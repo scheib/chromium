@@ -37,6 +37,9 @@ Polymer({
 
     /** @private */
     isFolder_: Boolean,
+
+    /** @private */
+    openItemUrl_: String,
   },
 
   observers: [
@@ -74,10 +77,9 @@ Polymer({
    */
   onContextMenu_: function(e) {
     e.preventDefault();
-    if (!this.isSelectedItem_) {
-      this.dispatch(bookmarks.actions.selectItem(
-          this.itemId, false, false, this.getState()));
-    }
+    if (!this.isSelectedItem_)
+      this.selectThisItem_();
+
     this.fire('open-item-menu', {
       x: e.clientX,
       y: e.clientY,
@@ -90,8 +92,8 @@ Polymer({
    */
   onMenuButtonClick_: function(e) {
     e.stopPropagation();
-    this.dispatch(bookmarks.actions.selectItem(
-        this.itemId, false, false, this.getState()));
+    e.preventDefault();
+    this.selectThisItem_();
     this.fire('open-item-menu', {
       targetElement: e.target,
     });
@@ -106,6 +108,15 @@ Polymer({
   },
 
   /** @private */
+  selectThisItem_: function() {
+    this.dispatch(bookmarks.actions.selectItem(this.itemId, this.getState(), {
+      clear: true,
+      range: false,
+      toggle: false,
+    }));
+  },
+
+  /** @private */
   onItemIdChanged_: function() {
     // TODO(tsergeant): Add a histogram to measure whether this assertion fails
     // for real users.
@@ -116,6 +127,10 @@ Polymer({
   /** @private */
   onItemChanged_: function() {
     this.isFolder_ = !this.item_.url;
+    if (this.item_.url)
+      this.openItemUrl_ = this.item_.url;
+    else
+      this.openItemUrl_ = 'chrome://bookmarks/?id=' + this.itemId;
   },
 
   /**
@@ -133,26 +148,32 @@ Polymer({
   },
 
   /**
-   * @param {Event} e
+   * @param {MouseEvent} e
    * @private
    */
   onClick_: function(e) {
-    this.dispatch(bookmarks.actions.selectItem(
-        this.itemId, e.ctrlKey, e.shiftKey, this.getState()));
+    // Ignore double clicks so that Ctrl double-clicking an item won't deselect
+    // the item before opening.
+    if (e.detail != 2) {
+      this.dispatch(bookmarks.actions.selectItem(this.itemId, this.getState(), {
+        clear: !e.ctrlKey,
+        range: e.shiftKey,
+        toggle: e.ctrlKey && !e.shiftKey,
+      }));
+    }
     e.stopPropagation();
+    e.preventDefault();
   },
 
   /**
-   * @param {Event} e
+   * @param {MouseEvent} e
    * @private
    */
   onDblClick_: function(e) {
-    if (!this.item_.url) {
-      this.dispatch(
-          bookmarks.actions.selectFolder(this.item_.id, this.getState().nodes));
-    } else {
-      chrome.tabs.create({url: this.item_.url});
-    }
+    var commandManager = bookmarks.CommandManager.getInstance();
+    var itemSet = this.getState().selection.items;
+    if (commandManager.canExecute(Command.OPEN, itemSet))
+      commandManager.handle(Command.OPEN, itemSet);
   },
 
   /**

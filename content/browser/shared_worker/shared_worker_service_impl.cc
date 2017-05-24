@@ -335,7 +335,8 @@ blink::WebWorkerCreationError SharedWorkerServiceImpl::CreateWorker(
   std::unique_ptr<SharedWorkerInstance> instance(new SharedWorkerInstance(
       params.url, params.name, params.content_security_policy,
       params.security_policy_type, params.creation_address_space,
-      resource_context, partition_id, params.creation_context_type));
+      resource_context, partition_id, params.creation_context_type,
+      params.data_saver_enabled));
   std::unique_ptr<SharedWorkerPendingInstance::SharedWorkerPendingRequest>
       request(new SharedWorkerPendingInstance::SharedWorkerPendingRequest(
           filter, route_id, params.document_id, filter->render_process_id(),

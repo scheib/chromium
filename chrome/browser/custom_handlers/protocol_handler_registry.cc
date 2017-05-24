@@ -14,6 +14,7 @@
 #include "base/logging.h"
 #include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile_io_data.h"
@@ -247,19 +248,13 @@ bool ProtocolHandlerRegistry::Delegate::IsExternalHandlerRegistered(
   return ProfileIOData::IsHandledProtocol(protocol);
 }
 
-scoped_refptr<shell_integration::DefaultProtocolClientWorker>
-ProtocolHandlerRegistry::Delegate::CreateShellWorker(
-    const shell_integration::DefaultWebClientWorkerCallback& callback,
-    const std::string& protocol) {
-  return new shell_integration::DefaultProtocolClientWorker(callback, protocol);
-}
-
 void ProtocolHandlerRegistry::Delegate::RegisterWithOSAsDefaultClient(
     const std::string& protocol, ProtocolHandlerRegistry* registry) {
   // The worker pointer is reference counted. While it is running, the
-  // message loops of the FILE and UI thread will hold references to it
-  // and it will be automatically freed once all its tasks have finished.
-  CreateShellWorker(registry->GetDefaultWebClientCallback(protocol), protocol)
+  // sequence it runs on will hold references it will be automatically freed
+  // once all its tasks have finished.
+  base::MakeRefCounted<shell_integration::DefaultProtocolClientWorker>(
+      registry->GetDefaultWebClientCallback(protocol), protocol)
       ->StartSetAsDefault();
 }
 
@@ -414,13 +409,7 @@ void ProtocolHandlerRegistry::InitProtocolSettings() {
     for (ProtocolHandlerMap::const_iterator p = default_handlers_.begin();
          p != default_handlers_.end(); ++p) {
       ProtocolHandler handler = p->second;
-      // The worker pointer is reference counted. While it is running the
-      // message loops of the FILE and UI thread will hold references to it
-      // and it will be automatically freed once all its tasks have finished.
-      delegate_
-          ->CreateShellWorker(GetDefaultWebClientCallback(handler.protocol()),
-                              handler.protocol())
-          ->StartSetAsDefault();
+      delegate_->RegisterWithOSAsDefaultClient(handler.protocol(), this);
     }
   }
 }

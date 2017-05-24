@@ -8,6 +8,7 @@
 #include "ash/public/interfaces/system_tray.mojom.h"
 #include "base/macros.h"
 #include "chrome/browser/chromeos/system/system_clock_observer.h"
+#include "chrome/browser/upgrade_observer.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
@@ -28,7 +29,8 @@ class WidgetDelegate;
 class SystemTrayClient : public ash::mojom::SystemTrayClient,
                          public chromeos::system::SystemClockObserver,
                          public policy::CloudPolicyStore::Observer,
-                         public content::NotificationObserver {
+                         public content::NotificationObserver,
+                         public UpgradeObserver {
  public:
   SystemTrayClient();
   ~SystemTrayClient() override;
@@ -69,6 +71,7 @@ class SystemTrayClient : public ash::mojom::SystemTrayClient,
   void ShowPowerSettings() override;
   void ShowChromeSlow() override;
   void ShowIMESettings() override;
+  void ShowAboutChromeOS() override;
   void ShowHelp() override;
   void ShowAccessibilityHelp() override;
   void ShowAccessibilitySettings() override;
@@ -92,8 +95,14 @@ class SystemTrayClient : public ash::mojom::SystemTrayClient,
   // Requests that ash show the update available icon.
   void HandleUpdateAvailable();
 
+  // Requests that ash show the update over cellular available icon.
+  void HandleUpdateOverCellularAvailable();
+
   // chromeos::system::SystemClockObserver:
   void OnSystemClockChanged(chromeos::system::SystemClock* clock) override;
+
+  // UpgradeObserver:
+  void OnUpdateOverCellularAvailable() override;
 
   // policy::CloudPolicyStore::Observer
   void OnStoreLoaded(policy::CloudPolicyStore* store) override;

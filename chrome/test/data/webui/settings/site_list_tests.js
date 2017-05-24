@@ -150,44 +150,6 @@ var prefsMixedEmbeddingOrigin = {
 };
 
 /**
- * An example pref with mixed origin and pattern.
- * @type {SiteSettingsPref}
- */
-var prefsMixedOriginAndPattern = {
-  exceptions: {
-    auto_downloads: [],
-    background_sync: [],
-    camera: [],
-    cookies: [],
-    geolocation: [
-      {
-        origin: 'https://foo.com',
-        embeddingOrigin: 'https://example.com',
-        setting: 'allow',
-        source: 'preference',
-      },
-    ],
-    images: [],
-    javascript: [
-      {
-        origin: 'https://[*.]foo.com',
-        embeddingOrigin: '',
-        setting: 'allow',
-        source: 'preference',
-      },
-    ],
-    mic: [],
-    notifications: [],
-    plugins: [],
-    midiDevices: [],
-    protectedContent: [],
-    popups: [],
-    subresource_filter: [],
-    unsandboxed_plugins: [],
-  }
-};
-
-/**
  * An example pref with multiple categories and multiple allow/block
  * state.
  * @type {SiteSettingsPref}
@@ -463,13 +425,7 @@ suite('SiteList', function() {
    */
   function setUpCategory(category, subtype, prefs) {
     browserProxy.setPrefs(prefs);
-    if (category == settings.ALL_SITES) {
-      testElement.categorySubtype = settings.INVALID_CATEGORY_SUBTYPE;
-      testElement.allSites = true;
-    } else {
-      testElement.categorySubtype = subtype;
-      testElement.allSites = false;
-    }
+    testElement.categorySubtype = subtype;
     // Some route is needed, but the actual route doesn't matter.
     testElement.currentRoute = {
       page: 'dummy',
@@ -921,117 +877,6 @@ suite('SiteList', function() {
         .then(function(actualContentType) {
           assertEquals(contentType, actualContentType);
           assertFalse(testElement.$.category.hidden);
-        });
-  });
-
-  test('All sites category no action menu', function() {
-    setUpCategory(settings.ALL_SITES, '', prefsVarious);
-    return browserProxy.whenCalled('getExceptionList')
-        .then(function(contentType) {
-          // Use resolver to ensure that the list container is populated.
-          var resolver = new PromiseResolver();
-          testElement.async(resolver.resolve);
-          return resolver.promise.then(function() {
-            var item = testElement.$.listContainer.children[0];
-            var dots = item.querySelector('#actionMenuButton');
-            assertTrue(!!dots);
-            assertTrue(dots.hidden);
-          });
-        });
-  });
-
-  test('All sites category', function() {
-    // Prefs: Multiple and overlapping sites.
-    setUpCategory(settings.ALL_SITES, '', prefsVarious);
-
-    return browserProxy.whenCalled('getExceptionList')
-        .then(function(contentType) {
-          // Use resolver to ensure asserts bubble up to the framework with
-          // meaningful errors.
-          var resolver = new PromiseResolver();
-          testElement.async(resolver.resolve);
-          return resolver.promise.then(function() {
-            // All Sites calls getExceptionList for all categories, starting
-            // with Cookies.
-            assertEquals(settings.ContentSettingsTypes.COOKIES, contentType);
-
-            // Required for firstItem to be found below.
-            Polymer.dom.flush();
-
-            assertFalse(testElement.$.category.hidden);
-            // Validate that the sites gets populated from pre-canned prefs.
-            assertEquals(
-                3, testElement.sites.length,
-                'If this fails with 5 instead of the expected 3, then ' +
-                    'the de-duping of sites is not working for site_list');
-            assertEquals(
-                prefsVarious.exceptions.geolocation[1].origin,
-                testElement.sites[0].origin);
-            assertEquals(
-                prefsVarious.exceptions.geolocation[0].origin,
-                testElement.sites[1].origin);
-            assertEquals(
-                prefsVarious.exceptions.notifications[0].origin,
-                testElement.sites[2].origin);
-            assertEquals(undefined, testElement.selectedOrigin);
-
-            // Validate that the sites are shown in UI and can be selected.
-            var firstItem = testElement.$.listContainer.children[1];
-            var clickable = firstItem.querySelector('.middle');
-            assertNotEquals(undefined, clickable);
-            MockInteractions.tap(clickable);
-            assertEquals(
-                prefsVarious.exceptions.geolocation[0].origin,
-                settings.getQueryParameters().get('site'));
-          });
-        });
-  });
-
-  test('All sites mixed pattern and origin', function() {
-    // Prefs: One site, represented as origin and pattern.
-    setUpCategory(settings.ALL_SITES, '', prefsMixedOriginAndPattern);
-
-    return browserProxy.whenCalled('getExceptionList')
-        .then(function(contentType) {
-          // Use resolver to ensure asserts bubble up to the framework with
-          // meaningful errors.
-          var resolver = new PromiseResolver();
-          testElement.async(resolver.resolve);
-          return resolver.promise.then(function() {
-            // All Sites calls getExceptionList for all categories, starting
-            // with Cookies.
-            assertEquals(settings.ContentSettingsTypes.COOKIES, contentType);
-
-            // Required for firstItem to be found below.
-            Polymer.dom.flush();
-
-            assertFalse(testElement.$.category.hidden);
-            // Validate that the sites gets populated from pre-canned prefs.
-            // TODO(dschuyler): de-duping of sites is under discussion, so
-            // it is currently disabled. It should be enabled again or this
-            // code should be removed.
-            assertEquals(
-                2, testElement.sites.length,
-                'If this fails with 1 instead of the expected 2, then ' +
-                    'the de-duping of sites has been enabled for site_list.');
-            if (testElement.sites.length == 1) {
-              assertEquals(
-                  prefsMixedOriginAndPattern.exceptions.geolocation[0].origin,
-                  testElement.sites[0].displayName);
-            }
-
-            assertEquals(undefined, testElement.selectedOrigin);
-            // Validate that the sites are shown in UI and can be selected.
-            var firstItem = testElement.$.listContainer.children[0];
-            var clickable = firstItem.querySelector('.middle');
-            assertNotEquals(undefined, clickable);
-            MockInteractions.tap(clickable);
-            if (testElement.sites.length == 1) {
-              assertEquals(
-                  prefsMixedOriginAndPattern.exceptions.geolocation[0].origin,
-                  testElement.sites[0].displayName);
-            }
-          });
         });
   });
 

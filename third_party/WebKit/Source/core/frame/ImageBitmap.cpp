@@ -1089,7 +1089,8 @@ bool ImageBitmap::IsAccelerated() const {
 IntSize ImageBitmap::Size() const {
   if (!image_)
     return IntSize();
-  ASSERT(image_->width() > 0 && image_->height() > 0);
+  DCHECK_GT(image_->width(), 0);
+  DCHECK_GT(image_->height(), 0);
   return IntSize(image_->width(), image_->height());
 }
 

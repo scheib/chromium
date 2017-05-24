@@ -132,7 +132,8 @@ GpuChannel* GpuChannelManager::EstablishChannel(int client_id,
                                                 bool is_gpu_host) {
   std::unique_ptr<GpuChannel> gpu_channel = base::MakeUnique<GpuChannel>(
       this, scheduler_, sync_point_manager_, watchdog_, share_group_,
-      mailbox_manager_, is_gpu_host ? preemption_flag_ : nullptr,
+      mailbox_manager_, &discardable_manager_,
+      is_gpu_host ? preemption_flag_ : nullptr,
       is_gpu_host ? nullptr : preemption_flag_, task_runner_, io_task_runner_,
       client_id, client_tracing_id, is_gpu_host);
 

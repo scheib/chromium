@@ -706,9 +706,6 @@ namespace {
 
 #if !OS(MACOSX)
 
-static const float kMarkerWidth = 4;
-static const float kMarkerHeight = 2;
-
 sk_sp<PaintRecord> RecordMarker(DocumentMarker::MarkerType marker_type) {
   SkColor color = (marker_type == DocumentMarker::kGrammar)
                       ? SkColorSetRGB(0xC0, 0xC0, 0xC0)
@@ -718,28 +715,31 @@ sk_sp<PaintRecord> RecordMarker(DocumentMarker::MarkerType marker_type) {
   //   X o   o X o   o X
   //     o X o   o X o
 
+  static const float kW = 4;
+  static const float kH = 2;
+
   // Adjust the phase such that f' == 0 is "pixel"-centered
   // (for optimal rasterization at native rez).
   SkPath path;
-  path.moveTo(kMarkerWidth * -3 / 8, kMarkerHeight * 3 / 4);
-  path.cubicTo(kMarkerWidth * -1 / 8, kMarkerHeight * 3 / 4,
-               kMarkerWidth * -1 / 8, kMarkerHeight * 1 / 4,
-               kMarkerWidth * 1 / 8, kMarkerHeight * 1 / 4);
-  path.cubicTo(kMarkerWidth * 3 / 8, kMarkerHeight * 1 / 4,
-               kMarkerWidth * 3 / 8, kMarkerHeight * 3 / 4,
-               kMarkerWidth * 5 / 8, kMarkerHeight * 3 / 4);
-  path.cubicTo(kMarkerWidth * 7 / 8, kMarkerHeight * 3 / 4,
-               kMarkerWidth * 7 / 8, kMarkerHeight * 1 / 4,
-               kMarkerWidth * 9 / 8, kMarkerHeight * 1 / 4);
+  path.moveTo(kW * -3 / 8, kH * 3 / 4);
+  path.cubicTo(kW * -1 / 8, kH * 3 / 4,
+               kW * -1 / 8, kH * 1 / 4,
+               kW *  1 / 8, kH * 1 / 4);
+  path.cubicTo(kW * 3 / 8, kH * 1 / 4,
+               kW * 3 / 8, kH * 3 / 4,
+               kW * 5 / 8, kH * 3 / 4);
+  path.cubicTo(kW * 7 / 8, kH * 3 / 4,
+               kW * 7 / 8, kH * 1 / 4,
+               kW * 9 / 8, kH * 1 / 4);
 
   PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setColor(color);
   flags.setStyle(PaintFlags::kStroke_Style);
-  flags.setStrokeWidth(kMarkerHeight * 1 / 2);
+  flags.setStrokeWidth(kH * 1 / 2);
 
   PaintRecorder recorder;
-  recorder.beginRecording(kMarkerWidth, kMarkerHeight);
+  recorder.beginRecording(kW, kH);
   recorder.getRecordingCanvas()->drawPath(path, flags);
 
   return recorder.finishRecordingAsPicture();
@@ -747,15 +747,14 @@ sk_sp<PaintRecord> RecordMarker(DocumentMarker::MarkerType marker_type) {
 
 #else  // OS(MACOSX)
 
-static const float kMarkerWidth = 4;
-static const float kMarkerHeight = 3;
-
 sk_sp<PaintRecord> RecordMarker(DocumentMarker::MarkerType marker_type) {
   SkColor color = (marker_type == DocumentMarker::kGrammar)
                       ? SkColorSetRGB(0x6B, 0x6B, 0x6B)
                       : SkColorSetRGB(0xFB, 0x2D, 0x1D);
 
   // Match the artwork used by the Mac.
+  static const float kW = 4;
+  static const float kH = 3;
   static const float kR = 1.5f;
 
   // top->bottom translucent gradient.
@@ -777,7 +776,7 @@ sk_sp<PaintRecord> RecordMarker(DocumentMarker::MarkerType marker_type) {
   flags.setShader(SkGradientShader::MakeLinear(
       pts, colors, nullptr, ARRAY_SIZE(colors), SkShader::kClamp_TileMode));
   PaintRecorder recorder;
-  recorder.beginRecording(kMarkerWidth, kMarkerHeight);
+  recorder.beginRecording(kW, kH);
   recorder.getRecordingCanvas()->drawCircle(kR, kR, kR, flags);
 
   return recorder.finishRecordingAsPicture();
@@ -807,20 +806,20 @@ void DrawDocumentMarker(GraphicsContext& context,
 
 #if OS(MACOSX)
   // Make sure to draw only complete dots, and finish inside the marked text.
-  width -= fmodf(width, kMarkerWidth * zoom);
+  width -= fmodf(width, marker->cullRect().width() * zoom);
 #else
   // Offset it vertically by 1 so that there's some space under the text.
   origin_y += 1;
 #endif
 
-  const auto rect = SkRect::MakeWH(width, kMarkerHeight * zoom);
+  const auto rect = SkRect::MakeWH(width, marker->cullRect().height() * zoom);
   const auto local_matrix = SkMatrix::MakeScale(zoom, zoom);
 
   PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setShader(WrapSkShader(MakePaintShaderRecord(
-      sk_ref_sp(marker), FloatRect(0, 0, kMarkerWidth, kMarkerHeight),
-      SkShader::kRepeat_TileMode, SkShader::kClamp_TileMode, &local_matrix)));
+      sk_ref_sp(marker), SkShader::kRepeat_TileMode, SkShader::kClamp_TileMode,
+      &local_matrix, nullptr)));
 
   // Apply the origin translation as a global transform.  This ensures that the
   // shader local matrix depends solely on zoom => Skia can reuse the same

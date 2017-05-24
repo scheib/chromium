@@ -296,7 +296,7 @@ function FileManager() {
   this.backgroundPage_ = null;
 
   /**
-   * @type {FileBrowserBackgroundImpl}
+   * @type {FileBrowserBackgroundFull}
    * @private
    */
   this.fileBrowserBackground_ = null;
@@ -800,7 +800,7 @@ FileManager.prototype = /** @struct */ {
             this.backgroundPage_ =
                 /** @type {!BackgroundWindow} */ (opt_backgroundPage);
             this.fileBrowserBackground_ =
-                /** @type {!FileBrowserBackgroundImpl} */ (
+                /** @type {!FileBrowserBackgroundFull} */ (
                     this.backgroundPage_.background);
             this.fileBrowserBackground_.ready(function() {
               loadTimeData.data = this.fileBrowserBackground_.stringData;

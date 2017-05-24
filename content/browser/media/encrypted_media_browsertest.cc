@@ -12,6 +12,7 @@
 #include "content/shell/browser/shell.h"
 #include "media/base/media.h"
 #include "media/base/media_switches.h"
+#include "media/mojo/features.h"
 
 #if defined(OS_ANDROID)
 #include "base/android/build_info.h"
@@ -21,7 +22,7 @@
 #include "base/win/windows_version.h"
 #endif
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
 // When mojo CDM is enabled, External Clear Key is supported in //content/shell/
 // by using mojo CDM with AesDecryptor running in the remote (e.g. GPU or
 // Browser) process.

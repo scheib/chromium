@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/views/payments/payment_request_sheet_controller.h"
 
+#include <utility>
+
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view.h"
 #include "chrome/browser/ui/views/payments/payment_request_views_util.h"
 #include "components/payments/content/payment_request.h"
@@ -254,6 +256,20 @@ void PaymentRequestSheetController::UpdateContentView() {
   RelayoutPane();
 }
 
+void PaymentRequestSheetController::UpdateFocus(views::View* focused_view) {
+  DialogViewID sheet_id;
+  if (GetSheetId(&sheet_id)) {
+    SheetView* sheet_view = static_cast<SheetView*>(
+        dialog()->GetViewByID(static_cast<int>(sheet_id)));
+    // This will be null on first call since it's not been set until CreateView
+    // returns, and the first call to UpdateContentView comes from CreateView.
+    if (sheet_view) {
+      sheet_view->SetFirstFocusableView(focused_view);
+      dialog()->RequestFocus();
+    }
+  }
+}
+
 void PaymentRequestSheetController::RelayoutPane() {
   content_view_->Layout();
   pane_->SizeToPreferredSize();
@@ -329,20 +345,13 @@ std::unique_ptr<views::View> PaymentRequestSheetController::CreateFooterView() {
   trailing_buttons_container->SetLayoutManager(new views::BoxLayout(
       views::BoxLayout::kHorizontal, 0, 0, kPaymentRequestButtonSpacing));
 
-  primary_button_ = CreatePrimaryButton();
-  if (primary_button_) {
-    primary_button_->set_owned_by_client();
-    trailing_buttons_container->AddChildView(primary_button_.get());
-  }
-
-  secondary_button_ = std::unique_ptr<views::Button>(
-      views::MdTextButton::CreateSecondaryUiButton(this,
-                                                   GetSecondaryButtonLabel()));
-  secondary_button_->set_owned_by_client();
-  secondary_button_->set_tag(
-      static_cast<int>(PaymentRequestCommonTags::CLOSE_BUTTON_TAG));
-  secondary_button_->set_id(static_cast<int>(DialogViewID::CANCEL_BUTTON));
-  trailing_buttons_container->AddChildView(secondary_button_.get());
+#if defined(OS_MACOSX)
+  AddSecondaryButton(trailing_buttons_container.get());
+  AddPrimaryButton(trailing_buttons_container.get());
+#else
+  AddPrimaryButton(trailing_buttons_container.get());
+  AddSecondaryButton(trailing_buttons_container.get());
+#endif  // defined(OS_MACOSX)
 
   layout->AddView(trailing_buttons_container.release());
 
@@ -363,11 +372,28 @@ bool PaymentRequestSheetController::GetSheetId(DialogViewID* sheet_id) {
 }
 
 bool PaymentRequestSheetController::PerformPrimaryButtonAction() {
-  if (primary_button_ && primary_button_->enabled()) {
+  if (primary_button_ && primary_button_->enabled())
     ButtonPressed(primary_button_.get(), DummyEvent());
-    return true;
+  return true;
+}
+
+void PaymentRequestSheetController::AddPrimaryButton(views::View* container) {
+  primary_button_ = CreatePrimaryButton();
+  if (primary_button_) {
+    primary_button_->set_owned_by_client();
+    container->AddChildView(primary_button_.get());
   }
-  return false;
+}
+
+void PaymentRequestSheetController::AddSecondaryButton(views::View* container) {
+  secondary_button_ = std::unique_ptr<views::Button>(
+      views::MdTextButton::CreateSecondaryUiButton(this,
+                                                   GetSecondaryButtonLabel()));
+  secondary_button_->set_owned_by_client();
+  secondary_button_->set_tag(
+      static_cast<int>(PaymentRequestCommonTags::CLOSE_BUTTON_TAG));
+  secondary_button_->set_id(static_cast<int>(DialogViewID::CANCEL_BUTTON));
+  container->AddChildView(secondary_button_.get());
 }
 
 }  // namespace payments

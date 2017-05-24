@@ -1,3 +1,4 @@
 include_rules = [
   "+third_party/smhasher",
+  "+services/service_manager/public"
 ]

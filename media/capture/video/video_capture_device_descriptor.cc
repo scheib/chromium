@@ -71,6 +71,8 @@ const char* VideoCaptureDeviceDescriptor::GetCaptureApiTypeString() const {
       return "AV Foundation";
     case VideoCaptureApi::MACOSX_DECKLINK:
       return "DeckLink";
+    case VideoCaptureApi::MACOSX_SYPHON:
+      return "Syphon";
     case VideoCaptureApi::ANDROID_API1:
       return "Camera API1";
     case VideoCaptureApi::ANDROID_API2_LEGACY:

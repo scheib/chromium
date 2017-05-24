@@ -17,6 +17,10 @@ namespace content {
 class FrameLoadWaiter : public RenderFrameObserver {
  public:
   explicit FrameLoadWaiter(RenderFrame* frame);
+
+  // Note: single-process browser tests need to enable nestable tasks by
+  // instantiating a base::MessageLoop::ScopedNestableTaskAllower or this method
+  // will never return.
   void Wait();
 
  private:
@@ -25,6 +29,7 @@ class FrameLoadWaiter : public RenderFrameObserver {
   void OnDestruct() override;
 
   base::RunLoop run_loop_;
+  bool did_load_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(FrameLoadWaiter);
 };

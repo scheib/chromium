@@ -138,8 +138,11 @@ class GpuVideoDecodeAccelerator
   // The texture target as requested by ProvidePictureBuffers().
   uint32_t texture_target_;
 
-  // The number of textures per picture buffer as requests by
-  // ProvidePictureBuffers()
+  // The format of the picture buffers requested by ProvidePictureBuffers().
+  VideoPixelFormat pixel_format_;
+
+  // The number of textures per picture buffer as requested by
+  // ProvidePictureBuffers().
   uint32_t textures_per_buffer_;
 
   // The message filter to run VDA::Decode on IO thread if VDA supports it.

@@ -80,6 +80,11 @@ int ChromeBrowserMainPartsAndroid::PreCreateThreads() {
             crash_dump_dir, kAndroidMinidumpDescriptor));
   }
 
+  // Auto-detect based on en-US whether locale .pak files are store uncompressed
+  // (monochrome) vs extracted (non-monochrome).
+  ui::SetLocalePaksStoredInApk(
+      !ui::GetPathForAndroidLocalePakWithinApk("en-US").empty());
+
   return ChromeBrowserMainParts::PreCreateThreads();
 }
 

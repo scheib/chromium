@@ -41,7 +41,7 @@ class COMPOSITOR_EXPORT PaintRecorder {
   const PaintContext& context_;
   gfx::Canvas canvas_;
   PaintCache* cache_;
-  gfx::Size recording_size_;
+  gfx::Rect bounds_in_layer_;
 
   DISALLOW_COPY_AND_ASSIGN(PaintRecorder);
 };

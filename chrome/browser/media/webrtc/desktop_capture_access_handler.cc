@@ -164,8 +164,9 @@ std::unique_ptr<content::MediaStreamUI> GetDevicesForDesktopCapture(
            << registered_extension_name;
 
   // Add selected desktop source to the list.
-  devices->push_back(content::MediaStreamDevice(
-      content::MEDIA_DESKTOP_VIDEO_CAPTURE, media_id.ToString(), "Screen"));
+  devices->push_back(
+      content::MediaStreamDevice(content::MEDIA_DESKTOP_VIDEO_CAPTURE,
+                                 media_id.ToString(), media_id.ToString()));
   if (capture_audio) {
     if (media_id.type == content::DesktopMediaID::TYPE_WEB_CONTENTS) {
       content::WebContentsMediaCaptureId web_id = media_id.web_contents_id;

@@ -56,6 +56,12 @@
 #include "chrome/utility/printing_handler.h"
 #endif
 
+#if BUILDFLAG(ENABLE_PRINTING)
+#include "chrome/common/chrome_content_client.h"
+#include "components/printing/service/public/cpp/pdf_compositor_service_factory.h"
+#include "components/printing/service/public/interfaces/pdf_compositor.mojom.h"  // nogncheck
+#endif
+
 #if defined(FULL_SAFE_BROWSING)
 #include "chrome/common/safe_archive_analyzer.mojom.h"
 #include "chrome/common/safe_browsing/zip_analyzer.h"
@@ -318,6 +324,16 @@ bool ChromeContentUtilityClient::OnMessageReceived(
   }
 
   return false;
+}
+
+void ChromeContentUtilityClient::RegisterServices(
+    ChromeContentUtilityClient::StaticServiceMap* services) {
+#if BUILDFLAG(ENABLE_PRINTING)
+  content::ServiceInfo pdf_compositor_info;
+  pdf_compositor_info.factory =
+      base::Bind(&printing::CreatePdfCompositorService, GetUserAgent());
+  services->emplace(printing::mojom::kServiceName, pdf_compositor_info);
+#endif
 }
 
 // static

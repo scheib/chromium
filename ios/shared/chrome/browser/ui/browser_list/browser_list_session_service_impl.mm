@@ -232,7 +232,10 @@ bool BrowserListSessionServiceImpl::RestoreSession() {
 
     WebStateList& web_state_list = browser->web_state_list();
     const int old_count = web_state_list.count();
-    DeserializeWebStateList(&web_state_list, session_window, create_web_state_);
+    // TODO(crbug.com/724282): Track whether web usage should be enabled for
+    // the deserialized WebStates.
+    DeserializeWebStateList(&web_state_list, session_window, false,
+                            create_web_state_);
     DCHECK_GT(web_state_list.count(), old_count);
 
     // If there was a single tab open without any navigation, then close it

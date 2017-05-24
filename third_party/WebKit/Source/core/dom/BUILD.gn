@@ -11,6 +11,8 @@ blink_core_sources("dom") {
     "AXObject.h",
     "AXObjectCache.cpp",
     "AXObjectCache.h",
+    "AXObjectCacheBase.cpp",
+    "AXObjectCacheBase.h",
     "AccessibleNode.cpp",
     "AccessibleNode.h",
     "AncestorList.h",

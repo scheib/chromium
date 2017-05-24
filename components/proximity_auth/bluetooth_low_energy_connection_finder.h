@@ -39,11 +39,9 @@ class BluetoothLowEnergyConnectionFinder
   // advertised by the remote device.
   //
   // |remote_device|: The BLE remote device.
-  // |beacon_seeds|: The BeaconSeeds for the |remote_device.
   // |bluetooth_throttler|: The reconnection throttler.
   BluetoothLowEnergyConnectionFinder(
       const cryptauth::RemoteDevice remote_device,
-      const std::vector<cryptauth::BeaconSeed>& beacon_seeds,
       cryptauth::BluetoothThrottler* bluetooth_throttler);
 
   ~BluetoothLowEnergyConnectionFinder() override;
@@ -70,7 +68,6 @@ class BluetoothLowEnergyConnectionFinder
   BluetoothLowEnergyConnectionFinder(
       const cryptauth::RemoteDevice remote_device,
       const std::string& service_uuid,
-      const std::vector<cryptauth::BeaconSeed>& beacon_seeds,
       std::unique_ptr<cryptauth::BackgroundEidGenerator> eid_generator,
       cryptauth::BluetoothThrottler* bluetooth_throttler);
 
@@ -117,9 +114,6 @@ class BluetoothLowEnergyConnectionFinder
 
   // The UUID of the service used by the Weave socket.
   std::string service_uuid_;
-
-  // The BeaconSeeds of the |remote_device|.
-  std::vector<cryptauth::BeaconSeed> beacon_seeds_;
 
   // Generates the expected EIDs that may be advertised by |remote_device_|. If
   // an EID matches, we know its a device we should connect to.

@@ -14,8 +14,11 @@ namespace media_router {
 // be presented to a media sink.  These must be declared in the priority order
 // returned by GetPreferredCastMode.
 enum MediaCastMode {
-  // The default presentation for the WebContents.  Only available when the
-  // document has provided a default presentation URL.
+  // A presentation URL provided by the WebContents via the Presentation API.
+  // This can be set by the default presentation URL (for top level browsing
+  // contexts) or presentation URLs passed with a PresentationRequest (for top
+  // level and nested browsing contexts).
+  // TODO(mfoltz): More accurately named PRESENTATION
   DEFAULT = 0x1,
   // Capture the rendered WebContents and stream it to a media sink.  Always
   // available.

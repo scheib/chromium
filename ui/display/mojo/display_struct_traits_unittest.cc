@@ -31,11 +31,15 @@ void CheckDisplaysEqual(const Display& input, const Display& output) {
   EXPECT_NE(&input, &output);  // Make sure they aren't the same object.
   EXPECT_EQ(input.id(), output.id());
   EXPECT_EQ(input.bounds(), output.bounds());
+  EXPECT_EQ(input.GetSizeInPixel(), output.GetSizeInPixel());
   EXPECT_EQ(input.work_area(), output.work_area());
   EXPECT_EQ(input.device_scale_factor(), output.device_scale_factor());
   EXPECT_EQ(input.rotation(), output.rotation());
   EXPECT_EQ(input.touch_support(), output.touch_support());
   EXPECT_EQ(input.maximum_cursor_size(), output.maximum_cursor_size());
+  EXPECT_EQ(input.color_depth(), output.color_depth());
+  EXPECT_EQ(input.depth_per_component(), output.depth_per_component());
+  EXPECT_EQ(input.is_monochrome(), output.is_monochrome());
 }
 
 void CheckDisplayLayoutsEqual(const DisplayLayout& input,
@@ -125,6 +129,9 @@ TEST(DisplayStructTraitsTest, SetAllDisplayValues) {
   input.set_rotation(Display::ROTATE_270);
   input.set_touch_support(Display::TOUCH_SUPPORT_AVAILABLE);
   input.set_maximum_cursor_size(maximum_cursor_size);
+  input.set_color_depth(input.color_depth() + 1);
+  input.set_depth_per_component(input.depth_per_component() + 1);
+  input.set_is_monochrome(!input.is_monochrome());
 
   Display output;
   SerializeAndDeserialize<mojom::Display>(input, &output);

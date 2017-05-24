@@ -485,25 +485,6 @@ void TextIteratorAlgorithm<Strategy>::Advance() {
   }
 }
 
-static bool HasVisibleTextNode(LayoutText* layout_object) {
-  if (layout_object->Style()->Visibility() == EVisibility::kVisible)
-    return true;
-
-  if (!layout_object->IsTextFragment())
-    return false;
-
-  LayoutTextFragment* fragment = ToLayoutTextFragment(layout_object);
-  if (!fragment->IsRemainingTextLayoutObject())
-    return false;
-
-  DCHECK(fragment->GetFirstLetterPseudoElement());
-  LayoutObject* pseudo_element_layout_object =
-      fragment->GetFirstLetterPseudoElement()->GetLayoutObject();
-  return pseudo_element_layout_object &&
-         pseudo_element_layout_object->Style()->Visibility() ==
-             EVisibility::kVisible;
-}
-
 template <typename Strategy>
 bool TextIteratorAlgorithm<Strategy>::ShouldHandleFirstLetter(
     const LayoutText& layout_text) const {
@@ -533,18 +514,6 @@ bool TextIteratorAlgorithm<Strategy>::HandleTextNode() {
 
   // handle pre-formatted text
   if (!layout_object->Style()->CollapseWhiteSpace()) {
-    if (last_text_node_ended_with_collapsed_space_ &&
-        HasVisibleTextNode(layout_object)) {
-      if (behavior_.CollapseTrailingSpace()) {
-        if (offset_ > 0 && str[offset_ - 1] == ' ') {
-          SpliceBuffer(kSpaceCharacter, text_node, 0, offset_, offset_);
-          return false;
-        }
-      } else {
-        SpliceBuffer(kSpaceCharacter, text_node, 0, offset_, offset_);
-        return false;
-      }
-    }
     if (ShouldHandleFirstLetter(*layout_object)) {
       HandleTextNodeFirstLetter(ToLayoutTextFragment(layout_object));
       if (first_letter_text_) {

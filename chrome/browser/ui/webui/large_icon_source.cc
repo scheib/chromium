@@ -9,7 +9,6 @@
 #include "base/memory/ref_counted_memory.h"
 #include "chrome/browser/search/instant_io_context.h"
 #include "chrome/common/url_constants.h"
-#include "components/favicon/core/fallback_icon_service.h"
 #include "components/favicon/core/large_icon_service.h"
 #include "components/favicon_base/fallback_icon_style.h"
 #include "components/favicon_base/favicon_types.h"
@@ -24,12 +23,8 @@ const int kMaxLargeIconSize = 192;  // Arbitrary bound to safeguard endpoint.
 
 }  // namespace
 
-LargeIconSource::LargeIconSource(
-    favicon::FallbackIconService* fallback_icon_service,
-    favicon::LargeIconService* large_icon_service)
-    : fallback_icon_service_(fallback_icon_service),
-      large_icon_service_(large_icon_service) {
-}
+LargeIconSource::LargeIconSource(favicon::LargeIconService* large_icon_service)
+    : large_icon_service_(large_icon_service) {}
 
 LargeIconSource::~LargeIconSource() {
 }
@@ -111,13 +106,11 @@ void LargeIconSource::OnLargeIconDataAvailable(
     return;
   }
 
-  // Bitmap is invalid, use the fallback if service is available.
-  if (!fallback_icon_service_ || !result.fallback_icon_style) {
+  if (!result.fallback_icon_style) {
     SendNotFoundResponse(callback);
     return;
   }
 
-#if defined(OS_ANDROID)
   // RenderFallbackIconBitmap() cannot draw fallback icons on Android. See
   // crbug.com/580922 for details. Return a 1x1 bitmap so that JavaScript can
   // detect that it needs to generate a fallback icon.
@@ -127,11 +120,6 @@ void LargeIconSource::OnLargeIconDataAvailable(
   std::vector<unsigned char> bitmap_data;
   if (!gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &bitmap_data))
     bitmap_data.clear();
-#else
-  std::vector<unsigned char> bitmap_data =
-      fallback_icon_service_->RenderFallbackIconBitmap(
-          url, size, *result.fallback_icon_style);
-#endif
 
   callback.Run(base::RefCountedBytes::TakeVector(&bitmap_data));
 }

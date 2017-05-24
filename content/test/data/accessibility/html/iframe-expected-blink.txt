@@ -1,4 +1,4 @@
 rootWebArea
-++group
+++genericContainer
 ++++iframe name='Empty iframe'
 ++++++rootWebArea

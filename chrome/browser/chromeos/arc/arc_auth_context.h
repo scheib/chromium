@@ -61,6 +61,10 @@ class ArcAuthContext : public UbertokenConsumer,
   void OnMergeSessionSuccess(const std::string& data) override;
   void OnMergeSessionFailure(const GoogleServiceAuthError& error) override;
 
+  // Skips the merge session, instead calling the callback passed to |Prepare()|
+  // once the refresh token is available. Use only in testing.
+  void SkipMergeSessionForTesting() { skip_merge_session_for_testing_ = true; }
+
  private:
   void OnRefreshTokenTimeout();
 
@@ -72,6 +76,9 @@ class ArcAuthContext : public UbertokenConsumer,
   ProfileOAuth2TokenService* token_service_;
   std::string account_id_;
   std::string full_account_id_;
+
+  // Whether the merge session should be skipped. Set to true only in testing.
+  bool skip_merge_session_for_testing_ = false;
 
   // Owned by content::BrowserContent. Used to isolate cookies for auth server
   // communication and shared with ARC OptIn UI platform app.

@@ -51,6 +51,7 @@
           "extensions::KeepAlive",
           "extensions::mime_handler::MimeHandlerService",
           "media_router::mojom::MediaRouter",
+          "page_load_metrics::mojom::PageLoadMetrics",
           "password_manager::mojom::CredentialManager",
           "translate::mojom::ContentTranslateDriver",
 

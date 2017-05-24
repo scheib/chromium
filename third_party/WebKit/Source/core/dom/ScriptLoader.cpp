@@ -479,6 +479,9 @@ bool ScriptLoader::PrepareScript(const TextPosition& script_start_position,
         //     base URL."
         KURL base_url = element_document.BaseURL();
 
+        TextPosition position = element_document.IsInDocumentWrite()
+                                    ? TextPosition()
+                                    : script_start_position;
         // 2. "Let script be the result of creating a module script using
         //     source text, settings, base URL, cryptographic nonce,
         //     parser state, and module script credentials mode."
@@ -486,7 +489,7 @@ bool ScriptLoader::PrepareScript(const TextPosition& script_start_position,
             ToScriptStateForMainWorld(element_document.GetFrame()));
         ModuleScript* module_script = ModuleScript::Create(
             ScriptContent(), modulator, base_url, nonce, parser_state,
-            credentials_mode, kSharableCrossOrigin);
+            credentials_mode, kSharableCrossOrigin, position);
 
         // 3. "If this returns null, set the script's script to null and abort
         //     these substeps; the script is ready."

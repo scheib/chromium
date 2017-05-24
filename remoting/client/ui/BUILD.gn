@@ -17,6 +17,8 @@ source_set("ui") {
     "input_strategy.h",
     "renderer_proxy.cc",
     "renderer_proxy.h",
+    "trackpad_input_strategy.cc",
+    "trackpad_input_strategy.h",
     "view_matrix.cc",
     "view_matrix.h",
   ]

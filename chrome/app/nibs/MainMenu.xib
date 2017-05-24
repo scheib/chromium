@@ -494,6 +494,24 @@ CA
                                     <action selector="commandDispatch:" target="-1" id="559"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="^IDS_DUPLICATE_TAB_MAC" tag="34027" id="rsG-Hi-xbu">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="commandDispatch:" target="-1" id="AjB-PF-HrG"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="^IDS_MUTE_TAB_MAC" tag="35012" id="WVg-XQ-yLX">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="commandDispatch:" target="-1" id="LaZ-j6-0bg"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="^IDS_PIN_TAB_MAC" tag="35013" id="VlC-vo-Vrf">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="commandDispatch:" target="-1" id="ou5-3d-iUR"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="551"/>
                             <menuItem title="^IDS_SHOW_DOWNLOADS_MAC" tag="40012" keyEquivalent="J" id="550">
                                 <connections>
@@ -558,5 +576,6 @@ CA
                 <outlet property="helpMenu_" destination="106" id="667"/>
             </connections>
         </customObject>
+        <menuItem isSeparatorItem="YES" id="4Sz-Jh-Doh"/>
     </objects>
 </document>

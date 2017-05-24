@@ -62,6 +62,7 @@ class CC_EXPORT SingleThreadProxy : public Proxy,
   // SchedulerClient implementation
   void WillBeginImplFrame(const BeginFrameArgs& args) override;
   void DidFinishImplFrame() override;
+  void DidNotProduceFrame(const BeginFrameAck& ack) override;
   void ScheduledActionSendBeginMainFrame(const BeginFrameArgs& args) override;
   DrawResult ScheduledActionDrawIfPossible() override;
   DrawResult ScheduledActionDrawForced() override;

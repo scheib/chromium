@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "base/containers/adapters.h"
-#include "base/threading/sequenced_worker_pool.h"
+#include "base/task_scheduler/post_task.h"
 #include "build/build_config.h"
 #include "chrome/browser/task_manager/providers/browser_process_task_provider.h"
 #include "chrome/browser/task_manager/providers/child_process_task_provider.h"
@@ -32,13 +32,6 @@ namespace task_manager {
 
 namespace {
 
-scoped_refptr<base::SequencedTaskRunner> GetBlockingPoolRunner() {
-  base::SequencedWorkerPool* blocking_pool =
-      content::BrowserThread::GetBlockingPool();
-  return blocking_pool->GetSequencedTaskRunner(
-      blocking_pool->GetSequenceToken());
-}
-
 base::LazyInstance<TaskManagerImpl>::DestructorAtExit
     lazy_task_manager_instance = LAZY_INSTANCE_INITIALIZER;
 
@@ -48,7 +41,9 @@ TaskManagerImpl::TaskManagerImpl()
     : on_background_data_ready_callback_(
           base::Bind(&TaskManagerImpl::OnTaskGroupBackgroundCalculationsDone,
                      base::Unretained(this))),
-      blocking_pool_runner_(GetBlockingPoolRunner()),
+      blocking_pool_runner_(base::CreateSequencedTaskRunnerWithTraits(
+          {base::MayBlock(), base::TaskPriority::BACKGROUND,
+           base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})),
       shared_sampler_(new SharedSampler(blocking_pool_runner_)),
       is_running_(false),
       weak_ptr_factory_(this) {

@@ -27,11 +27,27 @@ bool IsFlagSet(uint32_t bitfield, uint32_t flag) {
   return 0 != (bitfield & (1 << flag));
 }
 
+uint32_t ModifyFlag(uint32_t bitfield, uint32_t flag, bool set) {
+  return set ? (bitfield |= (1 << flag)) : (bitfield &= ~(1 << flag));
+}
+
 std::string StateBitfieldToString(uint32_t state) {
   std::string str;
   for (uint32_t i = AX_STATE_NONE + 1; i <= AX_STATE_LAST; ++i) {
     if (IsFlagSet(state, i))
       str += " " + base::ToUpperASCII(ToString(static_cast<AXState>(i)));
+  }
+  return str;
+}
+
+std::string ActionsBitfieldToString(uint32_t actions) {
+  std::string str;
+  for (uint32_t i = AX_ACTION_NONE + 1; i <= AX_ACTION_LAST; ++i) {
+    if (IsFlagSet(actions, i)) {
+      str += ToString(static_cast<AXAction>(i));
+      actions = ModifyFlag(actions, i, false);
+      str += actions ? "," : "";
+    }
   }
   return str;
 }
@@ -170,7 +186,11 @@ bool IsNodeIdIntListAttribute(AXIntListAttribute attr) {
 }
 
 AXNodeData::AXNodeData()
-    : id(-1), role(AX_ROLE_UNKNOWN), state(0), offset_container_id(-1) {}
+    : id(-1),
+      role(AX_ROLE_UNKNOWN),
+      state(AX_STATE_NONE),
+      actions(AX_ACTION_NONE),
+      offset_container_id(-1) {}
 
 AXNodeData::~AXNodeData() {
 }
@@ -179,6 +199,7 @@ AXNodeData::AXNodeData(const AXNodeData& other) {
   id = other.id;
   role = other.role;
   state = other.state;
+  actions = other.actions;
   string_attributes = other.string_attributes;
   int_attributes = other.int_attributes;
   float_attributes = other.float_attributes;
@@ -196,6 +217,7 @@ AXNodeData& AXNodeData::operator=(AXNodeData other) {
   id = other.id;
   role = other.role;
   state = other.state;
+  actions = other.actions;
   string_attributes = other.string_attributes;
   int_attributes = other.int_attributes;
   float_attributes = other.float_attributes;
@@ -424,13 +446,53 @@ void AXNodeData::SetValue(const base::string16& value) {
   SetValue(base::UTF16ToUTF8(value));
 }
 
-bool AXNodeData::HasState(AXState state_flag) const {
-  return IsFlagSet(state, state_flag);
+bool AXNodeData::HasState(AXState state_enum) const {
+  return IsFlagSet(state, state_enum);
 }
 
-void AXNodeData::AddState(AXState state_flag) {
-  DCHECK_NE(state_flag, AX_STATE_NONE);
-  state |= (1 << state_flag);
+bool AXNodeData::HasAction(AXAction action_enum) const {
+  return IsFlagSet(actions, action_enum);
+}
+
+void AXNodeData::AddState(AXState state_enum) {
+  DCHECK_NE(state_enum, AX_STATE_NONE);
+  state = ModifyFlag(state, state_enum, true);
+}
+
+void AXNodeData::AddAction(AXAction action_enum) {
+  switch (action_enum) {
+    case AX_ACTION_NONE:
+      NOTREACHED();
+      break;
+
+    // Note: all of the attributes are included here explicitly, rather than
+    // using "default:", so that it's a compiler error to add a new action
+    // without explicitly considering whether there are mutually exclusive
+    // actions that can be performed on a UI control at the same time.
+    case AX_ACTION_BLUR:
+    case AX_ACTION_FOCUS: {
+      AXAction excluded_action =
+          (action_enum == AX_ACTION_BLUR) ? AX_ACTION_FOCUS : AX_ACTION_BLUR;
+      DCHECK(HasAction(excluded_action));
+    } break;
+    case AX_ACTION_DECREMENT:
+    case AX_ACTION_DO_DEFAULT:
+    case AX_ACTION_GET_IMAGE_DATA:
+    case AX_ACTION_HIT_TEST:
+    case AX_ACTION_INCREMENT:
+    case AX_ACTION_REPLACE_SELECTED_TEXT:
+    case AX_ACTION_SCROLL_TO_MAKE_VISIBLE:
+    case AX_ACTION_SCROLL_TO_POINT:
+    case AX_ACTION_SET_ACCESSIBILITY_FOCUS:
+    case AX_ACTION_SET_SCROLL_OFFSET:
+    case AX_ACTION_SET_SELECTION:
+    case AX_ACTION_SET_SEQUENTIAL_FOCUS_NAVIGATION_STARTING_POINT:
+    case AX_ACTION_SET_VALUE:
+    case AX_ACTION_SHOW_CONTEXT_MENU:
+      break;
+  }
+
+  actions = ModifyFlag(actions, action_enum, true);
 }
 
 std::string AXNodeData::ToString() const {
@@ -807,9 +869,6 @@ std::string AXNodeData::ToString() const {
       case AX_ATTR_ARIA_READONLY:
         result += " aria_readonly=" + value;
         break;
-      case AX_ATTR_CAN_SET_VALUE:
-        result += " can_set_value=" + value;
-        break;
       case AX_ATTR_UPDATE_LOCATION_ONLY:
         result += " update_location_only=" + value;
         break;
@@ -904,6 +963,8 @@ std::string AXNodeData::ToString() const {
         break;
     }
   }
+
+  result += " actions=" + ActionsBitfieldToString(actions);
 
   if (!child_ids.empty())
     result += " child_ids=" + IntVectorToString(child_ids);

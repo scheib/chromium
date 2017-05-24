@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/command_line.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/frame_host/navigation_handle_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -10,9 +11,11 @@
 #include "content/public/common/browser_side_navigation_policy.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/request_context_type.h"
+#include "content/public/common/url_constants.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/navigation_handle_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
 #include "content/shell/browser/shell.h"
@@ -25,97 +28,6 @@
 namespace content {
 
 namespace {
-
-// Gathers data from the NavigationHandle assigned to navigations that start
-// with the expected URL.
-class NavigationHandleObserver : public WebContentsObserver {
- public:
-  NavigationHandleObserver(WebContents* web_contents,
-                           const GURL& expected_start_url)
-      : WebContentsObserver(web_contents),
-        page_transition_(ui::PAGE_TRANSITION_LINK),
-        expected_start_url_(expected_start_url) {}
-
-  void DidStartNavigation(NavigationHandle* navigation_handle) override {
-    if (handle_ || navigation_handle->GetURL() != expected_start_url_)
-      return;
-
-    handle_ = navigation_handle;
-    has_committed_ = false;
-    is_error_ = false;
-    page_transition_ = ui::PAGE_TRANSITION_LINK;
-    last_committed_url_ = GURL();
-
-    is_main_frame_ = navigation_handle->IsInMainFrame();
-    is_parent_main_frame_ = navigation_handle->IsParentMainFrame();
-    is_renderer_initiated_ = navigation_handle->IsRendererInitiated();
-    is_same_document_ = navigation_handle->IsSameDocument();
-    was_redirected_ = navigation_handle->WasServerRedirect();
-    frame_tree_node_id_ = navigation_handle->GetFrameTreeNodeId();
-  }
-
-  void DidFinishNavigation(NavigationHandle* navigation_handle) override {
-    if (navigation_handle != handle_)
-      return;
-
-    DCHECK_EQ(is_main_frame_, navigation_handle->IsInMainFrame());
-    DCHECK_EQ(is_parent_main_frame_, navigation_handle->IsParentMainFrame());
-    DCHECK_EQ(is_same_document_, navigation_handle->IsSameDocument());
-    DCHECK_EQ(is_renderer_initiated_, navigation_handle->IsRendererInitiated());
-    DCHECK_EQ(frame_tree_node_id_, navigation_handle->GetFrameTreeNodeId());
-
-    was_redirected_ = navigation_handle->WasServerRedirect();
-    net_error_code_ = navigation_handle->GetNetErrorCode();
-
-    if (navigation_handle->HasCommitted()) {
-      has_committed_ = true;
-      if (!navigation_handle->IsErrorPage()) {
-        page_transition_ = navigation_handle->GetPageTransition();
-        last_committed_url_ = navigation_handle->GetURL();
-      } else {
-        is_error_ = true;
-      }
-    } else {
-      has_committed_ = false;
-      is_error_ = true;
-    }
-
-    handle_ = nullptr;
-  }
-
-  bool has_committed() { return has_committed_; }
-  bool is_error() { return is_error_; }
-  bool is_main_frame() { return is_main_frame_; }
-  bool is_parent_main_frame() { return is_parent_main_frame_; }
-  bool is_renderer_initiated() { return is_renderer_initiated_; }
-  bool is_same_document() { return is_same_document_; }
-  bool was_redirected() { return was_redirected_; }
-  int frame_tree_node_id() { return frame_tree_node_id_; }
-
-  const GURL& last_committed_url() { return last_committed_url_; }
-
-  ui::PageTransition page_transition() { return page_transition_; }
-
-  net::Error net_error_code() { return net_error_code_; }
-
- private:
-  // A reference to the NavigationHandle so this class will track only
-  // one navigation at a time. It is set at DidStartNavigation and cleared
-  // at DidFinishNavigation before the NavigationHandle is destroyed.
-  NavigationHandle* handle_ = nullptr;
-  bool has_committed_ = false;
-  bool is_error_ = false;
-  bool is_main_frame_ = false;
-  bool is_parent_main_frame_ = false;
-  bool is_renderer_initiated_ = true;
-  bool is_same_document_ = false;
-  bool was_redirected_ = false;
-  int frame_tree_node_id_ = -1;
-  ui::PageTransition page_transition_ = ui::PAGE_TRANSITION_LINK;
-  GURL expected_start_url_;
-  GURL last_committed_url_;
-  net::Error net_error_code_ = net::OK;
-};
 
 // A test NavigationThrottle that will return pre-determined checks and run
 // callbacks when the various NavigationThrottle methods are called. It is
@@ -1135,6 +1047,49 @@ IN_PROC_BROWSER_TEST_F(NavigationHandleImplBrowserTest, ErrorCodeOnCancel) {
   shell()->LoadURL(url2);
   same_tab_observer.Wait();
 
+  EXPECT_EQ(net::ERR_ABORTED, observer.net_error_code());
+}
+
+// Tests that when a renderer-initiated request redirects to a URL that the
+// renderer can't access, the right error code is set on the NavigationHandle.
+IN_PROC_BROWSER_TEST_F(NavigationHandleImplBrowserTest, ErrorCodeOnRedirect) {
+  GURL url(embedded_test_server()->GetURL("/title1.html"));
+  EXPECT_TRUE(NavigateToURL(shell(), url));
+
+  GURL redirect_url = embedded_test_server()->GetURL(
+      std::string("/server-redirect?") + kChromeUINetworkErrorsListingURL);
+  NavigationHandleObserver observer(shell()->web_contents(), redirect_url);
+  TestNavigationObserver same_tab_observer(shell()->web_contents(), 1);
+  EXPECT_TRUE(
+      ExecuteScript(shell(), base::StringPrintf("location.href = '%s';",
+                                                redirect_url.spec().c_str())));
+  same_tab_observer.Wait();
+  EXPECT_EQ(net::ERR_ABORTED, observer.net_error_code());
+}
+
+// Tests that when a navigation is aborted (i.e. because of beforeunload), the
+// right error code is set on the NavigationHandle.
+IN_PROC_BROWSER_TEST_F(NavigationHandleImplBrowserTest,
+                       ErrorCodeOnAbortedNavigation) {
+  // Without PlzNavigate, NavigationHandles aren't created until after the
+  // beforeunload handler runs.
+  if (!IsBrowserSideNavigationEnabled())
+    return;
+  GURL url(
+      embedded_test_server()->GetURL("/render_frame_host/beforeunload.html"));
+  EXPECT_TRUE(NavigateToURL(shell(), url));
+
+  GURL new_url("/title1.html");
+  NavigationHandleObserver observer(shell()->web_contents(), new_url);
+  TestNavigationManager navigation_waiter(shell()->web_contents(), new_url);
+  PrepContentsForBeforeUnloadTest(shell()->web_contents());
+  SetShouldProceedOnBeforeUnload(shell(), false);
+
+  shell()->LoadURL(new_url);
+  WaitForAppModalDialog(shell());
+  static_cast<WebContentsImpl*>(shell()->web_contents())
+      ->CancelModalDialogsForRenderManager();
+  navigation_waiter.WaitForNavigationFinished();
   EXPECT_EQ(net::ERR_ABORTED, observer.net_error_code());
 }
 

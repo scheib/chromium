@@ -8,7 +8,6 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_window.h"
 #include "ui/base/hit_test.h"

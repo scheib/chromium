@@ -1,5 +1,6 @@
-<link rel="import" href="chrome://resources/cr_elements/icons.html">
 <link rel="import" href="chrome://resources/html/polymer.html">
+
+<link rel="import" href="chrome://resources/cr_elements/icons.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-ripple/paper-ripple.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-styles/color.html">
 
@@ -21,7 +22,7 @@
       paper-ripple {
         /* Allowing the ripple to capture pointer events prevents a focus
          * rectangle for showing up for clicks, while still allowing it with
-         * tab-navigation. This undoes a paper-ripple bugfix aimed at
+         * tab-navigation. This undoes a paper-ripple bug fix aimed at
          * non-Chrome browsers. TODO(tsergeant): Improve focus in
          * viewer-bookmark so this can be removed (https://crbug.com/5448190).
          */
@@ -62,8 +63,8 @@
     </div>
     <!-- dom-if will stamp the complex bookmark tree lazily as individual nodes
       are opened. -->
-    <template is="dom-if" if="{{childrenShown}}" id="sub-bookmarks">
-      <template is="dom-repeat" items="{{bookmark.children}}">
+    <template is="dom-if" if="[[childrenShown]]" id="sub-bookmarks">
+      <template is="dom-repeat" items="[[bookmark.children]]">
         <viewer-bookmark bookmark="{{item}}" depth="{{childDepth}}">
         </viewer-bookmark>
       </template>

@@ -2,19 +2,10 @@
    Use of this source code is governed by a BSD-style license that can be
    found in the LICENSE file. */
 
-a {
-  color: #585858;
-}
-
 .bad-clock .icon {
   background-image: -webkit-image-set(
       url(images/1x/clock.png) 1x,
       url(images/2x/clock.png) 2x);
-}
-
-body {
-  background-color: #f7f7f7;
-  color: #646464;
 }
 
 body.safe-browsing {
@@ -81,15 +72,6 @@ button:hover {
   margin-top: 20px;
 }
 
-#details-button {
-  background: inherit;
-  border: 0;
-  float: none;
-  margin: 0;
-  padding: 10px 0;
-  text-transform: uppercase;
-}
-
 #details-button:hover {
   box-shadow: inherit;
   text-decoration: underline;
@@ -118,18 +100,7 @@ h2 {
   font-weight: normal;
 }
 
-.hidden {
-  display: none;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-  font-size: 125%;
-}
-
 .icon {
-  background-repeat: no-repeat;
-  background-size: 100%;
   height: 72px;
   margin: 0 0 40px;
   width: 72px;

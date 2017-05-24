@@ -56,8 +56,6 @@ bool g_keyboard_restricted = false;
 
 bool g_touch_keyboard_enabled = false;
 
-bool g_overscroll_enabled_with_accessibility_keyboard = false;
-
 KeyboardState g_requested_keyboard_state = KEYBOARD_STATE_AUTO;
 
 KeyboardOverscrolOverride g_keyboard_overscroll_override =
@@ -150,10 +148,8 @@ bool IsKeyboardOverscrollEnabled() {
 
   // Users of the accessibility on-screen keyboard are likely to be using mouse
   // input, which may interfere with overscrolling.
-  if (g_accessibility_keyboard_enabled &&
-      !g_overscroll_enabled_with_accessibility_keyboard) {
+  if (g_accessibility_keyboard_enabled)
     return false;
-  }
 
   // If overscroll enabled override is set, use it instead. Currently
   // login / out-of-box disable keyboard overscroll. http://crbug.com/363635
@@ -387,10 +383,6 @@ void MarkKeyboardLoadFinished() {
 void LogKeyboardControlEvent(KeyboardControlEvent event) {
   UMA_HISTOGRAM_ENUMERATION("VirtualKeyboard.KeyboardControlEvent", event,
                             KEYBOARD_CONTROL_MAX);
-}
-
-void SetOverscrollEnabledWithAccessibilityKeyboard(bool enabled) {
-  g_overscroll_enabled_with_accessibility_keyboard = enabled;
 }
 
 }  // namespace keyboard

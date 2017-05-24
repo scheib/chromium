@@ -30,7 +30,7 @@ class RepostFormTabHelper : public web::WebStateUserData<RepostFormTabHelper>,
 
  private:
   // web::WebStateObserver overrides:
-  void ProvisionalNavigationStarted(const GURL&) override;
+  void DidStartNavigation(web::NavigationContext* navigation_context) override;
   void WebStateDestroyed() override;
 
   // Coordinates repost form dialog presentation.

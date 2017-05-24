@@ -5204,7 +5204,7 @@ void BrowserAccessibilityComWin::InitRoleAndState() {
   if (owner()->HasState(ui::AX_STATE_EDITABLE))
     ia2_state |= IA2_STATE_EDITABLE;
 
-  if (owner()->GetBoolAttribute(ui::AX_ATTR_CAN_SET_VALUE))
+  if (owner()->HasAction(ui::AX_ACTION_SET_VALUE))
     ia2_state |= IA2_STATE_EDITABLE;
 
   if (!owner()->GetStringAttribute(ui::AX_ATTR_AUTO_COMPLETE).empty())
@@ -5294,11 +5294,6 @@ void BrowserAccessibilityComWin::InitRoleAndState() {
       ia_role = ROLE_SYSTEM_DROPLIST;
       ia2_role = IA2_ROLE_DATE_EDITOR;
       break;
-    case ui::AX_ROLE_DIV:
-      role_name = L"div";
-      ia_role = ROLE_SYSTEM_GROUPING;
-      ia2_role = IA2_ROLE_SECTION;
-      break;
     case ui::AX_ROLE_DEFINITION:
       role_name = html_tag;
       ia2_role = IA2_ROLE_PARAGRAPH;
@@ -5364,6 +5359,11 @@ void BrowserAccessibilityComWin::InitRoleAndState() {
       ia_role = ROLE_SYSTEM_GROUPING;
       ia2_role = IA2_ROLE_FOOTER;
       break;
+    case ui::AX_ROLE_GENERIC_CONTAINER:
+      ia_role = ROLE_SYSTEM_GROUPING;
+      ia2_role = IA2_ROLE_SECTION;
+      role_name = html_tag.empty() ? L"div" : html_tag;
+      break;
     case ui::AX_ROLE_GRID:
       ia_role = ROLE_SYSTEM_TABLE;
       // TODO(aleventhal) this changed between ARIA 1.0 and 1.1,
@@ -5371,23 +5371,9 @@ void BrowserAccessibilityComWin::InitRoleAndState() {
       // or editable by default
       // ia_state |= STATE_SYSTEM_READONLY;
       break;
-    case ui::AX_ROLE_GROUP: {
-      base::string16 aria_role =
-          owner()->GetString16Attribute(ui::AX_ATTR_ROLE);
-      if (aria_role == L"group" || html_tag == L"fieldset") {
-        ia_role = ROLE_SYSTEM_GROUPING;
-      } else if (html_tag == L"li") {
-        ia_role = ROLE_SYSTEM_LISTITEM;
-        ia_state |= STATE_SYSTEM_READONLY;
-      } else {
-        if (html_tag.empty())
-          role_name = L"div";
-        else
-          role_name = html_tag;
-        ia2_role = IA2_ROLE_SECTION;
-      }
+    case ui::AX_ROLE_GROUP:
+      ia_role = ROLE_SYSTEM_GROUPING;
       break;
-    }
     case ui::AX_ROLE_HEADING:
       role_name = html_tag;
       if (html_tag.empty())

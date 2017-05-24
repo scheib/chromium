@@ -24,8 +24,9 @@ import org.chromium.ui.widget.Toast;
 /**
  * Java version of the compact translate infobar.
  */
-class TranslateCompactInfoBar extends InfoBar
-        implements TabLayout.OnTabSelectedListener, TranslateMenuHelper.TranslateMenuListener {
+class TranslateCompactInfoBar extends InfoBar implements TabLayout.OnTabSelectedListener,
+                                                         TranslateMenuHelper.TranslateMenuListener,
+                                                         View.OnLayoutChangeListener {
     public static final int TRANSLATING_INFOBAR = 1;
 
     private static final int SOURCE_TAB_INDEX = 0;
@@ -175,6 +176,7 @@ class TranslateCompactInfoBar extends InfoBar
                         .inflate(R.layout.infobar_translate_compact_content, parent, false);
 
         mTabLayout = (TranslateTabLayout) content.findViewById(R.id.translate_infobar_tabs);
+        mTabLayout.addOnLayoutChangeListener(this);
         mTabLayout.addTabs(mOptions.sourceLanguageName(), mOptions.targetLanguageName());
 
         // Set translating status in the beginning for pages translated automatically.
@@ -401,9 +403,22 @@ class TranslateCompactInfoBar extends InfoBar
     }
 
     @Override
-    protected void onStartedHiding() {
+    public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft,
+            int oldTop, int oldRight, int oldBottom) {
+        // Dismiss all menus when there is layout changed. (which will cause menu misplacement.)
+        dismissMenus();
+    }
+
+    // Dismiss all overflow menus that remains open.
+    // This is called when infobar started hiding or layout changed.
+    private void dismissMenus() {
         if (mOverflowMenuHelper != null) mOverflowMenuHelper.dismiss();
         if (mLanguageMenuHelper != null) mLanguageMenuHelper.dismiss();
+    }
+
+    @Override
+    protected void onStartedHiding() {
+        dismissMenus();
         if (getSnackbarManager() != null) getSnackbarManager().dismissAllSnackbars();
         super.onStartedHiding();
     }

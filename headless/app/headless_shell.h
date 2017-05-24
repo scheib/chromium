@@ -32,7 +32,7 @@ class HeadlessShell : public HeadlessWebContents::Observer,
   HeadlessShell();
   ~HeadlessShell() override;
 
-  void OnStart(HeadlessBrowser* browser);
+  virtual void OnStart(HeadlessBrowser* browser);
 
   HeadlessDevToolsClient* devtools_client() const {
     return devtools_client_.get();
@@ -52,7 +52,7 @@ class HeadlessShell : public HeadlessWebContents::Observer,
   void OnNavigationRequested(
       const headless::page::NavigationRequestedParams& params) override;
 
-  void Shutdown();
+  virtual void Shutdown();
 
   void FetchTimeout();
 

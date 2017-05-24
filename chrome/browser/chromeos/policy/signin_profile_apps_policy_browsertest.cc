@@ -48,10 +48,11 @@ namespace {
 // Parameters for the several extensions and apps that are used by the tests in
 // this file (note that the paths are given relative to the src/chrome/test/data
 // directory):
-// * The test app which is whitelisted for running in the sign-in profile:
-const char kTestAppId[] = "bjaiihebfngildkcjkjckolinodhliff";
-const char kTestAppUpdateManifestPath[] =
-    "extensions/signin_screen_test_app/update_manifest.xml";
+// * The manual testing app which is whitelisted for running in the sign-in
+//   profile:
+const char kManualTestAppId[] = "bjaiihebfngildkcjkjckolinodhliff";
+const char kManualTestAppUpdateManifestPath[] =
+    "extensions/signin_screen_manual_test_app/update_manifest.xml";
 // * A trivial test app which is NOT whitelisted for running in the sign-in
 //   profile:
 const char kTrivialAppId[] = "mockapnacjbcdncmpkjngjalkhphojek";
@@ -221,15 +222,15 @@ class SigninProfileAppsPolicyPerChannelTest
 IN_PROC_BROWSER_TEST_P(SigninProfileAppsPolicyPerChannelTest,
                        WhitelistedAppInstallation) {
   extensions::TestExtensionRegistryObserver registry_observer(
-      extensions::ExtensionRegistry::Get(GetProfile()), kTestAppId);
+      extensions::ExtensionRegistry::Get(GetProfile()), kManualTestAppId);
 
-  AddExtensionForForceInstallation(kTestAppId,
-                                   base::FilePath(kTestAppUpdateManifestPath));
+  AddExtensionForForceInstallation(
+      kManualTestAppId, base::FilePath(kManualTestAppUpdateManifestPath));
 
   registry_observer.WaitForExtensionLoaded();
   EXPECT_TRUE(extensions::ExtensionRegistry::Get(GetProfile())
                   ->enabled_extensions()
-                  .Contains(kTestAppId));
+                  .Contains(kManualTestAppId));
 }
 
 // Tests that a non-whitelisted app is installed only when on Dev, Canary or
@@ -277,14 +278,13 @@ IN_PROC_BROWSER_TEST_P(SigninProfileAppsPolicyPerChannelTest,
                    ->GetInstalledExtension(kTrivialExtensionId));
 }
 
-// TODO(emaxx): Add the STABLE option once the scoped feature channel bug is
-// fixed (https://crrev.com/2854293003).
 INSTANTIATE_TEST_CASE_P(,
                         SigninProfileAppsPolicyPerChannelTest,
                         testing::Values(version_info::Channel::UNKNOWN,
                                         version_info::Channel::CANARY,
                                         version_info::Channel::DEV,
-                                        version_info::Channel::BETA));
+                                        version_info::Channel::BETA,
+                                        version_info::Channel::STABLE));
 
 namespace {
 
@@ -321,12 +321,12 @@ IN_PROC_BROWSER_TEST_F(SigninProfileAppsPolicyTest, BackgroundPage) {
 // Tests installation of multiple sign-in profile apps.
 IN_PROC_BROWSER_TEST_F(SigninProfileAppsPolicyTest, MultipleApps) {
   extensions::TestExtensionRegistryObserver registry_observer1(
-      extensions::ExtensionRegistry::Get(GetProfile()), kTestAppId);
+      extensions::ExtensionRegistry::Get(GetProfile()), kManualTestAppId);
   extensions::TestExtensionRegistryObserver registry_observer2(
       extensions::ExtensionRegistry::Get(GetProfile()), kTrivialAppId);
 
-  AddExtensionForForceInstallation(kTestAppId,
-                                   base::FilePath(kTestAppUpdateManifestPath));
+  AddExtensionForForceInstallation(
+      kManualTestAppId, base::FilePath(kManualTestAppUpdateManifestPath));
   AddExtensionForForceInstallation(
       kTrivialAppId, base::FilePath(kTrivialAppUpdateManifestPath));
 

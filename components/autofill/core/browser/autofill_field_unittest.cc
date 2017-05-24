@@ -799,7 +799,7 @@ TEST_F(AutofillFieldTest, FillSelectControlWithTwoDigitCreditCardYear) {
 }
 
 TEST_F(AutofillFieldTest, FillSelectControlWithCreditCardType) {
-  std::vector<const char*> kCreditCardTypes = {"Visa", "Master Card", "AmEx",
+  std::vector<const char*> kCreditCardTypes = {"Visa", "Mastercard", "AmEx",
                                                "discover"};
   AutofillField field;
   test::CreateTestSelectField(kCreditCardTypes, &field);
@@ -812,8 +812,17 @@ TEST_F(AutofillFieldTest, FillSelectControlWithCreditCardType) {
 
   // Filling should be able to handle intervening whitespace:
   AutofillField::FillFormField(
+      field, ASCIIToUTF16("Master card"), "en-US", "en-US", &field);
+  EXPECT_EQ(ASCIIToUTF16("Mastercard"), field.value);
+
+  // Mastercard is sometimes shown as MasterCard or Master Card:
+  AutofillField::FillFormField(
       field, ASCIIToUTF16("MasterCard"), "en-US", "en-US", &field);
-  EXPECT_EQ(ASCIIToUTF16("Master Card"), field.value);
+  EXPECT_EQ(ASCIIToUTF16("Mastercard"), field.value);
+
+  AutofillField::FillFormField(
+      field, ASCIIToUTF16("Master Card"), "en-US", "en-US", &field);
+  EXPECT_EQ(ASCIIToUTF16("Mastercard"), field.value);
 
   // American Express is sometimes abbreviated as AmEx:
   AutofillField::FillFormField(

@@ -31,6 +31,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/variations/variations_associated_data.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/media_stream_request.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -847,7 +848,8 @@ IN_PROC_BROWSER_TEST_P(MediaStreamDevicesControllerTest,
 IN_PROC_BROWSER_TEST_P(MediaStreamDevicesControllerTest,
                        PepperRequestInsecure) {
   InitWithUrl(GURL("http://www.example.com"));
-  SetContentSettings(CONTENT_SETTING_ALLOW, CONTENT_SETTING_ALLOW);
+
+  SetPromptResponseType(PermissionRequestManager::ACCEPT_ALL);
 
   RequestPermissions(
       GetWebContents(),
@@ -855,7 +857,29 @@ IN_PROC_BROWSER_TEST_P(MediaStreamDevicesControllerTest,
                             content::MEDIA_OPEN_DEVICE_PEPPER_ONLY),
       base::Bind(&MediaStreamDevicesControllerTest::OnMediaStreamResponse,
                  base::Unretained(this)));
+  ASSERT_EQ(2u, TotalPromptRequestCount());
+
+  ASSERT_EQ(content::MEDIA_DEVICE_OK, media_stream_result());
+  ASSERT_TRUE(CheckDevicesListContains(content::MEDIA_DEVICE_AUDIO_CAPTURE));
+  ASSERT_FALSE(CheckDevicesListContains(content::MEDIA_DEVICE_VIDEO_CAPTURE));
+
+  // Test that with the kRequireSecureOriginsForPepperMediaRequests flag enabled
+  // that permission will be denied.
+  ResetPromptCounters();
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      features::kRequireSecureOriginsForPepperMediaRequests);
+  RequestPermissions(
+      GetWebContents(),
+      CreateRequestWithType(example_audio_id(), example_video_id(),
+                            content::MEDIA_OPEN_DEVICE_PEPPER_ONLY),
+      base::Bind(&MediaStreamDevicesControllerTest::OnMediaStreamResponse,
+                 base::Unretained(this)));
   ASSERT_EQ(0u, TotalPromptRequestCount());
+
+  ASSERT_EQ(content::MEDIA_DEVICE_PERMISSION_DENIED, media_stream_result());
+  ASSERT_FALSE(CheckDevicesListContains(content::MEDIA_DEVICE_AUDIO_CAPTURE));
+  ASSERT_FALSE(CheckDevicesListContains(content::MEDIA_DEVICE_VIDEO_CAPTURE));
 }
 
 // Request and block microphone and camera access with kill switch.

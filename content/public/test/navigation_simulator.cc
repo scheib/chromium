@@ -483,6 +483,11 @@ NavigationSimulator::GetLastThrottleCheckResult() {
   return last_throttle_check_result_.value();
 }
 
+NavigationHandle* NavigationSimulator::GetNavigationHandle() const {
+  CHECK_EQ(STARTED, state_);
+  return handle_;
+}
+
 void NavigationSimulator::DidStartNavigation(
     NavigationHandle* navigation_handle) {
   // Check if this navigation is the one we're simulating.

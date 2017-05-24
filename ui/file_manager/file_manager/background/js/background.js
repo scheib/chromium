@@ -5,7 +5,7 @@
 /**
  * Root class of the background page.
  * @constructor
- * @implements {FileBrowserBackground}
+ * @implements {FileBrowserBackgroundFull}
  * @extends {BackgroundBase}
  * @struct
  */

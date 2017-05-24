@@ -22,6 +22,7 @@
 #include "google_apis/google_api_keys.h"
 #include "net/base/escape.h"
 #include "net/base/load_flags.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/url_request/url_fetcher.h"
 #include "net/url_request/url_request_context_getter.h"
 #include "net/url_request/url_request_status.h"
@@ -124,8 +125,33 @@ bool NetworkLocationRequest::MakeRequest(const base::string16& access_token,
   wifi_timestamp_ = wifi_timestamp;
 
   GURL request_url = FormRequestURL(url_);
-  url_fetcher_ = net::URLFetcher::Create(url_fetcher_id_for_tests, request_url,
-                                         net::URLFetcher::POST, this);
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("device_geolocation_request", R"(
+        semantics {
+          sender: "Network Location Provider"
+          description:
+            "Obtains geo position based on current IP address."
+          trigger:
+            "Location requests are sent when the page requests them or new "
+            "IP address is available."
+          data: "IP Address."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: false
+          setting:
+            "Users can control this feature via the Location setting under "
+            "'Privacy', 'Content Settings...'."
+          chrome_policy {
+            DefaultGeolocationSetting {
+              policy_options {mode: MANDATORY}
+              DefaultGeolocationSetting: 2
+            }
+          }
+        })");
+  url_fetcher_ =
+      net::URLFetcher::Create(url_fetcher_id_for_tests, request_url,
+                              net::URLFetcher::POST, this, traffic_annotation);
   url_fetcher_->SetRequestContext(url_context_.get());
   std::string upload_data;
   FormUploadData(wifi_data, wifi_timestamp, access_token, &upload_data);

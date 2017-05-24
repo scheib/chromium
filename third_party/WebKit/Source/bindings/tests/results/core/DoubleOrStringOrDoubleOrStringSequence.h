@@ -40,9 +40,9 @@ class CORE_EXPORT DoubleOrStringOrDoubleOrStringSequence final {
   static DoubleOrStringOrDoubleOrStringSequence fromDoubleOrStringSequence(const HeapVector<DoubleOrString>&);
 
   bool isString() const { return m_type == SpecificTypeString; }
-  String getAsString() const;
-  void setString(String);
-  static DoubleOrStringOrDoubleOrStringSequence fromString(String);
+  const String& getAsString() const;
+  void setString(const String&);
+  static DoubleOrStringOrDoubleOrStringSequence fromString(const String&);
 
   DoubleOrStringOrDoubleOrStringSequence(const DoubleOrStringOrDoubleOrStringSequence&);
   ~DoubleOrStringOrDoubleOrStringSequence();

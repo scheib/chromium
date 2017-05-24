@@ -16,12 +16,9 @@ namespace payments {
 PaymentRequestRowView::PaymentRequestRowView(views::ButtonListener* listener,
                                              bool clickable,
                                              const gfx::Insets& insets)
-    : views::CustomButton(listener), clickable_(clickable) {
+    : views::CustomButton(listener), clickable_(clickable), insets_(insets) {
   SetEnabled(clickable_);
-  SetBorder(payments::CreatePaymentRequestRowBorder(
-      GetNativeTheme()->GetSystemColor(
-          ui::NativeTheme::kColorId_SeparatorColor),
-      insets));
+  ShowBottomSeparator();
   SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
 }
 
@@ -33,26 +30,46 @@ void PaymentRequestRowView::SetActiveBackground() {
       ui::NativeTheme::kColorId_ResultsTableHoveredBackground)));
 }
 
-// views::CustomButton:
-void PaymentRequestRowView::StateChanged(ButtonState old_state) {
-  if (clickable_ && (state() == views::Button::STATE_HOVERED ||
-                     state() == views::Button::STATE_PRESSED)) {
+void PaymentRequestRowView::ShowBottomSeparator() {
+  SetBorder(payments::CreatePaymentRequestRowBorder(
+      GetNativeTheme()->GetSystemColor(
+          ui::NativeTheme::kColorId_SeparatorColor),
+      insets_));
+}
+
+void PaymentRequestRowView::HideBottomSeparator() {
+  SetBorder(views::NullBorder());
+}
+
+void PaymentRequestRowView::SetIsHighlighted(bool highlighted) {
+  if (highlighted) {
     SetActiveBackground();
+    HideBottomSeparator();
   } else {
     set_background(nullptr);
+    ShowBottomSeparator();
   }
+}
+
+// views::CustomButton:
+void PaymentRequestRowView::StateChanged(ButtonState old_state) {
+  if (!clickable_)
+    return;
+
+  SetIsHighlighted(state() == views::Button::STATE_HOVERED ||
+                   state() == views::Button::STATE_PRESSED);
 }
 
 void PaymentRequestRowView::OnFocus() {
   if (clickable_) {
-    SetActiveBackground();
+    SetIsHighlighted(true);
     SchedulePaint();
   }
 }
 
 void PaymentRequestRowView::OnBlur() {
   if (clickable_) {
-    set_background(nullptr);
+    SetIsHighlighted(false);
     SchedulePaint();
   }
 }

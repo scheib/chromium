@@ -95,8 +95,8 @@ RenderProcessHost* SiteInstanceImpl::GetProcess() {
 
     // Check if the ProcessReusePolicy should be updated.
     bool should_use_process_per_site =
-        RenderProcessHost::ShouldUseProcessPerSite(browser_context, site_) &&
-        has_site_;
+        has_site_ &&
+        RenderProcessHost::ShouldUseProcessPerSite(browser_context, site_);
     if (should_use_process_per_site) {
       process_reuse_policy_ = ProcessReusePolicy::PROCESS_PER_SITE;
     } else if (process_reuse_policy_ == ProcessReusePolicy::PROCESS_PER_SITE) {

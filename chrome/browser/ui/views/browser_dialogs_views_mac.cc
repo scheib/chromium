@@ -41,9 +41,9 @@ void ShowPageInfoBubbleViewsAtPoint(
     return;
   }
 
-  PageInfoBubbleView::ShowBubble(nullptr, gfx::Rect(anchor_point, gfx::Size()),
-                                 profile, web_contents, virtual_url,
-                                 security_info);
+  PageInfoBubbleView::ShowBubble(nullptr, nullptr,
+                                 gfx::Rect(anchor_point, gfx::Size()), profile,
+                                 web_contents, virtual_url, security_info);
 }
 
 void ShowBookmarkBubbleViewsAtPoint(const gfx::Point& anchor_point,

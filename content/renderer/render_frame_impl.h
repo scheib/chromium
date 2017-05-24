@@ -54,6 +54,7 @@
 #include "media/base/routing_token_callback.h"
 #include "media/blink/webmediaplayer_delegate.h"
 #include "media/blink/webmediaplayer_params.h"
+#include "media/mojo/features.h"
 #include "media/mojo/interfaces/remoting.mojom.h"
 #include "mojo/public/cpp/bindings/associated_binding.h"
 #include "mojo/public/cpp/bindings/binding.h"
@@ -1100,7 +1101,7 @@ class CONTENT_EXPORT RenderFrameImpl
 
   bool AreSecureCodecsSupported();
 
-#if defined(ENABLE_MOJO_MEDIA)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA)
   service_manager::mojom::InterfaceProvider* GetMediaInterfaceProvider();
 #endif
 
@@ -1279,7 +1280,7 @@ class CONTENT_EXPORT RenderFrameImpl
   // The media permission dispatcher attached to this frame.
   std::unique_ptr<MediaPermissionDispatcher> media_permission_dispatcher_;
 
-#if defined(ENABLE_MOJO_MEDIA)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA)
   // The media interface provider attached to this frame, lazily initialized.
   std::unique_ptr<MediaInterfaceProvider> media_interface_provider_;
 #endif

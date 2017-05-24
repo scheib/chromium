@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_METRICS_PROCESS_MEMORY_METRICS_EMITTER_H_
 
 #include "base/memory/ref_counted.h"
-#include "services/resource_coordinator/public/interfaces/memory/memory_instrumentation.mojom.h"
+#include "services/resource_coordinator/public/interfaces/memory_instrumentation/memory_instrumentation.mojom.h"
 
 // This class asynchronously fetches memory metrics for each process, and then
 // emits UMA metrics from those metrics.

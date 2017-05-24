@@ -198,10 +198,6 @@ static_library("content_shell_lib") {
     "//build/config/compiler:no_size_t_to_int_warning",
   ]
 
-  if (enable_mojo_media) {
-    configs += [ "//media/mojo/services:mojo_media_config" ]
-  }
-
   defines = [ "CONTENT_SHELL_VERSION=\"$content_shell_version\"" ]
 
   public_deps = [
@@ -246,6 +242,7 @@ static_library("content_shell_lib") {
     "//gpu",
     "//media",
     "//media/capture",
+    "//media/mojo:features",
     "//mojo/edk/js",
     "//net",
     "//net:net_resources",
@@ -488,7 +485,7 @@ if (is_android) {
     deps = [
       ":content_shell_framework_bundle_data",
       ":content_shell_resources_bundle_data",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
 
       # TODO(rsesek): Remove this after GYP is gone, since it only needs to
       # be here per the comment in blink_test_platform_support_mac.mm about
@@ -521,7 +518,7 @@ if (is_android) {
     deps = [
       ":content_shell_lib",
       ":pak",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
     ]
 
@@ -560,7 +557,7 @@ if (is_win) {
 
     deps = [
       "//base",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
       "//components/crash/content/tools:crash_service",
     ]
@@ -726,7 +723,7 @@ if (is_mac) {
     ]
     deps = [
       ":content_shell_framework+link",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
     ldflags = [
       # The helper is in Content Shell.app/Contents/Frameworks/Content Shell Helper.app/Contents/MacOS/

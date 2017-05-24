@@ -172,7 +172,8 @@ class PaymentRequestBrowserTestBase
                                 bool wait_for_animation = true);
   void ClickOnChildInListViewAndWait(int child_index,
                                      int total_num_children,
-                                     DialogViewID list_view_id);
+                                     DialogViewID list_view_id,
+                                     bool wait_for_animation = true);
   // Returns profile label values under |parent_view|.
   std::vector<base::string16> GetProfileLabelValues(
       DialogViewID parent_view_id);

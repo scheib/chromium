@@ -4601,6 +4601,50 @@ TEST_F(GLES2ImplementationManualInitTest, FailInitOnTransferBufferFail) {
   EXPECT_FALSE(Initialize(init_options));
 }
 
+TEST_F(GLES2ImplementationTest, DiscardableMemoryDelete) {
+  const GLuint texture_id = 1;
+  EXPECT_FALSE(share_group_->discardable_manager()->TextureIsValid(texture_id));
+  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
+  EXPECT_TRUE(share_group_->discardable_manager()->TextureIsValid(texture_id));
+
+  // Deleting a texture should clear its discardable entry.
+  gl_->DeleteTextures(1, &texture_id);
+  EXPECT_FALSE(share_group_->discardable_manager()->TextureIsValid(texture_id));
+}
+
+TEST_F(GLES2ImplementationTest, DiscardableMemoryLockFail) {
+  const GLuint texture_id = 1;
+  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
+  EXPECT_TRUE(share_group_->discardable_manager()->TextureIsValid(texture_id));
+
+  // Unlock and delete the handle.
+  ClientDiscardableHandle client_handle =
+      share_group_->discardable_manager()->GetHandleForTesting(texture_id);
+  ServiceDiscardableHandle service_handle(client_handle.BufferForTesting(),
+                                          client_handle.byte_offset(),
+                                          client_handle.shm_id());
+  service_handle.Unlock();
+  EXPECT_TRUE(service_handle.Delete());
+
+  // Trying to re-lock the texture via GL should fail and delete the entry.
+  EXPECT_FALSE(gl_->LockDiscardableTextureCHROMIUM(texture_id));
+  EXPECT_FALSE(share_group_->discardable_manager()->TextureIsValid(texture_id));
+}
+
+TEST_F(GLES2ImplementationTest, DiscardableMemoryDoubleInitError) {
+  const GLuint texture_id = 1;
+  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
+  EXPECT_EQ(GL_NO_ERROR, CheckError());
+  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
+  EXPECT_EQ(GL_INVALID_VALUE, CheckError());
+}
+
+TEST_F(GLES2ImplementationTest, DiscardableMemoryLockError) {
+  const GLuint texture_id = 1;
+  EXPECT_FALSE(gl_->LockDiscardableTextureCHROMIUM(texture_id));
+  EXPECT_EQ(GL_INVALID_VALUE, CheckError());
+}
+
 #include "base/macros.h"
 #include "gpu/command_buffer/client/gles2_implementation_unittest_autogen.h"
 

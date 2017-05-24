@@ -1,8 +1,0 @@
-This is a testharness.js-based test.
-PASS Foreign fetch can intercept fetches made from a service worker 
-FAIL Foreign fetch can intercept fetches made from a dedicated worker assert_equals: expected "Success: Foreign Fetch" but got "Error: TypeError: Failed to fetch"
-FAIL Foreign fetch can intercept fetches made from a shared worker assert_equals: expected "Success: Foreign Fetch" but got "Error: TypeError: Failed to fetch"
-FAIL Fetches from an insecure dedicated worker aren't intercepted. assert_equals: expected "Success: Foreign Fetch" but got "Error: TypeError: Failed to fetch"
-FAIL Fetches from an insecure shared worker aren't intercepted. assert_equals: expected "Success: Foreign Fetch" but got "Error: TypeError: Failed to fetch"
-Harness: the test ran to completion.
-

@@ -4,14 +4,15 @@
 
 #include "ash/devtools/ash_devtools_css_agent.h"
 
+#include "ash/devtools/ui_element.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "ui/aura/window.h"
 
 namespace ash {
 namespace devtools {
-
 namespace {
+
 using namespace ui::devtools::protocol;
 
 const char kHeight[] = "height";
@@ -163,16 +164,8 @@ ui::devtools::protocol::Response AshDevToolsCSSAgent::setStyleTexts(
   return ui::devtools::protocol::Response::OK();
 }
 
-void AshDevToolsCSSAgent::OnWindowBoundsChanged(aura::Window* window) {
-  InvalidateStyleSheet(dom_agent_->GetNodeIdFromWindow(window));
-}
-
-void AshDevToolsCSSAgent::OnWidgetBoundsChanged(views::Widget* widget) {
-  InvalidateStyleSheet(dom_agent_->GetNodeIdFromWidget(widget));
-}
-
-void AshDevToolsCSSAgent::OnViewBoundsChanged(views::View* view) {
-  InvalidateStyleSheet(dom_agent_->GetNodeIdFromView(view));
+void AshDevToolsCSSAgent::OnNodeBoundsChanged(int node_id) {
+  InvalidateStyleSheet(node_id);
 }
 
 std::unique_ptr<ui::devtools::protocol::CSS::CSSStyle>
@@ -192,22 +185,10 @@ void AshDevToolsCSSAgent::InvalidateStyleSheet(int node_id) {
 bool AshDevToolsCSSAgent::GetPropertiesForNodeId(int node_id,
                                                  gfx::Rect* bounds,
                                                  bool* visible) {
-  aura::Window* window = dom_agent_->GetWindowFromNodeId(node_id);
-  if (window) {
-    *bounds = window->bounds();
-    *visible = window->IsVisible();
-    return true;
-  }
-  views::Widget* widget = dom_agent_->GetWidgetFromNodeId(node_id);
-  if (widget) {
-    *bounds = widget->GetRestoredBounds();
-    *visible = widget->IsVisible();
-    return true;
-  }
-  views::View* view = dom_agent_->GetViewFromNodeId(node_id);
-  if (view) {
-    *bounds = view->bounds();
-    *visible = view->visible();
+  UIElement* ui_element = dom_agent_->GetElementFromNodeId(node_id);
+  if (ui_element) {
+    ui_element->GetBounds(bounds);
+    ui_element->GetVisible(visible);
     return true;
   }
   return false;
@@ -216,33 +197,10 @@ bool AshDevToolsCSSAgent::GetPropertiesForNodeId(int node_id,
 bool AshDevToolsCSSAgent::SetPropertiesForNodeId(int node_id,
                                                  const gfx::Rect& bounds,
                                                  bool visible) {
-  aura::Window* window = dom_agent_->GetWindowFromNodeId(node_id);
-  if (window) {
-    window->SetBounds(bounds);
-    if (visible != window->IsVisible()) {
-      if (visible)
-        window->Show();
-      else
-        window->Hide();
-    }
-    return true;
-  }
-  views::Widget* widget = dom_agent_->GetWidgetFromNodeId(node_id);
-  if (widget) {
-    widget->SetBounds(bounds);
-    if (visible != widget->IsVisible()) {
-      if (visible)
-        widget->Show();
-      else
-        widget->Hide();
-    }
-    return true;
-  }
-  views::View* view = dom_agent_->GetViewFromNodeId(node_id);
-  if (view) {
-    view->SetBoundsRect(bounds);
-    if (visible != view->visible())
-      view->SetVisible(visible);
+  UIElement* ui_element = dom_agent_->GetElementFromNodeId(node_id);
+  if (ui_element) {
+    ui_element->SetBounds(bounds);
+    ui_element->SetVisible(visible);
     return true;
   }
   return false;

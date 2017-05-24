@@ -44,6 +44,9 @@ enum class UserAgentType : short;
 // Notifier for changes to the reading list requiring the menu to be updated.
 // Menus needing to be updated should set themselves as this object's delegate.
 @property(nonatomic, assign) ReadingListMenuNotifier* readingListMenuNotifier;
+// Records the time that the tools menu was requested; value is the time
+// interval since the NSDate referenceDate.
+@property(nonatomic, assign) NSTimeInterval requestStartTime;
 
 // Initialize a ToolsMenuContext instance with default values. |displayView| is
 // the weakly-held parent view within which the popup tools menu using this

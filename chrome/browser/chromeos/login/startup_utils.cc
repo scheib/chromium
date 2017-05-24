@@ -39,6 +39,14 @@ void SaveIntegerPreferenceForced(const char* pref_name, int value) {
   prefs->CommitPendingWrite();
 }
 
+// Saves 64 bit signed integer "Local State" preference and forces its
+// persistence to disk.
+void SaveInt64PreferenceForced(const char* pref_name, int64_t value) {
+  PrefService* prefs = g_browser_process->local_state();
+  prefs->SetInt64(pref_name, value);
+  prefs->CommitPendingWrite();
+}
+
 // Saves string "Local State" preference and forces its persistence to disk.
 void SaveStringPreferenceForced(const char* pref_name,
                                 const std::string& value) {
@@ -90,6 +98,8 @@ void StartupUtils::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterStringPref(prefs::kInitialLocale, "en-US");
   registry->RegisterBooleanPref(prefs::kIsBootstrappingSlave, false);
   registry->RegisterBooleanPref(prefs::kOobeControllerDetected, false);
+  registry->RegisterInt64Pref(prefs::kOobeTimeOfLastUpdateCheckWithoutUpdate,
+                              0);
 }
 
 // static
@@ -196,6 +206,26 @@ void StartupUtils::SetInitialLocale(const std::string& locale) {
     SaveStringPreferenceForced(prefs::kInitialLocale, locale);
   else
     NOTREACHED();
+}
+
+// static
+void StartupUtils::SaveTimeOfLastUpdateCheckWithoutUpdate(base::Time time) {
+  SaveInt64PreferenceForced(prefs::kOobeTimeOfLastUpdateCheckWithoutUpdate,
+                            time.ToInternalValue());
+}
+
+// static
+void StartupUtils::ClearTimeOfLastUpdateCheckWithoutUpdate() {
+  PrefService* prefs = g_browser_process->local_state();
+  prefs->ClearPref(prefs::kOobeTimeOfLastUpdateCheckWithoutUpdate);
+  prefs->CommitPendingWrite();
+}
+
+// static
+base::Time StartupUtils::GetTimeOfLastUpdateCheckWithoutUpdate() {
+  return base::Time::FromInternalValue(
+      g_browser_process->local_state()->GetInt64(
+          prefs::kOobeTimeOfLastUpdateCheckWithoutUpdate));
 }
 
 }  // namespace chromeos

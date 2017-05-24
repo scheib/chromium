@@ -161,6 +161,9 @@ bool CSSPropertyEquality::PropertiesEqual(CSSPropertyID prop,
       return a.FontSizeAdjust() == b.FontSizeAdjust();
     case CSSPropertyFontStretch:
       return a.GetFontStretch() == b.GetFontStretch();
+    case CSSPropertyFontVariationSettings:
+      return DataEquivalent(a.GetFontDescription().VariationSettings(),
+                            b.GetFontDescription().VariationSettings());
     case CSSPropertyFontWeight:
       return a.GetFontWeight() == b.GetFontWeight();
     case CSSPropertyHeight:

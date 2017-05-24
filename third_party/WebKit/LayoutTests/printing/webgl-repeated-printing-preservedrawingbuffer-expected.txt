@@ -1,4 +1,4 @@
- PASS successfullyParsed is true
+PASS successfullyParsed is true
 
 TEST COMPLETE
 Snapshot width: 800 height: 600

@@ -27,11 +27,6 @@ extern const char kShowAutofillTypePredictions[];
 extern const char kShowAutofillSignatures[];
 extern const char kWalletServiceUseSandbox[];
 
-#if defined(OS_ANDROID)
-extern const char kDisableAccessorySuggestionView[];
-extern const char kEnableAccessorySuggestionView[];
-#endif  // defined(OS_ANDROID)
-
 }  // namespace switches
 }  // namespace autofill
 

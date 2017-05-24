@@ -33,6 +33,7 @@
 #include "components/subresource_filter/core/browser/ruleset_service.h"
 #include "components/subresource_filter/core/browser/subresource_filter_features.h"
 #include "components/subresource_filter/core/browser/subresource_filter_features_test_support.h"
+#include "components/subresource_filter/core/common/activation_decision.h"
 #include "components/subresource_filter/core/common/test_ruleset_creator.h"
 #include "content/public/browser/navigation_throttle.h"
 #include "content/public/test/navigation_simulator.h"
@@ -255,4 +256,43 @@ TEST_F(SubresourceFilterTest, ExplicitWhitelisting_ShouldNotClearMetadata) {
   // Should not have cleared the metadata, since the site is still on the SB
   // blacklist.
   EXPECT_NE(nullptr, settings_manager()->GetSiteMetadata(url));
+}
+
+TEST_F(SubresourceFilterTest,
+       NavigationToBadSchemeUrlWithNoActivation_DoesNotReportBadScheme) {
+  // Don't report UNSUPPORTED_SCHEME if the navigation has no matching
+  // configuration.
+  scoped_configuration().ResetConfiguration(subresource_filter::Configuration(
+      subresource_filter::ActivationLevel::DISABLED,
+      subresource_filter::ActivationScope::NO_SITES));
+
+  GURL url("data:text/html,hello world");
+  SimulateNavigateAndCommit(url, main_rfh());
+  EXPECT_TRUE(CreateAndNavigateDisallowedSubframe(main_rfh()));
+  auto* driver_factory = subresource_filter::
+      ContentSubresourceFilterDriverFactory::FromWebContents(web_contents());
+  EXPECT_EQ(
+      subresource_filter::ActivationDecision::ACTIVATION_CONDITIONS_NOT_MET,
+      driver_factory->GetActivationDecisionForLastCommittedPageLoad());
+
+  // Also don't report UNSUPPORTED_SCHEME if the navigation matches a
+  // configuration with DISABLED activation level.
+  scoped_configuration().ResetConfiguration(subresource_filter::Configuration(
+      subresource_filter::ActivationLevel::DISABLED,
+      subresource_filter::ActivationScope::ALL_SITES));
+
+  SimulateNavigateAndCommit(url, main_rfh());
+  EXPECT_TRUE(CreateAndNavigateDisallowedSubframe(main_rfh()));
+  EXPECT_EQ(subresource_filter::ActivationDecision::ACTIVATION_DISABLED,
+            driver_factory->GetActivationDecisionForLastCommittedPageLoad());
+
+  // Sanity check that UNSUPPORTED_SCHEME is reported if the navigation does
+  // activate.
+  scoped_configuration().ResetConfiguration(subresource_filter::Configuration(
+      subresource_filter::ActivationLevel::ENABLED,
+      subresource_filter::ActivationScope::ALL_SITES));
+  SimulateNavigateAndCommit(url, main_rfh());
+  EXPECT_TRUE(CreateAndNavigateDisallowedSubframe(main_rfh()));
+  EXPECT_EQ(subresource_filter::ActivationDecision::UNSUPPORTED_SCHEME,
+            driver_factory->GetActivationDecisionForLastCommittedPageLoad());
 }

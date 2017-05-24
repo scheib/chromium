@@ -82,8 +82,7 @@ void StartupPagesHandler::OnModelChanged() {
     startup_pages.Append(std::move(entry));
   }
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("update-startup-pages"), startup_pages);
+  FireWebUIListener("update-startup-pages", startup_pages);
 }
 
 void StartupPagesHandler::OnItemsChanged(int start, int length) {

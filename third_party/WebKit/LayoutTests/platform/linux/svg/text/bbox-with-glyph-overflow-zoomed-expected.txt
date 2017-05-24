@@ -46,7 +46,7 @@ layer at (0,0) size 800x251
         LayoutSVGText {text} at (20,61.67) size 32.77x16.66 contains 1 chunk(s)
           LayoutSVGInlineText {#text} at (20,61.67) size 32.77x16.66
             chunk 1 text run 1 at (20.00,75.00) startOffset 0 endOffset 5 width 31.67: "'faQ'"
-        LayoutSVGRect {rect} at (17.77,8.89) size 85x13.87 [stroke={[type=SOLID] [color=#008000]}] [fill={[type=SOLID] [color=#00000000]}] [x=17.77] [y=8.89] [width=85.00] [height=13.88]
+        LayoutSVGRect {rect} at (17.77,8.89) size 85x13.87 [stroke={[type=SOLID] [color=#008000]}] [fill={[type=SOLID] [color=#00000000]}] [x=17.77] [y=8.89] [width=85.00] [height=13.87]
         LayoutSVGRect {rect} at (17.77,28.34) size 67.22x27.22 [stroke={[type=SOLID] [color=#008000]}] [fill={[type=SOLID] [color=#00000000]}] [x=17.77] [y=28.34] [width=67.22] [height=27.22]
         LayoutSVGRect {rect} at (20,61.67) size 32.77x16.66 [stroke={[type=SOLID] [color=#008000]}] [fill={[type=SOLID] [color=#00000000]}] [x=20.00] [y=61.67] [width=32.77] [height=16.66]
       LayoutText {#text} at (0,0) size 0x0

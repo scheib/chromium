@@ -139,10 +139,10 @@ void TestDictionary::setElementOrNullMemberToNull() {
 bool TestDictionary::hasEnumMember() const {
   return !m_enumMember.IsNull();
 }
-String TestDictionary::enumMember() const {
+const String& TestDictionary::enumMember() const {
   return m_enumMember;
 }
-void TestDictionary::setEnumMember(String value) {
+void TestDictionary::setEnumMember(const String& value) {
   m_enumMember = value;
 }
 bool TestDictionary::hasEnumSequenceMember() const {
@@ -284,19 +284,19 @@ void TestDictionary::setStringArrayMember(const Vector<String>& value) {
 bool TestDictionary::hasStringMember() const {
   return !m_stringMember.IsNull();
 }
-String TestDictionary::stringMember() const {
+const String& TestDictionary::stringMember() const {
   return m_stringMember;
 }
-void TestDictionary::setStringMember(String value) {
+void TestDictionary::setStringMember(const String& value) {
   m_stringMember = value;
 }
 bool TestDictionary::hasStringOrNullMember() const {
   return !m_stringOrNullMember.IsNull();
 }
-String TestDictionary::stringOrNullMember() const {
+const String& TestDictionary::stringOrNullMember() const {
   return m_stringOrNullMember;
 }
-void TestDictionary::setStringOrNullMember(String value) {
+void TestDictionary::setStringOrNullMember(const String& value) {
   m_stringOrNullMember = value;
 }
 void TestDictionary::setStringOrNullMemberToNull() {

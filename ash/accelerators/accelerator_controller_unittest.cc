@@ -25,7 +25,6 @@
 #include "ash/wm/panels/panel_layout_manager.h"
 #include "ash/wm/window_positioning_utils.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm_window.h"
@@ -434,14 +433,14 @@ TEST_F(AcceleratorControllerTest, WindowSnap) {
 
   {
     GetController()->PerformActionIfEnabled(WINDOW_CYCLE_SNAP_LEFT);
-    gfx::Rect expected_bounds = wm::GetDefaultLeftSnappedWindowBoundsInParent(
-        WmWindow::Get(window.get()));
+    gfx::Rect expected_bounds =
+        wm::GetDefaultLeftSnappedWindowBoundsInParent(window.get());
     EXPECT_EQ(expected_bounds.ToString(), window->bounds().ToString());
   }
   {
     GetController()->PerformActionIfEnabled(WINDOW_CYCLE_SNAP_RIGHT);
-    gfx::Rect expected_bounds = wm::GetDefaultRightSnappedWindowBoundsInParent(
-        WmWindow::Get(window.get()));
+    gfx::Rect expected_bounds =
+        wm::GetDefaultRightSnappedWindowBoundsInParent(window.get());
     EXPECT_EQ(expected_bounds.ToString(), window->bounds().ToString());
   }
   {
@@ -490,8 +489,8 @@ TEST_F(AcceleratorControllerTest, TestRepeatedSnap) {
   // Snap right.
   GetController()->PerformActionIfEnabled(WINDOW_CYCLE_SNAP_RIGHT);
   gfx::Rect normal_bounds = window_state->GetRestoreBoundsInParent();
-  gfx::Rect expected_bounds = wm::GetDefaultRightSnappedWindowBoundsInParent(
-      WmWindow::Get(window.get()));
+  gfx::Rect expected_bounds =
+      wm::GetDefaultRightSnappedWindowBoundsInParent(window.get());
   EXPECT_EQ(expected_bounds.ToString(), window->bounds().ToString());
   EXPECT_TRUE(window_state->IsSnapped());
   // Snap right again ->> becomes normal.
@@ -504,8 +503,7 @@ TEST_F(AcceleratorControllerTest, TestRepeatedSnap) {
   // Snap left.
   GetController()->PerformActionIfEnabled(WINDOW_CYCLE_SNAP_LEFT);
   EXPECT_TRUE(window_state->IsSnapped());
-  expected_bounds = wm::GetDefaultLeftSnappedWindowBoundsInParent(
-      WmWindow::Get(window.get()));
+  expected_bounds = wm::GetDefaultLeftSnappedWindowBoundsInParent(window.get());
   EXPECT_EQ(expected_bounds.ToString(), window->bounds().ToString());
   // Snap left again ->> becomes normal.
   GetController()->PerformActionIfEnabled(WINDOW_CYCLE_SNAP_LEFT);

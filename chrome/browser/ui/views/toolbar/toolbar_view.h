@@ -23,7 +23,6 @@
 #include "ui/views/view.h"
 
 class AppMenuButton;
-class BackButton;
 class Browser;
 class BrowserActionsContainer;
 class HomeButton;
@@ -193,7 +192,7 @@ class ToolbarView : public views::AccessiblePaneView,
 
   // Controls. Most of these can be null, e.g. in popup windows. Only
   // |location_bar_| is guaranteed to exist.
-  BackButton* back_;
+  ToolbarButton* back_;
   ToolbarButton* forward_;
   ReloadButton* reload_;
   HomeButton* home_;

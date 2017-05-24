@@ -190,11 +190,11 @@
       field_group: "box",
     },
     {
-      name: "border",
-      field_template: "storage_only",
-      field_type_path: "core/style/BorderData",
+      name: "border-image",
+      field_template: "external",
+      field_type_path: "core/style/NinePieceImage",
       field_group: "surround",
-      default_value: "BorderData()",
+      default_value: "NinePieceImage()",
     },
     {
       name: "Background",
@@ -253,7 +253,7 @@
     {
       name: "VisitedLinkColor",
       inherited: true,
-      field_template: "storage_only",
+      field_template: "external",
       field_type_path: "platform/graphics/Color",
       field_group: "inherited",
       default_value: "Color::kBlack",

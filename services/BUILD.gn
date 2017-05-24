@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/ui.gni")
 import("//services/catalog/public/tools/catalog.gni")
 import("//services/service_manager/public/tools/test/service_test.gni")
 import("//testing/test.gni")
@@ -22,6 +23,20 @@ service_test("service_unittests") {
     "//services/resource_coordinator:tests",
     "//services/shape_detection:tests",
   ]
+
+  if (use_aura) {
+    deps += [
+      "//services/ui/clipboard:tests",
+      "//services/ui/ime:tests",
+      "//services/ui/input_devices:tests",
+      "//services/ui/public/cpp/tests",
+      "//services/ui/public/interfaces:tests",
+    ]
+
+    if (is_linux && !is_chromeos) {
+      deps += [ "//services/ui/demo:tests" ]
+    }
+  }
 
   if (is_android) {
     deps += [
@@ -48,17 +63,36 @@ catalog("service_unittests_catalog") {
     "//services/preferences:tests_catalog",
     "//services/video_capture:tests_catalog",
   ]
+
+  if (use_aura) {
+    catalog_deps += [
+      "//services/ui/clipboard:tests_catalog",
+      "//services/ui/ime:tests_catalog",
+    ]
+
+    if (is_linux && !is_chromeos) {
+      catalog_deps += [ "//services/ui/demo:tests_catalog" ]
+    }
+  }
 }
 
 if (is_android) {
   junit_binary("service_junit_tests") {
-    java_files = [ "device/generic_sensor/android/junit/src/org/chromium/device/sensors/PlatformSensorAndProviderTest.java" ]
+    java_files = [
+      "device/generic_sensor/android/junit/src/org/chromium/device/sensors/PlatformSensorAndProviderTest.java",
+      "shape_detection/android/junit/src/org/chromium/shape_detection/SharedBufferUtilsTest.java",
+    ]
     deps = [
+      "$google_play_services_package:google_play_services_base_java",
+      "$google_play_services_package:google_play_services_basement_java",
+      "$google_play_services_package:google_play_services_vision_java",
       "//base:base_java",
       "//base:base_java_test_support",
       "//device/generic_sensor:java",
       "//device/generic_sensor/public/interfaces:interfaces_java",
       "//mojo/public/java:bindings_java",
+      "//mojo/public/java:system_java",
+      "//services/shape_detection:shape_detection_java",
       "//third_party/android_tools:android_support_annotations_java",
     ]
   }

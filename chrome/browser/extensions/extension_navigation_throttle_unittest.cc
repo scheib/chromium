@@ -40,10 +40,7 @@ class MockBrowserClient : public content::ContentBrowserClient {
   std::vector<std::unique_ptr<NavigationThrottle>> CreateThrottlesForNavigation(
       content::NavigationHandle* handle) override {
     std::vector<std::unique_ptr<NavigationThrottle>> throttles;
-    if (!handle->IsInMainFrame()) {  // Mirrors ChromeContentBrowserClient.
-      throttles.push_back(
-          base::MakeUnique<ExtensionNavigationThrottle>(handle));
-    }
+    throttles.push_back(base::MakeUnique<ExtensionNavigationThrottle>(handle));
     return throttles;
   }
 };
@@ -170,7 +167,7 @@ TEST_F(ExtensionNavigationThrottleUnitTest, WebPageAncestor) {
 }
 
 // Tests that requests to disabled or non-existent extensions are blocked.
-TEST_F(ExtensionNavigationThrottleUnitTest, InvalidExtension) {
+TEST_F(ExtensionNavigationThrottleUnitTest, DisabledExtensionChildFrame) {
   web_contents_tester()->NavigateAndCommit(GURL("http://example.com"));
   content::RenderFrameHost* child =
       render_frame_host_tester(main_rfh())->AppendChild("child");
@@ -189,10 +186,69 @@ TEST_F(ExtensionNavigationThrottleUnitTest, InvalidExtension) {
 
   std::string second_id = crx_file::id_util::GenerateId("bar");
   ASSERT_NE(second_id, extension()->id());
-  GURL invalid_url(base::StringPrintf("chrome-extension://%s/accessible.html",
+  GURL unknown_url(base::StringPrintf("chrome-extension://%s/accessible.html",
                                       second_id.c_str()));
   // Requests to non-existent extensions should be blocked.
-  CheckTestCase(child, invalid_url, NavigationThrottle::BLOCK_REQUEST);
+  CheckTestCase(child, unknown_url, NavigationThrottle::BLOCK_REQUEST);
+
+  // Test blob and filesystem URLs with disabled/unknown extensions.
+  GURL disabled_blob(base::StringPrintf("blob:chrome-extension://%s/SOMEGUID",
+                                        extension()->id().c_str()));
+  GURL unknown_blob(base::StringPrintf("blob:chrome-extension://%s/SOMEGUID",
+                                       second_id.c_str()));
+  CheckTestCase(child, disabled_blob, NavigationThrottle::BLOCK_REQUEST);
+  CheckTestCase(child, unknown_blob, NavigationThrottle::BLOCK_REQUEST);
+  GURL disabled_filesystem(
+      base::StringPrintf("filesystem:chrome-extension://%s/temporary/foo.html",
+                         extension()->id().c_str()));
+  GURL unknown_filesystem(
+      base::StringPrintf("filesystem:chrome-extension://%s/temporary/foo.html",
+                         second_id.c_str()));
+  CheckTestCase(child, disabled_filesystem, NavigationThrottle::BLOCK_REQUEST);
+  CheckTestCase(child, unknown_filesystem, NavigationThrottle::BLOCK_REQUEST);
+}
+
+// Tests that requests to disabled or non-existent extensions are blocked.
+TEST_F(ExtensionNavigationThrottleUnitTest, DisabledExtensionMainFrame) {
+  web_contents_tester()->NavigateAndCommit(GURL("http://example.com"));
+
+  ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context());
+  registry->RemoveEnabled(extension()->id());
+  registry->AddDisabled(extension());
+
+  // Since the extension is disabled, all requests should be blocked.
+  CheckTestCase(main_rfh(), extension()->GetResourceURL(kPrivate),
+                NavigationThrottle::BLOCK_REQUEST);
+  CheckTestCase(main_rfh(), extension()->GetResourceURL(kAccessible),
+                NavigationThrottle::BLOCK_REQUEST);
+  CheckTestCase(main_rfh(), extension()->GetResourceURL(kAccessibleDirResource),
+                NavigationThrottle::BLOCK_REQUEST);
+
+  std::string second_id = crx_file::id_util::GenerateId("bar");
+
+  ASSERT_NE(second_id, extension()->id());
+  GURL unknown_url(base::StringPrintf("chrome-extension://%s/accessible.html",
+                                      second_id.c_str()));
+  // Requests to non-existent extensions should be blocked.
+  CheckTestCase(main_rfh(), unknown_url, NavigationThrottle::BLOCK_REQUEST);
+
+  // Test blob and filesystem URLs with disabled/unknown extensions.
+  GURL disabled_blob(base::StringPrintf("blob:chrome-extension://%s/SOMEGUID",
+                                        extension()->id().c_str()));
+  GURL unknown_blob(base::StringPrintf("blob:chrome-extension://%s/SOMEGUID",
+                                       second_id.c_str()));
+  CheckTestCase(main_rfh(), disabled_blob, NavigationThrottle::BLOCK_REQUEST);
+  CheckTestCase(main_rfh(), unknown_blob, NavigationThrottle::BLOCK_REQUEST);
+  GURL disabled_filesystem(
+      base::StringPrintf("filesystem:chrome-extension://%s/temporary/foo.html",
+                         extension()->id().c_str()));
+  GURL unknown_filesystem(
+      base::StringPrintf("filesystem:chrome-extension://%s/temporary/foo.html",
+                         second_id.c_str()));
+  CheckTestCase(main_rfh(), disabled_filesystem,
+                NavigationThrottle::BLOCK_REQUEST);
+  CheckTestCase(main_rfh(), unknown_filesystem,
+                NavigationThrottle::BLOCK_REQUEST);
 }
 
 }  // namespace extensions

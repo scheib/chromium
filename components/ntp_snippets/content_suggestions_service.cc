@@ -170,16 +170,9 @@ void ContentSuggestionsService::FetchSuggestionFavicon(
     return;
   }
 
-  // TODO(jkrcal): Create a general wrapper function in LargeIconService that
-  // does handle the get-from-cache-and-fallback-to-google-server functionality
-  // in one shot (for all clients that do not need to react in between).
-  large_icon_service_->GetLargeIconImageOrFallbackStyle(
-      domain_with_favicon, minimum_size_in_pixel, desired_size_in_pixel,
-      base::Bind(&ContentSuggestionsService::OnGetFaviconFromCacheFinished,
-                 base::Unretained(this), domain_with_favicon,
-                 minimum_size_in_pixel, desired_size_in_pixel, callback,
-                 /*continue_to_google_server=*/true),
-      &favicons_task_tracker_);
+  GetFaviconFromCache(domain_with_favicon, minimum_size_in_pixel,
+                      desired_size_in_pixel, callback,
+                      /*continue_to_google_server=*/true);
 }
 
 GURL ContentSuggestionsService::GetFaviconDomain(
@@ -203,6 +196,24 @@ GURL ContentSuggestionsService::GetFaviconDomain(
     return remote_suggestions_provider_->GetUrlWithFavicon(suggestion_id);
   }
   return GURL();
+}
+
+void ContentSuggestionsService::GetFaviconFromCache(
+    const GURL& publisher_url,
+    int minimum_size_in_pixel,
+    int desired_size_in_pixel,
+    const ImageFetchedCallback& callback,
+    bool continue_to_google_server) {
+  // TODO(jkrcal): Create a general wrapper function in LargeIconService that
+  // does handle the get-from-cache-and-fallback-to-google-server functionality
+  // in one shot (for all clients that do not need to react in between).
+  large_icon_service_->GetLargeIconImageOrFallbackStyle(
+      publisher_url, minimum_size_in_pixel, desired_size_in_pixel,
+      base::Bind(&ContentSuggestionsService::OnGetFaviconFromCacheFinished,
+                 base::Unretained(this), publisher_url, minimum_size_in_pixel,
+                 /*desired_size_in_pixel=*/0, callback,
+                 continue_to_google_server),
+      &favicons_task_tracker_);
 }
 
 void ContentSuggestionsService::OnGetFaviconFromCacheFinished(
@@ -255,14 +266,9 @@ void ContentSuggestionsService::OnGetFaviconFromGoogleServerFinished(
     return;
   }
 
-  // Get the freshly downloaded icon from the cache.
-  large_icon_service_->GetLargeIconImageOrFallbackStyle(
-      publisher_url, minimum_size_in_pixel, desired_size_in_pixel,
-      base::Bind(&ContentSuggestionsService::OnGetFaviconFromCacheFinished,
-                 base::Unretained(this), publisher_url, minimum_size_in_pixel,
-                 desired_size_in_pixel, callback,
-                 /*continue_to_google_server=*/false),
-      &favicons_task_tracker_);
+  GetFaviconFromCache(publisher_url, minimum_size_in_pixel,
+                      desired_size_in_pixel, callback,
+                      /*continue_to_google_server=*/false);
 }
 
 void ContentSuggestionsService::ClearHistory(

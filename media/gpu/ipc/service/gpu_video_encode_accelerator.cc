@@ -22,25 +22,10 @@
 #include "media/base/limits.h"
 #include "media/base/video_frame.h"
 #include "media/gpu/gpu_video_accelerator_util.h"
+#include "media/gpu/gpu_video_encode_accelerator_factory.h"
 #include "media/gpu/ipc/common/media_messages.h"
 #include "media/media_features.h"
 
-#if defined(OS_CHROMEOS)
-#if defined(USE_V4L2_CODEC)
-#include "media/gpu/v4l2_video_encode_accelerator.h"
-#endif
-#if defined(ARCH_CPU_X86_FAMILY)
-#include "media/gpu/vaapi_video_encode_accelerator.h"
-#endif
-#elif defined(OS_ANDROID) && BUILDFLAG(ENABLE_WEBRTC)
-#include "media/gpu/android_video_encode_accelerator.h"
-#elif defined(OS_MACOSX)
-#include "media/gpu/vt_video_encode_accelerator_mac.h"
-#elif defined(OS_WIN)
-#include "base/feature_list.h"
-#include "media/base/media_switches.h"
-#include "media/gpu/media_foundation_video_encode_accelerator_win.h"
-#endif
 
 namespace media {
 
@@ -64,44 +49,6 @@ bool MakeDecoderContextCurrent(
 void DropSharedMemory(std::unique_ptr<base::SharedMemory> shm) {
   // Just let |shm| fall out of scope.
 }
-
-#if defined(OS_CHROMEOS) && defined(USE_V4L2_CODEC)
-std::unique_ptr<VideoEncodeAccelerator> CreateV4L2VEA() {
-  scoped_refptr<V4L2Device> device = V4L2Device::Create();
-  if (!device)
-    return nullptr;
-  return base::WrapUnique<VideoEncodeAccelerator>(
-      new V4L2VideoEncodeAccelerator(device));
-}
-#endif
-
-#if defined(OS_CHROMEOS) && defined(ARCH_CPU_X86_FAMILY)
-std::unique_ptr<VideoEncodeAccelerator> CreateVaapiVEA() {
-  return base::WrapUnique<VideoEncodeAccelerator>(
-      new VaapiVideoEncodeAccelerator());
-}
-#endif
-
-#if defined(OS_ANDROID) && BUILDFLAG(ENABLE_WEBRTC)
-std::unique_ptr<VideoEncodeAccelerator> CreateAndroidVEA() {
-  return base::WrapUnique<VideoEncodeAccelerator>(
-      new AndroidVideoEncodeAccelerator());
-}
-#endif
-
-#if defined(OS_MACOSX)
-std::unique_ptr<VideoEncodeAccelerator> CreateVTVEA() {
-  return base::WrapUnique<VideoEncodeAccelerator>(
-      new VTVideoEncodeAccelerator());
-}
-#endif
-
-#if defined(OS_WIN)
-std::unique_ptr<VideoEncodeAccelerator> CreateMediaFoundationVEA() {
-  return base::WrapUnique<media::VideoEncodeAccelerator>(
-      new MediaFoundationVideoEncodeAccelerator());
-}
-#endif
 
 }  // anonymous namespace
 
@@ -216,35 +163,31 @@ bool GpuVideoEncodeAccelerator::Initialize(VideoPixelFormat input_format,
   const gpu::GpuPreferences& gpu_preferences =
       stub_->channel()->gpu_channel_manager()->gpu_preferences();
 
-  // Try all possible encoders and use the first successful encoder.
-  for (const auto& factory_function : GetVEAFactoryFunctions(gpu_preferences)) {
-    encoder_ = factory_function.Run();
-    if (encoder_ &&
-        encoder_->Initialize(input_format, input_visible_size, output_profile,
-                             initial_bitrate, this)) {
-      input_format_ = input_format;
-      input_visible_size_ = input_visible_size;
-      // Attempt to set up performing encoding tasks on IO thread, if supported
-      // by the VEA.
-      if (encoder_->TryToSetupEncodeOnSeparateThread(weak_this_,
-                                                     io_task_runner_)) {
-        filter_ = new MessageFilter(this, host_route_id_);
-        stub_->channel()->AddFilter(filter_.get());
-        encode_task_runner_ = io_task_runner_;
-      }
-
-      if (!encoder_worker_thread_.Start()) {
-        DLOG(ERROR) << "Failed spawning encoder worker thread.";
-        return false;
-      }
-      encoder_worker_task_runner_ = encoder_worker_thread_.task_runner();
-
-      return true;
-    }
+  encoder_ = GpuVideoEncodeAcceleratorFactory::CreateVEA(
+      input_format, input_visible_size, output_profile, initial_bitrate, this,
+      gpu_preferences);
+  if (!encoder_) {
+    DLOG(ERROR) << __func__ << " Could not create VEA";
+    return false;
   }
-  encoder_.reset();
-  DLOG(ERROR) << __func__ << " VEA initialization failed";
-  return false;
+
+  if (!encoder_worker_thread_.Start()) {
+    encoder_.reset();
+    DLOG(ERROR) << "Failed spawning encoder worker thread.";
+    return false;
+  }
+
+  input_format_ = input_format;
+  input_visible_size_ = input_visible_size;
+  // Attempt to set up performing encoding tasks on IO thread, if supported
+  // by the VEA.
+  if (encoder_->TryToSetupEncodeOnSeparateThread(weak_this_, io_task_runner_)) {
+    filter_ = new MessageFilter(this, host_route_id_);
+    stub_->channel()->AddFilter(filter_.get());
+    encode_task_runner_ = io_task_runner_;
+  }
+  encoder_worker_task_runner_ = encoder_worker_thread_.task_runner();
+  return true;
 }
 
 bool GpuVideoEncodeAccelerator::OnMessageReceived(const IPC::Message& message) {
@@ -342,44 +285,8 @@ void GpuVideoEncodeAccelerator::OnWillDestroyStub() {
 gpu::VideoEncodeAcceleratorSupportedProfiles
 GpuVideoEncodeAccelerator::GetSupportedProfiles(
     const gpu::GpuPreferences& gpu_preferences) {
-  VideoEncodeAccelerator::SupportedProfiles profiles;
-
-  for (const auto& factory_function : GetVEAFactoryFunctions(gpu_preferences)) {
-    std::unique_ptr<VideoEncodeAccelerator> encoder = factory_function.Run();
-    if (!encoder)
-      continue;
-    VideoEncodeAccelerator::SupportedProfiles vea_profiles =
-        encoder->GetSupportedProfiles();
-    GpuVideoAcceleratorUtil::InsertUniqueEncodeProfiles(vea_profiles,
-                                                        &profiles);
-  }
-  return GpuVideoAcceleratorUtil::ConvertMediaToGpuEncodeProfiles(profiles);
-}
-
-// static
-std::vector<GpuVideoEncodeAccelerator::VEAFactoryFunction>
-GpuVideoEncodeAccelerator::GetVEAFactoryFunctions(
-    const gpu::GpuPreferences& gpu_preferences) {
-  std::vector<VEAFactoryFunction> vea_factory_functions;
-#if defined(OS_CHROMEOS) && defined(USE_V4L2_CODEC)
-  vea_factory_functions.push_back(base::Bind(&CreateV4L2VEA));
-#endif
-#if defined(OS_CHROMEOS) && defined(ARCH_CPU_X86_FAMILY)
-  if (!gpu_preferences.disable_vaapi_accelerated_video_encode)
-    vea_factory_functions.push_back(base::Bind(&CreateVaapiVEA));
-#endif
-#if defined(OS_ANDROID) && BUILDFLAG(ENABLE_WEBRTC)
-  if (!gpu_preferences.disable_web_rtc_hw_encoding)
-    vea_factory_functions.push_back(base::Bind(&CreateAndroidVEA));
-#endif
-#if defined(OS_MACOSX)
-  vea_factory_functions.push_back(base::Bind(&CreateVTVEA));
-#endif
-#if defined(OS_WIN)
-  if (base::FeatureList::IsEnabled(kMediaFoundationH264Encoding))
-    vea_factory_functions.push_back(base::Bind(&CreateMediaFoundationVEA));
-#endif
-  return vea_factory_functions;
+  return GpuVideoAcceleratorUtil::ConvertMediaToGpuEncodeProfiles(
+      GpuVideoEncodeAcceleratorFactory::GetSupportedProfiles(gpu_preferences));
 }
 
 void GpuVideoEncodeAccelerator::OnFilterRemoved() {

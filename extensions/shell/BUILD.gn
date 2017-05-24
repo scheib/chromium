@@ -229,7 +229,7 @@ if (is_mac) {
     ]
     deps = [
       ":app_shell_framework_bundle_data",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//extensions:shell_and_test_pak",
     ]
     ldflags = [
@@ -248,7 +248,7 @@ if (is_mac) {
 
     deps = [
       ":app_shell_lib",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
       "//extensions:shell_and_test_pak",
     ]
@@ -377,7 +377,7 @@ if (is_mac) {
     ]
     deps = [
       ":app_shell_framework+link",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
     ldflags = [
       "-rpath",

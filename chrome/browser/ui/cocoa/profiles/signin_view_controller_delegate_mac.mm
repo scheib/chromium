@@ -106,38 +106,37 @@ SigninViewControllerDelegateMac::CreateGaiaWebContents(
 std::unique_ptr<content::WebContents>
 SigninViewControllerDelegateMac::CreateSyncConfirmationWebContents(
     Browser* browser) {
-  std::unique_ptr<content::WebContents> web_contents(
-      content::WebContents::Create(
-          content::WebContents::CreateParams(browser->profile())));
-  web_contents->GetController().LoadURL(
-      GURL(chrome::kChromeUISyncConfirmationURL), content::Referrer(),
-      ui::PAGE_TRANSITION_AUTO_TOPLEVEL, std::string());
-  SyncConfirmationUI* sync_confirmation_ui = static_cast<SyncConfirmationUI*>(
-      web_contents->GetWebUI()->GetController());
-  sync_confirmation_ui->InitializeMessageHandlerWithBrowser(browser);
-
-  NSView* webview = web_contents->GetNativeView();
-  [webview setFrameSize:NSMakeSize(kModalDialogWidth,
-                                   GetSyncConfirmationDialogPreferredHeight(
-                                       browser->profile()))];
-
-  return web_contents;
+  return CreateDialogWebContents(
+      browser, chrome::kChromeUISyncConfirmationURL,
+      GetSyncConfirmationDialogPreferredHeight(browser->profile()));
 }
 
 // static
 std::unique_ptr<content::WebContents>
 SigninViewControllerDelegateMac::CreateSigninErrorWebContents(
-    Profile* profile) {
+    Browser* browser) {
+  return CreateDialogWebContents(browser, chrome::kChromeUISigninErrorURL,
+                                 kSigninErrorDialogHeight);
+}
+
+// static
+std::unique_ptr<content::WebContents>
+SigninViewControllerDelegateMac::CreateDialogWebContents(Browser* browser,
+                                                         const std::string& url,
+                                                         int dialog_height) {
   std::unique_ptr<content::WebContents> web_contents(
       content::WebContents::Create(
-          content::WebContents::CreateParams(profile)));
-  web_contents->GetController().LoadURL(
-      GURL(chrome::kChromeUISigninErrorURL), content::Referrer(),
-      ui::PAGE_TRANSITION_AUTO_TOPLEVEL, std::string());
+          content::WebContents::CreateParams(browser->profile())));
+  web_contents->GetController().LoadURL(GURL(url), content::Referrer(),
+                                        ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
+                                        std::string());
+
+  SigninWebDialogUI* web_dialog_ui = static_cast<SigninWebDialogUI*>(
+      web_contents->GetWebUI()->GetController());
+  web_dialog_ui->InitializeMessageHandlerWithBrowser(browser);
 
   NSView* webview = web_contents->GetNativeView();
-  [webview
-      setFrameSize:NSMakeSize(kModalDialogWidth, kSigninErrorDialogHeight)];
+  [webview setFrameSize:NSMakeSize(kModalDialogWidth, dialog_height)];
 
   return web_contents;
 }
@@ -254,8 +253,7 @@ SigninViewControllerDelegate::CreateSigninErrorDelegate(
     Browser* browser) {
   return new SigninViewControllerDelegateMac(
       signin_view_controller,
-      SigninViewControllerDelegateMac::CreateSigninErrorWebContents(
-          browser->profile()),
+      SigninViewControllerDelegateMac::CreateSigninErrorWebContents(browser),
       browser, NSMakeRect(0, 0, kModalDialogWidth, kSigninErrorDialogHeight),
       ui::MODAL_TYPE_WINDOW, true /* wait_for_size */);
 }

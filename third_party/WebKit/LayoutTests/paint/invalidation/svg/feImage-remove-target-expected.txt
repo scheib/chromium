@@ -10,11 +10,6 @@
           "object": "LayoutSVGRect rect",
           "rect": [0, 0, 110, 110],
           "reason": "full"
-        },
-        {
-          "object": "LayoutSVGRect rect id='rect'",
-          "rect": [0, 0, 100, 100],
-          "reason": "disappeared"
         }
       ]
     }
@@ -23,10 +18,6 @@
     {
       "object": "LayoutSVGRect rect id='rect'",
       "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGResourceFilterPrimitive feImage id='feimage'",
-      "reason": "full"
     },
     {
       "object": "LayoutSVGRect rect",

@@ -182,7 +182,8 @@ ShelfWidget::~ShelfWidget() {
 void ShelfWidget::CreateStatusAreaWidget(WmWindow* status_container) {
   DCHECK(status_container);
   DCHECK(!status_area_widget_);
-  status_area_widget_ = new StatusAreaWidget(status_container, wm_shelf_);
+  status_area_widget_ =
+      new StatusAreaWidget(status_container->aura_window(), wm_shelf_);
   status_area_widget_->CreateTrayViews();
   // NOTE: Container may be hidden depending on login/display state.
   status_area_widget_->Show();

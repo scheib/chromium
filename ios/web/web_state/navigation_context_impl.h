@@ -7,9 +7,10 @@
 
 #include <memory>
 
+#import "base/mac/scoped_nsobject.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
-#include "ios/web/public/web_state/navigation_context.h"
+#import "ios/web/public/web_state/navigation_context.h"
 #include "url/gurl.h"
 
 namespace web {
@@ -32,13 +33,13 @@ class NavigationContextImpl : public NavigationContext {
   WebState* GetWebState() override;
   const GURL& GetUrl() const override;
   bool IsSameDocument() const override;
-  bool IsErrorPage() const override;
+  NSError* GetError() const override;
   net::HttpResponseHeaders* GetResponseHeaders() const override;
   ~NavigationContextImpl() override;
 
   // Setters for navigation context data members.
   void SetIsSameDocument(bool is_same_document);
-  void SetIsErrorPage(bool is_error_page);
+  void SetError(NSError* error);
   void SetResponseHeaders(
       const scoped_refptr<net::HttpResponseHeaders>& response_headers);
 
@@ -47,17 +48,12 @@ class NavigationContextImpl : public NavigationContext {
   void SetNavigationItemUniqueID(int unique_id);
 
  private:
-  NavigationContextImpl(
-      WebState* web_state,
-      const GURL& url,
-      bool is_same_page,
-      bool is_error_page,
-      const scoped_refptr<net::HttpResponseHeaders>& response_headers);
+  NavigationContextImpl(WebState* web_state, const GURL& url);
 
   WebState* web_state_ = nullptr;
   GURL url_;
   bool is_same_document_ = false;
-  bool is_error_page_ = false;
+  base::scoped_nsobject<NSError> error_;
   scoped_refptr<net::HttpResponseHeaders> response_headers_;
   int navigation_item_unique_id_ = -1;
 

@@ -30,7 +30,7 @@ executable("zip_archiver_pnacl") {
 
   deps = [
     "//base:base",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//ppapi/cpp",
     "//ppapi/native_client:ppapi_lib",
     "//third_party/zlib:minizip",

@@ -125,7 +125,7 @@ executable("dbus_test_server") {
     ":dbus",
     "//base",
     "//base/test:test_support",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
 
   configs += [ "//build/config/linux/dbus" ]

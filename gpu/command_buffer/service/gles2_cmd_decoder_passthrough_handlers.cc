@@ -2728,5 +2728,25 @@ error::Error GLES2DecoderPassthroughImpl::HandleCompressedTexSubImage3D(
                                    data_size, data);
 }
 
+error::Error
+GLES2DecoderPassthroughImpl::HandleInitializeDiscardableTextureCHROMIUM(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  return error::kNoError;
+}
+
+error::Error
+GLES2DecoderPassthroughImpl::HandleUnlockDiscardableTextureCHROMIUM(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  return error::kNoError;
+}
+
+error::Error GLES2DecoderPassthroughImpl::HandleLockDiscardableTextureCHROMIUM(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  return error::kNoError;
+}
+
 }  // namespace gles2
 }  // namespace gpu

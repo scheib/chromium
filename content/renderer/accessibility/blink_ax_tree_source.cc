@@ -432,7 +432,7 @@ void BlinkAXTreeSource::SerializeNode(blink::WebAXObject src,
   }
 
   if (src.CanSetValueAttribute())
-    dst->AddBoolAttribute(ui::AX_ATTR_CAN_SET_VALUE, true);
+    dst->AddAction(ui::AX_ACTION_SET_VALUE);
 
   if (!src.Url().IsEmpty())
     dst->AddStringAttribute(ui::AX_ATTR_URL, src.Url().GetString().Utf8());

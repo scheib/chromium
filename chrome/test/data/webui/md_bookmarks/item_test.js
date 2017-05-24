@@ -12,8 +12,8 @@ suite('<bookmarks-item>', function() {
       nodes: testTree(createFolder(
           '1',
           [
-            createItem(['2']),
-            createItem(['3']),
+            createItem('2', {url: 'http://example.com/'}),
+            createItem('3'),
           ])),
     });
     bookmarks.Store.instance_ = store;
@@ -45,7 +45,11 @@ suite('<bookmarks-item>', function() {
   test('pressing the menu button selects the item', function() {
     MockInteractions.tap(item.$$('.more-vert-button'));
     assertDeepEquals(
-        bookmarks.actions.selectItem('2', false, false, store.data),
+        bookmarks.actions.selectItem('2', store.data, {
+          clear: true,
+          range: false,
+          toggle: false,
+        }),
         store.lastAction);
   });
 
@@ -57,7 +61,23 @@ suite('<bookmarks-item>', function() {
     item.isSelectedItem_ = false;
     item.dispatchEvent(new MouseEvent('contextmenu'));
     assertDeepEquals(
-        bookmarks.actions.selectItem('2', false, false, store.data),
+        bookmarks.actions.selectItem('2', store.data, {
+          clear: true,
+          range: false,
+          toggle: false,
+        }),
         store.lastAction);
+  });
+
+  test('anchor tag updates with item url', function() {
+    assertEquals('http://example.com/', item.$.url.href);
+
+    store.data.nodes['2'] = createItem('0', {url: 'https://mail.google.com'});
+    store.notifyObservers();
+    assertEquals('https://mail.google.com/', item.$.url.href);
+
+    // Change to a folder.
+    item.itemId = '1';
+    assertEquals('chrome://bookmarks/?id=1', item.$.url.href);
   });
 });

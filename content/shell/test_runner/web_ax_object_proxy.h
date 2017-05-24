@@ -129,6 +129,7 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   std::string Relevant();
   std::string RoleDescription();
   std::string Sort();
+  int HierarchicalLevel();
   int PosInSet();
   int SetSize();
   int ClickPointX();

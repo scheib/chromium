@@ -24,6 +24,7 @@ class BubbleDialogDelegateView;
 }
 
 // Represents an icon on the omnibox that shows a bubble when clicked.
+// TODO(spqchan): Convert this to subclass CustomButton.
 class BubbleIconView : public views::InkDropHostView,
                        public views::WidgetObserver {
  public:
@@ -74,6 +75,7 @@ class BubbleIconView : public views::InkDropHostView,
   void AddInkDropLayer(ui::Layer* ink_drop_layer) override;
   void RemoveInkDropLayer(ui::Layer* ink_drop_layer) override;
   std::unique_ptr<views::InkDrop> CreateInkDrop() override;
+  std::unique_ptr<views::InkDropRipple> CreateInkDropRipple() const override;
   SkColor GetInkDropBaseColor() const override;
 
   // ui::EventHandler:

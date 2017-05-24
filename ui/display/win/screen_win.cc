@@ -488,7 +488,8 @@ void ScreenWin::OnWndProc(HWND hwnd,
                           UINT message,
                           WPARAM wparam,
                           LPARAM lparam) {
-  if (message != WM_DISPLAYCHANGE)
+  if (message != WM_DISPLAYCHANGE &&
+    !(message == WM_SETTINGCHANGE && wparam == SPI_SETWORKAREA))
     return;
 
   std::vector<Display> old_displays = std::move(displays_);

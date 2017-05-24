@@ -79,18 +79,19 @@ TEST(IDBTransactionTest, EnsureLifetime) {
       IDBTransaction::CreateNonVersionChange(
           scope.GetScriptState(), kTransactionId, transaction_scope,
           kWebIDBTransactionModeReadOnly, db.Get());
-  PersistentHeapHashSet<WeakMember<IDBTransaction>> set;
-  set.insert(transaction);
+  PersistentHeapHashSet<WeakMember<IDBTransaction>> live_transactions;
+  live_transactions.insert(transaction);
 
   ThreadState::Current()->CollectAllGarbage();
-  EXPECT_EQ(1u, set.size());
+  EXPECT_EQ(1u, live_transactions.size());
 
   Persistent<IDBRequest> request = IDBRequest::Create(
       scope.GetScriptState(), IDBAny::CreateUndefined(), transaction.Get());
   DeactivateNewTransactions(scope.GetIsolate());
 
+  request.Clear();  // The transaction is holding onto the request.
   ThreadState::Current()->CollectAllGarbage();
-  EXPECT_EQ(1u, set.size());
+  EXPECT_EQ(1u, live_transactions.size());
 
   // This will generate an Abort() call to the back end which is dropped by the
   // fake proxy, so an explicit OnAbort call is made.
@@ -99,7 +100,7 @@ TEST(IDBTransactionTest, EnsureLifetime) {
   transaction.Clear();
 
   ThreadState::Current()->CollectAllGarbage();
-  EXPECT_EQ(0u, set.size());
+  EXPECT_EQ(0u, live_transactions.size());
 }
 
 TEST(IDBTransactionTest, TransactionFinish) {
@@ -119,21 +120,21 @@ TEST(IDBTransactionTest, TransactionFinish) {
       IDBTransaction::CreateNonVersionChange(
           scope.GetScriptState(), kTransactionId, transaction_scope,
           kWebIDBTransactionModeReadOnly, db.Get());
-  PersistentHeapHashSet<WeakMember<IDBTransaction>> set;
-  set.insert(transaction);
+  PersistentHeapHashSet<WeakMember<IDBTransaction>> live_transactions;
+  live_transactions.insert(transaction);
 
   ThreadState::Current()->CollectAllGarbage();
-  EXPECT_EQ(1u, set.size());
+  EXPECT_EQ(1u, live_transactions.size());
 
   DeactivateNewTransactions(scope.GetIsolate());
 
   ThreadState::Current()->CollectAllGarbage();
-  EXPECT_EQ(1u, set.size());
+  EXPECT_EQ(1u, live_transactions.size());
 
   transaction.Clear();
 
   ThreadState::Current()->CollectAllGarbage();
-  EXPECT_EQ(1u, set.size());
+  EXPECT_EQ(1u, live_transactions.size());
 
   // Stop the context, so events don't get queued (which would keep the
   // transaction alive).
@@ -145,7 +146,7 @@ TEST(IDBTransactionTest, TransactionFinish) {
 
   // OnAbort() should have cleared the transaction's reference to the database.
   ThreadState::Current()->CollectAllGarbage();
-  EXPECT_EQ(0u, set.size());
+  EXPECT_EQ(0u, live_transactions.size());
 }
 
 }  // namespace

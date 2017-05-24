@@ -141,10 +141,12 @@ class PrefModelAssociator : public syncer::SyncableService,
                             const std::string& pref_name,
                             syncer::SyncChangeList* sync_changes);
 
-  static base::Value* MergeListValues(const base::Value& from_value,
-                                      const base::Value& to_value);
-  static base::Value* MergeDictionaryValues(const base::Value& from_value,
-                                            const base::Value& to_value);
+  static std::unique_ptr<base::Value> MergeListValues(
+      const base::Value& from_value,
+      const base::Value& to_value);
+  static std::unique_ptr<base::Value> MergeDictionaryValues(
+      const base::Value& from_value,
+      const base::Value& to_value);
 
   // Do we have an active association between the preferences and sync models?
   // Set when start syncing, reset in StopSyncing. While this is not set, we

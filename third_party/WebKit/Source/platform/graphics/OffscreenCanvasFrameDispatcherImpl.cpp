@@ -434,7 +434,7 @@ void OffscreenCanvasFrameDispatcherImpl::OnBeginFrame(
   if (pending_compositor_frames_ >= kMaxPendingCompositorFrames ||
       (begin_frame_args.type == cc::BeginFrameArgs::MISSED &&
        base::TimeTicks::Now() > begin_frame_args.deadline)) {
-    sink_->BeginFrameDidNotSwap(current_begin_frame_ack_);
+    sink_->DidNotProduceFrame(current_begin_frame_ack_);
     return;
   }
 

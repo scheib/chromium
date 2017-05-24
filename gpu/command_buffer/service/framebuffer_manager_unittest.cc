@@ -11,6 +11,7 @@
 #include "gpu/command_buffer/service/gles2_cmd_decoder_mock.h"
 #include "gpu/command_buffer/service/gpu_service_test.h"
 #include "gpu/command_buffer/service/renderbuffer_manager.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/test_helper.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -44,7 +45,7 @@ class FramebufferManagerTest : public GpuServiceTest {
     texture_manager_.reset(new TextureManager(
         nullptr, feature_info_.get(), kMaxTextureSize, kMaxCubemapSize,
         kMaxRectangleTextureSize, kMax3DTextureSize, kMaxArrayTextureLayers,
-        kUseDefaultTextures, nullptr));
+        kUseDefaultTextures, nullptr, &discardable_manager_));
     renderbuffer_manager_.reset(new RenderbufferManager(nullptr,
                                                         kMaxRenderbufferSize,
                                                         kMaxSamples,
@@ -59,6 +60,7 @@ class FramebufferManagerTest : public GpuServiceTest {
  protected:
   FramebufferManager manager_;
   scoped_refptr<FeatureInfo> feature_info_;
+  ServiceDiscardableManager discardable_manager_;
   std::unique_ptr<TextureManager> texture_manager_;
   std::unique_ptr<RenderbufferManager> renderbuffer_manager_;
 };
@@ -121,7 +123,7 @@ class FramebufferInfoTestBase : public GpuServiceTest {
     texture_manager_.reset(new TextureManager(
         nullptr, feature_info_.get(), kMaxTextureSize, kMaxCubemapSize,
         kMaxRectangleTextureSize, kMax3DTextureSize, kMaxArrayTextureLayers,
-        kUseDefaultTextures, nullptr));
+        kUseDefaultTextures, nullptr, &discardable_manager_));
     renderbuffer_manager_.reset(new RenderbufferManager(nullptr,
                                                         kMaxRenderbufferSize,
                                                         kMaxSamples,
@@ -158,6 +160,7 @@ class FramebufferInfoTestBase : public GpuServiceTest {
   FramebufferManager manager_;
   Framebuffer* framebuffer_;
   scoped_refptr<FeatureInfo> feature_info_;
+  ServiceDiscardableManager discardable_manager_;
   std::unique_ptr<TextureManager> texture_manager_;
   std::unique_ptr<RenderbufferManager> renderbuffer_manager_;
   std::unique_ptr<MockErrorState> error_state_;

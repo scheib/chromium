@@ -10,11 +10,9 @@
 
 #include "base/macros.h"
 #include "base/task/cancelable_task_tracker.h"
-#include "components/favicon/core/fallback_icon_service.h"
 #include "content/public/browser/url_data_source.h"
 
 namespace favicon {
-class FallbackIconService;
 class LargeIconService;
 }
 
@@ -37,10 +35,8 @@ struct LargeIconResult;
 //    This requests a 48x48 large icon for http://www.google.com.
 class LargeIconSource : public content::URLDataSource {
  public:
-  // |fallback_icon_service| and |large_icon_service| are owned by caller and
-  // may be null.
-  LargeIconSource(favicon::FallbackIconService* fallback_icon_service,
-                  favicon::LargeIconService* large_icon_service);
+  // |large_icon_service| is owned by caller and may be null.
+  explicit LargeIconSource(favicon::LargeIconService* large_icon_service);
 
   ~LargeIconSource() override;
 
@@ -70,9 +66,6 @@ class LargeIconSource : public content::URLDataSource {
       const content::URLDataSource::GotDataCallback& callback);
 
   base::CancelableTaskTracker cancelable_task_tracker_;
-
-  // Owned by client.
-  favicon::FallbackIconService* fallback_icon_service_;
 
   // Owned by client.
   favicon::LargeIconService* large_icon_service_;

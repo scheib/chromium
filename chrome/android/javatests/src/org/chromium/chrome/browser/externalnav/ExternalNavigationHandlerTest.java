@@ -33,8 +33,8 @@ import org.chromium.chrome.browser.externalnav.ExternalNavigationHandler.Overrid
 import org.chromium.chrome.browser.instantapps.InstantAppsHandler;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabRedirectHandler;
+import org.chromium.chrome.browser.test.ChromeBrowserTestRule;
 import org.chromium.chrome.browser.webapps.ChromeWebApkHost;
-import org.chromium.content.browser.test.NativeLibraryTestRule;
 import org.chromium.ui.base.PageTransition;
 import org.chromium.webapk.lib.common.WebApkConstants;
 
@@ -48,7 +48,8 @@ import java.util.List;
 @RunWith(BaseJUnit4ClassRunner.class)
 public class ExternalNavigationHandlerTest {
     @Rule
-    public NativeLibraryTestRule mActivityTestRule = new NativeLibraryTestRule();
+    public final ChromeBrowserTestRule mBrowserTestRule =
+            new ChromeBrowserTestRule(true /* initBrowserProcess */);
 
     // Expectations
     private static final int IGNORE = 0x0;
@@ -123,15 +124,14 @@ public class ExternalNavigationHandlerTest {
     }
 
     @Before
-    public void setUp() throws Exception {
-        RecordHistogram.setDisabledForTests(true);
+    public void setUp() {
         mDelegate.mQueryIntentOverride = null;
         ChromeWebApkHost.initForTesting(false);  // disabled by default
-        mActivityTestRule.loadNativeLibraryAndInitBrowserProcess();
+        RecordHistogram.setDisabledForTests(true);
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         RecordHistogram.setDisabledForTests(false);
     }
 
@@ -1039,6 +1039,22 @@ public class ExternalNavigationHandlerTest {
 
     @Test
     @SmallTest
+    public void testIntentWithMissingReferrer() {
+        // http://crbug.com/702089: Don't override links within the same host/domain.
+        // This is an issue for HTTPS->HTTP because there's no referrer, so we fall back on the
+        // WebContents.lastCommittedUrl.
+        mDelegate.setCanResolveActivity(true);
+
+        checkUrl("http://refertest.com")
+                .expecting(OverrideUrlLoadingResult.OVERRIDE_WITH_EXTERNAL_INTENT,
+                        START_OTHER_ACTIVITY);
+
+        mDelegate.setPreviousUrl("https://refertest.com");
+        checkUrl("http://refertest.com").expecting(OverrideUrlLoadingResult.NO_OVERRIDE, IGNORE);
+    }
+
+    @Test
+    @SmallTest
     public void testReferrerExtra() {
         String referrer = "http://www.google.com";
         checkUrl("http://youtube.com:90/foo/bar")
@@ -1280,17 +1296,19 @@ public class ExternalNavigationHandlerTest {
                 }
             }
             String dataString = intent.getDataString();
-            if (dataString.startsWith("http://")
-                    || intent.getDataString().startsWith("https://")) {
+            if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
                 list.add(newResolveInfo("chrome", "chrome"));
             }
             if (dataString.startsWith("http://m.youtube.com")
-                    || intent.getDataString().startsWith("http://youtube.com")) {
+                    || dataString.startsWith("http://youtube.com")) {
                 list.add(newResolveInfo("youtube", "youtube"));
             } else if (dataString.startsWith(PLUS_STREAM_URL)) {
                 list.add(newResolveInfo("plus", "plus"));
-            } else if (intent.getDataString().startsWith(CALENDAR_URL)) {
+            } else if (dataString.startsWith(CALENDAR_URL)) {
                 list.add(newResolveInfo("calendar", "calendar"));
+            } else if (dataString.startsWith("http://refertest.com")
+                    || dataString.startsWith("https://refertest.com")) {
+                list.add(newResolveInfo("refertest", "refertest"));
             } else if (dataString.startsWith("sms")) {
                 list.add(newResolveInfo(
                         TEXT_APP_1_PACKAGE_NAME, TEXT_APP_1_PACKAGE_NAME + ".cls"));
@@ -1438,6 +1456,11 @@ public class ExternalNavigationHandlerTest {
             return mIsSerpReferrer;
         }
 
+        @Override
+        public String getPreviousUrl() {
+            return mPreviousUrl;
+        }
+
         public void reset() {
             startActivityIntent = null;
             startIncognitoIntentCalled = false;
@@ -1473,6 +1496,10 @@ public class ExternalNavigationHandlerTest {
             mIsSerpReferrer = value;
         }
 
+        public void setPreviousUrl(String value) {
+            mPreviousUrl = value;
+        }
+
         public Intent startActivityIntent;
         public boolean startIncognitoIntentCalled;
 
@@ -1483,6 +1510,7 @@ public class ExternalNavigationHandlerTest {
         private String mReferrerUrlForClobbering;
         private boolean mCanHandleWithInstantApp;
         private boolean mIsSerpReferrer;
+        private String mPreviousUrl;
         public boolean mCalledWithProxy;
         public boolean mIsChromeAppInForeground = true;
         public boolean mIsWithinCurrentWebappScope;

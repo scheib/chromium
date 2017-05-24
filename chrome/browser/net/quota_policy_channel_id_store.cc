@@ -62,6 +62,10 @@ void QuotaPolicyChannelIDStore::DeleteChannelID(
   persistent_store_->DeleteChannelID(channel_id);
 }
 
+void QuotaPolicyChannelIDStore::Flush() {
+  persistent_store_->Flush();
+}
+
 void QuotaPolicyChannelIDStore::SetForceKeepSessionState() {
   special_storage_policy_ = NULL;
 }

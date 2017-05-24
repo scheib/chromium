@@ -314,6 +314,9 @@ IPC_STRUCT_BEGIN(ViewHostMsg_CreateWorker_Params)
   // The type (secure or nonsecure) of the context that created the worker.
   IPC_STRUCT_MEMBER(blink::WebSharedWorkerCreationContextType,
                     creation_context_type)
+
+  // Whether Data-Saver is enabled or not.
+  IPC_STRUCT_MEMBER(bool, data_saver_enabled)
 IPC_STRUCT_END()
 
 IPC_STRUCT_BEGIN(ViewHostMsg_CreateWorker_Reply)
@@ -803,8 +806,7 @@ IPC_MESSAGE_ROUTED2(ViewHostMsg_FrameSwapMessages,
 
 // Sent if the BeginFrame did not cause a SwapCompositorFrame (e.g. because no
 // updates were required or because it was aborted in the renderer).
-IPC_MESSAGE_ROUTED1(ViewHostMsg_BeginFrameDidNotSwap,
-                    cc::BeginFrameAck /* ack */)
+IPC_MESSAGE_ROUTED1(ViewHostMsg_DidNotProduceFrame, cc::BeginFrameAck /* ack */)
 
 // Send back a string to be recorded by UserMetrics.
 IPC_MESSAGE_CONTROL1(ViewHostMsg_UserMetricsRecordAction,

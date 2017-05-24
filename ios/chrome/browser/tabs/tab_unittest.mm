@@ -47,7 +47,7 @@
 #import "ios/web/public/navigation_manager.h"
 #include "ios/web/public/referrer.h"
 #include "ios/web/public/test/test_web_thread_bundle.h"
-#include "ios/web/web_state/navigation_context_impl.h"
+#import "ios/web/web_state/navigation_context_impl.h"
 #import "ios/web/web_state/ui/crw_web_controller.h"
 #import "ios/web/web_state/web_state_impl.h"
 #import "net/base/mac/url_conversions.h"

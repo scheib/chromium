@@ -100,7 +100,7 @@ static_library("metrics") {
     "//base:base_static",
     "//components/prefs",
     "//components/variations",
-    "//third_party/zlib:compression_utils",
+    "//third_party/zlib/google:compression_utils",
   ]
 
   if (is_chromeos) {
@@ -377,7 +377,7 @@ source_set("unit_tests") {
     "//net:test_support",
     "//services/service_manager/public/cpp",
     "//testing/gtest",
-    "//third_party/zlib:compression_utils",
+    "//third_party/zlib/google:compression_utils",
     "//ui/gfx/geometry",
   ]
 

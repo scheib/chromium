@@ -12,11 +12,12 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/service_manager_connection.h"
+#include "media/mojo/features.h"
 #include "media/mojo/interfaces/media_service.mojom.h"
 #include "media/mojo/services/media_interface_provider.h"
 #include "services/service_manager/public/cpp/connector.h"
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/provision_fetcher_impl.h"
 #include "content/public/browser/render_process_host.h"
@@ -104,7 +105,7 @@ void MediaInterfaceProxy::ConnectToService() {
   // interface. See http://crbug.com/660573
   auto provider = base::MakeUnique<media::MediaInterfaceProvider>(
       mojo::MakeRequest(&interfaces));
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
   // TODO(slan): Wrap these into a RenderFrame specific ProvisionFetcher impl.
   net::URLRequestContextGetter* context_getter =
       BrowserContext::GetDefaultStoragePartition(
@@ -112,7 +113,7 @@ void MediaInterfaceProxy::ConnectToService() {
           ->GetURLRequestContext();
   provider->registry()->AddInterface(
       base::Bind(&ProvisionFetcherImpl::Create, context_getter));
-#endif  // defined(ENABLE_MOJO_CDM)
+#endif  // BUILDFLAG(ENABLE_MOJO_CDM)
   GetContentClient()->browser()->ExposeInterfacesToMediaService(
       provider->registry(), render_frame_host_);
 

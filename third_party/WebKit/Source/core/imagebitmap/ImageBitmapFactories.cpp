@@ -308,7 +308,8 @@ void ImageBitmapFactories::ImageBitmapLoader::ResolvePromiseOnOriginalThread(
     RejectPromise();
     return;
   }
-  ASSERT(frame->width() && frame->height());
+  DCHECK(frame->width());
+  DCHECK(frame->height());
 
   RefPtr<StaticBitmapImage> image = StaticBitmapImage::Create(std::move(frame));
   image->SetOriginClean(true);

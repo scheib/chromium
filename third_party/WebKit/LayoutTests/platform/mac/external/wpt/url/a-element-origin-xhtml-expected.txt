@@ -1,5 +1,5 @@
 This is a testharness.js-based test.
-Found 295 tests; 220 PASS, 75 FAIL, 0 TIMEOUT, 0 NOTRUN.
+Found 296 tests; 223 PASS, 73 FAIL, 0 TIMEOUT, 0 NOTRUN.
 PASS Loading data… 
 PASS Parsing origin: <http://example	.
 org> against <http://example.org/foo/bar> 
@@ -210,8 +210,9 @@ PASS Parsing origin: <\0 http://example.com/ \r > against <about:blank>
 PASS Parsing origin: <http://www.foo。bar.com> against <http://other.com/> 
 PASS Parsing origin: <https://x/�?�#�> against <about:blank> 
 PASS Parsing origin: <http://Ｇｏ.com> against <http://other.com/> 
-FAIL Parsing origin: <http://你好你好> against <http://other.com/> assert_equals: origin expected "http://你好你好" but got "http://xn--6qqa088eba"
-FAIL Parsing origin: <https://faß.ExAmPlE/> against <about:blank> assert_equals: origin expected "https://faß.example" but got "https://fass.example"
+PASS Parsing origin: <http://你好你好> against <http://other.com/> 
+FAIL Parsing origin: <https://faß.ExAmPlE/> against <about:blank> assert_equals: origin expected "https://xn--fa-hia.example" but got "https://fass.example"
+FAIL Parsing origin: <sc://faß.ExAmPlE/> against <about:blank> assert_equals: origin expected "null" but got "sc://"
 PASS Parsing origin: <http://%30%78%63%30%2e%30%32%35%30.01> against <http://other.com/> 
 PASS Parsing origin: <http://%30%78%63%30%2e%30%32%35%30.01%2e> against <http://other.com/> 
 PASS Parsing origin: <http://０Ｘｃ０．０２５０．０１> against <http://other.com/> 
@@ -258,8 +259,8 @@ FAIL Parsing origin: <sc:\../> against <about:blank> assert_equals: origin expec
 FAIL Parsing origin: <sc::a@example.net> against <about:blank> assert_equals: origin expected "null" but got "sc://"
 FAIL Parsing origin: <wow:%NBD> against <about:blank> assert_equals: origin expected "null" but got "wow://"
 FAIL Parsing origin: <wow:%1G> against <about:blank> assert_equals: origin expected "null" but got "wow://"
-FAIL Parsing origin: <ftp://%e2%98%83> against <about:blank> assert_equals: origin expected "ftp://☃" but got "ftp://xn--n3h"
-FAIL Parsing origin: <https://%e2%98%83> against <about:blank> assert_equals: origin expected "https://☃" but got "https://xn--n3h"
+PASS Parsing origin: <ftp://%e2%98%83> against <about:blank> 
+PASS Parsing origin: <https://%e2%98%83> against <about:blank> 
 PASS Parsing origin: <http://127.0.0.1:10100/relative_import.html> against <about:blank> 
 PASS Parsing origin: <http://facebook.com/?foo=%7B%22abc%22> against <about:blank> 
 PASS Parsing origin: <https://localhost:3000/jqueryui@1.2.3> against <about:blank> 

@@ -21,7 +21,6 @@
 #include "ash/system/tray/system_tray_delegate.h"
 #include "ash/system/virtual_keyboard/virtual_keyboard_tray.h"
 #include "ash/system/web_notification/web_notification_tray.h"
-#include "ash/wm_window.h"
 #include "base/i18n/time_formatting.h"
 #include "ui/display/display.h"
 #include "ui/events/devices/input_device_manager.h"
@@ -29,7 +28,7 @@
 
 namespace ash {
 
-StatusAreaWidget::StatusAreaWidget(WmWindow* status_container,
+StatusAreaWidget::StatusAreaWidget(aura::Window* status_container,
                                    WmShelf* wm_shelf)
     : status_area_widget_delegate_(new StatusAreaWidgetDelegate(wm_shelf)),
       overview_button_tray_(nullptr),
@@ -42,14 +41,16 @@ StatusAreaWidget::StatusAreaWidget(WmWindow* status_container,
       ime_menu_tray_(nullptr),
       login_status_(LoginStatus::NOT_LOGGED_IN),
       wm_shelf_(wm_shelf) {
+  DCHECK(status_container);
+  DCHECK(wm_shelf);
   views::Widget::InitParams params(
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   params.delegate = status_area_widget_delegate_;
   params.name = "StatusAreaWidget";
   params.opacity = views::Widget::InitParams::TRANSLUCENT_WINDOW;
-  status_container->GetRootWindowController()
-      ->ConfigureWidgetInitParamsForContainer(
-          this, status_container->aura_window()->id(), &params);
+  RootWindowController::ForWindow(status_container)
+      ->ConfigureWidgetInitParamsForContainer(this, status_container->id(),
+                                              &params);
   Init(params);
   set_focus_on_creation(false);
   SetContentsView(status_area_widget_delegate_);

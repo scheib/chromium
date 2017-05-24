@@ -30,18 +30,6 @@
     {
       "object": "InlineTextBox 'Pattern on fill'",
       "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGResourcePattern pattern id='dynPattern'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
     }
   ]
 }

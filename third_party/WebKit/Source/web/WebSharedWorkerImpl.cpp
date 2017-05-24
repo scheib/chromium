@@ -123,7 +123,7 @@ void WebSharedWorkerImpl::TerminateWorkerThread() {
   worker_inspector_proxy_->WorkerThreadTerminated();
 }
 
-void WebSharedWorkerImpl::InitializeLoader() {
+void WebSharedWorkerImpl::InitializeLoader(bool data_saver_enabled) {
   DCHECK(IsMainThread());
 
   // Create 'shadow page'. This page is never displayed, it is used to proxy the
@@ -134,6 +134,7 @@ void WebSharedWorkerImpl::InitializeLoader() {
   // FIXME: http://crbug.com/363843. This needs to find a better way to
   // not create graphics layers.
   web_view_->GetSettings()->SetAcceleratedCompositingEnabled(false);
+  web_view_->GetSettings()->SetDataSaverEnabled(data_saver_enabled);
   // FIXME: Settings information should be passed to the Worker process from
   // Browser process when the worker is created (similar to
   // RenderThread::OnCreateNewView).
@@ -291,12 +292,13 @@ void WebSharedWorkerImpl::StartWorkerContext(
     const WebString& name,
     const WebString& content_security_policy,
     WebContentSecurityPolicyType policy_type,
-    WebAddressSpace creation_address_space) {
+    WebAddressSpace creation_address_space,
+    bool data_saver_enabled) {
   DCHECK(IsMainThread());
   url_ = url;
   name_ = name;
   creation_address_space_ = creation_address_space;
-  InitializeLoader();
+  InitializeLoader(data_saver_enabled);
 }
 
 void WebSharedWorkerImpl::DidReceiveScriptLoaderResponse() {

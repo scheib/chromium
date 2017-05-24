@@ -98,8 +98,6 @@ std::unique_ptr<views::View> PaymentRequestItemList::Item::CreateItemView() {
   columns->AddColumn(views::GridLayout::FILL, views::GridLayout::LEADING, 1,
                      views::GridLayout::USE_PREF, 0, 0);
 
-  columns->AddPaddingColumn(1, 0);
-
   // Add a column for the checkmark shown next to the selected profile.
   columns->AddColumn(views::GridLayout::TRAILING, views::GridLayout::CENTER, 0,
                      views::GridLayout::USE_PREF, 0, 0);

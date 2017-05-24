@@ -13,6 +13,7 @@
 #include "base/macros.h"
 #include "chrome/browser/chromeos/login/user_flow.h"
 #include "chrome/browser/chromeos/login/users/chrome_user_manager.h"
+#include "components/prefs/testing_pref_service.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_image/user_image.h"
@@ -43,6 +44,10 @@ class FakeChromeUserManager : public ChromeUserManager {
   const user_manager::User* AddUser(const AccountId& account_id);
   const user_manager::User* AddUserWithAffiliation(const AccountId& account_id,
                                                    bool is_affiliated);
+
+  // Creates the instance returned by |GetLocalState()| (which returns nullptr
+  // by default).
+  void CreateLocalState();
 
   // user_manager::UserManager override.
   void Shutdown() override;
@@ -205,6 +210,8 @@ class FakeChromeUserManager : public ChromeUserManager {
   mutable std::unique_ptr<UserFlow> default_flow_;
 
   using FlowMap = std::map<AccountId, UserFlow*>;
+
+  std::unique_ptr<TestingPrefServiceSimple> local_state_;
 
   // Specific flows by user e-mail.
   // Keys should be canonicalized before access.

@@ -287,6 +287,12 @@ void RecordParallelizableDownloadStats(
     base::TimeDelta time_without_parallel_streams,
     bool uses_parallel_requests);
 
+// Records the average bandwidth, time, and file size for parallelizable
+// download.
+CONTENT_EXPORT void RecordParallelizableDownloadAverageStats(
+    int64_t bytes_downloaded,
+    const base::TimeDelta& time_span);
+
 // Records the parallel download creation counts and the reasons why the
 // download falls back to non-parallel download.
 void RecordParallelDownloadCreationEvent(ParallelDownloadCreationEvent event);

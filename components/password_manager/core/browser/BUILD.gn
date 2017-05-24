@@ -122,6 +122,8 @@ static_library("browser") {
     "sql_table_builder.h",
     "statistics_table.cc",
     "statistics_table.h",
+    "suppressed_https_form_fetcher.cc",
+    "suppressed_https_form_fetcher.h",
     "test_affiliation_fetcher_factory.h",
     "webdata/logins_table.cc",
     "webdata/logins_table.h",
@@ -320,6 +322,7 @@ source_set("unit_tests") {
     "psl_matching_helper_unittest.cc",
     "sql_table_builder_unittest.cc",
     "statistics_table_unittest.cc",
+    "suppressed_https_form_fetcher_unittest.cc",
   ]
   if (is_mac) {
     sources -= [ "password_store_default_unittest.cc" ]

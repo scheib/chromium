@@ -95,6 +95,10 @@ class ExtensionUninstallDialog
   const gfx::ImageSkia& icon() const { return icon_; }
 
  private:
+  // Uninstalls the extension. Returns true on success, and populates |error| on
+  // failure.
+  bool Uninstall(base::string16* error);
+
   // Handles the "report abuse" checkbox being checked at the close of the
   // dialog.
   void HandleReportAbuse();

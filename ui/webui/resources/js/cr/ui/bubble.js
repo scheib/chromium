@@ -182,13 +182,13 @@ cr.define('cr.ui', function() {
         var left = this.arrowAtRight_ ?
             anchorMid + BubbleBase.ARROW_OFFSET - bubble.width :
             anchorMid - BubbleBase.ARROW_OFFSET;
-        var max_left_pos =
+        var maxLeftPos =
             documentWidth - bubble.width - BubbleBase.MIN_VIEWPORT_EDGE_MARGIN;
-        var min_left_pos = BubbleBase.MIN_VIEWPORT_EDGE_MARGIN;
+        var minLeftPos = BubbleBase.MIN_VIEWPORT_EDGE_MARGIN;
         if (document.documentElement.dir == 'rtl')
-          left = Math.min(Math.max(left, min_left_pos), max_left_pos);
+          left = Math.min(Math.max(left, minLeftPos), maxLeftPos);
         else
-          left = Math.max(Math.min(left, max_left_pos), min_left_pos);
+          left = Math.max(Math.min(left, maxLeftPos), minLeftPos);
         var arrowTip = Math.min(
             Math.max(
                 arrow.width / 2, this.arrowAtRight_ ?

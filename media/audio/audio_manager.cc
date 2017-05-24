@@ -281,12 +281,11 @@ AudioManager::~AudioManager() {
 // static
 std::unique_ptr<AudioManager> AudioManager::Create(
     std::unique_ptr<AudioThread> audio_thread,
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     AudioLogFactory* audio_log_factory) {
   std::unique_ptr<AudioManager> manager =
       CreateAudioManager(std::move(audio_thread), audio_log_factory);
 #if BUILDFLAG(ENABLE_WEBRTC)
-  manager->InitializeOutputDebugRecording(std::move(file_task_runner));
+  manager->InitializeOutputDebugRecording();
 #endif
   return manager;
 }
@@ -297,10 +296,7 @@ std::unique_ptr<AudioManager> AudioManager::CreateForTesting(
 #if defined(OS_WIN)
   GetHelper()->InitializeCOMForTesting();
 #endif
-  scoped_refptr<base::SingleThreadTaskRunner> file_task_runner =
-      audio_thread->GetWorkerTaskRunner();
-  return Create(std::move(audio_thread), std::move(file_task_runner),
-                GetHelper()->fake_log_factory());
+  return Create(std::move(audio_thread), GetHelper()->fake_log_factory());
 }
 
 // static

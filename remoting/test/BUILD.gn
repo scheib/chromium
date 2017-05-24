@@ -103,7 +103,7 @@ executable("chromoting_test_driver") {
   deps = [
     ":test_support",
     "//base/test:test_support",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//build/win:default_exe_manifest",
     "//testing/gtest",
   ]
@@ -142,7 +142,7 @@ executable("ar_sample_test_driver") {
   deps = [
     ":ar_test_driver_common",
     "//base/test:test_support",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//build/win:default_exe_manifest",
     "//testing/gtest",
   ]

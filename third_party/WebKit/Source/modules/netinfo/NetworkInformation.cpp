@@ -4,6 +4,8 @@
 
 #include "modules/netinfo/NetworkInformation.h"
 
+#include <limits>
+
 #include "core/dom/ExecutionContext.h"
 #include "core/dom/TaskRunnerHelper.h"
 #include "core/events/Event.h"
@@ -40,6 +42,35 @@ String ConnectionTypeToString(WebConnectionType type) {
   return "none";
 }
 
+// Rounds |rtt_msec| to the nearest 25 milliseconds as per the NetInfo spec.
+unsigned long RoundRtt(const Optional<TimeDelta>& rtt) {
+  if (!rtt.has_value()) {
+    // RTT is unavailable. So, return the fastest value.
+    return 0;
+  }
+
+  int rtt_msec = rtt.value().InMilliseconds();
+  if (rtt.value().InMilliseconds() > std::numeric_limits<int>::max())
+    rtt_msec = std::numeric_limits<int>::max();
+
+  DCHECK_LE(0, rtt_msec);
+  return std::round(static_cast<double>(rtt_msec) / 25) * 25;
+}
+
+// Rounds |downlink_mbps| to the nearest 25 kbps as per the NetInfo spec. The
+// returned value is in Mbps.
+double RoundMbps(const Optional<double>& downlink_mbps) {
+  if (!downlink_mbps.has_value()) {
+    // Throughput is unavailable. So, return the fastest value.
+    return std::numeric_limits<double>::infinity();
+  }
+
+  DCHECK_LE(0, downlink_mbps.value());
+  double downlink_kbps = downlink_mbps.value() * 1000;
+  double downlink_kbps_rounded = std::round(downlink_kbps / 25) * 25;
+  return downlink_kbps_rounded / 1000;
+}
+
 }  // namespace
 
 NetworkInformation* NetworkInformation::Create(ExecutionContext* context) {
@@ -67,12 +98,35 @@ double NetworkInformation::downlinkMax() const {
   return downlink_max_mbps_;
 }
 
-void NetworkInformation::ConnectionChange(WebConnectionType type,
-                                          double downlink_max_mbps) {
+unsigned long NetworkInformation::rtt() const {
+  if (!observing_)
+    return RoundRtt(GetNetworkStateNotifier().TransportRtt());
+
+  return transport_rtt_msec_;
+}
+
+double NetworkInformation::downlink() const {
+  if (!observing_)
+    return RoundMbps(GetNetworkStateNotifier().DownlinkThroughputMbps());
+
+  return downlink_mbps_;
+}
+
+void NetworkInformation::ConnectionChange(
+    WebConnectionType type,
+    double downlink_max_mbps,
+    const Optional<TimeDelta>& http_rtt,
+    const Optional<TimeDelta>& transport_rtt,
+    const Optional<double>& downlink_mbps) {
   DCHECK(GetExecutionContext()->IsContextThread());
 
+  transport_rtt_msec_ = RoundRtt(transport_rtt);
+  downlink_mbps_ = RoundMbps(downlink_mbps);
+  // TODO(tbansal): https://crbug.com/719108. Dispatch |change| event if the
+  // expected network quality has changed.
+
   // This can happen if the observer removes and then adds itself again
-  // during notification.
+  // during notification, or if HTTP RTT was the only metric that changed.
   if (type_ == type && downlink_max_mbps_ == downlink_max_mbps)
     return;
 
@@ -150,6 +204,9 @@ NetworkInformation::NetworkInformation(ExecutionContext* context)
     : ContextLifecycleObserver(context),
       type_(GetNetworkStateNotifier().ConnectionType()),
       downlink_max_mbps_(GetNetworkStateNotifier().MaxBandwidth()),
+      transport_rtt_msec_(RoundRtt(GetNetworkStateNotifier().TransportRtt())),
+      downlink_mbps_(
+          RoundMbps(GetNetworkStateNotifier().DownlinkThroughputMbps())),
       observing_(false),
       context_stopped_(false) {}
 

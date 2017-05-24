@@ -131,7 +131,7 @@ MAX_LAUNCH_FAILURES = SHORT_BACKOFF_THRESHOLD + 10
 SESSION_OUTPUT_TIME_LIMIT_SECONDS = 30
 
 # Globals needed by the atexit cleanup() handler.
-g_desktops = []
+g_desktop = None
 g_host_hash = hashlib.md5(socket.gethostname()).hexdigest()
 
 def gen_xorg_config(sizes):
@@ -408,7 +408,9 @@ class Desktop:
     self.randr_add_sizes = False
     self.host_ready = False
     self.ssh_auth_sockname = None
-    g_desktops.append(self)
+    global g_desktop
+    assert(g_desktop is None)
+    g_desktop = self
 
   @staticmethod
   def get_unused_display_number():
@@ -751,8 +753,8 @@ class Desktop:
       _ = signum, frame
       logging.info("Host ready to receive connections.")
       self.host_ready = True
-      if (ParentProcessLogger.instance() and
-          False not in [desktop.host_ready for desktop in g_desktops]):
+      if (ParentProcessLogger.instance() and g_desktop is not None and
+          g_desktop.host_ready):
         ParentProcessLogger.instance().release_parent(True)
 
     signal.signal(signal.SIGUSR1, sigusr1_handler)
@@ -1063,11 +1065,11 @@ def daemonize():
 def cleanup():
   logging.info("Cleanup.")
 
-  global g_desktops
-  for desktop in g_desktops:
-    for proc, name in [(desktop.x_proc, "X server"),
-                       (desktop.session_proc, "session"),
-                       (desktop.host_proc, "host")]:
+  global g_desktop
+  if g_desktop is not None:
+    for proc, name in [(g_desktop.x_proc, "X server"),
+                       (g_desktop.session_proc, "session"),
+                       (g_desktop.host_proc, "host")]:
       if proc is not None:
         logging.info("Terminating " + name)
         try:
@@ -1082,10 +1084,10 @@ def cleanup():
           psutil_proc.kill()
         except psutil.Error:
           logging.error("Error terminating process")
-    if desktop.xorg_conf is not None:
-      os.remove(desktop.xorg_conf)
+    if g_desktop.xorg_conf is not None:
+      os.remove(g_desktop.xorg_conf)
 
-  g_desktops = []
+  g_desktop = None
   if ParentProcessLogger.instance():
     ParentProcessLogger.instance().release_parent(False)
 
@@ -1104,9 +1106,8 @@ class SignalHandler:
         self.host_config.load()
       except (IOError, ValueError) as e:
         logging.error("Failed to load config: " + str(e))
-      for desktop in g_desktops:
-        if desktop.host_proc:
-          desktop.host_proc.send_signal(signal.SIGTERM)
+      if g_desktop is not None and g_desktop.host_proc:
+        g_desktop.host_proc.send_signal(signal.SIGTERM)
     else:
       # Exit cleanly so the atexit handler, cleanup(), gets called.
       raise SystemExit

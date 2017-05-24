@@ -4,6 +4,7 @@
 
 #include "modules/peerconnection/RTCDataChannel.h"
 
+#include <string>
 #include "bindings/core/v8/ExceptionState.h"
 #include "core/dom/DOMArrayBuffer.h"
 #include "core/dom/DOMException.h"
@@ -144,6 +145,28 @@ TEST(RTCDataChannelTest, BufferedAmountLow) {
   EXPECT_EQ(
       "bufferedamountlow",
       std::string(channel->scheduled_events_.back()->type().Utf8().data()));
+}
+
+TEST(RTCDataChannelTest, SendAfterContextDestroyed) {
+  MockHandler* handler = new MockHandler();
+  RTCDataChannel* channel = RTCDataChannel::Create(0, WTF::WrapUnique(handler));
+  handler->ChangeState(WebRTCDataChannelHandlerClient::kReadyStateOpen);
+  channel->ContextDestroyed(nullptr);
+
+  String message(std::string(100, 'A').c_str());
+  DummyExceptionStateForTesting exception_state;
+  channel->send(message, exception_state);
+
+  EXPECT_TRUE(exception_state.HadException());
+}
+
+TEST(RTCDataChannelTest, CloseAfterContextDestroyed) {
+  MockHandler* handler = new MockHandler();
+  RTCDataChannel* channel = RTCDataChannel::Create(0, WTF::WrapUnique(handler));
+  handler->ChangeState(WebRTCDataChannelHandlerClient::kReadyStateOpen);
+  channel->ContextDestroyed(nullptr);
+  channel->close();
+  EXPECT_EQ(String::FromUTF8("closed"), channel->readyState());
 }
 
 }  // namespace blink

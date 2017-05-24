@@ -63,9 +63,9 @@ static bool IsContextValid(ExecutionContext* context) {
   return true;
 }
 
-IDBRequest* IDBFactory::getDatabaseNames(ScriptState* script_state,
+IDBRequest* IDBFactory::GetDatabaseNames(ScriptState* script_state,
                                          ExceptionState& exception_state) {
-  IDB_TRACE("IDBFactory::getDatabaseNames");
+  // TODO(jsbell): Used only by inspector; remove unneeded checks/exceptions?
   if (!IsContextValid(ExecutionContext::From(script_state)))
     return nullptr;
   if (!ExecutionContext::From(script_state)
@@ -161,6 +161,7 @@ IDBOpenDBRequest* IDBFactory::CloseConnectionsAndDeleteDatabase(
     ScriptState* script_state,
     const String& name,
     ExceptionState& exception_state) {
+  // TODO(jsbell): Used only by inspector; remove unneeded checks/exceptions?
   return DeleteDatabaseInternal(script_state, name, exception_state,
                                 /*force_close=*/true);
 }

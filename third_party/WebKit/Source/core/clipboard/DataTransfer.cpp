@@ -355,7 +355,7 @@ void DataTransfer::WriteSelection(const FrameSelection& selection) {
 
 void DataTransfer::SetAccessPolicy(DataTransferAccessPolicy policy) {
   // once you go numb, can never go back
-  ASSERT(policy_ != kDataTransferNumb || policy == kDataTransferNumb);
+  DCHECK(policy_ != kDataTransferNumb || policy == kDataTransferNumb);
   policy_ = policy;
 }
 
@@ -386,7 +386,7 @@ DragOperation DataTransfer::SourceOperation() const {
 
 DragOperation DataTransfer::DestinationOperation() const {
   DragOperation op = ConvertEffectAllowedToDragOperation(drop_effect_);
-  ASSERT(op == kDragOperationCopy || op == kDragOperationNone ||
+  DCHECK(op == kDragOperationCopy || op == kDragOperationNone ||
          op == kDragOperationLink ||
          op == (DragOperation)(kDragOperationGeneric | kDragOperationMove) ||
          op == kDragOperationEvery);

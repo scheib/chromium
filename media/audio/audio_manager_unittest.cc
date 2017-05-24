@@ -570,10 +570,8 @@ TEST_F(AudioManagerTest, GetAssociatedOutputDeviceID) {
 class MockAudioDebugRecordingManager : public AudioDebugRecordingManager {
  public:
   MockAudioDebugRecordingManager(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner)
-      : AudioDebugRecordingManager(std::move(task_runner),
-                                   std::move(file_task_runner)) {}
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+      : AudioDebugRecordingManager(std::move(task_runner)) {}
 
   ~MockAudioDebugRecordingManager() override {}
 
@@ -624,10 +622,9 @@ class TestAudioManager : public FakeAudioManager {
   }
 
   std::unique_ptr<AudioDebugRecordingManager> CreateAudioDebugRecordingManager(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner) override {
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner) override {
     return base::MakeUnique<MockAudioDebugRecordingManager>(
-        std::move(task_runner), std::move(file_task_runner));
+        std::move(task_runner));
   }
 };
 
@@ -662,8 +659,7 @@ TEST_F(AudioManagerTest, AudioDebugRecording) {
 
   // Initialize is normally done in AudioManager::Create(), but since we don't
   // use that in this test, we need to initialize here.
-  audio_manager_->InitializeOutputDebugRecording(
-      audio_manager_->GetTaskRunner());
+  audio_manager_->InitializeOutputDebugRecording();
 
   MockAudioDebugRecordingManager* mock_debug_recording_manager =
       static_cast<MockAudioDebugRecordingManager*>(

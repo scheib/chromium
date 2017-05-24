@@ -68,8 +68,6 @@ RTCVideoDecoder::RTCVideoDecoder(webrtc::VideoCodecType type,
     : vda_error_counter_(0),
       video_codec_type_(type),
       factories_(factories),
-      decoder_texture_target_(0),
-      pixel_format_(media::PIXEL_FORMAT_UNKNOWN),
       next_picture_buffer_id_(0),
       state_(UNINITIALIZED),
       decode_complete_callback_(nullptr),
@@ -318,22 +316,13 @@ void RTCVideoDecoder::ProvidePictureBuffers(uint32_t buffer_count,
 
   std::vector<uint32_t> texture_ids;
   std::vector<gpu::Mailbox> texture_mailboxes;
-  decoder_texture_target_ = texture_target;
 
   if (format == media::PIXEL_FORMAT_UNKNOWN)
     format = media::PIXEL_FORMAT_ARGB;
 
-  if ((pixel_format_ != media::PIXEL_FORMAT_UNKNOWN) &&
-      (format != pixel_format_)) {
-    NotifyError(media::VideoDecodeAccelerator::PLATFORM_FAILURE);
-    return;
-  }
-
-  pixel_format_ = format;
   const uint32_t texture_count = buffer_count * textures_per_buffer;
   if (!factories_->CreateTextures(texture_count, size, &texture_ids,
-                                  &texture_mailboxes,
-                                  decoder_texture_target_)) {
+                                  &texture_mailboxes, texture_target)) {
     NotifyError(media::VideoDecodeAccelerator::PLATFORM_FAILURE);
     return;
   }
@@ -352,8 +341,9 @@ void RTCVideoDecoder::ProvidePictureBuffers(uint32_t buffer_count,
       mailboxes.push_back(texture_mailboxes[texture_id]);
     }
 
-    picture_buffers.push_back(
-        media::PictureBuffer(next_picture_buffer_id_++, size, ids, mailboxes));
+    picture_buffers.push_back(media::PictureBuffer(next_picture_buffer_id_++,
+                                                   size, ids, mailboxes,
+                                                   texture_target, format));
     const bool inserted =
         assigned_picture_buffers_
             .insert(std::make_pair(picture_buffers.back().id(),
@@ -415,7 +405,7 @@ void RTCVideoDecoder::PictureReady(const media::Picture& picture) {
   }
 
   scoped_refptr<media::VideoFrame> frame =
-      CreateVideoFrame(picture, pb, timestamp, visible_rect, pixel_format_);
+      CreateVideoFrame(picture, pb, timestamp, visible_rect, pb.pixel_format());
   if (!frame) {
     NotifyError(media::VideoDecodeAccelerator::PLATFORM_FAILURE);
     return;
@@ -451,7 +441,7 @@ scoped_refptr<media::VideoFrame> RTCVideoDecoder::CreateVideoFrame(
     uint32_t timestamp,
     const gfx::Rect& visible_rect,
     media::VideoPixelFormat pixel_format) {
-  DCHECK(decoder_texture_target_);
+  DCHECK(pb.texture_target());
   // Convert timestamp from 90KHz to ms.
   base::TimeDelta timestamp_ms = base::TimeDelta::FromInternalValue(
       base::checked_cast<uint64_t>(timestamp) * 1000 / 90);
@@ -464,7 +454,7 @@ scoped_refptr<media::VideoFrame> RTCVideoDecoder::CreateVideoFrame(
   gpu::MailboxHolder holders[media::VideoFrame::kMaxPlanes];
   for (size_t i = 0; i < pb.client_texture_ids().size(); ++i) {
     holders[i].mailbox = pb.texture_mailbox(i);
-    holders[i].texture_target = decoder_texture_target_;
+    holders[i].texture_target = pb.texture_target();
   }
   scoped_refptr<media::VideoFrame> frame =
       media::VideoFrame::WrapNativeTextures(

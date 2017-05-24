@@ -15,19 +15,16 @@ namespace base {
 class Timer;
 }  // namespace base
 
-namespace IPC {
-class Sender;
-}  // namespace IPC
-
 namespace page_load_metrics {
+
+class PageTimingSender;
 
 // PageTimingMetricsSender is responsible for sending page load timing metrics
 // over IPC. PageTimingMetricsSender may coalesce sent IPCs in order to
 // minimize IPC contention.
 class PageTimingMetricsSender {
  public:
-  PageTimingMetricsSender(IPC::Sender* ipc_sender,
-                          int routing_id,
+  PageTimingMetricsSender(std::unique_ptr<PageTimingSender> sender,
                           std::unique_ptr<base::Timer> timer,
                           mojom::PageLoadTimingPtr initial_timing);
   ~PageTimingMetricsSender();
@@ -42,14 +39,13 @@ class PageTimingMetricsSender {
   void EnsureSendTimer();
   void SendNow();
 
-  IPC::Sender* const ipc_sender_;
-  const int routing_id_;
+  std::unique_ptr<PageTimingSender> sender_;
   std::unique_ptr<base::Timer> timer_;
   mojom::PageLoadTimingPtr last_timing_;
 
   // The the sender keep track of metadata as it comes in, because the sender is
   // scoped to a single committed load.
-  mojom::PageLoadMetadata metadata_;
+  mojom::PageLoadMetadataPtr metadata_;
 
   bool have_sent_ipc_ = false;
 

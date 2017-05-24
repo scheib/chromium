@@ -1,0 +1,170 @@
+// Copyright 2017 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// Private API for receiving real-time media perception information.
+[platforms=("chromeos")]
+namespace mediaPerceptionPrivate {
+  enum Status {
+    // The media analytics process is waiting to be launched.
+    UNINITIALIZED,
+
+    // The analytics process is running and the media processing pipeline is
+    // started, but it is not yet receiving image frames. This is a
+    // transitional state between SUSPENDED and RUNNING for the time it takes
+    // to warm up the media processing pipeline, which can take anywhere from
+    // a few seconds to a minute.
+    // Note: STARTED is the initial reply to SetState RUNNING.
+    STARTED,
+
+    // The analytics process is running and the media processing pipeling is
+    // injesting image frames. At this point, MediaPerception signals should
+    // be coming over D-Bus.
+    RUNNING,
+
+    // Analytics process is running and the media processing pipeline is ready
+    // to be set to state RUNNING. The D-Bus communications are enabled but
+    // the media processing pipeline is suspended.
+    SUSPENDED
+  };
+
+  // The system and configuration state of the analytics process and v4lplugin.
+  dictionary State {
+    Status status;
+
+    // Optional $(ref:setState) parameter. Specifies the video device the media
+    // analytics process should open while the media processing pipeline is
+    // starting. To set this parameter, status has to be RUNNING.
+    DOMString? deviceContext;
+  };
+
+  dictionary Point {
+    // The horizontal distance from the top left corner of the image.
+    double? x;
+
+    // The vertical distance from the top left corner of the image.
+    double? y;
+  };
+
+  dictionary BoundingBox {
+    // Specifies whether the points are normalized to the size of the image.
+    boolean? normalized;
+
+    // The two points that define the corners of a bounding box.
+    Point? topLeft;
+    Point? bottomRight;
+  };
+
+  enum EntityType {
+    UNSPECIFIED,
+    FACE,
+    PERSON
+  };
+
+  dictionary Entity {
+    // A unique id associated with the detected entity, which can be used to
+    // track the entity over time.
+    long? id;
+
+    EntityType? type;
+
+    // Minimum box which captures entire detected entity.
+    BoundingBox? boundingBox;
+
+    // A value for the quality of this detection.
+    double? confidence;
+
+    // The estimated depth of the entity from the camera.
+    double? depthInMeters;
+  };
+
+  // The set of computer vision metadata for an image frame.
+  dictionary FramePerception {
+    long? frameId;
+
+    long? frameWidthInPx;
+    long? frameHeightInPx;
+
+    // The timestamp associated with the frame (when its recieved by the
+    // analytics process).
+    double? timestamp;
+
+    // The list of entities detected in this frame.
+    Entity[]? entities;
+  };
+
+  dictionary MediaPerception {
+    // The time the media perception data was emitted by the media processing
+    // pipeline. This value will be greater than the timestamp stored within
+    // the FramePerception dictionary and the difference between them can be
+    // viewed as the processing time for a single frame.
+    double? timestamp;
+
+    // An array of framePerceptions.
+    FramePerception[]? framePerceptions;
+  };
+
+  enum ImageFormat {
+    // Image represented by RGB data channels.
+    RAW,
+    PNG,
+    JPEG
+  };
+
+  dictionary ImageFrame {
+    long? width;
+    long? height;
+
+    ImageFormat? format;
+
+    long? dataLength;
+
+    // The bytes of the image frame.
+    ArrayBuffer? frame;
+  };
+
+  dictionary PerceptionSample {
+    // The video analytics FramePerception for the associated image frame
+    // data.
+    FramePerception? framePerception;
+
+    // The image frame data for the associated FramePerception object.
+    ImageFrame? imageFrame;
+  };
+
+  dictionary Diagnostics {
+    // A buffer of image frames and the associated video analytics information
+    // that can be used to diagnose a malfunction.
+    PerceptionSample[]? perceptionSamples;
+  };
+
+  callback StateCallback = void(State state);
+
+  callback DiagnosticsCallback = void(Diagnostics diagnostics);
+
+  interface Functions {
+    // Gets the status of the media perception process.
+    // |callback| : The current state of the system.
+    static void getState(StateCallback callback);
+
+    // Sets the desired state of the system.
+    // |state| : A dictionary with the desired new state. The only settable
+    // states are RUNNING and SUSPENDED.
+    // |callback| : Invoked with the State of the system after setting it. Can
+    // be used to verify the state was set as desired.
+    static void setState(State state, StateCallback callback);
+
+    // Get a diagnostics buffer out of the video analytics process.
+    // |callback| : Returns a Diagnostics dictionary object.
+    static void getDiagnostics(DiagnosticsCallback callback);
+  };
+
+  interface Events {
+    // Fired when media perception information is received from the media
+    // analytics process.
+    // |mediaPerception| : The dictionary which contains a dump of everything
+    // the analytics process has detected or determined from the incoming media
+    // streams.
+    static void onMediaPerception(MediaPerception mediaPerception);
+  };
+};

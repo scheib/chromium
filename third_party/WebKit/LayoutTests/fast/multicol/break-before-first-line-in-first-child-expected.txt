@@ -2,4 +2,4 @@ Test that the first block in a multicol container refuses a pagination strut fro
 
 There should be a blue square below.
 
- PASS
+PASS

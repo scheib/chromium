@@ -225,35 +225,25 @@ void WebBluetoothServiceImpl::DeviceChanged(device::BluetoothAdapter* adapter,
     base::Optional<WebBluetoothDeviceId> device_id =
         connected_devices_->CloseConnectionToDeviceWithAddress(
             device->GetAddress());
+
+    // Since the device disconnected we need to send an error for pending
+    // primary services requests.
+    RunPendingPrimaryServicesRequests(device);
   }
 }
 
 void WebBluetoothServiceImpl::GattServicesDiscovered(
     device::BluetoothAdapter* adapter,
     device::BluetoothDevice* device) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  DVLOG(1) << "Services discovered for device: " << device->GetAddress();
+
   if (device_chooser_controller_.get()) {
     device_chooser_controller_->AddFilteredDevice(*device);
   }
 
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  const std::string& device_address = device->GetAddress();
-  DVLOG(1) << "Services discovered for device: " << device_address;
-
-  auto iter = pending_primary_services_requests_.find(device_address);
-  if (iter == pending_primary_services_requests_.end()) {
-    return;
-  }
-  std::vector<PrimaryServicesRequestCallback> requests =
-      std::move(iter->second);
-  pending_primary_services_requests_.erase(iter);
-
-  for (const PrimaryServicesRequestCallback& request : requests) {
-    request.Run(device);
-  }
-
-  // Sending get-service responses unexpectedly queued another request.
-  DCHECK(
-      !base::ContainsKey(pending_primary_services_requests_, device_address));
+  RunPendingPrimaryServicesRequests(device);
 }
 
 void WebBluetoothServiceImpl::GattCharacteristicValueChanged(
@@ -824,6 +814,18 @@ void WebBluetoothServiceImpl::RemoteServerGetPrimaryServicesImpl(
     const RemoteServerGetPrimaryServicesCallback& callback,
     device::BluetoothDevice* device) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  if (!device->IsGattConnected()) {
+    // The device disconnected while discovery was pending. The returned error
+    // does not matter because the renderer ignores the error if the device
+    // disconnected.
+    RecordGetPrimaryServicesOutcome(
+        quantity, UMAGetPrimaryServiceOutcome::DEVICE_DISCONNECTED);
+    callback.Run(blink::mojom::WebBluetoothResult::NO_SERVICES_FOUND,
+                 base::nullopt /* services */);
+    return;
+  }
+
   DCHECK(device->IsGattServicesDiscoveryComplete());
 
   std::vector<device::BluetoothRemoteGattService*> services =
@@ -1150,6 +1152,27 @@ CacheQueryResult WebBluetoothServiceImpl::QueryCacheForDescriptor(
   }
 
   return result;
+}
+
+void WebBluetoothServiceImpl::RunPendingPrimaryServicesRequests(
+    device::BluetoothDevice* device) {
+  const std::string& device_address = device->GetAddress();
+
+  auto iter = pending_primary_services_requests_.find(device_address);
+  if (iter == pending_primary_services_requests_.end()) {
+    return;
+  }
+  std::vector<PrimaryServicesRequestCallback> requests =
+      std::move(iter->second);
+  pending_primary_services_requests_.erase(iter);
+
+  for (const PrimaryServicesRequestCallback& request : requests) {
+    request.Run(device);
+  }
+
+  // Sending get-service responses unexpectedly queued another request.
+  DCHECK(
+      !base::ContainsKey(pending_primary_services_requests_, device_address));
 }
 
 RenderProcessHost* WebBluetoothServiceImpl::GetRenderProcessHost() {

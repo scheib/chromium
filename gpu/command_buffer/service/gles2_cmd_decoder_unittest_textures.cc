@@ -21,6 +21,7 @@
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/mocks.h"
 #include "gpu/command_buffer/service/program_manager.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/test_helper.h"
 #include "gpu/config/gpu_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -35,6 +36,7 @@
 
 using ::gl::MockGLInterface;
 using ::testing::_;
+using ::testing::AnyNumber;
 using ::testing::DoAll;
 using ::testing::InSequence;
 using ::testing::Invoke;
@@ -4857,6 +4859,88 @@ TEST_P(WebGL2DecoderTest, TexSwizzleDisabled) {
     EXPECT_EQ(error::kNoError, ExecuteCmd(cmd));
     EXPECT_EQ(GL_INVALID_ENUM, GetGLError());
   }
+}
+
+TEST_P(GLES2DecoderTest, TestInitDiscardableTexture) {
+  EXPECT_EQ(0u, group().discardable_manager()->NumCacheEntriesForTesting());
+  DoInitializeDiscardableTextureCHROMIUM(client_texture_id_);
+  EXPECT_EQ(1u, group().discardable_manager()->NumCacheEntriesForTesting());
+}
+
+TEST_P(GLES2DecoderTest, TestInitInvalidDiscardableTexture) {
+  EXPECT_EQ(0u, group().discardable_manager()->NumCacheEntriesForTesting());
+  DoInitializeDiscardableTextureCHROMIUM(0);
+  EXPECT_EQ(0u, group().discardable_manager()->NumCacheEntriesForTesting());
+  EXPECT_EQ(GL_INVALID_VALUE, GetGLError());
+}
+
+TEST_P(GLES2DecoderTest, TestUnlockDiscardableTexture) {
+  const ContextGroup& context_group = group();
+  EXPECT_EQ(0u,
+            context_group.discardable_manager()->NumCacheEntriesForTesting());
+  DoInitializeDiscardableTextureCHROMIUM(client_texture_id_);
+  EXPECT_TRUE(context_group.discardable_manager()->IsEntryLockedForTesting(
+      client_texture_id_, context_group.texture_manager()));
+  DoUnlockDiscardableTextureCHROMIUM(client_texture_id_);
+  EXPECT_FALSE(context_group.discardable_manager()->IsEntryLockedForTesting(
+      client_texture_id_, context_group.texture_manager()));
+}
+
+TEST_P(GLES2DecoderTest, TestDeleteDiscardableTexture) {
+  EXPECT_EQ(0u, group().discardable_manager()->NumCacheEntriesForTesting());
+  DoInitializeDiscardableTextureCHROMIUM(client_texture_id_);
+  EXPECT_EQ(1u, group().discardable_manager()->NumCacheEntriesForTesting());
+  DoDeleteTexture(client_texture_id_, kServiceTextureId);
+  EXPECT_EQ(0u, group().discardable_manager()->NumCacheEntriesForTesting());
+}
+
+TEST_P(GLES2DecoderManualInitTest,
+       TestDiscardableTextureUnusableWhileUnlocked) {
+  base::CommandLine command_line(0, NULL);
+  InitState init;
+  init.bind_generates_resource = false;
+  InitDecoderWithCommandLine(init, &command_line);
+
+  DoInitializeDiscardableTextureCHROMIUM(client_texture_id_);
+  DoBindTexture(GL_TEXTURE_2D, client_texture_id_, kServiceTextureId);
+  EXPECT_EQ(GL_NO_ERROR, GetGLError());
+  EXPECT_CALL(*gl_, BindTexture(GL_TEXTURE_2D, 0)).RetiresOnSaturation();
+  DoUnlockDiscardableTextureCHROMIUM(client_texture_id_);
+  {
+    // Avoid DoBindTexture, as we expect failure.
+    cmds::BindTexture cmd;
+    cmd.Init(GL_TEXTURE_2D, client_texture_id_);
+    EXPECT_EQ(error::kNoError, ExecuteCmd(cmd));
+  }
+  EXPECT_EQ(GL_INVALID_OPERATION, GetGLError());
+  DoLockDiscardableTextureCHROMIUM(client_texture_id_);
+  DoBindTexture(GL_TEXTURE_2D, client_texture_id_, kServiceTextureId);
+  EXPECT_EQ(GL_NO_ERROR, GetGLError());
+}
+
+TEST_P(GLES2DecoderTest, TestDiscardableTextureBindGeneratesUnlocked) {
+  DoInitializeDiscardableTextureCHROMIUM(client_texture_id_);
+  DoBindTexture(GL_TEXTURE_2D, client_texture_id_, kServiceTextureId);
+  EXPECT_EQ(GL_NO_ERROR, GetGLError());
+  // Unlock will unbind the texture.
+  EXPECT_CALL(*gl_, BindTexture(GL_TEXTURE_2D, 0)).RetiresOnSaturation();
+  DoUnlockDiscardableTextureCHROMIUM(client_texture_id_);
+
+  // At this point, the texture is unlocked and unusable. Bind will generate a
+  // new resource.
+  EXPECT_CALL(*gl_, GenTextures(_, _))
+      .WillOnce(SetArgPointee<1>(kNewServiceId))
+      .RetiresOnSaturation();
+  DoBindTexture(GL_TEXTURE_2D, client_texture_id_, kNewServiceId);
+  EXPECT_EQ(GL_NO_ERROR, GetGLError());
+
+  // Re-locking should delete the previous resource (preserving the generated
+  // one).
+  EXPECT_CALL(*gl_, DeleteTextures(1, Pointee(kServiceTextureId)))
+      .RetiresOnSaturation();
+  DoLockDiscardableTextureCHROMIUM(client_texture_id_);
+  DoBindTexture(GL_TEXTURE_2D, client_texture_id_, kNewServiceId);
+  EXPECT_EQ(GL_NO_ERROR, GetGLError());
 }
 
 // TODO(gman): Complete this test.

@@ -79,7 +79,7 @@ class ASH_EXPORT CustomFrameViewAsh : public views::NonClientFrameView {
   void ActivationChanged(bool active) override;
 
   // views::View:
-  gfx::Size GetPreferredSize() const override;
+  gfx::Size CalculatePreferredSize() const override;
   void Layout() override;
   const char* GetClassName() const override;
   gfx::Size GetMinimumSize() const override;

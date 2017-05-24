@@ -193,7 +193,8 @@ IN_PROC_BROWSER_TEST_F(AutomationApiTest, DesktopFocusWeb) {
       << message_;
 }
 
-IN_PROC_BROWSER_TEST_F(AutomationApiTest, DesktopFocusIframe) {
+// Flaky, see https://crbug.com/724923.
+IN_PROC_BROWSER_TEST_F(AutomationApiTest, DISABLED_DesktopFocusIframe) {
   StartEmbeddedTestServer();
   ASSERT_TRUE(
       RunExtensionSubtest("automation/tests/desktop", "focus_iframe.html"))

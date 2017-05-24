@@ -63,6 +63,9 @@ class PaymentRequestSheetController : public views::ButtonListener {
   // calls FillContentView again to re-populate it with updated views.
   void UpdateContentView();
 
+  // Update the focus to |focused_view|.
+  void UpdateFocus(views::View* focused_view);
+
   // View controllers should call this if they have modified some layout aspect
   // (e.g., made it taller or shorter), and want to relayout the whole pane.
   void RelayoutPane();
@@ -124,11 +127,17 @@ class PaymentRequestSheetController : public views::ButtonListener {
   // sets |sheet_id| to the desired value.
   virtual bool GetSheetId(DialogViewID* sheet_id);
 
+  views::Button* primary_button() { return primary_button_.get(); }
+
  private:
   // Called when the Enter accelerator is pressed. Perform the action associated
   // with the primary button and returns true if it's enabled, returns false
   // otherwise.
   bool PerformPrimaryButtonAction();
+
+  // Add the primary/secondary buttons to |container|.
+  void AddPrimaryButton(views::View* container);
+  void AddSecondaryButton(views::View* container);
 
   // All these are not owned. Will outlive this.
   PaymentRequestSpec* spec_;

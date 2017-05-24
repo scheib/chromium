@@ -16,11 +16,10 @@ const char kDataChannelHtmlFile[] = "/media/datachannel_test.html";
 
 namespace content {
 
-// This test is flaky, see https://crbug.com/611620.
-class DISABLED_WebRtcDataChannelTest : public WebRtcContentBrowserTestBase {
+class WebRtcDataChannelTest : public WebRtcContentBrowserTestBase {
  public:
-  DISABLED_WebRtcDataChannelTest() {}
-  ~DISABLED_WebRtcDataChannelTest() override {}
+  WebRtcDataChannelTest() {}
+  ~WebRtcDataChannelTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     WebRtcContentBrowserTestBase::SetUpCommandLine(command_line);
@@ -30,10 +29,10 @@ class DISABLED_WebRtcDataChannelTest : public WebRtcContentBrowserTestBase {
   }
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(DISABLED_WebRtcDataChannelTest);
+  DISALLOW_COPY_AND_ASSIGN(WebRtcDataChannelTest);
 };
 
-IN_PROC_BROWSER_TEST_F(DISABLED_WebRtcDataChannelTest, DataChannelGC) {
+IN_PROC_BROWSER_TEST_F(WebRtcDataChannelTest, DataChannelGC) {
   MakeTypicalCall("testDataChannelGC();", kDataChannelHtmlFile);
 }
 

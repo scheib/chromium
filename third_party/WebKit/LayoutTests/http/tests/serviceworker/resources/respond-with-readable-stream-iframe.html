@@ -1,7 +1,0 @@
-<!DOCTYPE html>
-<script>
-fetch('body-stream').then(resp => {
-    return resp.text();
-  }).then(text => parent.done(text))
-  .catch(e => parent.done('FAIL: ' + e));
-</script>

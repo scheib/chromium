@@ -37,7 +37,6 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
-#include "base/threading/sequenced_worker_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
@@ -113,7 +112,6 @@
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_type.h"
-#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/notification_details.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/notification_source.h"
@@ -215,10 +213,6 @@ const char* const kInvalidRecommendedLocale[] = {
 };
 const char kPublicSessionLocale[] = "de";
 const char kPublicSessionInputMethodIDTemplate[] = "_comp_ime_%sxkb:de:neo:ger";
-
-// The sequence token used by GetKeyboardLayoutsForLocale() for its background
-// tasks.
-const char kSequenceToken[] = "chromeos_login_l10n_util";
 
 // Helper that serves extension update manifests to Chrome.
 class TestingUpdateManifestProvider
@@ -700,21 +694,11 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
     EXPECT_EQ(initial_language_, icu::Locale::getDefault().getLanguage());
   }
 
-  // GetKeyboardLayoutsForLocale() posts a task to a background task runner.
-  // This method flushes that task runner and the current thread's message loop
-  // to ensure that GetKeyboardLayoutsForLocale() is finished.
+  // GetKeyboardLayoutsForLocale() posts a task to a background task runner and
+  // handles the response on the main thread. This method flushes both the
+  // thread pool backing the background task runner and the main thread.
   void WaitForGetKeyboardLayoutsForLocaleToFinish() {
-    base::SequencedWorkerPool* worker_pool =
-        content::BrowserThread::GetBlockingPool();
-     scoped_refptr<base::SequencedTaskRunner> background_task_runner =
-         worker_pool->GetSequencedTaskRunner(
-             worker_pool->GetNamedSequenceToken(kSequenceToken));
-    base::RunLoop run_loop;
-    background_task_runner->PostTaskAndReply(FROM_HERE,
-                                             base::Bind(&base::DoNothing),
-                                             run_loop.QuitClosure());
-    run_loop.Run();
-    base::RunLoop().RunUntilIdle();
+    content::RunAllBlockingPoolTasksUntilIdle();
 
     // Verify that the construction of the keyboard layout list did not affect
     // the current ICU locale.

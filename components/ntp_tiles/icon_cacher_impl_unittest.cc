@@ -24,6 +24,7 @@
 #include "components/image_fetcher/core/image_decoder.h"
 #include "components/image_fetcher/core/image_fetcher.h"
 #include "components/image_fetcher/core/request_metadata.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -49,10 +50,11 @@ class MockImageFetcher : public image_fetcher::ImageFetcher {
                void(image_fetcher::ImageFetcher::DataUseServiceName name));
   MOCK_METHOD1(SetImageDownloadLimit,
                void(base::Optional<int64_t> max_download_bytes));
-  MOCK_METHOD3(StartOrQueueNetworkRequest,
+  MOCK_METHOD4(StartOrQueueNetworkRequest,
                void(const std::string& id,
                     const GURL& image_url,
-                    const ImageFetcherCallback& callback));
+                    const ImageFetcherCallback& callback,
+                    const net::NetworkTrafficAnnotationTag&));
   MOCK_METHOD1(SetDesiredImageFrameSize, void(const gfx::Size&));
   MOCK_METHOD0(GetImageDecoder, image_fetcher::ImageDecoder*());
 };
@@ -259,7 +261,7 @@ TEST_F(IconCacherTestPopularSites, LargeNotCachedAndFetchSucceeded) {
                     data_use_measurement::DataUseUserData::NTP_TILES));
     EXPECT_CALL(*image_fetcher_, SetDesiredImageFrameSize(gfx::Size(128, 128)));
     EXPECT_CALL(*image_fetcher_,
-                StartOrQueueNetworkRequest(_, site_.large_icon_url, _))
+                StartOrQueueNetworkRequest(_, site_.large_icon_url, _, _))
         .WillOnce(PassFetch(128, 128));
     EXPECT_CALL(done, Run()).WillOnce(Quit(&loop));
   }
@@ -283,7 +285,7 @@ TEST_F(IconCacherTestPopularSites, SmallNotCachedAndFetchSucceeded) {
                     data_use_measurement::DataUseUserData::NTP_TILES));
     EXPECT_CALL(*image_fetcher_, SetDesiredImageFrameSize(gfx::Size(128, 128)));
     EXPECT_CALL(*image_fetcher_,
-                StartOrQueueNetworkRequest(_, site_.favicon_url, _))
+                StartOrQueueNetworkRequest(_, site_.favicon_url, _, _))
         .WillOnce(PassFetch(128, 128));
     EXPECT_CALL(done, Run()).WillOnce(Quit(&loop));
   }
@@ -305,7 +307,7 @@ TEST_F(IconCacherTestPopularSites, LargeNotCachedAndFetchFailed) {
                     data_use_measurement::DataUseUserData::NTP_TILES));
     EXPECT_CALL(*image_fetcher_, SetDesiredImageFrameSize(gfx::Size(128, 128)));
     EXPECT_CALL(*image_fetcher_,
-                StartOrQueueNetworkRequest(_, site_.large_icon_url, _))
+                StartOrQueueNetworkRequest(_, site_.large_icon_url, _, _))
         .WillOnce(FailFetch());
   }
 
@@ -319,7 +321,7 @@ TEST_F(IconCacherTestPopularSites, LargeNotCachedAndFetchFailed) {
 TEST_F(IconCacherTestPopularSites, HandlesEmptyCallbacksNicely) {
   EXPECT_CALL(*image_fetcher_, SetDataUseServiceName(_));
   EXPECT_CALL(*image_fetcher_, SetDesiredImageFrameSize(_));
-  EXPECT_CALL(*image_fetcher_, StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*image_fetcher_, StartOrQueueNetworkRequest(_, _, _, _))
       .WillOnce(PassFetch(128, 128));
   IconCacherImpl cacher(&favicon_service_, nullptr, std::move(image_fetcher_));
   cacher.StartFetchPopularSites(site_, base::Closure(), base::Closure());
@@ -351,7 +353,7 @@ TEST_F(IconCacherTestPopularSites, ProvidesDefaultIconAndSucceedsWithFetching) {
                     data_use_measurement::DataUseUserData::NTP_TILES));
     EXPECT_CALL(*image_fetcher_, SetDesiredImageFrameSize(gfx::Size(128, 128)));
     EXPECT_CALL(*image_fetcher_,
-                StartOrQueueNetworkRequest(_, site_.large_icon_url, _))
+                StartOrQueueNetworkRequest(_, site_.large_icon_url, _, _))
         .WillOnce(PassFetch(128, 128));
 
     // Both callback are called async after the request but preliminary has to
@@ -387,7 +389,7 @@ TEST_F(IconCacherTestPopularSites, LargeNotCachedAndFetchPerformedOnlyOnce) {
                     data_use_measurement::DataUseUserData::NTP_TILES));
     EXPECT_CALL(*image_fetcher_, SetDesiredImageFrameSize(gfx::Size(128, 128)));
     EXPECT_CALL(*image_fetcher_,
-                StartOrQueueNetworkRequest(_, site_.large_icon_url, _))
+                StartOrQueueNetworkRequest(_, site_.large_icon_url, _, _))
         .WillOnce(PassFetch(128, 128));
     // Success will be notified to both requests.
     EXPECT_CALL(done, Run()).WillOnce(Return()).WillOnce(Quit(&loop));
@@ -457,7 +459,7 @@ TEST_F(IconCacherTestMostLikely, NotCachedAndFetchSucceeded) {
                 SetDataUseServiceName(
                     data_use_measurement::DataUseUserData::LARGE_ICON_SERVICE));
     EXPECT_CALL(*fetcher_for_large_icon_service_,
-                StartOrQueueNetworkRequest(_, _, _))
+                StartOrQueueNetworkRequest(_, _, _, _))
         .WillOnce(PassFetch(128, 128));
     EXPECT_CALL(done, Run()).WillOnce(Quit(&loop));
   }
@@ -489,7 +491,7 @@ TEST_F(IconCacherTestMostLikely, NotCachedAndFetchFailed) {
                 SetDataUseServiceName(
                     data_use_measurement::DataUseUserData::LARGE_ICON_SERVICE));
     EXPECT_CALL(*fetcher_for_large_icon_service_,
-                StartOrQueueNetworkRequest(_, _, _))
+                StartOrQueueNetworkRequest(_, _, _, _))
         .WillOnce(FailFetch());
     EXPECT_CALL(done, Run()).Times(0);
   }
@@ -516,7 +518,7 @@ TEST_F(IconCacherTestMostLikely, HandlesEmptyCallbacksNicely) {
 
   EXPECT_CALL(*fetcher_for_large_icon_service_, SetDataUseServiceName(_));
   EXPECT_CALL(*fetcher_for_large_icon_service_,
-              StartOrQueueNetworkRequest(_, _, _))
+              StartOrQueueNetworkRequest(_, _, _, _))
       .WillOnce(PassFetch(128, 128));
 
   favicon::LargeIconService large_icon_service(
@@ -549,7 +551,7 @@ TEST_F(IconCacherTestMostLikely, NotCachedAndFetchPerformedOnlyOnce) {
                 SetDataUseServiceName(
                     data_use_measurement::DataUseUserData::LARGE_ICON_SERVICE));
     EXPECT_CALL(*fetcher_for_large_icon_service_,
-                StartOrQueueNetworkRequest(_, _, _))
+                StartOrQueueNetworkRequest(_, _, _, _))
         .WillOnce(PassFetch(128, 128));
     // Success will be notified to both requests.
     EXPECT_CALL(done, Run()).WillOnce(Return()).WillOnce(Quit(&loop));

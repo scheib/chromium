@@ -78,9 +78,10 @@ LINK_RESOURCE_ID(IDR_AUTOFILL_CC_SCAN_NEW, R.drawable.ic_photo_camera_black)
 LINK_RESOURCE_ID(IDR_AUTOFILL_HTTP_WARNING, R.drawable.ic_info_outline_grey)
 LINK_RESOURCE_ID(IDR_AUTOFILL_HTTPS_INVALID_WARNING, R.drawable.ic_warning_red)
 
-// We display settings icon for keyboard accessory using Android's
-// |VectorDrawableCompat|. We do not display settings icon for autofill popup.
+// We display settings and edit icon for keyboard accessory using Android's
+// |VectorDrawableCompat|. We do not display these icons for autofill popup.
 LINK_RESOURCE_ID(IDR_AUTOFILL_SETTINGS, R.drawable.ic_settings_black)
+LINK_RESOURCE_ID(IDR_AUTOFILL_CREATE, R.drawable.ic_edit_24dp)
 
 // We use PNG files for the following images.
 LINK_RESOURCE_ID(IDR_CREDIT_CARD_CVC_HINT, R.drawable.cvc_icon)

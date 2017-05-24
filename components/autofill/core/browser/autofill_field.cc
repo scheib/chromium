@@ -289,9 +289,9 @@ bool FillYearSelectControl(const base::string16& value,
   return false;
 }
 
-// Try to fill a credit card type |value| (Visa, MasterCard, etc.) into the
+// Try to fill a credit card type |value| (Visa, Mastercard, etc.) into the
 // given |field|. We ignore whitespace when filling credit card types to
-// allow for cases such as "Master Card".
+// allow for cases such as "Master card".
 
 bool FillCreditCardTypeSelectControl(const base::string16& value,
                                      FormFieldData* field) {

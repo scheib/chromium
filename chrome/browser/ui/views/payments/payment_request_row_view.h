@@ -26,6 +26,16 @@ class PaymentRequestRowView : public views::CustomButton {
   // it's begin hovered or it's focused.
   void SetActiveBackground();
 
+  // Show/hide the separator at the bottom of the row. This is used to hide the
+  // separator when the row is hovered.
+  void ShowBottomSeparator();
+  void HideBottomSeparator();
+
+  // Sets the row as |highlighted| or not. A row is highlighted if it's hovered
+  // on or focused, in which case it hides its bottom separator and gets a light
+  // colored background color.
+  void SetIsHighlighted(bool highlighted);
+
   // views::CustomButton:
   void StateChanged(ButtonState old_state) override;
 
@@ -34,6 +44,7 @@ class PaymentRequestRowView : public views::CustomButton {
   void OnBlur() override;
 
   bool clickable_;
+  gfx::Insets insets_;
 
   DISALLOW_COPY_AND_ASSIGN(PaymentRequestRowView);
 };

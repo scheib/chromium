@@ -126,7 +126,7 @@ void SerialIoHandler::StartOpen(
     const std::string& port,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner) {
   DCHECK(!open_complete_.is_null());
-  DCHECK(file_thread_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(file_thread_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(!file_.IsValid());
   // It's the responsibility of the API wrapper around SerialIoHandler to
   // validate the supplied path against the set of valid port names, and

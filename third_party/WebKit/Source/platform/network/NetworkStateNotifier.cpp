@@ -58,7 +58,10 @@ NetworkStateNotifier::ScopedNotifier::~ScopedNotifier() {
   const NetworkState& after =
       notifier_.has_override_ ? notifier_.override_ : notifier_.state_;
   if ((after.type != before_.type ||
-       after.max_bandwidth_mbps != before_.max_bandwidth_mbps) &&
+       after.max_bandwidth_mbps != before_.max_bandwidth_mbps ||
+       after.http_rtt != before_.http_rtt ||
+       after.transport_rtt != before_.transport_rtt ||
+       after.downlink_throughput_mbps != before_.downlink_throughput_mbps) &&
       before_.connection_initialized) {
     notifier_.NotifyObservers(notifier_.connection_observers_,
                               ObserverType::CONNECTION_TYPE, after);
@@ -88,6 +91,31 @@ void NetworkStateNotifier::SetWebConnection(WebConnectionType type,
     state_.connection_initialized = true;
     state_.type = type;
     state_.max_bandwidth_mbps = max_bandwidth_mbps;
+  }
+}
+
+void NetworkStateNotifier::SetNetworkQuality(TimeDelta http_rtt,
+                                             TimeDelta transport_rtt,
+                                             int downlink_throughput_kbps) {
+  DCHECK(IsMainThread());
+  ScopedNotifier notifier(*this);
+  {
+    MutexLocker locker(mutex_);
+
+    state_.http_rtt = base::nullopt;
+    state_.transport_rtt = base::nullopt;
+    state_.downlink_throughput_mbps = base::nullopt;
+
+    if (http_rtt.InMilliseconds() >= 0)
+      state_.http_rtt = http_rtt;
+
+    if (transport_rtt.InMilliseconds() >= 0)
+      state_.transport_rtt = transport_rtt;
+
+    if (downlink_throughput_kbps >= 0) {
+      state_.downlink_throughput_mbps =
+          static_cast<double>(downlink_throughput_kbps) / 1000;
+    }
   }
 }
 
@@ -180,8 +208,9 @@ void NetworkStateNotifier::NotifyObserversOnTaskRunner(
         observer_list->observers[i]->OnLineStateChange(state.on_line);
         continue;
       case ObserverType::CONNECTION_TYPE:
-        observer_list->observers[i]->ConnectionChange(state.type,
-                                                      state.max_bandwidth_mbps);
+        observer_list->observers[i]->ConnectionChange(
+            state.type, state.max_bandwidth_mbps, state.http_rtt,
+            state.transport_rtt, state.downlink_throughput_mbps);
         continue;
     }
     NOTREACHED();

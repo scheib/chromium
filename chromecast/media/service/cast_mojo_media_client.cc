@@ -43,6 +43,12 @@ class CastAudioRendererSink : public ::media::AudioRendererSink {
                                      ::media::OUTPUT_DEVICE_STATUS_OK,
                                      ::media::AudioParameters());
   }
+
+  bool IsOptimizedForHardwareParameters() final {
+    NOTREACHED();
+    return true;
+  }
+
   bool CurrentThreadIsRenderingThread() final {
     NOTREACHED();
     return false;

@@ -68,6 +68,7 @@ class VrShellGl : public device::mojom::VRVSyncProvider {
             gvr_context* gvr_api,
             bool initially_web_vr,
             bool reprojected_rendering,
+            bool daydream_support,
             UiScene* scene);
   ~VrShellGl() override;
 
@@ -113,6 +114,7 @@ class VrShellGl : public device::mojom::VRVSyncProvider {
   void InitializeRenderer();
   void DrawFrame(int16_t frame_index);
   void DrawWorldElements(const vr::Mat4f& head_pose);
+  void DrawOverlayElements(const vr::Mat4f& head_pose);
   void DrawHeadLockedElements();
   void DrawUiView(const vr::Mat4f& head_pose,
                   const std::vector<const UiElement*>& elements,
@@ -150,6 +152,7 @@ class VrShellGl : public device::mojom::VRVSyncProvider {
   void SendTap(UiElement* target,
                const gfx::PointF& target_point,
                const gfx::Point& local_point_pixels);
+  void SendImmediateExitRequestIfNecessary();
   void GetVisualTargetElement(const gfx::Vector3dF& controller_direction,
                               gfx::Vector3dF& eye_to_target,
                               gfx::Point3F& target_point,
@@ -240,6 +243,7 @@ class VrShellGl : public device::mojom::VRVSyncProvider {
   bool web_vr_mode_;
   bool ready_to_draw_ = false;
   bool surfaceless_rendering_;
+  bool daydream_support_;
 
   std::unique_ptr<VrController> controller_;
 

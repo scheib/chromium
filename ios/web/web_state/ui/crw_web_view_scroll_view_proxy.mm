@@ -145,6 +145,14 @@
   [_scrollView setContentOffset:contentOffset animated:animated];
 }
 
+- (BOOL)scrollsToTop {
+  return [_scrollView scrollsToTop];
+}
+
+- (void)setScrollsToTop:(BOOL)scrollsToTop {
+  [_scrollView setScrollsToTop:scrollsToTop];
+}
+
 - (UIPanGestureRecognizer*)panGestureRecognizer {
   return [_scrollView panGestureRecognizer];
 }

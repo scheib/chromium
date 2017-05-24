@@ -67,9 +67,8 @@ void DownloadsHandler::SendAutoOpenDownloadsToJavascript() {
       content::BrowserContext::GetDownloadManager(profile_);
   bool auto_open_downloads =
       DownloadPrefs::FromDownloadManager(manager)->IsAutoOpenUsed();
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("auto-open-downloads-changed"),
-                         base::Value(auto_open_downloads));
+  FireWebUIListener("auto-open-downloads-changed",
+                    base::Value(auto_open_downloads));
 }
 
 void DownloadsHandler::HandleResetAutoOpenFileTypes(

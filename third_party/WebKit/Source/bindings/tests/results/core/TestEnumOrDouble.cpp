@@ -36,12 +36,12 @@ TestEnumOrDouble TestEnumOrDouble::fromDouble(double value) {
   return container;
 }
 
-String TestEnumOrDouble::getAsTestEnum() const {
+const String& TestEnumOrDouble::getAsTestEnum() const {
   DCHECK(isTestEnum());
   return m_testEnum;
 }
 
-void TestEnumOrDouble::setTestEnum(String value) {
+void TestEnumOrDouble::setTestEnum(const String& value) {
   DCHECK(isNull());
   NonThrowableExceptionState exceptionState;
   const char* validValues[] = {
@@ -58,7 +58,7 @@ void TestEnumOrDouble::setTestEnum(String value) {
   m_type = SpecificTypeTestEnum;
 }
 
-TestEnumOrDouble TestEnumOrDouble::fromTestEnum(String value) {
+TestEnumOrDouble TestEnumOrDouble::fromTestEnum(const String& value) {
   TestEnumOrDouble container;
   container.setTestEnum(value);
   return container;

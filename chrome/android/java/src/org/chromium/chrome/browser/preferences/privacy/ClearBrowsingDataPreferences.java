@@ -195,8 +195,7 @@ public class ClearBrowsingDataPreferences extends PreferenceFragment
         CLEAR_CACHE(BrowsingDataType.CACHE, PREF_CACHE, R.drawable.ic_collections_grey, false),
         CLEAR_PASSWORDS(
                 BrowsingDataType.PASSWORDS, PREF_PASSWORDS, R.drawable.ic_vpn_key_grey, false),
-        CLEAR_FORM_DATA(
-                BrowsingDataType.FORM_DATA, PREF_FORM_DATA, R.drawable.bookmark_edit_normal, true),
+        CLEAR_FORM_DATA(BrowsingDataType.FORM_DATA, PREF_FORM_DATA, R.drawable.ic_edit_24dp, true),
         CLEAR_SITE_SETTINGS(BrowsingDataType.SITE_SETTINGS, PREF_SITE_SETTINGS,
                 R.drawable.ic_tv_options_input_settings_rotated_grey, false);
 

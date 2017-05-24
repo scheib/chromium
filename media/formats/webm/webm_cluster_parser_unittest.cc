@@ -1066,7 +1066,7 @@ TEST_F(WebMClusterParserTest,
 
 TEST_F(WebMClusterParserTest, ReadOpusDurationsSimpleBlockAtEndOfCluster) {
   int loop_count = 0;
-  for (const auto* packet_ptr : BuildAllOpusPackets()) {
+  for (const auto& packet_ptr : BuildAllOpusPackets()) {
     InSequence s;
 
     // Get a new parser each iteration to prevent exceeding the media log cap.
@@ -1103,7 +1103,7 @@ TEST_F(WebMClusterParserTest, ReadOpusDurationsSimpleBlockAtEndOfCluster) {
 
 TEST_F(WebMClusterParserTest, PreferOpusDurationsOverBlockDurations) {
   int loop_count = 0;
-  for (const auto* packet_ptr : BuildAllOpusPackets()) {
+  for (const auto& packet_ptr : BuildAllOpusPackets()) {
     InSequence s;
 
     // Get a new parser each iteration to prevent exceeding the media log cap.

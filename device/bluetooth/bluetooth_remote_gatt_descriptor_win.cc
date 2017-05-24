@@ -19,7 +19,7 @@ BluetoothRemoteGattDescriptorWin::BluetoothRemoteGattDescriptorWin(
       descriptor_info_(descriptor_info),
       ui_task_runner_(ui_task_runner),
       weak_ptr_factory_(this) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(parent_characteristic_);
   DCHECK(descriptor_info_.get());
 
@@ -38,7 +38,7 @@ BluetoothRemoteGattDescriptorWin::BluetoothRemoteGattDescriptorWin(
 }
 
 BluetoothRemoteGattDescriptorWin::~BluetoothRemoteGattDescriptorWin() {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
 
   parent_characteristic_->GetWinService()
       ->GetWinAdapter()
@@ -72,7 +72,7 @@ BluetoothRemoteGattDescriptorWin::GetPermissions() const {
 void BluetoothRemoteGattDescriptorWin::ReadRemoteDescriptor(
     const ValueCallback& callback,
     const ErrorCallback& error_callback) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
 
   NOTIMPLEMENTED();
   error_callback.Run(BluetoothRemoteGattService::GATT_ERROR_NOT_SUPPORTED);
@@ -82,7 +82,7 @@ void BluetoothRemoteGattDescriptorWin::WriteRemoteDescriptor(
     const std::vector<uint8_t>& new_value,
     const base::Closure& callback,
     const ErrorCallback& error_callback) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
 
   NOTIMPLEMENTED();
   error_callback.Run(BluetoothRemoteGattService::GATT_ERROR_NOT_SUPPORTED);

@@ -520,6 +520,36 @@ void DCLayerTree::SwapChainPresenter::PresentToSwapChain(
 
   InitializeVideoProcessor(ceiled_input_size, swap_chain_size);
 
+  if (surface_->workarounds().disable_larger_than_screen_overlays) {
+    // Because of the rounding when converting between pixels and DIPs, a
+    // fullscreen video can become slightly larger than the monitor - e.g. on
+    // a 3000x2000 monitor with a scale factor of 1.75 a 1920x1079 video can
+    // become 3002x1689.
+    // On older Intel drivers, swapchains that are bigger than the monitor
+    // won't be put into overlays, which will hurt power usage a lot. On those
+    // systems, the scaling can be adjusted very slightly so that it's less
+    // than the monitor size. This should be close to imperceptible.
+    // TODO(jbauman): Remove when http://crbug.com/668278 is fixed.
+    const int kOversizeMargin = 3;
+
+    if ((bounds_rect.x() >= 0) &&
+        (bounds_rect.width() > g_overlay_monitor_size.width()) &&
+        (bounds_rect.width() <=
+         g_overlay_monitor_size.width() + kOversizeMargin)) {
+      bounds_rect.set_width(g_overlay_monitor_size.width());
+    }
+
+    if ((bounds_rect.y() >= 0) &&
+        (bounds_rect.height() > g_overlay_monitor_size.height()) &&
+        (bounds_rect.height() <=
+         g_overlay_monitor_size.height() + kOversizeMargin)) {
+      bounds_rect.set_height(g_overlay_monitor_size.height());
+    }
+  }
+
+  swap_chain_scale_x_ = bounds_rect.width() * 1.0f / swap_chain_size.width();
+  swap_chain_scale_y_ = bounds_rect.height() * 1.0f / swap_chain_size.height();
+
   bool yuy2_swapchain = ShouldBeYUY2();
   bool first_present = false;
   if (!swap_chain_ || swap_chain_size_ != swap_chain_size ||
@@ -640,36 +670,6 @@ void DCLayerTree::SwapChainPresenter::PresentToSwapChain(
     CHECK(SUCCEEDED(hr));
   }
 
-  if (surface_->workarounds().disable_larger_than_screen_overlays) {
-    // Because of the rounding when converting between pixels and DIPs, a
-    // fullscreen video can become slightly larger than the monitor - e.g. on
-    // a 3000x2000 monitor with a scale factor of 1.75 a 1920x1079 video can
-    // become 3002x1689.
-    // On older Intel drivers, swapchains that are bigger than the monitor
-    // won't be put into overlays, which will hurt power usage a lot. On those
-    // systems, the scaling can be adjusted very slightly so that it's less
-    // than the monitor size. This should be close to imperceptible.
-    // TODO(jbauman): Remove when http://crbug.com/668278 is fixed.
-    const int kOversizeMargin = 3;
-
-    if ((bounds_rect.x() >= 0) &&
-        (bounds_rect.width() > g_overlay_monitor_size.width()) &&
-        (bounds_rect.width() <=
-         g_overlay_monitor_size.width() + kOversizeMargin)) {
-      bounds_rect.set_width(g_overlay_monitor_size.width());
-    }
-
-    if ((bounds_rect.y() >= 0) &&
-        (bounds_rect.height() > g_overlay_monitor_size.height()) &&
-        (bounds_rect.height() <=
-         g_overlay_monitor_size.height() + kOversizeMargin)) {
-      bounds_rect.set_height(g_overlay_monitor_size.height());
-    }
-  }
-
-  swap_chain_scale_x_ = bounds_rect.width() * 1.0f / swap_chain_size.width();
-  swap_chain_scale_y_ = bounds_rect.height() * 1.0f / swap_chain_size.height();
-
   if (first_present) {
     swap_chain_->Present(0, 0);
 
@@ -689,6 +689,17 @@ void DCLayerTree::SwapChainPresenter::PresentToSwapChain(
     base::win::ScopedComPtr<ID3D11DeviceContext> context;
     d3d11_device_->GetImmediateContext(context.GetAddressOf());
     context->CopyResource(dest_texture.Get(), src_texture.Get());
+
+    // Additionally wait for the GPU to finish executing its commands, or
+    // there still may be a black flicker when presenting expensive content
+    // (e.g. 4k video).
+    base::win::ScopedComPtr<IDXGIDevice2> dxgi_device2;
+    hr = d3d11_device_.CopyTo(dxgi_device2.GetAddressOf());
+    DCHECK(SUCCEEDED(hr));
+    base::WaitableEvent event(base::WaitableEvent::ResetPolicy::AUTOMATIC,
+                              base::WaitableEvent::InitialState::NOT_SIGNALED);
+    dxgi_device2->EnqueueSetEvent(event.handle());
+    event.Wait();
   }
 
   swap_chain_->Present(1, 0);

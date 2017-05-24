@@ -8,6 +8,7 @@
 
 #include "base/command_line.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task_scheduler/post_task.h"
 #include "build/build_config.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -57,22 +58,15 @@ BrowserAccessibilityStateImpl::BrowserAccessibilityStateImpl()
     : BrowserAccessibilityState(),
       disable_hot_tracking_(false) {
   ResetAccessibilityModeValue();
-#if defined(OS_WIN)
-  // On Windows, UpdateHistograms calls some system functions with unknown
-  // runtime, so call it on the file thread to ensure there's no jank.
-  // Everything in that method must be safe to call on another thread.
-  BrowserThread::ID update_histogram_thread = BrowserThread::FILE;
-#else
-  // On all other platforms, UpdateHistograms should be called on the main
-  // thread.
-  BrowserThread::ID update_histogram_thread = BrowserThread::UI;
-#endif
 
   // We need to AddRef() the leaky singleton so that Bind doesn't
   // delete it prematurely.
   AddRef();
-  BrowserThread::PostDelayedTask(
-      update_histogram_thread, FROM_HERE,
+  // The delay is necessary because assistive technology sometimes isn't
+  // detected until after the user interacts in some way, so a reasonable delay
+  // gives us better numbers.
+  base::PostDelayedTaskWithTraits(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
       base::Bind(&BrowserAccessibilityStateImpl::UpdateHistograms, this),
       base::TimeDelta::FromSeconds(ACCESSIBILITY_HISTOGRAM_DELAY_SECS));
 }

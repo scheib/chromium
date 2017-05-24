@@ -183,7 +183,6 @@ class MODULES_EXPORT AXNodeObject : public AXObjectImpl {
                      AXRelatedObjectVector*) const override;
   String Placeholder(AXNameFrom) const override;
   bool NameFromLabelElement() const override;
-  bool NameFromContents() const override;
 
   // Location
   void GetRelativeBounds(AXObjectImpl** out_container,

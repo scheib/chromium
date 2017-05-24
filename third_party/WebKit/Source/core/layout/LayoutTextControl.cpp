@@ -132,7 +132,7 @@ void LayoutTextControl::ComputeLogicalHeight(
     if (Style()->OverflowInlineDirection() == EOverflow::kScroll ||
         (Style()->OverflowInlineDirection() == EOverflow::kAuto &&
          inner_editor->GetLayoutObject()->Style()->OverflowWrap() ==
-             kNormalOverflowWrap))
+             EOverflowWrap::kNormal))
       logical_height += ScrollbarThickness();
 
     // FIXME: The logical height of the inner text box should have been added

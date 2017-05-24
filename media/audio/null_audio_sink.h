@@ -34,6 +34,7 @@ class MEDIA_EXPORT NullAudioSink
   void Play() override;
   bool SetVolume(double volume) override;
   OutputDeviceInfo GetOutputDeviceInfo() override;
+  bool IsOptimizedForHardwareParameters() override;
   bool CurrentThreadIsRenderingThread() override;
   void SwitchOutputDevice(const std::string& device_id,
                           const url::Origin& security_origin,

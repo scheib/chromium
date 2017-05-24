@@ -74,6 +74,8 @@ class HitTestingTransformState;
 class PaintLayerCompositor;
 class TransformationMatrix;
 
+using PaintLayerId = uint64_t;
+
 enum IncludeSelfOrNot { kIncludeSelf, kExcludeSelf };
 
 enum CompositingQueryMode {
@@ -1023,6 +1025,9 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
   void EndShouldKeepAliveAllClientsRecursive();
 #endif
 
+  // An id for this PaintLayer that is unique for the lifetime of the WebView.
+  PaintLayerId UniqueId() const { return unique_id_; }
+
  private:
   void SetNeedsCompositingInputsUpdateInternal();
 
@@ -1269,6 +1274,8 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
   LayoutRect previous_paint_dirty_rect_;
 
   std::unique_ptr<PaintLayerRareData> rare_data_;
+
+  PaintLayerId unique_id_;
 
   FRIEND_TEST_ALL_PREFIXES(PaintLayerTest,
                            DescendantDependentFlagsStopsAtThrottledFrames);

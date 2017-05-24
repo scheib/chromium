@@ -48,6 +48,10 @@ class WebWorkerFetchContext {
   // https://tools.ietf.org/html/draft-west-first-party-cookies.
   // See content::URLRequest::first_party_for_cookies() for details.
   virtual WebURL FirstPartyForCookies() const = 0;
+
+  // Reports the certificate error to the browser process.
+  virtual void DidRunContentWithCertificateErrors(const WebURL& url) {}
+  virtual void DidDisplayContentWithCertificateErrors(const WebURL& url) {}
 };
 
 }  // namespace blink

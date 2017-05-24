@@ -69,6 +69,7 @@ static_library("renderer") {
     "page_load_metrics/metrics_render_frame_observer.h",
     "page_load_metrics/page_timing_metrics_sender.cc",
     "page_load_metrics/page_timing_metrics_sender.h",
+    "page_load_metrics/page_timing_sender.h",
     "page_load_metrics/renderer_page_track_decider.cc",
     "page_load_metrics/renderer_page_track_decider.h",
     "plugins/non_loadable_plugin_placeholder.cc",
@@ -121,7 +122,6 @@ static_library("renderer") {
     "//components/omnibox/common",
     "//components/password_manager/content/renderer",
     "//components/plugins/renderer",
-    "//components/printing/renderer",
     "//components/rappor/public/interfaces",
     "//components/resources:components_resources",
     "//components/spellcheck:build_features",
@@ -141,6 +141,7 @@ static_library("renderer") {
     "//media",
     "//media:media_features",
     "//media/capture",
+    "//mojo/public/cpp/bindings",
     "//net",
     "//ppapi/features",
     "//printing/features",
@@ -348,8 +349,12 @@ static_library("renderer") {
   if (enable_spellcheck) {
     deps += [ "//components/spellcheck/renderer:renderer" ]
   }
+
   if (enable_basic_printing || enable_print_preview) {
-    deps += [ "//printing" ]
+    deps += [
+      "//components/printing/renderer",
+      "//printing",
+    ]
     sources += [
       "printing/chrome_print_web_view_helper_delegate.cc",
       "printing/chrome_print_web_view_helper_delegate.h",

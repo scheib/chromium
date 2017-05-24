@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/macros.h"
-#include "base/memory/scoped_vector.h"
 
 namespace media {
 
@@ -39,7 +38,7 @@ class OpusPacket {
 };
 
 // Builds an exhaustive collection of Opus packet configurations.
-ScopedVector<OpusPacket> BuildAllOpusPackets();
+std::vector<std::unique_ptr<OpusPacket>> BuildAllOpusPackets();
 
 }  // namespace media
 

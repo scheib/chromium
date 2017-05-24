@@ -9,7 +9,6 @@
 #include "base/bind.h"
 #include "content/browser/appcache/appcache.h"
 #include "content/browser/appcache/appcache_backend_impl.h"
-#include "content/browser/appcache/appcache_network_service_handler.h"
 #include "content/browser/appcache/appcache_policy.h"
 #include "content/browser/appcache/appcache_request.h"
 #include "content/browser/appcache/appcache_url_request_job.h"
@@ -222,23 +221,6 @@ void AppCacheRequestHandler::MaybeCompleteCrossSiteTransferInOldProcess(
     return;
   }
   CompleteCrossSiteTransfer(old_process_id_, old_host_id_);
-}
-
-// static.
-void AppCacheRequestHandler::InitializeForNavigationNetworkService(
-    std::unique_ptr<ResourceRequest> resource_request,
-    ResourceContext* resource_context,
-    AppCacheNavigationHandleCore* navigation_handle_core,
-    ResourceType resource_type,
-    base::Callback<void(mojom::URLLoaderFactoryPtrInfo,
-                        std::unique_ptr<ResourceRequest>)> callback) {
-  // This instance is deleted when it receives a callback from the
-  // AppCacheStorage class which contains information about the AppCache
-  // status for the URL being served by the |resource_request|.
-  AppCacheNetworkServiceHandler* network_service_handler =
-      new AppCacheNetworkServiceHandler(
-          std::move(resource_request), navigation_handle_core, callback);
-  network_service_handler->Start();
 }
 
 void AppCacheRequestHandler::OnDestructionImminent(AppCacheHost* host) {

@@ -171,10 +171,12 @@ SessionWindowIOS* SerializeWebStateList(WebStateList* web_state_list) {
 
 void DeserializeWebStateList(WebStateList* web_state_list,
                              SessionWindowIOS* session_window,
+                             bool web_usage_enabled,
                              const WebStateFactory& web_state_factory) {
   int old_count = web_state_list->count();
   for (CRWSessionStorage* session in session_window.sessions) {
     std::unique_ptr<web::WebState> web_state = web_state_factory.Run(session);
+    web_state->SetWebUsageEnabled(web_usage_enabled);
     web_state_list->InsertWebState(web_state_list->count(),
                                    std::move(web_state));
   }

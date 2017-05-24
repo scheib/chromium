@@ -3149,6 +3149,8 @@ TEST_F(PasswordFormManagerTest, UploadSignInForm_WithAutofillTypes) {
 
   ASSERT_EQ(2u, uploaded_form_structure->field_count());
   autofill::ServerFieldTypeSet expected_types = {autofill::PASSWORD};
+  EXPECT_EQ(form_to_save.username_value,
+            uploaded_form_structure->field(0)->value);
   EXPECT_EQ(expected_types,
             uploaded_form_structure->field(1)->possible_types());
 }

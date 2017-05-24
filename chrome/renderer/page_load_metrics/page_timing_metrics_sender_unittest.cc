@@ -6,9 +6,8 @@
 
 #include "base/time/time.h"
 #include "base/timer/mock_timer.h"
-#include "chrome/common/page_load_metrics/page_load_timing.h"
-#include "chrome/renderer/page_load_metrics/fake_page_timing_metrics_ipc_sender.h"
-#include "ipc/ipc_message.h"
+#include "chrome/common/page_load_metrics/page_load_metrics.mojom.h"
+#include "chrome/renderer/page_load_metrics/fake_page_timing_sender.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace page_load_metrics {
@@ -17,11 +16,11 @@ namespace page_load_metrics {
 // MockTimer instance.
 class TestPageTimingMetricsSender : public PageTimingMetricsSender {
  public:
-  explicit TestPageTimingMetricsSender(IPC::Sender* ipc_sender,
-                                       mojom::PageLoadTimingPtr initial_timing)
+  explicit TestPageTimingMetricsSender(
+      std::unique_ptr<PageTimingSender> page_timing_sender,
+      mojom::PageLoadTimingPtr initial_timing)
       : PageTimingMetricsSender(
-            ipc_sender,
-            MSG_ROUTING_NONE,
+            std::move(page_timing_sender),
             std::unique_ptr<base::Timer>(new base::MockTimer(false, false)),
             std::move(initial_timing)) {}
 
@@ -33,12 +32,12 @@ class TestPageTimingMetricsSender : public PageTimingMetricsSender {
 class PageTimingMetricsSenderTest : public testing::Test {
  public:
   PageTimingMetricsSenderTest()
-      : metrics_sender_(
-            new TestPageTimingMetricsSender(&fake_ipc_sender_,
-                                            mojom::PageLoadTiming::New())) {}
+      : metrics_sender_(new TestPageTimingMetricsSender(
+            base::MakeUnique<FakePageTimingSender>(&validator_),
+            mojom::PageLoadTiming::New())) {}
 
  protected:
-  FakePageTimingMetricsIPCSender fake_ipc_sender_;
+  FakePageTimingSender::PageTimingValidator validator_;
   std::unique_ptr<TestPageTimingMetricsSender> metrics_sender_;
 };
 
@@ -47,20 +46,20 @@ TEST_F(PageTimingMetricsSenderTest, Basic) {
   base::TimeDelta first_layout = base::TimeDelta::FromMillisecondsD(2);
 
   mojom::PageLoadTiming timing;
-  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  InitPageLoadTimingForTest(&timing);
   timing.navigation_start = nav_start;
   timing.document_timing->first_layout = first_layout;
 
   metrics_sender_->Send(timing.Clone());
 
-  // Firing the timer should trigger sending of an OnTimingUpdated IPC.
-  fake_ipc_sender_.ExpectPageLoadTiming(timing);
+  // Firing the timer should trigger sending of an SendTiming call.
+  validator_.ExpectPageLoadTiming(timing);
   ASSERT_TRUE(metrics_sender_->mock_timer()->IsRunning());
   metrics_sender_->mock_timer()->Fire();
   EXPECT_FALSE(metrics_sender_->mock_timer()->IsRunning());
 
-  // At this point, we should have triggered the send of the PageLoadTiming IPC.
-  fake_ipc_sender_.VerifyExpectedTimings();
+  // At this point, we should have triggered the send of the SendTiming call.
+  validator_.VerifyExpectedTimings();
 
   // Attempt to send the same timing instance again. The send should be
   // suppressed, since the timing instance hasn't changed since the last send.
@@ -68,13 +67,13 @@ TEST_F(PageTimingMetricsSenderTest, Basic) {
   EXPECT_FALSE(metrics_sender_->mock_timer()->IsRunning());
 }
 
-TEST_F(PageTimingMetricsSenderTest, CoalesceMultipleIPCs) {
+TEST_F(PageTimingMetricsSenderTest, CoalesceMultipleTimings) {
   base::Time nav_start = base::Time::FromDoubleT(10);
   base::TimeDelta first_layout = base::TimeDelta::FromMillisecondsD(2);
   base::TimeDelta load_event = base::TimeDelta::FromMillisecondsD(4);
 
   mojom::PageLoadTiming timing;
-  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  InitPageLoadTimingForTest(&timing);
   timing.navigation_start = nav_start;
   timing.document_timing->first_layout = first_layout;
 
@@ -86,43 +85,43 @@ TEST_F(PageTimingMetricsSenderTest, CoalesceMultipleIPCs) {
   timing.document_timing->load_event_start = load_event;
   metrics_sender_->Send(timing.Clone());
 
-  // Firing the timer should trigger sending of the OnTimingUpdated IPC with
+  // Firing the timer should trigger sending of the SendTiming call with
   // the most recently provided PageLoadTiming instance.
-  fake_ipc_sender_.ExpectPageLoadTiming(timing);
+  validator_.ExpectPageLoadTiming(timing);
   metrics_sender_->mock_timer()->Fire();
   EXPECT_FALSE(metrics_sender_->mock_timer()->IsRunning());
 }
 
-TEST_F(PageTimingMetricsSenderTest, MultipleIPCs) {
+TEST_F(PageTimingMetricsSenderTest, MultipleTimings) {
   base::Time nav_start = base::Time::FromDoubleT(10);
   base::TimeDelta first_layout = base::TimeDelta::FromMillisecondsD(2);
   base::TimeDelta load_event = base::TimeDelta::FromMillisecondsD(4);
 
   mojom::PageLoadTiming timing;
-  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  InitPageLoadTimingForTest(&timing);
   timing.navigation_start = nav_start;
   timing.document_timing->first_layout = first_layout;
 
   metrics_sender_->Send(timing.Clone());
   ASSERT_TRUE(metrics_sender_->mock_timer()->IsRunning());
-  fake_ipc_sender_.ExpectPageLoadTiming(timing);
+  validator_.ExpectPageLoadTiming(timing);
   metrics_sender_->mock_timer()->Fire();
   EXPECT_FALSE(metrics_sender_->mock_timer()->IsRunning());
-  fake_ipc_sender_.VerifyExpectedTimings();
+  validator_.VerifyExpectedTimings();
 
   // Send an updated PageLoadTiming after the timer for the first send request
-  // has fired, and verify that a second IPC is sent.
+  // has fired, and verify that a second timing is sent.
   timing.document_timing->load_event_start = load_event;
   metrics_sender_->Send(timing.Clone());
   ASSERT_TRUE(metrics_sender_->mock_timer()->IsRunning());
-  fake_ipc_sender_.ExpectPageLoadTiming(timing);
+  validator_.ExpectPageLoadTiming(timing);
   metrics_sender_->mock_timer()->Fire();
   EXPECT_FALSE(metrics_sender_->mock_timer()->IsRunning());
 }
 
-TEST_F(PageTimingMetricsSenderTest, SendIPCOnDestructor) {
+TEST_F(PageTimingMetricsSenderTest, SendTimingOnDestructor) {
   mojom::PageLoadTiming timing;
-  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  InitPageLoadTimingForTest(&timing);
   timing.navigation_start = base::Time::FromDoubleT(10);
   timing.document_timing->first_layout = base::TimeDelta::FromMilliseconds(10);
 
@@ -130,7 +129,7 @@ TEST_F(PageTimingMetricsSenderTest, SendIPCOnDestructor) {
   // destructor. The EXPECT_CALL will be satisfied when the |metrics_sender_|
   // is destroyed below.
   metrics_sender_->Send(timing.Clone());
-  fake_ipc_sender_.ExpectPageLoadTiming(timing);
+  validator_.ExpectPageLoadTiming(timing);
   ASSERT_TRUE(metrics_sender_->mock_timer()->IsRunning());
 
   // Destroy |metrics_sender_|, in order to force its destructor to run.

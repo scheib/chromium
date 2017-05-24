@@ -21,26 +21,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourceLinearGradient linearGradient id='fillLinearGradient'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGResourceLinearGradient linearGradient id='strokeLinearGradient'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGContainer g id='content'",
       "reason": "appeared"
     },

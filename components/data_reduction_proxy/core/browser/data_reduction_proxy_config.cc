@@ -354,9 +354,9 @@ class WarmupURLFetcher : public net::URLFetcherDelegate {
     data_use_measurement::DataUseUserData::AttachToFetcher(
         fetcher_.get(),
         data_use_measurement::DataUseUserData::DATA_REDUCTION_PROXY);
-    fetcher_->SetLoadFlags(net::LOAD_BYPASS_CACHE |
-                           net::LOAD_DO_NOT_SEND_COOKIES |
-                           net::LOAD_DO_NOT_SAVE_COOKIES);
+    // Do not disable cookies. This allows the warmup connection to be reused
+    // for fetching user initiated requests.
+    fetcher_->SetLoadFlags(net::LOAD_BYPASS_CACHE);
     fetcher_->SetRequestContext(url_request_context_getter_.get());
     // |fetcher| should not retry on 5xx errors.
     fetcher_->SetAutomaticallyRetryOn5xx(false);

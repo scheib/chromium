@@ -112,7 +112,7 @@ static void RunTransferCallback(
     UsbTransferStatus status,
     scoped_refptr<net::IOBuffer> buffer,
     size_t result) {
-  if (callback_task_runner->RunsTasksOnCurrentThread()) {
+  if (callback_task_runner->RunsTasksInCurrentSequence()) {
     callback.Run(status, buffer, result);
   } else {
     callback_task_runner->PostTask(
@@ -132,7 +132,7 @@ void ReportIsochronousTransferError(
     packets[i].transferred_length = 0;
     packets[i].status = status;
   }
-  if (callback_task_runner->RunsTasksOnCurrentThread()) {
+  if (callback_task_runner->RunsTasksInCurrentSequence()) {
     callback.Run(nullptr, packets);
   } else {
     callback_task_runner->PostTask(FROM_HERE,
@@ -806,7 +806,7 @@ UsbDeviceHandleImpl::~UsbDeviceHandleImpl() {
   // This class is RefCountedThreadSafe and so the destructor may be called on
   // any thread. libusb is not safe to reentrancy so be sure not to try to close
   // the device from inside a transfer completion callback.
-  if (blocking_task_runner_->RunsTasksOnCurrentThread()) {
+  if (blocking_task_runner_->RunsTasksInCurrentSequence()) {
     libusb_close(handle_);
   } else {
     blocking_task_runner_->PostTask(FROM_HERE,
@@ -1140,7 +1140,7 @@ void UsbDeviceHandleImpl::TransferComplete(Transfer* transfer,
       << "Missing transfer completed";
   transfers_.erase(transfer);
 
-  if (transfer->callback_task_runner()->RunsTasksOnCurrentThread()) {
+  if (transfer->callback_task_runner()->RunsTasksInCurrentSequence()) {
     callback.Run();
   } else {
     transfer->callback_task_runner()->PostTask(FROM_HERE, callback);

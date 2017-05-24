@@ -38,7 +38,7 @@ source_set("unit_tests") {
     "//extensions/common",
     "//extensions/strings",
     "//testing/gtest",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:zip",
     "//ui/base",
   ]
 }

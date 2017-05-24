@@ -5,7 +5,7 @@
 #import "ios/web/web_state/ui/crw_wk_navigation_states.h"
 
 #include "base/logging.h"
-#include "ios/web/web_state/navigation_context_impl.h"
+#import "ios/web/web_state/navigation_context_impl.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."

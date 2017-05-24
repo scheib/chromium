@@ -265,7 +265,7 @@ template("test") {
       deps += [
         # All shared libraries must have the sanitizer deps to properly link in
         # asan mode (this target will be empty in other cases).
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
       if (!defined(bundle_deps)) {
         bundle_deps = []
@@ -281,7 +281,7 @@ template("test") {
       deps += [
         # All shared libraries must have the sanitizer deps to properly link in
         # asan mode (this target will be empty in other cases).
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
 
         # Give tests the default manifest on Windows (a no-op elsewhere).
         "//build/win:default_exe_manifest",

@@ -200,12 +200,7 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, CursorTest) {
   SimpleTest(GetTestUrl("indexeddb", "cursor_test.html"));
 }
 
-#if defined(OS_ANDROID)
-#define MAYBE_CursorTestIncognito DISABLED_CursorTestIncognito
-#else
-#define MAYBE_CursorTestIncognito CursorTestIncogntio
-#endif
-IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, MAYBE_CursorTestIncognito) {
+IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, CursorTestIncognito) {
   SimpleTest(GetTestUrl("indexeddb", "cursor_test.html"),
              true /* incognito */);
 }
@@ -731,7 +726,6 @@ INSTANTIATE_TEST_CASE_P(IndexedDBBrowserTestInstantiation,
                         ::testing::Values("failGetBlobJournal",
                                           "get",
                                           "getAll",
-                                          "failWebkitGetDatabaseNames",
                                           "iterate",
                                           "failTransactionCommit",
                                           "clearObjectStore"));

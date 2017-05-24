@@ -1,7 +1,8 @@
+<link rel="import" href="chrome://resources/html/polymer.html">
+
 <link rel="import" href="chrome://resources/cr_elements/network/cr_network_icon.html">
 <link rel="import" href="chrome://resources/cr_elements/policy/cr_policy_indicator.html">
 <link rel="import" href="chrome://resources/html/i18n_behavior.html">
-<link rel="import" href="chrome://resources/html/polymer.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-collapse/iron-collapse.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-icon-button/paper-icon-button-light.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-toggle-button/paper-toggle-button.html">
@@ -11,11 +12,7 @@
 
 <dom-module id="network-summary-item">
   <template>
-    <style include="settings-shared">
-      cr-network-icon {
-        -webkit-padding-end: var(--settings-box-row-padding);
-      }
-
+    <style include="internet-shared">
       network-siminfo {
         padding: 0 var(--settings-box-row-padding);
       }

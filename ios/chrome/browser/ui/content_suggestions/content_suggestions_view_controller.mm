@@ -202,11 +202,8 @@ using CSCollectionViewItem = CollectionViewItem<SuggestedContent>;
 
 - (BOOL)collectionView:(nonnull UICollectionView*)collectionView
     shouldHideItemBackgroundAtIndexPath:(nonnull NSIndexPath*)indexPath {
-  if ([self.collectionUpdater
-          shouldUseCustomStyleForSection:indexPath.section]) {
-    return YES;
-  }
-  return NO;
+  return
+      [self.collectionUpdater shouldUseCustomStyleForSection:indexPath.section];
 }
 
 - (BOOL)collectionView:(UICollectionView*)collectionView

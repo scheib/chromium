@@ -105,7 +105,10 @@
 #endif
 
 #if defined(OS_MACOSX)
-#include "device/power_save_blocker/power_save_blocker.h"
+#include "content/public/common/service_manager_connection.h"
+#include "device/wake_lock/public/interfaces/wake_lock_provider.mojom.h"
+#include "services/device/public/interfaces/constants.mojom.h"
+#include "services/service_manager/public/cpp/connector.h"
 #include "ui/accelerated_widget_mac/window_resize_helper_mac.h"
 #endif
 
@@ -555,7 +558,7 @@ bool RenderWidgetHostImpl::OnMessageReceived(const IPC::Message &msg) {
                         OnUpdateScreenRectsAck)
     IPC_MESSAGE_HANDLER(ViewHostMsg_RequestMove, OnRequestMove)
     IPC_MESSAGE_HANDLER(ViewHostMsg_SetTooltipText, OnSetTooltipText)
-    IPC_MESSAGE_HANDLER(ViewHostMsg_BeginFrameDidNotSwap, BeginFrameDidNotSwap)
+    IPC_MESSAGE_HANDLER(ViewHostMsg_DidNotProduceFrame, DidNotProduceFrame)
     IPC_MESSAGE_HANDLER(ViewHostMsg_UpdateRect, OnUpdateRect)
     IPC_MESSAGE_HANDLER(ViewHostMsg_SetCursor, OnSetCursor)
     IPC_MESSAGE_HANDLER(ViewHostMsg_TextInputStateChanged,
@@ -1310,10 +1313,7 @@ void RenderWidgetHostImpl::QueueSyntheticGesture(
   if (!synthetic_gesture_controller_ && view_) {
     synthetic_gesture_controller_ =
         base::MakeUnique<SyntheticGestureController>(
-            view_->CreateSyntheticGestureTarget(),
-            base::Bind(
-                &RenderWidgetHostImpl::RequestBeginFrameForSynthesizedInput,
-                base::Unretained(this)));
+            this, view_->CreateSyntheticGestureTarget());
   }
   if (synthetic_gesture_controller_) {
     synthetic_gesture_controller_->QueueSyntheticGesture(
@@ -1509,14 +1509,8 @@ void RenderWidgetHostImpl::GetSnapshotFromBrowser(
   // MacOS version of underlying GrabViewSnapshot() blocks while
   // display/GPU are in a power-saving mode, so make sure display
   // does not go to sleep for the duration of reading a snapshot.
-  if (pending_browser_snapshots_.empty()) {
-    DCHECK(!power_save_blocker_);
-    power_save_blocker_.reset(new device::PowerSaveBlocker(
-        device::PowerSaveBlocker::kPowerSaveBlockPreventDisplaySleep,
-        device::PowerSaveBlocker::kReasonOther, "GetSnapshot",
-        BrowserThread::GetTaskRunnerForThread(BrowserThread::UI),
-        BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE)));
-  }
+  if (pending_browser_snapshots_.empty())
+    GetWakeLockService()->RequestWakeLock();
 #endif
   pending_browser_snapshots_.insert(std::make_pair(id, callback));
   ui::LatencyInfo latency_info;
@@ -1858,13 +1852,6 @@ void RenderWidgetHostImpl::OnGpuSwapBuffersCompletedInternal(
   latency_tracker_.OnGpuSwapBuffersCompleted(latency_info);
 }
 
-void RenderWidgetHostImpl::RequestBeginFrameForSynthesizedInput(
-    base::OnceClosure begin_frame_callback) {
-  DCHECK(view_);
-  begin_frame_callback_ = std::move(begin_frame_callback);
-  view_->OnSetNeedsFlushInput();
-}
-
 void RenderWidgetHostImpl::OnRenderProcessGone(int status, int exit_code) {
   // RenderFrameHost owns a RenderWidgetHost when it needs one, in which case
   // it handles destruction.
@@ -1942,13 +1929,13 @@ void RenderWidgetHostImpl::OnRequestMove(const gfx::Rect& pos) {
   }
 }
 
-void RenderWidgetHostImpl::BeginFrameDidNotSwap(const cc::BeginFrameAck& ack) {
+void RenderWidgetHostImpl::DidNotProduceFrame(const cc::BeginFrameAck& ack) {
   // |has_damage| is not transmitted.
   cc::BeginFrameAck modified_ack = ack;
   modified_ack.has_damage = false;
 
   if (view_)
-    view_->OnBeginFrameDidNotSwap(modified_ack);
+    view_->OnDidNotProduceFrame(modified_ack);
 }
 
 void RenderWidgetHostImpl::OnUpdateRect(
@@ -2216,9 +2203,6 @@ void RenderWidgetHostImpl::OnHasTouchEventHandlers(bool has_handlers) {
   has_touch_handler_ = has_handlers;
 }
 
-void RenderWidgetHostImpl::DidFlush() {
-}
-
 void RenderWidgetHostImpl::DidOverscroll(
     const ui::DidOverscrollParams& params) {
   if (view_)
@@ -2473,7 +2457,7 @@ void RenderWidgetHostImpl::OnSnapshotReceived(int snapshot_id,
   }
 #if defined(OS_MACOSX)
   if (pending_browser_snapshots_.empty())
-    power_save_blocker_.reset();
+    GetWakeLockService()->CancelWakeLock();
 #endif
 }
 
@@ -2549,6 +2533,17 @@ void RenderWidgetHostImpl::RequestMojoCompositorFrameSink(
   if (view_)
     view_->DidCreateNewRendererCompositorFrameSink(client.get());
   renderer_compositor_frame_sink_ = std::move(client);
+}
+
+void RenderWidgetHostImpl::RequestBeginFrameForSynthesizedInput(
+    base::OnceClosure begin_frame_callback) {
+  DCHECK(view_);
+  begin_frame_callback_ = std::move(begin_frame_callback);
+  view_->OnSetNeedsFlushInput();
+}
+
+bool RenderWidgetHostImpl::HasGestureStopped() {
+  return !input_router_->HasPendingEvents();
 }
 
 void RenderWidgetHostImpl::SetNeedsBeginFrame(bool needs_begin_frame) {
@@ -2642,5 +2637,30 @@ void RenderWidgetHostImpl::ProcessSwapMessages(
       rph->OnBadMessageReceived(*i);
   }
 }
+
+#if defined(OS_MACOSX)
+device::mojom::WakeLockService* RenderWidgetHostImpl::GetWakeLockService() {
+  // Here is a lazy binding, and will not reconnect after connection error.
+  if (!wake_lock_) {
+    device::mojom::WakeLockServiceRequest request =
+        mojo::MakeRequest(&wake_lock_);
+    // In some testing contexts, the service manager connection isn't
+    // initialized.
+    if (ServiceManagerConnection::GetForProcess()) {
+      service_manager::Connector* connector =
+          ServiceManagerConnection::GetForProcess()->GetConnector();
+      DCHECK(connector);
+      device::mojom::WakeLockProviderPtr wake_lock_provider;
+      connector->BindInterface(device::mojom::kServiceName,
+                               mojo::MakeRequest(&wake_lock_provider));
+      wake_lock_provider->GetWakeLockWithoutContext(
+          device::mojom::WakeLockType::PreventDisplaySleep,
+          device::mojom::WakeLockReason::ReasonOther, "GetSnapshot",
+          std::move(request));
+    }
+  }
+  return wake_lock_.get();
+}
+#endif
 
 }  // namespace content

@@ -20,7 +20,7 @@ test(function(t)
 {
     // No problem with using aria-owns to put a menu inside a heading.
     var axHeading1 = accessibilityController.accessibleElementById("heading1");
-    assert_equals(axHeading1.name, "heading menu");
+    assert_equals(axHeading1.name, "heading ");
     var axContainer1 = accessibilityController.accessibleElementById("container1");
     assert_equals(axContainer1.childrenCount, 1);
     assert_equals(axContainer1.childAtIndex(0).role, "AXRole: AXHeading");
@@ -101,7 +101,7 @@ test(function(t)
     assert_equals(axTextfield5.name, "textfield");
     var axContainer5 = accessibilityController.accessibleElementById("container5");
     assert_equals(axContainer5.childrenCount, 2);
-    assert_equals(axContainer5.childAtIndex(0).role, "AXRole: AXDiv");
+    assert_equals(axContainer5.childAtIndex(0).role, "AXRole: AXGenericContainer");
     assert_equals(axContainer5.childAtIndex(0).childrenCount, 0);
     assert_equals(axContainer5.childAtIndex(1).role, "AXRole: AXMenu");
 }, "Aria-owns doesn't create children of a contenteditable element.");

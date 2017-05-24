@@ -184,7 +184,7 @@ source_set("automation_client_lib") {
     "//net",
     "//third_party/WebKit/public:features",
     "//third_party/zlib:minizip",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:zip",
     "//ui/accessibility:ax_gen",
     "//ui/base",
     "//ui/gfx",
@@ -317,7 +317,7 @@ executable("chromedriver") {
 
   deps = [
     ":lib",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//build/win:default_exe_manifest",
   ]
 }

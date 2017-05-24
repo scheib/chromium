@@ -202,7 +202,8 @@ bool RemoteSafeBrowsingDatabaseManager::CheckBrowseUrl(const GURL& url,
   DCHECK(api_handler) << "SafeBrowsingApiHandler was never constructed";
   api_handler->StartURLCheck(
       base::Bind(&ClientRequest::OnRequestDoneWeak, req->GetWeakPtr()), url,
-      {SB_THREAT_TYPE_URL_PHISHING, SB_THREAT_TYPE_URL_MALWARE});
+      {SB_THREAT_TYPE_URL_MALWARE, SB_THREAT_TYPE_URL_PHISHING,
+       SB_THREAT_TYPE_URL_UNWANTED});
 
   LogPendingChecks(current_requests_.size());
   current_requests_.push_back(req.release());

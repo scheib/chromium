@@ -12,7 +12,6 @@
 #include "chrome/browser/chromeos/login/screens/base_screen_delegate.h"
 #include "chrome/browser/chromeos/login/screens/eula_view.h"
 #include "chrome/browser/chromeos/login/wizard_controller.h"
-#include "chrome/browser/chromeos/policy/device_cloud_policy_manager_chromeos.h"
 #include "chromeos/dbus/cryptohome_client.h"
 #include "chromeos/dbus/dbus_method_call_status.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
@@ -84,8 +83,7 @@ void EulaScreen::Show() {
   // Command to own the TPM.
   DBusThreadManager::Get()->GetCryptohomeClient()->TpmCanAttemptOwnership(
       EmptyVoidDBusMethodCallback());
-  if (policy::DeviceCloudPolicyManagerChromeOS::GetZeroTouchEnrollmentMode() ==
-      policy::ZeroTouchEnrollmentMode::HANDS_OFF)
+  if (WizardController::UsingHandsOffEnrollment())
     OnUserAction(kUserActionAcceptButtonClicked);
   else if (view_)
     view_->Show();

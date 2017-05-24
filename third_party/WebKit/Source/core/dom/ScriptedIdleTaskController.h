@@ -12,12 +12,15 @@
 #include "platform/wtf/Vector.h"
 
 namespace blink {
+namespace internal {
+class IdleRequestCallbackWrapper;
+}
 
 class ExecutionContext;
 class IdleRequestCallback;
 class IdleRequestOptions;
 
-class ScriptedIdleTaskController
+class CORE_EXPORT ScriptedIdleTaskController
     : public GarbageCollectedFinalized<ScriptedIdleTaskController>,
       public SuspendableObject {
   USING_GARBAGE_COLLECTED_MIXIN(ScriptedIdleTaskController);
@@ -45,7 +48,11 @@ class ScriptedIdleTaskController
                      IdleDeadline::CallbackType);
 
  private:
+  friend class internal::IdleRequestCallbackWrapper;
   explicit ScriptedIdleTaskController(ExecutionContext*);
+
+  void ScheduleCallback(RefPtr<internal::IdleRequestCallbackWrapper>,
+                        long long timeout_millis);
 
   int NextCallbackId();
 

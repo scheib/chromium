@@ -78,8 +78,7 @@ scoped_refptr<DisplayItemList> PictureImageLayer::PaintContentsToDisplayList(
   canvas->drawImage(image_, 0, 0);
 
   display_list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-      PaintableRegion(), recorder.finishRecordingAsPicture(),
-      gfx::RectToSkRect(PaintableRegion()));
+      PaintableRegion(), recorder.finishRecordingAsPicture());
 
   display_list->Finalize();
   return display_list;

@@ -251,12 +251,13 @@ using web::NavigationManager;
 // -----------------------------------------------------------------------
 // WebStateObserver implementation.
 
-- (void)didStartProvisionalNavigationForURL:(const GURL&)URL {
+- (void)webState:(web::WebState*)webState
+    didStartNavigation:(web::NavigationContext*)navigation {
   [self updateToolbar];
 }
 
-- (void)didCommitNavigationWithDetails:
-    (const web::LoadCommittedDetails&)details {
+- (void)webState:(web::WebState*)webState
+    didCommitNavigationWithDetails:(const web::LoadCommittedDetails&)details {
   [self updateToolbar];
 }
 

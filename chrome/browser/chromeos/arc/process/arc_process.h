@@ -6,6 +6,8 @@
 #define CHROME_BROWSER_CHROMEOS_ARC_PROCESS_ARC_PROCESS_H_
 
 #include <stdint.h>
+
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -62,6 +64,9 @@ class ArcProcess {
   // ActivityManagerService via IPC.
   int64_t last_activity_time_;
   std::vector<std::string> packages_;
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const ArcProcess& arc_process);
 
   DISALLOW_COPY_AND_ASSIGN(ArcProcess);
 };

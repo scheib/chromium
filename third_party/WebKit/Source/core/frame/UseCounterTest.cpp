@@ -12,38 +12,51 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
-const char* const kFeaturesHistogramName = "Blink.UseCounter.Features";
-const char* const kCSSHistogramName = "Blink.UseCounter.CSSProperties";
-const char* const kAnimatedCSSHistogramName =
+const char kFeaturesHistogramName[] = "Blink.UseCounter.Features";
+const char kCSSHistogramName[] = "Blink.UseCounter.CSSProperties";
+const char kAnimatedCSSHistogramName[] =
     "Blink.UseCounter.AnimatedCSSProperties";
+const char kExtensionFeaturesHistogramName[] =
+    "Blink.UseCounter.Extensions.Features";
 
-const char* const kSVGFeaturesHistogramName =
-    "Blink.UseCounter.SVGImage.Features";
-const char* const kSVGCSSHistogramName =
-    "Blink.UseCounter.SVGImage.CSSProperties";
-const char* const kSVGAnimatedCSSHistogramName =
+const char kSVGFeaturesHistogramName[] = "Blink.UseCounter.SVGImage.Features";
+const char kSVGCSSHistogramName[] = "Blink.UseCounter.SVGImage.CSSProperties";
+const char kSVGAnimatedCSSHistogramName[] =
     "Blink.UseCounter.SVGImage.AnimatedCSSProperties";
 
-const char* const kLegacyFeaturesHistogramName = "WebCore.FeatureObserver";
-const char* const kLegacyCSSHistogramName =
-    "WebCore.FeatureObserver.CSSProperties";
+const char kLegacyFeaturesHistogramName[] = "WebCore.FeatureObserver";
+const char kLegacyCSSHistogramName[] = "WebCore.FeatureObserver.CSSProperties";
+
+// In practice, SVGs always appear to be loaded with an about:blank URL
+const char kSvgUrl[] = "about:blank";
+const char* const kInternalUrl = kSvgUrl;
+const char kHttpsUrl[] = "https://dummysite.com/";
+const char kExtensionUrl[] = "chrome-extension://dummysite/";
+
+int GetPageVisitsBucketforHistogram(const std::string& histogram_name) {
+  if (histogram_name.find("CSS") == std::string::npos)
+    return blink::UseCounter::kPageVisits;
+  // For CSS histograms, the page visits bucket should be 1.
+  return 1;
 }
+
+}  // namespace
 
 namespace blink {
 
 template <typename T>
 void HistogramBasicTest(const std::string& histogram,
                         const std::string& legacy_histogram,
-                        const std::vector<std::string>& unaffected_histograms,
                         T item,
                         T second_item,
                         std::function<bool(T)> counted,
                         std::function<void(T)> count,
                         std::function<int(T)> histogram_map,
                         std::function<void(KURL)> did_commit_load,
-                        const std::string& url,
-                        int page_visit_bucket) {
+                        const std::string& url) {
   HistogramTester histogram_tester;
+
+  int page_visit_bucket = GetPageVisitsBucketforHistogram(histogram);
 
   // Test recording a single (arbitrary) counter
   EXPECT_FALSE(counted(item));
@@ -109,18 +122,40 @@ void HistogramBasicTest(const std::string& histogram,
     histogram_tester.ExpectTotalCount(legacy_histogram, 5);
   }
 
-  for (size_t i = 0; i < unaffected_histograms.size(); ++i) {
-    histogram_tester.ExpectTotalCount(unaffected_histograms[i], 0);
+  // For all histograms, no other histograms besides |histogram| should
+  // be affected. Legacy histograms are not included in the list because they
+  // soon will be removed.
+  for (const std::string& unaffected_histogram :
+       {kAnimatedCSSHistogramName, kCSSHistogramName,
+        kExtensionFeaturesHistogramName, kFeaturesHistogramName,
+        kSVGAnimatedCSSHistogramName, kSVGCSSHistogramName,
+        kSVGFeaturesHistogramName}) {
+    if (unaffected_histogram == histogram)
+      continue;
+    // CSS histograms are never created in didCommitLoad when the context is
+    // extension.
+    if (histogram == kExtensionFeaturesHistogramName &&
+        unaffected_histogram.find("CSS") != std::string::npos)
+      continue;
+
+    // The expected total count for "Features" of unaffected histograms should
+    // be either:
+    //    a. pageVisits, for "CSSFeatures"; or
+    //    b. 0 (pageVisits is 0), for others, including "SVGImage.CSSFeatures"
+    //      since no SVG images are loaded at all.
+    histogram_tester.ExpectTotalCount(
+        unaffected_histogram,
+        0 + histogram_tester.GetBucketCount(
+                unaffected_histogram,
+                GetPageVisitsBucketforHistogram(unaffected_histogram)));
   }
 }
 
 TEST(UseCounterTest, RecordingFeatures) {
   UseCounter use_counter;
   HistogramBasicTest<UseCounter::Feature>(
-      kFeaturesHistogramName, kLegacyFeaturesHistogramName,
-      {kSVGFeaturesHistogramName, kSVGCSSHistogramName,
-       kSVGAnimatedCSSHistogramName},
-      UseCounter::kFetch, UseCounter::kFetchBodyStream,
+      kFeaturesHistogramName, kLegacyFeaturesHistogramName, UseCounter::kFetch,
+      UseCounter::kFetchBodyStream,
       [&](UseCounter::Feature feature) -> bool {
         return use_counter.HasRecordedMeasurement(feature);
       },
@@ -128,17 +163,14 @@ TEST(UseCounterTest, RecordingFeatures) {
         use_counter.RecordMeasurement(feature);
       },
       [](UseCounter::Feature feature) -> int { return feature; },
-      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); },
-      "https://dummysite.com/", UseCounter::kPageVisits);
+      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, kHttpsUrl);
 }
 
 TEST(UseCounterTest, RecordingCSSProperties) {
   UseCounter use_counter;
   HistogramBasicTest<CSSPropertyID>(
-      kCSSHistogramName, kLegacyCSSHistogramName,
-      {kSVGFeaturesHistogramName, kSVGCSSHistogramName,
-       kSVGAnimatedCSSHistogramName},
-      CSSPropertyFont, CSSPropertyZoom,
+      kCSSHistogramName, kLegacyCSSHistogramName, CSSPropertyFont,
+      CSSPropertyZoom,
       [&](CSSPropertyID property) -> bool {
         return use_counter.IsCounted(property);
       },
@@ -148,16 +180,13 @@ TEST(UseCounterTest, RecordingCSSProperties) {
       [](CSSPropertyID property) -> int {
         return UseCounter::MapCSSPropertyIdToCSSSampleIdForHistogram(property);
       },
-      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); },
-      "https://dummysite.com/", 1 /* page visit bucket */);
+      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, kHttpsUrl);
 }
 
 TEST(UseCounterTest, RecordingAnimatedCSSProperties) {
   UseCounter use_counter;
   HistogramBasicTest<CSSPropertyID>(
-      kAnimatedCSSHistogramName, "",
-      {kSVGCSSHistogramName, kSVGAnimatedCSSHistogramName}, CSSPropertyOpacity,
-      CSSPropertyVariable,
+      kAnimatedCSSHistogramName, "", CSSPropertyOpacity, CSSPropertyVariable,
       [&](CSSPropertyID property) -> bool {
         return use_counter.IsCountedAnimatedCSS(property);
       },
@@ -165,15 +194,28 @@ TEST(UseCounterTest, RecordingAnimatedCSSProperties) {
       [](CSSPropertyID property) -> int {
         return UseCounter::MapCSSPropertyIdToCSSSampleIdForHistogram(property);
       },
-      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); },
-      "https://dummysite.com/", 1 /* page visit bucket */);
+      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, kHttpsUrl);
+}
+
+TEST(UseCounterTest, RecordingExtensions) {
+  UseCounter use_counter(UseCounter::kExtensionContext);
+  HistogramBasicTest<UseCounter::Feature>(
+      kExtensionFeaturesHistogramName, kLegacyFeaturesHistogramName,
+      UseCounter::kFetch, UseCounter::kFetchBodyStream,
+      [&](UseCounter::Feature feature) -> bool {
+        return use_counter.HasRecordedMeasurement(feature);
+      },
+      [&](UseCounter::Feature feature) {
+        use_counter.RecordMeasurement(feature);
+      },
+      [](UseCounter::Feature feature) -> int { return feature; },
+      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, kExtensionUrl);
 }
 
 TEST(UseCounterTest, SVGImageContextFeatures) {
   UseCounter use_counter(UseCounter::kSVGImageContext);
   HistogramBasicTest<UseCounter::Feature>(
       kSVGFeaturesHistogramName, kLegacyFeaturesHistogramName,
-      {kFeaturesHistogramName, kCSSHistogramName, kAnimatedCSSHistogramName},
       UseCounter::kSVGSMILAdditiveAnimation,
       UseCounter::kSVGSMILAnimationElementTiming,
       [&](UseCounter::Feature feature) -> bool {
@@ -183,17 +225,14 @@ TEST(UseCounterTest, SVGImageContextFeatures) {
         use_counter.RecordMeasurement(feature);
       },
       [](UseCounter::Feature feature) -> int { return feature; },
-      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, "about:blank",
-      // In practice SVGs always appear to be loaded with an about:blank URL
-      UseCounter::kPageVisits);
+      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, kSvgUrl);
 }
 
 TEST(UseCounterTest, SVGImageContextCSSProperties) {
   UseCounter use_counter(UseCounter::kSVGImageContext);
   HistogramBasicTest<CSSPropertyID>(
-      kSVGCSSHistogramName, kLegacyCSSHistogramName,
-      {kFeaturesHistogramName, kCSSHistogramName, kAnimatedCSSHistogramName},
-      CSSPropertyFont, CSSPropertyZoom,
+      kSVGCSSHistogramName, kLegacyCSSHistogramName, CSSPropertyFont,
+      CSSPropertyZoom,
       [&](CSSPropertyID property) -> bool {
         return use_counter.IsCounted(property);
       },
@@ -203,17 +242,13 @@ TEST(UseCounterTest, SVGImageContextCSSProperties) {
       [](CSSPropertyID property) -> int {
         return UseCounter::MapCSSPropertyIdToCSSSampleIdForHistogram(property);
       },
-      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, "about:blank",
-      // In practice SVGs always appear to be loaded with an about:blank URL
-      1 /* page visit bucket */);
+      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, kSvgUrl);
 }
 
 TEST(UseCounterTest, SVGImageContextAnimatedCSSProperties) {
   UseCounter use_counter(UseCounter::kSVGImageContext);
   HistogramBasicTest<CSSPropertyID>(
-      kSVGAnimatedCSSHistogramName, "",
-      {kCSSHistogramName, kAnimatedCSSHistogramName}, CSSPropertyOpacity,
-      CSSPropertyVariable,
+      kSVGAnimatedCSSHistogramName, "", CSSPropertyOpacity, CSSPropertyVariable,
       [&](CSSPropertyID property) -> bool {
         return use_counter.IsCountedAnimatedCSS(property);
       },
@@ -221,9 +256,7 @@ TEST(UseCounterTest, SVGImageContextAnimatedCSSProperties) {
       [](CSSPropertyID property) -> int {
         return UseCounter::MapCSSPropertyIdToCSSSampleIdForHistogram(property);
       },
-      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, "about:blank",
-      // In practice SVGs always appear to be loaded with an about:blank URL
-      1 /* page visit bucket */);
+      [&](KURL kurl) { use_counter.DidCommitLoad(kurl); }, kSvgUrl);
 }
 
 TEST(UseCounterTest, InspectorDisablesMeasurement) {
@@ -304,7 +337,7 @@ TEST(UseCounterTest, MutedDocuments) {
                    CSSPropertyFontWeight, 1);
 
   // Loading an internal page doesn't bump PageVisits and metrics not reported.
-  use_counter.DidCommitLoad(URLTestHelpers::ToKURL("about:blank"));
+  use_counter.DidCommitLoad(URLTestHelpers::ToKURL(kInternalUrl));
   EXPECT_FALSE(use_counter.HasRecordedMeasurement(UseCounter::kFetch));
   EXPECT_FALSE(use_counter.IsCounted(CSSPropertyFontWeight));
   use_counter.RecordMeasurement(UseCounter::kFetch);
@@ -332,16 +365,14 @@ TEST(UseCounterTest, MutedDocuments) {
                    CSSPropertyFontWeight, 2);
 
   // HTTPs URLs are the same.
-  use_counter.DidCommitLoad(
-      URLTestHelpers::ToKURL("https://baz.com:1234/blob.html"));
+  use_counter.DidCommitLoad(URLTestHelpers::ToKURL(kHttpsUrl));
   use_counter.RecordMeasurement(UseCounter::kFetch);
   use_counter.Count(kHTMLStandardMode, CSSPropertyFontWeight);
   ExpectHistograms(histogram_tester, 2, UseCounter::kFetch, 3,
                    CSSPropertyFontWeight, 3);
 
   // Extensions aren't counted.
-  use_counter.DidCommitLoad(
-      URLTestHelpers::ToKURL("chrome-extension://1238ba908adf/"));
+  use_counter.DidCommitLoad(URLTestHelpers::ToKURL(kExtensionUrl));
   use_counter.RecordMeasurement(UseCounter::kFetch);
   use_counter.Count(kHTMLStandardMode, CSSPropertyFontWeight);
   ExpectHistograms(histogram_tester, 2, UseCounter::kFetch, 3,

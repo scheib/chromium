@@ -16,10 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourceClipper clipPath id='myclip'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGContainer g",
       "reason": "full"
     }

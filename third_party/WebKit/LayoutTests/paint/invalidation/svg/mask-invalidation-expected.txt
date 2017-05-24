@@ -25,10 +25,6 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGRect rect id='maskRect'",
-      "reason": "subtree"
-    },
-    {
       "object": "LayoutSVGContainer g id='root'",
       "reason": "geometry"
     },

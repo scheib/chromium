@@ -603,16 +603,6 @@ InkDropImpl::~InkDropImpl() {
   DestroyInkDropHighlight();
 }
 
-void InkDropImpl::SetShowHighlightOnHover(bool show_highlight_on_hover) {
-  show_highlight_on_hover_ = show_highlight_on_hover;
-  highlight_state_->ShowOnHoverChanged();
-}
-
-void InkDropImpl::SetShowHighlightOnFocus(bool show_highlight_on_focus) {
-  show_highlight_on_focus_ = show_highlight_on_focus;
-  highlight_state_->ShowOnFocusChanged();
-}
-
 void InkDropImpl::SetAutoHighlightMode(AutoHighlightMode auto_highlight_mode) {
   // Exit the current state completely first in case state tear down accesses
   // the current |highlight_state_factory_| instance.
@@ -665,6 +655,20 @@ void InkDropImpl::SetHovered(bool is_hovered) {
 void InkDropImpl::SetFocused(bool is_focused) {
   is_focused_ = is_focused;
   highlight_state_->OnFocusChanged();
+}
+
+bool InkDropImpl::IsHighlightFadingInOrVisible() const {
+  return highlight_ && highlight_->IsFadingInOrVisible();
+}
+
+void InkDropImpl::SetShowHighlightOnHover(bool show_highlight_on_hover) {
+  show_highlight_on_hover_ = show_highlight_on_hover;
+  highlight_state_->ShowOnHoverChanged();
+}
+
+void InkDropImpl::SetShowHighlightOnFocus(bool show_highlight_on_focus) {
+  show_highlight_on_focus_ = show_highlight_on_focus;
+  highlight_state_->ShowOnFocusChanged();
 }
 
 void InkDropImpl::DestroyHiddenTargetedAnimations() {
@@ -733,15 +737,12 @@ void InkDropImpl::RemoveRootLayerFromHostIfNeeded() {
   }
 }
 
-bool InkDropImpl::IsHighlightFadingInOrVisible() const {
-  return highlight_ && highlight_->IsFadingInOrVisible();
-}
-
 // -----------------------------------------------------------------------------
 // views::InkDropRippleObserver:
 
 void InkDropImpl::AnimationStarted(InkDropState ink_drop_state) {
   highlight_state_->AnimationStarted(ink_drop_state);
+  NotifyInkDropAnimationStarted();
 }
 
 void InkDropImpl::AnimationEnded(InkDropState ink_drop_state,
@@ -766,7 +767,9 @@ void InkDropImpl::AnimationEnded(InkDropState ink_drop_state,
 // views::InkDropHighlightObserver:
 
 void InkDropImpl::AnimationStarted(
-    InkDropHighlight::AnimationType animation_type) {}
+    InkDropHighlight::AnimationType animation_type) {
+  NotifyInkDropAnimationStarted();
+}
 
 void InkDropImpl::AnimationEnded(InkDropHighlight::AnimationType animation_type,
                                  InkDropAnimationEndedReason reason) {

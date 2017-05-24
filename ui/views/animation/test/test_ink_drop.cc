@@ -30,5 +30,13 @@ void TestInkDrop::SetHovered(bool is_hovered) {
 
 void TestInkDrop::SetFocused(bool is_focused) {}
 
+bool TestInkDrop::IsHighlightFadingInOrVisible() const {
+  return false;
+}
+
+void TestInkDrop::SetShowHighlightOnHover(bool show_highlight_on_hover) {}
+
+void TestInkDrop::SetShowHighlightOnFocus(bool show_highlight_on_focus) {}
+
 }  // namespace test
 }  // namespace views

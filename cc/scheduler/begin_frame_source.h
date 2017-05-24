@@ -247,54 +247,10 @@ class CC_EXPORT DelayBasedBeginFrameSource : public SyntheticBeginFrameSource,
   DISALLOW_COPY_AND_ASSIGN(DelayBasedBeginFrameSource);
 };
 
-// Helper class that tracks outstanding acknowledgments from
-// BeginFrameObservers.
-class CC_EXPORT BeginFrameObserverAckTracker {
- public:
-  BeginFrameObserverAckTracker();
-  ~BeginFrameObserverAckTracker();
-
-  // The BeginFrameSource uses these methods to notify us when a BeginFrame was
-  // started, an observer finished a frame, or an observer was added/removed.
-  void OnBeginFrame(const BeginFrameArgs& args);
-  void OnObserverFinishedFrame(BeginFrameObserver* obs,
-                               const BeginFrameAck& ack);
-  void OnObserverAdded(BeginFrameObserver* obs);
-  void OnObserverRemoved(BeginFrameObserver* obs);
-
-  // Returns |true| if all the source's observers completed the current frame.
-  bool AllObserversFinishedFrame() const;
-
-  // Returns |true| if any observer had damage during the current frame.
-  bool AnyObserversHadDamage() const;
-
-  // Return the sequence number of the latest frame that all active observers
-  // have confirmed.
-  uint64_t LatestConfirmedSequenceNumber() const;
-
-  void AsValueInto(base::trace_event::TracedValue* state) const;
-
- private:
-  void SourceChanged(const BeginFrameArgs& args);
-
-  uint32_t current_source_id_ = 0;
-  uint64_t current_sequence_number_ = BeginFrameArgs::kStartingFrameNumber;
-  // Small sets, but order matters for intersection computation.
-  base::flat_set<BeginFrameObserver*> observers_;
-  base::flat_set<BeginFrameObserver*> finished_observers_;
-  bool observers_had_damage_ = false;
-  base::flat_map<BeginFrameObserver*, uint64_t>
-      latest_confirmed_sequence_numbers_;
-
-  DISALLOW_COPY_AND_ASSIGN(BeginFrameObserverAckTracker);
-};
-
 class CC_EXPORT ExternalBeginFrameSourceClient {
  public:
   // Only called when changed.  Assumed false by default.
   virtual void OnNeedsBeginFrames(bool needs_begin_frames) = 0;
-  // Called when all observers have completed a frame.
-  virtual void OnDidFinishFrame(const BeginFrameAck& ack) = 0;
 };
 
 // A BeginFrameSource that is only ticked manually.  Usually the endpoint
@@ -319,15 +275,10 @@ class CC_EXPORT ExternalBeginFrameSource : public BeginFrameSource {
   void OnBeginFrame(const BeginFrameArgs& args);
 
  protected:
-  void MaybeFinishFrame();
-  void FinishFrame();
-
   BeginFrameArgs last_begin_frame_args_;
   std::unordered_set<BeginFrameObserver*> observers_;
   ExternalBeginFrameSourceClient* client_;
   bool paused_ = false;
-  bool frame_active_ = false;
-  BeginFrameObserverAckTracker ack_tracker_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(ExternalBeginFrameSource);

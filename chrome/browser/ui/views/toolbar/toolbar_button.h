@@ -11,7 +11,7 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/controls/button/button.h"
-#include "ui/views/controls/button/label_button.h"
+#include "ui/views/controls/button/image_button.h"
 
 class Profile;
 
@@ -30,7 +30,7 @@ class MenuRunner;
 
 // This class provides basic drawing and mouse-over behavior for buttons
 // appearing in the toolbar.
-class ToolbarButton : public views::LabelButton,
+class ToolbarButton : public views::ImageButton,
                       public views::ContextMenuController {
  public:
   // Padding inside the border (around the image).
@@ -47,12 +47,15 @@ class ToolbarButton : public views::LabelButton,
   // Should be called before first paint.
   void Init();
 
+  // Sets |margin_leading_| when the browser is maximized and updates layout
+  // to make the focus rectangle centered.
+  void SetLeadingMargin(int margin);
+
   // Methods for handling ButtonDropDown-style menus.
   void ClearPendingMenu();
   bool IsMenuShowing() const;
 
-  // views::LabelButton:
-  gfx::Size GetPreferredSize() const override;
+  // views::ImageButton:
   bool OnMousePressed(const ui::MouseEvent& event) override;
   bool OnMouseDragged(const ui::MouseEvent& event) override;
   void OnMouseReleased(const ui::MouseEvent& event) override;
@@ -61,7 +64,8 @@ class ToolbarButton : public views::LabelButton,
   void OnMouseExited(const ui::MouseEvent& event) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  std::unique_ptr<views::LabelButtonBorder> CreateDefaultBorder()
+  std::unique_ptr<views::InkDropRipple> CreateInkDropRipple() const override;
+  std::unique_ptr<views::InkDropHighlight> CreateInkDropHighlight()
       const override;
 
   // views::ContextMenuController:
@@ -82,7 +86,7 @@ class ToolbarButton : public views::LabelButton,
   // Callback for MenuModelAdapter.
   void OnMenuClosed();
 
-  // views::LabelButton:
+  // views::ImageButton:
   const char* GetClassName() const override;
 
   // The associated profile. The browser theme affects rendering.

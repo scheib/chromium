@@ -680,6 +680,7 @@ extern const char kOobeComplete[];
 extern const char kOobeScreenPending[];
 extern const char kOobeMdMode[];
 extern const char kOobeControllerDetected[];
+extern const char kOobeTimeOfLastUpdateCheckWithoutUpdate[];
 extern const char kCanShowOobeGoodiesPage[];
 extern const char kDeviceRegistered[];
 extern const char kEnrollmentRecoveryRequired[];

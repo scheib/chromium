@@ -83,8 +83,8 @@ class CORE_EXPORT TestDictionary : public IDLDictionaryBase {
   void setElementOrNullMemberToNull();
 
   bool hasEnumMember() const;
-  String enumMember() const;
-  void setEnumMember(String);
+  const String& enumMember() const;
+  void setEnumMember(const String&);
 
   bool hasEnumSequenceMember() const;
   const Vector<String>& enumSequenceMember() const;
@@ -140,12 +140,12 @@ class CORE_EXPORT TestDictionary : public IDLDictionaryBase {
   void setStringArrayMember(const Vector<String>&);
 
   bool hasStringMember() const;
-  String stringMember() const;
-  void setStringMember(String);
+  const String& stringMember() const;
+  void setStringMember(const String&);
 
   bool hasStringOrNullMember() const;
-  String stringOrNullMember() const;
-  void setStringOrNullMember(String);
+  const String& stringOrNullMember() const;
+  void setStringOrNullMember(const String&);
   void setStringOrNullMemberToNull();
 
   bool hasStringSequenceMember() const;

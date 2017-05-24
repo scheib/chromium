@@ -4560,6 +4560,28 @@ _FUNCTION_INFO = {
     'decoder_func': 'DoSetEnableDCLayersCHROMIUM',
     'extension': 'CHROMIUM_dc_layers',
   },
+  'InitializeDiscardableTextureCHROMIUM': {
+    'type': 'Custom',
+    'cmd_args': 'GLuint texture_id, uint32_t shm_id, '
+                'uint32_t shm_offset',
+    'impl_func': False,
+    'client_test': False,
+    'extension': True,
+  },
+  'UnlockDiscardableTextureCHROMIUM': {
+    'type': 'Custom',
+    'cmd_args': 'GLuint texture_id',
+    'impl_func': False,
+    'client_test': False,
+    'extension': True,
+  },
+  'LockDiscardableTextureCHROMIUM': {
+    'type': 'Custom',
+    'cmd_args': 'GLuint texture_id',
+    'impl_func': False,
+    'client_test': False,
+    'extension': True,
+  },
 }
 
 

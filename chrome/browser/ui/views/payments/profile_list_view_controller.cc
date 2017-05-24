@@ -61,8 +61,7 @@ class ProfileItem : public PaymentRequestItemList::Item {
                                                selected,
                                                /*show_edit_button=*/true),
         controller_(controller),
-        profile_(profile),
-        dialog_(dialog) {}
+        profile_(profile) {}
   ~ProfileItem() override {}
 
  private:
@@ -76,7 +75,6 @@ class ProfileItem : public PaymentRequestItemList::Item {
   void SelectedStateChanged() override {
     if (selected()) {
       controller_->SelectProfile(profile_);
-      dialog_->GoBack();
     }
   }
 
@@ -99,22 +97,23 @@ class ProfileItem : public PaymentRequestItemList::Item {
 
   ProfileListViewController* controller_;
   autofill::AutofillProfile* profile_;
-  PaymentRequestDialogView* dialog_;
 
   DISALLOW_COPY_AND_ASSIGN(ProfileItem);
 };
 
 // The ProfileListViewController subtype for the Shipping address list
 // screen of the Payment Request flow.
-class ShippingProfileViewController : public ProfileListViewController {
+class ShippingProfileViewController : public ProfileListViewController,
+                                      public PaymentRequestSpec::Observer {
  public:
   ShippingProfileViewController(PaymentRequestSpec* spec,
                                 PaymentRequestState* state,
                                 PaymentRequestDialogView* dialog)
       : ProfileListViewController(spec, state, dialog) {
+    spec->AddObserver(this);
     PopulateList();
   }
-  ~ShippingProfileViewController() override {}
+  ~ShippingProfileViewController() override { spec()->RemoveObserver(this); }
 
  protected:
   // ProfileListViewController:
@@ -221,6 +220,19 @@ class ShippingProfileViewController : public ProfileListViewController {
   }
 
  private:
+  void OnSpecUpdated() override {
+    // If there's an error, stay on this screen so the user can select a
+    // different address. Otherwise, go back to the payment sheet.
+    if (spec()->current_update_reason() ==
+        PaymentRequestSpec::UpdateReason::SHIPPING_ADDRESS) {
+      if (spec()->selected_shipping_option_error().empty()) {
+        dialog()->GoBack();
+      } else {
+        UpdateContentView();
+      }
+    }
+  }
+
   DISALLOW_COPY_AND_ASSIGN(ShippingProfileViewController);
 };
 
@@ -245,6 +257,7 @@ class ContactProfileViewController : public ProfileListViewController {
 
   void SelectProfile(autofill::AutofillProfile* profile) override {
     state()->SetSelectedContactProfile(profile);
+    dialog()->GoBack();
   }
 
   void ShowEditor(autofill::AutofillProfile* profile) override {

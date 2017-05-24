@@ -28,6 +28,8 @@
 
 #include "modules/webdatabase/DatabaseAuthorizer.h"
 
+#include "core/frame/UseCounter.h"
+#include "modules/webdatabase/DatabaseContext.h"
 #include "platform/wtf/HashSet.h"
 #include "platform/wtf/StdLibExtras.h"
 #include "platform/wtf/Threading.h"
@@ -36,13 +38,16 @@
 namespace blink {
 
 DatabaseAuthorizer* DatabaseAuthorizer::Create(
+    DatabaseContext* database_context,
     const String& database_info_table_name) {
-  return new DatabaseAuthorizer(database_info_table_name);
+  return new DatabaseAuthorizer(database_context, database_info_table_name);
 }
 
-DatabaseAuthorizer::DatabaseAuthorizer(const String& database_info_table_name)
+DatabaseAuthorizer::DatabaseAuthorizer(DatabaseContext* database_context,
+                                       const String& database_info_table_name)
     : security_enabled_(false),
-      database_info_table_name_(database_info_table_name) {
+      database_info_table_name_(database_info_table_name),
+      database_context_(database_context) {
   DCHECK(IsMainThread());
 
   Reset();
@@ -247,6 +252,8 @@ int DatabaseAuthorizer::CreateVTable(const String& table_name,
   if (!DeprecatedEqualIgnoringCase(module_name, "fts3"))
     return kSQLAuthDeny;
 
+  UseCounter::Count(database_context_->GetExecutionContext(),
+                    UseCounter::kWebDatabaseCreateDropFTS3Table);
   last_action_changed_database_ = true;
   return DenyBasedOnTableName(table_name);
 }
@@ -260,6 +267,8 @@ int DatabaseAuthorizer::DropVTable(const String& table_name,
   if (!DeprecatedEqualIgnoringCase(module_name, "fts3"))
     return kSQLAuthDeny;
 
+  UseCounter::Count(database_context_->GetExecutionContext(),
+                    UseCounter::kWebDatabaseCreateDropFTS3Table);
   return UpdateDeletesBasedOnTableName(table_name);
 }
 
@@ -367,6 +376,10 @@ int DatabaseAuthorizer::UpdateDeletesBasedOnTableName(
   if (allow)
     had_deletes_ = true;
   return allow;
+}
+
+DEFINE_TRACE(DatabaseAuthorizer) {
+  visitor->Trace(database_context_);
 }
 
 }  // namespace blink

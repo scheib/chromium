@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/macros.h"
+#include "media/mojo/features.h"
 #include "media/mojo/interfaces/interface_factory.mojom.h"
 #include "media/mojo/services/mojo_cdm_service_context.h"
 #include "mojo/public/cpp/bindings/strong_binding_set.h"
@@ -38,35 +39,35 @@ class InterfaceFactoryImpl : public mojom::InterfaceFactory {
   void CreateCdm(mojom::ContentDecryptionModuleRequest request) final;
 
  private:
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
   RendererFactory* GetRendererFactory();
-#endif  // defined(ENABLE_MOJO_RENDERER)
+#endif  // BUILDFLAG(ENABLE_MOJO_RENDERER)
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
   CdmFactory* GetCdmFactory();
-#endif  // defined(ENABLE_MOJO_CDM)
+#endif  // BUILDFLAG(ENABLE_MOJO_CDM)
 
   MojoCdmServiceContext cdm_service_context_;
 
-#if defined(ENABLE_MOJO_AUDIO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
   mojo::StrongBindingSet<mojom::AudioDecoder> audio_decoder_bindings_;
-#endif  // defined(ENABLE_MOJO_AUDIO_DECODER)
+#endif  // BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
 
-#if defined(ENABLE_MOJO_VIDEO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
   mojo::StrongBindingSet<mojom::VideoDecoder> video_decoder_bindings_;
-#endif  // defined(ENABLE_MOJO_VIDEO_DECODER)
+#endif  // BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
 
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
   MediaLog* media_log_;
   std::unique_ptr<RendererFactory> renderer_factory_;
   mojo::StrongBindingSet<mojom::Renderer> renderer_bindings_;
-#endif  // defined(ENABLE_MOJO_RENDERER)
+#endif  // BUILDFLAG(ENABLE_MOJO_RENDERER)
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
   std::unique_ptr<CdmFactory> cdm_factory_;
   service_manager::mojom::InterfaceProviderPtr interfaces_;
   mojo::StrongBindingSet<mojom::ContentDecryptionModule> cdm_bindings_;
-#endif  // defined(ENABLE_MOJO_CDM)
+#endif  // BUILDFLAG(ENABLE_MOJO_CDM)
 
   std::unique_ptr<service_manager::ServiceContextRef> connection_ref_;
   MojoMediaClient* mojo_media_client_;

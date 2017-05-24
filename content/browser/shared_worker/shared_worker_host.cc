@@ -82,6 +82,7 @@ void SharedWorkerHost::Start(bool pause_on_start) {
   params.creation_address_space = instance_->creation_address_space();
   params.pause_on_start = pause_on_start;
   params.route_id = worker_route_id_;
+  params.data_saver_enabled = instance_->data_saver_enabled();
   Send(new WorkerProcessMsg_CreateWorker(params));
 
   for (const FilterInfo& info : filters_)

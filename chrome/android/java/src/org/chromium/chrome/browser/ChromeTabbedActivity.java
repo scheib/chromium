@@ -589,7 +589,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements OverviewMode
     public void onStartWithNative() {
         super.onStartWithNative();
         // If we don't have a current tab, show the overview mode.
-        if (getActivityTab() == null) mLayoutManager.showOverview(false);
+        if (getActivityTab() == null && !mLayoutManager.overviewVisible()) {
+            mLayoutManager.showOverview(false);
+        }
 
         resetSavedInstanceState();
     }
@@ -652,6 +654,10 @@ public class ChromeTabbedActivity extends ChromeActivity implements OverviewMode
                 mLayoutManager = new LayoutManagerChromeTablet(compositorViewHolder);
             } else {
                 mLayoutManager = new LayoutManagerChromePhone(compositorViewHolder);
+                if (getBottomSheet() != null) {
+                    ((LayoutManagerChromePhone) mLayoutManager)
+                            .setForegroundTabAnimationDisabled(true);
+                }
             }
             mLayoutManager.setEnableAnimations(DeviceClassManager.enableAnimations());
             mLayoutManager.addOverviewModeObserver(this);
@@ -1045,6 +1051,10 @@ public class ChromeTabbedActivity extends ChromeActivity implements OverviewMode
                 getBottomSheet().setSheetState(BottomSheet.SHEET_STATE_PEEK, true);
             }
 
+            // We send this intent so that we can enter WebVr presentation mode if needed. This
+            // call doesn't consume the intent because it also has the url that we need to load.
+            VrShellDelegate.onNewIntent(intent);
+
             TabModel tabModel = getCurrentTabModel();
             boolean fromLauncherShortcut = IntentUtils.safeGetBooleanExtra(
                     intent, IntentHandler.EXTRA_INVOKED_FROM_SHORTCUT, false);
@@ -1157,8 +1167,14 @@ public class ChromeTabbedActivity extends ChromeActivity implements OverviewMode
                                     intent, mIntentHandlingTimeMs);
                         }
                     } else {
-                        getTabCreator(true).launchUrl(
-                                url, TabLaunchType.FROM_LINK, intent, mIntentHandlingTimeMs);
+                        TabLaunchType launchType = IntentHandler.getTabLaunchType(intent);
+                        if (launchType != null) {
+                            getTabCreator(true).launchUrl(
+                                    url, launchType, intent, mIntentHandlingTimeMs);
+                        } else {
+                            getTabCreator(true).launchUrl(
+                                    url, TabLaunchType.FROM_LINK, intent, mIntentHandlingTimeMs);
+                        }
                     }
                     break;
                 default:
@@ -1451,9 +1467,8 @@ public class ChromeTabbedActivity extends ChromeActivity implements OverviewMode
     @Override
     protected void recordIntentToCreationTime(long timeMs) {
         super.recordIntentToCreationTime(timeMs);
-
-        RecordHistogram.recordTimesHistogram(
-                "MobileStartup.IntentToCreationTime.TabbedMode", timeMs, TimeUnit.MILLISECONDS);
+        RecordHistogram.recordCustomTimesHistogram("MobileStartup.IntentToCreationTime.TabbedMode",
+                timeMs, 1, TimeUnit.SECONDS.toMillis(30), TimeUnit.MILLISECONDS, 50);
     }
 
     @Override

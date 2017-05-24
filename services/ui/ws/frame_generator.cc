@@ -18,15 +18,9 @@ namespace ui {
 
 namespace ws {
 
-FrameGenerator::FrameGenerator(
-    std::unique_ptr<cc::CompositorFrameSink> compositor_frame_sink)
-    : compositor_frame_sink_(std::move(compositor_frame_sink)) {
-  compositor_frame_sink_->BindToClient(this);
-}
+FrameGenerator::FrameGenerator() = default;
 
-FrameGenerator::~FrameGenerator() {
-  compositor_frame_sink_->DetachFromClient();
-}
+FrameGenerator::~FrameGenerator() = default;
 
 void FrameGenerator::SetDeviceScaleFactor(float device_scale_factor) {
   if (device_scale_factor_ == device_scale_factor)
@@ -66,14 +60,10 @@ void FrameGenerator::OnWindowSizeChanged(const gfx::Size& pixel_size) {
   SetNeedsBeginFrame(true);
 }
 
-void FrameGenerator::SetBeginFrameSource(cc::BeginFrameSource* source) {
-  if (begin_frame_source_ && observing_begin_frames_)
-    begin_frame_source_->RemoveObserver(this);
-
-  begin_frame_source_ = source;
-
-  if (begin_frame_source_ && observing_begin_frames_)
-    begin_frame_source_->AddObserver(this);
+void FrameGenerator::Bind(
+    std::unique_ptr<cc::mojom::MojoCompositorFrameSink> compositor_frame_sink) {
+  DCHECK(!compositor_frame_sink_);
+  compositor_frame_sink_ = std::move(compositor_frame_sink);
 }
 
 void FrameGenerator::ReclaimResources(
@@ -83,28 +73,16 @@ void FrameGenerator::ReclaimResources(
   DCHECK(resources.empty());
 }
 
-void FrameGenerator::SetTreeActivationCallback(const base::Closure& callback) {}
-
-void FrameGenerator::DidReceiveCompositorFrameAck() {}
-
-void FrameGenerator::DidLoseCompositorFrameSink() {}
-
-void FrameGenerator::OnDraw(const gfx::Transform& transform,
-                            const gfx::Rect& viewport,
-                            bool resourceless_software_draw) {}
-
-void FrameGenerator::SetMemoryPolicy(const cc::ManagedMemoryPolicy& policy) {}
-
-void FrameGenerator::SetExternalTilePriorityConstraints(
-    const gfx::Rect& viewport_rect,
-    const gfx::Transform& transform) {}
+void FrameGenerator::DidReceiveCompositorFrameAck(
+    const cc::ReturnedResourceArray& resources) {}
 
 void FrameGenerator::OnBeginFrame(const cc::BeginFrameArgs& begin_frame_args) {
+  DCHECK(compositor_frame_sink_);
   current_begin_frame_ack_ = cc::BeginFrameAck(
       begin_frame_args.source_id, begin_frame_args.sequence_number,
       begin_frame_args.sequence_number, false);
   if (begin_frame_args.type == cc::BeginFrameArgs::MISSED) {
-    begin_frame_source_->DidFinishFrame(this, current_begin_frame_ack_);
+    compositor_frame_sink_->DidNotProduceFrame(current_begin_frame_ack_);
     return;
   }
 
@@ -113,18 +91,18 @@ void FrameGenerator::OnBeginFrame(const cc::BeginFrameArgs& begin_frame_args) {
 
   // TODO(fsamuel): We should add a trace for generating a top level frame.
   cc::CompositorFrame frame(GenerateCompositorFrame());
-
-  compositor_frame_sink_->SubmitCompositorFrame(std::move(frame));
-
-  begin_frame_source_->DidFinishFrame(this, current_begin_frame_ack_);
+  gfx::Size frame_size = frame.render_pass_list.back()->output_rect.size();
+  if (!local_surface_id_.is_valid() ||
+      frame_size != last_submitted_frame_size_ ||
+      frame.metadata.device_scale_factor != last_device_scale_factor_) {
+    last_device_scale_factor_ = frame.metadata.device_scale_factor;
+    last_submitted_frame_size_ = frame_size;
+    local_surface_id_ = id_allocator_.GenerateId();
+  }
+  compositor_frame_sink_->SubmitCompositorFrame(local_surface_id_,
+                                                std::move(frame));
   SetNeedsBeginFrame(false);
 }
-
-const cc::BeginFrameArgs& FrameGenerator::LastUsedBeginFrameArgs() const {
-  return last_begin_frame_args_;
-}
-
-void FrameGenerator::OnBeginFrameSourcePausedChanged(bool paused) {}
 
 cc::CompositorFrame FrameGenerator::GenerateCompositorFrame() {
   const int render_pass_id = 1;
@@ -200,14 +178,7 @@ void FrameGenerator::DrawWindow(cc::RenderPass* pass) {
 
 void FrameGenerator::SetNeedsBeginFrame(bool needs_begin_frame) {
   needs_begin_frame &= window_manager_surface_info_.is_valid();
-  if (needs_begin_frame == observing_begin_frames_)
-    return;
-
-  observing_begin_frames_ = needs_begin_frame;
-  if (needs_begin_frame)
-    begin_frame_source_->AddObserver(this);
-  else
-    begin_frame_source_->RemoveObserver(this);
+  compositor_frame_sink_->SetNeedsBeginFrame(needs_begin_frame);
 }
 
 }  // namespace ws

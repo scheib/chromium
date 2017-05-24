@@ -259,10 +259,11 @@ class WebGLConformanceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
         '--disable-domain-blocking-for-3d-apis',
         '--disable-gpu-process-crash-limit',
         '--test-type=gpu',
-        '--enable-experimental-canvas-features'
-        # If intermittent GPU process hangs are seen on the waterfall,
-        # try re-adding the --disable-gpu-watchdog flag here.
-        # crbug.com/596622 crbug.com/609252
+        '--enable-experimental-canvas-features',
+        # Try disabling the GPU watchdog to see if this affects the
+        # intermittent GPU process hangs that have been seen on the
+        # waterfall. crbug.com/596622 crbug.com/609252
+        '--disable-gpu-watchdog'
     ])
 
     builtin_js_flags = '--js-flags=--expose-gc'

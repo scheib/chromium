@@ -10,6 +10,7 @@
 #include "ash/shell.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
+#include "base/memory/weak_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
@@ -61,6 +62,7 @@
 using chromeos::BluetoothPairingDialog;
 using chromeos::DBusThreadManager;
 using chromeos::LoginState;
+using chromeos::UpdateEngineClient;
 using device::BluetoothDevice;
 using views::Widget;
 
@@ -124,6 +126,7 @@ SystemTrayClient::SystemTrayClient() : binding_(this) {
 
   DCHECK(!g_instance);
   g_instance = this;
+  UpgradeDetector::GetInstance()->AddObserver(this);
 }
 
 SystemTrayClient::~SystemTrayClient() {
@@ -138,6 +141,7 @@ SystemTrayClient::~SystemTrayClient() {
     policy_manager->core()->store()->RemoveObserver(this);
 
   g_browser_process->platform_part()->GetSystemClock()->RemoveObserver(this);
+  UpgradeDetector::GetInstance()->RemoveObserver(this);
 }
 
 // static
@@ -292,6 +296,13 @@ void SystemTrayClient::ShowChromeSlow() {
 void SystemTrayClient::ShowIMESettings() {
   base::RecordAction(base::UserMetricsAction("OpenLanguageOptionsDialog"));
   ShowSettingsSubPageForActiveUser(chrome::kLanguageOptionsSubPage);
+}
+
+void SystemTrayClient::ShowAboutChromeOS() {
+  // We always want to check for updates when showing the about page from the
+  // Ash UI.
+  ShowSettingsSubPageForActiveUser(std::string(chrome::kHelpSubPage) +
+                                   "?checkForUpdate=true");
 }
 
 void SystemTrayClient::ShowHelp() {
@@ -460,6 +471,10 @@ void SystemTrayClient::HandleUpdateAvailable() {
                                update_type);
 }
 
+void SystemTrayClient::HandleUpdateOverCellularAvailable() {
+  system_tray_->ShowUpdateOverCellularAvailableIcon();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // chromeos::system::SystemClockObserver:
 
@@ -473,6 +488,12 @@ void SystemTrayClient::Observe(int type,
                                const content::NotificationDetails& details) {
   DCHECK_EQ(chrome::NOTIFICATION_UPGRADE_RECOMMENDED, type);
   HandleUpdateAvailable();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// UpgradeDetector::UpgradeObserver:
+void SystemTrayClient::OnUpdateOverCellularAvailable() {
+  HandleUpdateOverCellularAvailable();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

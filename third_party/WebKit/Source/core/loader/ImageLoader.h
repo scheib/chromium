@@ -110,9 +110,7 @@ class CORE_EXPORT ImageLoader : public GarbageCollectedFinalized<ImageLoader>,
     return image_resource_for_image_document_;
   }
 
-  bool HasPendingActivity() const {
-    return has_pending_load_event_ || has_pending_error_event_ || pending_task_;
-  }
+  bool HasPendingActivity() const { return HasPendingEvent() || pending_task_; }
 
   bool HasPendingError() const { return has_pending_error_event_; }
 
@@ -141,6 +139,7 @@ class CORE_EXPORT ImageLoader : public GarbageCollectedFinalized<ImageLoader>,
   virtual void DispatchLoadEvent() = 0;
   virtual void NoImageResourceToLoad() {}
 
+  bool HasPendingEvent() const;
   void UpdatedHasPendingEvent();
 
   void DispatchPendingLoadEvent();
@@ -207,8 +206,11 @@ class CORE_EXPORT ImageLoader : public GarbageCollectedFinalized<ImageLoader>,
   std::unique_ptr<IncrementLoadEventDelayCount>
       delay_until_image_notify_finished_;
 
+  // Indicates whether there is a pending task for the load/error event on
+  // EventSender. Will be replaced when EventSender is removed crbug/624697.
   bool has_pending_load_event_ : 1;
   bool has_pending_error_event_ : 1;
+
   bool image_complete_ : 1;
   bool loading_image_document_ : 1;
   bool element_is_protected_ : 1;

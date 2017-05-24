@@ -66,6 +66,7 @@
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_util.h"
 #include "net/cookies/parsed_cookie.h"
+#include "net/ssl/channel_id_service.h"
 #include "url/origin.h"
 
 using base::Time;
@@ -347,10 +348,26 @@ CookieMonster::CookieMonster(PersistentCookieStore* store,
     : CookieMonster(
           store,
           delegate,
+          nullptr,
           base::TimeDelta::FromSeconds(kDefaultAccessUpdateThresholdSeconds)) {}
 
 CookieMonster::CookieMonster(PersistentCookieStore* store,
                              CookieMonsterDelegate* delegate,
+                             ChannelIDService* channel_id_service)
+    : CookieMonster(
+          store,
+          delegate,
+          channel_id_service,
+          base::TimeDelta::FromSeconds(kDefaultAccessUpdateThresholdSeconds)) {}
+
+CookieMonster::CookieMonster(PersistentCookieStore* store,
+                             CookieMonsterDelegate* delegate,
+                             base::TimeDelta last_access_threshold)
+    : CookieMonster(store, delegate, nullptr, last_access_threshold) {}
+
+CookieMonster::CookieMonster(PersistentCookieStore* store,
+                             CookieMonsterDelegate* delegate,
+                             ChannelIDService* channel_id_service,
                              base::TimeDelta last_access_threshold)
     : initialized_(false),
       started_fetching_all_cookies_(false),
@@ -360,6 +377,7 @@ CookieMonster::CookieMonster(PersistentCookieStore* store,
       store_(store),
       last_access_threshold_(last_access_threshold),
       delegate_(delegate),
+      channel_id_service_(channel_id_service),
       last_statistic_record_time_(base::Time::Now()),
       persist_session_cookies_(false),
       weak_ptr_factory_(this) {
@@ -862,10 +880,14 @@ void CookieMonster::SetCookieWithDetailsAsync(
 void CookieMonster::FlushStore(const base::Closure& callback) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (initialized_ && store_.get())
+  if (initialized_ && store_.get()) {
+    if (channel_id_service_) {
+      channel_id_service_->GetChannelIDStore()->Flush();
+    }
     store_->Flush(callback);
-  else if (!callback.is_null())
+  } else if (!callback.is_null()) {
     base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, callback);
+  }
 }
 
 void CookieMonster::SetForceKeepSessionState() {

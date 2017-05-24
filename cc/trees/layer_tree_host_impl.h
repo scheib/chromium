@@ -415,6 +415,7 @@ class CC_EXPORT LayerTreeHostImpl
 
   virtual void WillBeginImplFrame(const BeginFrameArgs& args);
   virtual void DidFinishImplFrame();
+  void DidNotProduceFrame(const BeginFrameAck& ack);
   void DidModifyTilePriorities();
 
   LayerTreeImpl* active_tree() { return active_tree_.get(); }

@@ -170,6 +170,10 @@ void MojoWatcher::RunReadyCallback(MojoResult result) {
 
   RunWatchCallback(callback_, this, result);
 
+  // The user callback may have canceled watching.
+  if (!watcher_handle_.is_valid())
+    return;
+
   // Rearm the watcher so another notification can fire.
   //
   // TODO(rockot): MojoWatcher should expose some better approximation of the

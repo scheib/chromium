@@ -1,95 +1,83 @@
 <!DOCTYPE html>
 <script src="../resources/testharness.js"></script>
 <script src="../resources/testharnessreport.js"></script>
-<script src="../resources/mojo-helpers.js"></script>
+<script src="file:///gen/layout_test_data/mojo/public/js/mojo_bindings.js"></script>
+<script src="file:///gen/mojo/public/interfaces/bindings/tests/sample_interfaces.mojom.js"></script>
+<script src="file:///gen/mojo/public/interfaces/bindings/tests/sample_service.mojom.js"></script>
 <script>
 'use strict';
 
-setup({ explicit_done: true });
+promise_test(async () => {
+  function ServiceImpl() {
+  }
 
-define([
-    'mojo/public/js/bindings',
-    'mojo/public/js/core',
-    'mojo/public/interfaces/bindings/tests/sample_interfaces.mojom',
-    'mojo/public/interfaces/bindings/tests/sample_service.mojom',
-], function(bindings, core, sample_interfaces, sample_service) {
+  ServiceImpl.prototype.frobinate = function(foo, baz, port) {
+    assert_equals(foo.name, "Example name");
+    assert_equals(baz, sample.Service.BazOptions.REGULAR);
+    assert_true(port.ptr.isBound());
+    port.ptr.reset();
 
-  promise_test(async () => {
-    function ServiceImpl() {
-    }
+    return Promise.resolve({result: 42});
+  };
 
-    ServiceImpl.prototype.frobinate = function(foo, baz, port) {
-      assert_equals(foo.name, "Example name");
-      assert_equals(baz, sample_service.Service.BazOptions.REGULAR);
-      assert_true(port.ptr.isBound());
-      port.ptr.reset();
+  var service = new sample.ServicePtr();
+  var serviceBinding = new mojo.Binding(
+      sample.Service, new ServiceImpl(), mojo.makeRequest(service));
+  var sourcePipe = Mojo.createMessagePipe();
+  var port = new sample.PortPtr();
+  var portRequest = mojo.makeRequest(port);
 
-      return Promise.resolve({result: 42});
-    };
+  var foo = new sample.Foo();
+  foo.bar = new sample.Bar();
+  foo.name = "Example name";
+  foo.source = sourcePipe.handle0;
 
-    var service = new sample_service.ServicePtr();
-    var serviceBinding = new bindings.Binding(sample_service.Service,
-                                              new ServiceImpl(),
-                                              bindings.makeRequest(service));
-    var sourcePipe = core.createMessagePipe();
-    var port = new sample_service.PortPtr();
-    var portRequest = bindings.makeRequest(port);
+  assert_equals((await service.frobinate(
+      foo, sample.Service.BazOptions.REGULAR, port)).result, 42);
 
-    var foo = new sample_service.Foo();
-    foo.bar = new sample_service.Bar();
-    foo.name = "Example name";
-    foo.source = sourcePipe.handle0;
+  service.ptr.reset();
+  serviceBinding.close();
 
-    assert_equals((await service.frobinate(
-        foo, sample_service.Service.BazOptions.REGULAR, port)).result, 42);
+  // sourcePipe.handle1 hasn't been closed yet.
+  sourcePipe.handle1.close();
 
-    service.ptr.reset();
-    serviceBinding.close();
+  // portRequest.handle hasn't been closed yet.
+  portRequest.handle.close();
+}, 'client server');
 
-    // sourcePipe.handle1 hasn't been closed yet.
-    assert_equals(core.close(sourcePipe.handle1), core.RESULT_OK);
+promise_test(async () => {
+  var service = new sample.ServicePtr();
+  // Discard the interface request.
+  var interfaceRequest = mojo.makeRequest(service);
+  interfaceRequest.close();
 
-    // portRequest.handle hasn't been closed yet.
-    assert_equals(core.close(portRequest.handle), core.RESULT_OK);
-  }, 'client server');
+  try {
+    await service.frobinate(null, sample.Service.BazOptions.REGULAR, null);
+    assert_unreached();
+  } catch (e) {
+    assert_not_equals(e, null);
+  }
+}, 'write to closed pipe');
 
-  promise_test(async () => {
-    var service = new sample_service.ServicePtr();
-    // Discard the interface request.
-    var interfaceRequest = bindings.makeRequest(service);
-    interfaceRequest.close();
+promise_test(async () => {
+  function ProviderImpl() {
+  }
 
-    try {
-      await service.frobinate(
-          null, sample_service.Service.BazOptions.REGULAR, null);
-      assert_unreached();
-    } catch (e) {
-      assert_not_equals(e, null);
-    }
-  }, 'write to closed pipe');
+  ProviderImpl.prototype.echoString = function(a) {
+    return Promise.resolve({a: a});
+  };
 
-  promise_test(async () => {
-    function ProviderImpl() {
-    }
+  ProviderImpl.prototype.echoStrings = function(a, b) {
+    return Promise.resolve({a: a, b: b});
+  };
 
-    ProviderImpl.prototype.echoString = function(a) {
-      return Promise.resolve({a: a});
-    };
+  var provider = new sample.ProviderPtr();
+  var providerBinding = new mojo.Binding(
+      sample.Provider, new ProviderImpl(), mojo.makeRequest(provider));
+  assert_equals((await provider.echoString("hello")).a, "hello");
+  var response = await provider.echoStrings("hello", "world");
+  assert_equals(response.a, "hello");
+  assert_equals(response.b, "world");
+}, 'request response');
 
-    ProviderImpl.prototype.echoStrings = function(a, b) {
-      return Promise.resolve({a: a, b: b});
-    };
-
-    var provider = new sample_interfaces.ProviderPtr();
-    var providerBinding = new bindings.Binding(sample_interfaces.Provider,
-                                               new ProviderImpl(),
-                                               bindings.makeRequest(provider));
-    assert_equals((await provider.echoString("hello")).a, "hello");
-    var response = await provider.echoStrings("hello", "world");
-    assert_equals(response.a, "hello");
-    assert_equals(response.b, "world");
-  }, 'request response');
-
-  done();
-});
 </script>

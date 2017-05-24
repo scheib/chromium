@@ -10,6 +10,7 @@
 #include "core/layout/ng/ng_block_break_token.h"
 #include "core/layout/ng/ng_block_node.h"
 #include "core/layout/ng/ng_exclusion.h"
+#include "core/style/ComputedStyleConstants.h"
 #include "platform/wtf/Optional.h"
 #include "platform/wtf/RefPtr.h"
 
@@ -89,6 +90,7 @@ struct CORE_EXPORT NGUnpositionedFloat
 
   bool IsLeft() const;
   bool IsRight() const;
+  EClear ClearType() const;
 
  private:
   NGUnpositionedFloat(const NGBoxStrut& margins,

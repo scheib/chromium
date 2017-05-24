@@ -226,6 +226,7 @@ bool DecodeImageData(SharedBuffer* data,
 
   RefPtr<SharedBuffer> packet_data = SharedBuffer::Create();
   size_t position = 0;
+  size_t next_frame_to_decode = 0;
   while (true) {
     const char* packet;
     size_t length = data->GetSomeData(packet, position);
@@ -237,9 +238,10 @@ bool DecodeImageData(SharedBuffer* data,
     bool all_data_received = position == data->size();
     decoder->SetData(packet_data.Get(), all_data_received);
 
-    int frame_count = decoder->FrameCount();
-    for (int i = 0; i < frame_count; ++i) {
-      if (!decoder->FrameBufferAtIndex(i))
+    size_t frame_count = decoder->FrameCount();
+    for (; next_frame_to_decode < frame_count; ++next_frame_to_decode) {
+      ImageFrame* frame = decoder->FrameBufferAtIndex(next_frame_to_decode);
+      if (frame->GetStatus() != ImageFrame::kFrameComplete)
         break;
     }
 

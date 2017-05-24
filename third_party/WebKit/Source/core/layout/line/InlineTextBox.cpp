@@ -384,14 +384,9 @@ LayoutUnit InlineTextBox::PlaceEllipsisBox(bool flow_is_ltr,
   LayoutUnit ellipsis_x = flow_is_ltr ? visible_right_edge - ellipsis_width
                                       : visible_left_edge + ellipsis_width;
 
-  if (IsLeftToRightDirection() == flow_is_ltr && !flow_is_ltr &&
-      logical_left_offset < 0)
-    ellipsis_x -= logical_left_offset;
-
   bool ltr_full_truncation = flow_is_ltr && ellipsis_x <= adjusted_logical_left;
   bool rtl_full_truncation =
-      !flow_is_ltr &&
-      ellipsis_x > adjusted_logical_left + LogicalWidth() + ellipsis_width;
+      !flow_is_ltr && ellipsis_x > adjusted_logical_left + LogicalWidth();
   if (ltr_full_truncation || rtl_full_truncation) {
     // Too far.  Just set full truncation, but return -1 and let the ellipsis
     // just be placed at the edge of the box.
@@ -420,9 +415,14 @@ LayoutUnit InlineTextBox::PlaceEllipsisBox(bool flow_is_ltr,
                                : LogicalRight() - visible_box_width;
     }
 
+    // OffsetForPosition() expects the position relative to the root box.
+    if (ltr == flow_is_ltr && !flow_is_ltr && logical_left_offset < 0)
+      ellipsis_x -= logical_left_offset;
+
     // We measure the text using the second half of the previous character and
     // the first half of the current one when the text is rtl. This gives a
     // more accurate position in rtl text.
+    // TODO(crbug.com/722043: This doesn't always give the best results.
     int offset = OffsetForPosition(ellipsis_x, !ltr);
     // Full truncation is only necessary when we're flowing left-to-right.
     if (flow_is_ltr && offset == 0 && ltr == flow_is_ltr) {

@@ -295,14 +295,15 @@ AccessibilityRole AXLayoutObject::DetermineAccessibilityRole() {
   if (role != kUnknownRole)
     return role;
 
+  // These are layout containers added by blink
   if (layout_object_->IsLayoutBlockFlow())
-    return kGroupRole;
+    return kGenericContainerRole;
 
   // If the element does not have role, but it has ARIA attributes or is an
   // in-page link target, accessibility should fallback to exposing it as a
-  // group.
+  // generic container.
   if (IsInPageLinkTarget() || SupportsARIAAttributes())
-    return kGroupRole;
+    return kGenericContainerRole;
 
   return kUnknownRole;
 }

@@ -71,6 +71,23 @@ class FormFetcher {
   virtual const std::vector<const autofill::PasswordForm*>&
   GetFederatedMatches() const = 0;
 
+  // When this instance fetches forms for an HTTP origin: Returns credentials,
+  // if any, found for the HTTPS version of that origin. These results are
+  // queried on a best-effort basis, might be somewhat stale, and are normally
+  // available shortly after the first Consumer::ProcessMatches callback.
+  //
+  // When there exists no precisely matching HTTP credentials for an origin, but
+  // there are suppressed HTTPS credentials, that could indicate a premature
+  // `move-to-HTTPS` migration, or simply that the site serves its sign-up or
+  // some of its sign-in forms over HTTPS, while others still over HTTP.
+  virtual const std::vector<const autofill::PasswordForm*>&
+  GetSuppressedHTTPSForms() const = 0;
+
+  // Whether querying the results for GetSuppressedHTTPSForms was attempted and
+  // did complete at least once during the lifetime of this instance, regardless
+  // of whether there have been any suppressed HTTPS forms.
+  virtual bool DidCompleteQueryingSuppressedHTTPSForms() const = 0;
+
   // Fetches stored matching logins. In addition the statistics is fetched on
   // platforms with the password bubble. This is called automatically during
   // construction and can be called manually later as well to cause an update

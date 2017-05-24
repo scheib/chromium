@@ -8,6 +8,7 @@
 // Includes needed for macros allowing conditional compilation of some strings.
 #include "build/build_config.h"
 #include "build/buildflag.h"
+#include "device/vr/features/features.h"
 #include "media/media_features.h"
 
 // This file declares strings used in chrome://flags. These messages are not
@@ -480,6 +481,9 @@ extern const char kOfflineAutoReloadDescription[];
 extern const char kOfflineAutoReloadVisibleOnlyName[];
 extern const char kOfflineAutoReloadVisibleOnlyDescription[];
 
+extern const char kOffMainThreadFetchName[];
+extern const char kOffMainThreadFetchDescription[];
+
 extern const char kOmniboxDisplayTitleForCurrentUrlName[];
 extern const char kOmniboxDisplayTitleForCurrentUrlDescription[];
 
@@ -782,8 +786,10 @@ extern const char kWebrtcSrtpAesGcmDescription[];
 extern const char kWebrtcStunOriginName[];
 extern const char kWebrtcStunOriginDescription[];
 
+#if BUILDFLAG(ENABLE_VR)
 extern const char kWebvrExperimentalRenderingName[];
 extern const char kWebvrExperimentalRenderingDescription[];
+#endif  // ENABLE_VR
 
 extern const char kWebvrName[];
 extern const char kWebvrDescription[];
@@ -891,6 +897,9 @@ extern const char kEnableOmniboxClipboardProviderDescription[];
 extern const char kEnableExpandedAutofillCreditCardPopupLayoutName[];
 extern const char kEnableExpandedAutofillCreditCardPopupLayoutDescription[];
 
+extern const char kEnableFaviconsFromWebManifestName[];
+extern const char kEnableFaviconsFromWebManifestDescription[];
+
 extern const char kEnableNtpAssetDownloadSuggestionsName[];
 extern const char kEnableNtpAssetDownloadSuggestionsDescription[];
 
@@ -933,8 +942,18 @@ extern const char kEnableOskOverscrollDescription[];
 extern const char kEnableSpecialLocaleName[];
 extern const char kEnableSpecialLocaleDescription[];
 
+#if BUILDFLAG(ENABLE_VR)
+
 extern const char kEnableVrShellName[];
 extern const char kEnableVrShellDescription[];
+
+extern const char kVrCustomTabBrowsingName[];
+extern const char kVrCustomTabBrowsingDescription[];
+
+extern const char kWebVrAutopresentName[];
+extern const char kWebVrAutopresentDescription[];
+
+#endif  // BUILDFLAG(ENABLE_VR)
 
 extern const char kEnableWebapk[];
 extern const char kEnableWebapkDescription[];
@@ -1071,6 +1090,9 @@ extern const char kUseNewDoodleApiDescription[];
 
 extern const char kWebPaymentsModifiersName[];
 extern const char kWebPaymentsModifiersDescription[];
+
+extern const char kXGEOVisibleNetworksName[];
+extern const char kXGEOVisibleNetworksDescription[];
 
 // Non-Android ----------------------------------------------------------------
 

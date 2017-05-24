@@ -43,7 +43,7 @@ class AuthCodeGetter : public base::NonThreadSafe {
   // The authorization code callback.
   base::Callback<void(const std::string&)> on_auth_code_;
   // The browser through which the user requests an authorization code.
-  base::win::ScopedComPtr<IWebBrowser2, &IID_IWebBrowser2> browser_;
+  base::win::ScopedComPtr<IWebBrowser2> browser_;
   // A timer used to poll the browser's URL.
   base::OneShotTimer timer_;
   // The interval at which the timer fires.

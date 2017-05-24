@@ -60,8 +60,7 @@ FakeContentLayerClient::PaintContentsToDisplayList(
         recorder.beginRecording(gfx::RectFToSkRect(draw_rect));
     canvas->drawRect(gfx::RectFToSkRect(draw_rect), flags);
     display_list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-        ToEnclosingRect(draw_rect), recorder.finishRecordingAsPicture(),
-        gfx::RectFToSkRect(draw_rect));
+        ToEnclosingRect(draw_rect), recorder.finishRecordingAsPicture());
   }
 
   for (ImageVector::const_iterator it = draw_images_.begin();
@@ -70,12 +69,11 @@ FakeContentLayerClient::PaintContentsToDisplayList(
       display_list->CreateAndAppendPairedBeginItem<TransformDisplayItem>(
           it->transform);
     }
-    PaintCanvas* canvas =
-        recorder.beginRecording(gfx::RectToSkRect(PaintableRegion()));
+    PaintCanvas* canvas = recorder.beginRecording(
+        it->image.sk_image()->width(), it->image.sk_image()->height());
     canvas->drawImage(it->image, it->point.x(), it->point.y(), &it->flags);
     display_list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-        PaintableRegion(), recorder.finishRecordingAsPicture(),
-        gfx::RectToSkRect(PaintableRegion()));
+        PaintableRegion(), recorder.finishRecordingAsPicture());
     if (!it->transform.IsIdentity()) {
       display_list->CreateAndAppendPairedEndItem<EndTransformDisplayItem>();
     }
@@ -91,8 +89,7 @@ FakeContentLayerClient::PaintContentsToDisplayList(
           recorder.beginRecording(gfx::RectToSkRect(draw_rect));
       canvas->drawIRect(gfx::RectToSkIRect(draw_rect), flags);
       display_list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-          draw_rect, recorder.finishRecordingAsPicture(),
-          gfx::RectToSkRect(draw_rect));
+          draw_rect, recorder.finishRecordingAsPicture());
       draw_rect.Inset(1, 1);
     }
   }

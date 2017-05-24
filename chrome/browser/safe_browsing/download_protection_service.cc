@@ -289,7 +289,8 @@ class DownloadUrlSBClient
     hit_report.is_metrics_reporting_active =
         ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled();
 
-    ui_manager_->MaybeReportSafeBrowsingHit(hit_report);
+    ui_manager_->MaybeReportSafeBrowsingHit(hit_report,
+                                            item_->GetWebContents());
   }
 
   void IdentifyReferrerChain() {

@@ -108,13 +108,14 @@ std::ostream& operator<<(std::ostream& os, const ProcessType& type) {
 std::ostream& operator<<(
     std::ostream& out, const TabManagerDelegate::Candidate& candidate) {
   if (candidate.app()) {
-    out << "app " << candidate.app()->pid() << " ("
-        << candidate.app()->process_name() << ")"
-        << ", process_state " << candidate.app()->process_state()
-        << ", is_focused " << candidate.app()->is_focused()
-        << ", lastActivityTime " << candidate.app()->last_activity_time();
+    out << "app " << *candidate.app();
   } else if (candidate.tab()) {
-    out << "tab " << candidate.tab()->renderer_handle;
+    const TabStats* const& tab = candidate.tab();
+    out << "tab " << tab->title << ", renderer_handle: " << tab->renderer_handle
+        << ", oom_score: " << tab->oom_score
+        << ", is_discarded: " << tab->is_discarded
+        << ", discard_count: " << tab->discard_count
+        << ", last_active: " << tab->last_active;
   }
   out << ", process_type " << candidate.process_type();
   return out;
@@ -578,6 +579,11 @@ void TabManagerDelegate::LowMemoryKillImpl(
   int target_memory_to_free_kb = mem_stat_->TargetMemoryToFreeKB();
   const TimeTicks now = TimeTicks::Now();
 
+  MEMORY_LOG(ERROR) << "List of low memory kill candidates "
+                       "(sorted from low priority to high priority):";
+  for (auto it = candidates.rbegin(); it != candidates.rend(); ++it) {
+    MEMORY_LOG(ERROR) << *it;
+  }
   // Kill processes until the estimated amount of freed memory is sufficient to
   // bring the system memory back to a normal level.
   // The list is sorted by descending importance, so we go through the list
@@ -592,12 +598,13 @@ void TabManagerDelegate::LowMemoryKillImpl(
     // bad.
     ProcessType process_type = it->process_type();
     if (process_type <= ProcessType::IMPORTANT_APP) {
-      MEMORY_LOG(ERROR) << "Skipped killing " << *it;
+      MEMORY_LOG(ERROR) << "Skipped killing " << it->app()->process_name();
       continue;
     }
     if (it->app()) {
       if (IsRecentlyKilledArcProcess(it->app()->process_name(), now)) {
-        MEMORY_LOG(ERROR) << "Avoided killing " << *it << " too often";
+        MEMORY_LOG(ERROR) << "Avoided killing " << it->app()->process_name()
+                          << " too often";
         continue;
       }
       int estimated_memory_freed_kb =
@@ -606,10 +613,12 @@ void TabManagerDelegate::LowMemoryKillImpl(
         recently_killed_arc_processes_[it->app()->process_name()] = now;
         target_memory_to_free_kb -= estimated_memory_freed_kb;
         MemoryKillsMonitor::LogLowMemoryKill("APP", estimated_memory_freed_kb);
-        MEMORY_LOG(ERROR) << "Killed " << *it << ", estimated "
-                          << estimated_memory_freed_kb << " KB freed";
+        MEMORY_LOG(ERROR) << "Killed app " << it->app()->process_name() << " ("
+                          << it->app()->pid() << ")"
+                          << ", estimated " << estimated_memory_freed_kb
+                          << " KB freed";
       } else {
-        MEMORY_LOG(ERROR) << "Failed to kill " << *it;
+        MEMORY_LOG(ERROR) << "Failed to kill " << it->app()->process_name();
       }
     } else {
       int64_t tab_id = it->tab()->tab_contents_id;
@@ -621,7 +630,8 @@ void TabManagerDelegate::LowMemoryKillImpl(
       if (KillTab(tab_id)) {
         target_memory_to_free_kb -= estimated_memory_freed_kb;
         MemoryKillsMonitor::LogLowMemoryKill("TAB", estimated_memory_freed_kb);
-        MEMORY_LOG(ERROR) << "Killed " << *it << ", estimated "
+        MEMORY_LOG(ERROR) << "Killed tab " << it->tab()->title << " ("
+                          << it->tab()->renderer_handle << "), estimated "
                           << estimated_memory_freed_kb << " KB freed";
       }
     }

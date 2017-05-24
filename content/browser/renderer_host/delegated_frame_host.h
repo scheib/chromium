@@ -171,7 +171,7 @@ class CONTENT_EXPORT DelegatedFrameHost
                                          gfx::Point* transformed_point);
 
   void SetNeedsBeginFrames(bool needs_begin_frames);
-  void BeginFrameDidNotSwap(const cc::BeginFrameAck& ack);
+  void DidNotProduceFrame(const cc::BeginFrameAck& ack);
 
   // Exposed for tests.
   cc::SurfaceId SurfaceIdForTesting() const {

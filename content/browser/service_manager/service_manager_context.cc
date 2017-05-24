@@ -33,6 +33,7 @@
 #include "content/public/common/content_switches.h"
 #include "content/public/common/service_manager_connection.h"
 #include "content/public/common/service_names.mojom.h"
+#include "media/mojo/features.h"
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/incoming_broker_client_invitation.h"
 #include "services/catalog/manifest_provider.h"
@@ -370,7 +371,7 @@ ServiceManagerContext::ServiceManagerContext() {
                                   service.second, false /* use_sandbox */));
   }
 
-#if (ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
   packaged_services_connection_->AddServiceRequestHandler(
       "media", base::Bind(&StartServiceInGpuProcess, "media"));
 #endif

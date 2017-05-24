@@ -193,10 +193,10 @@ class Internals final : public GarbageCollected<Internals>,
                             bool thick,
                             const String& background_color_value,
                             ExceptionState&);
-  void setMarkersActive(Node*,
-                        unsigned start_offset,
-                        unsigned end_offset,
-                        bool);
+  void setTextMatchMarkersActive(Node*,
+                                 unsigned start_offset,
+                                 unsigned end_offset,
+                                 bool);
   void setMarkedTextMatchesAreHighlighted(Document*, bool);
 
   void setFrameViewPosition(Document*, long x, long y, ExceptionState&);

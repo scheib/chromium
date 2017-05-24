@@ -73,7 +73,7 @@ TestPaintArtifact& TestPaintArtifact::RectDrawing(const FloatRect& bounds,
   std::unique_ptr<DummyRectClient> client =
       WTF::MakeUnique<DummyRectClient>(bounds, color);
   display_item_list_.AllocateAndConstruct<DrawingDisplayItem>(
-      *client, DisplayItem::kDrawingFirst, client->MakeRecord(), bounds);
+      *client, DisplayItem::kDrawingFirst, client->MakeRecord());
   dummy_clients_.push_back(std::move(client));
   return *this;
 }

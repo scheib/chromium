@@ -2405,4 +2405,18 @@ TEST_F(WindowTreeClientClientTestHighDPI, InputEventsInDip) {
             window_delegate1.last_event_location());
 }
 
+using WindowTreeClientDestructionTest = test::AuraTestBaseMus;
+
+TEST_F(WindowTreeClientDestructionTest, Shutdown) {
+  // Windows should be able to outlive the WindowTreeClient.
+  aura::Window window(nullptr);
+  window.Init(ui::LAYER_NOT_DRAWN);
+  DeleteWindowTreeClient();
+
+  // And it should be possible to create Windows after the WindowTreeClient has
+  // been deleted.
+  aura::Window window2(nullptr);
+  window2.Init(ui::LAYER_NOT_DRAWN);
+}
+
 }  // namespace aura

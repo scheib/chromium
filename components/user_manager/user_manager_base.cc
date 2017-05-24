@@ -374,9 +374,8 @@ void UserManagerBase::SaveUserOAuthStatus(
   {
     DictionaryPrefUpdate oauth_status_update(GetLocalState(),
                                              kUserOAuthTokenStatus);
-    oauth_status_update->SetWithoutPathExpansion(
-        account_id.GetUserEmail(),
-        new base::Value(static_cast<int>(oauth_token_status)));
+    oauth_status_update->SetIntegerWithoutPathExpansion(
+        account_id.GetUserEmail(), static_cast<int>(oauth_token_status));
   }
   GetLocalState()->CommitPendingWrite();
 }
@@ -411,8 +410,8 @@ void UserManagerBase::SaveUserDisplayName(const AccountId& account_id,
     if (!IsUserNonCryptohomeDataEphemeral(account_id)) {
       DictionaryPrefUpdate display_name_update(GetLocalState(),
                                                kUserDisplayName);
-      display_name_update->SetWithoutPathExpansion(
-          account_id.GetUserEmail(), new base::Value(display_name));
+      display_name_update->SetStringWithoutPathExpansion(
+          account_id.GetUserEmail(), display_name);
     }
   }
 }
@@ -441,8 +440,8 @@ void UserManagerBase::SaveUserDisplayEmail(const AccountId& account_id,
     return;
 
   DictionaryPrefUpdate display_email_update(GetLocalState(), kUserDisplayEmail);
-  display_email_update->SetWithoutPathExpansion(account_id.GetUserEmail(),
-                                                new base::Value(display_email));
+  display_email_update->SetStringWithoutPathExpansion(account_id.GetUserEmail(),
+                                                      display_email);
 }
 
 std::string UserManagerBase::GetUserDisplayEmail(
@@ -467,8 +466,8 @@ void UserManagerBase::SaveUserType(const AccountId& account_id,
     return;
 
   DictionaryPrefUpdate user_type_update(GetLocalState(), kUserType);
-  user_type_update->SetWithoutPathExpansion(
-      account_id.GetUserEmail(), new base::Value(static_cast<int>(user_type)));
+  user_type_update->SetIntegerWithoutPathExpansion(account_id.GetUserEmail(),
+                                                   static_cast<int>(user_type));
   GetLocalState()->CommitPendingWrite();
 }
 
@@ -484,8 +483,8 @@ void UserManagerBase::UpdateUserAccountData(
     user->set_given_name(given_name);
     if (!IsUserNonCryptohomeDataEphemeral(account_id)) {
       DictionaryPrefUpdate given_name_update(GetLocalState(), kUserGivenName);
-      given_name_update->SetWithoutPathExpansion(account_id.GetUserEmail(),
-                                                 new base::Value(given_name));
+      given_name_update->SetStringWithoutPathExpansion(
+          account_id.GetUserEmail(), given_name);
     }
   }
 

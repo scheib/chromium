@@ -72,7 +72,6 @@
 #include "net/proxy/proxy_config_service_fixed.h"
 #include "net/proxy/proxy_info.h"
 #include "net/proxy/proxy_resolver.h"
-#include "net/proxy/proxy_resolver_factory.h"
 #include "net/proxy/proxy_server.h"
 #include "net/proxy/proxy_service.h"
 #include "net/socket/client_socket_factory.h"
@@ -378,20 +377,6 @@ std::unique_ptr<HttpNetworkSession> CreateSessionWithThrottler(
 
   return session;
 }
-
-class FailingProxyResolverFactory : public ProxyResolverFactory {
- public:
-  FailingProxyResolverFactory() : ProxyResolverFactory(false) {}
-
-  // ProxyResolverFactory override.
-  int CreateProxyResolver(
-      const scoped_refptr<ProxyResolverScriptData>& script_data,
-      std::unique_ptr<ProxyResolver>* result,
-      const CompletionCallback& callback,
-      std::unique_ptr<Request>* request) override {
-    return ERR_PAC_SCRIPT_FAILED;
-  }
-};
 
 }  // namespace
 
@@ -10101,9 +10086,8 @@ TEST_F(HttpNetworkTransactionTest, HonorAlternativeServiceHeader) {
   url::SchemeHostPort test_server(request.url);
   HttpServerProperties* http_server_properties =
       session->http_server_properties();
-  AlternativeServiceVector alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  EXPECT_TRUE(alternative_service_vector.empty());
+  EXPECT_TRUE(
+      http_server_properties->GetAlternativeServiceInfos(test_server).empty());
 
   EXPECT_THAT(callback.WaitForResult(), IsOk());
 
@@ -10118,12 +10102,12 @@ TEST_F(HttpNetworkTransactionTest, HonorAlternativeServiceHeader) {
   ASSERT_THAT(ReadTransaction(&trans, &response_data), IsOk());
   EXPECT_EQ("hello world", response_data);
 
-  alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  ASSERT_EQ(1u, alternative_service_vector.size());
-  EXPECT_EQ(kProtoHTTP2, alternative_service_vector[0].protocol);
-  EXPECT_EQ("mail.example.org", alternative_service_vector[0].host);
-  EXPECT_EQ(443, alternative_service_vector[0].port);
+  AlternativeServiceInfoVector alternative_service_info_vector =
+      http_server_properties->GetAlternativeServiceInfos(test_server);
+  ASSERT_EQ(1u, alternative_service_info_vector.size());
+  AlternativeService alternative_service(kProtoHTTP2, "mail.example.org", 443);
+  EXPECT_EQ(alternative_service,
+            alternative_service_info_vector[0].alternative_service);
 }
 
 // Regression test for https://crbug.com/615497.
@@ -10153,9 +10137,8 @@ TEST_F(HttpNetworkTransactionTest,
   url::SchemeHostPort test_server(request.url);
   HttpServerProperties* http_server_properties =
       session->http_server_properties();
-  AlternativeServiceVector alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  EXPECT_TRUE(alternative_service_vector.empty());
+  EXPECT_TRUE(
+      http_server_properties->GetAlternativeServiceInfos(test_server).empty());
 
   int rv = trans.Start(&request, callback.callback(), NetLogWithSource());
   EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
@@ -10172,9 +10155,8 @@ TEST_F(HttpNetworkTransactionTest,
   ASSERT_THAT(ReadTransaction(&trans, &response_data), IsOk());
   EXPECT_EQ("hello world", response_data);
 
-  alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  EXPECT_TRUE(alternative_service_vector.empty());
+  EXPECT_TRUE(
+      http_server_properties->GetAlternativeServiceInfos(test_server).empty());
 }
 
 // HTTP/2 Alternative Services should be disabled by default.
@@ -10271,9 +10253,9 @@ TEST_F(HttpNetworkTransactionTest, ClearAlternativeServices) {
   base::Time expiration = base::Time::Now() + base::TimeDelta::FromDays(1);
   http_server_properties->SetAlternativeService(
       test_server, alternative_service, expiration);
-  AlternativeServiceVector alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  EXPECT_EQ(1u, alternative_service_vector.size());
+  EXPECT_EQ(
+      1u,
+      http_server_properties->GetAlternativeServiceInfos(test_server).size());
 
   // Send a clear header.
   MockRead data_reads[] = {
@@ -10311,9 +10293,8 @@ TEST_F(HttpNetworkTransactionTest, ClearAlternativeServices) {
   ASSERT_THAT(ReadTransaction(&trans, &response_data), IsOk());
   EXPECT_EQ("hello world", response_data);
 
-  alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  EXPECT_TRUE(alternative_service_vector.empty());
+  EXPECT_TRUE(
+      http_server_properties->GetAlternativeServiceInfos(test_server).empty());
 }
 
 TEST_F(HttpNetworkTransactionTest, HonorMultipleAlternativeServiceHeaders) {
@@ -10346,9 +10327,8 @@ TEST_F(HttpNetworkTransactionTest, HonorMultipleAlternativeServiceHeaders) {
   url::SchemeHostPort test_server("https", "www.example.org", 443);
   HttpServerProperties* http_server_properties =
       session->http_server_properties();
-  AlternativeServiceVector alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  EXPECT_TRUE(alternative_service_vector.empty());
+  EXPECT_TRUE(
+      http_server_properties->GetAlternativeServiceInfos(test_server).empty());
 
   EXPECT_THAT(callback.WaitForResult(), IsOk());
 
@@ -10363,15 +10343,17 @@ TEST_F(HttpNetworkTransactionTest, HonorMultipleAlternativeServiceHeaders) {
   ASSERT_THAT(ReadTransaction(&trans, &response_data), IsOk());
   EXPECT_EQ("hello world", response_data);
 
-  alternative_service_vector =
-      http_server_properties->GetAlternativeServices(test_server);
-  ASSERT_EQ(2u, alternative_service_vector.size());
-  EXPECT_EQ(kProtoHTTP2, alternative_service_vector[0].protocol);
-  EXPECT_EQ("www.example.com", alternative_service_vector[0].host);
-  EXPECT_EQ(443, alternative_service_vector[0].port);
-  EXPECT_EQ(kProtoHTTP2, alternative_service_vector[1].protocol);
-  EXPECT_EQ("www.example.org", alternative_service_vector[1].host);
-  EXPECT_EQ(1234, alternative_service_vector[1].port);
+  AlternativeServiceInfoVector alternative_service_info_vector =
+      http_server_properties->GetAlternativeServiceInfos(test_server);
+  ASSERT_EQ(2u, alternative_service_info_vector.size());
+
+  AlternativeService alternative_service(kProtoHTTP2, "www.example.com", 443);
+  EXPECT_EQ(alternative_service,
+            alternative_service_info_vector[0].alternative_service);
+  AlternativeService alternative_service_2(kProtoHTTP2, "www.example.org",
+                                           1234);
+  EXPECT_EQ(alternative_service_2,
+            alternative_service_info_vector[1].alternative_service);
 }
 
 TEST_F(HttpNetworkTransactionTest, IdentifyQuicBroken) {
@@ -10486,9 +10468,8 @@ TEST_F(HttpNetworkTransactionTest, IdentifyQuicNotBroken) {
 
   // Mark one of the QUIC alternative service as broken.
   http_server_properties->MarkAlternativeServiceBroken(alternative_service1);
-
-  const AlternativeServiceVector alternative_service_vector =
-      http_server_properties->GetAlternativeServices(server);
+  EXPECT_EQ(2u,
+            http_server_properties->GetAlternativeServiceInfos(server).size());
 
   HttpRequestInfo request;
   HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
@@ -10555,12 +10536,13 @@ TEST_F(HttpNetworkTransactionTest, MarkBrokenAlternateProtocolAndFallback) {
   ASSERT_THAT(ReadTransaction(&trans, &response_data), IsOk());
   EXPECT_EQ("hello world", response_data);
 
-  const AlternativeServiceVector alternative_service_vector =
-      http_server_properties->GetAlternativeServices(server);
-  ASSERT_EQ(1u, alternative_service_vector.size());
-  EXPECT_EQ(alternative_service, alternative_service_vector[0]);
-  EXPECT_TRUE(http_server_properties->IsAlternativeServiceBroken(
-      alternative_service_vector[0]));
+  const AlternativeServiceInfoVector alternative_service_info_vector =
+      http_server_properties->GetAlternativeServiceInfos(server);
+  ASSERT_EQ(1u, alternative_service_info_vector.size());
+  EXPECT_EQ(alternative_service,
+            alternative_service_info_vector[0].alternative_service);
+  EXPECT_TRUE(
+      http_server_properties->IsAlternativeServiceBroken(alternative_service));
 }
 
 // Ensure that we are not allowed to redirect traffic via an alternate protocol
@@ -15413,19 +15395,12 @@ class FakeWebSocketBasicHandshakeStream : public WebSocketHandshakeStreamBase {
 class FakeWebSocketStreamCreateHelper :
       public WebSocketHandshakeStreamBase::CreateHelper {
  public:
-  WebSocketHandshakeStreamBase* CreateBasicStream(
+  std::unique_ptr<WebSocketHandshakeStreamBase> CreateBasicStream(
       std::unique_ptr<ClientSocketHandle> connection,
       bool using_proxy) override {
-    return new FakeWebSocketBasicHandshakeStream(std::move(connection),
-                                                 using_proxy);
+    return base::MakeUnique<FakeWebSocketBasicHandshakeStream>(
+        std::move(connection), using_proxy);
   }
-
-  WebSocketHandshakeStreamBase* CreateSpdyStream(
-      const base::WeakPtr<SpdySession>& session,
-      bool use_relative_url) override {
-    NOTREACHED();
-    return NULL;
-  };
 
   ~FakeWebSocketStreamCreateHelper() override {}
 
@@ -16884,75 +16859,6 @@ TEST_F(HttpNetworkTransactionTest, MatchContentEncoding3) {
 TEST_F(HttpNetworkTransactionTest, MatchContentEncoding4) {
   CheckContentEncodingMatching(&session_deps_, "identity;q=1, *;q=0", "gzip",
                                "www.foo.com/other", true);
-}
-
-TEST_F(HttpNetworkTransactionTest, ProxyResolutionFailsSync) {
-  ProxyConfig proxy_config;
-  proxy_config.set_pac_url(GURL("http://fooproxyurl"));
-  proxy_config.set_pac_mandatory(true);
-  MockAsyncProxyResolver resolver;
-  session_deps_.proxy_service.reset(new ProxyService(
-      base::MakeUnique<ProxyConfigServiceFixed>(proxy_config),
-      base::WrapUnique(new FailingProxyResolverFactory), nullptr));
-
-  HttpRequestInfo request;
-  request.method = "GET";
-  request.url = GURL("http://www.example.org/");
-
-  std::unique_ptr<HttpNetworkSession> session(CreateSession(&session_deps_));
-  HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
-
-  TestCompletionCallback callback;
-
-  int rv = trans.Start(&request, callback.callback(), NetLogWithSource());
-  EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
-  EXPECT_THAT(callback.WaitForResult(),
-              IsError(ERR_MANDATORY_PROXY_CONFIGURATION_FAILED));
-}
-
-TEST_F(HttpNetworkTransactionTest, ProxyResolutionFailsAsync) {
-  ProxyConfig proxy_config;
-  proxy_config.set_pac_url(GURL("http://fooproxyurl"));
-  proxy_config.set_pac_mandatory(true);
-  MockAsyncProxyResolverFactory* proxy_resolver_factory =
-      new MockAsyncProxyResolverFactory(false);
-  MockAsyncProxyResolver resolver;
-  session_deps_.proxy_service.reset(
-      new ProxyService(base::MakeUnique<ProxyConfigServiceFixed>(proxy_config),
-                       base::WrapUnique(proxy_resolver_factory), nullptr));
-  HttpRequestInfo request;
-  request.method = "GET";
-  request.url = GURL("http://www.example.org/");
-
-  std::unique_ptr<HttpNetworkSession> session(CreateSession(&session_deps_));
-  HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
-
-  TestCompletionCallback callback;
-  int rv = trans.Start(&request, callback.callback(), NetLogWithSource());
-  EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
-
-  proxy_resolver_factory->pending_requests()[0]->CompleteNowWithForwarder(
-      ERR_FAILED, &resolver);
-  EXPECT_THAT(callback.WaitForResult(),
-              IsError(ERR_MANDATORY_PROXY_CONFIGURATION_FAILED));
-}
-
-TEST_F(HttpNetworkTransactionTest, NoSupportedProxies) {
-  session_deps_.proxy_service =
-      ProxyService::CreateFixedFromPacResult("QUIC myproxy.org:443");
-  session_deps_.enable_quic = false;
-  std::unique_ptr<HttpNetworkSession> session(CreateSession(&session_deps_));
-
-  HttpRequestInfo request;
-  request.method = "GET";
-  request.url = GURL("http://www.example.org/");
-
-  TestCompletionCallback callback;
-  HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
-  int rv = trans.Start(&request, callback.callback(), NetLogWithSource());
-  EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
-
-  EXPECT_THAT(callback.WaitForResult(), IsError(ERR_NO_SUPPORTED_PROXIES));
 }
 
 }  // namespace net

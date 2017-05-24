@@ -19,16 +19,16 @@ if (!window.internals) {
 } else {
     window.internals.addTextMatchMarker(range, 'kInactive');
 
-    window.internals.setMarkersActive(elt, 0, 1, true);
+    window.internals.setTextMatchMarkersActive(elt, 0, 1, true);
     shouldBe('window.internals.activeMarkerCountForNode(elt)', '0');
 
-    window.internals.setMarkersActive(elt, 1, 2, true);
+    window.internals.setTextMatchMarkersActive(elt, 1, 2, true);
     shouldBe('window.internals.activeMarkerCountForNode(elt)', '1');
 
-    window.internals.setMarkersActive(elt, 2, 3, false);
+    window.internals.setTextMatchMarkersActive(elt, 2, 3, false);
     shouldBe('window.internals.activeMarkerCountForNode(elt)', '0');
 
-    window.internals.setMarkersActive(elt, 3, 4, true);
+    window.internals.setTextMatchMarkersActive(elt, 3, 4, true);
     shouldBe('window.internals.activeMarkerCountForNode(elt)', '0');
 }
 

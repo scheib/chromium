@@ -57,8 +57,8 @@ class MediaInitializer {
   }
 #endif  // defined(OS_ANDROID)
 
-  void enable_new_vp9_codec_string_support() {
-    has_new_vp9_codec_string_support_ = true;
+  void enable_new_vp9_codec_string_support(bool enable) {
+    has_new_vp9_codec_string_support_ = enable;
   }
 
   bool has_new_vp9_codec_string_support() {
@@ -101,7 +101,11 @@ bool PlatformHasOpusSupport() {
 #endif  // defined(OS_ANDROID)
 
 void EnableNewVp9CodecStringSupport() {
-  GetMediaInstance()->enable_new_vp9_codec_string_support();
+  GetMediaInstance()->enable_new_vp9_codec_string_support(true);
+}
+
+void DisableNewVp9CodecStringSupport_ForTesting() {
+  GetMediaInstance()->enable_new_vp9_codec_string_support(false);
 }
 
 bool HasNewVp9CodecStringSupport() {

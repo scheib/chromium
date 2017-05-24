@@ -1,0 +1,25 @@
+# Copyright 2017 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//ui/vector_icons/vector_icons.gni")
+
+aggregate_vector_icons("components_vector_icons") {
+  icon_directory = "."
+
+  icons = [
+    "screen_share.1x.icon",
+    "screen_share.icon",
+  ]
+}
+
+static_library("vector_icons") {
+  sources = get_target_outputs(":components_vector_icons")
+
+  deps = [
+    ":components_vector_icons",
+    "//base",
+    "//skia",
+    "//ui/gfx",
+  ]
+}

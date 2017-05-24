@@ -65,10 +65,6 @@ enum class DialogViewID : int {
   // unique at the scope of the parent row.
   CHECKMARK_VIEW,
 
-  // Used to label the error labels with an offset, which gets added to
-  // the Autofill type value they represent (for tests).
-  ERROR_LABEL_OFFSET,
-
   // The CVC text field in the unmask sheet.
   CVC_PROMPT_TEXT_FIELD,
   CVC_ERROR_LABEL,
@@ -81,6 +77,14 @@ enum class DialogViewID : int {
 
   // The combobox to choose a billing address to associate to a credit card.
   CREDIT_CARD_BILLING_ADDRESS,
+
+  // NOTE: Keep these values last.
+  // Used to offset the IDs of input fields, which gets added to the Autofill
+  // type value they represent.
+  INPUT_FIELD_TYPE_OFFSET,
+  // Used to label the error labels with an offset, which gets added to
+  // the Autofill type value they represent.
+  ERROR_LABEL_OFFSET = INPUT_FIELD_TYPE_OFFSET + autofill::MAX_VALID_FIELD_TYPE,
 };
 
 }  // namespace payments

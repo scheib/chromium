@@ -24,6 +24,7 @@
 #include "base/metrics/persistent_memory_allocator.h"
 #include "base/process/process_handle.h"
 #include "base/stl_util.h"
+#include "base/test/histogram_tester.h"
 #include "base/threading/platform_thread.h"
 #include "components/browser_watcher/stability_data_names.h"
 #include "components/browser_watcher/stability_report_extractor.h"
@@ -47,6 +48,7 @@ using crashpad::CrashReportDatabase;
 using crashpad::Settings;
 using crashpad::UUID;
 using testing::_;
+using testing::DoAll;
 using testing::Return;
 using testing::SetArgPointee;
 
@@ -165,8 +167,7 @@ MATCHER_P(EqualsProto, message, "") {
 class PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest
     : public testing::Test {
  public:
-  void SetUp() override {
-    testing::Test::SetUp();
+  void SetUpTest(bool system_session_clean) {
     // Create a dummy debug file.
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     debug_file_ = temp_dir_.GetPath().AppendASCII("foo-1.pma");
@@ -188,9 +189,12 @@ class PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest
     EXPECT_CALL(database_, GetSettings()).Times(1).WillOnce(Return(nullptr));
 
     // Expect a single collection call.
+    StabilityReport report;
+    report.mutable_system_state()->set_session_state(
+        system_session_clean ? SystemState::CLEAN : SystemState::UNCLEAN);
     EXPECT_CALL(collector_, CollectOneReport(debug_file_, _))
         .Times(1)
-        .WillOnce(Return(SUCCESS));
+        .WillOnce(DoAll(SetArgPointee<1>(report), Return(SUCCESS)));
 
     // Expect the call to write the proto to a minidump. This involves
     // requesting a report from the crashpad database, writing the report, then
@@ -212,8 +216,37 @@ class PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest
         .Times(1)
         .WillOnce(Return(true));
   }
+  void ValidateHistograms(int unclean_cnt, int unclean_system_cnt) {
+    histogram_tester_.ExpectTotalCount(
+        "ActivityTracker.Collect.StabilityFileCount", 1);
+    histogram_tester_.ExpectBucketCount(
+        "ActivityTracker.Collect.StabilityFileCount", 1, 1);
+    histogram_tester_.ExpectTotalCount(
+        "ActivityTracker.Collect.UncleanShutdownCount", 1);
+    histogram_tester_.ExpectBucketCount(
+        "ActivityTracker.Collect.UncleanShutdownCount", unclean_cnt, 1);
+    histogram_tester_.ExpectTotalCount(
+        "ActivityTracker.Collect.UncleanSystemCount", 1);
+    histogram_tester_.ExpectBucketCount(
+        "ActivityTracker.Collect.UncleanSystemCount", unclean_system_cnt, 1);
+  }
+  void CollectReports(bool is_session_clean) {
+    SetUpTest(is_session_clean);
+
+    EXPECT_CALL(database_, FinishedWritingCrashReport(&crashpad_report_, _))
+        .Times(1)
+        .WillOnce(Return(CrashReportDatabase::kNoError));
+
+    // Run the test.
+    int success_cnt = collector_.CollectAndSubmitAllPendingReports(
+        debug_file_.DirName(), debug_file_pattern_, no_excluded_files_,
+        &database_);
+    ASSERT_EQ(1, success_cnt);
+    ASSERT_FALSE(base::PathExists(debug_file_));
+  }
 
  protected:
+  base::HistogramTester histogram_tester_;
   base::ScopedTempDir temp_dir_;
   base::FilePath debug_file_;
   MockCrashReportDatabase database_;
@@ -224,21 +257,25 @@ class PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest
 };
 
 TEST_F(PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest,
-       CollectAndSubmitAllPendingReports) {
-  EXPECT_CALL(database_, FinishedWritingCrashReport(&crashpad_report_, _))
-      .Times(1)
-      .WillOnce(Return(CrashReportDatabase::kNoError));
+       CollectAndSubmitAllPendingReportsCleanSession) {
+  CollectReports(true);
+  int expected_unclean = 1;
+  int expected_system_unclean = 0;
+  ValidateHistograms(expected_unclean, expected_system_unclean);
+}
 
-  // Run the test.
-  int success_cnt = collector_.CollectAndSubmitAllPendingReports(
-      debug_file_.DirName(), debug_file_pattern_, no_excluded_files_,
-      &database_);
-  ASSERT_EQ(1, success_cnt);
-  ASSERT_FALSE(base::PathExists(debug_file_));
+TEST_F(PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest,
+       CollectAndSubmitAllPendingReportsUncleanSession) {
+  CollectReports(false);
+  int expected_unclean = 1;
+  int expected_system_unclean = 1;
+  ValidateHistograms(expected_unclean, expected_system_unclean);
 }
 
 TEST_F(PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest,
        CollectAndSubmitAllPendingReportsStuckFile) {
+  SetUpTest(true);
+
   // Open the stability debug file to prevent its deletion.
   base::ScopedFILE file(base::OpenFile(debug_file_, "w"));
   ASSERT_NE(file.get(), nullptr);
@@ -254,6 +291,10 @@ TEST_F(PostmortemReportCollectorCollectAndSubmitAllPendingReportsTest,
       &database_);
   ASSERT_EQ(0, success_cnt);
   ASSERT_TRUE(base::PathExists(debug_file_));
+
+  int expected_unclean = 0;
+  int expected_system_unclean = 0;
+  ValidateHistograms(expected_unclean, expected_system_unclean);
 }
 
 TEST(PostmortemReportCollectorTest, GetDebugStateFilePaths) {

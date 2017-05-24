@@ -6,13 +6,15 @@
 #define SERVICES_SERVICE_MANAGER_PUBLIC_CPP_BIND_SOURCE_INFO_STRUCT_TRAITS_H_
 
 #include "services/service_manager/public/cpp/bind_source_info.h"
+#include "services/service_manager/public/interfaces/interfaces_export.h"
 #include "services/service_manager/public/interfaces/service.mojom.h"
 
 namespace mojo {
 
 template <>
-struct StructTraits<service_manager::mojom::BindSourceInfo::DataView,
-                    service_manager::BindSourceInfo> {
+struct SERVICE_MANAGER_MOJOM_EXPORT
+    StructTraits<service_manager::mojom::BindSourceInfo::DataView,
+                 service_manager::BindSourceInfo> {
   static const service_manager::Identity& identity(
       const service_manager::BindSourceInfo& source) {
     return source.identity;

@@ -19,6 +19,7 @@ class GURL;
 
 namespace content {
 
+class NavigationHandle;
 class NavigationHandleImpl;
 class RenderFrameHost;
 class TestRenderFrameHost;
@@ -144,6 +145,11 @@ class NavigationSimulator : public WebContentsObserver {
   // Gets the last throttle check result computed by the navigation throttles.
   // It is an error to call this before Start() is called.
   virtual NavigationThrottle::ThrottleCheckResult GetLastThrottleCheckResult();
+
+  // Returns the NavigationHandle associated with the navigation being
+  // simulated. It is an error to call this before Start() or after the
+  // navigation has finished (successfully or not).
+  virtual NavigationHandle* GetNavigationHandle() const;
 
  private:
   // WebContentsObserver:

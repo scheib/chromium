@@ -18,11 +18,6 @@ import org.chromium.base.annotations.UsedByReflection;
  */
 @UsedByReflection("")
 public class WebViewConfig {
-    @UsedByReflection("")
-    public static void disableSafeBrowsing() {
-        AwContentsStatics.setSafeBrowsingEnabled(false);
-    }
-
     /**
      * Starts Safe Browsing initialization. This should only be called once.
      * @param context is the activity context the WebView will be used in.

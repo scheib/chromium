@@ -100,8 +100,8 @@ class CSSChecker(object):
       # Intentionally dumbed down version of CSS 2.1 grammar for class without
       # non-ASCII, escape chars, or whitespace.
       class_reg = re.compile(r"""
-          \.(-?[\w-]+).*  # ., then maybe -, then alpha numeric and -
-          [,{]\s*$        # selectors should end with a , or {
+          (?<!')\.(-?[\w-]+).*  # ., then maybe -, then alpha numeric and -
+          [,{]\s*$              # selectors should end with a , or {
           """,
           re.VERBOSE)
       m = class_reg.search(line)
@@ -115,10 +115,10 @@ class CSSChecker(object):
     def close_brace_on_new_line(line):
       # Ignore single frames in a @keyframe, i.e. 0% { margin: 50px; }
       frame_reg = re.compile(r"""
-          \s*(from|to|\d+%)\s*{   # 50% {
-          \s*[\w-]+:              # rule:
-          (\s*[\w\(\), -]+)+\s*;  # value;
-          \s*}\s*                 # }
+          \s*(from|to|\d+%)\s*{     # 50% {
+          \s*[\w-]+:                # rule:
+          (\s*[\w\(\), -\.]+)+\s*;  # value;
+          \s*}\s*                   # }
           """,
           re.VERBOSE)
       return ('}' in line and re.search(r'[^ }]', line) and
@@ -301,7 +301,7 @@ class CSSChecker(object):
           ^.*(?:^|[^0-9.])              # start/non-number
           (?:\.0|0(?:\.0?               # .0, 0, or 0.0
           |px|em|%|in|cm|mm|pc|pt|ex))  # a length unit
-          (?:\D|$)                      # non-number/end
+          (?!svg|png|jpg)(?:\D|$)       # non-number/end
           (?=[^{}]+?}).*$               # only { rules }
           """,
           re.MULTILINE | re.VERBOSE)

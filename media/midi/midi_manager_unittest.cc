@@ -14,7 +14,6 @@
 #include "base/logging.h"
 #include "base/macros.h"
 #include "base/memory/ptr_util.h"
-#include "base/memory/scoped_vector.h"
 #include "base/message_loop/message_loop.h"
 #include "base/run_loop.h"
 #include "base/system_monitor/system_monitor.h"
@@ -222,11 +221,11 @@ TEST_F(MidiManagerTest, StartMultipleSessions) {
 
 TEST_F(MidiManagerTest, TooManyPendingSessions) {
   // Push as many client requests for starting session as possible.
-  ScopedVector<FakeMidiManagerClient> many_existing_clients;
+  std::vector<std::unique_ptr<FakeMidiManagerClient>> many_existing_clients;
   many_existing_clients.resize(MidiManager::kMaxPendingClientCount);
   for (size_t i = 0; i < MidiManager::kMaxPendingClientCount; ++i) {
-    many_existing_clients[i] = new FakeMidiManagerClient;
-    StartTheNthSession(many_existing_clients[i], i + 1);
+    many_existing_clients[i] = base::MakeUnique<FakeMidiManagerClient>();
+    StartTheNthSession(many_existing_clients[i].get(), i + 1);
   }
   EXPECT_TRUE(manager_->start_initialization_is_called_);
 
@@ -252,7 +251,7 @@ TEST_F(MidiManagerTest, TooManyPendingSessions) {
   // Close all successful sessions in FIFO order.
   size_t sessions = many_existing_clients.size();
   for (size_t i = 0; i < many_existing_clients.size(); ++i, --sessions)
-    EndSession(many_existing_clients[i], sessions, sessions - 1);
+    EndSession(many_existing_clients[i].get(), sessions, sessions - 1);
 }
 
 TEST_F(MidiManagerTest, AbortSession) {

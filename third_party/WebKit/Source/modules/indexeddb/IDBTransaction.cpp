@@ -373,6 +373,7 @@ void IDBTransaction::abort(ExceptionState& exception_state) {
 
 void IDBTransaction::RegisterRequest(IDBRequest* request) {
   DCHECK(request);
+  DCHECK(!request_list_.Contains(request));
   DCHECK_EQ(state_, kActive);
   request_list_.insert(request);
 }

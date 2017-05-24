@@ -162,6 +162,7 @@ GpuVideoDecodeAccelerator::GpuVideoDecodeAccelerator(
     : host_route_id_(host_route_id),
       stub_(stub),
       texture_target_(0),
+      pixel_format_(PIXEL_FORMAT_UNKNOWN),
       textures_per_buffer_(0),
       filter_removed_(base::WaitableEvent::ResetPolicy::MANUAL,
                       base::WaitableEvent::InitialState::NOT_SIGNALED),
@@ -244,6 +245,7 @@ void GpuVideoDecodeAccelerator::ProvidePictureBuffers(
   texture_dimensions_ = dimensions;
   textures_per_buffer_ = textures_per_buffer;
   texture_target_ = texture_target;
+  pixel_format_ = format;
 }
 
 void GpuVideoDecodeAccelerator::DismissPictureBuffer(
@@ -481,7 +483,8 @@ void GpuVideoDecodeAccelerator::OnAssignPictureBuffers(
     }
     textures.push_back(current_textures);
     buffers.push_back(PictureBuffer(buffer_ids[i], texture_dimensions_,
-                                    buffer_texture_ids, service_ids));
+                                    buffer_texture_ids, service_ids,
+                                    texture_target_, pixel_format_));
   }
   {
     DebugAutoLock auto_lock(debug_uncleared_textures_lock_);

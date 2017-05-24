@@ -250,7 +250,7 @@ target(link_target_type, "child") {
     "//third_party/WebKit/public:image_resources",
     "//third_party/WebKit/public:resources",
     "//third_party/ced",
-    "//third_party/zlib:compression_utils",
+    "//third_party/zlib/google:compression_utils",
     "//ui/base",
     "//ui/events/gestures/blink",
     "//ui/gfx",

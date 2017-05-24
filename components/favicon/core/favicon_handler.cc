@@ -16,6 +16,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
 #include "components/favicon/core/favicon_service.h"
+#include "components/favicon/core/features.h"
 #include "components/favicon_base/favicon_util.h"
 #include "components/favicon_base/select_favicon_frames.h"
 #include "skia/ext/image_operations.h"
@@ -24,10 +25,6 @@
 #include "ui/gfx/image/image_util.h"
 
 namespace favicon {
-
-const base::Feature kFaviconsFromWebManifest{"FaviconsFromWebManifest",
-                                             base::FEATURE_DISABLED_BY_DEFAULT};
-
 namespace {
 
 const int kNonTouchLargestIconSize = 192;

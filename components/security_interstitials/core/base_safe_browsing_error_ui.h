@@ -32,15 +32,10 @@ class BaseSafeBrowsingErrorUI {
                           bool is_extended_reporting_enabled,
                           bool is_scout_reporting_enabled,
                           bool is_proceed_anyway_disabled,
-                          bool is_resource_cancellable)
-        : is_main_frame_load_blocked(is_main_frame_load_blocked),
-          is_extended_reporting_opt_in_allowed(
-              is_extended_reporting_opt_in_allowed),
-          is_off_the_record(is_off_the_record),
-          is_extended_reporting_enabled(is_extended_reporting_enabled),
-          is_scout_reporting_enabled(is_scout_reporting_enabled),
-          is_proceed_anyway_disabled(is_proceed_anyway_disabled),
-          is_resource_cancellable(is_resource_cancellable) {}
+                          bool is_resource_cancellable,
+                          const std::string& help_center_article_link);
+
+    SBErrorDisplayOptions(const SBErrorDisplayOptions& other);
 
     // Indicates if this SB interstitial is blocking main frame load.
     bool is_main_frame_load_blocked;
@@ -63,6 +58,10 @@ class BaseSafeBrowsingErrorUI {
     // Indicates if "back to safety" should cancel the pending navigation or
     // navigate back after it's committed.
     bool is_resource_cancellable;
+
+    // The p= query parameter used when visiting the Help Center. If this is
+    // nullptr, then a default value will be used for the SafeBrowsing article.
+    std::string help_center_article_link;
   };
 
   BaseSafeBrowsingErrorUI(
@@ -105,6 +104,10 @@ class BaseSafeBrowsingErrorUI {
     return display_options_.is_resource_cancellable;
   }
 
+  const std::string& get_help_center_article_link() const {
+    return display_options_.help_center_article_link;
+  }
+
   // Checks if we should even show the extended reporting option. We don't show
   // it in incognito mode or if kSafeBrowsingExtendedReportingOptInAllowed
   // preference is disabled.
@@ -123,7 +126,7 @@ class BaseSafeBrowsingErrorUI {
   GURL request_url() const { return request_url_; }
   GURL main_frame_url() const { return main_frame_url_; }
 
-  virtual void PopulateStringsForHTML(
+  virtual void PopulateStringsForHtml(
       base::DictionaryValue* load_time_data) = 0;
   virtual void HandleCommand(SecurityInterstitialCommands command) = 0;
 

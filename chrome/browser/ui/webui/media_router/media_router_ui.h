@@ -152,6 +152,9 @@ class MediaRouterUI : public ConstrainedWebDialogUI,
     return routes_and_cast_modes_;
   }
   const content::WebContents* initiator() const { return initiator_; }
+  const base::Optional<MediaCastMode>& forced_cast_mode() const {
+    return forced_cast_mode_;
+  }
 
   virtual const std::string& GetRouteProviderExtensionId() const;
 
@@ -392,6 +395,9 @@ class MediaRouterUI : public ConstrainedWebDialogUI,
   // The observer for the route controller. Notifies |handler_| of media status
   // updates.
   std::unique_ptr<UIMediaRouteControllerObserver> route_controller_observer_;
+
+  // If set, a cast mode that is required to be shown first.
+  base::Optional<MediaCastMode> forced_cast_mode_;
 
   // NOTE: Weak pointers must be invalidated before all other member variables.
   // Therefore |weak_factory_| must be placed at the end.

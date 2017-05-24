@@ -39,6 +39,20 @@ namespace blink {
 
 class ComputedStyle;
 
+// The LayoutTreeBuilder class uses the DOM tree and CSS style rules as input to
+// form a LayoutObject Tree which is then used for layout computations in a
+// later stage.
+
+// To construct the LayoutObject tree, the LayoutTreeBuilder does the following:
+// 1. Starting at the root of the DOM tree, traverse each visible node.
+//    Visibility is determined by
+//    LayoutTreeBuilderFor{Element,Text}::ShouldCreateLayoutObject() functions.
+// 2. For each visible node, ensure that the style has been resolved (either by
+//    getting the ComputedStyle passed on to the LayoutTreeBuilder or by forcing
+//    style resolution). This is done in LayoutTreeBuilderForElement::Style().
+// 3. Emit visible LayoutObjects with content and their computed styles.
+//    This is dealt with by the
+//    LayoutTreeBuilderFor{Element,Text}::CreateLayoutObject() functions.
 template <typename NodeType>
 class LayoutTreeBuilder {
   STACK_ALLOCATED();

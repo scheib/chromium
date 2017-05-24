@@ -212,9 +212,10 @@ void SearchResultPageView::OnSearchResultContainerResultsChanged() {
 
 gfx::Rect SearchResultPageView::GetPageBoundsForState(
     AppListModel::State state) const {
-  gfx::Rect onscreen_bounds = features::IsAnswerCardEnabled()
-                                  ? GetFullContentsBounds()
-                                  : GetDefaultContentsBounds();
+  gfx::Rect onscreen_bounds =
+      features::IsAnswerCardEnabled() && !features::IsAnswerCardDarkRunEnabled()
+          ? GetFullContentsBounds()
+          : GetDefaultContentsBounds();
   switch (state) {
     case AppListModel::STATE_SEARCH_RESULTS:
       return onscreen_bounds;

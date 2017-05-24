@@ -499,10 +499,6 @@ void ObjectPaintInvalidatorWithContext::InvalidatePaintRectangleWithContext(
   if (rect.IsEmpty())
     return;
 
-  if (context_.forced_subtree_invalidation_flags &
-      PaintInvalidatorContext::kForcedSubtreeNoRasterInvalidation)
-    return;
-
   // If the parent has fully invalidated and its visual rect covers this object
   // on the same backing, skip the invalidation.
   if (ParentFullyInvalidatedOnSameBacking() &&
@@ -527,8 +523,8 @@ ObjectPaintInvalidatorWithContext::ComputePaintInvalidationReason() {
     background_obscuration_changed = true;
   }
 
-  if (context_.forced_subtree_invalidation_flags &
-      PaintInvalidatorContext::kForcedSubtreeFullInvalidation)
+  if (context_.subtree_flags &
+      PaintInvalidatorContext::kSubtreeFullInvalidation)
     return PaintInvalidationReason::kSubtree;
 
   if (object_.ShouldDoFullPaintInvalidation())
@@ -626,6 +622,9 @@ DISABLE_CFI_PERF
 PaintInvalidationReason
 ObjectPaintInvalidatorWithContext::InvalidatePaintWithComputedReason(
     PaintInvalidationReason reason) {
+  DCHECK(!(context_.subtree_flags &
+           PaintInvalidatorContext::kSubtreeNoInvalidation));
+
   // We need to invalidate the selection before checking for whether we are
   // doing a full invalidation.  This is because we need to update the previous
   // selection rect regardless.
@@ -638,8 +637,8 @@ ObjectPaintInvalidatorWithContext::InvalidatePaintWithComputedReason(
       // stay the same) so no rect-based invalidation is issued. See
       // crbug.com/508383 and crbug.com/515977.
       if (!RuntimeEnabledFeatures::slimmingPaintV2Enabled() &&
-          (context_.forced_subtree_invalidation_flags &
-           PaintInvalidatorContext::kForcedSubtreeInvalidationChecking) &&
+          (context_.subtree_flags &
+           PaintInvalidatorContext::kSubtreeInvalidationChecking) &&
           !object_.IsSVGChild()) {
         // For SPv1, we conservatively assume the object changed paint offset
         // except for non-root SVG whose paint offset is always zero.
@@ -648,8 +647,8 @@ ObjectPaintInvalidatorWithContext::InvalidatePaintWithComputedReason(
       }
 
       if (object_.IsSVG() &&
-          (context_.forced_subtree_invalidation_flags &
-           PaintInvalidatorContext::kForcedSubtreeSVGResourceChange)) {
+          (context_.subtree_flags &
+           PaintInvalidatorContext::kSubtreeSVGResourceChange)) {
         reason = PaintInvalidationReason::kSVGResource;
         break;
       }

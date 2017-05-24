@@ -5,6 +5,7 @@
 #include "net/reporting/reporting_service.h"
 
 #include <memory>
+#include <utility>
 
 #include "base/bind.h"
 #include "base/macros.h"

@@ -985,7 +985,7 @@ void TabStripModel::ExecuteContextMenuCommand(
 
     case CommandToggleTabAudioMuted: {
       const std::vector<int>& indices = GetIndicesForCommand(context_index);
-      const bool mute = !chrome::AreAllTabsMuted(*this, indices);
+      const bool mute = WillContextMenuMute(context_index);
       if (mute)
         base::RecordAction(UserMetricsAction("TabContextMenu_MuteTabs"));
       else
@@ -1044,6 +1044,11 @@ std::vector<int> TabStripModel::GetIndicesClosedByCommand(
       indices.push_back(i);
   }
   return indices;
+}
+
+bool TabStripModel::WillContextMenuMute(int index) {
+  std::vector<int> indices = GetIndicesForCommand(index);
+  return !chrome::AreAllTabsMuted(*this, indices);
 }
 
 bool TabStripModel::WillContextMenuPin(int index) {

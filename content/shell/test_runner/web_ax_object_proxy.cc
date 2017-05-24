@@ -92,8 +92,6 @@ std::string RoleToString(blink::WebAXRole role) {
       return result.append("Directory");
     case blink::kWebAXRoleDisclosureTriangle:
       return result.append("DisclosureTriangle");
-    case blink::kWebAXRoleDiv:
-      return result.append("Div");
     case blink::kWebAXRoleDocument:
       return result.append("Document");
     case blink::kWebAXRoleEmbeddedObject:
@@ -106,6 +104,8 @@ std::string RoleToString(blink::WebAXRole role) {
       return result.append("Footer");
     case blink::kWebAXRoleForm:
       return result.append("Form");
+    case blink::kWebAXRoleGenericContainer:
+      return result.append("GenericContainer");
     case blink::kWebAXRoleGrid:
       return result.append("Grid");
     case blink::kWebAXRoleGroup:
@@ -626,6 +626,7 @@ gin::ObjectTemplateBuilder WebAXObjectProxy::GetObjectTemplateBuilder(
       .SetProperty("relevant", &WebAXObjectProxy::Relevant)
       .SetProperty("roleDescription", &WebAXObjectProxy::RoleDescription)
       .SetProperty("sort", &WebAXObjectProxy::Sort)
+      .SetProperty("hierarchicalLevel", &WebAXObjectProxy::HierarchicalLevel)
       .SetProperty("posInSet", &WebAXObjectProxy::PosInSet)
       .SetProperty("setSize", &WebAXObjectProxy::SetSize)
       .SetProperty("clickPointX", &WebAXObjectProxy::ClickPointX)
@@ -1196,6 +1197,11 @@ std::string WebAXObjectProxy::Sort() {
     default:
       return std::string();
   }
+}
+
+int WebAXObjectProxy::HierarchicalLevel() {
+  accessibility_object_.UpdateLayoutAndCheckValidity();
+  return accessibility_object_.HierarchicalLevel();
 }
 
 int WebAXObjectProxy::PosInSet() {

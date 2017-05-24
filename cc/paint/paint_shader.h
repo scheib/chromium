@@ -24,12 +24,12 @@ inline sk_sp<PaintShader> MakePaintShaderImage(sk_sp<const SkImage> image,
 }
 
 inline sk_sp<PaintShader> MakePaintShaderRecord(sk_sp<PaintRecord> record,
-                                                const SkRect& tile,
                                                 SkShader::TileMode tx,
                                                 SkShader::TileMode ty,
-                                                const SkMatrix* local_matrix) {
-  return SkShader::MakePictureShader(ToSkPicture(record, tile), tx, ty,
-                                     local_matrix, nullptr);
+                                                const SkMatrix* local_matrix,
+                                                const SkRect* tile) {
+  return SkShader::MakePictureShader(ToSkPicture(record), tx, ty, local_matrix,
+                                     tile);
 }
 
 }  // namespace cc

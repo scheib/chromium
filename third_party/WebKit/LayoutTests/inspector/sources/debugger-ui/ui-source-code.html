@@ -6,15 +6,28 @@
 
 function test()
 {
-    var MockProject = function() {}
-    MockProject.prototype.requestFileContent = function(uri, callback)
-    {
-        InspectorTest.addResult("Content is requested from SourceCodeProvider.");
-        setTimeout(callback.bind(null, "var x = 0;"), 0);
-    }
-    MockProject.prototype.isServiceProject = function() { return false; };
-    MockProject.prototype.type = function() { return Workspace.projectTypes.Debugger; }
-    MockProject.prototype.url = function() { return "mock://debugger-ui/"; }
+    var MockProject = class extends Workspace.ProjectStore {
+        requestFileContent(uri, callback) {
+            InspectorTest.addResult("Content is requested from SourceCodeProvider.");
+            setTimeout(callback.bind(null, "var x = 0;"), 0);
+        }
+
+        mimeType() {
+            return 'text/javascript';
+        }
+
+        isServiceProject() {
+            return false;
+        }
+
+        type() {
+            return Workspace.projectTypes.Debugger;
+        }
+
+        url() {
+            return "mock://debugger-ui/";
+        }
+    };
 
     InspectorTest.runTestSuite([
         function testUISourceCode(next)
@@ -23,14 +36,14 @@ function test()
             function didRequestContent(callNumber, content)
             {
                 InspectorTest.addResult("Callback " + callNumber + " is invoked.");
-                InspectorTest.assertEquals("text/javascript", Bindings.NetworkProject.uiSourceCodeMimeType(uiSourceCode));
+                InspectorTest.assertEquals("text/javascript", uiSourceCode.mimeType());
                 InspectorTest.assertEquals("var x = 0;", content);
 
                 if (callNumber === 3) {
                     // Check that sourceCodeProvider.requestContent won't be called anymore.
                     uiSourceCode.requestContent().then(function(content)
                     {
-                        InspectorTest.assertEquals("text/javascript", Bindings.NetworkProject.uiSourceCodeMimeType(uiSourceCode));
+                        InspectorTest.assertEquals("text/javascript", uiSourceCode.mimeType());
                         InspectorTest.assertEquals("var x = 0;", content);
                         next();
                     });

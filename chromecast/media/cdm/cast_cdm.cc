@@ -127,7 +127,7 @@ void CastCdm::OnSessionKeysChange(const std::string& session_id,
   logging::LogMessage log_message(__FILE__, __LINE__, logging::LOG_INFO);
   log_message.stream() << "keystatuseschange ";
   int status_count[::media::CdmKeyInformation::KEY_STATUS_MAX] = {0};
-  for (const auto* key_info : keys_info) {
+  for (const auto& key_info : keys_info) {
     status_count[key_info->status]++;
   }
   for (int i = 0; i != ::media::CdmKeyInformation::KEY_STATUS_MAX; ++i) {
@@ -156,10 +156,8 @@ void CastCdm::KeyIdAndKeyPairsToInfo(const ::media::KeyIdAndKeyPairs& keys,
                                      ::media::CdmKeysInfo* keys_info) {
   DCHECK(keys_info);
   for (const std::pair<std::string, std::string>& key : keys) {
-    std::unique_ptr<::media::CdmKeyInformation> cdm_key_information(
-        new ::media::CdmKeyInformation(key.first,
-                                       ::media::CdmKeyInformation::USABLE, 0));
-    keys_info->push_back(cdm_key_information.release());
+    keys_info->push_back(base::MakeUnique<::media::CdmKeyInformation>(
+        key.first, ::media::CdmKeyInformation::USABLE, 0));
   }
 }
 

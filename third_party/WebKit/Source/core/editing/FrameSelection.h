@@ -51,7 +51,6 @@ class LocalFrame;
 class FrameCaret;
 class GranularityStrategy;
 class GraphicsContext;
-class HTMLFormElement;
 class SelectionEditor;
 class LayoutSelection;
 class TextIteratorBehavior;
@@ -128,7 +127,7 @@ class CORE_EXPORT FrameSelection final
       TextAffinity,
       SelectionDirectionalMode = SelectionDirectionalMode::kNonDirectional,
       FrameSelection::SetSelectionOptions = kCloseTyping | kClearTypingStyle);
-  void SelectAll();
+  void SelectAll(EUserTriggered = kNotUserTriggered);
   void Clear();
   bool IsHidden() const;
 
@@ -231,10 +230,10 @@ class CORE_EXPORT FrameSelection final
   String SelectedTextForClipboard() const;
 
   // The bounds are clipped to the viewport as this is what callers expect.
+  // This returns last layouted selection bounds of LayoutSelection rather than
+  // SelectionEditor keeps.
   LayoutRect Bounds() const;
   LayoutRect UnclippedBounds() const;
-
-  HTMLFormElement* CurrentForm() const;
 
   // TODO(tkent): This function has a bug that scrolling doesn't work well in
   // a case of RangeSelection. crbug.com/443061

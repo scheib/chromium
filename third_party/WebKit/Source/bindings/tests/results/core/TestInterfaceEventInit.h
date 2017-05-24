@@ -28,8 +28,8 @@ class CORE_EXPORT TestInterfaceEventInit : public EventInit {
   TestInterfaceEventInit& operator=(const TestInterfaceEventInit&);
 
   bool hasStringMember() const;
-  String stringMember() const;
-  void setStringMember(String);
+  const String& stringMember() const;
+  void setStringMember(const String&);
 
   v8::Local<v8::Value> ToV8Impl(v8::Local<v8::Object>, v8::Isolate*) const override;
   DECLARE_VIRTUAL_TRACE();

@@ -1,7 +1,7 @@
 The inner border radius clip should be respected for hit testing.
 
  
- PASS successfullyParsed is true
+PASS successfullyParsed is true
 
 TEST COMPLETE
 PASS document.elementFromPoint(x + 20, y + 20).id is 'container'

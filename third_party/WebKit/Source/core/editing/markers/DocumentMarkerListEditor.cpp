@@ -11,21 +11,19 @@ namespace blink {
 
 void DocumentMarkerListEditor::AddMarkerWithoutMergingOverlapping(
     MarkerList* list,
-    const DocumentMarker* marker) {
-  RenderedDocumentMarker* rendered_marker =
-      RenderedDocumentMarker::Create(*marker);
+    DocumentMarker* marker) {
   if (list->IsEmpty() || list->back()->EndOffset() <= marker->StartOffset()) {
-    list->push_back(rendered_marker);
+    list->push_back(marker);
     return;
   }
 
   const auto pos = std::lower_bound(
       list->begin(), list->end(), marker,
-      [](const Member<RenderedDocumentMarker>& marker_in_list,
+      [](const Member<DocumentMarker>& marker_in_list,
          const DocumentMarker* marker_to_insert) {
         return marker_in_list->StartOffset() < marker_to_insert->StartOffset();
       });
-  list->insert(pos - list->begin(), rendered_marker);
+  list->insert(pos - list->begin(), marker);
 }
 
 bool DocumentMarkerListEditor::MoveMarkers(MarkerList* src_list,
@@ -65,7 +63,7 @@ bool DocumentMarkerListEditor::RemoveMarkers(MarkerList* list,
   const unsigned end_offset = start_offset + length;
   MarkerList::iterator start_pos = std::upper_bound(
       list->begin(), list->end(), start_offset,
-      [](size_t start_offset, const Member<RenderedDocumentMarker>& marker) {
+      [](size_t start_offset, const Member<DocumentMarker>& marker) {
         return start_offset < marker->EndOffset();
       });
   for (MarkerList::iterator i = start_pos; i != list->end();) {
@@ -89,7 +87,7 @@ bool DocumentMarkerListEditor::ShiftMarkers(MarkerList* list,
                                             unsigned new_length) {
   bool did_shift_marker = false;
   for (MarkerList::iterator it = list->begin(); it != list->end(); ++it) {
-    RenderedDocumentMarker& marker = **it;
+    DocumentMarker& marker = **it;
     Optional<DocumentMarker::MarkerOffsets> result =
         marker.ComputeOffsetsAfterShift(offset, old_length, new_length);
     if (result == WTF::nullopt) {

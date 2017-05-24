@@ -17,6 +17,7 @@
     <structure type="chrome_scaled_image" name="IDR_AUTOFILL_CC_SCAN_NEW" file="autofill/cc-generic.png" />
     <structure type="chrome_scaled_image" name="IDR_AUTOFILL_CC_SCAN_NEW_KEYBOARD_ACCESSORY" file="autofill/cc-generic.png" />
     <structure type="chrome_scaled_image" name="IDR_AUTOFILL_SETTINGS" file="autofill/cc-generic.png" />
+    <structure type="chrome_scaled_image" name="IDR_AUTOFILL_CREATE" file="autofill/cc-generic.png" />
     <structure type="chrome_scaled_image" name="IDR_AUTOFILL_HTTP_WARNING" file="autofill/cc-generic.png" />
     <structure type="chrome_scaled_image" name="IDR_AUTOFILL_HTTPS_INVALID_WARNING" file="autofill/cc-generic.png" />
   </if>

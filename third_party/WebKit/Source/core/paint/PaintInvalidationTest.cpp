@@ -217,7 +217,7 @@ TEST_P(PaintInvalidationTest, SVGHiddenContainer) {
 
   // mask_rect's visual rect is in coordinates of the mask.
   auto* mask_rect = GetLayoutObjectByElementId("mask-rect");
-  EXPECT_EQ(LayoutRect(22, 44, 66, 88), mask_rect->VisualRect());
+  EXPECT_EQ(LayoutRect(), mask_rect->VisualRect());
 
   // real_rect's visual rect is in coordinates of its paint invalidation
   // container (the view).
@@ -227,7 +227,7 @@ TEST_P(PaintInvalidationTest, SVGHiddenContainer) {
   GetDocument().View()->SetTracksPaintInvalidations(true);
   ToElement(mask_rect->GetNode())->setAttribute("x", "20");
   GetDocument().View()->UpdateAllLifecyclePhasesExceptPaint();
-  EXPECT_EQ(LayoutRect(40, 44, 66, 88), mask_rect->VisualRect());
+  EXPECT_EQ(LayoutRect(), mask_rect->VisualRect());
   EXPECT_EQ(LayoutRect(155, 166, 7, 8), real_rect->VisualRect());
 
   // Should invalidate raster for real_rect only.
@@ -239,9 +239,10 @@ TEST_P(PaintInvalidationTest, SVGHiddenContainer) {
   EXPECT_EQ(PaintInvalidationReason::kFull,
             real_rect->GetPaintInvalidationReason());
 
-  // Should still invalidate DisplayItemClient of mask_rect.
-  EXPECT_EQ(PaintInvalidationReason::kFull,
+  // Should not invalidate DisplayItemClient of mask_rect.
+  EXPECT_EQ(PaintInvalidationReason::kNone,
             mask_rect->GetPaintInvalidationReason());
+
   GetDocument().View()->SetTracksPaintInvalidations(false);
 }
 

@@ -53,6 +53,11 @@ bool GetStartTimestamp(
   return true;
 }
 
+void LogCollectionStatus(CollectionStatus status) {
+  UMA_HISTOGRAM_ENUMERATION("ActivityTracker.Collect.Status", status,
+                            COLLECTION_STATUS_MAX);
+}
+
 }  // namespace
 
 PostmortemReportCollector::PostmortemReportCollector(
@@ -91,19 +96,31 @@ int PostmortemReportCollector::CollectAndSubmitAllPendingReports(
     settings->GetClientID(&client_id);
   }
 
+  // Number of unclean shutdowns based on successful collection of stability
+  // reports.
+  int unclean_cnt = 0;
+  // Number of unclean shutdowns that may be attributable to system instability
+  // based on successful collection of stability reports. This number should be
+  // smaller or equal to |unclean_cnt|.
+  int unclean_system_cnt = 0;
+
   // Process each stability file.
-  int success_cnt = 0;
   for (const FilePath& file : debug_files) {
-    CollectionStatus status =
-        CollectAndSubmitOneReport(client_id, file, report_database);
-    // TODO(manzagop): consider making this a stability metric.
-    UMA_HISTOGRAM_ENUMERATION("ActivityTracker.Collect.Status", status,
-                              COLLECTION_STATUS_MAX);
-    if (status == SUCCESS)
-      ++success_cnt;
+    bool system_unclean = false;
+    if (CollectAndSubmitOneReport(client_id, file, report_database,
+                                  &system_unclean)) {
+      ++unclean_cnt;
+      if (system_unclean)
+        ++unclean_system_cnt;
+    }
   }
 
-  return success_cnt;
+  UMA_STABILITY_HISTOGRAM_COUNTS_100(
+      "ActivityTracker.Collect.UncleanShutdownCount", unclean_cnt);
+  UMA_STABILITY_HISTOGRAM_COUNTS_100(
+      "ActivityTracker.Collect.UncleanSystemCount", unclean_system_cnt);
+
+  return unclean_cnt;
 }
 
 std::vector<FilePath> PostmortemReportCollector::GetDebugStateFilePaths(
@@ -125,11 +142,14 @@ std::vector<FilePath> PostmortemReportCollector::GetDebugStateFilePaths(
   return paths;
 }
 
-CollectionStatus PostmortemReportCollector::CollectAndSubmitOneReport(
+bool PostmortemReportCollector::CollectAndSubmitOneReport(
     const crashpad::UUID& client_id,
     const FilePath& file,
-    crashpad::CrashReportDatabase* report_database) {
+    crashpad::CrashReportDatabase* report_database,
+    bool* system_unclean) {
   DCHECK_NE(nullptr, report_database);
+  DCHECK_NE(nullptr, system_unclean);
+  *system_unclean = false;
 
   // Note: the code below involves two notions of report: chrome internal state
   // reports and the crashpad reports they get wrapped into.
@@ -143,7 +163,8 @@ CollectionStatus PostmortemReportCollector::CollectAndSubmitOneReport(
     // logging happens within the Collect function.
     if (!base::DeleteFile(file, false))
       DLOG(ERROR) << "Failed to delete " << file.value();
-    return status;
+    LogCollectionStatus(status);
+    return false;
   }
 
   // Prepare a crashpad report.
@@ -153,7 +174,8 @@ CollectionStatus PostmortemReportCollector::CollectAndSubmitOneReport(
   if (database_status != CrashReportDatabase::kNoError) {
     // Assume this is recoverable: not deleting the file.
     DLOG(ERROR) << "PrepareNewCrashReport failed";
-    return PREPARE_NEW_CRASH_REPORT_FAILED;
+    LogCollectionStatus(PREPARE_NEW_CRASH_REPORT_FAILED);
+    return false;
   }
   CrashReportDatabase::CallErrorWritingCrashReport
       call_error_writing_crash_report(report_database, new_report);
@@ -164,7 +186,8 @@ CollectionStatus PostmortemReportCollector::CollectAndSubmitOneReport(
     // Assume this is not recoverable and delete the file.
     if (!base::DeleteFile(file, false))
       DLOG(ERROR) << "Failed to delete " << file.value();
-    return WRITE_TO_MINIDUMP_FAILED;
+    LogCollectionStatus(WRITE_TO_MINIDUMP_FAILED);
+    return false;
   }
 
   // If the file cannot be deleted, do not report its contents. Note this can
@@ -174,7 +197,8 @@ CollectionStatus PostmortemReportCollector::CollectAndSubmitOneReport(
   // TODO(manzagop): metrics for the number of non-deletable files.
   if (!base::DeleteFile(file, false)) {
     DLOG(ERROR) << "Failed to delete " << file.value();
-    return DEBUG_FILE_DELETION_FAILED;
+    LogCollectionStatus(DEBUG_FILE_DELETION_FAILED);
+    return false;
   }
 
   // Finalize the report wrt the report database. Note that this doesn't trigger
@@ -186,10 +210,15 @@ CollectionStatus PostmortemReportCollector::CollectAndSubmitOneReport(
       new_report, &unused_report_id);
   if (database_status != CrashReportDatabase::kNoError) {
     DLOG(ERROR) << "FinishedWritingCrashReport failed";
-    return FINISHED_WRITING_CRASH_REPORT_FAILED;
+    LogCollectionStatus(FINISHED_WRITING_CRASH_REPORT_FAILED);
+    return false;
   }
 
-  return SUCCESS;
+  // Report collection is successful. We may increment |unclean_system_cnt|.
+  if (report_proto.system_state().session_state() == SystemState::UNCLEAN)
+    *system_unclean = true;
+
+  return true;
 }
 
 CollectionStatus PostmortemReportCollector::CollectOneReport(

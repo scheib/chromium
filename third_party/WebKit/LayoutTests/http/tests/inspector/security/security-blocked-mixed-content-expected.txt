@@ -5,7 +5,7 @@ Tests active mixed content blocking in the security panel.
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Secure Resources
+Secure resources
         </DIV>
         <DIV >
 All resources on this page are served securely.
@@ -32,7 +32,7 @@ View 1 request in Network Panel
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Secure Resources
+Secure resources
         </DIV>
         <DIV >
 All resources on this page are served securely.

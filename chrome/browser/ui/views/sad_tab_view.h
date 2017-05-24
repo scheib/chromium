@@ -53,9 +53,12 @@ class SadTabView : public chrome::SadTab,
  private:
   bool painted_ = false;
   views::Label* message_;
+  std::vector<views::Label*> bullet_labels_;
   views::Link* help_link_;
   views::LabelButton* action_button_;
   views::Label* title_;
+
+  DISALLOW_COPY_AND_ASSIGN(SadTabView);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_SAD_TAB_VIEW_H__

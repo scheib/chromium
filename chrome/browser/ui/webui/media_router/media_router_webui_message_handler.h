@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/macros.h"
+#include "base/optional.h"
 #include "chrome/browser/ui/webui/media_router/media_cast_mode.h"
 #include "chrome/browser/ui/webui/media_router/media_sink_with_cast_modes.h"
 #include "chrome/common/media_router/issue.h"
@@ -44,8 +45,10 @@ class MediaRouterWebUIMessageHandler : public content::WebUIMessageHandler {
                     const std::vector<MediaRoute::Id>& joinable_route_ids,
                     const std::unordered_map<MediaRoute::Id, MediaCastMode>&
                         current_cast_modes);
-  void UpdateCastModes(const CastModeSet& cast_modes,
-                       const std::string& source_host);
+  // Overridden in tests.
+  virtual void UpdateCastModes(const CastModeSet& cast_modes,
+                               const std::string& source_host,
+                               base::Optional<MediaCastMode> forced_cast_mode);
   void OnCreateRouteResponseReceived(const MediaSink::Id& sink_id,
                                      const MediaRoute* route);
   void ReturnSearchResult(const std::string& sink_id);

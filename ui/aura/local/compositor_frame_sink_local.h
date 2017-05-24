@@ -43,6 +43,7 @@ class CompositorFrameSinkLocal : public cc::CompositorFrameSink,
   bool BindToClient(cc::CompositorFrameSinkClient* client) override;
   void DetachFromClient() override;
   void SubmitCompositorFrame(cc::CompositorFrame frame) override;
+  void DidNotProduceFrame(const cc::BeginFrameAck& ack) override;
 
   // cc::CompositorFrameSinkSupportClient:
   void DidReceiveCompositorFrameAck(
@@ -54,7 +55,6 @@ class CompositorFrameSinkLocal : public cc::CompositorFrameSink,
 
   // cc::ExternalBeginFrameSourceClient:
   void OnNeedsBeginFrames(bool needs_begin_frames) override;
-  void OnDidFinishFrame(const cc::BeginFrameAck& ack) override;
 
  private:
   const cc::FrameSinkId frame_sink_id_;

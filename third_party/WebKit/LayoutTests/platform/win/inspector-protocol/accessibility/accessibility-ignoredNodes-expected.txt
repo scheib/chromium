@@ -178,14 +178,14 @@ WebArea
 }
 
 WebArea
-  *Div
+  *GenericContainer
     text "Div in list isn't presentational"
 {
   "nodeId": "<string>",
   "ignored": false,
   "role": {
     "type": "internalRole",
-    "value": "Div"
+    "value": "GenericContainer"
   },
   "name": {
     "type": "computedString",

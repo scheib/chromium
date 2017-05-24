@@ -9,6 +9,7 @@
 #include "base/guid.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/sys_info.h"
 #include "build/build_config.h"
@@ -81,97 +82,87 @@ const char* DownloaderToString(CrxDownloader::DownloadMetrics::Downloader d) {
   }
 }
 
-// Returns a string representing a sequence of download complete events
-// corresponding to each download metrics in |item|.
-std::string BuildDownloadCompleteEventElements(const Component& component) {
+}  // namespace
+
+std::string BuildDownloadCompleteEventElement(
+    const CrxDownloader::DownloadMetrics& metrics) {
   using base::StringAppendF;
-  std::string download_events;
-  for (const auto& metrics : component.download_metrics()) {
-    std::string event("<event eventtype=\"14\"");
-    StringAppendF(&event, " eventresult=\"%d\"", metrics.error == 0);
-    StringAppendF(&event, " downloader=\"%s\"",
-                  DownloaderToString(metrics.downloader));
-    if (metrics.error) {
-      StringAppendF(&event, " errorcode=\"%d\"", metrics.error);
-    }
-    StringAppendF(&event, " url=\"%s\"", metrics.url.spec().c_str());
 
-    // -1 means that the  byte counts are not known.
-    if (metrics.downloaded_bytes != -1) {
-      StringAppendF(&event, " downloaded=\"%s\"",
-                    base::Int64ToString(metrics.downloaded_bytes).c_str());
-    }
-    if (metrics.total_bytes != -1) {
-      StringAppendF(&event, " total=\"%s\"",
-                    base::Int64ToString(metrics.total_bytes).c_str());
-    }
-
-    if (metrics.download_time_ms) {
-      StringAppendF(&event, " download_time_ms=\"%s\"",
-                    base::Uint64ToString(metrics.download_time_ms).c_str());
-    }
-    StringAppendF(&event, "/>");
-
-    download_events += event;
+  std::string event("<event eventtype=\"14\"");
+  StringAppendF(&event, " eventresult=\"%d\"", metrics.error == 0);
+  StringAppendF(&event, " downloader=\"%s\"",
+                DownloaderToString(metrics.downloader));
+  if (metrics.error) {
+    StringAppendF(&event, " errorcode=\"%d\"", metrics.error);
   }
-  return download_events;
+  StringAppendF(&event, " url=\"%s\"", metrics.url.spec().c_str());
+
+  // -1 means that the  byte counts are not known.
+  if (metrics.downloaded_bytes != -1) {
+    StringAppendF(&event, " downloaded=\"%s\"",
+                  base::Int64ToString(metrics.downloaded_bytes).c_str());
+  }
+  if (metrics.total_bytes != -1) {
+    StringAppendF(&event, " total=\"%s\"",
+                  base::Int64ToString(metrics.total_bytes).c_str());
+  }
+
+  if (metrics.download_time_ms) {
+    StringAppendF(&event, " download_time_ms=\"%s\"",
+                  base::Uint64ToString(metrics.download_time_ms).c_str());
+  }
+  StringAppendF(&event, "/>");
+  return event;
 }
 
-// Returns a string representing one ping event for the update of a component.
-// The event type for this ping event is 3.
 std::string BuildUpdateCompleteEventElement(const Component& component) {
   DCHECK(component.state() == ComponentState::kUpdateError ||
          component.state() == ComponentState::kUpdated);
 
   using base::StringAppendF;
 
-  std::string ping_event("<event eventtype=\"3\"");
+  std::string event("<event eventtype=\"3\"");
   const int event_result = component.state() == ComponentState::kUpdated;
-  StringAppendF(&ping_event, " eventresult=\"%d\"", event_result);
+  StringAppendF(&event, " eventresult=\"%d\"", event_result);
   if (component.error_category())
-    StringAppendF(&ping_event, " errorcat=\"%d\"", component.error_category());
+    StringAppendF(&event, " errorcat=\"%d\"", component.error_category());
   if (component.error_code())
-    StringAppendF(&ping_event, " errorcode=\"%d\"", component.error_code());
+    StringAppendF(&event, " errorcode=\"%d\"", component.error_code());
   if (component.extra_code1())
-    StringAppendF(&ping_event, " extracode1=\"%d\"", component.extra_code1());
+    StringAppendF(&event, " extracode1=\"%d\"", component.extra_code1());
   if (HasDiffUpdate(component))
-    StringAppendF(&ping_event, " diffresult=\"%d\"",
+    StringAppendF(&event, " diffresult=\"%d\"",
                   !component.diff_update_failed());
   if (component.diff_error_category()) {
-    StringAppendF(&ping_event, " differrorcat=\"%d\"",
+    StringAppendF(&event, " differrorcat=\"%d\"",
                   component.diff_error_category());
   }
   if (component.diff_error_code())
-    StringAppendF(&ping_event, " differrorcode=\"%d\"",
-                  component.diff_error_code());
+    StringAppendF(&event, " differrorcode=\"%d\"", component.diff_error_code());
   if (component.diff_extra_code1()) {
-    StringAppendF(&ping_event, " diffextracode1=\"%d\"",
+    StringAppendF(&event, " diffextracode1=\"%d\"",
                   component.diff_extra_code1());
   }
   if (!component.previous_fp().empty())
-    StringAppendF(&ping_event, " previousfp=\"%s\"",
+    StringAppendF(&event, " previousfp=\"%s\"",
                   component.previous_fp().c_str());
   if (!component.next_fp().empty())
-    StringAppendF(&ping_event, " nextfp=\"%s\"", component.next_fp().c_str());
-  StringAppendF(&ping_event, "/>");
-  return ping_event;
+    StringAppendF(&event, " nextfp=\"%s\"", component.next_fp().c_str());
+  StringAppendF(&event, "/>");
+  return event;
 }
 
-// Returns a string representing one ping event for the uninstall of a
-// component. The event type for this ping event is 4.
 std::string BuildUninstalledEventElement(const Component& component) {
   DCHECK(component.state() == ComponentState::kUninstalled);
 
   using base::StringAppendF;
 
-  std::string ping_event("<event eventtype=\"4\" eventresult=\"1\"");
+  std::string event("<event eventtype=\"4\" eventresult=\"1\"");
   if (component.extra_code1())
-    StringAppendF(&ping_event, " extracode1=\"%d\"", component.extra_code1());
-  StringAppendF(&ping_event, "/>");
-  return ping_event;
+    StringAppendF(&event, " extracode1=\"%d\"", component.extra_code1());
+  StringAppendF(&event, "/>");
+  return event;
 }
-
-}  // namespace
 
 std::string BuildProtocolRequest(
     const std::string& prod_id,
@@ -336,34 +327,21 @@ std::string BuildUpdateCheckRequest(
 
 std::string BuildEventPingRequest(const Configurator& config,
                                   const Component& component) {
+  DCHECK(component.state() == ComponentState::kUpdateError ||
+         component.state() == ComponentState::kUpdated ||
+         component.state() == ComponentState::kUninstalled);
+
   const char app_element_format[] =
       "<app appid=\"%s\" version=\"%s\" nextversion=\"%s\">"
       "%s"
-      "%s"
       "</app>";
-
-  std::string ping_event;
-  switch (component.state()) {
-    case ComponentState::kUpdateError:  // Fall through.
-    case ComponentState::kUpdated:
-      ping_event = BuildUpdateCompleteEventElement(component);
-      break;
-    case ComponentState::kUninstalled:
-      ping_event = BuildUninstalledEventElement(component);
-      break;
-    default:
-      NOTREACHED();
-      break;
-  }
 
   const std::string app_element(base::StringPrintf(
       app_element_format,
-      component.id().c_str(),                            // "appid"
-      component.previous_version().GetString().c_str(),  // "version"
-      component.next_version().GetString().c_str(),      // "nextversion"
-      ping_event.c_str(),                                // ping event
-      BuildDownloadCompleteEventElements(component)
-          .c_str()));  // download events
+      component.id().c_str(),                              // "appid"
+      component.previous_version().GetString().c_str(),    // "version"
+      component.next_version().GetString().c_str(),        // "nextversion"
+      base::JoinString(component.events(), "").c_str()));  // events
 
   // The ping request does not include any updater state.
   return BuildProtocolRequest(

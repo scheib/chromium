@@ -189,17 +189,34 @@ ChooserBubbleUi::ChooserBubbleUi(
       std::move(chooser_controller));
 }
 
-ChooserBubbleUi::~ChooserBubbleUi() {}
+ChooserBubbleUi::~ChooserBubbleUi() {
+  if (chooser_bubble_ui_view_delegate_ &&
+      chooser_bubble_ui_view_delegate_->GetWidget()) {
+    chooser_bubble_ui_view_delegate_->GetWidget()->RemoveObserver(this);
+  }
+}
 
 void ChooserBubbleUi::Show(BubbleReference bubble_reference) {
   chooser_bubble_ui_view_delegate_->set_bubble_reference(bubble_reference);
   CreateAndShow(chooser_bubble_ui_view_delegate_);
+  chooser_bubble_ui_view_delegate_->GetWidget()->AddObserver(this);
   chooser_bubble_ui_view_delegate_->UpdateTableView();
 }
 
-void ChooserBubbleUi::Close() {}
+void ChooserBubbleUi::Close() {
+  if (chooser_bubble_ui_view_delegate_ &&
+      !chooser_bubble_ui_view_delegate_->GetWidget()->IsClosed()) {
+    chooser_bubble_ui_view_delegate_->GetWidget()->Close();
+  }
+}
 
 void ChooserBubbleUi::UpdateAnchorPosition() {
+  DCHECK(chooser_bubble_ui_view_delegate_);
   chooser_bubble_ui_view_delegate_->UpdateAnchor(GetAnchorView(),
                                                  GetAnchorArrow());
+}
+
+void ChooserBubbleUi::OnWidgetClosing(views::Widget* widget) {
+  widget->RemoveObserver(this);
+  chooser_bubble_ui_view_delegate_ = nullptr;
 }

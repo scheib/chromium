@@ -353,9 +353,11 @@ void SelectionController::UpdateSelectionForMouseDrag(
   frame_->GetDocument()->UpdateStyleAndLayoutIgnorePendingStylesheets();
 
   const PositionWithAffinity& raw_target_position =
-      PositionRespectingEditingBoundary(
-          Selection().ComputeVisibleSelectionInDOMTree().Start(),
-          hit_test_result.LocalPoint(), target);
+      Selection().SelectionHasFocus()
+          ? PositionRespectingEditingBoundary(
+                Selection().ComputeVisibleSelectionInDOMTree().Start(),
+                hit_test_result.LocalPoint(), target)
+          : PositionWithAffinity();
   VisiblePositionInFlatTree target_position = CreateVisiblePosition(
       FromPositionInDOMTree<EditingInFlatTreeStrategy>(raw_target_position));
   // Don't modify the selection if we're not on a node.

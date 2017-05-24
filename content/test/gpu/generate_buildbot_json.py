@@ -649,21 +649,6 @@ FYI_WATERFALL = {
       'swarming': False,
       'os_type': 'android',
     },
-    'Android Release (Pixel C)': {
-      'swarming_dimensions': [
-        {
-          # There are no PCI IDs on Android.
-          # This is a hack to get the script working.
-          'gpu': '0000:0000',
-          'os': 'Android'
-        },
-      ],
-      'build_config': 'android-chromium',
-      # This bot is a one-off and doesn't have similar slaves in the
-      # swarming pool.
-      'swarming': False,
-      'os_type': 'android',
-    },
     'Android Release (NVIDIA Shield TV)': {
       'swarming_dimensions': [
         {
@@ -1332,10 +1317,6 @@ COMMON_GTESTS = {
     'disabled_tester_configs': [
       {
         'names': [
-          # TODO(kbr): investigate inability to recognize this
-          # configuration in the various tests. crbug.com/624621
-          'Android Release (Pixel C)',
-
           'Linux ChromiumOS Ozone (Intel)',
         ],
       },

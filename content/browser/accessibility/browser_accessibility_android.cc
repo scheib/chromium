@@ -550,9 +550,6 @@ base::string16 BrowserAccessibilityAndroid::GetRoleDescription() const {
     case ui::AX_ROLE_DISCLOSURE_TRIANGLE:
       message_id = IDS_AX_ROLE_DISCLOSURE_TRIANGLE;
       break;
-    case ui::AX_ROLE_DIV:
-      // No role description.
-      break;
     case ui::AX_ROLE_DOCUMENT:
       message_id = IDS_AX_ROLE_DOCUMENT;
       break;
@@ -572,6 +569,9 @@ base::string16 BrowserAccessibilityAndroid::GetRoleDescription() const {
       message_id = IDS_AX_ROLE_FOOTER;
       break;
     case ui::AX_ROLE_FORM:
+      // No role description.
+      break;
+    case ui::AX_ROLE_GENERIC_CONTAINER:
       // No role description.
       break;
     case ui::AX_ROLE_GRID:

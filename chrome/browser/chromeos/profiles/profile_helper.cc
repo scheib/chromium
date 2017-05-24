@@ -475,6 +475,10 @@ std::string ProfileHelper::GetUserIdHashByUserIdForTesting(
   return user_id + kUserIdHashSuffix;
 }
 
+void ProfileHelper::SetActiveUserIdForTesting(const std::string& user_id) {
+  active_user_id_hash_ = GetUserIdHashByUserIdForTesting(user_id);
+}
+
 void ProfileHelper::FlushProfile(Profile* profile) {
   if (!profile_flusher_)
     profile_flusher_.reset(new FileFlusher);

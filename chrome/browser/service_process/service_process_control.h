@@ -17,6 +17,7 @@
 #include "base/cancelable_callback.h"
 #include "base/id_map.h"
 #include "base/memory/singleton.h"
+#include "base/memory/weak_ptr.h"
 #include "base/process/process.h"
 #include "build/build_config.h"
 #include "content/public/browser/notification_observer.h"
@@ -32,6 +33,12 @@ class CommandLine;
 namespace cloud_print {
 struct CloudPrintProxyInfo;
 }  // namespace cloud_print
+
+namespace mojo {
+namespace edk {
+class PeerConnection;
+}
+}
 
 // A ServiceProcessControl works as a portal between the service process and
 // the browser process.
@@ -200,10 +207,16 @@ class ServiceProcessControl : public IPC::Sender,
   // Used internally to connect to the service process.
   void ConnectInternal();
 
+  // Called when ConnectInternal's async work is done.
+  void OnPeerConnectionComplete(
+      std::unique_ptr<mojo::edk::PeerConnection> connection);
+
   // Takes ownership of the pointer. Split out for testing.
   void SetChannel(std::unique_ptr<IPC::ChannelProxy> channel);
 
   static void RunAllTasksHelper(TaskList* task_list);
+
+  std::unique_ptr<mojo::edk::PeerConnection> peer_connection_;
 
   // IPC channel to the service process.
   std::unique_ptr<IPC::ChannelProxy> channel_;
@@ -232,6 +245,8 @@ class ServiceProcessControl : public IPC::Sender,
 
   // Callback that gets invoked if service didn't reply in time.
   base::CancelableClosure histograms_timeout_callback_;
+
+  base::WeakPtrFactory<ServiceProcessControl> weak_factory_;
 };
 
 #endif  // CHROME_BROWSER_SERVICE_PROCESS_SERVICE_PROCESS_CONTROL_H_

@@ -11,6 +11,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/profile_oauth2_token_service_factory.h"
 #include "chrome/browser/signin/signin_manager_factory.h"
+#include "chrome/browser/ui/views/autofill/view_util.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "chrome/browser/ui/views/payments/payment_request_views_util.h"
@@ -18,6 +19,7 @@
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/credit_card.h"
 #include "components/autofill/core/browser/payments/full_card_request.h"
+#include "components/autofill/core/browser/validation.h"
 #include "components/grit/components_scaled_resources.h"
 #include "components/payments/content/payment_request_state.h"
 #include "components/payments/core/payment_request_delegate.h"
@@ -190,7 +192,8 @@ void CvcUnmaskViewController::FillContentView(views::View* content_view) {
   layout->AddView(cvc_image.release());
 
   std::unique_ptr<views::Textfield> cvc_field =
-      base::MakeUnique<views::Textfield>();
+      std::unique_ptr<views::Textfield>(autofill::CreateCvcTextfield());
+  cvc_field->set_controller(this);
   cvc_field->set_id(static_cast<int>(DialogViewID::CVC_PROMPT_TEXT_FIELD));
   cvc_field_ = cvc_field.get();
   layout->AddView(cvc_field.release());
@@ -216,6 +219,7 @@ std::unique_ptr<views::Button> CvcUnmaskViewController::CreatePrimaryButton() {
   std::unique_ptr<views::Button> button(
       views::MdTextButton::CreateSecondaryUiBlueButton(
           this, l10n_util::GetStringUTF16(IDS_CONFIRM)));
+  button->SetEnabled(false);  // Only enabled when a valid CVC is entered.
   button->set_id(static_cast<int>(DialogViewID::CVC_PROMPT_CONFIRM_BUTTON));
   button->set_tag(static_cast<int>(Tags::CONFIRM_TAG));
   return button;
@@ -262,6 +266,17 @@ bool CvcUnmaskViewController::GetSheetId(DialogViewID* sheet_id) {
 
 views::View* CvcUnmaskViewController::GetFirstFocusedView() {
   return cvc_field_;
+}
+
+void CvcUnmaskViewController::ContentsChanged(
+    views::Textfield* sender,
+    const base::string16& new_contents) {
+  base::string16 trimmed_text;
+  base::TrimWhitespace(new_contents, base::TRIM_ALL, &trimmed_text);
+  bool valid = autofill::IsValidCreditCardSecurityCode(trimmed_text,
+                                                       credit_card_.network());
+  cvc_field_->SetInvalid(!valid);
+  primary_button()->SetEnabled(valid);
 }
 
 }  // namespace payments

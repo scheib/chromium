@@ -24,6 +24,7 @@
 #include "third_party/WebKit/public/platform/WebCredential.h"
 #include "third_party/WebKit/public/platform/WebCredentialManagerClient.h"
 #include "third_party/WebKit/public/platform/WebCredentialManagerError.h"
+#include "third_party/WebKit/public/platform/WebCredentialMediationRequirement.h"
 #include "third_party/WebKit/public/platform/WebPasswordCredential.h"
 
 namespace password_manager {
@@ -54,7 +55,7 @@ class FakeCredentialManager : public mojom::CredentialManager {
     std::move(callback).Run();
   }
 
-  void Get(bool zero_click_only,
+  void Get(CredentialMediationRequirement mediation,
            bool include_passwords,
            const std::vector<GURL>& federations,
            GetCallback callback) override {
@@ -208,7 +209,8 @@ TEST_F(CredentialManagerClientTest, SendRequestCredential) {
       new TestRequestCallbacks(this));
   std::vector<GURL> federations;
   federations.push_back(GURL(kTestCredentialPassword));
-  client_->DispatchGet(false, true, federations, callbacks.release());
+  client_->DispatchGet(blink::WebCredentialMediationRequirement::kOptional,
+                       true, federations, callbacks.release());
 
   RunAllPendingTasks();
 
@@ -223,7 +225,8 @@ TEST_F(CredentialManagerClientTest, SendRequestCredentialEmpty) {
       new TestRequestCallbacks(this));
   std::vector<GURL> federations;
   federations.push_back(GURL(kTestCredentialEmpty));
-  client_->DispatchGet(false, true, federations, callbacks.release());
+  client_->DispatchGet(blink::WebCredentialMediationRequirement::kOptional,
+                       true, federations, callbacks.release());
 
   RunAllPendingTasks();
 
@@ -237,7 +240,8 @@ TEST_F(CredentialManagerClientTest, SendRequestCredentialReject) {
       new TestRequestCallbacks(this));
   std::vector<GURL> federations;
   federations.push_back(GURL(kTestCredentialReject));
-  client_->DispatchGet(false, true, federations, callbacks.release());
+  client_->DispatchGet(blink::WebCredentialMediationRequirement::kOptional,
+                       true, federations, callbacks.release());
 
   RunAllPendingTasks();
 

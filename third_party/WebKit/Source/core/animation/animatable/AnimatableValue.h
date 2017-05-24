@@ -62,6 +62,9 @@ class CORE_EXPORT AnimatableValue : public RefCounted<AnimatableValue> {
   bool IsDouble() const { return GetType() == kTypeDouble; }
   bool IsDoubleAndBool() const { return GetType() == kTypeDoubleAndBool; }
   bool IsFilterOperations() const { return GetType() == kTypeFilterOperations; }
+  bool IsFontVariationSettings() const {
+    return GetType() == kTypeFontVariationSettings;
+  }
   bool IsImage() const { return GetType() == kTypeImage; }
   bool IsLength() const { return GetType() == kTypeLength; }
   bool IsLengthBox() const { return GetType() == kTypeLengthBox; }
@@ -94,6 +97,7 @@ class CORE_EXPORT AnimatableValue : public RefCounted<AnimatableValue> {
     kTypeDouble,
     kTypeDoubleAndBool,
     kTypeFilterOperations,
+    kTypeFontVariationSettings,
     kTypeImage,
     kTypeLength,
     kTypeLengthBox,

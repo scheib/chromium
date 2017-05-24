@@ -22,6 +22,9 @@ class VIEWS_EXPORT InkDropStub : public InkDrop {
   void SnapToActivated() override;
   void SetHovered(bool is_hovered) override;
   void SetFocused(bool is_hovered) override;
+  bool IsHighlightFadingInOrVisible() const override;
+  void SetShowHighlightOnHover(bool show_highlight_on_hover) override;
+  void SetShowHighlightOnFocus(bool show_highlight_on_focus) override;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(InkDropStub);

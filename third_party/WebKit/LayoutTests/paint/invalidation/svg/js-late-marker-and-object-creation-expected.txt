@@ -34,14 +34,6 @@
       "reason": "appeared"
     },
     {
-      "object": "LayoutSVGResourceMarker marker id='markerMiddle'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGEllipse circle",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGPath path",
       "reason": "style change"
     }

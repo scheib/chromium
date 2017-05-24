@@ -55,7 +55,7 @@ class PaletteToolManagerTest : public ::testing::Test,
   void HidePalette() override {}
   void HidePaletteImmediately() override {}
   void OnActiveToolChanged() override { ++tool_changed_count_; }
-  WmWindow* GetWindow() override {
+  aura::Window* GetWindow() override {
     NOTREACHED();
     return nullptr;
   }

@@ -13,7 +13,6 @@ import subprocess
 import sys
 import tempfile
 
-import build.inputs
 import processor
 import error_filter
 
@@ -189,7 +188,7 @@ class Checker(object):
     return tmp_file.name
 
   def check(self, sources, out_file, closure_args=None,
-            custom_sources=True, custom_includes=False):
+            custom_sources=False, custom_includes=False):
     """Closure compile |sources| while checking for errors.
 
     Args:

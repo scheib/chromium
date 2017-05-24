@@ -376,12 +376,6 @@ class SearchBoxExtensionWrapper : public v8::Extension {
   static void GetMostVisitedItemData(
     const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  // Gets the submitted value of the user's search query.
-  static void GetQuery(const v8::FunctionCallbackInfo<v8::Value>& args);
-
-  // Returns true if the Searchbox itself is oriented right-to-left.
-  static void GetRightToLeft(const v8::FunctionCallbackInfo<v8::Value>& args);
-
   // Gets the Embedded Search request params. Used for logging purposes.
   static void GetSearchRequestParams(
       const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -532,10 +526,6 @@ SearchBoxExtensionWrapper::GetNativeFunctionTemplate(
     return v8::FunctionTemplate::New(isolate, GetMostVisitedItems);
   if (name_str == "GetMostVisitedItemData")
     return v8::FunctionTemplate::New(isolate, GetMostVisitedItemData);
-  if (name_str == "GetQuery")
-    return v8::FunctionTemplate::New(isolate, GetQuery);
-  if (name_str == "GetRightToLeft")
-    return v8::FunctionTemplate::New(isolate, GetRightToLeft);
   if (name_str == "GetSearchRequestParams")
     return v8::FunctionTemplate::New(isolate, GetSearchRequestParams);
   if (name_str == "GetSuggestionToPrefetch")
@@ -677,24 +667,6 @@ void SearchBoxExtensionWrapper::GetMostVisitedItemData(
   args.GetReturnValue().Set(GenerateMostVisitedItem(
       isolate, render_frame->GetRenderView()->GetRoutingID(), restricted_id,
       mv_item));
-}
-
-// static
-void SearchBoxExtensionWrapper::GetQuery(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  content::RenderFrame* render_frame = GetRenderFrame();
-  if (!render_frame)
-    return;
-  const base::string16& query = SearchBox::Get(render_frame)->query();
-  DVLOG(1) << render_frame << " GetQuery: '" << query << "'";
-  v8::Isolate* isolate = args.GetIsolate();
-  args.GetReturnValue().Set(UTF16ToV8String(isolate, query));
-}
-
-// static
-void SearchBoxExtensionWrapper::GetRightToLeft(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  args.GetReturnValue().Set(base::i18n::IsRTL());
 }
 
 // static

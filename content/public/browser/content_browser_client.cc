@@ -188,10 +188,6 @@ bool ContentBrowserClient::AllowSetCookie(const GURL& url,
   return true;
 }
 
-bool ContentBrowserClient::AllowSaveLocalState(ResourceContext* context) {
-  return true;
-}
-
 void ContentBrowserClient::AllowWorkerFileSystem(
     const GURL& url,
     ResourceContext* context,
@@ -207,14 +203,6 @@ bool ContentBrowserClient::AllowWorkerIndexedDB(
     const std::vector<std::pair<int, int> >& render_frames) {
   return true;
 }
-
-#if BUILDFLAG(ENABLE_WEBRTC)
-bool ContentBrowserClient::AllowWebRTCIdentityCache(const GURL& url,
-                                                    const GURL& first_party_url,
-                                                    ResourceContext* context) {
-  return true;
-}
-#endif  // BUILDFLAG(ENABLE_WEBRTC)
 
 ContentBrowserClient::AllowWebBluetoothResult
 ContentBrowserClient::AllowWebBluetooth(

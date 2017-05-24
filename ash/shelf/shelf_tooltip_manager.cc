@@ -98,7 +98,7 @@ class ShelfTooltipManager::ShelfTooltipBubble
 
  private:
   // BubbleDialogDelegateView overrides:
-  gfx::Size GetPreferredSize() const override {
+  gfx::Size CalculatePreferredSize() const override {
     const gfx::Size size = BubbleDialogDelegateView::GetPreferredSize();
     const int kTooltipMinHeight = kTooltipHeight - 2 * kTooltipTopBottomMargin;
     return gfx::Size(std::min(size.width(), kTooltipMaxWidth),

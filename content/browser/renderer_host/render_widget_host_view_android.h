@@ -148,7 +148,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAndroid
       override;
   void SubmitCompositorFrame(const cc::LocalSurfaceId& local_surface_id,
                              cc::CompositorFrame frame) override;
-  void OnBeginFrameDidNotSwap(const cc::BeginFrameAck& ack) override;
+  void OnDidNotProduceFrame(const cc::BeginFrameAck& ack) override;
   void ClearCompositorFrame() override;
   void SetIsInVR(bool is_in_vr) override;
   bool IsInVR() const override;

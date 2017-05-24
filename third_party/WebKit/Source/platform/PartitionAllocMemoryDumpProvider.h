@@ -6,17 +6,9 @@
 #define PartitionAllocMemoryDumpProvider_h
 
 #include "base/trace_event/memory_dump_provider.h"
+#include "base/trace_event/sharded_allocation_register.h"
 #include "platform/wtf/Noncopyable.h"
-#include "platform/wtf/ThreadingPrimitives.h"
 #include "public/platform/WebCommon.h"
-
-namespace base {
-namespace trace_event {
-
-class AllocationRegister;
-
-}  // namespace trace_event
-}  // namespace base
 
 namespace blink {
 
@@ -42,9 +34,7 @@ class BLINK_PLATFORM_EXPORT PartitionAllocMemoryDumpProvider final
  private:
   PartitionAllocMemoryDumpProvider();
 
-  Mutex allocation_register_mutex_;
-  std::unique_ptr<base::trace_event::AllocationRegister> allocation_register_;
-  bool is_heap_profiling_enabled_;
+  base::trace_event::ShardedAllocationRegister allocation_register_;
 };
 
 }  // namespace blink

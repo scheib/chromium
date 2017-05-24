@@ -7,7 +7,6 @@
 #import "ios/clean/chrome/browser/ui/toolbar/toolbar_button+factory.h"
 
 @implementation MenuOverflowControlsStackView
-@synthesize toolsMenuButton = _toolsMenuButton;
 @synthesize shareButton = _shareButton;
 @synthesize reloadButton = _reloadButton;
 @synthesize stopButton = _stopButton;
@@ -19,7 +18,6 @@
     [self addArrangedSubview:self.shareButton];
     [self addArrangedSubview:self.stopButton];
     [self addArrangedSubview:self.reloadButton];
-    [self addArrangedSubview:self.toolsMenuButton];
 
     self.axis = UILayoutConstraintAxisHorizontal;
     self.distribution = UIStackViewDistributionFillEqually;
@@ -30,9 +28,6 @@
 #pragma mark - Components Setup
 
 - (void)setUpToolbarButtons {
-  // Tools menu button.
-  self.toolsMenuButton = [ToolbarButton toolsMenuToolbarButton];
-
   // Share button.
   self.shareButton = [ToolbarButton shareToolbarButton];
 

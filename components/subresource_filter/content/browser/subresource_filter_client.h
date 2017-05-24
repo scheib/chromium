@@ -38,10 +38,6 @@ class SubresourceFilterClient {
       content::NavigationHandle* navigation_handle,
       bool activated) = 0;
 
-  // Adds |top_level_url| to the BLOCKED state via content settings for the
-  // current profile.
-  virtual void WhitelistByContentSettings(const GURL& top_level_url) = 0;
-
   // Adds |url| to a per-WebContents whitelist.
   virtual void WhitelistInCurrentWebContents(const GURL& url) = 0;
 

@@ -1232,4 +1232,10 @@ void SetDrawRectangleCHROMIUM(GLint x,
 
 void SetEnableDCLayersCHROMIUM(GLboolean enabled) override;
 
+void InitializeDiscardableTextureCHROMIUM(GLuint texture_id) override;
+
+void UnlockDiscardableTextureCHROMIUM(GLuint texture_id) override;
+
+bool LockDiscardableTextureCHROMIUM(GLuint texture_id) override;
+
 #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_IMPLEMENTATION_AUTOGEN_H_

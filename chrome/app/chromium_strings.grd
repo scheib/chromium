@@ -1203,16 +1203,16 @@ Please check your email at <ph name="ACCOUNT_EMAIL">$2<ex>jane.doe@example.com</
       <!-- Runtime permission strings -->
       <if expr="is_android">
         <message name="IDS_INFOBAR_MISSING_CAMERA_PERMISSION_TEXT" desc="Text shown in an infobar when a website has requested access to the camera capabilities, but Chrome is missing the Android camera permission.">
-          Chromium needs camera access to share it with this site.
+          Chromium needs permission to access your camera for this site.
         </message>
         <message name="IDS_INFOBAR_MISSING_MICROPHONE_PERMISSION_TEXT" desc="Text shown in an infobar when a website has requested access to the microphone capabilities, but Chrome is missing the Android microphone permission.">
-          Chromium needs microphone access to share it with this site.
+          Chromium needs permission to access your microphone for this site.
+        </message>
+        <message name="IDS_INFOBAR_MISSING_MICROPHONE_CAMERA_PERMISSIONS_TEXT" desc="Text shown in an infobar when a website has requested access to the microphone and camera capabilities, but Chrome is missing the Android microphone and camera permissions.">
+          Chromium needs permission to access your camera and microphone for this site.
         </message>
         <message name="IDS_INFOBAR_MISSING_LOCATION_PERMISSION_TEXT" desc="Text shown in an infobar when a website has requested access to the location capabilities, but Chrome is missing the Android location permission.">
-          Chromium needs location access to share it with this site.
-        </message>
-        <message name="IDS_INFOBAR_MISSING_MULTIPLE_PERMISSIONS_TEXT" desc="Text shown in an infobar when a website has requested access to the multiple restricted capabilities (e.g. location, camera, microphone), but Chrome is missing the corresponding Android permissions.">
-          Chromium needs permissions access to share them with this site.
+          Chromium needs access to to your location to share your location with this site.
         </message>
         <message name="IDS_MISSING_STORAGE_PERMISSION_DOWNLOAD_EDUCATION_TEXT" desc="Text shown educating the user that Chrome is missing the Android storage permission, which is required to download files.">
           Chromium needs storage access to download files.

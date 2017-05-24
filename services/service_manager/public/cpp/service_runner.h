@@ -9,6 +9,7 @@
 
 #include "base/message_loop/message_loop.h"
 #include "mojo/public/cpp/system/core.h"
+#include "services/service_manager/public/cpp/export.h"
 
 namespace service_manager {
 
@@ -26,7 +27,7 @@ class ServiceContext;
 // ServiceRunner takes care of chromium environment initialization and
 // shutdown, and starting a base::MessageLoop from which your service can run
 // and ultimately Quit().
-class ServiceRunner {
+class SERVICE_MANAGER_PUBLIC_CPP_EXPORT ServiceRunner {
  public:
   // Takes ownership of |service|.
   explicit ServiceRunner(Service* service);

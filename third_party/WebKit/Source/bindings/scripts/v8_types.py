@@ -201,7 +201,7 @@ def cpp_type(idl_type, extended_attributes=None, raw_type=False, used_as_rvalue_
         return ('PassRefPtr<%s>' if used_as_rvalue_type else 'RefPtr<%s>') % base_idl_type
     if idl_type.is_string_type:
         if not raw_type:
-            return 'String'
+            return 'const String&' if used_as_rvalue_type else 'String'
         return 'V8StringResource<%s>' % string_mode()
 
     if base_idl_type == 'ArrayBufferView' and 'FlexibleArrayBufferView' in extended_attributes:

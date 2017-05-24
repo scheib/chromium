@@ -50,11 +50,11 @@ Profile* GetOriginalProfile() {
 void OnBrowsingDataRemoverDone(
     JavaObjectWeakGlobalRef weak_chrome_native_preferences) {
   JNIEnv* env = AttachCurrentThread();
-  if (weak_chrome_native_preferences.get(env).is_null())
+  auto java_obj = weak_chrome_native_preferences.get(env);
+  if (java_obj.is_null())
     return;
 
-  Java_BrowsingDataBridge_browsingDataCleared(
-      env, weak_chrome_native_preferences.get(env));
+  Java_BrowsingDataBridge_browsingDataCleared(env, java_obj);
 }
 
 }  // namespace

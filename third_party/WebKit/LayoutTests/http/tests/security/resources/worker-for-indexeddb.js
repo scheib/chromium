@@ -11,7 +11,6 @@ self.onmessage = function() {
         'result': [
             test('deleteDatabase', 'testDBName'),
             test('open', 'testDBName'),
-            test('webkitGetDatabaseNames')
         ]
     });
 };

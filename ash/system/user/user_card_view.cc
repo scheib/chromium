@@ -87,7 +87,6 @@ class PublicAccountUserDetails : public views::View,
  private:
   // Overridden from views::View.
   void Layout() override;
-  gfx::Size GetPreferredSize() const override;
   void OnPaint(gfx::Canvas* canvas) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
@@ -101,7 +100,6 @@ class PublicAccountUserDetails : public views::View,
 
   base::string16 text_;
   views::Link* learn_more_;
-  gfx::Size preferred_size_;
   std::vector<std::unique_ptr<gfx::RenderText>> lines_;
 
   DISALLOW_COPY_AND_ASSIGN(PublicAccountUserDetails);
@@ -208,10 +206,6 @@ void PublicAccountUserDetails::Layout() {
   learn_more_->SetBoundsRect(learn_more_bounds);
 }
 
-gfx::Size PublicAccountUserDetails::GetPreferredSize() const {
-  return preferred_size_;
-}
-
 void PublicAccountUserDetails::OnPaint(gfx::Canvas* canvas) {
   for (const auto& line : lines_)
     line->Draw(canvas);
@@ -276,9 +270,9 @@ void PublicAccountUserDetails::DeterminePreferredSize() {
   const int line_height = font_list.GetHeight();
   const int link_extra_height = std::max(
       link_size.height() - learn_more_->GetInsets().top() - line_height, 0);
-  preferred_size_ =
-      gfx::Size(min_width + insets.width(),
-                line_count * line_height + link_extra_height + insets.height());
+  set_preferred_size(gfx::Size(
+      min_width + insets.width(),
+      line_count * line_height + link_extra_height + insets.height()));
 }
 
 }  // namespace

@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <script src="../resources/testharness.js"></script>
 <script src="../resources/testharnessreport.js"></script>
-<script src="../resources/mojo-helpers.js"></script>
+<script src="file:///gen/layout_test_data/mojo/public/js/mojo_bindings.js"></script>
+<script src="file:///gen/mojo/public/interfaces/bindings/tests/math_calculator.mojom.js"></script>
 <script>
 'use strict';
 
@@ -24,28 +25,12 @@ CalculatorImpl.prototype.multiply = function(value) {
   return Promise.resolve({value: this.total});
 };
 
-function loadModules(name, func) {
-  return define(
-      name,
-      [
-        'mojo/public/js/bindings',
-        'mojo/public/interfaces/bindings/tests/math_calculator.mojom'
-      ],
-      func);
-};
-
-function binding_test(func, name, properties) {
-  promise_test(() => {
-    return loadModules(name, func);
-  }, name, properties);
-}
-
-binding_test((bindings, math) => {
-  var binding = new bindings.Binding(math.Calculator, new CalculatorImpl());
+test(() => {
+  var binding = new mojo.Binding(math.Calculator, new CalculatorImpl());
   assert_false(binding.isBound());
 
   var calc = new math.CalculatorPtr();
-  var request = bindings.makeRequest(calc);
+  var request = mojo.makeRequest(calc);
   binding.bind(request);
   assert_true(binding.isBound());
 
@@ -53,23 +38,21 @@ binding_test((bindings, math) => {
   assert_false(binding.isBound());
 }, 'is bound');
 
-binding_test(async (bindings, math) => {
+promise_test(async () => {
   var calc1 = new math.CalculatorPtr();
-  var calcBinding = new bindings.Binding(math.Calculator,
-                                         new CalculatorImpl(),
-                                         bindings.makeRequest(calc1));
+  var calcBinding = new mojo.Binding(math.Calculator, new CalculatorImpl(),
+                                     mojo.makeRequest(calc1));
   assert_equals((await calc1.add(2)).value, 2);
 
   var calc2 = new math.CalculatorPtr();
-  calcBinding.bind(bindings.makeRequest(calc2));
+  calcBinding.bind(mojo.makeRequest(calc2));
   assert_equals((await calc2.add(2)).value, 4);
 }, 'reusable');
 
-binding_test(async (bindings, math) => {
+promise_test(async () => {
   var calc = new math.CalculatorPtr();
-  var calcBinding = new bindings.Binding(math.Calculator,
-                                         new CalculatorImpl(),
-                                         bindings.makeRequest(calc));
+  var calcBinding = new mojo.Binding(math.Calculator, new CalculatorImpl(),
+                                     mojo.makeRequest(calc));
 
   await new Promise((resolve, reject) => {
     calcBinding.setConnectionErrorHandler(() => { resolve(); });
@@ -77,48 +60,45 @@ binding_test(async (bindings, math) => {
   });
 }, 'connection error');
 
-binding_test(async (bindings, math) => {
+promise_test(async () => {
   var calc = new math.CalculatorPtr();
-  var calcBinding = new bindings.Binding(math.Calculator,
-                                         new CalculatorImpl(),
-                                         bindings.makeRequest(calc));
+  var calcBinding = new mojo.Binding(math.Calculator, new CalculatorImpl(),
+                                     mojo.makeRequest(calc));
 
   await new Promise((resolve, reject) => {
-    calcBinding.setConnectionErrorHandler(({custom_reason, description}) => {
-      assert_equals(custom_reason, 32);
+    calcBinding.setConnectionErrorHandler(({customReason, description}) => {
+      assert_equals(customReason, 32);
       assert_equals(description, 'goodbye');
       resolve();
     });
-    calc.ptr.resetWithReason({custom_reason: 32, description: 'goodbye'});
+    calc.ptr.resetWithReason({customReason: 32, description: 'goodbye'});
   });
 }, 'connection error with reason');
 
-binding_test(async (bindings, math) => {
+promise_test(async () => {
   var calc = new math.CalculatorPtr();
-  var calcBinding = new bindings.Binding(math.Calculator,
-                                         new CalculatorImpl(),
-                                         bindings.makeRequest(calc));
+  var calcBinding = new mojo.Binding(math.Calculator, new CalculatorImpl(),
+                                     mojo.makeRequest(calc));
   assert_equals((await calc.add(2)).value, 2);
 
   var interfaceRequest = calcBinding.unbind();
   assert_false(calcBinding.isBound());
 
-  var newCalcBinding = new bindings.Binding(math.Calculator,
-                                            new CalculatorImpl(),
-                                            interfaceRequest);
+  var newCalcBinding = new mojo.Binding(math.Calculator, new CalculatorImpl(),
+                                        interfaceRequest);
   assert_equals((await calc.add(2)).value, 2);
 }, 'unbind');
 
-binding_test(async (bindings, math) => {
+promise_test(async () => {
   var calc1 = new math.CalculatorPtr();
   var calc2 = new math.CalculatorPtr();
   var calcImpl = new CalculatorImpl();
 
-  var bindingSet = new bindings.BindingSet(math.Calculator);
+  var bindingSet = new mojo.BindingSet(math.Calculator);
   assert_true(bindingSet.isEmpty());
 
-  bindingSet.addBinding(calcImpl, bindings.makeRequest(calc1));
-  bindingSet.addBinding(calcImpl, bindings.makeRequest(calc2));
+  bindingSet.addBinding(calcImpl, mojo.makeRequest(calc1));
+  bindingSet.addBinding(calcImpl, mojo.makeRequest(calc2));
   assert_false(bindingSet.isEmpty());
 
   assert_equals((await calc1.add(3)).value, 3);

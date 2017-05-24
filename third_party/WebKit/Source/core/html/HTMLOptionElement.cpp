@@ -72,10 +72,11 @@ HTMLOptionElement* HTMLOptionElement::CreateForJSConstructor(
     ExceptionState& exception_state) {
   HTMLOptionElement* element = new HTMLOptionElement(document);
   element->EnsureUserAgentShadowRoot();
-  element->AppendChild(Text::Create(document, data.IsNull() ? "" : data),
-                       exception_state);
-  if (exception_state.HadException())
-    return nullptr;
+  if (!data.IsEmpty()) {
+    element->AppendChild(Text::Create(document, data), exception_state);
+    if (exception_state.HadException())
+      return nullptr;
+  }
 
   if (!value.IsNull())
     element->setValue(value);

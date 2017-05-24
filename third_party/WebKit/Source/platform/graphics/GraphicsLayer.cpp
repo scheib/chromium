@@ -1207,11 +1207,6 @@ static bool PixelsDiffer(SkColor p1, SkColor p2) {
          PixelComponentsDiffer(SkColorGetB(p1), SkColorGetB(p2));
 }
 
-// This method is used to graphically verify any under invalidation when
-// RuntimeEnabledFeatures::paintUnderInvalidationCheckingEnabled is being
-// used. It compares the last recording made by GraphicsLayer::Paint against
-// |new_record|, by rastering both into bitmaps. Any differences are colored
-// as dark red.
 void GraphicsLayer::CheckPaintUnderInvalidations(
     sk_sp<PaintRecord> new_record) {
   if (!DrawsContent())
@@ -1288,7 +1283,7 @@ void GraphicsLayer::CheckPaintUnderInvalidations(
   recorder.getRecordingCanvas()->drawBitmap(new_bitmap, rect.X(), rect.Y());
   sk_sp<PaintRecord> record = recorder.finishRecordingAsPicture();
   GetPaintController().AppendDebugDrawingAfterCommit(
-      *this, record, rect, OffsetFromLayoutObjectWithSubpixelAccumulation());
+      *this, record, OffsetFromLayoutObjectWithSubpixelAccumulation());
 }
 
 }  // namespace blink

@@ -150,6 +150,8 @@ class ProfileHelper
   static std::string GetUserIdHashByUserIdForTesting(
       const std::string& user_id);
 
+  void SetActiveUserIdForTesting(const std::string& user_id);
+
   // Flushes all files of |profile|.
   void FlushProfile(Profile* profile);
 

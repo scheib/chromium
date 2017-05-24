@@ -7,12 +7,14 @@
 
 #include "services/service_manager/public/cpp/identity.h"
 #include "services/service_manager/public/interfaces/connector.mojom.h"
+#include "services/service_manager/public/interfaces/interfaces_export.h"
 
 namespace mojo {
 
 template <>
-struct StructTraits<service_manager::mojom::IdentityDataView,
-                    service_manager::Identity> {
+struct SERVICE_MANAGER_MOJOM_EXPORT
+    StructTraits<service_manager::mojom::IdentityDataView,
+                 service_manager::Identity> {
   static const std::string& name(const service_manager::Identity& identity) {
     return identity.name();
   }

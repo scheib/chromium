@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "mojo/public/cpp/bindings/interface_request.h"
 #include "services/service_manager/public/cpp/connector.h"
@@ -14,8 +15,56 @@
 
 namespace service_manager {
 
+namespace {
+
+using ServiceNameToBinderRegistryMap = std::map<std::string, BinderRegistry>;
+
+base::LazyInstance<std::unique_ptr<ServiceNameToBinderRegistryMap>>::Leaky
+    g_overridden_binder_registries = LAZY_INSTANCE_INITIALIZER;
+
+// Returns the overridden binder registry which intercepts interface bind
+// requests to all |service_name| service instances, returns nullptr if no such
+// one.
+BinderRegistry* GetGlobalBinderRegistryForService(
+    const std::string& service_name) {
+  const auto& registries = g_overridden_binder_registries.Get();
+  if (registries) {
+    auto it = registries->find(service_name);
+    if (it != registries->end())
+      return &it->second;
+  }
+
+  return nullptr;
+}
+
+}  // namespace
+
 ////////////////////////////////////////////////////////////////////////////////
 // ServiceContext, public:
+
+// static
+void ServiceContext::SetGlobalBinderForTesting(
+    const std::string& service_name,
+    const std::string& interface_name,
+    const BinderRegistry::Binder& binder,
+    const scoped_refptr<base::SingleThreadTaskRunner>& task_runner) {
+  if (!g_overridden_binder_registries.Get()) {
+    g_overridden_binder_registries.Get() =
+        base::MakeUnique<ServiceNameToBinderRegistryMap>();
+  }
+
+  (*g_overridden_binder_registries.Get())[service_name].AddInterface(
+      interface_name, binder, task_runner);
+}
+
+// static
+void ServiceContext::ClearGlobalBindersForTesting(
+    const std::string& service_name) {
+  if (!g_overridden_binder_registries.Get())
+    return;
+
+  g_overridden_binder_registries.Get()->erase(service_name);
+}
 
 ServiceContext::ServiceContext(
     std::unique_ptr<service_manager::Service> service,
@@ -83,6 +132,14 @@ void ServiceContext::OnBindInterface(
   // Acknowledge the request regardless of whether it's accepted.
   callback.Run();
 
+  BinderRegistry* global_registry =
+      GetGlobalBinderRegistryForService(identity_.name());
+  if (global_registry && global_registry->CanBindInterface(interface_name)) {
+    // Just use the binder overridden globally.
+    global_registry->BindInterface(source_info, interface_name,
+                                   std::move(interface_pipe));
+    return;
+  }
   service_->OnBindInterface(source_info, interface_name,
                             std::move(interface_pipe));
 }

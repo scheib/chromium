@@ -161,4 +161,8 @@ void NonPresentingGvrDelegate::CreateVRDisplayInfo(
       GvrDelegate::CreateVRDisplayInfo(gvr_api_.get(), webvr_size, device_id));
 }
 
+void NonPresentingGvrDelegate::UpdateContext(gvr_context* context) {
+  gvr_api_ = gvr::GvrApi::WrapNonOwned(context);
+}
+
 }  // namespace vr_shell

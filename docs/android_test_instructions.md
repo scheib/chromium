@@ -58,7 +58,7 @@ adb shell settings put global package_verifier_enable 0
 Use an emulator (i.e. Android Virtual Device, AVD): Enabling Intel's
 Virtualizaton support provides the fastest, most reliable emulator configuration
 available (i.e. x86 emulator with GPU acceleration and KVM support). Remember to
-build with `target_arch=ia32` for x86. Otherwise installing the APKs will fail
+build with `target_cpu = "x86"` for x86. Otherwise installing the APKs will fail
 with `INSTALL_FAILED_NO_MATCHING_ABIS`.
 
 1.  Enable Intel Virtualization support in the BIOS.

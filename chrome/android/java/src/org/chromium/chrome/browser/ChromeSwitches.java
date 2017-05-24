@@ -124,13 +124,6 @@ public abstract class ChromeSwitches {
     public static final String NTP_SWITCH_TO_EXISTING_TAB = "ntp-switch-to-existing-tab";
 
     /**
-     * Enable keyboard accessory view that shows autofill suggestions on top of the keyboard.
-     * Native switch - autofill::switches::kEnableAccessorySuggestionView
-     */
-    public static final String ENABLE_AUTOFILL_KEYBOARD_ACCESSORY =
-            "enable-autofill-keyboard-accessory-view";
-
-    /**
      * Enables overscroll of the on screen keyboard. With this flag on, the OSK will only resize the
      * visual viewport.
      * Native switch - switches::kEnableOSKOverscroll

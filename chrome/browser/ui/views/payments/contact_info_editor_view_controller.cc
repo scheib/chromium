@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/views/payments/contact_info_editor_view_controller.h"
 
+#include <utility>
+
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/views/payments/validating_textfield.h"
 #include "components/autofill/core/browser/autofill_country.h"
@@ -50,7 +52,8 @@ ContactInfoEditorViewController::GetFieldDefinitions() {
     fields.push_back(EditorField(
         autofill::PHONE_HOME_WHOLE_NUMBER,
         l10n_util::GetStringUTF16(IDS_PAYMENTS_PHONE_FIELD_IN_CONTACT_DETAILS),
-        EditorField::LengthHint::HINT_SHORT, /*required=*/true));
+        EditorField::LengthHint::HINT_SHORT, /*required=*/true,
+        EditorField::ControlType::TEXTFIELD_NUMBER));
   }
   if (spec()->request_payer_email()) {
     fields.push_back(EditorField(
@@ -150,14 +153,29 @@ ContactInfoEditorViewController::ContactInfoValidationDelegate::
     ~ContactInfoValidationDelegate() {}
 
 bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
-    ValidateTextfield(views::Textfield* textfield) {
-  bool is_valid = true;
+    IsValidTextfield(views::Textfield* textfield) {
+  return ValidateTextfield(textfield, nullptr);
+}
+
+bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
+    TextfieldValueChanged(views::Textfield* textfield) {
   base::string16 error_message;
+  bool is_valid = ValidateTextfield(textfield, &error_message);
+  controller_->DisplayErrorMessageForField(field_.type, error_message);
+  return is_valid;
+}
+
+bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
+    ValidateTextfield(views::Textfield* textfield,
+                      base::string16* error_message) {
+  bool is_valid = true;
 
   if (textfield->text().empty()) {
     is_valid = false;
-    error_message = l10n_util::GetStringUTF16(
-        IDS_PAYMENTS_FIELD_REQUIRED_VALIDATION_MESSAGE);
+    if (error_message) {
+      *error_message = l10n_util::GetStringUTF16(
+          IDS_PAYMENTS_FIELD_REQUIRED_VALIDATION_MESSAGE);
+    }
   } else {
     switch (field_.type) {
       case autofill::PHONE_HOME_WHOLE_NUMBER: {
@@ -166,8 +184,10 @@ bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
         if (!autofill::IsValidPhoneNumber(textfield->text(),
                                           default_region_code)) {
           is_valid = false;
-          error_message = l10n_util::GetStringUTF16(
-              IDS_PAYMENTS_PHONE_INVALID_VALIDATION_MESSAGE);
+          if (error_message) {
+            *error_message = l10n_util::GetStringUTF16(
+                IDS_PAYMENTS_PHONE_INVALID_VALIDATION_MESSAGE);
+          }
         }
         break;
       }
@@ -175,8 +195,10 @@ bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
       case autofill::EMAIL_ADDRESS: {
         if (!autofill::IsValidEmailAddress(textfield->text())) {
           is_valid = false;
-          error_message = l10n_util::GetStringUTF16(
-              IDS_PAYMENTS_EMAIL_INVALID_VALIDATION_MESSAGE);
+          if (error_message) {
+            *error_message = l10n_util::GetStringUTF16(
+                IDS_PAYMENTS_EMAIL_INVALID_VALIDATION_MESSAGE);
+          }
         }
         break;
       }
@@ -194,12 +216,18 @@ bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
     }
   }
 
-  controller_->DisplayErrorMessageForField(field_, error_message);
   return is_valid;
 }
 
 bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
-    ValidateCombobox(views::Combobox* combobox) {
+    IsValidCombobox(views::Combobox* combobox) {
+  // This UI doesn't contain any comboboxes.
+  NOTREACHED();
+  return true;
+}
+
+bool ContactInfoEditorViewController::ContactInfoValidationDelegate::
+    ComboboxValueChanged(views::Combobox* combobox) {
   // This UI doesn't contain any comboboxes.
   NOTREACHED();
   return true;

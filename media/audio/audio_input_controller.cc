@@ -179,8 +179,7 @@ AudioInputController::AudioInputController(
     SyncWriter* sync_writer,
     UserInputMonitor* user_input_monitor,
     const AudioParameters& params,
-    StreamType type,
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner)
+    StreamType type)
     : creator_task_runner_(base::ThreadTaskRunnerHandle::Get()),
       task_runner_(std::move(task_runner)),
       handler_(handler),
@@ -189,10 +188,7 @@ AudioInputController::AudioInputController(
       type_(type),
       user_input_monitor_(user_input_monitor),
 #if BUILDFLAG(ENABLE_WEBRTC)
-      debug_recording_helper_(params,
-                              task_runner_,
-                              std::move(file_task_runner),
-                              base::OnceClosure()),
+      debug_recording_helper_(params, task_runner_, base::OnceClosure()),
 #endif
       weak_ptr_factory_(this) {
   DCHECK(creator_task_runner_.get());
@@ -213,8 +209,7 @@ scoped_refptr<AudioInputController> AudioInputController::Create(
     UserInputMonitor* user_input_monitor,
     const AudioParameters& params,
     const std::string& device_id,
-    bool enable_agc,
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner) {
+    bool enable_agc) {
   DCHECK(audio_manager);
   DCHECK(sync_writer);
   DCHECK(event_handler);
@@ -232,8 +227,7 @@ scoped_refptr<AudioInputController> AudioInputController::Create(
   // the audio-manager thread.
   scoped_refptr<AudioInputController> controller(new AudioInputController(
       audio_manager->GetTaskRunner(), event_handler, sync_writer,
-      user_input_monitor, params, ParamsToStreamType(params),
-      std::move(file_task_runner)));
+      user_input_monitor, params, ParamsToStreamType(params)));
 
   // Create and open a new audio input stream from the existing
   // audio-device thread. Use the provided audio-input device.
@@ -254,7 +248,6 @@ scoped_refptr<AudioInputController> AudioInputController::CreateForStream(
     AudioInputStream* stream,
     SyncWriter* sync_writer,
     UserInputMonitor* user_input_monitor,
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     const AudioParameters& params) {
   DCHECK(sync_writer);
   DCHECK(stream);
@@ -269,9 +262,9 @@ scoped_refptr<AudioInputController> AudioInputController::CreateForStream(
 
   // Create the AudioInputController object and ensure that it runs on
   // the audio-manager thread.
-  scoped_refptr<AudioInputController> controller(new AudioInputController(
-      task_runner, event_handler, sync_writer, user_input_monitor, params,
-      VIRTUAL, std::move(file_task_runner)));
+  scoped_refptr<AudioInputController> controller(
+      new AudioInputController(task_runner, event_handler, sync_writer,
+                               user_input_monitor, params, VIRTUAL));
 
   if (!controller->task_runner_->PostTask(
           FROM_HERE, base::Bind(&AudioInputController::DoCreateForStream,

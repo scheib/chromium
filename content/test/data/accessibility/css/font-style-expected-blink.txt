@@ -14,7 +14,7 @@ rootWebArea
 ++++++inlineTextBox name='over'
 ++++staticText name='dog' textStyle=7
 ++++++inlineTextBox name='dog'
-++div
+++genericContainer
 ++++staticText name='Normal'
 ++++++inlineTextBox name='Normal'
 ++++staticText name='bold' textStyle=1

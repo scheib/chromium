@@ -409,8 +409,8 @@ class MockHashStoreContents : public HashStoreContents {
     base::DictionaryValue* mac_dict = nullptr;
     dictionary_.GetDictionaryWithoutPathExpansion(path, &mac_dict);
     if (!mac_dict) {
-      mac_dict = new base::DictionaryValue;
-      dictionary_.SetWithoutPathExpansion(path, mac_dict);
+      mac_dict = dictionary_.SetDictionaryWithoutPathExpansion(
+          path, base::MakeUnique<base::DictionaryValue>());
     }
     mac_dict->SetStringWithoutPathExpansion(split_path, mac);
   }

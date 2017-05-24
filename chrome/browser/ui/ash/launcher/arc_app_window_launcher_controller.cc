@@ -12,7 +12,6 @@
 #include "ash/shell.h"
 #include "ash/wm/maximize_mode/maximize_mode_controller.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_window.h"
 #include "base/bind.h"

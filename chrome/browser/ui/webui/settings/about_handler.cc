@@ -613,8 +613,7 @@ void AboutHandler::SetUpdateStatus(VersionUpdater::Status status,
   }
 #endif  // defined(OS_CHROMEOS)
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("update-status-changed"), *event);
+  FireWebUIListener("update-status-changed", *event);
 }
 
 #if defined(OS_MACOSX)
@@ -641,8 +640,7 @@ void AboutHandler::SetPromotionState(VersionUpdater::PromotionState state) {
   if (!text.empty())
     promo_state.SetString("text", text);
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("promotion-state-changed"), promo_state);
+  FireWebUIListener("promotion-state-changed", promo_state);
 }
 #endif  // defined(OS_MACOSX)
 

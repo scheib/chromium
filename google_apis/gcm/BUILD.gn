@@ -122,7 +122,7 @@ if (!is_ios) {
       ":gcm",
       ":test_support",
       "//base",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
       "//net",
       "//net:test_support",

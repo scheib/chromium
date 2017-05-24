@@ -70,7 +70,7 @@ class WebInputMethodControllerImpl;
 class WebNode;
 class WebPerformance;
 class WebPlugin;
-class WebPluginContainerImpl;
+class WebPluginContainerBase;
 class WebScriptExecutionCallback;
 class WebView;
 class WebViewBase;
@@ -352,14 +352,14 @@ class WEB_EXPORT WebLocalFrameImpl final
   static WebLocalFrameImpl* FromFrameOwnerElement(Element*);
 
   // If the frame hosts a PluginDocument, this method returns the
-  // WebPluginContainerImpl that hosts the plugin.
-  static WebPluginContainerImpl* PluginContainerFromFrame(LocalFrame*);
+  // WebPluginContainerBase that hosts the plugin.
+  static WebPluginContainerBase* PluginContainerFromFrame(LocalFrame*);
 
   // If the frame hosts a PluginDocument, this method returns the
-  // WebPluginContainerImpl that hosts the plugin. If the provided node is a
-  // plugin, then it runs its WebPluginContainerImpl. Otherwise, uses the
+  // WebPluginContainerBase that hosts the plugin. If the provided node is a
+  // plugin, then it runs its WebPluginContainerBase. Otherwise, uses the
   // currently focused element (if any).
-  static WebPluginContainerImpl* CurrentPluginContainer(LocalFrame*,
+  static WebPluginContainerBase* CurrentPluginContainer(LocalFrame*,
                                                         Node* = nullptr);
 
   WebViewBase* ViewImpl() const override;

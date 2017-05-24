@@ -14,22 +14,33 @@
     this.incomingReceiver_ = null;
     this.readWatcher_ = null;
     this.errorHandler_ = null;
+    this.paused_ = false;
 
-    if (handle) {
-      this.readWatcher_ = handle.watch({readable: true},
-                                       this.readMore_.bind(this));
-    }
+    this.waitToReadMore();
   }
 
   Connector.prototype.close = function() {
-    if (this.readWatcher_) {
-      this.readWatcher_.cancel();
-      this.readWatcher_ = null;
-    }
+    this.cancelWait();
     if (this.handle_ != null) {
       this.handle_.close();
       this.handle_ = null;
     }
+  };
+
+  Connector.prototype.pauseIncomingMethodCallProcessing = function() {
+    if (this.paused_) {
+      return;
+    }
+    this.paused_= true;
+    this.cancelWait();
+  };
+
+  Connector.prototype.resumeIncomingMethodCallProcessing = function() {
+    if (!this.paused_) {
+      return;
+    }
+    this.paused_= false;
+    this.waitToReadMore();
   };
 
   Connector.prototype.accept = function(message) {
@@ -71,32 +82,82 @@
     this.errorHandler_ = handler;
   };
 
-  Connector.prototype.encounteredError = function() {
-    return this.error_;
-  };
-
-  Connector.prototype.waitForNextMessageForTesting = function() {
-    // TODO(yzshen): Change the tests that use this method.
-    throw new Error("Not supported!");
-  };
-
   Connector.prototype.readMore_ = function(result) {
     for (;;) {
+      if (this.paused_) {
+        return;
+      }
+
       var read = this.handle_.readMessage();
       if (this.handle_ == null) // The connector has been closed.
         return;
       if (read.result == Mojo.RESULT_SHOULD_WAIT)
         return;
       if (read.result != Mojo.RESULT_OK) {
-        this.error_ = true;
-        if (this.errorHandler_)
-          this.errorHandler_.onError(read.result);
+        this.handleError(read.result !== Mojo.RESULT_FAILED_PRECONDITION,
+            false);
         return;
       }
       var messageBuffer = new internal.Buffer(read.buffer);
       var message = new internal.Message(messageBuffer, read.handles);
-      if (this.incomingReceiver_)
-        this.incomingReceiver_.accept(message);
+      var receiverResult = this.incomingReceiver_ &&
+          this.incomingReceiver_.accept(message);
+
+      // Handle invalid incoming message.
+      if (!internal.isTestingMode() && !receiverResult) {
+        // TODO(yzshen): Consider notifying the embedder.
+        this.handleError(true, false);
+      }
+    }
+  };
+
+  Connector.prototype.cancelWait = function() {
+    if (this.readWatcher_) {
+      this.readWatcher_.cancel();
+      this.readWatcher_ = null;
+    }
+  };
+
+  Connector.prototype.waitToReadMore = function() {
+    if (this.handle_) {
+      this.readWatcher_ = this.handle_.watch({readable: true},
+                                             this.readMore_.bind(this));
+    }
+  };
+
+  Connector.prototype.handleError = function(forcePipeReset,
+                                             forceAsyncHandler) {
+    if (this.error_ || this.handle_ === null) {
+      return;
+    }
+
+    if (this.paused_) {
+      // Enforce calling the error handler asynchronously if the user has
+      // paused receiving messages. We need to wait until the user starts
+      // receiving messages again.
+      forceAsyncHandler = true;
+    }
+
+    if (!forcePipeReset && forceAsyncHandler) {
+      forcePipeReset = true;
+    }
+
+    this.cancelWait();
+    if (forcePipeReset) {
+      this.handle_.close();
+      var dummyPipe = Mojo.createMessagePipe();
+      this.handle_ = dummyPipe.handle0;
+    }
+
+    if (forceAsyncHandler) {
+      if (!this.paused_) {
+        this.waitToReadMore();
+      }
+    } else {
+      this.error_ = true;
+      if (this.errorHandler_) {
+        this.errorHandler_.onError();
+      }
     }
   };
 

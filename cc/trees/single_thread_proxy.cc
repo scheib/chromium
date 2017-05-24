@@ -807,6 +807,11 @@ void SingleThreadProxy::DidFinishImplFrame() {
 #endif
 }
 
+void SingleThreadProxy::DidNotProduceFrame(const BeginFrameAck& ack) {
+  DebugScopedSetImplThread impl(task_runner_provider_);
+  layer_tree_host_impl_->DidNotProduceFrame(ack);
+}
+
 void SingleThreadProxy::DidReceiveCompositorFrameAck() {
   layer_tree_host_->DidReceiveCompositorFrameAck();
 }

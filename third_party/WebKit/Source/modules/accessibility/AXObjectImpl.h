@@ -60,8 +60,8 @@ enum class AOMStringProperty;
 typedef unsigned AXID;
 
 enum AccessibilityRole {
-  kUnknownRole = 0,
-  kAbbrRole,  // No mapping to ARIA role.
+  kUnknownRole = 0,  // Not mapped in platform APIs, generally indicates a bug
+  kAbbrRole,         // No mapping to ARIA role.
   kAlertDialogRole,
   kAlertRole,
   kAnchorRole,      // No mapping to ARIA role.
@@ -93,7 +93,6 @@ enum AccessibilityRole {
   kDialogRole,
   kDirectoryRole,
   kDisclosureTriangleRole,  // No mapping to ARIA role.
-  kDivRole,                 // No mapping to ARIA role.
   kDocumentRole,
   kEmbeddedObjectRole,  // No mapping to ARIA role.
   kFeedRole,
@@ -101,6 +100,7 @@ enum AccessibilityRole {
   kFigureRole,
   kFooterRole,
   kFormRole,
+  kGenericContainerRole,  // No role was defined for this container
   kGridRole,
   kGroupRole,
   kHeadingRole,
@@ -136,7 +136,7 @@ enum AccessibilityRole {
   kMenuRole,
   kMeterRole,
   kNavigationRole,
-  kNoneRole,  // No mapping to ARIA role.
+  kNoneRole,  // ARIA role of "none"
   kNoteRole,
   kOutlineRole,    // No mapping to ARIA role.
   kParagraphRole,  // No mapping to ARIA role.
@@ -1100,7 +1100,8 @@ class MODULES_EXPORT AXObjectImpl
     return 0;
   }
 
-  virtual bool NameFromContents() const;
+  bool CanReceiveAccessibilityFocus() const;
+  bool NameFromContents(bool recursive) const;
 
   AccessibilityRole ButtonRoleType() const;
 

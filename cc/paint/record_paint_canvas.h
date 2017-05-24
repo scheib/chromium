@@ -24,7 +24,7 @@ class PaintFlags;
 
 class CC_PAINT_EXPORT RecordPaintCanvas final : public PaintCanvas {
  public:
-  explicit RecordPaintCanvas(PaintOpBuffer* buffer, const SkRect& bounds);
+  explicit RecordPaintCanvas(PaintOpBuffer* buffer);
   ~RecordPaintCanvas() override;
 
   SkMetaData& getMetaData() override;
@@ -148,7 +148,6 @@ class CC_PAINT_EXPORT RecordPaintCanvas final : public PaintCanvas {
   // This is mutable so that const functions (e.g. quickReject) that may
   // lazy initialize the canvas can still be const.
   mutable base::Optional<SkNoDrawCanvas> canvas_;
-  SkRect recording_bounds_;
 
   DISALLOW_COPY_AND_ASSIGN(RecordPaintCanvas);
 };

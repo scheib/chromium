@@ -15,7 +15,7 @@ uint64_t IdFromCompositorElementId(CompositorElementId element_id) {
 }
 
 TEST_F(CompositorElementIdTest, EncodeDecode) {
-  CompositorElementId element_id = CompositorElementIdFromDOMNodeId(
+  CompositorElementId element_id = CompositorElementIdFromPaintLayerId(
       1, CompositorElementIdNamespace::kPrimary);
   EXPECT_EQ(1u, IdFromCompositorElementId(element_id));
   EXPECT_EQ(CompositorElementIdNamespace::kPrimary,
@@ -27,10 +27,10 @@ TEST_F(CompositorElementIdTest, EncodeDecode) {
   EXPECT_EQ(CompositorElementIdNamespace::kLinkHighlight,
             NamespaceFromCompositorElementId(element_id));
 
-  element_id = CompositorElementIdFromDOMNodeId(
-      23, CompositorElementIdNamespace::kScroll);
+  element_id = CompositorElementIdFromScrollbarId(
+      23, CompositorElementIdNamespace::kScrollbar);
   EXPECT_EQ(23u, IdFromCompositorElementId(element_id));
-  EXPECT_EQ(CompositorElementIdNamespace::kScroll,
+  EXPECT_EQ(CompositorElementIdNamespace::kScrollbar,
             NamespaceFromCompositorElementId(element_id));
 }
 

@@ -153,10 +153,10 @@ PaintInvalidationState::PaintInvalidationState(
     // - Track offset between the two paintInvalidationContainers.
     cached_offsets_enabled_ = false;
     if (forced_subtree_invalidation_flags_ &
-        PaintInvalidatorContext::
-            kForcedSubtreeFullInvalidationForStackedContents)
+        PaintInvalidatorContext::kSubtreeFullInvalidationForStackedContents) {
       forced_subtree_invalidation_flags_ |=
-          PaintInvalidatorContext::kForcedSubtreeFullInvalidation;
+          PaintInvalidatorContext::kSubtreeFullInvalidation;
+    }
   }
 
   if (!current_object.IsBoxModelObject() && !current_object.IsSVG())
@@ -188,8 +188,8 @@ PaintInvalidationState::PaintInvalidationState(
       // However, we need to keep the FullInvalidationForStackedContents flag
       // if the current object isn't the paint invalidation container of
       // stacked contents.
-      forced_subtree_invalidation_flags_ &= PaintInvalidatorContext::
-          kForcedSubtreeFullInvalidationForStackedContents;
+      forced_subtree_invalidation_flags_ &=
+          PaintInvalidatorContext::kSubtreeFullInvalidationForStackedContents;
     } else {
       forced_subtree_invalidation_flags_ = 0;
       if (current_object != container_for_absolute_position_ &&
@@ -304,13 +304,12 @@ void PaintInvalidationState::UpdateForChildren(PaintInvalidationReason reason) {
       break;
     case PaintInvalidationReason::kSubtree:
       forced_subtree_invalidation_flags_ |=
-          (PaintInvalidatorContext::kForcedSubtreeFullInvalidation |
-           PaintInvalidatorContext::
-               kForcedSubtreeFullInvalidationForStackedContents);
+          (PaintInvalidatorContext::kSubtreeFullInvalidation |
+           PaintInvalidatorContext::kSubtreeFullInvalidationForStackedContents);
       break;
     case PaintInvalidationReason::kSVGResource:
       forced_subtree_invalidation_flags_ |=
-          PaintInvalidatorContext::kForcedSubtreeSVGResourceChange;
+          PaintInvalidatorContext::kSubtreeSVGResourceChange;
       break;
     default:
       break;
@@ -546,8 +545,7 @@ PaintInvalidatorContextAdapter::PaintInvalidatorContextAdapter(
     const PaintInvalidationState& paint_invalidation_state)
     : PaintInvalidatorContext(),
       paint_invalidation_state_(paint_invalidation_state) {
-  forced_subtree_invalidation_flags =
-      paint_invalidation_state.forced_subtree_invalidation_flags_;
+  subtree_flags = paint_invalidation_state.forced_subtree_invalidation_flags_;
   paint_invalidation_container =
       &paint_invalidation_state.PaintInvalidationContainer();
   painting_layer = &paint_invalidation_state.PaintingLayer();

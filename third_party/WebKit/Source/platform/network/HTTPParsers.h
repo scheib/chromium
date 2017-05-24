@@ -45,6 +45,7 @@
 
 namespace blink {
 
+class HTTPHeaderMap;
 class Suborigin;
 class ResourceResponse;
 
@@ -146,6 +147,14 @@ PLATFORM_EXPORT bool ParseSuboriginHeader(const String& header,
 
 PLATFORM_EXPORT ContentTypeOptionsDisposition
 ParseContentTypeOptionsHeader(const String& header);
+
+// Returns true and stores the position of the end of the headers to |*end|
+// if the headers part ends in |bytes[0..size]|. Returns false otherwise.
+PLATFORM_EXPORT bool ParseMultipartFormHeadersFromBody(
+    const char* bytes,
+    size_t,
+    HTTPHeaderMap* header_fields,
+    size_t* end);
 
 // Returns true and stores the position of the end of the headers to |*end|
 // if the headers part ends in |bytes[0..size]|. Returns false otherwise.

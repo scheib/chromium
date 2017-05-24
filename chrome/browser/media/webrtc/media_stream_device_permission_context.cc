@@ -10,6 +10,7 @@
 #include "chrome/common/pref_names.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/url_constants.h"
 #include "extensions/common/constants.h"
 
@@ -91,8 +92,6 @@ void MediaStreamDevicePermissionContext::CancelPermissionRequest(
 }
 
 bool MediaStreamDevicePermissionContext::IsRestrictedToSecureOrigins() const {
-  // Flash currently doesn't require secure origin to use mic/camera. If we
-  // return true here, it'll break the use case like http://tinychat.com.
-  // TODO(raymes): Change this to true after crbug.com/526324 is fixed.
-  return false;
+  return base::FeatureList::IsEnabled(
+      features::kRequireSecureOriginsForPepperMediaRequests);
 }

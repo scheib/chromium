@@ -27,12 +27,22 @@ class SyntheticGestureTarget;
 // input events to the platform until the gesture has finished.
 class CONTENT_EXPORT SyntheticGestureController {
  public:
-  using BeginFrameCallback = base::OnceClosure;
-  using BeginFrameRequestCallback =
-      base::RepeatingCallback<void(BeginFrameCallback)>;
+  class Delegate {
+   public:
+    virtual ~Delegate() {}
+
+    // Requests a single begin frame. The passed callback is run on the next
+    // begin frame message.
+    virtual void RequestBeginFrameForSynthesizedInput(
+        base::OnceClosure callback) = 0;
+
+    // Returns whether any gesture created by dispatched input events has
+    // completed or not.
+    virtual bool HasGestureStopped() = 0;
+  };
   SyntheticGestureController(
-      std::unique_ptr<SyntheticGestureTarget> gesture_target,
-      BeginFrameRequestCallback begin_frame_callback);
+      Delegate* delegate,
+      std::unique_ptr<SyntheticGestureTarget> gesture_target);
   virtual ~SyntheticGestureController();
 
   typedef base::Callback<void(SyntheticGesture::Result)>
@@ -44,6 +54,7 @@ class CONTENT_EXPORT SyntheticGestureController {
   bool DispatchNextEvent(base::TimeTicks = base::TimeTicks::Now());
 
  private:
+  void RequestBeginFrame();
   void OnBeginFrame();
 
   void StartGesture(const SyntheticGesture& gesture);
@@ -51,6 +62,7 @@ class CONTENT_EXPORT SyntheticGestureController {
                    const OnGestureCompleteCallback& completion_callback,
                    SyntheticGesture::Result result);
 
+  Delegate* const delegate_;
   std::unique_ptr<SyntheticGestureTarget> gesture_target_;
 
   // A queue of gesture/callback pairs.  Implemented as two queues to
@@ -67,23 +79,37 @@ class CONTENT_EXPORT SyntheticGestureController {
     void Pop() {
       gestures_.erase(gestures_.begin());
       callbacks_.pop();
+      result_of_current_gesture_ = SyntheticGesture::GESTURE_RUNNING;
     }
     SyntheticGesture* FrontGesture() { return gestures_.front().get(); }
     OnGestureCompleteCallback& FrontCallback() {
       return callbacks_.front();
     }
-    bool IsEmpty() {
+    bool IsEmpty() const {
       CHECK(gestures_.empty() == callbacks_.empty());
       return gestures_.empty();
     }
+
+    bool is_current_gesture_complete() const {
+      return result_of_current_gesture_ != SyntheticGesture::GESTURE_RUNNING;
+    }
+
+    SyntheticGesture::Result current_gesture_result() const {
+      return result_of_current_gesture_;
+    }
+
+    void mark_current_gesture_complete(SyntheticGesture::Result result) {
+      result_of_current_gesture_ = result;
+    }
+
    private:
+    SyntheticGesture::Result result_of_current_gesture_ =
+        SyntheticGesture::GESTURE_RUNNING;
     std::vector<std::unique_ptr<SyntheticGesture>> gestures_;
     std::queue<OnGestureCompleteCallback> callbacks_;
 
     DISALLOW_COPY_AND_ASSIGN(GestureAndCallbackQueue);
   } pending_gesture_queue_;
-
-  BeginFrameRequestCallback begin_frame_callback_;
 
   base::WeakPtrFactory<SyntheticGestureController> weak_ptr_factory_;
 

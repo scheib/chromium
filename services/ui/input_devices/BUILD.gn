@@ -21,7 +21,7 @@ source_set("input_devices") {
   ]
 }
 
-test("input_device_unittests") {
+source_set("tests") {
   testonly = true
 
   sources = [
@@ -32,7 +32,6 @@ test("input_device_unittests") {
     ":input_devices",
     "//base",
     "//base/test:test_support",
-    "//mojo/edk/test:run_all_unittests",
     "//services/service_manager/public/cpp",
     "//services/service_manager/public/cpp:service_test_support",
     "//services/ui/public/cpp/input_devices",

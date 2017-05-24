@@ -73,10 +73,13 @@ std::vector<std::unique_ptr<PasswordForm>> MakeCopies(
 
 FormFetcherImpl::FormFetcherImpl(PasswordStore::FormDigest form_digest,
                                  const PasswordManagerClient* client,
-                                 bool should_migrate_http_passwords)
+                                 bool should_migrate_http_passwords,
+                                 bool should_query_suppressed_https_forms)
     : form_digest_(std::move(form_digest)),
       client_(client),
-      should_migrate_http_passwords_(should_migrate_http_passwords) {}
+      should_migrate_http_passwords_(should_migrate_http_passwords),
+      should_query_suppressed_https_forms_(
+          should_query_suppressed_https_forms) {}
 
 FormFetcherImpl::~FormFetcherImpl() = default;
 
@@ -106,6 +109,15 @@ const std::vector<const PasswordForm*>& FormFetcherImpl::GetFederatedMatches()
   return weak_federated_;
 }
 
+const std::vector<const PasswordForm*>&
+FormFetcherImpl::GetSuppressedHTTPSForms() const {
+  return weak_suppressed_https_forms_;
+}
+
+bool FormFetcherImpl::DidCompleteQueryingSuppressedHTTPSForms() const {
+  return did_complete_querying_suppressed_https_forms_;
+}
+
 void FormFetcherImpl::OnGetPasswordStoreResults(
     std::vector<std::unique_ptr<PasswordForm>> results) {
   DCHECK_EQ(State::WAITING, state_);
@@ -124,6 +136,16 @@ void FormFetcherImpl::OnGetPasswordStoreResults(
         new BrowserSavePasswordProgressLogger(client_->GetLogManager()));
     logger->LogMessage(Logger::STRING_ON_GET_STORE_RESULTS_METHOD);
     logger->LogNumber(Logger::STRING_NUMBER_RESULTS, results.size());
+  }
+
+  // If this is a non-secure Web origin (i.e. HTTP), kick off the discovery of
+  // credentials stored for the secure version of this origin (i.e. HTTPS),
+  // regardless of whether there are some precisely matching |results|.
+  if (should_query_suppressed_https_forms_ &&
+      form_digest_.origin.SchemeIs(url::kHttpScheme)) {
+    suppressed_https_form_fetcher_ =
+        base::MakeUnique<SuppressedHTTPSFormFetcher>(form_digest_.origin,
+                                                     client_, this);
   }
 
   if (should_migrate_http_passwords_ && results.empty() &&
@@ -146,6 +168,14 @@ void FormFetcherImpl::OnGetSiteStatistics(
 void FormFetcherImpl::ProcessMigratedForms(
     std::vector<std::unique_ptr<autofill::PasswordForm>> forms) {
   ProcessPasswordStoreResults(std::move(forms));
+}
+
+void FormFetcherImpl::ProcessSuppressedHTTPSForms(
+    std::vector<std::unique_ptr<autofill::PasswordForm>> forms) {
+  did_complete_querying_suppressed_https_forms_ = true;
+
+  suppressed_https_forms_ = std::move(forms);
+  weak_suppressed_https_forms_ = MakeWeakCopies(suppressed_https_forms_);
 }
 
 void FormFetcherImpl::Fetch() {
@@ -188,14 +218,18 @@ std::unique_ptr<FormFetcher> FormFetcherImpl::Clone() {
 
   // Create the copy without the "HTTPS migration" activated. If it was needed,
   // then it was done by |this| already.
-  auto result = base::MakeUnique<FormFetcherImpl>(form_digest_, client_, false);
+  auto result = base::MakeUnique<FormFetcherImpl>(
+      form_digest_, client_, false, should_query_suppressed_https_forms_);
 
   result->non_federated_ = MakeCopies(this->non_federated_);
   result->federated_ = MakeCopies(this->federated_);
   result->interactions_stats_ = this->interactions_stats_;
+  result->suppressed_https_forms_ = MakeCopies(this->suppressed_https_forms_);
 
   result->weak_non_federated_ = MakeWeakCopies(result->non_federated_);
   result->weak_federated_ = MakeWeakCopies(result->federated_);
+  result->weak_suppressed_https_forms_ =
+      MakeWeakCopies(result->suppressed_https_forms_);
 
   result->filtered_count_ = this->filtered_count_;
   result->state_ = this->state_;

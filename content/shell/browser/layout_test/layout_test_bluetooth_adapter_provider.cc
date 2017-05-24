@@ -876,6 +876,7 @@ scoped_refptr<NiceMockBluetoothAdapter> LayoutTestBluetoothAdapterProvider::
                              base::RetainedRef(adapter_ptr), device_ptr));
             }
 
+            device_ptr->SetConnected(true);
             return base::MakeUnique<NiceMockBluetoothGattConnection>(
                 adapter_ptr, device_ptr->GetAddress());
           }));
@@ -929,13 +930,15 @@ scoped_refptr<NiceMockBluetoothAdapter> LayoutTestBluetoothAdapterProvider::
   NiceMockBluetoothDevice* device_ptr = device.get();
 
   ON_CALL(*device, CreateGattConnection(_, _))
-      .WillByDefault(Invoke([adapter_ptr, device_ptr](
-          const BluetoothDevice::GattConnectionCallback& callback,
-          const BluetoothDevice::ConnectErrorCallback& error_callback) {
-        callback.Run(base::MakeUnique<NiceMockBluetoothGattConnection>(
-            adapter_ptr, device_ptr->GetAddress()));
-        device_ptr->RunPendingCallbacks();
-      }));
+      .WillByDefault(Invoke(
+          [adapter_ptr, device_ptr](
+              const BluetoothDevice::GattConnectionCallback& callback,
+              const BluetoothDevice::ConnectErrorCallback& error_callback) {
+            device_ptr->SetConnected(true);
+            callback.Run(base::MakeUnique<NiceMockBluetoothGattConnection>(
+                adapter_ptr, device_ptr->GetAddress()));
+            device_ptr->RunPendingCallbacks();
+          }));
 
   device->AddMockService(GetGenericAccessService(device.get()));
 
@@ -1092,13 +1095,15 @@ scoped_refptr<NiceMockBluetoothAdapter> LayoutTestBluetoothAdapterProvider::
   NiceMockBluetoothDevice* device_ptr = device.get();
 
   ON_CALL(*device, CreateGattConnection(_, _))
-      .WillByDefault(Invoke([adapter_ptr, device_ptr](
-          const BluetoothDevice::GattConnectionCallback& callback,
-          const BluetoothDevice::ConnectErrorCallback& error_callback) {
-        callback.Run(base::MakeUnique<NiceMockBluetoothGattConnection>(
-            adapter_ptr, device_ptr->GetAddress()));
-        device_ptr->RunPendingCallbacks();
-      }));
+      .WillByDefault(Invoke(
+          [adapter_ptr, device_ptr](
+              const BluetoothDevice::GattConnectionCallback& callback,
+              const BluetoothDevice::ConnectErrorCallback& error_callback) {
+            device_ptr->SetConnected(true);
+            callback.Run(base::MakeUnique<NiceMockBluetoothGattConnection>(
+                adapter_ptr, device_ptr->GetAddress()));
+            device_ptr->RunPendingCallbacks();
+          }));
 
   device->AddMockService(GetGenericAccessService(device.get()));
 
@@ -1303,6 +1308,7 @@ LayoutTestBluetoothAdapterProvider::GetConnectableDevice(
   ON_CALL(*device, CreateGattConnection(_, _))
       .WillByDefault(RunCallbackWithResult<0 /* success_callback */>(
           [adapter, device_ptr]() {
+            device_ptr->SetConnected(true);
             return base::MakeUnique<NiceMockBluetoothGattConnection>(
                 adapter, device_ptr->GetAddress());
           }));

@@ -222,9 +222,7 @@ UsbServiceImpl::UsbServiceImpl()
 #endif
       weak_factory_(this) {
   base::PostTaskWithTraits(
-      FROM_HERE,
-      {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
-       base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
+      FROM_HERE, kBlockingTaskTraits,
       base::Bind(&InitializeUsbContextOnBlockingThread, task_runner(),
                  base::Bind(&UsbServiceImpl::OnUsbContext,
                             weak_factory_.GetWeakPtr())));
@@ -324,9 +322,7 @@ void UsbServiceImpl::RefreshDevices() {
     pending_path_enumerations_.pop();
   }
 
-  base::PostTaskWithTraits(FROM_HERE,
-                           {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
-                            base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
+  base::PostTaskWithTraits(FROM_HERE, kBlockingTaskTraits,
                            base::Bind(&GetDeviceListOnBlockingThread,
                                       device_path, context_, task_runner(),
                                       base::Bind(&UsbServiceImpl::OnDeviceList,

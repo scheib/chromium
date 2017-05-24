@@ -11,7 +11,7 @@
 
 namespace blink {
 
-class RenderedDocumentMarker;
+class DocumentMarker;
 
 // This is an interface implemented by classes that DocumentMarkerController
 // uses to store DocumentMarkers. Different implementations can be written
@@ -31,8 +31,7 @@ class CORE_EXPORT DocumentMarkerList
   virtual void Add(DocumentMarker*) = 0;
   virtual void Clear() = 0;
 
-  virtual const HeapVector<Member<RenderedDocumentMarker>>& GetMarkers()
-      const = 0;
+  virtual const HeapVector<Member<DocumentMarker>>& GetMarkers() const = 0;
 
   // Returns true if at least one marker is copied, false otherwise
   virtual bool MoveMarkers(int length, DocumentMarkerList* dst_list) = 0;

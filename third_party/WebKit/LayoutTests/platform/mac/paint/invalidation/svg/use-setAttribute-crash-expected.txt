@@ -51,10 +51,6 @@
       "reason": "full"
     },
     {
-      "object": "LayoutSVGEllipse svg:circle id='circle'",
-      "reason": "subtree"
-    },
-    {
       "object": "LayoutSVGContainer svg:use id='use'",
       "reason": "full"
     },

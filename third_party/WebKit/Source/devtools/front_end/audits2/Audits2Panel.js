@@ -40,6 +40,8 @@ Audits2.Audits2Panel = class extends UI.PanelWithSidebar {
         this.contentElement, [UI.DropTarget.Types.Files], Common.UIString('Drop audit file here'),
         this._handleDrop.bind(this));
 
+    for (var preset of Audits2.Audits2Panel.Presets)
+      preset.setting.addChangeListener(this._updateStartButtonEnabled.bind(this));
     this._showLandingPage();
   }
 
@@ -75,6 +77,7 @@ Audits2.Audits2Panel = class extends UI.PanelWithSidebar {
     var newButton = UI.createTextButton(
         Common.UIString('Perform an audit\u2026'), this._showLauncherUI.bind(this), 'material-button default');
     landingCenter.appendChild(newButton);
+    this.setDefaultFocusedElement(newButton);
   }
 
   _showLauncherUI() {
@@ -103,6 +106,7 @@ Audits2.Audits2Panel = class extends UI.PanelWithSidebar {
     var buttonsRow = uiElement.createChild('div', 'audits2-dialog-buttons hbox');
     this._startButton =
         UI.createTextButton(Common.UIString('Run audit'), this._start.bind(this), 'material-button default');
+    this._updateStartButtonEnabled();
     buttonsRow.appendChild(this._startButton);
     this._cancelButton = UI.createTextButton(Common.UIString('Cancel'), this._cancel.bind(this), 'material-button');
     buttonsRow.appendChild(this._cancelButton);
@@ -112,6 +116,18 @@ Audits2.Audits2Panel = class extends UI.PanelWithSidebar {
     this._dialog.show(this.mainElement());
     auditsViewElement.tabIndex = 0;
     auditsViewElement.focus();
+  }
+
+  _updateStartButtonEnabled() {
+    if (!this._startButton)
+      return;
+    for (var preset of Audits2.Audits2Panel.Presets) {
+      if (preset.setting.get()) {
+        this._startButton.disabled = false;
+        return;
+      }
+    }
+    this._startButton.disabled = true;
   }
 
   /**
@@ -226,15 +242,14 @@ Audits2.Audits2Panel = class extends UI.PanelWithSidebar {
   /**
    * @return {!Promise<undefined>}
    */
-  _stopAndReattach() {
-    return this._protocolService.detach().then(_ => {
-      Emulation.InspectedPagePlaceholder.instance().update(true);
-      this._auditRunning = false;
-      this._updateButton();
-      var resourceTreeModel = SDK.targetManager.mainTarget().model(SDK.ResourceTreeModel);
-      // reload to reset the page state
-      resourceTreeModel.navigate(this._inspectedURL).then(() => this._hideDialog());
-    });
+  async _stopAndReattach() {
+    await this._protocolService.detach();
+    Emulation.InspectedPagePlaceholder.instance().update(true);
+    var resourceTreeModel = SDK.targetManager.mainTarget().model(SDK.ResourceTreeModel);
+    // reload to reset the page state
+    await resourceTreeModel.navigate(this._inspectedURL);
+    this._auditRunning = false;
+    this._updateButton();
   }
 
   /**
@@ -260,8 +275,7 @@ Audits2.Audits2Panel = class extends UI.PanelWithSidebar {
     console.error(err);
     this._statusElement.textContent = '';
     this._statusIcon.classList.add('error');
-    this._statusElement.createTextChild(Common.UIString('Ah, sorry! We ran into an error: '));
-    this._statusElement.createChild('em').createTextChild(err.message);
+    this._statusElement.createTextChild(Common.UIString('We ran into an error. '));
     this._createBugReportLink(err, this._statusElement);
   }
 
@@ -273,16 +287,13 @@ Audits2.Audits2Panel = class extends UI.PanelWithSidebar {
     var baseURI = 'https://github.com/GoogleChrome/lighthouse/issues/new?';
     var title = encodeURI('title=DevTools Error: ' + err.message.substring(0, 60));
 
-    var issueBody = `
-**Initial URL**: ${this._inspectedURL}
-**Chrome Version**: ${navigator.userAgent.match(/Chrome\/(\S+)/)[1]}
-**Error Message**: ${err.message}
-**Stack Trace**:
-\`\`\`
-${err.stack}
-\`\`\`
-    `;
-    var body = '&body=' + encodeURI(issueBody.trim());
+    var qsBody = '';
+    qsBody += '**Initial URL**: ' + this._inspectedURL + '\n';
+    qsBody += '**Chrome Version**: ' + navigator.userAgent.match(/Chrome\/(\S+)/)[1] + '\n';
+    qsBody += '**Error Message**: ' + err.message + '\n';
+    qsBody += '**Stack Trace**:\n ```' + err.stack + '```';
+    var body = '&body=' + encodeURI(qsBody);
+
     var reportErrorEl = parentElem.createChild('a', 'audits2-link audits2-report-error');
     reportErrorEl.href = baseURI + title + body;
     reportErrorEl.textContent = Common.UIString('Report this bug');

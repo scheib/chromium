@@ -1,6 +1,6 @@
 Tests audit formatters performing evals on content scripts in WebInspector Extensions API
 
- Started extension.
+Started extension.
 Running tests...
 RUNNING TEST: extension_testAudits
     Extension audits

@@ -370,7 +370,8 @@ void AudioRendererImpl::Initialize(DemuxerStream* stream,
   const AudioParameters& hw_params = output_device_info.output_params();
   expecting_config_changes_ = stream->SupportsConfigChanges();
   if (!expecting_config_changes_ || !hw_params.IsValid() ||
-      hw_params.format() == AudioParameters::AUDIO_FAKE) {
+      hw_params.format() == AudioParameters::AUDIO_FAKE ||
+      !sink_->IsOptimizedForHardwareParameters()) {
     // The actual buffer size is controlled via the size of the AudioBus
     // provided to Render(), but we should choose a value here based on hardware
     // parameters if possible since it affects the initial buffer size used by

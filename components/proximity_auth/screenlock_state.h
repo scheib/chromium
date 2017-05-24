@@ -15,7 +15,7 @@ enum class ScreenlockState {
   INACTIVE,
   // Bluetooth is not on.
   NO_BLUETOOTH,
-  // The local device is in process of turning on Bluetooth.
+  // The local device is in process of connecting to the remote device.
   BLUETOOTH_CONNECTING,
   // No phones eligible to unlock the local device can be found.
   NO_PHONE,

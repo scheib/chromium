@@ -119,6 +119,9 @@ class DataReductionProxyIOData : public DataReductionProxyEventStorageDelegate {
   void SetLoFiModeOff();
 
   // Bridge methods to safely call to the UI thread objects.
+  void UpdateDataUseForHost(int64_t network_bytes,
+                            int64_t original_bytes,
+                            const std::string& host);
   void UpdateContentLengths(
       int64_t data_used,
       int64_t original_size,

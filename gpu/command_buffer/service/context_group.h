@@ -29,6 +29,7 @@ namespace gpu {
 class ImageFactory;
 struct GpuPreferences;
 class TransferBufferManager;
+class ServiceDiscardableManager;
 
 namespace gles2 {
 
@@ -66,7 +67,8 @@ class GPU_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
       bool bind_generates_resource,
       gpu::ImageFactory* image_factory,
       ProgressReporter* progress_reporter,
-      const GpuFeatureInfo& gpu_feature_info);
+      const GpuFeatureInfo& gpu_feature_info,
+      ServiceDiscardableManager* discardable_manager);
 
   // This should only be called by GLES2Decoder. This must be paired with a
   // call to destroy if it succeeds.
@@ -199,6 +201,10 @@ class GPU_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
     return sampler_manager_.get();
   }
 
+  ServiceDiscardableManager* discardable_manager() const {
+    return discardable_manager_;
+  }
+
   uint32_t GetMemRepresented() const;
 
   // Loses all the context associated with this group.
@@ -304,6 +310,8 @@ class GPU_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
   ProgressReporter* progress_reporter_;
 
   GpuFeatureInfo gpu_feature_info_;
+
+  ServiceDiscardableManager* discardable_manager_;
 
   DISALLOW_COPY_AND_ASSIGN(ContextGroup);
 };

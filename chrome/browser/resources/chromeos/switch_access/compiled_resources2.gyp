@@ -64,6 +64,7 @@
     {
       'target_name': 'switch_access',
       'dependencies': [
+        '<(EXTERNS_GYP):automation',
         '<(EXTERNS_GYP):chrome_extensions',
         'prefs',
         'auto_scan_manager',

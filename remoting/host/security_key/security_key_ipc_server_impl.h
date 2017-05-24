@@ -27,6 +27,12 @@ class Channel;
 class Message;
 }  // IPC
 
+namespace mojo {
+namespace edk {
+class PeerConnection;
+}
+}
+
 namespace remoting {
 
 // Responsible for handing the server end of the IPC channel between the
@@ -88,11 +94,8 @@ class SecurityKeyIpcServerImpl : public SecurityKeyIpcServer,
   SecurityKeyAuthHandler::SendMessageCallback message_callback_;
 
   // Used for sending/receiving security key messages between processes.
+  std::unique_ptr<mojo::edk::PeerConnection> peer_connection_;
   std::unique_ptr<IPC::Channel> ipc_channel_;
-
-  // A token that can be used to close the underlying mojo connection. If no
-  // connection exists, this is empty.
-  std::string mojo_peer_token_;
 
   // Ensures SecurityKeyIpcServerImpl methods are called on the same thread.
   base::ThreadChecker thread_checker_;

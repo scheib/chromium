@@ -12,6 +12,7 @@
 #include "core/animation/CSSColorInterpolationType.h"
 #include "core/animation/CSSFilterListInterpolationType.h"
 #include "core/animation/CSSFontSizeInterpolationType.h"
+#include "core/animation/CSSFontVariationSettingsInterpolationType.h"
 #include "core/animation/CSSFontWeightInterpolationType.h"
 #include "core/animation/CSSImageInterpolationType.h"
 #include "core/animation/CSSImageListInterpolationType.h"
@@ -216,6 +217,11 @@ const InterpolationTypes& CSSInterpolationTypesMap::Get(
     case CSSPropertyFontWeight:
       applicable_types->push_back(
           WTF::MakeUnique<CSSFontWeightInterpolationType>(used_property));
+      break;
+    case CSSPropertyFontVariationSettings:
+      applicable_types->push_back(
+          WTF::MakeUnique<CSSFontVariationSettingsInterpolationType>(
+              used_property));
       break;
     case CSSPropertyVisibility:
       applicable_types->push_back(

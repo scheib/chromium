@@ -31,7 +31,7 @@
 #ifndef WebFormElement_h
 #define WebFormElement_h
 
-#include "../platform/WebVector.h"
+#include "public/platform/WebVector.h"
 #include "WebElement.h"
 
 namespace blink {

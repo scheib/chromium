@@ -9,20 +9,21 @@
 </head>
 <body>
   <ul id="list">
-    <li>One</li>
-    <li>Two</li>
+    <li tabindex="-1">One</li>
+    <li tabindex="-1">Two</li>
   </ul>
   <button id="add">Add</button>
   <button id="remove">Remove</button>
   <button id="live">Live</button>
 
-  <div id="dead_region1"></div>
-  <div id="live_region" aria-live="polite"></div>
-  <div id="dead_region2"></div>
+  <div tabindex="-1" id="dead_region1"></div>
+  <div tabindex="-1" id="live_region" aria-live="polite"></div>
+  <div tabindex="-1" id="dead_region2"></div>
 
 <script>
   document.getElementById('add').addEventListener('click', function() {
     var li = document.createElement('li');
+    li.tabIndex = -1;
     li.innerText = 'New';
     document.getElementById('list').appendChild(li);
   });

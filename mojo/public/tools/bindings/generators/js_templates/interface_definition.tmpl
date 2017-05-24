@@ -9,15 +9,15 @@
                                                    handleOrPtrInfo);
   }
 
-  function Associated{{interface.name}}Ptr(associatedInterfacePtrInfo) {
+  function {{interface.name}}AssociatedPtr(associatedInterfacePtrInfo) {
     this.ptr = new associatedBindings.AssociatedInterfacePtrController(
         {{interface.name}}, associatedInterfacePtrInfo);
   }
 
-  Associated{{interface.name}}Ptr.prototype =
+  {{interface.name}}AssociatedPtr.prototype =
       Object.create({{interface.name}}Ptr.prototype);
-  Associated{{interface.name}}Ptr.prototype.constructor =
-      Associated{{interface.name}}Ptr;
+  {{interface.name}}AssociatedPtr.prototype.constructor =
+      {{interface.name}}AssociatedPtr;
 
   function {{interface.name}}Proxy(receiver) {
     this.receiver_ = receiver;
@@ -42,7 +42,7 @@
 {%- endfor %}
 
 {%- if method.response_parameters == None %}
-{%-   if method|method_passes_associated_kinds and not use_new_js_bindings %}
+{%-   if method|method_passes_associated_kinds %}
     var builder = new codec.MessageV2Builder(
         k{{interface_method_id}}_Name,
         codec.align({{interface_method_id}}_Params.encodedSize));
@@ -57,7 +57,7 @@
     this.receiver_.accept(message);
 {%- else %}
     return new Promise(function(resolve, reject) {
-{%-   if method|method_passes_associated_kinds and not use_new_js_bindings %}
+{%-   if method|method_passes_associated_kinds %}
       var builder = new codec.MessageV2Builder(
           k{{interface_method_id}}_Name,
           codec.align({{interface_method_id}}_Params.encodedSize),
@@ -134,7 +134,7 @@ params.{{parameter.name}}{% if not loop.last %}, {% endif -%}
 {%-     for parameter in method.response_parameters %}
         responseParams.{{parameter.name}} = response.{{parameter.name}};
 {%-     endfor %}
-{%- if method|method_passes_associated_kinds and not use_new_js_bindings %}
+{%- if method|method_passes_associated_kinds %}
         var builder = new codec.MessageV2Builder(
             k{{interface_method_id}}_Name,
             codec.align({{interface_method_id}}_ResponseParams

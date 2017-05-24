@@ -108,8 +108,7 @@ void CookiesViewHandler::TreeNodesAdded(ui::TreeModel* model,
     args.SetString(kId, model_util_->GetTreeNodeId(parent_node));
   args.SetInteger(kStart, start);
   args.Set(kChildren, std::move(children));
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("onTreeItemAdded"), args);
+  FireWebUIListener("onTreeItemAdded", args);
 }
 
 void CookiesViewHandler::TreeNodesRemoved(ui::TreeModel* model,
@@ -129,8 +128,7 @@ void CookiesViewHandler::TreeNodesRemoved(ui::TreeModel* model,
     args.SetString(kId, model_util_->GetTreeNodeId(tree_model->AsNode(parent)));
   args.SetInteger(kStart, start);
   args.SetInteger(kCount, count);
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("onTreeItemRemoved"), args);
+  FireWebUIListener("onTreeItemRemoved", args);
 }
 
 void CookiesViewHandler::TreeModelBeginBatch(CookiesTreeModel* model) {

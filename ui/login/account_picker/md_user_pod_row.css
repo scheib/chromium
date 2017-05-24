@@ -46,9 +46,11 @@ pin-keyboard {
 }
 
 .pod .pin-container {
-  height: 204px;
+  left: 36px;
   position: absolute;
-  top: 170px;
+  top: 300px;
+  width: 234px;
+  z-index: 3;
 }
 
 .pod.faded {
@@ -124,21 +126,6 @@ html:not([screen=login-add-user]) .pod.focused .user-image {
   -webkit-filter: grayscale(100%);
 }
 
-.signed-in-indicator {
-  display: none;
-}
-
-.pod.signed-in .signed-in-indicator {
-  background-color: rgba(0, 0, 0, 0.5);
-  color: white;
-  display: block;
-  font-size: small;
-  position: absolute;
-  text-align: center;
-  top: 0;
-  width: 100%;
-}
-
 .main-pane {
   position: absolute;
   z-index: 2;
@@ -173,26 +160,16 @@ html[dir=rtl] .main-pane {
 </if>
 }
 
-polygon #arrow[active] {
-  fill: #7BAAF7;
-  opacity: 1;
-}
-
 .auth-container .submit-button[disabled] {
-  color: #FFFFFF;
   opacity: 0.34;
 }
 
 .auth-container .submit-button {
-  color: #7BAAF7;
+  color: #FFFFFF;
   height: 40px;
   opacity: 1;
   padding: 12px 0 4px 0;
   width: 24px;
-}
-
-.auth-container .submit-button.error-shown {
-  color: #CD2A00;
 }
 
 .name-container {
@@ -257,16 +234,17 @@ polygon #arrow[active] {
 .pod input[type='password'] {
   background-color: transparent;
   border: none;
-  color: #FFFFFF;
+  color: rgba(255, 255, 255, .67);
   font-family: "Roboto";
   font-size: 13px;
   height: 100%;
+  letter-spacing: 8px;
   padding: 0;
   width: 100%;
 }
 
 .pod input[type='password']::-webkit-input-placeholder {
-  opacity: 0.34;
+  letter-spacing: 0;
 }
 
 .capslock-hint-container {

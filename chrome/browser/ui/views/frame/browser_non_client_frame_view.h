@@ -61,6 +61,7 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   virtual void UpdateClientArea();
 
   // Overriden from views::View.
+  void ChildPreferredSizeChanged(views::View* child) override;
   void VisibilityChanged(views::View* starting_from, bool is_visible) override;
 
  protected:

@@ -65,7 +65,7 @@ void DictionaryDataStore::ScheduleWrite() {
 
 std::unique_ptr<base::DictionaryValue>
 DictionaryDataStore::LoadOnBlockingPool() {
-  DCHECK(worker_pool_->RunsTasksOnCurrentThread());
+  DCHECK(worker_pool_->RunsTasksInCurrentSequence());
 
   int error_code = JSONFileValueDeserializer::JSON_NO_ERROR;
   std::string error_message;

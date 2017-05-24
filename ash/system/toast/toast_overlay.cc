@@ -10,7 +10,6 @@
 #include "ash/shelf/wm_shelf.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/wm_window.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -224,10 +223,11 @@ ToastOverlay::ToastOverlay(Delegate* delegate,
   overlay_widget_->SetContentsView(overlay_view_.get());
   overlay_widget_->SetBounds(CalculateOverlayBounds());
 
-  WmWindow* overlay_window = WmWindow::Get(overlay_widget_->GetNativeWindow());
-  overlay_window->SetVisibilityAnimationType(
-      ::wm::WINDOW_VISIBILITY_ANIMATION_TYPE_VERTICAL);
-  overlay_window->SetVisibilityAnimationDuration(
+  aura::Window* overlay_window = overlay_widget_->GetNativeWindow();
+  ::wm::SetWindowVisibilityAnimationType(
+      overlay_window, ::wm::WINDOW_VISIBILITY_ANIMATION_TYPE_VERTICAL);
+  ::wm::SetWindowVisibilityAnimationDuration(
+      overlay_window,
       base::TimeDelta::FromMilliseconds(kSlideAnimationDurationMs));
 }
 

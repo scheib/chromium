@@ -72,11 +72,16 @@ class ContactInfoEditorViewController : public EditorViewController {
     ~ContactInfoValidationDelegate() override;
 
     // ValidationDelegate:
-    bool ValidateTextfield(views::Textfield* textfield) override;
-    bool ValidateCombobox(views::Combobox* combobox) override;
+    bool IsValidTextfield(views::Textfield* textfield) override;
+    bool IsValidCombobox(views::Combobox* combobox) override;
+    bool TextfieldValueChanged(views::Textfield* textfield) override;
+    bool ComboboxValueChanged(views::Combobox* combobox) override;
     void ComboboxModelChanged(views::Combobox* combobox) override {}
 
    private:
+    bool ValidateTextfield(views::Textfield* textfield,
+                           base::string16* error_message);
+
     EditorField field_;
     // Outlives this class. Never null.
     EditorViewController* controller_;

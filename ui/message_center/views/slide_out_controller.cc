@@ -72,6 +72,7 @@ void SlideOutController::OnGestureEvent(ui::GestureEvent* event) {
     RestoreVisualState();
   }
 
+  delegate_->OnSlideChanged();
   event->SetHandled();
 }
 
@@ -100,6 +101,7 @@ void SlideOutController::SlideOutAndClose(int direction) {
   transform.Translate(direction < 0 ? -width : width, 0.0);
   layer->SetTransform(transform);
   layer->SetOpacity(0.f);
+  delegate_->OnSlideChanged();
 }
 
 void SlideOutController::OnImplicitAnimationsCompleted() {

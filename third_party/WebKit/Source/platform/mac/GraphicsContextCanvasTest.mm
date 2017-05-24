@@ -35,11 +35,7 @@ void RunTest(TestType test) {
     canvas.clipRect(clip_rect);
   }
   {
-    SkIRect clip =
-        SkIRect::MakeWH(kWidth, kHeight)
-            .makeOffset(
-                (test & kTestTranslate) ? -(static_cast<int>(kWidth)) / 2 : 0,
-                0);
+    SkIRect clip = SkIRect::MakeWH(kWidth, kHeight);
     GraphicsContextCanvas bit_locker(&canvas, clip);
     CGContextRef cg_context = bit_locker.CgContext();
     CGColorRef test_color = CGColorGetConstantColor(kCGColorWhite);
@@ -54,7 +50,7 @@ void RunTest(TestType test) {
       {0xFF333333, 0xFF666666, 0xFF999999, 0xFFFFFFFF}   // translate | clip
   };
   for (unsigned index = 0; index < kStorageSize; index++)
-    EXPECT_EQ(kResults[test][index], bits[index]);
+    EXPECT_EQ(kResults[test][index], bits[index]) << "Index: " << index;
 }
 
 TEST(GraphicsContextCanvasTest, Identity) {

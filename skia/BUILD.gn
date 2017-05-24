@@ -726,7 +726,7 @@ if (!is_ios) {
     deps = [
       ":skia",
       "//base",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
     ]
   }
@@ -741,7 +741,7 @@ if (!is_ios) {
       ":skia",
       "//base",
       "//base/test:test_support",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
     ]
   }

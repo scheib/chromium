@@ -173,7 +173,7 @@ public class PaymentRequestPaymentAppAndCardsTest implements MainActivityStartCa
                 "Visa\u0020\u0020\u2022\u2006\u2022\u2006\u2022\u2006\u2022\u20061111\nJon Doe",
                 mPaymentRequestTestRule.getPaymentInstrumentLabel(i++));
         Assert.assertEquals(
-                "MasterCard\u0020\u0020\u2022\u2006\u2022\u2006\u2022\u2006\u2022\u20065454\n"
+                "Mastercard\u0020\u0020\u2022\u2006\u2022\u2006\u2022\u2006\u2022\u20065454\n"
                         + "Jon Doe\nBilling address required",
                 mPaymentRequestTestRule.getPaymentInstrumentLabel(i++));
 

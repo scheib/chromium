@@ -29,8 +29,6 @@
 namespace arc {
 namespace {
 
-ArcAuthService* g_arc_auth_service = nullptr;
-
 // Convers mojom::ArcSignInFailureReason into ProvisiningResult.
 ProvisioningResult ConvertArcSignInFailureReasonToProvisioningResult(
     mojom::ArcSignInFailureReason reason) {
@@ -70,6 +68,9 @@ mojom::ChromeAccountType GetAccountType() {
 }
 
 }  // namespace
+
+// static
+const char ArcAuthService::kArcServiceName[] = "arc::ArcAuthService";
 
 // TODO(lhchavez): Get rid of this class once we can safely remove all the
 // deprecated interfaces and only need to care about one type of callback.
@@ -134,22 +135,11 @@ class ArcAuthService::AccountInfoNotifier {
 
 ArcAuthService::ArcAuthService(ArcBridgeService* bridge_service)
     : ArcService(bridge_service), binding_(this), weak_ptr_factory_(this) {
-  DCHECK(!g_arc_auth_service);
-  g_arc_auth_service = this;
   arc_bridge_service()->auth()->AddObserver(this);
 }
 
 ArcAuthService::~ArcAuthService() {
   arc_bridge_service()->auth()->RemoveObserver(this);
-
-  DCHECK_EQ(g_arc_auth_service, this);
-  g_arc_auth_service = nullptr;
-}
-
-// static
-ArcAuthService* ArcAuthService::GetForTest() {
-  DCHECK(g_arc_auth_service);
-  return g_arc_auth_service;
 }
 
 void ArcAuthService::OnInstanceReady() {

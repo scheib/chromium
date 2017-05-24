@@ -62,6 +62,14 @@
   return _proxy.dragging;
 }
 
+- (BOOL)scrollsToTop {
+  return _proxy.scrollsToTop;
+}
+
+- (void)setScrollsToTop:(BOOL)scrollsToTop {
+  _proxy.scrollsToTop = scrollsToTop;
+}
+
 - (UIPanGestureRecognizer*)panGestureRecognizer {
   return _proxy.panGestureRecognizer;
 }

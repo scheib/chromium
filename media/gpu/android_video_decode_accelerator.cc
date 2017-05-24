@@ -38,12 +38,13 @@
 #include "media/gpu/avda_picture_buffer_manager.h"
 #include "media/gpu/content_video_view_overlay.h"
 #include "media/gpu/shared_memory_region.h"
+#include "media/mojo/features.h"
 #include "media/video/picture.h"
 #include "ui/gl/android/scoped_java_surface.h"
 #include "ui/gl/android/surface_texture.h"
 #include "ui/gl/gl_bindings.h"
 
-#if defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
 #include "media/cdm/cdm_manager.h"  // nogncheck
 #endif
 
@@ -275,7 +276,7 @@ AndroidVideoDecodeAccelerator::~AndroidVideoDecodeAccelerator() {
   GetManager()->StopTimer(this);
   codec_allocator_->StopThread(this);
 
-#if defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
   if (!media_drm_bridge_cdm_context_)
     return;
 
@@ -286,7 +287,7 @@ AndroidVideoDecodeAccelerator::~AndroidVideoDecodeAccelerator() {
       MediaDrmBridgeCdmContext::MediaCryptoReadyCB());
 
   media_drm_bridge_cdm_context_->UnregisterPlayer(cdm_registration_id_);
-#endif  // defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#endif  // BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
 }
 
 bool AndroidVideoDecodeAccelerator::Initialize(const Config& config,
@@ -508,7 +509,7 @@ void AndroidVideoDecodeAccelerator::InitializePictureBufferManager() {
   // If we get here with a codec, then we must setSurface.
   if (media_codec_) {
     // TODO(liberato): fail on api check?
-    if (!media_codec_->SetSurface(incoming_bundle_->j_surface().obj())) {
+    if (!media_codec_->SetSurface(incoming_bundle_->GetJavaSurface().obj())) {
       NOTIFY_ERROR(PLATFORM_FAILURE, "MediaCodec failed to switch surfaces.");
       // We're not going to use |incoming_bundle_|.
     } else {
@@ -1405,7 +1406,7 @@ void AndroidVideoDecodeAccelerator::OnStopUsingOverlayImmediately(
 void AndroidVideoDecodeAccelerator::InitializeCdm() {
   DVLOG(2) << __func__ << ": " << config_.cdm_id;
 
-#if !defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if !BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
   NOTIMPLEMENTED();
   NOTIFY_ERROR(PLATFORM_FAILURE, "Cdm support needs mojo in the gpu process");
 #else
@@ -1436,7 +1437,7 @@ void AndroidVideoDecodeAccelerator::InitializeCdm() {
   media_drm_bridge_cdm_context_->SetMediaCryptoReadyCB(BindToCurrentLoop(
       base::Bind(&AndroidVideoDecodeAccelerator::OnMediaCryptoReady,
                  weak_this_factory_.GetWeakPtr())));
-#endif  // !defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#endif  // !BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
 }
 
 void AndroidVideoDecodeAccelerator::OnMediaCryptoReady(

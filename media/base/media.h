@@ -34,6 +34,7 @@ MEDIA_EXPORT bool PlatformHasOpusSupport();
 // TODO(chcunningham): Remove these (always support) when string standardized.
 MEDIA_EXPORT void EnableNewVp9CodecStringSupport();
 MEDIA_EXPORT bool HasNewVp9CodecStringSupport();
+MEDIA_EXPORT void DisableNewVp9CodecStringSupport_ForTesting();
 
 }  // namespace media
 

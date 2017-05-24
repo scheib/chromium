@@ -3871,7 +3871,7 @@ TEST_F(PersonalDataManagerTest, GetCreditCardSuggestions_ServerDuplicates) {
   EXPECT_EQ(
       base::UTF8ToUTF16(std::string("Amex") + kUTF8MidlineEllipsis + "8555"),
       suggestions[1].value);
-  EXPECT_EQ(base::UTF8ToUTF16(std::string("MasterCard") + kUTF8MidlineEllipsis +
+  EXPECT_EQ(base::UTF8ToUTF16(std::string("Mastercard") + kUTF8MidlineEllipsis +
                               "2109"),
             suggestions[2].value);
   EXPECT_EQ(

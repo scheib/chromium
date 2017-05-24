@@ -34,18 +34,21 @@ class SingleSampleMetricsFactoryImplTest : public testing::Test {
 
   ~SingleSampleMetricsFactoryImplTest() override {
     factory_->DestroyProviderForTesting();
-    if (thread_.IsRunning()) {
-      thread_.task_runner()->PostTask(
-          FROM_HERE,
-          base::Bind(&SingleSampleMetricsFactoryImpl::DestroyProviderForTesting,
-                     base::Unretained(factory_)));
-      thread_.Stop();
-    }
+    if (thread_.IsRunning())
+      ShutdownThread();
     base::SingleSampleMetricsFactory::DeleteFactoryForTesting();
   }
 
  protected:
   void StartThread() { ASSERT_TRUE(thread_.Start()); }
+
+  void ShutdownThread() {
+    thread_.task_runner()->PostTask(
+        FROM_HERE,
+        base::Bind(&SingleSampleMetricsFactoryImpl::DestroyProviderForTesting,
+                   base::Unretained(factory_)));
+    thread_.Stop();
+  }
 
   void CreateProvider(mojom::SingleSampleMetricsProviderRequest request) {
     CreateSingleSampleMetricsProvider(service_manager::BindSourceInfo(),
@@ -131,13 +134,7 @@ TEST_F(SingleSampleMetricsFactoryImplTest, DefaultSingleSampleMetricWithValue) {
       base::HistogramBase::kUmaTargetedHistogramFlag));
 }
 
-// Flaky on Android N5X builders. https://crbug.com/719497
-#if defined(OS_ANDROID)
-#define MAYBE_MultithreadedMetrics DISABLED_MultithreadedMetrics
-#else
-#define MAYBE_MultithreadedMetrics MultithreadedMetrics
-#endif
-TEST_F(SingleSampleMetricsFactoryImplTest, MAYBE_MultithreadedMetrics) {
+TEST_F(SingleSampleMetricsFactoryImplTest, MultithreadedMetrics) {
   base::HistogramTester tester;
   std::unique_ptr<base::SingleSampleMetric> metric =
       factory_->CreateCustomCountsMetric(kMetricName, kMin, kMax, kBucketCount);
@@ -171,18 +168,13 @@ TEST_F(SingleSampleMetricsFactoryImplTest, MAYBE_MultithreadedMetrics) {
     run_loop.Run();
   }
 
-  // Release metrics and cycle threads to ensure destruction completes.
-  {
-    thread_.task_runner()->DeleteSoon(FROM_HERE, threaded_metric.release());
-
-    base::RunLoop run_loop;
-    thread_.task_runner()->PostTaskAndReply(
-        FROM_HERE, base::Bind(&base::DoNothing), run_loop.QuitClosure());
-    run_loop.Run();
-  }
+  // Release metrics and shutdown thread to ensure destruction completes.
+  thread_.task_runner()->DeleteSoon(FROM_HERE, threaded_metric.release());
+  ShutdownThread();
 
   metric.reset();
   base::RunLoop().RunUntilIdle();
+
   tester.ExpectUniqueSample(kMetricName, kSample, 2);
 }
 

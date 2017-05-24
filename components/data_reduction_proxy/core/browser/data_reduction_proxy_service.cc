@@ -13,6 +13,7 @@
 #include "base/sequenced_task_runner.h"
 #include "base/single_thread_task_runner.h"
 #include "base/task_runner_util.h"
+#include "base/time/time.h"
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_compression_stats.h"
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_io_data.h"
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_pingback_client.h"
@@ -89,6 +90,16 @@ void DataReductionProxyService::SetIOData(
 void DataReductionProxyService::Shutdown() {
   DCHECK(CalledOnValidThread());
   weak_factory_.InvalidateWeakPtrs();
+}
+
+void DataReductionProxyService::UpdateDataUseForHost(int64_t network_bytes,
+                                                     int64_t original_bytes,
+                                                     const std::string& host) {
+  DCHECK(CalledOnValidThread());
+  if (compression_stats_) {
+    compression_stats_->RecordDataUsage(host, original_bytes, network_bytes,
+                                        base::Time::Now());
+  }
 }
 
 void DataReductionProxyService::UpdateContentLengths(

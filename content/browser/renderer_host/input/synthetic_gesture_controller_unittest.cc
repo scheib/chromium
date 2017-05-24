@@ -660,6 +660,21 @@ class MockSyntheticPointerMouseActionTarget
   WebMouseEvent::Button button_;
 };
 
+class DummySyntheticGestureControllerDelegate
+    : public SyntheticGestureController::Delegate {
+ public:
+  DummySyntheticGestureControllerDelegate() {}
+  ~DummySyntheticGestureControllerDelegate() override {}
+
+ private:
+  // SyntheticGestureController::Delegate:
+  void RequestBeginFrameForSynthesizedInput(
+      base::OnceClosure callback) override {}
+  bool HasGestureStopped() override { return true; }
+
+  DISALLOW_COPY_AND_ASSIGN(DummySyntheticGestureControllerDelegate);
+};
+
 class SyntheticGestureControllerTestBase {
  public:
   SyntheticGestureControllerTestBase() {}
@@ -670,8 +685,7 @@ class SyntheticGestureControllerTestBase {
   void CreateControllerAndTarget() {
     target_ = new MockGestureTarget();
     controller_ = base::MakeUnique<SyntheticGestureController>(
-        std::unique_ptr<SyntheticGestureTarget>(target_),
-        base::Bind([](base::OnceClosure callback) {}));
+        &delegate_, std::unique_ptr<SyntheticGestureTarget>(target_));
   }
 
   void QueueSyntheticGesture(std::unique_ptr<SyntheticGesture> gesture) {
@@ -699,6 +713,7 @@ class SyntheticGestureControllerTestBase {
   base::TimeDelta GetTotalTime() const { return time_ - start_time_; }
 
   MockSyntheticGestureTarget* target_;
+  DummySyntheticGestureControllerDelegate delegate_;
   std::unique_ptr<SyntheticGestureController> controller_;
   base::TimeTicks start_time_;
   base::TimeTicks time_;

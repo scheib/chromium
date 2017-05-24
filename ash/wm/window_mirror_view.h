@@ -30,7 +30,7 @@ class WindowMirrorView : public views::View {
   ~WindowMirrorView() override;
 
   // views::View:
-  gfx::Size GetPreferredSize() const override;
+  gfx::Size CalculatePreferredSize() const override;
   void Layout() override;
   bool GetNeedsNotificationWhenVisibleBoundsChange() const override;
   void OnVisibleBoundsChanged() override;

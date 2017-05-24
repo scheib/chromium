@@ -14,12 +14,13 @@
 #include "content/public/utility/content_utility_client.h"
 #include "content/public/utility/utility_thread.h"
 #include "content/utility/utility_thread_impl.h"
+#include "media/mojo/features.h"
 #include "services/data_decoder/data_decoder_service.h"
 #include "services/data_decoder/public/interfaces/constants.mojom.h"
 #include "services/shape_detection/public/interfaces/constants.mojom.h"
 #include "services/shape_detection/shape_detection_service.h"
 
-#if defined(ENABLE_MOJO_MEDIA_IN_UTILITY_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_UTILITY_PROCESS)
 #include "media/mojo/services/media_service_factory.h"  // nogncheck
 #endif
 
@@ -42,11 +43,12 @@ UtilityServiceFactory::~UtilityServiceFactory() {}
 void UtilityServiceFactory::RegisterServices(ServiceMap* services) {
   GetContentClient()->utility()->RegisterServices(services);
 
-#if defined(ENABLE_MOJO_MEDIA_IN_UTILITY_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_UTILITY_PROCESS)
   ServiceInfo info;
   info.factory = base::Bind(&media::CreateMediaService);
   services->insert(std::make_pair("media", info));
 #endif
+
   ServiceInfo shape_detection_info;
   shape_detection_info.factory =
       base::Bind(&shape_detection::ShapeDetectionService::Create);

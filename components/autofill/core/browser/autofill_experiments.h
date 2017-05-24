@@ -29,7 +29,6 @@ extern const base::Feature kAutofillCreditCardAssist;
 extern const base::Feature kAutofillScanCardholderName;
 extern const base::Feature kAutofillCreditCardPopupLayout;
 extern const base::Feature kAutofillCreditCardLastUsedDateDisplay;
-extern const base::Feature kAutofillUkmLogging;
 extern const base::Feature kAutofillUpstreamRequestCvcIfMissing;
 extern const base::Feature kAutofillUpstreamUseAutofillProfileComparatorForName;
 extern const base::Feature kAutofillUpstreamUseNotRecentlyUsedAutofillProfile;
@@ -104,9 +103,6 @@ void ModifyAutofillCreditCardSuggestion(struct Suggestion* suggestion);
 // if the margin isn't configured in an experiment to tweak autofill popup
 // layout.
 unsigned int GetPopupMargin();
-
-// Returns whether the feature to log UKMs is enabled.
-bool IsUkmLoggingEnabled();
 
 // Returns whether the experiment is enabled where Chrome Upstream requests CVC
 // in the offer to save bubble if it was not detected during the checkout flow.

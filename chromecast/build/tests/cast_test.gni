@@ -67,6 +67,7 @@
 #     runtime_deps_path = "$root_out_dir/path/to/list/runtime_deps.json"
 #   }
 
+import("//chromecast/chromecast.gni")
 import("//testing/test.gni")
 
 # Do not allow mixing of gtests and junit tests. All gtests must go into one
@@ -432,6 +433,10 @@ template("cast_test_group_list") {
     # that the tests are built.
     if (defined(_build_tests)) {
       deps += _build_tests
+    }
+
+    if (chromecast_branding != "public") {
+      deps += [ "//chromecast/internal:cast_test_checker" ]
     }
   }
 }

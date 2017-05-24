@@ -263,7 +263,7 @@ HitTestResult EventHandler::HitTestResultAtPoint(
     const LayoutSize& padding) {
   TRACE_EVENT0("blink", "EventHandler::hitTestResultAtPoint");
 
-  ASSERT((hit_type & HitTestRequest::kListBased) || padding.IsEmpty());
+  DCHECK((hit_type & HitTestRequest::kListBased) || padding.IsEmpty());
 
   // We always send hitTestResultAtPoint to the main frame if we have one,
   // otherwise we might hit areas that are obscured by higher frames.
@@ -1240,7 +1240,7 @@ WebInputEventResult EventHandler::UpdatePointerTargetAndDispatchEvents(
     const String& canvas_region_id,
     const WebMouseEvent& mouse_event,
     const Vector<WebMouseEvent>& coalesced_events) {
-  ASSERT(mouse_event_type == EventTypeNames::mousedown ||
+  DCHECK(mouse_event_type == EventTypeNames::mousedown ||
          mouse_event_type == EventTypeNames::mousemove ||
          mouse_event_type == EventTypeNames::mouseup);
 
@@ -2023,7 +2023,7 @@ bool EventHandler::HandleTextInputEvent(const String& text,
   // Platforms should differentiate real commands like selectAll from text input
   // in disguise (like insertNewline), and avoid dispatching text input events
   // from keydown default handlers.
-  ASSERT(!underlying_event || !underlying_event->IsKeyboardEvent() ||
+  DCHECK(!underlying_event || !underlying_event->IsKeyboardEvent() ||
          ToKeyboardEvent(underlying_event)->type() == EventTypeNames::keypress);
 
   if (!frame_)

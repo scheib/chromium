@@ -24,7 +24,7 @@ void DidGetUsageAndQuota(
     QuotaStatusCode status,
     int64_t usage,
     int64_t quota) {
-  if (!original_task_runner->RunsTasksOnCurrentThread()) {
+  if (!original_task_runner->RunsTasksInCurrentSequence()) {
     original_task_runner->PostTask(
         FROM_HERE, base::Bind(&DidGetUsageAndQuota,
                               base::RetainedRef(original_task_runner), callback,

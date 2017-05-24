@@ -155,8 +155,12 @@ class ScopedGroupPolicyRegistrySandbox {
   ScopedGroupPolicyRegistrySandbox();
   ~ScopedGroupPolicyRegistrySandbox();
 
- private:
+  // Activates the registry keys overrides. This must be called before doing any
+  // writes to registry and the call should be wrapped in
+  // ASSERT_NO_FATAL_FAILURE.
   void ActivateOverrides();
+
+ private:
   void RemoveOverrides();
 
   // Deletes the sandbox keys.
@@ -295,7 +299,14 @@ class PRegTestHarness : public PolicyProviderTestHarness,
   DISALLOW_COPY_AND_ASSIGN(PRegTestHarness);
 };
 
-ScopedGroupPolicyRegistrySandbox::ScopedGroupPolicyRegistrySandbox() {
+ScopedGroupPolicyRegistrySandbox::ScopedGroupPolicyRegistrySandbox() {}
+
+ScopedGroupPolicyRegistrySandbox::~ScopedGroupPolicyRegistrySandbox() {
+  RemoveOverrides();
+  DeleteKeys();
+}
+
+void ScopedGroupPolicyRegistrySandbox::ActivateOverrides() {
   // Generate a unique registry key for the override for each test. This
   // makes sure that tests executing in parallel won't delete each other's
   // key, at DeleteKeys().
@@ -303,6 +314,11 @@ ScopedGroupPolicyRegistrySandbox::ScopedGroupPolicyRegistrySandbox() {
         "SOFTWARE\\chromium unittest %d", base::GetCurrentProcId()));
   std::wstring hklm_key_name = key_name_ + L"\\HKLM";
   std::wstring hkcu_key_name = key_name_ + L"\\HKCU";
+
+  // Delete the registry test keys if they already exist (this could happen if
+  // the process id got recycled and the last test running under the same
+  // process id crashed ).
+  DeleteKeys();
 
   // Create the subkeys to hold the overridden HKLM and HKCU
   // policy settings.
@@ -313,19 +329,22 @@ ScopedGroupPolicyRegistrySandbox::ScopedGroupPolicyRegistrySandbox() {
                              hkcu_key_name.c_str(),
                              KEY_ALL_ACCESS);
 
-  ActivateOverrides();
-}
+  auto result_override_hklm =
+      RegOverridePredefKey(HKEY_LOCAL_MACHINE, temp_hklm_hive_key_.Handle());
+  auto result_override_hkcu =
+      RegOverridePredefKey(HKEY_CURRENT_USER, temp_hkcu_hive_key_.Handle());
 
-ScopedGroupPolicyRegistrySandbox::~ScopedGroupPolicyRegistrySandbox() {
-  RemoveOverrides();
-  DeleteKeys();
-}
+  if (result_override_hklm != ERROR_SUCCESS ||
+      result_override_hkcu != ERROR_SUCCESS) {
+    // We need to remove the overrides first in case one succeeded and one
+    // failed, otherwise deleting the keys fails.
+    RemoveOverrides();
+    DeleteKeys();
 
-void ScopedGroupPolicyRegistrySandbox::ActivateOverrides() {
-  ASSERT_HRESULT_SUCCEEDED(RegOverridePredefKey(HKEY_LOCAL_MACHINE,
-                                                temp_hklm_hive_key_.Handle()));
-  ASSERT_HRESULT_SUCCEEDED(RegOverridePredefKey(HKEY_CURRENT_USER,
-                                                temp_hkcu_hive_key_.Handle()));
+    // Assert on the actual results to print the error code in failure case.
+    ASSERT_HRESULT_SUCCEEDED(result_override_hklm);
+    ASSERT_HRESULT_SUCCEEDED(result_override_hkcu);
+  }
 }
 
 void ScopedGroupPolicyRegistrySandbox::RemoveOverrides() {
@@ -347,7 +366,12 @@ RegistryTestHarness::RegistryTestHarness(HKEY hive, PolicyScope scope)
 
 RegistryTestHarness::~RegistryTestHarness() {}
 
-void RegistryTestHarness::SetUp() {}
+void RegistryTestHarness::SetUp() {
+  // SetUp is called at gtest SetUp time, and gtest documentation guarantees
+  // that the test will not be executed if SetUp has a fatal failure. This is
+  // important, see crbug.com/721691.
+  ASSERT_NO_FATAL_FAILURE(registry_sandbox_.ActivateOverrides());
+}
 
 ConfigurationPolicyProvider* RegistryTestHarness::CreateProvider(
     SchemaRegistry* registry,
@@ -713,6 +737,11 @@ class PolicyLoaderWinTest : public PolicyTestBase,
   void SetUp() override {
     base::win::SetDomainStateForTesting(false);
     PolicyTestBase::SetUp();
+
+    // Activate overrides of registry keys. gtest documentation guarantees
+    // that the test will not be executed if SetUp has a fatal failure. This is
+    // important, see crbug.com/721691.
+    ASSERT_NO_FATAL_FAILURE(registry_sandbox_.ActivateOverrides());
 
     ASSERT_TRUE(PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir_));
     test_data_dir_ = test_data_dir_.AppendASCII("chrome")

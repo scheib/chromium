@@ -730,16 +730,6 @@ bool ComputedStyle::DiffNeedsFullLayoutAndPaintInvalidation(
       other.inherited_data_->font_.LoadingCustomFonts())
     return true;
 
-  if (inherited_data_.Get() != other.inherited_data_.Get()) {
-    if (inherited_data_->line_height_ != other.inherited_data_->line_height_ ||
-        inherited_data_->font_ != other.inherited_data_->font_ ||
-        inherited_data_->horizontal_border_spacing_ !=
-            other.inherited_data_->horizontal_border_spacing_ ||
-        inherited_data_->vertical_border_spacing_ !=
-            other.inherited_data_->vertical_border_spacing_)
-      return true;
-  }
-
   if (BoxDirection() != other.BoxDirection() ||
       RtlOrdering() != other.RtlOrdering() ||
       GetTextAlign() != other.GetTextAlign() ||
@@ -859,10 +849,8 @@ bool ComputedStyle::DiffNeedsPaintInvalidationObject(
     const ComputedStyle& other) const {
   if (Visibility() != other.Visibility() ||
       PrintColorAdjust() != other.PrintColorAdjust() ||
-      InsideLink() != other.InsideLink() ||
-      !Border().VisuallyEqual(other.Border()) || !RadiiEqual(other) ||
-      !BorderColorVisuallyEquals(other) || !BorderSizeEquals(other) ||
-      *background_data_ != *other.background_data_)
+      InsideLink() != other.InsideLink() || !BorderVisuallyEqual(other) ||
+      !RadiiEqual(other) || *background_data_ != *other.background_data_)
     return true;
 
   if (rare_inherited_data_.Get() != other.rare_inherited_data_.Get()) {
@@ -1021,7 +1009,7 @@ void ComputedStyle::UpdatePropertySpecificDifferences(
       diff.SetNeedsRecomputeOverflow();
   }
 
-  if (!Border().VisualOverflowEqual(other.Border()))
+  if (!BorderVisualOverflowEqual(other))
     diff.SetNeedsRecomputeOverflow();
 
   if (!diff.NeedsFullPaintInvalidation()) {
@@ -1390,8 +1378,7 @@ void ComputedStyle::SetBoxShadow(RefPtr<ShadowList> s) {
   rare_non_inherited_data_.Access()->box_shadow_ = std::move(s);
 }
 
-static FloatRoundedRect::Radii CalcRadiiFor(const BorderData& border,
-                                            const LengthSize& top_left,
+static FloatRoundedRect::Radii CalcRadiiFor(const LengthSize& top_left,
                                             const LengthSize& top_right,
                                             const LengthSize& bottom_left,
                                             const LengthSize& bottom_right,
@@ -1420,16 +1407,10 @@ void ComputedStyle::SetListStyleImage(StyleImage* v) {
 }
 
 Color ComputedStyle::GetColor() const {
-  return inherited_data_->color_;
-}
-Color ComputedStyle::VisitedLinkColor() const {
-  return inherited_data_->visited_link_color_;
+  return ColorInternal();
 }
 void ComputedStyle::SetColor(const Color& v) {
-  SET_VAR(inherited_data_, color_, v);
-}
-void ComputedStyle::SetVisitedLinkColor(const Color& v) {
-  SET_VAR(inherited_data_, visited_link_color_, v);
+  SetColorInternal(v);
 }
 
 FloatRoundedRect ComputedStyle::GetRoundedBorderFor(
@@ -1438,10 +1419,9 @@ FloatRoundedRect ComputedStyle::GetRoundedBorderFor(
     bool include_logical_right_edge) const {
   FloatRoundedRect rounded_rect(PixelSnappedIntRect(border_rect));
   if (HasBorderRadius()) {
-    FloatRoundedRect::Radii radii =
-        CalcRadiiFor(Border(), BorderTopLeftRadius(), BorderTopRightRadius(),
-                     BorderBottomLeftRadius(), BorderBottomRightRadius(),
-                     border_rect.Size());
+    FloatRoundedRect::Radii radii = CalcRadiiFor(
+        BorderTopLeftRadius(), BorderTopRightRadius(), BorderBottomLeftRadius(),
+        BorderBottomRightRadius(), border_rect.Size());
     rounded_rect.IncludeLogicalEdges(radii, IsHorizontalWritingMode(),
                                      include_logical_left_edge,
                                      include_logical_right_edge);
@@ -1581,7 +1561,7 @@ AtomicString ComputedStyle::LocaleForLineBreakIterator() const {
 }
 
 Hyphenation* ComputedStyle::GetHyphenation() const {
-  return GetHyphens() == kHyphensAuto
+  return GetHyphens() == Hyphens::kAuto
              ? GetFontDescription().LocaleOrDefault().GetHyphenation()
              : nullptr;
 }
@@ -1677,10 +1657,10 @@ CSSTransitionData& ComputedStyle::AccessTransitions() {
 }
 
 const Font& ComputedStyle::GetFont() const {
-  return inherited_data_->font_;
+  return FontInternal();
 }
 const FontDescription& ComputedStyle::GetFontDescription() const {
-  return inherited_data_->font_.GetFontDescription();
+  return FontInternal().GetFontDescription();
 }
 float ComputedStyle::SpecifiedFontSize() const {
   return GetFontDescription().SpecifiedSize();
@@ -1873,15 +1853,15 @@ float ComputedStyle::LetterSpacing() const {
 }
 
 bool ComputedStyle::SetFontDescription(const FontDescription& v) {
-  if (inherited_data_->font_.GetFontDescription() != v) {
-    inherited_data_.Access()->font_ = Font(v);
+  if (FontInternal().GetFontDescription() != v) {
+    SetFontInternal(Font(v));
     return true;
   }
   return false;
 }
 
 void ComputedStyle::SetFont(const Font& font) {
-  inherited_data_.Access()->font_ = font;
+  SetFontInternal(font);
 }
 
 bool ComputedStyle::HasIdenticalAscentDescentAndLineGap(
@@ -1894,10 +1874,10 @@ bool ComputedStyle::HasIdenticalAscentDescentAndLineGap(
 }
 
 const Length& ComputedStyle::SpecifiedLineHeight() const {
-  return inherited_data_->line_height_;
+  return LineHeightInternal();
 }
 Length ComputedStyle::LineHeight() const {
-  const Length& lh = inherited_data_->line_height_;
+  const Length& lh = LineHeightInternal();
   // Unlike getFontDescription().computedSize() and hence fontSize(), this is
   // recalculated on demand as we only store the specified line height.
   // FIXME: Should consider scaling the fixed part of any calc expressions
@@ -1913,7 +1893,7 @@ Length ComputedStyle::LineHeight() const {
 }
 
 void ComputedStyle::SetLineHeight(const Length& specified_line_height) {
-  SET_VAR(inherited_data_, line_height_, specified_line_height);
+  SetLineHeightInternal(specified_line_height);
 }
 
 int ComputedStyle::ComputedLineHeight() const {
@@ -1961,7 +1941,7 @@ void ComputedStyle::SetLetterSpacing(float letter_spacing) {
 }
 
 void ComputedStyle::SetTextAutosizingMultiplier(float multiplier) {
-  SET_VAR(inherited_data_, text_autosizing_multiplier_, multiplier);
+  SetTextAutosizingMultiplierInternal(multiplier);
 
   float size = SpecifiedFontSize();
 
@@ -2387,33 +2367,33 @@ LayoutRectOutsets ComputedStyle::ImageOutsets(
 }
 
 void ComputedStyle::SetBorderImageSource(StyleImage* image) {
-  if (Border().image_.GetImage() == image)
+  if (BorderImage().GetImage() == image)
     return;
-  surround_data_.Access()->border_.image_.SetImage(image);
+  MutableBorderImageInternal().SetImage(image);
 }
 
 void ComputedStyle::SetBorderImageSlices(const LengthBox& slices) {
-  if (Border().image_.ImageSlices() == slices)
+  if (BorderImage().ImageSlices() == slices)
     return;
-  surround_data_.Access()->border_.image_.SetImageSlices(slices);
+  MutableBorderImageInternal().SetImageSlices(slices);
 }
 
 void ComputedStyle::SetBorderImageSlicesFill(bool fill) {
-  if (Border().image_.Fill() == fill)
+  if (BorderImage().Fill() == fill)
     return;
-  surround_data_.Access()->border_.image_.SetFill(fill);
+  MutableBorderImageInternal().SetFill(fill);
 }
 
 void ComputedStyle::SetBorderImageWidth(const BorderImageLengthBox& slices) {
-  if (Border().image_.BorderSlices() == slices)
+  if (BorderImage().BorderSlices() == slices)
     return;
-  surround_data_.Access()->border_.image_.SetBorderSlices(slices);
+  MutableBorderImageInternal().SetBorderSlices(slices);
 }
 
 void ComputedStyle::SetBorderImageOutset(const BorderImageLengthBox& outset) {
-  if (Border().image_.Outset() == outset)
+  if (BorderImage().Outset() == outset)
     return;
-  surround_data_.Access()->border_.image_.SetOutset(outset);
+  MutableBorderImageInternal().SetOutset(outset);
 }
 
 bool ComputedStyle::BorderObscuresBackground() const {

@@ -56,6 +56,7 @@
 #include "content/public/common/url_constants.h"
 #include "content/public/common/web_preferences.h"
 #include "media/audio/audio_thread_impl.h"
+#include "media/mojo/features.h"
 #include "net/ssl/ssl_cert_request_info.h"
 #include "net/url_request/url_request_context_getter.h"
 #include "services/service_manager/public/cpp/bind_source_info.h"
@@ -65,7 +66,7 @@
 #include "ui/display/screen.h"
 #include "ui/gl/gl_switches.h"
 
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
 #include "chromecast/media/service/cast_mojo_media_client.h"
 #include "media/mojo/services/media_service.h"  // nogncheck
 #endif  // ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS
@@ -83,7 +84,7 @@ namespace chromecast {
 namespace shell {
 
 namespace {
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
 static std::unique_ptr<service_manager::Service> CreateMediaService(
     CastContentBrowserClient* browser_client) {
   std::unique_ptr<media::CastMojoMediaClient> mojo_media_client(
@@ -97,7 +98,7 @@ static std::unique_ptr<service_manager::Service> CreateMediaService(
   return std::unique_ptr<service_manager::Service>(
       new ::media::MediaService(std::move(mojo_media_client)));
 }
-#endif  // defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#endif  // BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
 
 }  // namespace
 
@@ -203,10 +204,10 @@ CastContentBrowserClient::CreateAudioManager(
 
 std::unique_ptr<::media::CdmFactory>
 CastContentBrowserClient::CreateCdmFactory() {
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
   return base::MakeUnique<media::CastCdmFactory>(GetMediaTaskRunner(),
                                                  media_resource_tracker());
-#endif  // defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#endif  // BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
   return nullptr;
 }
 #endif  // BUILDFLAG(IS_CAST_USING_CMA_BACKEND)
@@ -483,7 +484,7 @@ void CastContentBrowserClient::ExposeInterfacesToRenderer(
 
 void CastContentBrowserClient::RegisterInProcessServices(
     StaticServiceMap* services) {
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
   content::ServiceInfo info;
   info.factory = base::Bind(&CreateMediaService, base::Unretained(this));
   info.task_runner = GetMediaTaskRunner();

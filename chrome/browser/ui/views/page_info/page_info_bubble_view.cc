@@ -58,6 +58,7 @@
 #include "ui/views/layout/layout_manager.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
+#include "ui/views/widget/widget_observer.h"
 #include "url/gurl.h"
 
 namespace {
@@ -387,6 +388,7 @@ PageInfoBubbleView::~PageInfoBubbleView() {}
 // static
 void PageInfoBubbleView::ShowBubble(
     views::View* anchor_view,
+    views::WidgetObserver* widget_observer,
     const gfx::Rect& anchor_rect,
     Profile* profile,
     content::WebContents* web_contents,
@@ -403,6 +405,8 @@ void PageInfoBubbleView::ShowBubble(
         new InternalPageInfoBubbleView(anchor_view, parent_window, url);
     if (!anchor_view)
       bubble->SetAnchorRect(anchor_rect);
+    if (widget_observer)
+      bubble->GetWidget()->AddObserver(widget_observer);
     bubble->GetWidget()->Show();
     return;
   }
@@ -410,6 +414,8 @@ void PageInfoBubbleView::ShowBubble(
       anchor_view, parent_window, profile, web_contents, url, security_info);
   if (!anchor_view)
     bubble->SetAnchorRect(anchor_rect);
+  if (widget_observer)
+    bubble->GetWidget()->AddObserver(widget_observer);
   bubble->GetWidget()->Show();
 }
 

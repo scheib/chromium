@@ -285,8 +285,7 @@ void UpdateEngine::HandleComponentComplete(const UpdateContextIterator& it) {
   if (component->IsHandled()) {
     (*it)->next_update_delay = component->GetUpdateDuration();
 
-    // Only ping when the server response included an update for this component.
-    if (component->CanPing()) {
+    if (!component->events().empty()) {
       ping_manager_->SendPing(*component);
     }
 

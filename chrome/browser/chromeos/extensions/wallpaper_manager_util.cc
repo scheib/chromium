@@ -28,15 +28,15 @@ namespace wallpaper_manager_util {
 
 namespace {
 
-const char kAndroidWallpapersAppPackage[] = "com.google.android.apps.wallpaper";
-const char kAndroidWallpapersAppActivity[] =
-    "com.google.android.apps.wallpaper.picker.CategoryPickerActivity";
-
 const char kAndroidWallpapersAppTrialName[] = "AndroidWallpapersAppOnChromeOS";
 const char kEnableAndroidWallpapersApp[] =
     "Enable-android-wallpapers-app_Dogfood";
 
 }  // namespace
+
+const char kAndroidWallpapersAppPackage[] = "com.google.android.apps.wallpaper";
+const char kAndroidWallpapersAppActivity[] =
+    "com.google.android.apps.wallpaper.picker.CategoryPickerActivity";
 
 // Only if the current profile is the primary profile && ARC service is enabled
 // && the Android Wallpapers App has been installed && the finch experiment or

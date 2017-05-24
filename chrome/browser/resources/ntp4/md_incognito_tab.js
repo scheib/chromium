@@ -24,8 +24,17 @@ window.addEventListener('load', function() {
   var bulletpoints = document.querySelectorAll('.bulletpoints');
   var content = document.querySelector('.content');
 
-  var maxWidth = (bulletpoints[0].offsetWidth + bulletpoints[1].offsetWidth +
-      40 /* margin */ + 2 /* offsetWidths may be rounded down */);
+  // Unless this is the first load of the Incognito NTP in this session and
+  // with this font size, we already have the maximum content width determined.
+  var fontSize = window.getComputedStyle(document.body).fontSize;
+  var maxWidth = localStorage[fontSize] ||
+      (bulletpoints[0].offsetWidth + bulletpoints[1].offsetWidth +
+           40 /* margin */ + 2 /* offsetWidths may be rounded down */);
+
+  // Save the data for quicker access when the NTP is reloaded. Note that since
+  // we're in the Incognito mode, the local storage is ephemeral and the data
+  // will be discarded when the session ends.
+  localStorage[fontSize] = maxWidth;
 
   // Limit the maximum width to 600px. That might force the two lists
   // of bulletpoints under each other, in which case we must swap the left

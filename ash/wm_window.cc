@@ -16,7 +16,6 @@
 #include "ash/wm/window_animations.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_transient_window_observer.h"
 #include "base/memory/ptr_util.h"
@@ -443,14 +442,6 @@ void WmWindow::SetShowState(ui::WindowShowState show_state) {
 
 ui::WindowShowState WmWindow::GetShowState() const {
   return window_->GetProperty(aura::client::kShowStateKey);
-}
-
-void WmWindow::SetPreMinimizedShowState(ui::WindowShowState show_state) {
-  window_->SetProperty(aura::client::kPreMinimizedShowStateKey, show_state);
-}
-
-ui::WindowShowState WmWindow::GetPreMinimizedShowState() const {
-  return window_->GetProperty(aura::client::kPreMinimizedShowStateKey);
 }
 
 void WmWindow::SetPreFullscreenShowState(ui::WindowShowState show_state) {

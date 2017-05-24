@@ -511,6 +511,7 @@ void NavigationRequest::OnRequestRedirected(
     // FilterURL sets the URL to about:blank if the CSP checks prevent the
     // renderer from accessing it.
     if ((url == url::kAboutBlankURL) && (url != common_params_.url)) {
+      navigation_handle_->set_net_error_code(net::ERR_ABORTED);
       frame_tree_node_->ResetNavigationRequest(false, true);
       return;
     }
@@ -595,6 +596,7 @@ void NavigationRequest::OnResponseStarted(
     // TODO(clamy): Rename ShouldTransferNavigation once PlzNavigate ships.
     if (!frame_tree_node_->navigator()->GetDelegate()->ShouldTransferNavigation(
             frame_tree_node_->IsMainFrame())) {
+      navigation_handle_->set_net_error_code(net::ERR_ABORTED);
       frame_tree_node_->ResetNavigationRequest(false, true);
       return;
     }

@@ -42,6 +42,7 @@ class EnvTestHelper {
   // only be used for tests where Env is long lived.
   void SetWindowTreeClient(WindowTreeClient* window_tree_client) {
     env_->window_tree_client_ = window_tree_client;
+    env_->in_mus_shutdown_ = window_tree_client ? false : true;
   }
 
   void SetAlwaysUseLastMouseLocation(bool value) {

@@ -30,7 +30,7 @@
 #include "ios/web/public/web_thread.h"
 #include "ios/web/public/webui/web_ui_ios_controller.h"
 #include "ios/web/web_state/global_web_state_event_tracker.h"
-#include "ios/web/web_state/navigation_context_impl.h"
+#import "ios/web/web_state/navigation_context_impl.h"
 #import "ios/web/web_state/session_certificate_policy_cache_impl.h"
 #import "ios/web/web_state/ui/crw_web_controller.h"
 #import "ios/web/web_state/ui/crw_web_controller_container_view.h"
@@ -671,9 +671,8 @@ bool WebStateImpl::HasOpener() const {
 }
 
 void WebStateImpl::OnNavigationStarted(web::NavigationContext* context) {
-  // TODO(crbug.com/713836): pass context to WebStateObserver callback.
   for (auto& observer : observers_)
-    observer.ProvisionalNavigationStarted(context->GetUrl());
+    observer.DidStartNavigation(context);
 }
 
 void WebStateImpl::OnNavigationFinished(web::NavigationContext* context) {

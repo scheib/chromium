@@ -6,12 +6,17 @@
 
 #include <string>
 
+#include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chrome/common/chrome_features.h"
+#include "chrome/common/page_load_metrics/page_load_metrics_messages.h"
 #include "chrome/renderer/page_load_metrics/page_timing_metrics_sender.h"
+#include "chrome/renderer/page_load_metrics/page_timing_sender.h"
 #include "chrome/renderer/page_load_metrics/renderer_page_track_decider.h"
 #include "chrome/renderer/searchbox/search_bouncer.h"
+#include "content/public/common/associated_interface_provider.h"
 #include "content/public/renderer/render_frame.h"
 #include "third_party/WebKit/public/web/WebDataSource.h"
 #include "third_party/WebKit/public/web/WebDocument.h"
@@ -28,6 +33,45 @@ base::TimeDelta ClampDelta(double event, double start) {
     event = start;
   return base::Time::FromDoubleT(event) - base::Time::FromDoubleT(start);
 }
+
+class LegacyIPCPageTimingSender : public PageTimingSender {
+ public:
+  LegacyIPCPageTimingSender(content::RenderFrame* render_frame,
+                            const int routing_id)
+      : render_frame_(render_frame), routing_id_(routing_id) {}
+  ~LegacyIPCPageTimingSender() override {}
+
+  void SendTiming(const mojom::PageLoadTimingPtr& timing,
+                  const mojom::PageLoadMetadataPtr& metadata) override {
+    DCHECK(render_frame_);
+    render_frame_->Send(
+        new PageLoadMetricsMsg_TimingUpdated(routing_id_, *timing, *metadata));
+  }
+
+ private:
+  content::RenderFrame* const render_frame_;
+  const int routing_id_;
+};
+
+class MojoIPCPageTimingSender : public PageTimingSender {
+ public:
+  explicit MojoIPCPageTimingSender(content::RenderFrame* render_frame) {
+    DCHECK(render_frame);
+    render_frame->GetRemoteAssociatedInterfaces()->GetInterface(
+        &page_load_metrics_);
+  }
+  ~MojoIPCPageTimingSender() override {}
+  void SendTiming(const mojom::PageLoadTimingPtr& timing,
+                  const mojom::PageLoadMetadataPtr& metadata) override {
+    DCHECK(page_load_metrics_);
+    page_load_metrics_->UpdateTiming(timing->Clone(), metadata->Clone());
+  }
+
+ private:
+  // Use associated interface to make sure mojo messages are ordered with regard
+  // to legacy IPC messages.
+  mojom::PageLoadMetricsAssociatedPtr page_load_metrics_;
+};
 
 }  //  namespace
 
@@ -71,7 +115,7 @@ void MetricsRenderFrameObserver::DidCommitProvisionalLoad(
   // those metrics become available.
   if (ShouldSendMetrics()) {
     page_timing_metrics_sender_ = base::MakeUnique<PageTimingMetricsSender>(
-        this, routing_id(), CreateTimer(), GetTiming());
+        CreatePageTimingSender(), CreateTimer(), GetTiming());
   }
 }
 
@@ -165,6 +209,16 @@ mojom::PageLoadTimingPtr MetricsRenderFrameObserver::GetTiming() const {
 
 std::unique_ptr<base::Timer> MetricsRenderFrameObserver::CreateTimer() const {
   return base::WrapUnique(new base::OneShotTimer);
+}
+
+std::unique_ptr<PageTimingSender>
+MetricsRenderFrameObserver::CreatePageTimingSender() {
+  if (base::FeatureList::IsEnabled(features::kPageLoadMetricsMojofication)) {
+    return base::WrapUnique<PageTimingSender>(
+        new MojoIPCPageTimingSender(render_frame()));
+  }
+  return base::WrapUnique<PageTimingSender>(
+      new LegacyIPCPageTimingSender(render_frame(), routing_id()));
 }
 
 bool MetricsRenderFrameObserver::HasNoRenderFrame() const {

@@ -121,8 +121,6 @@ GpuVideoDecoder::GpuVideoDecoder(
       media_log_(media_log),
       vda_initialized_(false),
       state_(kNormal),
-      decoder_texture_target_(0),
-      pixel_format_(PIXEL_FORMAT_UNKNOWN),
       next_picture_buffer_id_(0),
       next_bitstream_buffer_id_(0),
       available_pictures_(0),
@@ -540,26 +538,18 @@ void GpuVideoDecoder::ProvidePictureBuffers(uint32_t count,
 
   std::vector<uint32_t> texture_ids;
   std::vector<gpu::Mailbox> texture_mailboxes;
-  decoder_texture_target_ = texture_target;
 
   if (format == PIXEL_FORMAT_UNKNOWN) {
     format = IsOpaque(config_.format()) ? PIXEL_FORMAT_XRGB : PIXEL_FORMAT_ARGB;
   }
 
-  // TODO(jbauman): Move decoder_texture_target_ and pixel_format_ to the
-  // picture buffer. http://crbug.com/614789
-  if ((pixel_format_ != PIXEL_FORMAT_UNKNOWN) && (pixel_format_ != format)) {
+  if (!factories_->CreateTextures(count * textures_per_buffer, size,
+                                  &texture_ids, &texture_mailboxes,
+                                  texture_target)) {
     NotifyError(VideoDecodeAccelerator::PLATFORM_FAILURE);
     return;
   }
 
-  pixel_format_ = format;
-  if (!factories_->CreateTextures(count * textures_per_buffer, size,
-                                  &texture_ids, &texture_mailboxes,
-                                  decoder_texture_target_)) {
-    NotifyError(VideoDecodeAccelerator::PLATFORM_FAILURE);
-    return;
-  }
   sync_token_ = factories_->CreateSyncToken();
   DCHECK_EQ(count * textures_per_buffer, texture_ids.size());
   DCHECK_EQ(count * textures_per_buffer, texture_mailboxes.size());
@@ -578,8 +568,9 @@ void GpuVideoDecoder::ProvidePictureBuffers(uint32_t count,
       index++;
     }
 
-    picture_buffers.push_back(
-        PictureBuffer(next_picture_buffer_id_++, size, ids, mailboxes));
+    picture_buffers.push_back(PictureBuffer(next_picture_buffer_id_++, size,
+                                            ids, mailboxes, texture_target,
+                                            format));
     bool inserted = assigned_picture_buffers_.insert(std::make_pair(
         picture_buffers.back().id(), picture_buffers.back())).second;
     DCHECK(inserted);
@@ -658,16 +649,16 @@ void GpuVideoDecoder::PictureReady(const media::Picture& picture) {
     visible_rect = gfx::Rect(pb.size());
   }
 
-  DCHECK(decoder_texture_target_);
+  DCHECK(pb.texture_target());
 
   gpu::MailboxHolder mailbox_holders[VideoFrame::kMaxPlanes];
   for (size_t i = 0; i < pb.client_texture_ids().size(); ++i) {
     mailbox_holders[i] = gpu::MailboxHolder(pb.texture_mailbox(i), sync_token_,
-                                            decoder_texture_target_);
+                                            pb.texture_target());
   }
 
   scoped_refptr<VideoFrame> frame(VideoFrame::WrapNativeTextures(
-      pixel_format_, mailbox_holders,
+      pb.pixel_format(), mailbox_holders,
       // Always post ReleaseMailbox to avoid deadlock with the compositor when
       // releasing video frames on the media thread; http://crbug.com/710209.
       BindToCurrentLoop(base::Bind(

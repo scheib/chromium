@@ -18,6 +18,7 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/navigation_handle_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_network_delegate.h"
@@ -282,9 +283,12 @@ IN_PROC_BROWSER_TEST_F(BrowserSideNavigationBrowserTest,
   content::WindowedNotificationObserver close_observer(
       content::NOTIFICATION_WEB_CONTENTS_DESTROYED,
       content::Source<content::WebContents>(shell()->web_contents()));
-  shell()->LoadURL(GURL("chrome://resources/css/tabs.css"));
+  GURL url("chrome://resources/css/tabs.css");
+  NavigationHandleObserver handle_observer(shell()->web_contents(), url);
+  shell()->LoadURL(url);
   shell()->web_contents()->DispatchBeforeUnload();
   close_observer.Wait();
+  EXPECT_EQ(net::ERR_ABORTED, handle_observer.net_error_code());
 }
 
 // Ensure that the referrer of a navigation is properly sanitized.

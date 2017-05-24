@@ -2,23 +2,20 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-static_library("cpp") {
+component("cpp") {
+  output_name = "service_manager_cpp"
+
   sources = [
-    "bind_source_info.cc",
-    "bind_source_info.h",
     "binder_registry.cc",
     "binder_registry.h",
     "connect.h",
     "connector.cc",
     "connector.h",
-    "identity.cc",
-    "identity.h",
+    "export.h",
     "interface_binder.cc",
     "interface_binder.h",
     "interface_provider.cc",
     "interface_provider.h",
-    "interface_provider_spec.cc",
-    "interface_provider_spec.h",
     "service.cc",
     "service.h",
     "service_context.cc",
@@ -30,12 +27,39 @@ static_library("cpp") {
   ]
 
   public_deps = [
+    ":cpp_types",
     "//base",
     "//mojo/public/cpp/bindings",
     "//mojo/public/cpp/system",
     "//services/service_manager/public/interfaces",
+    "//services/service_manager/public/interfaces:constants",
     "//url",
   ]
+
+  defines = [ "SERVICE_MANAGER_PUBLIC_CPP_IMPL" ]
+}
+
+# A component for types which the public interfaces depend on for typemapping.
+# Unlike ":cpp" above, this cannot itself depend on the main public interfaces
+# target.
+component("cpp_types") {
+  output_name = "service_manager_cpp_types"
+
+  sources = [
+    "bind_source_info.cc",
+    "bind_source_info.h",
+    "identity.cc",
+    "identity.h",
+    "interface_provider_spec.cc",
+    "interface_provider_spec.h",
+    "types_export.h",
+  ]
+
+  deps = [
+    "//services/service_manager/public/interfaces:constants",
+  ]
+
+  defines = [ "SERVICE_MANAGER_PUBLIC_CPP_TYPES_IMPL" ]
 }
 
 if (!is_ios) {

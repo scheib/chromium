@@ -24,7 +24,7 @@ if (is_win) {
     deps = [
       ":lib",
       ":setup_exe_version",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
       "//chrome/install_static:install_static_util",
       "//components/crash/content/app:app",

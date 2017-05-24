@@ -61,6 +61,7 @@ target(link_target_type, "gpu_sources") {
     "//gpu/ipc/service",
     "//ipc",
     "//media/gpu",
+    "//media/mojo:features",
 
     # TODO(jrummell): As //media/gpu/ipc/service is a source_set in a
     # component build, determine if it should not be included here.

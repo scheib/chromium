@@ -17,6 +17,7 @@ mojom("interfaces_internal") {
     "constants.mojom",
     "event_properties.mojom",
     "locale.mojom",
+    "lock_screen.mojom",
     "media.mojom",
     "new_window.mojom",
     "session_controller.mojom",

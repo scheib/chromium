@@ -11,10 +11,12 @@
 
 #include <memory>
 
+#include "base/atomicops.h"
 #include "base/cancelable_callback.h"
 #include "base/compiler_specific.h"
 #include "base/macros.h"
 #include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "media/audio/audio_io.h"
 #include "media/base/audio_parameters.h"
 
@@ -72,6 +74,15 @@ class PCMQueueInAudioInputStream : public AudioInputStream {
 
   static const int kNumberBuffers = 3;
 
+  // Helper methods to set and get atomic |input_callback_is_active_|.
+  void SetInputCallbackIsActive(bool active);
+  bool GetInputCallbackIsActive();
+
+  // Checks if a stream was started successfully and the audio unit also starts
+  // to call InputProc() as it should. This method is called once when a timer
+  // expires, a few seconds after calling Start().
+  void CheckInputStartupSuccess();
+
   // Manager that owns this stream, used for closing down.
   AudioManagerMac* manager_;
   // We use the callback mostly to periodically supply the recorded audio data.
@@ -88,6 +99,15 @@ class PCMQueueInAudioInputStream : public AudioInputStream {
   base::TimeTicks last_fill_;
   // Used to defer Start() to workaround http://crbug.com/160920.
   base::CancelableClosure deferred_start_cb_;
+
+  // Is set to true on the internal AUHAL IO thread in the first input callback
+  // after Start() has bee called.
+  base::subtle::Atomic32 input_callback_is_active_;
+
+  // Timer which triggers CheckInputStartupSuccess() to verify that input
+  // callbacks have started as intended after a successful call to Start().
+  // This timer lives on the main browser thread.
+  std::unique_ptr<base::OneShotTimer> input_callback_timer_;
 
   std::unique_ptr<media::AudioBus> audio_bus_;
 

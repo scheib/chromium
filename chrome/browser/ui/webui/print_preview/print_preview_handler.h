@@ -221,7 +221,8 @@ class PrintPreviewHandler
   // |arg| contains the ID of the printer whose capabilities are requested.
   void HandleGetExtensionPrinterCapabilities(const base::ListValue* args);
 
-  void SendInitialSettings(const std::string& default_printer);
+  void SendInitialSettings(const std::string& callback_id,
+                           const std::string& default_printer);
 
   // Send OAuth2 access token.
   void SendAccessToken(const std::string& type,

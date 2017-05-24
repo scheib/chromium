@@ -845,7 +845,7 @@ void Bus::AssertOnDBusThread() {
   base::ThreadRestrictions::AssertIOAllowed();
 
   if (dbus_task_runner_.get()) {
-    DCHECK(dbus_task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(dbus_task_runner_->RunsTasksInCurrentSequence());
   } else {
     AssertOnOriginThread();
   }

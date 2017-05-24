@@ -11,6 +11,10 @@ namespace switches {
 const char kEnableBluetoothLowEnergyDiscovery[] =
     "enable-proximity-auth-bluetooth-low-energy-discovery";
 
+// Enables the use of EasyUnlock to log into the Chromebook.
+extern const char kEnableChromeOSLogin[] =
+    "enable-proximity-auth-chromeos-login";
+
 // Enables close proximity detection. This allows the user to set a setting to
 // require very close proximity between the remote device and the local device
 // in order to unlock the local device, which trades off convenience for

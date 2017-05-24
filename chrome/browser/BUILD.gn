@@ -1642,6 +1642,7 @@ split_static_library("browser") {
     "//media:media_features",
     "//media/cast:net",
     "//media/midi",
+    "//media/mojo:features",
     "//media/mojo/interfaces:remoting",
     "//mojo/common",
     "//mojo/edk/system",
@@ -1681,9 +1682,9 @@ split_static_library("browser") {
     "//third_party/webrtc_overrides",
     "//third_party/widevine/cdm:headers",
     "//third_party/zlib",
-    "//third_party/zlib:compression_utils",
     "//third_party/zlib:minizip",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:compression_utils",
+    "//third_party/zlib/google:zip",
     "//ui/base",
     "//ui/base:ui_data_pack",
     "//ui/base/ime",
@@ -2580,6 +2581,7 @@ split_static_library("browser") {
     ]
     deps += [
       "//components/printing/browser",
+      "//components/printing/service/public/interfaces",
       "//printing",
     ]
 
@@ -2818,6 +2820,8 @@ split_static_library("browser") {
       "android/contextualsearch/contextual_search_field_trial.h",
       "android/contextualsearch/contextual_search_manager.cc",
       "android/contextualsearch/contextual_search_manager.h",
+      "android/contextualsearch/contextual_search_ranker_logger_impl.cc",
+      "android/contextualsearch/contextual_search_ranker_logger_impl.h",
       "android/contextualsearch/contextual_search_tab_helper.cc",
       "android/contextualsearch/contextual_search_tab_helper.h",
       "android/contextualsearch/ctr_suppression.cc",
@@ -2858,8 +2862,6 @@ split_static_library("browser") {
       "android/document/document_web_contents_delegate.h",
       "android/dom_distiller/distiller_ui_handle_android.cc",
       "android/dom_distiller/distiller_ui_handle_android.h",
-      "android/download/chrome_download_delegate.cc",
-      "android/download/chrome_download_delegate.h",
       "android/download/chrome_duplicate_download_infobar_delegate.cc",
       "android/download/chrome_duplicate_download_infobar_delegate.h",
       "android/download/dangerous_download_infobar_delegate.cc",
@@ -3660,6 +3662,7 @@ split_static_library("browser") {
       "themes/theme_syncable_service.h",
       "upgrade_detector.cc",
       "upgrade_detector.h",
+      "upgrade_observer.h",
       "usb/usb_chooser_controller.cc",
       "usb/usb_chooser_controller.h",
       "usb/web_usb_chooser_service.cc",
@@ -3766,6 +3769,7 @@ split_static_library("browser") {
       "//third_party/iaccessible2",
       "//third_party/isimpledom",
       "//third_party/wtl",
+      "//ui/base:fullscreen_win",
     ]
 
     all_dependent_configs = [ ":browser_win_linker_flags" ]
@@ -4069,7 +4073,6 @@ split_static_library("browser") {
   }
 
   if (enable_mojo_media) {
-    configs += [ "//media/mojo/services:mojo_media_config" ]
     sources += [
       "media/output_protection_impl.cc",
       "media/output_protection_impl.h",
@@ -4150,6 +4153,7 @@ if (is_android) {
       "../android/java/src/org/chromium/chrome/browser/contextmenu/ContextMenuParams.java",
       "../android/java/src/org/chromium/chrome/browser/contextualsearch/ContextualSearchContext.java",
       "../android/java/src/org/chromium/chrome/browser/contextualsearch/ContextualSearchManager.java",
+      "../android/java/src/org/chromium/chrome/browser/contextualsearch/ContextualSearchRankerLoggerImpl.java",
       "../android/java/src/org/chromium/chrome/browser/contextualsearch/ContextualSearchTabHelper.java",
       "../android/java/src/org/chromium/chrome/browser/contextualsearch/CtrSuppression.java",
       "../android/java/src/org/chromium/chrome/browser/cookies/CookiesFetcher.java",
@@ -4702,6 +4706,7 @@ static_library("test_support_ui") {
     "ui/webui/signin/login_ui_test_utils.cc",
     "ui/webui/signin/login_ui_test_utils.h",
   ]
+  deps = []
 
   if (!is_android) {
     sources += [
@@ -4710,6 +4715,7 @@ static_library("test_support_ui") {
       "ui/webui/web_ui_test_handler.cc",
       "ui/webui/web_ui_test_handler.h",
     ]
+    deps += [ "//third_party/WebKit/public:blink_headers" ]
   }
 
   configs += [ "//build/config:precompiled_headers" ]
@@ -4718,7 +4724,7 @@ static_library("test_support_ui") {
     "//net:test_support",
   ]
 
-  deps = [
+  deps += [
     "//components/metrics:test_support",
     "//components/password_manager/content/common:mojo_interfaces",
     "//components/password_manager/core/browser:test_support",

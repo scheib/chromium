@@ -226,7 +226,7 @@ void WiFiServiceMac::SetProperties(
     existing_properties->MergeDictionary(properties.get());
   } else {
     network_properties_.SetWithoutPathExpansion(network_guid,
-                                                properties.release());
+                                                std::move(properties));
   }
 }
 
@@ -246,8 +246,7 @@ void WiFiServiceMac::CreateNetwork(
     *error = kErrorInvalidData;
     return;
   }
-  network_properties_.SetWithoutPathExpansion(guid,
-                                              properties.release());
+  network_properties_.SetWithoutPathExpansion(guid, std::move(properties));
   *network_guid = guid;
 }
 

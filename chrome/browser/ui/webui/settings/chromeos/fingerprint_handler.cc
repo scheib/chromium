@@ -124,9 +124,7 @@ void FingerprintHandler::OnEnrollScanDone(uint32_t scan_result,
   scan_attempt->SetBoolean("isComplete", enroll_session_complete);
   scan_attempt->SetInteger("percentComplete", percent_complete);
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("on-fingerprint-scan-received"),
-                         *scan_attempt);
+  FireWebUIListener("on-fingerprint-scan-received", *scan_attempt);
 }
 
 void FingerprintHandler::OnAuthScanDone(
@@ -156,9 +154,7 @@ void FingerprintHandler::OnAuthScanDone(
   fingerprint_attempt->SetInteger("result", scan_result);
   fingerprint_attempt->Set("indexes", std::move(fingerprint_ids));
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("on-fingerprint-attempt-received"),
-                         *fingerprint_attempt);
+  FireWebUIListener("on-fingerprint-attempt-received", *fingerprint_attempt);
 }
 
 void FingerprintHandler::OnSessionFailed() {}
@@ -167,9 +163,8 @@ void FingerprintHandler::OnSessionStateChanged() {
   SessionState state = SessionManager::Get()->session_state();
 
   AllowJavascript();
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("on-screen-locked"),
-                         base::Value(state == SessionState::LOCKED));
+  FireWebUIListener("on-screen-locked",
+                    base::Value(state == SessionState::LOCKED));
 }
 
 void FingerprintHandler::HandleGetFingerprintsList(

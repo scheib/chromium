@@ -71,6 +71,14 @@ views::View* BrowserNonClientFrameView::GetProfileSwitcherView() const {
 
 void BrowserNonClientFrameView::UpdateClientArea() {}
 
+void BrowserNonClientFrameView::ChildPreferredSizeChanged(views::View* child) {
+  if (child == GetProfileSwitcherView()) {
+    // Perform a re-layout if the avatar button has changed, since that can
+    // affect the size of the tabs.
+    frame()->GetRootView()->Layout();
+  }
+}
+
 void BrowserNonClientFrameView::VisibilityChanged(views::View* starting_from,
                                                   bool is_visible) {
   // UpdateTaskbarDecoration() calls DrawTaskbarDecoration(), but that does

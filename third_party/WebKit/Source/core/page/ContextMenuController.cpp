@@ -174,7 +174,7 @@ void ContextMenuController::ShowContextMenu(Event* event) {
 
 void ContextMenuController::ContextMenuItemSelected(
     const ContextMenuItem* item) {
-  ASSERT(item->GetType() == kActionType ||
+  DCHECK(item->GetType() == kActionType ||
          item->GetType() == kCheckableActionType);
 
   if (item->Action() < kContextMenuItemBaseCustomTag ||

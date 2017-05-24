@@ -156,7 +156,7 @@ login.createScreen('GaiaSigninScreen', 'gaia-signin', function() {
       this.navigation_.closeVisible =
         !this.navigation_.refreshVisible &&
         !isWhitelistError &&
-        !this.authCompleted &&
+        !this.authCompleted_ &&
         this.screenMode_ != ScreenMode.SAML_INTERSTITIAL;
 
       $('login-header-bar').updateUI_();

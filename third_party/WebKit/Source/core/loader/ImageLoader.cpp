@@ -214,10 +214,9 @@ void ImageLoader::SetImageForImageDocument(ImageResource* new_image_resource) {
   image_resource_for_image_document_ = new_image_resource;
   SetImageWithoutConsideringPendingLoadEvent(new_image_resource->GetContent());
 
-  // |has_pending_load_event_| is always false and |image_complete_| is
-  // always true for ImageDocument loading, while the loading is just started.
+  // |image_complete_| is always true for ImageDocument loading, while the
+  // loading is just started.
   // TODO(hiroshige): clean up the behavior of flags. https://crbug.com/719759
-  has_pending_load_event_ = false;
   image_complete_ = true;
 
   // Only consider updating the protection ref-count of the Element immediately
@@ -273,6 +272,13 @@ static void ConfigureRequest(
 }
 
 inline void ImageLoader::DispatchErrorEvent() {
+  // There can be cases where DispatchErrorEvent() is called when there is
+  // already a scheduled error event for the previous load attempt.
+  // In such cases we cancel the previous event and then re-schedule a new
+  // error event here. crbug.com/722500
+  if (has_pending_error_event_)
+    ErrorEventSender().CancelEvent(this);
+
   has_pending_error_event_ = true;
   ErrorEventSender().DispatchEventSoon(this);
 }
@@ -300,7 +306,6 @@ inline void ImageLoader::EnqueueImageLoadingMicroTask(
 
 void ImageLoader::UpdateImageState(ImageResourceContent* new_image) {
   image_ = new_image;
-  has_pending_load_event_ = new_image;
   image_complete_ = !new_image;
   delay_until_image_notify_finished_ = nullptr;
 }
@@ -536,8 +541,8 @@ void ImageLoader::ImageNotifyFinished(ImageResourceContent* resource) {
   DCHECK(failed_load_url_.IsEmpty());
   DCHECK_EQ(resource, image_.Get());
 
-  // |has_pending_load_event_| is always false and |image_complete_| is
-  // always true for entire ImageDocument loading for historical reason.
+  // |image_complete_| is always true for entire ImageDocument loading for
+  // historical reason.
   // DoUpdateFromElement() is not called and SetImageForImageDocument()
   // is called instead for ImageDocument loading.
   // TODO(hiroshige): Turn the CHECK()s to DCHECK()s before going to beta.
@@ -555,16 +560,20 @@ void ImageLoader::ImageNotifyFinished(ImageResourceContent* resource) {
 
   UpdateLayoutObject();
 
-  if (image_ && image_->GetImage() && image_->GetImage()->IsSVGImage())
+  if (image_ && image_->GetImage() && image_->GetImage()->IsSVGImage()) {
+    // SVG's document should be completely loaded before access control
+    // checks, which can occur anytime after ImageNotifyFinished()
+    // (See SVGImage::CurrentFrameHasSingleSecurityOrigin()).
+    // We check the document is loaded here to catch violation of the
+    // assumption reliably.
+    ToSVGImage(image_->GetImage())->CheckLoaded();
+
     ToSVGImage(image_->GetImage())
         ->UpdateUseCounters(GetElement()->GetDocument());
-
-  if (loading_image_document_) {
-    CHECK(!has_pending_load_event_);
-    return;
   }
 
-  CHECK(has_pending_load_event_);
+  if (loading_image_document_)
+    return;
 
   if (resource->ErrorOccurred()) {
     LoadEventSender().CancelEvent(this);
@@ -587,6 +596,7 @@ void ImageLoader::ImageNotifyFinished(ImageResourceContent* resource) {
     UpdatedHasPendingEvent();
     return;
   }
+  has_pending_load_event_ = true;
   LoadEventSender().DispatchEventSoon(this);
 }
 
@@ -625,6 +635,17 @@ void ImageLoader::UpdateLayoutObject() {
     image_resource->SetImageResource(image_.Get());
 }
 
+bool ImageLoader::HasPendingEvent() const {
+  // Regular image loading is in progress.
+  if (image_ && !image_complete_ && !loading_image_document_)
+    return true;
+
+  if (has_pending_load_event_ || has_pending_error_event_)
+    return true;
+
+  return false;
+}
+
 void ImageLoader::UpdatedHasPendingEvent() {
   // If an Element that does image loading is removed from the DOM the
   // load/error event for the image is still observable. As long as the
@@ -633,7 +654,7 @@ void ImageLoader::UpdatedHasPendingEvent() {
   // such an Element wishes for the load to stop when removed from the DOM it
   // needs to stop the ImageLoader explicitly.
   bool was_protected = element_is_protected_;
-  element_is_protected_ = has_pending_load_event_ || has_pending_error_event_;
+  element_is_protected_ = HasPendingEvent();
   if (was_protected == element_is_protected_)
     return;
 
@@ -679,12 +700,7 @@ void ImageLoader::DispatchPendingLoadEvent() {
 }
 
 void ImageLoader::DispatchPendingErrorEvent() {
-  // Currently this if condition is needed because there can be multiple
-  // in-flight error event tasks and we process only the first here.
-  // crbug.com/722500
-  // TODO(hiroshige): Replace this with |CHECK(has_pending_load_event_)|.
-  if (!has_pending_error_event_)
-    return;
+  CHECK(has_pending_error_event_);
   has_pending_error_event_ = false;
 
   if (GetElement()->GetDocument().GetFrame())

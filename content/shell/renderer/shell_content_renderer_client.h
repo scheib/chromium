@@ -10,6 +10,7 @@
 #include "base/compiler_specific.h"
 #include "build/build_config.h"
 #include "content/public/renderer/content_renderer_client.h"
+#include "media/mojo/features.h"
 
 namespace web_cache {
 class WebCacheImpl;
@@ -34,7 +35,7 @@ class ShellContentRendererClient : public ContentRendererClient {
   void DidInitializeWorkerContextOnWorkerThread(
       v8::Local<v8::Context> context) override;
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
   void AddSupportedKeySystems(
       std::vector<std::unique_ptr<media::KeySystemProperties>>* key_systems)
       override;

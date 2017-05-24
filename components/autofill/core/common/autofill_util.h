@@ -13,7 +13,16 @@
 #include "base/strings/string16.h"
 #include "components/autofill/core/common/form_field_data.h"
 
+namespace base {
+struct Feature;
+}
+
 namespace autofill {
+
+extern const base::Feature kAutofillKeyboardAccessory;
+extern const char kAutofillKeyboardAccessoryAnimationDurationKey[];
+extern const char kAutofillKeyboardAccessoryLimitLabelWidthKey[];
+extern const char kAutofillKeyboardAccessoryHintKey[];
 
 // Returns true when command line switch |kEnableSuggestionsWithSubstringMatch|
 // is on.
@@ -24,6 +33,17 @@ bool IsShowAutofillSignaturesEnabled();
 
 // Returns true when keyboard accessory is enabled.
 bool IsKeyboardAccessoryEnabled();
+
+// Returns animation duration for keyboard accessory. If 0, we do not animate.
+unsigned int GetKeyboardAccessoryAnimationDuration();
+
+// Returns true if we must limit width of keyboard accessory suggestion label to
+// half of device's pixel width.
+bool ShouldLimitKeyboardAccessorySuggestionLabelWidth();
+
+// Returns true if we show a hint in the keyboard accessory suggestions to call
+// attention to the availability of autofill suggestions.
+bool IsHintEnabledInKeyboardAccessory();
 
 // A token is a sequences of contiguous characters separated by any of the
 // characters that are part of delimiter set {' ', '.', ',', '-', '_', '@'}.

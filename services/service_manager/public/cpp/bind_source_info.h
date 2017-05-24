@@ -10,12 +10,13 @@
 
 #include "services/service_manager/public/cpp/identity.h"
 #include "services/service_manager/public/cpp/interface_provider_spec.h"
+#include "services/service_manager/public/cpp/types_export.h"
 
 namespace service_manager {
 
 class Identity;
 
-struct BindSourceInfo {
+struct SERVICE_MANAGER_PUBLIC_CPP_TYPES_EXPORT BindSourceInfo {
   BindSourceInfo();
   BindSourceInfo(const Identity& identity,
                  const CapabilitySet& required_capabilities);

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-module resource_coordinator.tracing.mojom;
+module tracing.mojom;
 
 import "mojo/common/time.mojom";
 import "mojo/common/values.mojom";
@@ -20,22 +20,28 @@ enum TraceDataType {
 
 // Tracing agents, like |chrome|, |etw|, |battor|, and |cros|, use this
 // interface to register themselves to the tracing service.
-interface Factory {
-  RegisterAgent(Agent agent, string name, string label, TraceDataType type,
+//
+// This is a separate interface from |Coordinator| for security and privacy
+// reasons: although we want to let almost every process be able to send tracing
+// data to the service, we do not want to let an untrusted child process be able
+// to collect traces from other processes using the |Coordinator| interface.
+interface AgentRegistry {
+  RegisterAgent(Agent agent, string label, TraceDataType type,
                 bool supports_explicit_clock_sync_);
 };
 
-// There should be at most one implementation of this interface per process.
 // When the tracing service calls |StopAndFlush| on an agent, the agent begins
 // serializing data into the recorder that was given in the |StartTracing| call.
 // When finished, the agent should close the recorder connection to signal the
 // tracing service that no more data will be sent.
 interface Agent {
-  StartTracing(string categories, Recorder recorder);
+  StartTracing(string config, Recorder recorder) => ();
   StopAndFlush();
-  RequestClockSyncMarker() => (mojo.common.mojom.TimeTicks issue_ts,
-                               mojo.common.mojom.TimeTicks issue_end_ts);
+  RequestClockSyncMarker(string sync_id) => (
+      mojo.common.mojom.TimeTicks issue_ts,
+      mojo.common.mojom.TimeTicks issue_end_ts);
   RequestBufferStatus() => (uint32 capacity, uint32 count);
+  GetCategories() => (string categories);
 };
 
 // An agent can make several calls to |AddChunk|. Chunks will be concatenated
@@ -51,8 +57,10 @@ interface Recorder {
 // from all registered agents. At any given time, there should be at most one
 // connected controller.
 interface Coordinator {
-  StartTracing(handle<data_pipe_producer> stream, string categories);
+  StartTracing(handle<data_pipe_producer> stream, string config);
   StopAndFlush();
   IsTracing() => (bool is_tracing);
-  RequestBufferUsage() => (float percent_full, uint32 approximate_count);
+  RequestBufferUsage() => (bool success, float percent_full,
+                           uint32 approximate_count);
+  GetCategories() => (string categories);
 };

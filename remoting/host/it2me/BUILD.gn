@@ -203,7 +203,7 @@ if (!is_chromeos && enable_remoting_host) {
 
       deps = [
         ":common",
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
         "//remoting/host",
         "//remoting/host/native_messaging",
         "//remoting/proto",

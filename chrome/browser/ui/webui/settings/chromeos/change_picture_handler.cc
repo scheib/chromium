@@ -143,8 +143,7 @@ void ChangePictureHandler::SendDefaultImages() {
                           default_user_image::GetDefaultImageDescription(i));
     image_urls.Append(std::move(image_data));
   }
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("default-images-changed"), image_urls);
+  FireWebUIListener("default-images-changed", image_urls);
 }
 
 void ChangePictureHandler::HandleChooseFile(const base::ListValue* args) {
@@ -231,9 +230,7 @@ void ChangePictureHandler::SendSelectedImage() {
         // User has image from the current set of default images.
         base::Value image_url(
             default_user_image::GetDefaultImageUrl(previous_image_index_));
-        CallJavascriptFunction("cr.webUIListenerCallback",
-                               base::Value("selected-image-changed"),
-                               image_url);
+        FireWebUIListener("selected-image-changed", image_url);
       } else {
         // User has an old default image, so present it in the same manner as a
         // previous image from file.
@@ -248,9 +245,7 @@ void ChangePictureHandler::SendProfileImage(const gfx::ImageSkia& image,
                                             bool should_select) {
   base::Value data_url(webui::GetBitmapDataUrl(*image.bitmap()));
   base::Value select(should_select);
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("profile-image-changed"), data_url,
-                         select);
+  FireWebUIListener("profile-image-changed", data_url, select);
 }
 
 void ChangePictureHandler::UpdateProfileImage() {
@@ -268,8 +263,7 @@ void ChangePictureHandler::UpdateProfileImage() {
 void ChangePictureHandler::SendOldImage(const std::string& image_url) {
   previous_image_url_ = image_url;
   base::Value url(image_url);
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("old-image-changed"), url);
+  FireWebUIListener("old-image-changed", url);
 }
 
 void ChangePictureHandler::HandleSelectImage(const base::ListValue* args) {
@@ -366,9 +360,7 @@ void ChangePictureHandler::SetImageFromCamera(const gfx::ImageSkia& photo) {
 }
 
 void ChangePictureHandler::SetCameraPresent(bool present) {
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("camera-presence-changed"),
-                         base::Value(present));
+  FireWebUIListener("camera-presence-changed", base::Value(present));
 }
 
 void ChangePictureHandler::OnCameraPresenceCheckDone(bool is_camera_present) {

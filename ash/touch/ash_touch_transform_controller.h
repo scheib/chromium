@@ -25,7 +25,8 @@ class ASH_EXPORT AshTouchTransformController
  public:
   AshTouchTransformController(
       display::DisplayConfigurator* display_configurator,
-      display::DisplayManager* display_manager);
+      display::DisplayManager* display_manager,
+      std::unique_ptr<display::TouchTransformSetter> setter);
   ~AshTouchTransformController() override;
 
   // WindowTreeHostManager::Observer:

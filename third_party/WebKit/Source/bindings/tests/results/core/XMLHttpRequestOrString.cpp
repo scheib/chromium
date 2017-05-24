@@ -20,18 +20,18 @@ namespace blink {
 
 XMLHttpRequestOrString::XMLHttpRequestOrString() : m_type(SpecificTypeNone) {}
 
-String XMLHttpRequestOrString::getAsString() const {
+const String& XMLHttpRequestOrString::getAsString() const {
   DCHECK(isString());
   return m_string;
 }
 
-void XMLHttpRequestOrString::setString(String value) {
+void XMLHttpRequestOrString::setString(const String& value) {
   DCHECK(isNull());
   m_string = value;
   m_type = SpecificTypeString;
 }
 
-XMLHttpRequestOrString XMLHttpRequestOrString::fromString(String value) {
+XMLHttpRequestOrString XMLHttpRequestOrString::fromString(const String& value) {
   XMLHttpRequestOrString container;
   container.setString(value);
   return container;

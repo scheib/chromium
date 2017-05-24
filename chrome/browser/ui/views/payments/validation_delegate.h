@@ -16,10 +16,17 @@ class ValidationDelegate {
  public:
   virtual ~ValidationDelegate() {}
 
-  // Only the delegate knows how to validate the textfield.
-  virtual bool ValidateTextfield(views::Textfield* textfield) = 0;
+  // Only the delegate knows how to validate the input fields.
+  virtual bool IsValidTextfield(views::Textfield* textfield) = 0;
+  virtual bool IsValidCombobox(views::Combobox* combobox) = 0;
 
-  virtual bool ValidateCombobox(views::Combobox* combobox) = 0;
+  // Notifications to let delegate react to input field changes and also let
+  // caller know if the new values are valid.
+  virtual bool TextfieldValueChanged(views::Textfield* textfield) = 0;
+  virtual bool ComboboxValueChanged(views::Combobox* combobox) = 0;
+
+  // Lets the delegate know that the model of the combobox has changed, e.g.,
+  // when it gets filled asynchronously as for the state field.
   virtual void ComboboxModelChanged(views::Combobox* combobox) = 0;
 };
 

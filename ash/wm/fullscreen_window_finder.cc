@@ -7,7 +7,6 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/wm/switchable_windows.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"

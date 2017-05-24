@@ -11,6 +11,7 @@
 #include "base/base_export.h"
 #include "base/callback.h"
 #include "base/macros.h"
+#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
@@ -25,6 +26,8 @@ class MessagePumpForUI;
 #if defined(OS_IOS)
 class MessagePumpUIApplication;
 #endif
+
+class SingleThreadTaskRunner;
 
 // Helper class to run the RunLoop::Delegate associated with the current thread.
 // A RunLoop::Delegate must have been bound to this thread (ref.
@@ -59,6 +62,10 @@ class BASE_EXPORT RunLoop {
   // Quit() quits an earlier call to Run() immediately. QuitWhenIdle() quits an
   // earlier call to Run() when there aren't any tasks or messages in the queue.
   //
+  // These methods are thread-safe but note that Quit() is best-effort when
+  // called from another thread (will quit soon but tasks that were already
+  // queued on this RunLoop will get to run first).
+  //
   // There can be other nested RunLoops servicing the same task queue
   // (MessageLoop); Quitting one RunLoop has no bearing on the others. Quit()
   // and QuitWhenIdle() can be called before, during or after Run(). If called
@@ -75,6 +82,10 @@ class BASE_EXPORT RunLoop {
 
   // Convenience methods to get a closure that safely calls Quit() or
   // QuitWhenIdle() (has no effect if the RunLoop instance is gone).
+  //
+  // The resulting Closure is thread-safe (note however that invoking the
+  // QuitClosure() from another thread than this RunLoop's will result in an
+  // asynchronous rather than immediate Quit()).
   //
   // Example:
   //   RunLoop run_loop;
@@ -214,19 +225,25 @@ class BASE_EXPORT RunLoop {
   // during Run(), ref. |sequence_checker_| below).
   Delegate* delegate_;
 
+#if DCHECK_IS_ON()
   bool run_called_ = false;
+#endif
+
   bool quit_called_ = false;
   bool running_ = false;
-
   // Used to record that QuitWhenIdle() was called on the MessageLoop, meaning
   // that we should quit Run once it becomes idle.
   bool quit_when_idle_received_ = false;
 
-  // RunLoop is not thread-safe. Its state may not be accessed from any other
-  // sequence than the thread it was constructed on. Exception: RunLoop can be
-  // safely accessed from one other sequence (or single parallel task) during
-  // Run().
+  // RunLoop is not thread-safe. Its state/methods, unless marked as such, may
+  // not be accessed from any other sequence than the thread it was constructed
+  // on. Exception: RunLoop can be safely accessed from one other sequence (or
+  // single parallel task) during Run() -- e.g. to Quit() without having to
+  // plumb ThreatTaskRunnerHandle::Get() throughout a test to repost QuitClosure
+  // to origin thread.
   SEQUENCE_CHECKER(sequence_checker_);
+
+  const scoped_refptr<SingleThreadTaskRunner> origin_task_runner_;
 
   // WeakPtrFactory for QuitClosure safety.
   base::WeakPtrFactory<RunLoop> weak_factory_;

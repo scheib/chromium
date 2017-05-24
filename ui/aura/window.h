@@ -51,8 +51,9 @@ namespace aura {
 
 class LayoutManager;
 class WindowDelegate;
-class WindowPort;
 class WindowObserver;
+class WindowPort;
+class WindowPortForShutdown;
 class WindowTreeHost;
 
 // Defined in class_property.h (which we do not include)
@@ -329,6 +330,7 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
   friend class LayoutManager;
   friend class PropertyConverter;
   friend class WindowPort;
+  friend class WindowPortForShutdown;
   friend class WindowTargeter;
   friend class test::WindowTestApi;
 
@@ -440,6 +442,9 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
   // pointer in |port_| so that it can still be accessed during destruction.
   // This is important as deleting the WindowPort may result in trying to lookup
   // the WindowPort associated with the Window.
+  //
+  // NOTE: this value is reset for windows that exist when WindowTreeClient
+  // is deleted.
   std::unique_ptr<WindowPort> port_owner_;
   WindowPort* port_;
 

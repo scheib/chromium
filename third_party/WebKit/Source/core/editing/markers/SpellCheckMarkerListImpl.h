@@ -22,7 +22,7 @@ class CORE_EXPORT SpellCheckMarkerListImpl : public DocumentMarkerList {
   void Add(DocumentMarker*) final;
   void Clear() final;
 
-  const HeapVector<Member<RenderedDocumentMarker>>& GetMarkers() const final;
+  const HeapVector<Member<DocumentMarker>>& GetMarkers() const final;
 
   bool MoveMarkers(int length, DocumentMarkerList* dst_list) final;
   bool RemoveMarkers(unsigned start_offset, int length) final;
@@ -41,7 +41,7 @@ class CORE_EXPORT SpellCheckMarkerListImpl : public DocumentMarkerList {
   SpellCheckMarkerListImpl() = default;
 
  private:
-  HeapVector<Member<RenderedDocumentMarker>> markers_;
+  HeapVector<Member<DocumentMarker>> markers_;
 
   DISALLOW_COPY_AND_ASSIGN(SpellCheckMarkerListImpl);
 };

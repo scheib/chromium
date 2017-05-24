@@ -40,6 +40,7 @@
 #include "core/frame/LocalFrame.h"
 #include "core/frame/Location.h"
 #include "core/frame/Settings.h"
+#include "core/frame/UseCounter.h"
 #include "core/html/HTMLFrameElementBase.h"
 #include "core/workers/MainThreadWorkletGlobalScope.h"
 #include "platform/bindings/WrapperCreationSecurityCheck.h"
@@ -133,8 +134,18 @@ bool BindingSecurity::ShouldAllowAccessTo(
   // would have to early return when it was null.
   if (!target->GetFrame())
     return false;
+  bool can_access = CanAccessWindow(accessing_window, target, exception_state);
 
-  return CanAccessWindow(accessing_window, target, exception_state);
+  if (!can_access) {
+    UseCounter::Count(accessing_window->GetFrame(),
+                      UseCounter::kCrossOriginPropertyAccess);
+    if (target->opener() == accessing_window) {
+      UseCounter::Count(accessing_window->GetFrame(),
+                        UseCounter::kCrossOriginPropertyAccessFromOpener);
+    }
+  }
+
+  return can_access;
 }
 
 bool BindingSecurity::ShouldAllowAccessTo(
@@ -151,7 +162,18 @@ bool BindingSecurity::ShouldAllowAccessTo(
   if (!target->GetFrame())
     return false;
 
-  return CanAccessWindow(accessing_window, target, reporting_option);
+  bool can_access = CanAccessWindow(accessing_window, target, reporting_option);
+
+  if (!can_access) {
+    UseCounter::Count(accessing_window->GetFrame(),
+                      UseCounter::kCrossOriginPropertyAccess);
+    if (target->opener() == accessing_window) {
+      UseCounter::Count(accessing_window->GetFrame(),
+                        UseCounter::kCrossOriginPropertyAccessFromOpener);
+    }
+  }
+
+  return can_access;
 }
 
 bool BindingSecurity::ShouldAllowAccessTo(
@@ -168,8 +190,19 @@ bool BindingSecurity::ShouldAllowAccessTo(
   if (!target->DomWindow()->GetFrame())
     return false;
 
-  return CanAccessWindow(accessing_window, target->DomWindow(),
-                         exception_state);
+  bool can_access =
+      CanAccessWindow(accessing_window, target->DomWindow(), exception_state);
+
+  if (!can_access) {
+    UseCounter::Count(accessing_window->GetFrame(),
+                      UseCounter::kCrossOriginPropertyAccess);
+    if (target->DomWindow()->opener() == accessing_window) {
+      UseCounter::Count(accessing_window->GetFrame(),
+                        UseCounter::kCrossOriginPropertyAccessFromOpener);
+    }
+  }
+
+  return can_access;
 }
 
 bool BindingSecurity::ShouldAllowAccessTo(
@@ -186,8 +219,19 @@ bool BindingSecurity::ShouldAllowAccessTo(
   if (!target->DomWindow()->GetFrame())
     return false;
 
-  return CanAccessWindow(accessing_window, target->DomWindow(),
-                         reporting_option);
+  bool can_access =
+      CanAccessWindow(accessing_window, target->DomWindow(), reporting_option);
+
+  if (!can_access) {
+    UseCounter::Count(accessing_window->GetFrame(),
+                      UseCounter::kCrossOriginPropertyAccess);
+    if (target->DomWindow()->opener() == accessing_window) {
+      UseCounter::Count(accessing_window->GetFrame(),
+                        UseCounter::kCrossOriginPropertyAccessFromOpener);
+    }
+  }
+
+  return can_access;
 }
 
 bool BindingSecurity::ShouldAllowAccessTo(

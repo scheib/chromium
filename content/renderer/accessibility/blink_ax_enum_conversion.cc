@@ -150,8 +150,6 @@ ui::AXRole AXRoleFromBlink(blink::WebAXRole role) {
       return ui::AX_ROLE_DIRECTORY;
     case blink::kWebAXRoleDisclosureTriangle:
       return ui::AX_ROLE_DISCLOSURE_TRIANGLE;
-    case blink::kWebAXRoleDiv:
-      return ui::AX_ROLE_DIV;
     case blink::kWebAXRoleDocument:
       return ui::AX_ROLE_DOCUMENT;
     case blink::kWebAXRoleEmbeddedObject:
@@ -166,6 +164,8 @@ ui::AXRole AXRoleFromBlink(blink::WebAXRole role) {
       return ui::AX_ROLE_FOOTER;
     case blink::kWebAXRoleForm:
       return ui::AX_ROLE_FORM;
+    case blink::kWebAXRoleGenericContainer:
+      return ui::AX_ROLE_GENERIC_CONTAINER;
     case blink::kWebAXRoleGrid:
       return ui::AX_ROLE_GRID;
     case blink::kWebAXRoleGroup:

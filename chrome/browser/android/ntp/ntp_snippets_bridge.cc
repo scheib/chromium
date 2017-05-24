@@ -13,7 +13,9 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/callback.h"
+#include "base/feature_list.h"
 #include "base/time/time.h"
+#include "chrome/browser/android/chrome_feature_list.h"
 #include "chrome/browser/android/ntp/content_suggestions_notifier_service.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/ntp_snippets/content_suggestions_notifier_service_factory.h"
@@ -332,6 +334,33 @@ void NTPSnippetsBridge::Fetch(
                             known_suggestion_ids.end()),
       base::Bind(&NTPSnippetsBridge::OnSuggestionsFetched,
                  weak_ptr_factory_.GetWeakPtr(), category));
+}
+
+void NTPSnippetsBridge::FetchContextualSuggestions(
+    JNIEnv* env,
+    const JavaParamRef<jobject>& obj,
+    const JavaParamRef<jstring>& j_url,
+    const JavaParamRef<jobject>& j_callback) {
+  DCHECK(base::FeatureList::IsEnabled(
+      chrome::android::kContextualSuggestionsCarousel));
+
+  // We don't currently have a contextual suggestions service or provider, so
+  // we use articles as placeholders.
+  Category category = Category::FromKnownCategory(KnownCategories::ARTICLES);
+  auto suggestions = ToJavaSuggestionList(
+      env, category,
+      content_suggestions_service_->GetSuggestionsForCategory(category));
+
+  // We would eventually have to hit the network or a database, so let's
+  // pretend here the call is asynchronous.
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](const base::android::JavaRef<jobject>& j_callback,
+                        const base::android::JavaRef<jobject>& j_suggestions) {
+                       RunCallbackAndroid(j_callback, j_suggestions);
+                     },
+                     ScopedJavaGlobalRef<jobject>(j_callback),
+                     ScopedJavaGlobalRef<jobject>(suggestions)));
 }
 
 void NTPSnippetsBridge::ReloadSuggestions(JNIEnv* env,

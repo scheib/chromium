@@ -82,7 +82,8 @@ class CORE_EXPORT V8ScriptRunner final {
   static v8::MaybeLocal<v8::Module> CompileModule(v8::Isolate*,
                                                   const String& source,
                                                   const String& file_name,
-                                                  AccessControlStatus);
+                                                  AccessControlStatus,
+                                                  const TextPosition&);
   static v8::MaybeLocal<v8::Value> RunCompiledScript(v8::Isolate*,
                                                      v8::Local<v8::Script>,
                                                      ExecutionContext*);

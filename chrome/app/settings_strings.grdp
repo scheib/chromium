@@ -933,7 +933,7 @@
     <message name="IDS_SETTINGS_PRINTING_CUPS_PRINTER_ADVANCED_URI" desc="Label for the CUPS printer URI (uniform resource identifier) in the Advanced section in the printer details page.">
       URI
     </message>
-    <message name="IDS_SETTINGS_PRINTING_CUPS_PRINTER_DETAILS_NAME" desc="Lable for the CUPS printer name in the printer details page.">
+    <message name="IDS_SETTINGS_PRINTING_CUPS_PRINTER_DETAILS_NAME" desc="Label for the CUPS printer name in the printer details page.">
       Name
     </message>
     <message name="IDS_SETTINGS_PRINTING_CUPS_PRINTER_DETAILS_MODEL" desc="Label for the CUPS printer model in the printer details page.">
@@ -2194,10 +2194,13 @@
   <message name="IDS_SETTINGS_SITE_DETAILS" desc="A title for the site settings details subpage.">
     Site details
   </message>
-  <message name="IDS_SETTINGS_SITE_NO_SITES_ADDED" desc="Explenation for not showing a list of site exceptions">
+  <message name="IDS_SETTINGS_SITE_NO_SITES_ADDED" desc="Explanation for not showing a list of site exceptions">
     No sites added
   </message>
 
+  <message name="IDS_SETTINGS_NO_USB_DEVICES_FOUND" desc="Explanation for not showing USB devices in site settings.">
+    No USB devices found
+  </message>
   <message name="IDS_SETTINGS_ADD_SITE_EXCEPTION_PLACEHOLDER" desc="Placeholder text shown before the user starts typing a new content settings exception for a site." >
     [*.]example.com
   </message>
@@ -2672,9 +2675,6 @@
   </if>
 
   <!-- Users Page -->
-  <message name="IDS_SETTINGS_USERS" desc="Name of the settings page which manages users on the device.">
-    Manage other users
-  </message>
   <if expr="chromeos">
     <message name="IDS_SETTINGS_USERS_MODIFIED_BY_OWNER_LABEL" desc="Label saying settings may only be modified by the device owner.">
       These settings may only be modified by the owner:

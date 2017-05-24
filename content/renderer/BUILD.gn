@@ -468,6 +468,7 @@ target(link_target_type, "renderer") {
     "//media/gpu/ipc/common",
     "//media/midi",
     "//media/midi:mojo",
+    "//media/mojo:features",
     "//media/mojo/interfaces:remoting",
     "//mojo/common",
     "//mojo/edk/js",
@@ -952,10 +953,8 @@ target(link_target_type, "renderer") {
     ]
 
     deps += [
-      "//media/mojo/interfaces",
-
-      # Defines in mojo_media_config are also pulled in here.
       "//media/mojo/clients",
+      "//media/mojo/interfaces",
     ]
   }
 
@@ -979,11 +978,6 @@ target(link_target_type, "renderer") {
 # See comment at the top of //content/BUILD.gn for how this works.
 group("for_content_tests") {
   visibility = [ "//content/test/*" ]
-
-  if (enable_mojo_media) {
-    # For the defines in mojo_media_config.
-    public_configs = [ "//media/mojo/services:mojo_media_config" ]
-  }
 
   if (!is_component_build) {
     public_deps = [

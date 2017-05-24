@@ -46,7 +46,6 @@
 #include "cc/trees/layer_tree_host_client.h"
 #include "cc/trees/layer_tree_host_common.h"
 #include "cc/trees/layer_tree_host_impl.h"
-#include "cc/trees/layer_tree_impl.h"
 #include "cc/trees/mutator_host.h"
 #include "cc/trees/property_tree_builder.h"
 #include "cc/trees/proxy_main.h"
@@ -173,7 +172,7 @@ LayerTreeHost::~LayerTreeHost() {
   mutator_host_->SetMutatorHostClient(nullptr);
 
   // We must clear any pointers into the layer tree prior to destroying it.
-  RegisterViewportLayers(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+  RegisterViewportLayers(ViewportLayers());
 
   if (root_layer_) {
     root_layer_->SetLayerTreeHost(nullptr);
@@ -680,7 +679,7 @@ bool LayerTreeHost::DoUpdateLayers(Layer* root_layer) {
 
   Layer* root_scroll =
       PropertyTreeBuilder::FindFirstScrollableLayer(root_layer);
-  Layer* page_scale_layer = page_scale_layer_.get();
+  Layer* page_scale_layer = viewport_layers_.page_scale.get();
   if (!page_scale_layer && root_scroll)
     page_scale_layer = root_scroll->parent();
 
@@ -763,10 +762,10 @@ void LayerTreeHost::ApplyViewportDeltas(ScrollAndScaleSet* info) {
   // Preemptively apply the scroll offset and scale delta here before sending
   // it to the client.  If the client comes back and sets it to the same
   // value, then the layer can early out without needing a full commit.
-  if (inner_viewport_scroll_layer_) {
-    inner_viewport_scroll_layer_->SetScrollOffsetFromImplSide(
+  if (viewport_layers_.inner_viewport_scroll) {
+    viewport_layers_.inner_viewport_scroll->SetScrollOffsetFromImplSide(
         gfx::ScrollOffsetWithDelta(
-            inner_viewport_scroll_layer_->scroll_offset(),
+            viewport_layers_.inner_viewport_scroll->scroll_offset(),
             inner_viewport_scroll_delta));
   }
 
@@ -903,21 +902,19 @@ void LayerTreeHost::SetRootLayer(scoped_refptr<Layer> root_layer) {
   SetNeedsFullTreeSync();
 }
 
-void LayerTreeHost::RegisterViewportLayers(
-    scoped_refptr<Layer> overscroll_elasticity_layer,
-    scoped_refptr<Layer> page_scale_layer,
-    scoped_refptr<Layer> inner_viewport_container_layer,
-    scoped_refptr<Layer> outer_viewport_container_layer,
-    scoped_refptr<Layer> inner_viewport_scroll_layer,
-    scoped_refptr<Layer> outer_viewport_scroll_layer) {
-  DCHECK(!inner_viewport_scroll_layer ||
-         inner_viewport_scroll_layer != outer_viewport_scroll_layer);
-  overscroll_elasticity_layer_ = overscroll_elasticity_layer;
-  page_scale_layer_ = page_scale_layer;
-  inner_viewport_container_layer_ = inner_viewport_container_layer;
-  outer_viewport_container_layer_ = outer_viewport_container_layer;
-  inner_viewport_scroll_layer_ = inner_viewport_scroll_layer;
-  outer_viewport_scroll_layer_ = outer_viewport_scroll_layer;
+LayerTreeHost::ViewportLayers::ViewportLayers() {}
+
+LayerTreeHost::ViewportLayers::~ViewportLayers() {}
+
+void LayerTreeHost::RegisterViewportLayers(const ViewportLayers& layers) {
+  DCHECK(!layers.inner_viewport_scroll ||
+         layers.inner_viewport_scroll != layers.outer_viewport_scroll);
+  viewport_layers_.overscroll_elasticity = layers.overscroll_elasticity;
+  viewport_layers_.page_scale = layers.page_scale;
+  viewport_layers_.inner_viewport_container = layers.inner_viewport_container;
+  viewport_layers_.outer_viewport_container = layers.outer_viewport_container;
+  viewport_layers_.inner_viewport_scroll = layers.inner_viewport_scroll;
+  viewport_layers_.outer_viewport_scroll = layers.outer_viewport_scroll;
 }
 
 void LayerTreeHost::RegisterSelection(const LayerSelection& selection) {
@@ -1173,19 +1170,23 @@ void LayerTreeHost::PushLayerTreePropertiesTo(LayerTreeImpl* tree_impl) {
       EventListenerClass::kTouchEndOrCancel,
       event_listener_properties(EventListenerClass::kTouchEndOrCancel));
 
-  if (page_scale_layer_ && inner_viewport_scroll_layer_) {
-    tree_impl->SetViewportLayersFromIds(
-        overscroll_elasticity_layer_ ? overscroll_elasticity_layer_->id()
-                                     : Layer::INVALID_ID,
-        page_scale_layer_->id(),
-        inner_viewport_container_layer_ ? inner_viewport_container_layer_->id()
-                                        : Layer::INVALID_ID,
-        outer_viewport_container_layer_ ? outer_viewport_container_layer_->id()
-                                        : Layer::INVALID_ID,
-        inner_viewport_scroll_layer_->id(),
-        outer_viewport_scroll_layer_ ? outer_viewport_scroll_layer_->id()
-                                     : Layer::INVALID_ID);
-    DCHECK(inner_viewport_scroll_layer_->IsContainerForFixedPositionLayers());
+  if (viewport_layers_.page_scale && viewport_layers_.inner_viewport_scroll) {
+    LayerTreeImpl::ViewportLayerIds ids;
+    if (viewport_layers_.overscroll_elasticity)
+      ids.overscroll_elasticity = viewport_layers_.overscroll_elasticity->id();
+    ids.page_scale = viewport_layers_.page_scale->id();
+    if (viewport_layers_.inner_viewport_container)
+      ids.inner_viewport_container =
+          viewport_layers_.inner_viewport_container->id();
+    if (viewport_layers_.outer_viewport_container)
+      ids.outer_viewport_container =
+          viewport_layers_.outer_viewport_container->id();
+    ids.inner_viewport_scroll = viewport_layers_.inner_viewport_scroll->id();
+    if (viewport_layers_.outer_viewport_scroll)
+      ids.outer_viewport_scroll = viewport_layers_.outer_viewport_scroll->id();
+    tree_impl->SetViewportLayersFromIds(ids);
+    DCHECK(viewport_layers_.inner_viewport_scroll
+               ->IsContainerForFixedPositionLayers());
   } else {
     tree_impl->ClearViewportLayers();
   }

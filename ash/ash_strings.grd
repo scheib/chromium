@@ -278,6 +278,10 @@ Press Ctrl+Alt+Z to disable.
         Restart and powerwash to update
       </message>
 
+      <message name="IDS_ASH_STATUS_TRAY_UPDATE_OVER_CELLULAR_AVAILABLE" desc="The label used in the tray popup to notify that update is available but current connection is cellular.">
+        Click to view update details
+      </message>
+
       <message name="IDS_ASH_STATUS_TRAY_VOLUME" desc="The accessible text for the volume slider.">
         Volume
       </message>

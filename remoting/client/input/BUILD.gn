@@ -1,0 +1,20 @@
+# Copyright 2014 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+source_set("input") {
+  sources = [
+    "client_input_injector.h",
+    "keyboard_input_strategy.h",
+    "keyboard_interpreter.cc",
+    "keyboard_interpreter.h",
+    "text_keyboard_input_strategy.cc",
+    "text_keyboard_input_strategy.h",
+  ]
+
+  deps = [
+    "//remoting/base",
+    "//third_party/webrtc/base:rtc_base_approved",
+    "//ui/events:dom_keycode_converter",
+  ]
+}

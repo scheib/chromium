@@ -230,12 +230,6 @@ class CONTENT_EXPORT RTCVideoDecoder
 
   media::GpuVideoAcceleratorFactories* const factories_;
 
-  // The texture target used for decoded pictures.
-  uint32_t decoder_texture_target_;
-
-  // The format of the decoded pictures.
-  media::VideoPixelFormat pixel_format_;
-
   // Metadata of the buffers that have been sent for decode.
   std::list<BufferData> input_buffer_data_;
 

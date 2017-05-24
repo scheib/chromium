@@ -47,7 +47,6 @@ import org.chromium.content.browser.accessibility.captioning.SystemCaptioningBri
 import org.chromium.content.browser.accessibility.captioning.TextTrackSettings;
 import org.chromium.content.browser.input.ImeAdapter;
 import org.chromium.content.browser.input.InputMethodManagerWrapper;
-import org.chromium.content.browser.input.JoystickZoomProvider;
 import org.chromium.content.browser.input.SelectPopup;
 import org.chromium.content.browser.input.SelectPopupDialog;
 import org.chromium.content.browser.input.SelectPopupDropdown;
@@ -84,10 +83,9 @@ import java.util.Map;
  * See https://crbug.com/598880.
  */
 @JNINamespace("content")
-public class ContentViewCore
-        implements AccessibilityStateChangeListener, DisplayAndroidObserver,
-                   SystemCaptioningBridge.SystemCaptioningBridgeListener, WindowAndroidProvider,
-                   JoystickZoomProvider.PinchZoomHandler, ImeEventObserver {
+public class ContentViewCore implements AccessibilityStateChangeListener, DisplayAndroidObserver,
+                                        SystemCaptioningBridge.SystemCaptioningBridgeListener,
+                                        WindowAndroidProvider, ImeEventObserver {
     private static final String TAG = "cr_ContentViewCore";
 
     // Used to avoid enabling zooming in / out if resulting zooming will
@@ -235,10 +233,6 @@ public class ContentViewCore
 
     // Whether joystick scroll is enabled.  It's disabled when an editable field is focused.
     private boolean mJoystickScrollEnabled = true;
-
-    // Provides smooth gamepad joystick-driven zooming. Created lazily when the first
-    // Joystick event was received.
-    private JoystickZoomProvider mJoystickZoomProvider;
 
     private boolean mIsMobileOptimizedHint;
 
@@ -567,9 +561,6 @@ public class ContentViewCore
             mContainerView.setClickable(true);
             if (mSelectionPopupController != null) {
                 mSelectionPopupController.setContainerView(containerView);
-            }
-            if (mJoystickZoomProvider != null) {
-                mJoystickZoomProvider.setContainerView(containerView);
             }
         } finally {
             TraceEvent.end("ContentViewCore.setContainerView");
@@ -1315,18 +1306,8 @@ public class ContentViewCore
                 flingViewport(event.getEventTime(), -velocityX, -velocityY, true);
                 return true;
             }
-            if (getJoystickZoomProvider().onMotion(event)) return true;
         }
         return mContainerViewInternals.super_onGenericMotionEvent(event);
-    }
-
-    private JoystickZoomProvider getJoystickZoomProvider() {
-        if (mJoystickZoomProvider == null) {
-            mJoystickZoomProvider = new JoystickZoomProvider(getContainerView(),
-                    mRenderCoordinates.getDeviceScaleFactor(), getViewportWidthPix() / 2,
-                    getViewportHeightPix() / 2, this);
-        }
-        return mJoystickZoomProvider;
     }
 
     /**
@@ -1802,7 +1783,7 @@ public class ContentViewCore
      * @param delta the factor by which the current page scale should be multiplied by.
      * @return whether the gesture was sent.
      */
-    public boolean pinchByDelta(float delta) {
+    private boolean pinchByDelta(float delta) {
         if (mNativeContentViewCore == 0) return false;
 
         long timeMs = SystemClock.uptimeMillis();
@@ -1813,27 +1794,6 @@ public class ContentViewCore
         nativePinchBy(mNativeContentViewCore, timeMs, xPix, yPix, delta);
         nativePinchEnd(mNativeContentViewCore, timeMs);
 
-        return true;
-    }
-
-    @Override
-    public boolean pinchBegin(int xPix, int yPix) {
-        if (mNativeContentViewCore == 0) return false;
-        nativePinchBegin(mNativeContentViewCore, SystemClock.uptimeMillis(), xPix, yPix);
-        return true;
-    }
-
-    @Override
-    public boolean pinchBy(int xPix, int yPix, float delta) {
-        if (mNativeContentViewCore == 0) return false;
-        nativePinchBy(mNativeContentViewCore, SystemClock.uptimeMillis(), xPix, yPix, delta);
-        return true;
-    }
-
-    @Override
-    public boolean pinchEnd() {
-        if (mNativeContentViewCore == 0) return false;
-        nativePinchEnd(mNativeContentViewCore, SystemClock.uptimeMillis());
         return true;
     }
 

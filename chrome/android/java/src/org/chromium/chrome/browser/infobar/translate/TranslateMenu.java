@@ -18,15 +18,21 @@ public final class TranslateMenu {
         public final int mType;
         public final int mId;
         public final String mCode;
+        public final boolean mWithDivider;
 
-        MenuItem(int itemType, int itemId) {
-            this(itemType, itemId, EMPTY_STRING);
+        MenuItem(int itemType, int itemId, boolean withDivider) {
+            this(itemType, itemId, EMPTY_STRING, withDivider);
         }
 
         MenuItem(int itemType, int itemId, String code) {
+            this(itemType, itemId, code, false);
+        }
+
+        MenuItem(int itemType, int itemId, String code, boolean withDivider) {
             mType = itemType;
             mId = itemId;
             mCode = code;
+            mWithDivider = withDivider;
         }
     }
 
@@ -38,13 +44,11 @@ public final class TranslateMenu {
     public static final int MENU_SOURCE_LANGUAGE = 2;
 
     // Menu item type config.
-    public static final int ITEM_DIVIDER = 0;
-    public static final int ITEM_LANGUAGE = 1;
-    public static final int ITEM_CHECKBOX_OPTION = 2;
-    public static final int MENU_ITEM_TYPE_COUNT = 3;
+    public static final int ITEM_LANGUAGE = 0;
+    public static final int ITEM_CHECKBOX_OPTION = 1;
+    public static final int MENU_ITEM_TYPE_COUNT = 2;
 
     // Menu Item ID config for MENU_OVERFLOW.
-    public static final int ID_UNDEFINED = -1;
     public static final int ID_OVERFLOW_MORE_LANGUAGE = 0;
     public static final int ID_OVERFLOW_ALWAYS_TRANSLATE = 1;
     public static final int ID_OVERFLOW_NEVER_SITE = 2;
@@ -60,13 +64,16 @@ public final class TranslateMenu {
         // Load overflow menu item if it's empty.
         synchronized (OVERFLOW_MENU) {
             if (OVERFLOW_MENU.isEmpty()) {
-                OVERFLOW_MENU.add(new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_MORE_LANGUAGE));
-                OVERFLOW_MENU.add(new MenuItem(ITEM_DIVIDER, ID_UNDEFINED));
-                OVERFLOW_MENU.add(new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_ALWAYS_TRANSLATE));
-                OVERFLOW_MENU.add(new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_NEVER_LANGUAGE));
-                OVERFLOW_MENU.add(new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_NEVER_SITE));
                 OVERFLOW_MENU.add(
-                        new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_NOT_THIS_LANGUAGE));
+                        new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_MORE_LANGUAGE, true));
+                OVERFLOW_MENU.add(
+                        new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_ALWAYS_TRANSLATE, false));
+                OVERFLOW_MENU.add(
+                        new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_NEVER_LANGUAGE, false));
+                OVERFLOW_MENU.add(
+                        new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_NEVER_SITE, false));
+                OVERFLOW_MENU.add(
+                        new MenuItem(ITEM_CHECKBOX_OPTION, ID_OVERFLOW_NOT_THIS_LANGUAGE, false));
             }
         }
         return OVERFLOW_MENU;

@@ -51,7 +51,6 @@
 #include "ash/wm/system_wallpaper_controller.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/workspace/workspace_layout_manager.h"
 #include "ash/wm/workspace_controller.h"
@@ -452,7 +451,7 @@ bool RootWindowController::CanWindowReceiveEvents(aura::Window* window) {
   return true;
 }
 
-WmWindow* RootWindowController::FindEventTarget(
+aura::Window* RootWindowController::FindEventTarget(
     const gfx::Point& location_in_screen) {
   gfx::Point location_in_root(location_in_screen);
   aura::Window* root_window = GetRootWindow();
@@ -465,7 +464,7 @@ WmWindow* RootWindowController::FindEventTarget(
           ->dispatcher()
           ->GetDefaultEventTargeter()
           ->FindTargetForEvent(root_window, &test_event);
-  return WmWindow::Get(static_cast<aura::Window*>(event_handler));
+  return static_cast<aura::Window*>(event_handler);
 }
 
 gfx::Point RootWindowController::GetLastMouseLocationInRoot() {

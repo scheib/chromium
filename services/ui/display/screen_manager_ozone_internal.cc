@@ -16,6 +16,7 @@
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "services/ui/display/output_protection.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/display/manager/chromeos/default_touch_transform_setter.h"
 #include "ui/display/manager/chromeos/display_change_observer.h"
 #include "ui/display/manager/chromeos/touch_transform_controller.h"
 #include "ui/display/manager/display_layout_store.h"
@@ -165,7 +166,8 @@ void ScreenManagerOzoneInternal::Init(ScreenManagerDelegate* delegate) {
   display_configurator_.ForceInitialConfigure(kChromeOsBootColor);
 
   touch_transform_controller_ = base::MakeUnique<TouchTransformController>(
-      &display_configurator_, display_manager_.get());
+      &display_configurator_, display_manager_.get(),
+      base::MakeUnique<display::DefaultTouchTransformSetter>());
 }
 
 void ScreenManagerOzoneInternal::RequestCloseDisplay(int64_t display_id) {

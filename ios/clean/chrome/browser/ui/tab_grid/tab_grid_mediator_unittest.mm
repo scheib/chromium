@@ -41,7 +41,7 @@ class TabGridMediatorTest : public PlatformTest {
   }
 
   void SetConsumer() {
-    consumer_ = [OCMockObject mockForProtocol:@protocol(TabGridConsumer)];
+    consumer_ = OCMProtocolMock(@protocol(TabGridConsumer));
     mediator_.consumer = consumer_;
   }
 
@@ -55,20 +55,16 @@ class TabGridMediatorTest : public PlatformTest {
 // the list is empty.
 TEST_F(TabGridMediatorTest, TestRemoveNoTabsOverlay) {
   SetConsumer();
-  [[consumer_ expect] insertItemAtIndex:0];
-  [[consumer_ expect] removeNoTabsOverlay];
   InsertWebStateAt(0);
-  EXPECT_OCMOCK_VERIFY(consumer_);
+  [[consumer_ verify] removeNoTabsOverlay];
 }
 
 // Tests that the noTabsOverlay is added when the web state list becomes empty.
 TEST_F(TabGridMediatorTest, TestAddNoTabsOverlay) {
-  InsertWebStateAt(0);
   SetConsumer();
-  [[consumer_ expect] deleteItemAtIndex:0];
-  [[consumer_ expect] addNoTabsOverlay];
+  InsertWebStateAt(0);
   web_state_list_->CloseWebStateAt(0);
-  EXPECT_OCMOCK_VERIFY(consumer_);
+  [[consumer_ verify] addNoTabsOverlay];
 }
 
 }  // namespace

@@ -30,12 +30,12 @@ class CORE_EXPORT TestDictionaryDerivedImplementedAs : public TestDictionary {
   TestDictionaryDerivedImplementedAs& operator=(const TestDictionaryDerivedImplementedAs&);
 
   bool hasDerivedStringMember() const;
-  String derivedStringMember() const;
-  void setDerivedStringMember(String);
+  const String& derivedStringMember() const;
+  void setDerivedStringMember(const String&);
 
   bool hasDerivedStringMemberWithDefault() const;
-  String derivedStringMemberWithDefault() const;
-  void setDerivedStringMemberWithDefault(String);
+  const String& derivedStringMemberWithDefault() const;
+  void setDerivedStringMemberWithDefault(const String&);
 
   bool hasRequiredLongMember() const;
   int32_t requiredLongMember() const;

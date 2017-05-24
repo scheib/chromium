@@ -17,6 +17,7 @@
 #include "base/threading/sequenced_worker_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/audio/cras_audio_handler.h"
+#include "chromeos/cryptohome/system_salt_getter.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/network/network_connect.h"
 #include "chromeos/network/network_handler.h"
@@ -114,10 +115,12 @@ void WindowManagerApplication::InitializeComponents(bool init_network_handler) {
   chromeos::NetworkConnect::Initialize(network_connect_delegate_.get());
   // TODO(jamescook): Initialize real audio handler.
   chromeos::CrasAudioHandler::InitializeForTesting();
+  chromeos::SystemSaltGetter::Initialize();
 }
 
 void WindowManagerApplication::ShutdownComponents() {
   // NOTE: PowerStatus is shutdown by Shell.
+  chromeos::SystemSaltGetter::Shutdown();
   chromeos::CrasAudioHandler::Shutdown();
   chromeos::NetworkConnect::Shutdown();
   network_connect_delegate_.reset();

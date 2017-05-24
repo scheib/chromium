@@ -112,12 +112,9 @@ class PaymentRequestSpec : public PaymentOptionsProvider {
 
   bool IsMixedCurrency() const;
 
- private:
-  friend class PaymentRequestDialogView;
-  void add_observer_for_testing(Observer* observer_for_testing) {
-    observer_for_testing_ = observer_for_testing;
-  }
+  UpdateReason current_update_reason() const { return current_update_reason_; }
 
+ private:
   // Validates the |method_data| and fills |supported_card_networks_|,
   // |supported_card_networks_set_| and |basic_card_specified_networks_|.
   void PopulateValidatedMethodData(
@@ -167,10 +164,12 @@ class PaymentRequestSpec : public PaymentOptionsProvider {
   // payment method specific data.
   std::map<std::string, std::set<std::string>> stringified_method_data_;
 
+  // The reason why this payment request is waiting for updateWith.
+  UpdateReason current_update_reason_;
+
   // The |observer_for_testing_| will fire after all the |observers_| have been
   // notified.
   base::ObserverList<Observer> observers_;
-  Observer* observer_for_testing_;
 
   DISALLOW_COPY_AND_ASSIGN(PaymentRequestSpec);
 };

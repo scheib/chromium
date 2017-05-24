@@ -279,10 +279,10 @@ class FrameFetchContextModifyRequestTest : public FrameFetchContextTest {
     }
   }
 
-  void ExpectSetEmbeddingCSPRequestHeader(
+  void ExpectSetRequiredCSPRequestHeader(
       const char* input,
       WebURLRequest::FrameType frame_type,
-      const AtomicString& expected_embedding_csp) {
+      const AtomicString& expected_required_csp) {
     KURL input_url(kParsedURLString, input);
     ResourceRequest resource_request(input_url);
     resource_request.SetRequestContext(WebURLRequest::kRequestContextScript);
@@ -290,8 +290,8 @@ class FrameFetchContextModifyRequestTest : public FrameFetchContextTest {
 
     fetch_context->ModifyRequestForCSP(resource_request);
 
-    EXPECT_EQ(expected_embedding_csp,
-              resource_request.HttpHeaderField(HTTPNames::Embedding_CSP));
+    EXPECT_EQ(expected_required_csp,
+              resource_request.HttpHeaderField(HTTPNames::Required_CSP));
   }
 
   void SetFrameOwnerBasedOnFrameType(WebURLRequest::FrameType frame_type,
@@ -440,7 +440,7 @@ TEST_F(FrameFetchContextModifyRequestTest, SendUpgradeInsecureRequestHeader) {
   }
 }
 
-TEST_F(FrameFetchContextModifyRequestTest, SendEmbeddingCSPHeader) {
+TEST_F(FrameFetchContextModifyRequestTest, SendRequiredCSPHeader) {
   struct TestCase {
     const char* to_request;
     WebURLRequest::FrameType frame_type;
@@ -456,14 +456,14 @@ TEST_F(FrameFetchContextModifyRequestTest, SendEmbeddingCSPHeader) {
 
   for (const auto& test : tests) {
     SetFrameOwnerBasedOnFrameType(test.frame_type, iframe, required_csp);
-    ExpectSetEmbeddingCSPRequestHeader(
+    ExpectSetRequiredCSPRequestHeader(
         test.to_request, test.frame_type,
         test.frame_type == WebURLRequest::kFrameTypeNested ? required_csp
                                                            : g_null_atom);
 
     SetFrameOwnerBasedOnFrameType(test.frame_type, iframe,
                                   another_required_csp);
-    ExpectSetEmbeddingCSPRequestHeader(
+    ExpectSetRequiredCSPRequestHeader(
         test.to_request, test.frame_type,
         test.frame_type == WebURLRequest::kFrameTypeNested
             ? another_required_csp

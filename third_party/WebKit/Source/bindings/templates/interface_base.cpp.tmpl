@@ -531,8 +531,10 @@ static void install{{v8_class}}Template(v8::Isolate* isolate, const DOMWrapperWo
   {% if iterator_method %}
   {% filter exposed(iterator_method.exposed_test) %}
   {% filter runtime_enabled(iterator_method.runtime_enabled_feature_name) %}
+  {% set symbol_alias = '"%s"' % iterator_method_alias
+                        if iterator_method_alias else 'nullptr' %}
   // Iterator (@@iterator)
-  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, {{v8_class_or_partial}}::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
+  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, {{symbol_alias}}, {{v8_class_or_partial}}::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
   V8DOMConfiguration::InstallMethod(isolate, world, prototypeTemplate, signature, symbolKeyedIteratorConfiguration);
   {% endfilter %}
   {% endfilter %}

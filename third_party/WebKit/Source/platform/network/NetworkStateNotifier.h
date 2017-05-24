@@ -33,7 +33,9 @@
 #include "platform/wtf/Allocator.h"
 #include "platform/wtf/HashMap.h"
 #include "platform/wtf/Noncopyable.h"
+#include "platform/wtf/Optional.h"
 #include "platform/wtf/ThreadingPrimitives.h"
+#include "platform/wtf/Time.h"
 #include "platform/wtf/Vector.h"
 #include "public/platform/WebConnectionType.h"
 
@@ -51,13 +53,20 @@ class PLATFORM_EXPORT NetworkStateNotifier {
     bool connection_initialized = false;
     WebConnectionType type = kWebConnectionTypeOther;
     double max_bandwidth_mbps = kInvalidMaxBandwidth;
+    Optional<TimeDelta> http_rtt;
+    Optional<TimeDelta> transport_rtt;
+    Optional<double> downlink_throughput_mbps;
   };
 
   class NetworkStateObserver {
    public:
     // Will be called on the task runner that is passed in add*Observer.
-    virtual void ConnectionChange(WebConnectionType,
-                                  double max_bandwidth_mbps) {}
+    virtual void ConnectionChange(
+        WebConnectionType,
+        double max_bandwidth_mbps,
+        const Optional<TimeDelta>& http_rtt,
+        const Optional<TimeDelta>& transport_rtt,
+        const Optional<double>& downlink_throughput_mbps) {}
     virtual void OnLineStateChange(bool on_line) {}
   };
 
@@ -69,6 +78,33 @@ class PLATFORM_EXPORT NetworkStateNotifier {
     const NetworkState& state = has_override_ ? override_ : state_;
     DCHECK(state.on_line_initialized);
     return state.on_line;
+  }
+
+  // Returns the current HTTP RTT estimate. If the estimate is unavailable, the
+  // returned optional value is null.
+  Optional<TimeDelta> HttpRtt() const {
+    MutexLocker locker(mutex_);
+    const NetworkState& state = has_override_ ? override_ : state_;
+    DCHECK(state.on_line_initialized);
+    return state.http_rtt;
+  }
+
+  // Returns the current transport RTT estimate. If the estimate is unavailable,
+  // the returned optional value is null.
+  Optional<TimeDelta> TransportRtt() const {
+    MutexLocker locker(mutex_);
+    const NetworkState& state = has_override_ ? override_ : state_;
+    DCHECK(state.on_line_initialized);
+    return state.transport_rtt;
+  }
+
+  // Returns the current throughput estimate (in megabits per second). If the
+  // estimate is unavailable, the returned optional value is null.
+  Optional<double> DownlinkThroughputMbps() const {
+    MutexLocker locker(mutex_);
+    const NetworkState& state = has_override_ ? override_ : state_;
+    DCHECK(state.on_line_initialized);
+    return state.downlink_throughput_mbps;
   }
 
   void SetOnLine(bool);
@@ -110,6 +146,9 @@ class PLATFORM_EXPORT NetworkStateNotifier {
   }
 
   void SetWebConnection(WebConnectionType, double max_bandwidth_mbps);
+  void SetNetworkQuality(TimeDelta http_rtt,
+                         TimeDelta transport_rtt,
+                         int downlink_throughput_kbps);
 
   // When called, successive setWebConnectionType/setOnLine calls are stored,
   // and supplied overridden values are used instead until clearOverride() is

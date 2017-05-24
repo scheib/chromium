@@ -5,10 +5,11 @@
 import("//build/config/ui.gni")
 import("//testing/test.gni")
 
-test("mus_public_unittests") {
+source_set("tests") {
+  testonly = true
+
   sources = [
     "property_type_converters_unittest.cc",
-    "run_all_unittests.cc",
     "window_server_test_suite.cc",
     "window_server_test_suite.h",
   ]

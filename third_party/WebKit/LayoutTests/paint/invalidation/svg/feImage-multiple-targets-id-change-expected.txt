@@ -21,18 +21,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGRect rect id='rect'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGResourceFilterPrimitive feImage id='feimage1'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGResourceFilterPrimitive feImage id='feimage2'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "full"
     },

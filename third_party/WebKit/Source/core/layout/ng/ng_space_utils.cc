@@ -66,7 +66,7 @@ bool IsNewFormattingContextForBlockLevelChild(const ComputedStyle& parent_style,
 
 WTF::Optional<LayoutUnit> GetClearanceOffset(
     const std::shared_ptr<NGExclusions>& exclusions,
-    const ComputedStyle& style) {
+    EClear clear_type) {
   const NGExclusion* right_exclusion = exclusions->last_right_float;
   const NGExclusion* left_exclusion = exclusions->last_left_float;
 
@@ -79,7 +79,7 @@ WTF::Optional<LayoutUnit> GetClearanceOffset(
     right_offset = right_exclusion->rect.BlockEndOffset();
   }
 
-  switch (style.Clear()) {
+  switch (clear_type) {
     case EClear::kNone:
       return WTF::nullopt;  // nothing to do here.
     case EClear::kLeft:
@@ -104,6 +104,15 @@ bool ShouldShrinkToFit(const ComputedStyle& parent_style,
 
   return style.Display() == EDisplay::kInlineBlock || style.IsFloating() ||
          !is_in_parallel_flow;
+}
+
+void AdjustToClearance(const WTF::Optional<LayoutUnit>& clearance_offset,
+                       NGLogicalOffset* offset) {
+  DCHECK(offset);
+  if (clearance_offset) {
+    offset->block_offset =
+        std::max(clearance_offset.value(), offset->block_offset);
+  }
 }
 
 }  // namespace blink

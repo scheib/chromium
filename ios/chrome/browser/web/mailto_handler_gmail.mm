@@ -3,9 +3,6 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/web/mailto_handler_gmail.h"
-#include "base/strings/sys_string_conversions.h"
-#include "url/gurl.h"
-#include "url/url_constants.h"
 
 #import <UIKit/UIKit.h>
 

@@ -125,8 +125,13 @@ void EasyUnlockGetKeysOperation::OnGetKeyData(
         device.wrapped_secret = *entry.bytes;
       else
         NOTREACHED();
+    } else if (entry.name == kEasyUnlockKeyMetaNameSerializedBeaconSeeds) {
+      if (entry.bytes)
+        device.serialized_beacon_seeds = *entry.bytes;
+      else
+        NOTREACHED();
     } else {
-      PA_LOG(WARNING) << "Unknown Easy unlock key data entry, name="
+      PA_LOG(WARNING) << "Unknown EasyUnlock key data entry, name="
                       << entry.name;
     }
   }

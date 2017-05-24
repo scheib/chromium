@@ -4,7 +4,7 @@ Before selecting origin view:
 <DIV class=widget vbox security-main-view >
     <DIV class=security-summary >
         <DIV class=security-summary-section-title >
-Security Overview
+Security overview
         </DIV>
         <DIV class=lock-spectrum >
             <DIV class=lock-icon lock-icon-secure >
@@ -48,7 +48,7 @@ View requests in Network Panel
     </DIV>
     <DIV class=origin-view-section >
         <DIV class=origin-view-section-title >
-Not Secure
+Not secure
         </DIV>
         <DIV >
 Your connection to this origin is not secure.
@@ -59,7 +59,7 @@ After interstitial is shown:
 <DIV class=widget vbox security-main-view >
     <DIV class=security-summary >
         <DIV class=security-summary-section-title >
-Security Overview
+Security overview
         </DIV>
         <DIV class=lock-spectrum >
             <DIV class=lock-icon lock-icon-secure >

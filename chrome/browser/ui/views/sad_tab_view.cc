@@ -7,6 +7,7 @@
 #include <string>
 
 #include "base/metrics/histogram_macros.h"
+#include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "content/public/browser/web_contents.h"
@@ -30,6 +31,20 @@ namespace {
 constexpr int kMaxContentWidth = 600;
 constexpr int kMinColumnWidth = 120;
 constexpr int kTitleBottomSpacing = 13;
+constexpr int kBulletBottomSpacing = 1;
+constexpr int kBulletWidth = 20;
+constexpr int kBulletPadding = 13;
+
+views::Label* CreateFormattedLabel(const base::string16& message) {
+  views::Label* label = new views::Label(message);
+
+  label->SetMultiLine(true);
+  label->SetEnabled(false);
+  label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+  label->SetLineHeight(views::kPanelSubVerticalSpacing);
+
+  return label;
+}
 
 }  // namespace
 
@@ -68,16 +83,42 @@ SadTabView::SadTabView(content::WebContents* web_contents,
                               views::kPanelVerticalSpacing);
   layout->AddView(title_, 2, 1);
 
-  message_ = new views::Label(l10n_util::GetStringUTF16(GetMessage()));
-
-  message_->SetMultiLine(true);
-  message_->SetEnabled(false);
-  message_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  message_->SetLineHeight(views::kPanelSubVerticalSpacing);
-
+  message_ = CreateFormattedLabel(l10n_util::GetStringUTF16(GetMessage()));
   layout->StartRowWithPadding(0, column_set_id, 0, kTitleBottomSpacing);
   layout->AddView(message_, 2, 1, views::GridLayout::LEADING,
                   views::GridLayout::LEADING);
+  size_t bullet_id = 0;
+  int bullet_string_id = GetSubMessage(bullet_id);
+  if (bullet_string_id) {
+    const int bullet_columnset_id = 1;
+    views::ColumnSet* column_set = layout->AddColumnSet(bullet_columnset_id);
+    column_set->AddPaddingColumn(1, views::kPanelSubVerticalSpacing);
+    column_set->AddColumn(views::GridLayout::TRAILING,
+                          views::GridLayout::LEADING, 0,
+                          views::GridLayout::FIXED, kBulletWidth, 0);
+    column_set->AddPaddingColumn(0, kBulletPadding);
+    column_set->AddColumn(views::GridLayout::LEADING,
+                          views::GridLayout::LEADING, 0,
+                          views::GridLayout::USE_PREF,
+                          0,  // No fixed width.
+                          0);
+    column_set->AddPaddingColumn(1, views::kPanelSubVerticalSpacing);
+
+    while (bullet_string_id) {
+      const base::string16 bullet_character(base::WideToUTF16(L"\u2022"));
+      views::Label* bullet_label = CreateFormattedLabel(bullet_character);
+      views::Label* label =
+          CreateFormattedLabel(l10n_util::GetStringUTF16(bullet_string_id));
+
+      layout->StartRowWithPadding(0, bullet_columnset_id, 0,
+                                  kBulletBottomSpacing);
+      layout->AddView(bullet_label);
+      layout->AddView(label);
+
+      bullet_labels_.push_back(label);
+      bullet_string_id = GetSubMessage(++bullet_id);
+    }
+  }
 
   action_button_ = views::MdTextButton::CreateSecondaryUiBlueButton(
       this, l10n_util::GetStringUTF16(GetButtonTitle()));
@@ -131,8 +172,13 @@ void SadTabView::Layout() {
   // Specify the maximum message width explicitly.
   const int max_width =
       std::min(width() - views::kPanelSubVerticalSpacing * 2, kMaxContentWidth);
+
   message_->SizeToFit(max_width);
   title_->SizeToFit(max_width);
+
+  // Bullet labels need to take into acocunt the size of the bullet.
+  for (views::Label* label : bullet_labels_)
+    label->SizeToFit(max_width - kBulletWidth - kBulletPadding);
 
   View::Layout();
 }

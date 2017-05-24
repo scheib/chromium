@@ -33,9 +33,19 @@ enum class WindowPinType;
 }
 
 namespace wm {
+class WindowState;
 class WindowStateDelegate;
 class WindowStateObserver;
 class WMEvent;
+
+// Returns the WindowState for the active window, null if there is no active
+// window.
+ASH_EXPORT WindowState* GetActiveWindowState();
+
+// Returns the WindowState for |window|. Creates WindowState if it doesn't
+// exist. The returned value is owned by |window| (you should not delete it).
+ASH_EXPORT WindowState* GetWindowState(aura::Window* window);
+ASH_EXPORT const WindowState* GetWindowState(const aura::Window* window);
 
 // WindowState manages and defines ash specific window state and
 // behavior. Ash specific per-window state (such as ones that controls
@@ -323,16 +333,16 @@ class ASH_EXPORT WindowState {
   // Called from the associated WmWindow once the window pin type changes.
   void OnWindowPinTypeChanged();
 
- protected:
-  explicit WindowState(WmWindow* window);
-
  private:
   friend class DefaultState;
   friend class ash::LockWindowState;
   friend class ash::MaximizeModeWindowState;
+  friend WindowState* GetWindowState(aura::Window*);
   FRIEND_TEST_ALL_PREFIXES(WindowAnimationsTest, CrossFadeToBounds);
   FRIEND_TEST_ALL_PREFIXES(WindowAnimationsTest,
                            CrossFadeToBoundsFromTransform);
+
+  explicit WindowState(WmWindow* window);
 
   WindowStateDelegate* delegate() { return delegate_.get(); }
 

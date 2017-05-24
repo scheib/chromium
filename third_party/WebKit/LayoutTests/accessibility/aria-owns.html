@@ -7,13 +7,13 @@
 </style>
 
 <div class="container">
-    <ul id="list1" aria-owns="item3">
-        <li>One</li>
-        <li>Two</li>
+    <ul id="list1" role="listbox" aria-owns="item3">
+        <li role="option">One</li>
+        <li role="option">Two</li>
     </ul>
-    <ul id="list2">
-        <li id="item3">Three</li>
-        <li>Four</li>
+    <ul role="listbox" id="list2">
+        <li role="option" id="item3">Three</li>
+        <li role="option">Four</li>
     </ul>
 </div>
 
@@ -21,7 +21,7 @@
 test(function(t)
 {
     var axList1 = accessibilityController.accessibleElementById("list1");
-    assert_equals(axList1.role, "AXRole: AXList");
+    assert_equals(axList1.role, "AXRole: AXListBox");
     assert_equals(axList1.childrenCount, 3);
 
     var axItem = axList1.childAtIndex(0);
@@ -30,17 +30,17 @@ test(function(t)
     assert_equals(axList1.childAtIndex(2).name, "Three");
 
     var axList2 = accessibilityController.accessibleElementById("list2");
-    assert_equals(axList2.role, "AXRole: AXList");
+    assert_equals(axList2.role, "AXRole: AXListBox");
     assert_equals(axList2.childrenCount, 1);
     assert_equals(axList2.childAtIndex(0).name, "Four");
 }, "Aria-owns moves an element from one part of the tree to another.");
 </script>
 
 <div class="container">
-    <ul id="parent1" aria-owns="child"></ul>
-    <ul id="parent2" aria-owns="child"></ul>
-    <ul id="parent3">
-        <li id="child">Child</li>
+    <ul id="parent1" role="listbox" aria-owns="child"></ul>
+    <ul id="parent2" role="listbox" aria-owns="child"></ul>
+    <ul id="parent3" role="listbox">
+        <li id="child" role="option">Child</li>
     </ul>
 </div>
 

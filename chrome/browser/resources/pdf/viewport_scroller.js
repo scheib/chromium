@@ -24,6 +24,7 @@ ViewportScroller.MAX_DRAG_SCROLL_DISTANCE_ = 100;
  * @param {Object} viewport The viewport info of the page.
  * @param {Object} plugin The PDF plugin element.
  * @param {Object} window The window containing the viewer.
+ * @constructor
  */
 function ViewportScroller(viewport, plugin, window) {
   this.viewport_ = viewport;

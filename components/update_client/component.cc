@@ -17,6 +17,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/update_client/component_unpacker.h"
 #include "components/update_client/configurator.h"
+#include "components/update_client/protocol_builder.h"
 #include "components/update_client/update_client.h"
 #include "components/update_client/update_client_errors.h"
 #include "components/update_client/update_engine.h"
@@ -251,10 +252,8 @@ bool Component::CanDoBackgroundDownload() const {
          update_context_.config->EnabledBackgroundDownloader();
 }
 
-void Component::AppendDownloadMetrics(
-    const std::vector<CrxDownloader::DownloadMetrics>& download_metrics) {
-  download_metrics_.insert(download_metrics_.end(), download_metrics.begin(),
-                           download_metrics.end());
+void Component::AppendEvent(const std::string& event) {
+  events_.push_back(event);
 }
 
 void Component::NotifyObservers(UpdateClient::Observer::Events event) const {
@@ -366,6 +365,11 @@ void Component::StateUpdateError::DoHandle() {
   DCHECK(thread_checker_.CalledOnValidThread());
 
   auto& component = State::component();
+
+  // Create an event only when the server response included an update.
+  if (component.IsUpdateAvailable())
+    component.AppendEvent(BuildUpdateCompleteEventElement(component));
+
   TransitionState(nullptr);
   component.NotifyObservers(Events::COMPONENT_NOT_UPDATED);
 }
@@ -475,7 +479,8 @@ void Component::StateDownloadingDiff::DownloadComplete(
 
   auto& component = Component::State::component();
 
-  component.AppendDownloadMetrics(crx_downloader_->download_metrics());
+  for (const auto& metrics : crx_downloader_->download_metrics())
+    component.AppendEvent(BuildDownloadCompleteEventElement(metrics));
 
   crx_downloader_.reset();
 
@@ -541,7 +546,8 @@ void Component::StateDownloading::DownloadComplete(
 
   auto& component = Component::State::component();
 
-  component.AppendDownloadMetrics(crx_downloader_->download_metrics());
+  for (const auto& metrics : crx_downloader_->download_metrics())
+    component.AppendEvent(BuildDownloadCompleteEventElement(metrics));
 
   crx_downloader_.reset();
 
@@ -681,6 +687,8 @@ void Component::StateUpdated::DoHandle() {
   component.crx_component_.version = component.next_version_;
   component.crx_component_.fingerprint = component.next_fp_;
 
+  component.AppendEvent(BuildUpdateCompleteEventElement(component));
+
   TransitionState(nullptr);
   component.NotifyObservers(Events::COMPONENT_UPDATED);
 }
@@ -696,6 +704,10 @@ Component::StateUninstalled::~StateUninstalled() {
 
 void Component::StateUninstalled::DoHandle() {
   DCHECK(thread_checker_.CalledOnValidThread());
+
+  auto& component = State::component();
+  component.AppendEvent(BuildUninstalledEventElement(component));
+
   TransitionState(nullptr);
 }
 

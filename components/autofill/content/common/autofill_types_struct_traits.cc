@@ -265,6 +265,18 @@ EnumTraits<mojom::PasswordFormSubmissionIndicatorEvent,
       return mojom::PasswordFormSubmissionIndicatorEvent::
           DOM_MUTATION_AFTER_XHR;
     case PasswordForm::SubmissionIndicatorEvent::
+        PROVISIONALLY_SAVED_FORM_ON_START_PROVISIONAL_LOAD:
+      return mojom::PasswordFormSubmissionIndicatorEvent::
+          PROVISIONALLY_SAVED_FORM_ON_START_PROVISIONAL_LOAD;
+    case PasswordForm::SubmissionIndicatorEvent::
+        FILLED_FORM_ON_START_PROVISIONAL_LOAD:
+      return mojom::PasswordFormSubmissionIndicatorEvent::
+          FILLED_FORM_ON_START_PROVISIONAL_LOAD;
+    case PasswordForm::SubmissionIndicatorEvent::
+        FILLED_INPUT_ELEMENTS_ON_START_PROVISIONAL_LOAD:
+      return mojom::PasswordFormSubmissionIndicatorEvent::
+          FILLED_INPUT_ELEMENTS_ON_START_PROVISIONAL_LOAD;
+    case PasswordForm::SubmissionIndicatorEvent::
         SUBMISSION_INDICATOR_EVENT_COUNT:
       return mojom::PasswordFormSubmissionIndicatorEvent::
           SUBMISSION_INDICATOR_EVENT_COUNT;
@@ -301,6 +313,21 @@ bool EnumTraits<mojom::PasswordFormSubmissionIndicatorEvent,
       return true;
     case mojom::PasswordFormSubmissionIndicatorEvent::DOM_MUTATION_AFTER_XHR:
       *output = PasswordForm::SubmissionIndicatorEvent::DOM_MUTATION_AFTER_XHR;
+      return true;
+    case mojom::PasswordFormSubmissionIndicatorEvent::
+        PROVISIONALLY_SAVED_FORM_ON_START_PROVISIONAL_LOAD:
+      *output = PasswordForm::SubmissionIndicatorEvent::
+          PROVISIONALLY_SAVED_FORM_ON_START_PROVISIONAL_LOAD;
+      return true;
+    case mojom::PasswordFormSubmissionIndicatorEvent::
+        FILLED_FORM_ON_START_PROVISIONAL_LOAD:
+      *output = PasswordForm::SubmissionIndicatorEvent::
+          FILLED_FORM_ON_START_PROVISIONAL_LOAD;
+      return true;
+    case mojom::PasswordFormSubmissionIndicatorEvent::
+        FILLED_INPUT_ELEMENTS_ON_START_PROVISIONAL_LOAD:
+      *output = PasswordForm::SubmissionIndicatorEvent::
+          FILLED_INPUT_ELEMENTS_ON_START_PROVISIONAL_LOAD;
       return true;
     case mojom::PasswordFormSubmissionIndicatorEvent::
         SUBMISSION_INDICATOR_EVENT_COUNT:

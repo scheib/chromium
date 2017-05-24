@@ -245,7 +245,7 @@ TEST_F(RenderWidgetHostViewChildFrameTest, FrameEviction) {
 }
 
 // Tests that BeginFrameAcks are forwarded correctly from the
-// SwapCompositorFrame and OnBeginFrameDidNotSwap IPCs through the
+// SwapCompositorFrame and DidNotProduceFrame IPCs through the
 // CompositorFrameSinkSupport.
 TEST_F(RenderWidgetHostViewChildFrameTest, ForwardsBeginFrameAcks) {
   gfx::Size view_size(100, 100);
@@ -280,9 +280,9 @@ TEST_F(RenderWidgetHostViewChildFrameTest, ForwardsBeginFrameAcks) {
         cc::CreateBeginFrameArgsForTesting(BEGINFRAME_FROM_HERE, source_id, 6u);
     source.TestOnBeginFrame(args);
 
-    // Explicit ack through OnBeginFrameDidNotSwap is forwarded.
+    // Explicit ack through OnDidNotProduceFrame is forwarded.
     cc::BeginFrameAck ack(source_id, 6, 4, false);
-    view_->OnBeginFrameDidNotSwap(ack);
+    view_->OnDidNotProduceFrame(ack);
     EXPECT_EQ(ack, source.LastAckForObserver(view_->support_.get()));
   }
 

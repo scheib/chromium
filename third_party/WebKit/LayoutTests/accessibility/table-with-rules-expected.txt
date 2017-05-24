@@ -15,9 +15,9 @@ AXRole: AXTable
 AXRole: AXTable
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 

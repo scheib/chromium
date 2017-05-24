@@ -37,6 +37,8 @@ namespace blink {
 extern const int kSQLAuthAllow;
 extern const int kSQLAuthDeny;
 
+class DatabaseContext;
+
 class DatabaseAuthorizer
     : public GarbageCollectedFinalized<DatabaseAuthorizer> {
  public:
@@ -46,8 +48,9 @@ class DatabaseAuthorizer
     kNoAccessMask = 1 << 2
   };
 
-  static DatabaseAuthorizer* Create(const String& database_info_table_name);
-  DEFINE_INLINE_TRACE() {}
+  static DatabaseAuthorizer* Create(DatabaseContext*,
+                                    const String& database_info_table_name);
+  DECLARE_TRACE();
 
   int CreateTable(const String& table_name);
   int CreateTempTable(const String& table_name);
@@ -103,7 +106,8 @@ class DatabaseAuthorizer
   bool HadDeletes() const { return had_deletes_; }
 
  private:
-  explicit DatabaseAuthorizer(const String& database_info_table_name);
+  explicit DatabaseAuthorizer(DatabaseContext*,
+                              const String& database_info_table_name);
   void AddWhitelistedFunctions();
   int DenyBasedOnTableName(const String&) const;
   int UpdateDeletesBasedOnTableName(const String&);
@@ -116,6 +120,8 @@ class DatabaseAuthorizer
   bool had_deletes_ : 1;
 
   const String database_info_table_name_;
+
+  Member<DatabaseContext> database_context_;
 };
 
 }  // namespace blink

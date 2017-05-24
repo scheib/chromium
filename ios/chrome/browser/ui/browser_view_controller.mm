@@ -3384,6 +3384,10 @@ class BrowserBookmarkModelBridge : public bookmarks::BookmarkModelObserver {
   DCHECK(_browserState);
   DCHECK(self.visible || self.dismissingModal);
 
+  // Record the time this menu was requested; to be stored in the configuration
+  // object.
+  NSDate* showToolsMenuPopupRequestDate = [NSDate date];
+
   // Dismiss the omnibox (if open).
   [_toolbarController cancelOmniboxEdit];
   // Dismiss the soft keyboard (if open).
@@ -3393,6 +3397,8 @@ class BrowserBookmarkModelBridge : public bookmarks::BookmarkModelObserver {
 
   ToolsMenuConfiguration* configuration =
       [[ToolsMenuConfiguration alloc] initWithDisplayView:[self view]];
+  configuration.requestStartTime =
+      showToolsMenuPopupRequestDate.timeIntervalSinceReferenceDate;
   if ([_model count] == 0)
     [configuration setNoOpenedTabs:YES];
 

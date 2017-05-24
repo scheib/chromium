@@ -54,7 +54,7 @@ class TabularContextMenuListAdapter extends BaseAdapter {
 
     @Override
     public long getItemId(int position) {
-        return mMenuItems.get(position).menuId;
+        return mMenuItems.get(position).getMenuId();
     }
 
     @Override
@@ -79,12 +79,12 @@ class TabularContextMenuListAdapter extends BaseAdapter {
             viewHolder = (ViewHolderItem) convertView.getTag();
         }
 
-        viewHolder.mText.setText(menuItem.getString(mActivity));
-        Drawable icon = menuItem.getDrawableAndDescription(mActivity);
+        viewHolder.mText.setText(menuItem.getTitle(mActivity));
+        Drawable icon = menuItem.getDrawable(mActivity);
         viewHolder.mIcon.setImageDrawable(icon);
         viewHolder.mIcon.setVisibility(icon != null ? View.VISIBLE : View.INVISIBLE);
 
-        if (menuItem == ContextMenuItem.SHARE_IMAGE) {
+        if (menuItem == ChromeContextMenuItem.SHARE_IMAGE) {
             Intent shareIntent = ShareHelper.getShareImageIntent(null);
             final Pair<Drawable, CharSequence> shareInfo =
                     ShareHelper.getShareableIconAndName(mActivity, shareIntent);

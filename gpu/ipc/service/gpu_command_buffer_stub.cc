@@ -589,7 +589,7 @@ bool GpuCommandBufferStub::Initialize(
         init_params.attribs.bind_generates_resource,
         gmb_factory ? gmb_factory->AsImageFactory() : nullptr,
         channel_->watchdog() /* progress_reporter */,
-        manager->gpu_feature_info());
+        manager->gpu_feature_info(), channel_->discardable_manager());
   }
 
 #if defined(OS_MACOSX)

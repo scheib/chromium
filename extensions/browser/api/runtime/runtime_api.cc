@@ -320,8 +320,8 @@ void RuntimeAPI::StorePendingOnInstallInfoToPref(const Extension* extension) {
   // so that we can add more stuff to it in the future if necessary.
   std::unique_ptr<base::DictionaryValue> pending_on_install_info(
       new base::DictionaryValue());
-  base::Version previous_version =
-      delegate_->GetPreviousExtensionVersion(extension);
+  base::Version previous_version = ExtensionRegistry::Get(browser_context_)
+                                       ->GetStoredVersion(extension->id());
   pending_on_install_info->SetString(
       kPrefPreviousVersion,
       previous_version.IsValid() ? previous_version.GetString() : "");

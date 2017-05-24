@@ -6,6 +6,7 @@ module content.mojom;
 
 import "content/common/native_types.mojom";
 import "ipc/ipc.mojom";
+import "mojo/common/time.mojom";
 import "ui/gfx/geometry/mojo/geometry.mojom";
 import "ui/gfx/mojo/icc_profile.mojom";
 
@@ -158,12 +159,13 @@ interface Renderer {
                              double max_bandwidth_mbps);
 
   // Tells the renderer process that the network quality estimate has changed.
-  // The RTT estimates are in milliseconds, while the downstream throughput is
-  // computed in kilobits per second. If an estimate of the HTTP or transport
-  // RTT is unavailable, it will be set to net::nqe::internal::InvalidRTT(). If
-  // the throughput estimate is unavailable, it will be set to
-  // net::nqe::internal::kInvalidThroughput.
-  OnNetworkQualityChanged(double http_rtt_msec, double transport_rtt_msec, double bandwidth_kbps);
+  // The downstream throughput is computed in kilobits per second. If an
+  // estimate of the HTTP or transport RTT is unavailable, it will be set to 
+  // net::nqe::internal::InvalidRTT(). If the throughput estimate is
+  // unavailable, it will be set to net::nqe::internal::kInvalidThroughput.
+  OnNetworkQualityChanged(mojo.common.mojom.TimeDelta http_rtt,
+                          mojo.common.mojom.TimeDelta transport_rtt,
+                          double bandwidth_kbps);
 
   // Tells the renderer to suspend/resume the webkit timers. Only for use on
   // Android.

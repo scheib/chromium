@@ -20,6 +20,7 @@
 #include "components/image_fetcher/core/image_fetcher.h"
 #include "components/image_fetcher/core/request_metadata.h"
 #include "components/prefs/testing_pref_service.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/size.h"
@@ -94,7 +95,8 @@ class FakeImageFetcher : public ImageFetcher {
   void StartOrQueueNetworkRequest(
       const std::string& id,
       const GURL& url,
-      const ImageFetcherCallback& callback) override {
+      const ImageFetcherCallback& callback,
+      const net::NetworkTrafficAnnotationTag&) override {
     // For simplicity, the fake doesn't support multiple concurrent requests.
     DCHECK(!HasPendingRequest());
 

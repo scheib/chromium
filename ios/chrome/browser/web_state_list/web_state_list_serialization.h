@@ -27,9 +27,11 @@ using WebStateFactory =
 SessionWindowIOS* SerializeWebStateList(WebStateList* web_state_list);
 
 // Restores a |web_state_list| from |session_window| using |web_state_factory|
-// to create the restored WebStates.
+// to create the restored WebStates and |web_usage_enabled| to enable/disable
+// web usage for the resulting WebStates.
 void DeserializeWebStateList(WebStateList* web_state_list,
                              SessionWindowIOS* session_window,
+                             bool web_usage_enabled,
                              const WebStateFactory& web_state_factory);
 
 #endif  // IOS_CHROME_BROWSER_WEB_STATE_LIST_WEB_STATE_LIST_SERIALIZATION_H_

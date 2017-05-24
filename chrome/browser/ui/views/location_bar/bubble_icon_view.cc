@@ -13,6 +13,7 @@
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/native_theme/native_theme.h"
+#include "ui/views/animation/flood_fill_ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop_highlight.h"
 #include "ui/views/animation/ink_drop_impl.h"
 #include "ui/views/bubble/bubble_dialog_delegate.h"
@@ -152,7 +153,8 @@ void BubbleIconView::RemoveInkDropLayer(ui::Layer* ink_drop_layer) {
 }
 
 std::unique_ptr<views::InkDrop> BubbleIconView::CreateInkDrop() {
-  std::unique_ptr<views::InkDropImpl> ink_drop = CreateDefaultInkDropImpl();
+  std::unique_ptr<views::InkDropImpl> ink_drop =
+      CreateDefaultFloodFillInkDropImpl();
   ink_drop->SetShowHighlightOnFocus(true);
   return std::move(ink_drop);
 }
@@ -160,6 +162,14 @@ std::unique_ptr<views::InkDrop> BubbleIconView::CreateInkDrop() {
 SkColor BubbleIconView::GetInkDropBaseColor() const {
   return color_utils::DeriveDefaultIconColor(GetNativeTheme()->GetSystemColor(
       ui::NativeTheme::kColorId_TextfieldDefaultColor));
+}
+
+std::unique_ptr<views::InkDropRipple> BubbleIconView::CreateInkDropRipple()
+    const {
+  return base::MakeUnique<views::FloodFillInkDropRipple>(
+      gfx::Size(kDefaultInkDropSize, kDefaultInkDropSize),
+      GetInkDropCenterBasedOnLastEvent(), GetInkDropBaseColor(),
+      ink_drop_visible_opacity());
 }
 
 void BubbleIconView::OnGestureEvent(ui::GestureEvent* event) {

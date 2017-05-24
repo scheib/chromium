@@ -48,6 +48,10 @@ class CreditCardEditorViewController : public EditorViewController {
 
   // EditorViewController:
   std::unique_ptr<views::View> CreateHeaderView() override;
+  std::unique_ptr<views::View> CreateCustomFieldView(
+      autofill::ServerFieldType type,
+      views::View** focusable_field,
+      bool* valid) override;
   std::unique_ptr<views::View> CreateExtraViewForField(
       autofill::ServerFieldType type) override;
   std::vector<EditorField> GetFieldDefinitions() override;
@@ -61,6 +65,7 @@ class CreditCardEditorViewController : public EditorViewController {
 
  protected:
   // PaymentRequestSheetController:
+  void FillContentView(views::View* content_view) override;
   base::string16 GetSheetTitle() override;
   void ButtonPressed(views::Button* sender, const ui::Event& event) override;
 
@@ -77,13 +82,18 @@ class CreditCardEditorViewController : public EditorViewController {
     ~CreditCardValidationDelegate() override;
 
     // ValidationDelegate:
-    bool ValidateTextfield(views::Textfield* textfield) override;
-    bool ValidateCombobox(views::Combobox* combobox) override;
+    bool IsValidTextfield(views::Textfield* textfield) override;
+    bool IsValidCombobox(views::Combobox* combobox) override;
+    bool TextfieldValueChanged(views::Textfield* textfield) override;
+    bool ComboboxValueChanged(views::Combobox* combobox) override;
     void ComboboxModelChanged(views::Combobox* combobox) override {}
 
    private:
-    // Validates a specific |value|.
-    bool ValidateValue(const base::string16& value);
+    // Validates a specific |value|/|combobox|.
+    bool ValidateValue(const base::string16& value,
+                       base::string16* error_message);
+    bool ValidateCombobox(views::Combobox* combobox,
+                          base::string16* error_message);
 
     EditorField field_;
     // Outlives this class.

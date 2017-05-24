@@ -12,6 +12,7 @@
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
 #include "net/http/http_status_code.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 
 using content::BrowserThread;
 
@@ -123,13 +124,7 @@ void PasswordProtectionRequest::FillRequestProto() {
       break;
     }
     case LoginReputationClientRequest::PASSWORD_REUSE_EVENT: {
-      if (password_protection_service_->IsExtendedReporting() &&
-          !password_protection_service_->IsIncognito()) {
-        LoginReputationClientRequest::PasswordReuseEvent* password_reuse =
-            request_proto_->mutable_password_reuse_event();
-        password_reuse->add_password_reused_original_origins(saved_domain_);
-      }
-      // TODO(jialiul): Fill more password_reuse information.
+      // TODO(jialiul): Fill more password reuse related information when ready.
       break;
     }
     default:
@@ -149,10 +144,41 @@ void PasswordProtectionRequest::SendRequest() {
 
   // In case the request take too long, we set a timer to cancel this request.
   StartTimeout();
-
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("password_protection_request", R"(
+        semantics {
+          sender: "Safe Browsing"
+          description:
+            "When the user is about to log in to a new, uncommon site, Chrome "
+            "will send a request to Safe Browsing to determine if the page is "
+            "phishing. It'll then show a warning if the page poses a risk of "
+            "phishing."
+          trigger:
+            "When a user focuses on a password field on a page that they "
+            "haven't visited before and that isn't popular or known to be safe."
+          data:
+            "URL and referrer of the current page, password form action, and "
+            "iframe structure."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: true
+          cookies_store: "Safe Browsing Cookie Store"
+          setting:
+            "Users can control this feature via 'Protect you and your device "
+            "from dangerous sites' or 'Automatically report details of "
+            "possible security incidents to Google' setting under 'Privacy'. "
+            "By default, the first setting is enabled and the second is not."
+          chrome_policy {
+            SafeBrowsingExtendedReportingOptInAllowed {
+              policy_options {mode: MANDATORY}
+              SafeBrowsingExtendedReportingOptInAllowed: false
+            }
+          }
+        })");
   fetcher_ = net::URLFetcher::Create(
       0, PasswordProtectionService::GetPasswordProtectionRequestUrl(),
-      net::URLFetcher::POST, this);
+      net::URLFetcher::POST, this, traffic_annotation);
   data_use_measurement::DataUseUserData::AttachToFetcher(
       fetcher_.get(), data_use_measurement::DataUseUserData::SAFE_BROWSING);
   fetcher_->SetLoadFlags(net::LOAD_DISABLE_CACHE);

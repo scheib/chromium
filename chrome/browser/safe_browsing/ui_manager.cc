@@ -92,7 +92,7 @@ void SafeBrowsingUIManager::CreateAndSendHitReport(
   hit_report.is_metrics_reporting_active =
       ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled();
 
-  MaybeReportSafeBrowsingHit(hit_report);
+  MaybeReportSafeBrowsingHit(hit_report, web_contents);
 
   for (Observer& observer : observer_list_)
     observer.OnSafeBrowsingHit(resource);
@@ -103,15 +103,25 @@ void SafeBrowsingUIManager::ShowBlockingPageForResource(
   SafeBrowsingBlockingPage::ShowBlockingPage(this, resource);
 }
 
-// A safebrowsing hit is sent after a blocking page for malware/phishing
+// static
+bool SafeBrowsingUIManager::ShouldSendHitReport(
+    const HitReport& hit_report,
+    const WebContents* web_contents) {
+  return hit_report.extended_reporting_level != SBER_LEVEL_OFF &&
+         !web_contents->GetBrowserContext()->IsOffTheRecord();
+}
+
+// A SafeBrowsing hit is sent after a blocking page for malware/phishing
 // or after the warning dialog for download urls, only for
 // extended-reporting users.
 void SafeBrowsingUIManager::MaybeReportSafeBrowsingHit(
-    const HitReport& hit_report) {
+    const HitReport& hit_report,
+    const WebContents* web_contents) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  // Send report if user opted-in extended reporting.
-  if (hit_report.extended_reporting_level != SBER_LEVEL_OFF) {
+  // Send report if user opted-in to extended reporting and is not in
+  //  incognito mode.
+  if (ShouldSendHitReport(hit_report, web_contents)) {
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,
         base::BindOnce(&SafeBrowsingUIManager::ReportSafeBrowsingHitOnIOThread,

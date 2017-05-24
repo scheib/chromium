@@ -46,5 +46,5 @@
 {%- for interface in interfaces %}
   exports.{{interface.name}} = {{interface.name}};
   exports.{{interface.name}}Ptr = {{interface.name}}Ptr;
-  exports.Associated{{interface.name}}Ptr = Associated{{interface.name}}Ptr;
+  exports.{{interface.name}}AssociatedPtr = {{interface.name}}AssociatedPtr;
 {%- endfor %}

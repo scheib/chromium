@@ -270,8 +270,10 @@ void MediaRouterUI::InitWithPresentationSessionRequest(
 
   create_session_request_ = std::move(create_session_request);
   presentation_service_delegate_ = delegate->GetWeakPtr();
+
   InitCommon(initiator);
-  OnDefaultPresentationChanged(create_session_request_->presentation_request());
+  OnDefaultPresentationChanged(
+      create_session_request_->presentation_request());
 }
 
 void MediaRouterUI::InitCommon(content::WebContents* initiator) {
@@ -280,6 +282,11 @@ void MediaRouterUI::InitCommon(content::WebContents* initiator) {
 
   TRACE_EVENT_NESTABLE_ASYNC_INSTANT1("media_router", "UI", initiator,
                                       "MediaRouterUI::InitCommon", this);
+
+  // Presentation requests from content must show the origin requesting
+  // presentation: crbug.com/704964
+  if (create_session_request_)
+    forced_cast_mode_ = MediaCastMode::DEFAULT;
 
   router_->OnUserGesture();
 
@@ -357,6 +364,12 @@ void MediaRouterUI::OnDefaultPresentationChanged(
 void MediaRouterUI::OnDefaultPresentationRemoved() {
   presentation_request_.reset();
   query_result_manager_->RemoveSourcesForCastMode(MediaCastMode::DEFAULT);
+
+  // This should not be set if the dialog was initiated with a default
+  // presentation request from the top level frame.  However, clear it just to
+  // be safe.
+  forced_cast_mode_ = base::nullopt;
+
   // Register for MediaRoute updates without a media source.
   routes_observer_.reset(new UIMediaRoutesObserver(
       router_, MediaSource::Id(),
@@ -368,7 +381,8 @@ void MediaRouterUI::UpdateCastModes() {
   // Gets updated cast modes from |query_result_manager_| and forwards it to UI.
   cast_modes_ = query_result_manager_->GetSupportedCastModes();
   if (ui_initialized_) {
-    handler_->UpdateCastModes(cast_modes_, GetPresentationRequestSourceName());
+    handler_->UpdateCastModes(cast_modes_, GetPresentationRequestSourceName(),
+                              forced_cast_mode());
   }
 }
 

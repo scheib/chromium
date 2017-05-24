@@ -130,6 +130,18 @@ TEST_F(ShaderManagerTest, DoCompile) {
   const char* kOutputVariable1Name = "gl_FragColor";
   const bool kOutputVariable1StaticUse = true;
 
+  const GLint kInterfaceBlock1Size = 1;
+  const sh::BlockLayoutType kInterfaceBlock1Layout = sh::BLOCKLAYOUT_STANDARD;
+  const bool kInterfaceBlock1RowMajor = false;
+  const bool kInterfaceBlock1StaticUse = false;
+  const char* kInterfaceBlock1Name = "block1";
+  const char* kInterfaceBlock1InstanceName = "block1instance";
+  const GLenum kInterfaceBlock1Field1Type = GL_FLOAT_VEC4;
+  const GLint kInterfaceBlock1Field1Size = 1;
+  const GLenum kInterfaceBlock1Field1Precision = GL_MEDIUM_FLOAT;
+  const char* kInterfaceBlock1Field1Name = "field1";
+  const bool kInterfaceBlock1Field1StaticUse = false;
+
   // Check we can create shader.
   Shader* shader1 = manager_.CreateShader(
       kClient1Id, kService1Id, kShader1Type);
@@ -194,9 +206,24 @@ TEST_F(ShaderManagerTest, DoCompile) {
   output_variable_list.push_back(TestHelper::ConstructOutputVariable(
       kOutputVariable1Type, kOutputVariable1Size, kOutputVariable1Precision,
       kOutputVariable1StaticUse, kOutputVariable1Name));
+
+  InterfaceBlockMap interface_block_map;
+  std::vector<sh::InterfaceBlockField> interface_block1_fields;
+  interface_block1_fields.push_back(TestHelper::ConstructInterfaceBlockField(
+      kInterfaceBlock1Field1Type, kInterfaceBlock1Field1Size,
+      kInterfaceBlock1Field1Precision, kInterfaceBlock1Field1StaticUse,
+      kInterfaceBlock1Field1Name));
+  interface_block_map[kInterfaceBlock1Name] =
+      TestHelper::ConstructInterfaceBlock(
+          kInterfaceBlock1Size, kInterfaceBlock1Layout,
+          kInterfaceBlock1RowMajor, kInterfaceBlock1StaticUse,
+          kInterfaceBlock1Name, kInterfaceBlock1InstanceName,
+          interface_block1_fields);
+
   TestHelper::SetShaderStates(
       gl_.get(), shader1, true, &kLog, &kTranslatedSource, nullptr, &attrib_map,
-      &uniform_map, &varying_map, nullptr, &output_variable_list);
+      &uniform_map, &varying_map, &interface_block_map, &output_variable_list);
+
   EXPECT_TRUE(shader1->valid());
   // When compilation succeeds, no log is recorded.
   EXPECT_STREQ("", shader1->log_info().c_str());
@@ -245,7 +272,40 @@ TEST_F(ShaderManagerTest, DoCompile) {
     EXPECT_STREQ(it->second.name.c_str(),
                  shader1->GetOriginalNameFromHashedName(it->first)->c_str());
   }
-  // TODO(kainino): Check interface block infos got copied.
+  // Check interface block infos got copied.
+  EXPECT_EQ(interface_block_map.size(), shader1->interface_block_map().size());
+  for (const auto& it : interface_block_map) {
+    const sh::InterfaceBlock* block_info =
+        shader1->GetInterfaceBlockInfo(it.first);
+    ASSERT_TRUE(block_info != NULL);
+    EXPECT_EQ(it.second.arraySize, block_info->arraySize);
+    EXPECT_EQ(it.second.layout, block_info->layout);
+    EXPECT_EQ(it.second.isRowMajorLayout, block_info->isRowMajorLayout);
+    EXPECT_EQ(it.second.staticUse, block_info->staticUse);
+    EXPECT_STREQ(it.second.name.c_str(), block_info->name.c_str());
+    EXPECT_STREQ(it.second.name.c_str(),
+                 shader1->GetOriginalNameFromHashedName(it.first)->c_str());
+    EXPECT_STREQ(it.second.instanceName.c_str(),
+                 block_info->instanceName.c_str());
+  }
+  // Check interface block field infos got copied.
+  const sh::InterfaceBlock* interface_block1_info =
+      shader1->GetInterfaceBlockInfo(kInterfaceBlock1Name);
+  EXPECT_EQ(interface_block1_fields.size(),
+            interface_block1_info->fields.size());
+  for (size_t f = 0; f < interface_block1_fields.size(); ++f) {
+    const auto& exp = interface_block1_fields[f];
+    const auto& act = interface_block1_info->fields[f];
+    EXPECT_EQ(exp.type, act.type);
+    EXPECT_EQ(exp.arraySize, act.arraySize);
+    EXPECT_EQ(exp.precision, act.precision);
+    EXPECT_EQ(exp.staticUse, act.staticUse);
+    EXPECT_STREQ(exp.name.c_str(), act.name.c_str());
+    std::string full_name = interface_block1_info->name + "." + act.name;
+    auto* original_basename = shader1->GetOriginalNameFromHashedName(full_name);
+    ASSERT_TRUE(original_basename != nullptr);
+    EXPECT_STREQ(kInterfaceBlock1Name, original_basename->c_str());
+  }
   // Check output variable infos got copied.
   EXPECT_EQ(output_variable_list.size(),
             shader1->output_variable_list().size());

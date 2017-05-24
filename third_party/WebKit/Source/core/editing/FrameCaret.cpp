@@ -28,6 +28,7 @@
 #include "core/dom/TaskRunnerHelper.h"
 #include "core/editing/CaretDisplayItemClient.h"
 #include "core/editing/EditingUtilities.h"
+#include "core/editing/FrameSelection.h"
 #include "core/editing/SelectionEditor.h"
 #include "core/frame/FrameView.h"
 #include "core/frame/LocalFrame.h"
@@ -212,8 +213,7 @@ bool FrameCaret::ShouldBlinkCaret() const {
   if (!focused_element)
     return false;
 
-  return focused_element->IsShadowIncludingInclusiveAncestorOf(
-      CaretPosition().AnchorNode());
+  return frame_->Selection().SelectionHasFocus();
 }
 
 void FrameCaret::CaretBlinkTimerFired(TimerBase*) {

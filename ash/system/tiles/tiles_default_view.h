@@ -15,6 +15,7 @@ class CustomButton;
 }
 
 namespace ash {
+class SystemMenuButton;
 class SystemTrayItem;
 
 // The container view for the tiles in the bottom row of the system menu
@@ -48,7 +49,7 @@ class ASH_EXPORT TilesDefaultView : public views::View,
   // which case the corresponding pointer will be null.
   views::CustomButton* settings_button_;
   views::CustomButton* help_button_;
-  views::CustomButton* night_light_button_;
+  SystemMenuButton* night_light_button_;
   views::CustomButton* lock_button_;
   views::CustomButton* power_button_;
 

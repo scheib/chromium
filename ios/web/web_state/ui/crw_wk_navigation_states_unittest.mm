@@ -7,7 +7,7 @@
 #import <WebKit/WebKit.h>
 
 #import "base/mac/scoped_nsobject.h"
-#include "ios/web/web_state/navigation_context_impl.h"
+#import "ios/web/web_state/navigation_context_impl.h"
 #include "net/http/http_response_headers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
@@ -94,13 +94,14 @@ TEST_F(CRWWKNavigationStatesTest, Context) {
   EXPECT_EQ(GURL(kTestUrl1),
             [states_ contextForNavigation:navigation1_]->GetUrl());
   EXPECT_TRUE([states_ contextForNavigation:navigation1_]->IsSameDocument());
-  EXPECT_FALSE([states_ contextForNavigation:navigation1_]->IsErrorPage());
+  EXPECT_FALSE([states_ contextForNavigation:navigation1_]->GetError());
 
   // Replace existing context.
   std::unique_ptr<web::NavigationContextImpl> context2 =
       NavigationContextImpl::CreateNavigationContext(nullptr /*web_state*/,
                                                      GURL(kTestUrl2));
-  context2->SetIsErrorPage(true);
+  NSError* error = [[[NSError alloc] init] autorelease];
+  context2->SetError(error);
   [states_ setContext:std::move(context2) forNavigation:navigation1_];
   EXPECT_FALSE([states_ contextForNavigation:navigation2_]);
   EXPECT_FALSE([states_ contextForNavigation:navigation3_]);
@@ -108,7 +109,7 @@ TEST_F(CRWWKNavigationStatesTest, Context) {
   EXPECT_EQ(GURL(kTestUrl2),
             [states_ contextForNavigation:navigation1_]->GetUrl());
   EXPECT_FALSE([states_ contextForNavigation:navigation1_]->IsSameDocument());
-  EXPECT_TRUE([states_ contextForNavigation:navigation1_]->IsErrorPage());
+  EXPECT_EQ(error, [states_ contextForNavigation:navigation1_]->GetError());
 }
 
 // Tests null WKNavigation object.

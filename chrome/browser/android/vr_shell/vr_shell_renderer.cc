@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/memory/ptr_util.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/android/vr_shell/vr_gl_util.h"
 
 namespace {
@@ -596,6 +597,7 @@ ControllerRenderer::ControllerRenderer()
 ControllerRenderer::~ControllerRenderer() = default;
 
 void ControllerRenderer::SetUp(std::unique_ptr<VrControllerModel> model) {
+  TRACE_EVENT0("gpu", "ControllerRenderer::SetUp");
   glGenBuffersARB(1, &indices_buffer_);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_buffer_);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, model->IndicesBufferSize(),

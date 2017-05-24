@@ -124,6 +124,11 @@ void AuraTestBase::EnableMusWithTestWindowTree() {
   use_mus_ = true;
 }
 
+void AuraTestBase::DeleteWindowTreeClient() {
+  DCHECK(use_mus_);
+  helper_->DeleteWindowTreeClient();
+}
+
 void AuraTestBase::ConfigureBackend(BackendType type) {
   if (type == BackendType::MUS)
     EnableMusWithTestWindowTree();

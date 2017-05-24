@@ -175,8 +175,6 @@ class InstantExtendedTest : public InProcessBrowserTest,
                                             &first_most_visited_item_id_) &&
            instant_test_utils::GetIntFromJS(contents, "submitCount",
                                             &submit_count_) &&
-           instant_test_utils::GetStringFromJS(contents, "apiHandle.value",
-                                               &query_value_) &&
            instant_test_utils::GetIntFromJS(contents, "onFocusChangedCalls",
                                             &on_focus_changed_calls_) &&
            instant_test_utils::GetBoolFromJS(contents, "isFocused",
@@ -234,7 +232,6 @@ class InstantExtendedTest : public InProcessBrowserTest,
   int most_visited_items_count_;
   int first_most_visited_item_id_;
   int submit_count_;
-  std::string query_value_;
   int on_focus_changed_calls_;
   bool is_focused_;
   std::string prefetch_query_value_;

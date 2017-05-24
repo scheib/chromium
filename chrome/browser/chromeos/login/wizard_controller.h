@@ -85,6 +85,10 @@ class WizardController : public BaseScreenDelegate,
   // Terms of Service, user image selection).
   static void SkipPostLoginScreensForTesting();
 
+  // Returns true if OOBE is operating under the
+  // Zero-Touch Hands-Off Enrollment Flow.
+  static bool UsingHandsOffEnrollment();
+
   // Shows the first screen defined by |first_screen| or by default if the
   // parameter is empty.
   void Init(OobeScreen first_screen);

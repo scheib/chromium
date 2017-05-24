@@ -4,37 +4,49 @@
 
 #include "extensions/common/features/feature_channel.h"
 
+#include "base/logging.h"
 #include "components/version_info/version_info.h"
 
 namespace {
 
-const version_info::Channel kDefaultChannel = version_info::Channel::STABLE;
-version_info::Channel g_current_channel = kDefaultChannel;
+// The current channel to be reported, unless overridden by
+// |ScopedCurrentChannel|.
+version_info::Channel g_current_channel = version_info::Channel::STABLE;
+
+// The current channel overridden by |ScopedCurrentChannel|. The value is valid
+// only whenever |g_override_count| is non-zero.
+version_info::Channel g_overridden_channel = version_info::Channel::STABLE;
+
+// The number of currently existing instances of |ScopedCurrentChannel|.
+int g_override_count = 0;
 
 }  // namespace
 
 namespace extensions {
 
 version_info::Channel GetCurrentChannel() {
-  return g_current_channel;
+  return g_override_count ? g_overridden_channel : g_current_channel;
 }
 
 void SetCurrentChannel(version_info::Channel channel) {
   g_current_channel = channel;
 }
 
-version_info::Channel GetDefaultChannel() {
-  return kDefaultChannel;
-}
-
 ScopedCurrentChannel::ScopedCurrentChannel(version_info::Channel channel)
-    : original_channel_(version_info::Channel::UNKNOWN) {
-  original_channel_ = GetCurrentChannel();
-  SetCurrentChannel(channel);
+    : channel_(channel),
+      original_overridden_channel_(g_overridden_channel),
+      original_override_count_(g_override_count) {
+  g_overridden_channel = channel;
+  ++g_override_count;
 }
 
 ScopedCurrentChannel::~ScopedCurrentChannel() {
-  SetCurrentChannel(original_channel_);
+  DCHECK_EQ(original_override_count_ + 1, g_override_count)
+      << "Scoped channel setters are not nested properly";
+  DCHECK_EQ(g_overridden_channel, channel_)
+      << "Scoped channel setters are not nested properly";
+  g_overridden_channel = original_overridden_channel_;
+  --g_override_count;
 }
 
 }  // namespace extensions

@@ -1165,13 +1165,6 @@ void PaintLayerCompositor::EnsureRootLayer() {
     root_content_layer_->SetPosition(FloatPoint());
     root_content_layer_->SetOwnerNodeId(
         DOMNodeIds::IdForNode(layout_view_.GetNode()));
-
-    // FIXME: with rootLayerScrolls, we probably don't even need
-    // m_rootContentLayer?
-    if (!RuntimeEnabledFeatures::rootLayerScrollingEnabled()) {
-      // Need to clip to prevent transformed content showing outside this frame
-      root_content_layer_->SetMasksToBounds(true);
-    }
   }
 
   if (should_create_own_layers && !overflow_controls_host_layer_) {
@@ -1199,7 +1192,7 @@ void PaintLayerCompositor::EnsureRootLayer() {
     if (!RuntimeEnabledFeatures::rootLayerScrollingEnabled()) {
       scroll_layer_->SetElementId(CompositorElementIdFromDOMNodeId(
           DOMNodeIds::IdForNode(&layout_view_.GetDocument()),
-          CompositorElementIdNamespace::kScroll));
+          CompositorElementIdNamespace::kRootScroll));
     }
 
     // Hook them up

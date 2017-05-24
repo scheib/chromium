@@ -299,7 +299,7 @@ void CustomFrameViewAsh::ActivationChanged(bool active) {
 ////////////////////////////////////////////////////////////////////////////////
 // CustomFrameViewAsh, views::View overrides:
 
-gfx::Size CustomFrameViewAsh::GetPreferredSize() const {
+gfx::Size CustomFrameViewAsh::CalculatePreferredSize() const {
   gfx::Size pref = frame_->client_view()->GetPreferredSize();
   gfx::Rect bounds(0, 0, pref.width(), pref.height());
   return frame_->non_client_view()

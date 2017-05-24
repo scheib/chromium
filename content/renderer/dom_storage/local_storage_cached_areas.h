@@ -9,6 +9,7 @@
 
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "content/common/content_export.h"
 #include "url/origin.h"
 
 namespace content {
@@ -22,7 +23,7 @@ class StoragePartitionService;
 // needed because we can have n LocalStorageArea objects for the same origin but
 // we want just one LocalStorageCachedArea to service them (no point in having
 // multiple caches of the same data in the same process).
-class LocalStorageCachedAreas {
+class CONTENT_EXPORT LocalStorageCachedAreas {
  public:
   explicit LocalStorageCachedAreas(
       mojom::StoragePartitionService* storage_partition_service);

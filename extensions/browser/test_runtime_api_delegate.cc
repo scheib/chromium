@@ -22,11 +22,6 @@ void TestRuntimeAPIDelegate::AddUpdateObserver(UpdateObserver* observer) {
 void TestRuntimeAPIDelegate::RemoveUpdateObserver(UpdateObserver* observer) {
 }
 
-base::Version TestRuntimeAPIDelegate::GetPreviousExtensionVersion(
-    const Extension* extension) {
-  return base::Version();
-}
-
 void TestRuntimeAPIDelegate::ReloadExtension(const std::string& extension_id) {
 }
 

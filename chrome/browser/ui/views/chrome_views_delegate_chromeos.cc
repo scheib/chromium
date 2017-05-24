@@ -7,7 +7,6 @@
 #include "ash/accelerators/accelerator_controller.h"
 #include "ash/shell.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "base/bind.h"
 #include "base/message_loop/message_loop.h"
 #include "base/threading/thread_task_runner_handle.h"

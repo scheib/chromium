@@ -12,6 +12,7 @@
 #include "base/macros.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_canvas.h"
+#include "printing/common/pdf_metafile_utils.h"
 #include "printing/metafile.h"
 #include "skia/ext/platform_canvas.h"
 
@@ -20,12 +21,6 @@
 #endif
 
 namespace printing {
-
-enum SkiaDocumentType {
-  PDF_SKIA_DOCUMENT_TYPE,
-  // MSKP is an experimental, fragile, and diagnostic-only document type.
-  MSKP_SKIA_DOCUMENT_TYPE,
-};
 
 struct PdfMetafileSkiaData;
 

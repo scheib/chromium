@@ -492,7 +492,6 @@ interface IDBFactory
     method constructor
     method deleteDatabase
     method open
-    method webkitGetDatabaseNames
 interface IDBIndex
     getter keyPath
     getter multiEntry
@@ -625,9 +624,11 @@ interface MessagePort : EventTarget
     setter onmessage
     setter onmessageerror
 interface NetworkInformation : EventTarget
+    getter downlink
     getter downlinkMax
     getter onchange
     getter ontypechange
+    getter rtt
     getter type
     method constructor
     setter onchange
@@ -840,6 +841,7 @@ interface Request
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface Response
@@ -858,6 +860,7 @@ interface Response
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface ServiceWorkerGlobalScope : WorkerGlobalScope

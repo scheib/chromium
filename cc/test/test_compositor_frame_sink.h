@@ -79,6 +79,7 @@ class TestCompositorFrameSink : public CompositorFrameSink,
   void DetachFromClient() override;
   void SetLocalSurfaceId(const LocalSurfaceId& local_surface_id) override;
   void SubmitCompositorFrame(CompositorFrame frame) override;
+  void DidNotProduceFrame(const BeginFrameAck& ack) override;
 
   // CompositorFrameSinkSupportClient implementation.
   void DidReceiveCompositorFrameAck(
@@ -97,7 +98,6 @@ class TestCompositorFrameSink : public CompositorFrameSink,
  private:
   // ExternalBeginFrameSource implementation.
   void OnNeedsBeginFrames(bool needs_begin_frames) override;
-  void OnDidFinishFrame(const BeginFrameAck& ack) override;
 
   void SendCompositorFrameAckToClient();
 

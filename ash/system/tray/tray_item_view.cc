@@ -83,7 +83,7 @@ int TrayItemView::GetAnimationDurationMS() {
   return kTrayItemAnimationDurationMS;
 }
 
-gfx::Size TrayItemView::GetPreferredSize() const {
+gfx::Size TrayItemView::CalculatePreferredSize() const {
   DCHECK_EQ(1, child_count());
   gfx::Size inner_size = views::View::GetPreferredSize();
   if (image_view_)

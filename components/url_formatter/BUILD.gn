@@ -28,6 +28,7 @@ static_library("url_formatter") {
   deps = [
     "//base",
     "//base:i18n",
+    "//components/url_formatter/top_domains",
     "//net",
     "//third_party/icu",
     "//url",
@@ -51,6 +52,7 @@ source_set("unit_tests") {
   deps = [
     ":url_formatter",
     "//base",
+    "//components/url_formatter/top_domains",
     "//net",
     "//testing/gtest",
     "//ui/gfx",

@@ -35,7 +35,7 @@
       [[noResultsMessage_(searchedTerm)]]
     </div>
 
-    <iron-list items="{{historyData_}}" as="item" id="infinite-list"
+    <iron-list items="[[historyData_]]" as="item" id="infinite-list"
         hidden$="[[!hasResults_(historyData_.length)]]">
       <template>
         <history-item tabindex$="[[tabIndex]]"

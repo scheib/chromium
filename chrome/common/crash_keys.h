@@ -107,10 +107,6 @@ extern const char kPrinterInfo[];
 #if defined(OS_CHROMEOS)
 // The number of simultaneous users in multi profile sessions.
 extern const char kNumberOfUsers[];
-
-// The stack trace of the last good close of a fd that just fails a close.
-// Temporary for https://crbug.com/660960
-extern const char kLastGoodCloseStack[];
 #endif
 
 #if defined(OS_MACOSX)

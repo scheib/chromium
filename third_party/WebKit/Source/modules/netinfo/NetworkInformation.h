@@ -9,6 +9,8 @@
 #include "core/events/EventTarget.h"
 #include "platform/bindings/ActiveScriptWrappable.h"
 #include "platform/network/NetworkStateNotifier.h"
+#include "platform/wtf/Optional.h"
+#include "platform/wtf/Time.h"
 #include "public/platform/WebConnectionType.h"
 
 namespace blink {
@@ -29,9 +31,15 @@ class NetworkInformation final
 
   String type() const;
   double downlinkMax() const;
+  unsigned long rtt() const;
+  double downlink() const;
 
   // NetworkStateObserver overrides.
-  void ConnectionChange(WebConnectionType, double downlink_max_mbps) override;
+  void ConnectionChange(WebConnectionType,
+                        double downlink_max_mbps,
+                        const Optional<TimeDelta>& http_rtt,
+                        const Optional<TimeDelta>& transport_rtt,
+                        const Optional<double>& downlink_mbps) override;
 
   // EventTarget overrides.
   const AtomicString& InterfaceName() const override;
@@ -66,6 +74,14 @@ class NetworkInformation final
 
   // Touched only on context thread.
   double downlink_max_mbps_;
+
+  // Transport RTT estimate. Rounded off to the nearest 25 msec. Touched only on
+  // context thread.
+  unsigned long transport_rtt_msec_;
+
+  // Downlink throughput estimate. Rounded off to the nearest 25 kbps. Touched
+  // only on context thread.
+  double downlink_mbps_;
 
   // Whether this object is listening for events from NetworkStateNotifier.
   bool observing_;

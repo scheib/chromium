@@ -1043,6 +1043,8 @@ int AXPlatformNodeWin::MSAARole() {
       return ROLE_SYSTEM_COMBOBOX;
     case ui::AX_ROLE_DIALOG:
       return ROLE_SYSTEM_DIALOG;
+    case ui::AX_ROLE_GENERIC_CONTAINER:
+      return ROLE_SYSTEM_GROUPING;
     case ui::AX_ROLE_GROUP:
       return ROLE_SYSTEM_GROUPING;
     case ui::AX_ROLE_IMAGE:

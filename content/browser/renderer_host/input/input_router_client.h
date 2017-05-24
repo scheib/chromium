@@ -42,11 +42,6 @@ class CONTENT_EXPORT InputRouterClient {
   // Called when the renderer notifies that it has touch event handlers.
   virtual void OnHasTouchEventHandlers(bool has_handlers) = 0;
 
-  // Called when the router has finished flushing all events queued at the time
-  // of the call to Flush.  The call will typically be asynchronous with
-  // respect to the call to |Flush| on the InputRouter.
-  virtual void DidFlush() = 0;
-
   // Called when the router has received an overscroll notification from the
   // renderer.
   virtual void DidOverscroll(const ui::DidOverscrollParams& params) = 0;

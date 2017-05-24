@@ -45,6 +45,7 @@ IPC_STRUCT_BEGIN(WorkerProcessMsg_CreateWorker_Params)
   IPC_STRUCT_MEMBER(blink::WebAddressSpace, creation_address_space)
   IPC_STRUCT_MEMBER(bool, pause_on_start)
   IPC_STRUCT_MEMBER(int, route_id)
+  IPC_STRUCT_MEMBER(bool, data_saver_enabled)
 IPC_STRUCT_END()
 
 //-----------------------------------------------------------------------------

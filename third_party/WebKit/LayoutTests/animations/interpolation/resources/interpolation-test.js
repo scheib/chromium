@@ -276,12 +276,19 @@
     compositionTests.push({options, expectations});
   }
 
+  function stringify(text) {
+    if (!text.includes("'")) {
+      return `'${text}'`;
+    }
+    return `"${text.replace('"', '\\"')}"`;
+  }
+
   function keyframeText(keyframe) {
     return isNeutralKeyframe(keyframe) ? 'neutral' : `[${keyframe}]`;
   }
 
   function keyframeCode(keyframe) {
-    return isNeutralKeyframe(keyframe) ? 'neutralKeyframe' : `'${keyframe}'`;
+    return isNeutralKeyframe(keyframe) ? 'neutralKeyframe' : `${stringify(keyframe)}`;
   }
 
   function createInterpolationTestTargets(interpolationMethod, interpolationMethodContainer, interpolationTest, rebaselineContainer) {
@@ -330,7 +337,7 @@ assertInterpolation({
             normalizeValue(getComputedStyle(expectedTargetContainer.target).getPropertyValue(property)));
         }, `${testText} at (${expectation.at}) is [${sanitizeUrls(actualValue)}]`);
         if (rebaselineExpectation) {
-          rebaselineExpectation.textContent += `  {at: ${expectation.at}, is: '${actualValue}'},\n`;
+          rebaselineExpectation.textContent += `  {at: ${expectation.at}, is: ${stringify(actualValue)}},\n`;
         }
       };
       return target;
@@ -359,9 +366,9 @@ assertInterpolation({
       rebaseline.appendChild(document.createTextNode(`\
 assertComposition({
   property: '${property}',
-  underlying: '${underlying}',
-  ${fromComposite}From: '${from}',
-  ${toComposite}To: '${to}',
+  underlying: '${stringify(underlying)}',
+  ${fromComposite}From: '${stringify(from)}',
+  ${toComposite}To: '${stringify(to)}',
 }, [\n`));
       var rebaselineExpectation;
       rebaseline.appendChild(rebaselineExpectation = document.createTextNode(''));
@@ -387,7 +394,7 @@ assertComposition({
             normalizeValue(getComputedStyle(expectedTargetContainer.target).getPropertyValue(property)));
         }, `${testText} at (${expectation.at}) is [${sanitizeUrls(actualValue)}]`);
         if (rebaselineExpectation) {
-          rebaselineExpectation.textContent += `  {at: ${expectation.at}, is: '${actualValue}'},\n`;
+          rebaselineExpectation.textContent += `  {at: ${expectation.at}, is: ${stringify(actualValue)}},\n`;
         }
       };
       return target;

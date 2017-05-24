@@ -36,10 +36,12 @@
 #include "core/InputTypeNames.h"
 #include "core/css/CSSStyleDeclaration.h"
 #include "core/dom/Document.h"
+#include "core/dom/ElementTraversal.h"
 #include "core/editing/Editor.h"
 #include "core/editing/markers/DocumentMarkerController.h"
 #include "core/editing/spellcheck/SpellChecker.h"
 #include "core/exported/WebDataSourceImpl.h"
+#include "core/exported/WebPluginContainerBase.h"
 #include "core/exported/WebViewBase.h"
 #include "core/frame/FrameView.h"
 #include "core/frame/Settings.h"
@@ -47,6 +49,7 @@
 #include "core/frame/WebLocalFrameBase.h"
 #include "core/html/HTMLAnchorElement.h"
 #include "core/html/HTMLFormElement.h"
+#include "core/html/HTMLFrameElementBase.h"
 #include "core/html/HTMLImageElement.h"
 #include "core/html/HTMLInputElement.h"
 #include "core/html/HTMLMediaElement.h"
@@ -78,7 +81,6 @@
 #include "public/web/WebTextCheckClient.h"
 #include "public/web/WebViewClient.h"
 #include "web/ContextMenuAllowedScope.h"
-#include "web/WebPluginContainerImpl.h"
 
 namespace blink {
 
@@ -198,6 +200,59 @@ bool ContextMenuClientImpl::ShouldShowContextMenuFromTouch(
          data.is_editable;
 }
 
+static HTMLFormElement* AssociatedFormElement(HTMLElement& element) {
+  if (isHTMLFormElement(element))
+    return &toHTMLFormElement(element);
+  return element.formOwner();
+}
+
+// Scans logically forward from "start", including any child frames.
+static HTMLFormElement* ScanForForm(const Node* start) {
+  if (!start)
+    return nullptr;
+
+  for (HTMLElement& element : Traversal<HTMLElement>::StartsAt(
+           start->IsHTMLElement() ? ToHTMLElement(start)
+                                  : Traversal<HTMLElement>::Next(*start))) {
+    if (HTMLFormElement* form = AssociatedFormElement(element))
+      return form;
+
+    if (IsHTMLFrameElementBase(element)) {
+      Node* child_document = ToHTMLFrameElementBase(element).contentDocument();
+      if (HTMLFormElement* frame_result = ScanForForm(child_document))
+        return frame_result;
+    }
+  }
+  return nullptr;
+}
+
+// We look for either the form containing the current focus, or for one
+// immediately after it
+static HTMLFormElement* CurrentForm(const FrameSelection& current_selection) {
+  // Start looking either at the active (first responder) node, or where the
+  // selection is.
+  const Node* start = current_selection.GetDocument().FocusedElement();
+  if (!start) {
+    start = current_selection.ComputeVisibleSelectionInDOMTree()
+                .Start()
+                .AnchorNode();
+  }
+  if (!start)
+    return nullptr;
+
+  // Try walking up the node tree to find a form element.
+  for (Node& node : NodeTraversal::InclusiveAncestorsOf(*start)) {
+    if (!node.IsHTMLElement())
+      break;
+    HTMLElement& element = ToHTMLElement(node);
+    if (HTMLFormElement* form = AssociatedFormElement(element))
+      return form;
+  }
+
+  // Try walking forward in the node tree to find a form element.
+  return ScanForForm(start);
+}
+
 bool ContextMenuClientImpl::ShowContextMenu(const ContextMenu* default_menu,
                                             bool from_touch) {
   // Displaying the context menu in this function is a big hack as we don't
@@ -296,7 +351,7 @@ bool ContextMenuClientImpl::ShowContextMenu(const ContextMenu* default_menu,
       PluginView* plugin_view = ToLayoutPart(object)->Plugin();
       if (plugin_view && plugin_view->IsPluginContainer()) {
         data.media_type = WebContextMenuData::kMediaTypePlugin;
-        WebPluginContainerImpl* plugin = ToWebPluginContainerImpl(plugin_view);
+        WebPluginContainerBase* plugin = ToWebPluginContainerBase(plugin_view);
         WebString text = plugin->Plugin()->SelectionAsText();
         if (!text.IsEmpty()) {
           data.selected_text = text;
@@ -375,7 +430,7 @@ bool ContextMenuClientImpl::ShowContextMenu(const ContextMenu* default_menu,
           &data.dictionary_suggestions);
     }
 
-    HTMLFormElement* form = selected_frame->Selection().CurrentForm();
+    HTMLFormElement* form = CurrentForm(selected_frame->Selection());
     if (form && isHTMLInputElement(*r.InnerNode())) {
       HTMLInputElement& selected_element = toHTMLInputElement(*r.InnerNode());
       WebSearchableFormData ws = WebSearchableFormData(

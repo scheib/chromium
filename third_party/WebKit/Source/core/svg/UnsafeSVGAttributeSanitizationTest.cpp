@@ -57,6 +57,7 @@ String ContentAfterPastingHTML(DummyPageHolder* page_holder,
 
   // Make the body editable, and put the caret in it.
   body->setAttribute(HTMLNames::contenteditableAttr, "true");
+  body->focus();
   frame.GetDocument()->UpdateStyleAndLayout();
   frame.Selection().SetSelection(
       SelectionInDOMTree::Builder().SelectAllChildren(*body).Build());

@@ -4,13 +4,7 @@
 
 package org.chromium.chromecast.shell;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.net.Uri;
-import android.os.PatternMatcher;
-import android.support.v4.content.LocalBroadcastManager;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
@@ -21,11 +15,12 @@ import org.chromium.content_public.browser.WebContents;
 /**
  * The Java component of CastContentWindowAndroid. This class is responsible for
  * starting, stopping and monitoring CastWebContentsActivity.
- *
+ * <p>
  * See chromecast/browser/cast_content_window_android.* for the native half.
  */
 @JNINamespace("chromecast::shell")
-public class CastContentWindowAndroid {
+public class CastContentWindowAndroid implements CastWebContentsComponent.OnComponentClosedHandler,
+                                                 CastWebContentsComponent.OnKeyDownHandler {
     private static final String TAG = "cr_CastContentWindowAndroid";
     private static final boolean DEBUG = true;
 
@@ -33,9 +28,8 @@ public class CastContentWindowAndroid {
     // ref should be checked that it is not zero before it is used.
     private long mNativeCastContentWindowAndroid;
     private Context mContext;
-    private IntentFilter mActivityClosedIntentFilter;
-    private BroadcastReceiver mActivityClosedBroadcastReceiver;
     private String mInstanceId;
+    private CastWebContentsComponent mComponent;
 
     private static int sInstanceId = 1;
 
@@ -46,19 +40,12 @@ public class CastContentWindowAndroid {
                 nativeCastContentWindowAndroid, ContextUtils.getApplicationContext());
     }
 
-    private CastContentWindowAndroid(long nativeCastContentWindowAndroid, Context context) {
+    private CastContentWindowAndroid(long nativeCastContentWindowAndroid, final Context context) {
         mNativeCastContentWindowAndroid = nativeCastContentWindowAndroid;
         mContext = context;
         mInstanceId = Integer.toString(sInstanceId++);
-    }
 
-    private Uri getInstanceUri() {
-        Uri instanceUri = new Uri.Builder()
-                .scheme(CastWebContentsActivity.ACTION_DATA_SCHEME)
-                .authority(CastWebContentsActivity.ACTION_DATA_AUTHORITY)
-                .path(mInstanceId)
-                .build();
-        return instanceUri;
+        mComponent = new CastWebContentsComponent(mInstanceId, this, this);
     }
 
     @SuppressWarnings("unused")
@@ -66,36 +53,7 @@ public class CastContentWindowAndroid {
     private void showWebContents(WebContents webContents) {
         if (DEBUG) Log.d(TAG, "showWebContents");
 
-        Intent intent = new Intent(
-                Intent.ACTION_VIEW, getInstanceUri(), mContext, CastWebContentsActivity.class);
-
-        mActivityClosedBroadcastReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (intent.getAction() == CastWebContentsActivity.ACTION_ACTIVITY_STOPPED) {
-                    onActivityStopped();
-                } else if (intent.getAction() == CastWebContentsActivity.ACTION_KEY_EVENT) {
-                    int keyCode =
-                            intent.getIntExtra(CastWebContentsActivity.ACTION_EXTRA_KEY_CODE, 0);
-                    onKeyDown(keyCode);
-                }
-            }
-        };
-        mActivityClosedIntentFilter = new IntentFilter();
-        mActivityClosedIntentFilter.addDataScheme(intent.getData().getScheme());
-        mActivityClosedIntentFilter.addDataAuthority(intent.getData().getAuthority(), null);
-        mActivityClosedIntentFilter.addDataPath(
-                intent.getData().getPath(), PatternMatcher.PATTERN_LITERAL);
-        mActivityClosedIntentFilter.addAction(CastWebContentsActivity.ACTION_ACTIVITY_STOPPED);
-        mActivityClosedIntentFilter.addAction(CastWebContentsActivity.ACTION_KEY_EVENT);
-        LocalBroadcastManager.getInstance(mContext).registerReceiver(
-                mActivityClosedBroadcastReceiver, mActivityClosedIntentFilter);
-
-        intent.putExtra(CastWebContentsActivity.ACTION_EXTRA_WEB_CONTENTS, webContents);
-        // FLAG_ACTIVITY_SINGLE_TOP will try to reuse existing activity.
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK
-                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        mContext.startActivity(intent);
+        mComponent.start(mContext, webContents);
     }
 
     @SuppressWarnings("unused")
@@ -111,24 +69,26 @@ public class CastContentWindowAndroid {
         // Instrumentation.startActivitySync to guarentee onCreate is run.
 
         if (DEBUG) Log.d(TAG, "onNativeDestroyed");
-        Intent intent = new Intent(CastWebContentsActivity.ACTION_STOP_ACTIVITY, getInstanceUri());
-        LocalBroadcastManager.getInstance(mContext).sendBroadcastSync(intent);
+        mComponent.stop(mContext);
     }
 
-    private void onActivityStopped() {
-        if (DEBUG) Log.d(TAG, "onActivityStopped");
-        if (mNativeCastContentWindowAndroid != 0) {
-            nativeOnActivityStopped(mNativeCastContentWindowAndroid);
-        }
-    }
-
-    private void onKeyDown(int keyCode) {
+    @Override
+    public void onKeyDown(int keyCode) {
         if (DEBUG) Log.d(TAG, "onKeyDown");
         if (mNativeCastContentWindowAndroid != 0) {
             nativeOnKeyDown(mNativeCastContentWindowAndroid, keyCode);
         }
     }
 
+    @Override
+    public void onComponentClosed() {
+        if (DEBUG) Log.d(TAG, "onComponentClosed");
+        if (mNativeCastContentWindowAndroid != 0) {
+            nativeOnActivityStopped(mNativeCastContentWindowAndroid);
+        }
+    }
+
     private native void nativeOnActivityStopped(long nativeCastContentWindowAndroid);
+
     private native void nativeOnKeyDown(long nativeCastContentWindowAndroid, int keyCode);
 }

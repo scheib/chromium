@@ -49,7 +49,6 @@ class CompositorExternalBeginFrameSource
 
   // cc::ExternalBeginFrameSourceClient implementation.
   void OnNeedsBeginFrames(bool need_begin_frames) override;
-  void OnDidFinishFrame(const cc::BeginFrameAck& ack) override;
 
  private:
   class CompositorExternalBeginFrameSourceProxy

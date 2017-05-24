@@ -2,6 +2,7 @@
 <head>
 <script src="../../../http/tests/inspector/inspector-test.js"></script>
 <script src="../../../http/tests/inspector/timeline-test.js"></script>
+<script src="../../../http/tests/inspector/product-registry-test.js"></script>
 <script>
 
 function initialize_ProductsExperiment()
@@ -11,6 +12,11 @@ function initialize_ProductsExperiment()
 
 async function test()
 {
+    await ProductRegistry.instance();
+    InspectorTest.resetProductRegistry();
+    InspectorTest.addProductRegistryEntry("*.google.com", "Google");
+    InspectorTest.addResult("");
+
     var sessionId = "6.23";
     var rawTraceEvents = [
     {

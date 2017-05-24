@@ -7,7 +7,6 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/window_positioning_utils.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm_window.h"
 #include "ui/aura/window.h"
 #include "ui/display/screen.h"

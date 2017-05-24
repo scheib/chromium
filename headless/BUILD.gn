@@ -405,9 +405,6 @@ component("headless") {
 # includes headless classes that depend on the renderer.
 if (!is_component_build) {
   static_library("headless_renderer") {
-    deps = [
-      ":headless",
-    ]
     sources = [
       "lib/browser/headless_web_contents_impl.cc",
       "lib/browser/headless_web_contents_impl.h",
@@ -416,10 +413,16 @@ if (!is_component_build) {
       "lib/renderer/headless_content_renderer_client.cc",
       "lib/renderer/headless_content_renderer_client.h",
     ]
-    deps += [ "//ui/base" ]
+
+    deps = [
+      ":headless",
+      "//third_party/WebKit/public:blink_headers",
+      "//ui/base",
+    ]
     if (enable_basic_printing) {
       deps += [ "//components/printing/renderer" ]
     }
+
     configs += [ ":headless_implementation" ]
   }
 } else {
@@ -563,6 +566,7 @@ if (is_win) {
       "app/headless_shell.h",
       "app/headless_shell_switches.cc",
       "app/headless_shell_switches.h",
+      "app/headless_shell_win.cc",
       "app/shell_navigation_request.cc",
       "app/shell_navigation_request.h",
       "lib/browser/headless_content_browser_client.cc",
@@ -577,6 +581,7 @@ if (is_win) {
         "lib/browser/headless_web_contents_impl.h",
         "lib/headless_content_main_delegate.cc",
         "lib/headless_content_main_delegate.h",
+        "lib/headless_content_main_delegate_win.cc",
       ]
     }
 
@@ -603,6 +608,7 @@ if (is_win) {
       "app/headless_shell.h",
       "app/headless_shell_switches.cc",
       "app/headless_shell_switches.h",
+      "app/headless_shell_win.cc",
       "app/shell_navigation_request.cc",
       "app/shell_navigation_request.h",
       "public/headless_shell.h",
@@ -615,6 +621,7 @@ if (is_win) {
         "lib/browser/headless_web_contents_impl.h",
         "lib/headless_content_main_delegate.cc",
         "lib/headless_content_main_delegate.h",
+        "lib/headless_content_main_delegate_win.cc",
       ]
     }
 

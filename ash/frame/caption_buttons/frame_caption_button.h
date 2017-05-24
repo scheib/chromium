@@ -47,7 +47,6 @@ class ASH_EXPORT FrameCaptionButton : public views::CustomButton {
   void SetAlpha(int alpha);
 
   // views::View overrides:
-  gfx::Size GetPreferredSize() const override;
   const char* GetClassName() const override;
   void OnPaint(gfx::Canvas* canvas) override;
 
@@ -58,8 +57,6 @@ class ASH_EXPORT FrameCaptionButton : public views::CustomButton {
   void set_use_light_images(bool light) { use_light_images_ = light; }
 
   CaptionButtonIcon icon() const { return icon_; }
-
-  void set_size(const gfx::Size& size) { size_ = size; }
 
  protected:
   // views::CustomButton override:
@@ -72,9 +69,6 @@ class ASH_EXPORT FrameCaptionButton : public views::CustomButton {
 
   // The button's current icon.
   CaptionButtonIcon icon_;
-
-  // The size of the button.
-  gfx::Size size_;
 
   // Whether the button should be painted as active.
   bool paint_as_active_;

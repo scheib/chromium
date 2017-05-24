@@ -60880,6 +60880,11 @@
      {}
     ]
    ],
+   "WebIDL/ecmascript-binding/sequence-conversion-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "XMLHttpRequest/README.md": [
     [
      {}
@@ -61465,6 +61470,21 @@
      {}
     ]
    ],
+   "battery-status/battery-discharging-manual.https-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "battery-status/battery-iframe.https-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "battery-status/battery-insecure-context-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "battery-status/support-iframe.html": [
     [
      {}
@@ -61501,6 +61521,11 @@
     ]
    ],
    "beacon/headers/header-referrer.js": [
+    [
+     {}
+    ]
+   ],
+   "beacon/resources/content-type.py": [
     [
      {}
     ]
@@ -61701,11 +61726,6 @@
     ]
    ],
    "content-security-policy/_unapproved/svgscript-nonces-hidden.html.headers": [
-    [
-     {}
-    ]
-   ],
-   "content-security-policy/base-uri/base-uri_iframe_sandbox.sub.html.headers": [
     [
      {}
     ]
@@ -63345,6 +63365,11 @@
      {}
     ]
    ],
+   "cookies/path/match-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "cookies/resources/echo-json.py": [
     [
      {}
@@ -63366,6 +63391,11 @@
     ]
    ],
    "cookies/secure/set-from-http.sub.html.headers": [
+    [
+     {}
+    ]
+   ],
+   "cookies/secure/set-from-ws.https.sub-expected.txt": [
     [
      {}
     ]
@@ -63401,6 +63431,16 @@
     ]
    ],
    "cors/resources/304.py": [
+    [
+     {}
+    ]
+   ],
+   "cors/resources/access-control-expose-headers-parsing-2.asis": [
+    [
+     {}
+    ]
+   ],
+   "cors/resources/access-control-expose-headers-parsing.asis": [
     [
      {}
     ]
@@ -63450,12 +63490,12 @@
      {}
     ]
    ],
-   "css-timing-1/cubic-bezier-timing-functions-output-expected.txt": [
+   "css-timing/cubic-bezier-timing-functions-output-expected.txt": [
     [
      {}
     ]
    ],
-   "css-timing-1/testcommon.js": [
+   "css-timing/testcommon.js": [
     [
      {}
     ]
@@ -75910,12 +75950,12 @@
      {}
     ]
    ],
-   "css/geometry-1/DOMMatrix-001-expected.txt": [
+   "css/geometry-1/DOMMatrix-stringifier-expected.txt": [
     [
      {}
     ]
    ],
-   "css/geometry-1/DOMMatrix-stringifier-expected.txt": [
+   "css/geometry-1/DOMMatrixInit-validate-fixup-expected.txt": [
     [
      {}
     ]
@@ -75935,12 +75975,27 @@
      {}
     ]
    ],
+   "css/geometry-1/historical-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "css/geometry-1/interfaces-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "css/geometry-1/structured-serialization-expected.txt": [
     [
      {}
     ]
    ],
    "css/geometry-1/support/dommatrix-test-util.js": [
+    [
+     {}
+    ]
+   ],
+   "css/geometry-1/support/interfaces.js": [
     [
      {}
     ]
@@ -77226,11 +77281,6 @@
     ]
    ],
    "cssom-view/iframe.html": [
-    [
-     {}
-    ]
-   ],
-   "cssom-view/offsetParent_element_test-expected.txt": [
     [
      {}
     ]
@@ -80040,6 +80090,11 @@
      {}
     ]
    ],
+   "fullscreen/interfaces-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "fullscreen/trusted-click.js": [
     [
      {}
@@ -82025,6 +82080,11 @@
      {}
     ]
    ],
+   "html/dom/documents/dom-tree-accessors/nameditem-08-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "html/dom/documents/loading-xml-documents/.gitkeep": [
     [
      {}
@@ -82826,11 +82886,6 @@
     ]
    ],
    "html/dom/resources/self-origin-subframe.html": [
-    [
-     {}
-    ]
-   ],
-   "html/dom/self-origin.sub-expected.txt": [
     [
      {}
     ]
@@ -89055,6 +89110,11 @@
      {}
     ]
    ],
+   "html/semantics/forms/resetting-a-form/reset-form-2-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "html/semantics/forms/resetting-a-form/reset-form-event-realm-expected.txt": [
     [
      {}
@@ -89085,6 +89145,11 @@
      {}
     ]
    ],
+   "html/semantics/forms/the-button-element/button-click-submits-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "html/semantics/forms/the-button-element/button-events-expected.txt": [
     [
      {}
@@ -89110,6 +89175,16 @@
      {}
     ]
    ],
+   "html/semantics/forms/the-form-element/form-action-reflection-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-form-element/form-action-reflection-with-base-url-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "html/semantics/forms/the-form-element/form-autocomplete-expected.txt": [
     [
      {}
@@ -89125,7 +89200,22 @@
      {}
     ]
    ],
-   "html/semantics/forms/the-form-element/resources/form-action-url-iframe.html": [
+   "html/semantics/forms/the-form-element/resources/form-no-action-with-base.html": [
+    [
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-form-element/resources/form-no-action.html": [
+    [
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-form-element/resources/form-with-action-and-base.sub.html": [
+    [
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-form-element/resources/form-with-action.sub.html": [
     [
      {}
     ]
@@ -89136,6 +89226,11 @@
     ]
    ],
    "html/semantics/forms/the-input-element/.gitkeep": [
+    [
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-input-element/checkbox-click-events-expected.txt": [
     [
      {}
     ]
@@ -89206,6 +89301,11 @@
     ]
    ],
    "html/semantics/forms/the-option-element/.gitkeep": [
+    [
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-option-element/option-element-constructor-expected.txt": [
     [
      {}
     ]
@@ -91045,11 +91145,6 @@
      {}
     ]
    ],
-   "html/webappapis/scripting/events/invalid-uncompiled-raw-handler-compiled-late-expected.txt": [
-    [
-     {}
-    ]
-   ],
    "html/webappapis/scripting/events/messageevent-constructor.https-expected.txt": [
     [
      {}
@@ -91596,6 +91691,11 @@
     ]
    ],
    "interfaces/fullscreen.idl": [
+    [
+     {}
+    ]
+   ],
+   "interfaces/geometry.idl": [
     [
      {}
     ]
@@ -92990,6 +93090,16 @@
      {}
     ]
    ],
+   "page-visibility/idlharness-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "page-visibility/prerender_call-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "page-visibility/resources/blank_page_green.html": [
     [
      {}
@@ -93036,6 +93146,11 @@
     ]
    ],
    "performance-timeline/performanceobservers.js": [
+    [
+     {}
+    ]
+   ],
+   "performance-timeline/po-navigation-expected.txt": [
     [
      {}
     ]
@@ -95850,6 +95965,21 @@
      {}
     ]
    ],
+   "resource-timing/resource_TAO_match_origin-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "resource-timing/resource_TAO_match_wildcard-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "resource-timing/resource_TAO_multi-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "resource-timing/resources/TAOResponse.py": [
     [
      {}
@@ -95955,7 +96085,22 @@
      {}
     ]
    ],
+   "resource-timing/test_resource_timing-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "resource-timing/test_resource_timing.js": [
+    [
+     {}
+    ]
+   ],
+   "screen-orientation/lock-bad-argument-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "screen-orientation/orientation-reading-expected.txt": [
     [
      {}
     ]
@@ -96530,11 +96675,6 @@
      {}
     ]
    ],
-   "service-workers/service-worker/resource-timing.https-expected.txt": [
-    [
-     {}
-    ]
-   ],
    "service-workers/service-worker/resources/404.py": [
     [
      {}
@@ -96785,6 +96925,26 @@
      {}
     ]
    ],
+   "service-workers/service-worker/resources/fetch-event-respond-with-readable-stream-iframe.html": [
+    [
+     {}
+    ]
+   ],
+   "service-workers/service-worker/resources/fetch-event-respond-with-readable-stream-worker.js": [
+    [
+     {}
+    ]
+   ],
+   "service-workers/service-worker/resources/fetch-event-respond-with-response-body-with-invalid-chunk-iframe.html": [
+    [
+     {}
+    ]
+   ],
+   "service-workers/service-worker/resources/fetch-event-respond-with-response-body-with-invalid-chunk-worker.js": [
+    [
+     {}
+    ]
+   ],
    "service-workers/service-worker/resources/fetch-event-respond-with-stops-propagation-worker.js": [
     [
      {}
@@ -96931,6 +97091,16 @@
     ]
    ],
    "service-workers/service-worker/resources/fetch-response-xhr-worker.js": [
+    [
+     {}
+    ]
+   ],
+   "service-workers/service-worker/resources/fetch-rewrite-worker-referrer-policy.js": [
+    [
+     {}
+    ]
+   ],
+   "service-workers/service-worker/resources/fetch-rewrite-worker-referrer-policy.js.headers": [
     [
      {}
     ]
@@ -97275,7 +97445,17 @@
      {}
     ]
    ],
+   "service-workers/service-worker/resources/referrer-policy-iframe.html": [
+    [
+     {}
+    ]
+   ],
    "service-workers/service-worker/resources/register-closed-window-iframe.html": [
+    [
+     {}
+    ]
+   ],
+   "service-workers/service-worker/resources/register-foreign-fetch-errors-worker.js": [
     [
      {}
     ]
@@ -98945,6 +99125,11 @@
      {}
     ]
    ],
+   "webmessaging/broadcastchannel/resources/origin.html": [
+    [
+     {}
+    ]
+   ],
    "webmessaging/broadcastchannel/resources/sandboxed.html": [
     [
      {}
@@ -98991,6 +99176,16 @@
     ]
    ],
    "webrtc/RTCConfiguration-iceCandidatePoolSize-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "webrtc/RTCDataChannel-id-expected.txt": [
+    [
+     {}
+    ]
+   ],
+   "webrtc/RTCIceCandidate-constructor-expected.txt": [
     [
      {}
     ]
@@ -101610,6 +101805,11 @@
      {}
     ]
    ],
+   "workers/constructors/SharedWorker/null-arguments-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "workers/constructors/SharedWorker/shared-worker.js": [
     [
      {}
@@ -101671,6 +101871,11 @@
     ]
    ],
    "workers/interfaces/WorkerUtils/importScripts/undefined": [
+    [
+     {}
+    ]
+   ],
+   "workers/name-property-expected.txt": [
     [
      {}
     ]
@@ -101825,6 +102030,11 @@
      {}
     ]
    ],
+   "workers/shared-worker-name-via-options-expected.txt": [
+    [
+     {}
+    ]
+   ],
    "workers/support/ErrorEvent-error.js": [
     [
      {}
@@ -101911,6 +102121,21 @@
     ]
    ],
    "workers/support/shared-name.js": [
+    [
+     {}
+    ]
+   ],
+   "x-frame-options/support/helper.js": [
+    [
+     {}
+    ]
+   ],
+   "x-frame-options/support/nested.py": [
+    [
+     {}
+    ]
+   ],
+   "x-frame-options/support/xfo.py": [
     [
      {}
     ]
@@ -103997,6 +104222,14 @@
      }
     ]
    ],
+   "IndexedDB/request-abort-ordering.html": [
+    [
+     "/IndexedDB/request-abort-ordering.html",
+     {
+      "timeout": "long"
+     }
+    ]
+   ],
    "IndexedDB/request_bubble-and-capture.htm": [
     [
      "/IndexedDB/request_bubble-and-capture.htm",
@@ -105721,6 +105954,12 @@
      {}
     ]
    ],
+   "XMLHttpRequest/send-data-arraybufferview.htm": [
+    [
+     "/XMLHttpRequest/send-data-arraybufferview.htm",
+     {}
+    ]
+   ],
    "XMLHttpRequest/send-data-blob.htm": [
     [
      "/XMLHttpRequest/send-data-blob.htm",
@@ -106313,6 +106552,12 @@
      {}
     ]
    ],
+   "beacon/headers/header-content-type.html": [
+    [
+     "/beacon/headers/header-content-type.html",
+     {}
+    ]
+   ],
    "beacon/headers/header-referrer-no-referrer-when-downgrade.https.html": [
     [
      "/beacon/headers/header-referrer-no-referrer-when-downgrade.https.html",
@@ -106440,6 +106685,18 @@
    "content-security-policy/_unapproved/svgscript-nonces-hidden.html": [
     [
      "/content-security-policy/_unapproved/svgscript-nonces-hidden.html",
+     {}
+    ]
+   ],
+   "content-security-policy/base-uri/base-uri-allow.sub.html": [
+    [
+     "/content-security-policy/base-uri/base-uri-allow.sub.html",
+     {}
+    ]
+   ],
+   "content-security-policy/base-uri/base-uri-deny.sub.html": [
+    [
+     "/content-security-policy/base-uri/base-uri-deny.sub.html",
      {}
     ]
    ],
@@ -108295,6 +108552,12 @@
      {}
     ]
    ],
+   "cors/access-control-expose-headers-parsing.window.js": [
+    [
+     "/cors/access-control-expose-headers-parsing.window.html",
+     {}
+    ]
+   ],
    "cors/allow-headers.htm": [
     [
      "/cors/allow-headers.htm",
@@ -108405,6 +108668,12 @@
      {}
     ]
    ],
+   "credential-management/credentialscontainer-create-basics.https.html": [
+    [
+     "/credential-management/credentialscontainer-create-basics.https.html",
+     {}
+    ]
+   ],
    "credential-management/idl.https.html": [
     [
      "/credential-management/idl.https.html",
@@ -108417,27 +108686,27 @@
      {}
     ]
    ],
-   "css-timing-1/cubic-bezier-timing-functions-output.html": [
+   "css-timing/cubic-bezier-timing-functions-output.html": [
     [
-     "/css-timing-1/cubic-bezier-timing-functions-output.html",
+     "/css-timing/cubic-bezier-timing-functions-output.html",
      {}
     ]
    ],
-   "css-timing-1/frames-timing-functions-output.html": [
+   "css-timing/frames-timing-functions-output.html": [
     [
-     "/css-timing-1/frames-timing-functions-output.html",
+     "/css-timing/frames-timing-functions-output.html",
      {}
     ]
    ],
-   "css-timing-1/frames-timing-functions-syntax.html": [
+   "css-timing/frames-timing-functions-syntax.html": [
     [
-     "/css-timing-1/frames-timing-functions-syntax.html",
+     "/css-timing/frames-timing-functions-syntax.html",
      {}
     ]
    ],
-   "css-timing-1/step-timing-functions-output.html": [
+   "css-timing/step-timing-functions-output.html": [
     [
-     "/css-timing-1/step-timing-functions-output.html",
+     "/css-timing/step-timing-functions-output.html",
      {}
     ]
    ],
@@ -110787,6 +111056,12 @@
      {}
     ]
    ],
+   "css/geometry-1/DOMMatrixInit-validate-fixup.html": [
+    [
+     "/css/geometry-1/DOMMatrixInit-validate-fixup.html",
+     {}
+    ]
+   ],
    "css/geometry-1/DOMPoint-001.html": [
     [
      "/css/geometry-1/DOMPoint-001.html",
@@ -110832,6 +111107,18 @@
    "css/geometry-1/historical.html": [
     [
      "/css/geometry-1/historical.html",
+     {}
+    ]
+   ],
+   "css/geometry-1/interfaces.html": [
+    [
+     "/css/geometry-1/interfaces.html",
+     {}
+    ]
+   ],
+   "css/geometry-1/interfaces.worker.js": [
+    [
+     "/css/geometry-1/interfaces.worker.html",
      {}
     ]
    ],
@@ -120717,9 +121004,27 @@
      {}
     ]
    ],
-   "html/semantics/forms/the-form-element/form-action-url.html": [
+   "html/semantics/forms/the-form-element/form-action-reflection-with-base-url.html": [
     [
-     "/html/semantics/forms/the-form-element/form-action-url.html",
+     "/html/semantics/forms/the-form-element/form-action-reflection-with-base-url.html",
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-form-element/form-action-reflection.html": [
+    [
+     "/html/semantics/forms/the-form-element/form-action-reflection.html",
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-form-element/form-action-submission-with-base-url.html": [
+    [
+     "/html/semantics/forms/the-form-element/form-action-submission-with-base-url.html",
+     {}
+    ]
+   ],
+   "html/semantics/forms/the-form-element/form-action-submission.html": [
+    [
+     "/html/semantics/forms/the-form-element/form-action-submission.html",
      {}
     ]
    ],
@@ -136305,6 +136610,18 @@
      {}
     ]
    ],
+   "service-workers/service-worker/fetch-event-respond-with-readable-stream.https.html": [
+    [
+     "/service-workers/service-worker/fetch-event-respond-with-readable-stream.https.html",
+     {}
+    ]
+   ],
+   "service-workers/service-worker/fetch-event-respond-with-response-body-with-invalid-chunk.https.html": [
+    [
+     "/service-workers/service-worker/fetch-event-respond-with-response-body-with-invalid-chunk.https.html",
+     {}
+    ]
+   ],
    "service-workers/service-worker/fetch-event-respond-with-stops-propagation.https.html": [
     [
      "/service-workers/service-worker/fetch-event-respond-with-stops-propagation.https.html",
@@ -136671,9 +136988,21 @@
      {}
     ]
    ],
+   "service-workers/service-worker/redirected-response.https.html": [
+    [
+     "/service-workers/service-worker/redirected-response.https.html",
+     {}
+    ]
+   ],
    "service-workers/service-worker/referer.https.html": [
     [
      "/service-workers/service-worker/referer.https.html",
+     {}
+    ]
+   ],
+   "service-workers/service-worker/referrer-policy-header.https.html": [
+    [
+     "/service-workers/service-worker/referrer-policy-header.https.html",
      {}
     ]
    ],
@@ -136688,6 +137017,12 @@
    "service-workers/service-worker/register-default-scope.https.html": [
     [
      "/service-workers/service-worker/register-default-scope.https.html",
+     {}
+    ]
+   ],
+   "service-workers/service-worker/register-foreign-fetch-errors.https.html": [
+    [
+     "/service-workers/service-worker/register-foreign-fetch-errors.https.html",
      {}
     ]
    ],
@@ -138865,6 +139200,12 @@
      {}
     ]
    ],
+   "web-animations/animation-model/animation-types/accumulation-per-property.html": [
+    [
+     "/web-animations/animation-model/animation-types/accumulation-per-property.html",
+     {}
+    ]
+   ],
    "web-animations/animation-model/animation-types/addition-per-property.html": [
     [
      "/web-animations/animation-model/animation-types/addition-per-property.html",
@@ -139525,6 +139866,12 @@
      {}
     ]
    ],
+   "webmessaging/broadcastchannel/origin.window.js": [
+    [
+     "/webmessaging/broadcastchannel/origin.window.html",
+     {}
+    ]
+   ],
    "webmessaging/broadcastchannel/sandbox.html": [
     [
      "/webmessaging/broadcastchannel/sandbox.html",
@@ -140020,6 +140367,18 @@
    "webrtc/RTCDataChannelEvent-constructor.html": [
     [
      "/webrtc/RTCDataChannelEvent-constructor.html",
+     {}
+    ]
+   ],
+   "webrtc/RTCIceCandidate-constructor.html": [
+    [
+     "/webrtc/RTCIceCandidate-constructor.html",
+     {}
+    ]
+   ],
+   "webrtc/RTCPeerConnection-addIceCandidate.html": [
+    [
+     "/webrtc/RTCPeerConnection-addIceCandidate.html",
      {}
     ]
    ],
@@ -143574,6 +143933,30 @@
      "/workers/shared-worker-name-via-options.html",
      {}
     ]
+   ],
+   "x-frame-options/deny.sub.html": [
+    [
+     "/x-frame-options/deny.sub.html",
+     {}
+    ]
+   ],
+   "x-frame-options/invalid.sub.html": [
+    [
+     "/x-frame-options/invalid.sub.html",
+     {}
+    ]
+   ],
+   "x-frame-options/multiple.sub.html": [
+    [
+     "/x-frame-options/multiple.sub.html",
+     {}
+    ]
+   ],
+   "x-frame-options/sameorigin.sub.html": [
+    [
+     "/x-frame-options/sameorigin.sub.html",
+     {}
+    ]
    ]
   },
   "visual": {
@@ -145415,7 +145798,7 @@
    "support"
   ],
   "./lint.whitelist": [
-   "d21395dd14fcc2993cf1723fade699caabd1b6f7",
+   "7775ac72c445b33ed6d42afa25d5497bc98f7d18",
    "support"
   ],
   "./update-built-tests.sh": [
@@ -145451,7 +145834,7 @@
    "testharness"
   ],
   "FileAPI/OWNERS": [
-   "e831e24e141c3e6e8dc8232a1a0ee0f580356400",
+   "24ffe607f5af5e681a389f38044914a0ba90df5d",
    "support"
   ],
   "FileAPI/blob/Blob-XHR-revoke-expected.txt": [
@@ -145627,7 +146010,7 @@
    "support"
   ],
   "IndexedDB/OWNERS": [
-   "e831e24e141c3e6e8dc8232a1a0ee0f580356400",
+   "6b6e294c35dfeff210d1d8e1764a10382550bf06",
    "support"
   ],
   "IndexedDB/README.md": [
@@ -146902,6 +147285,10 @@
    "22588cdd7dc2d565e57a393f5f6e7e85139f03b7",
    "testharness"
   ],
+  "IndexedDB/request-abort-ordering.html": [
+   "8d848f3ef41d81a3abfe9c8ed29303d1ce0bad58",
+   "testharness"
+  ],
   "IndexedDB/request_bubble-and-capture.htm": [
    "9c486babd57c2d14bb251d5bba202b3dbd6c802d",
    "testharness"
@@ -147670,6 +148057,10 @@
    "95fcfc28dae32ab9aadf21d2512a519d6a9fd5ab",
    "testharness"
   ],
+  "WebIDL/ecmascript-binding/sequence-conversion-expected.txt": [
+   "e56a7a691f494bab0ed4a83c7899c5cd56c77af5",
+   "support"
+  ],
   "WebIDL/ecmascript-binding/sequence-conversion.html": [
    "8038a4e188651f4ccd24a3c3bcd3af773c55bc97",
    "testharness"
@@ -148091,11 +148482,11 @@
    "testharness"
   ],
   "XMLHttpRequest/open-url-redirected-worker-origin.htm": [
-   "d92032b7a81bcea83ee03df3affe0e25263328b0",
+   "877d6bd227709cc3ada32493ba6cc86683efade9",
    "testharness"
   ],
   "XMLHttpRequest/open-url-worker-origin.htm": [
-   "e4db65c7c0a98d7f5aa84eac01705259f377f44b",
+   "f105c0e4b249f82545f2763c4b1a23a3a217e3a7",
    "testharness"
   ],
   "XMLHttpRequest/open-url-worker-simple.htm": [
@@ -148626,6 +149017,10 @@
    "43a7647ba4c567aaea98efa41d538d5beda682ff",
    "testharness"
   ],
+  "XMLHttpRequest/send-data-arraybufferview.htm": [
+   "89c4c24408588cbd42f1b3ccfd50f91b6267ff92",
+   "testharness"
+  ],
   "XMLHttpRequest/send-data-blob.htm": [
    "cf811393a5a18891e46439f5d9bb92acbf45b5e3",
    "testharness"
@@ -149082,6 +149477,10 @@
    "9b4367fa0a6920b5c9bd0b310935f79260ec1214",
    "manual"
   ],
+  "battery-status/battery-discharging-manual.https-expected.txt": [
+   "51d6107258f7a2e023319482dc87cacce0f541ea",
+   "support"
+  ],
   "battery-status/battery-discharging-manual.https.html": [
    "748f32b343f07e8abc4fb7a0764bca9e4b92e274",
    "manual"
@@ -149090,9 +149489,17 @@
    "0fb90d807a27ce9e78dab040926effc1be7f71be",
    "manual"
   ],
+  "battery-status/battery-iframe.https-expected.txt": [
+   "eb6453b6d1c328ffc20afdbb96fe5d7602a7c1d1",
+   "support"
+  ],
   "battery-status/battery-iframe.https.html": [
    "b4df9429c1ff9ace253fb40296b20c06f8eb5eb3",
    "testharness"
+  ],
+  "battery-status/battery-insecure-context-expected.txt": [
+   "6be1447d61155d2656c958a00674ea311031b8eb",
+   "support"
   ],
   "battery-status/battery-insecure-context.html": [
    "39639373d161846186cbcb7eb33466493bcc77ad",
@@ -149125,6 +149532,10 @@
   "battery-status/support-window-open.html": [
    "61b61d09a21daee964e0ebd26f7bdfdd1964c8ae",
    "support"
+  ],
+  "beacon/headers/header-content-type.html": [
+   "5753ef82d17941aaf0c929da8952f88aa4186f02",
+   "testharness"
   ],
   "beacon/headers/header-referrer-no-referrer-when-downgrade.https-expected.txt": [
    "d7120d5fd0d4f1a0503339bb4a86345a64fd3cbb",
@@ -149180,6 +149591,10 @@
   ],
   "beacon/headers/header-referrer.js": [
    "8185d2b31fbf67a573444d3c8f828f96422526f5",
+   "support"
+  ],
+  "beacon/resources/content-type.py": [
+   "0734a043b92b0a2646d643f14c0e7e0e33043b1d",
    "support"
   ],
   "beacon/resources/inspect-header.py": [
@@ -149426,13 +149841,17 @@
    "28c376fd32a880f58de3f67fd3b19288c38d63f3",
    "support"
   ],
-  "content-security-policy/base-uri/base-uri_iframe_sandbox.sub.html": [
-   "0235470345c1f336bb6ace4cb747ffc1a334a5f6",
+  "content-security-policy/base-uri/base-uri-allow.sub.html": [
+   "f529a5f663471743f84b0d6db986a67227dcdcab",
    "testharness"
   ],
-  "content-security-policy/base-uri/base-uri_iframe_sandbox.sub.html.headers": [
-   "ac57d9475710ee4ca0f979d3037264a405787c35",
-   "support"
+  "content-security-policy/base-uri/base-uri-deny.sub.html": [
+   "3b77edcd9a327a7cb7120ee0fb4975f936430211",
+   "testharness"
+  ],
+  "content-security-policy/base-uri/base-uri_iframe_sandbox.sub.html": [
+   "19d2027dc8784a479722b7f405fee31973808e2f",
+   "testharness"
   ],
   "content-security-policy/blink-contrib-2/allowed.css": [
    "4477032f6a7347c932c71f9737f3f5e8d244c7d3",
@@ -151942,6 +152361,10 @@
    "cbb91823a75f6e5c5ae435c5bc4c3b15a09c483e",
    "support"
   ],
+  "cookies/path/match-expected.txt": [
+   "50a6d500bd8340a69575d13a8aa0b21132e9fdd7",
+   "support"
+  ],
   "cookies/path/match.html": [
    "f0a64d36154617213cbe846eb5ef0c93f7a65556",
    "testharness"
@@ -151974,6 +152397,10 @@
    "b1b6ee4d317f108574453da7410f91d52eecdf83",
    "support"
   ],
+  "cookies/secure/set-from-ws.https.sub-expected.txt": [
+   "d0c2bd6e046fd7c98bae2d692c80afb66b6020a2",
+   "support"
+  ],
   "cookies/secure/set-from-ws.https.sub.html": [
    "2d60b86d8beaa5b3329c804949c7ee0d51d929c3",
    "testharness"
@@ -151989,6 +152416,10 @@
   "cors/README.md": [
    "acf95ba2292a36d28bbe9aa857428b2d1741ad33",
    "support"
+  ],
+  "cors/access-control-expose-headers-parsing.window.js": [
+   "2da0e5bb66faad76a428ce5fbcc6878fde52fc3c",
+   "testharness"
   ],
   "cors/allow-headers-expected.txt": [
    "2b3dbc564e08536e7e613e053e7a8513fc255d32",
@@ -152066,6 +152497,14 @@
    "b3270117326add2e3709b1bf790747cf3a83a218",
    "support"
   ],
+  "cors/resources/access-control-expose-headers-parsing-2.asis": [
+   "e9e349bea68cfe246cbc247c1dd314cd49e82e8b",
+   "support"
+  ],
+  "cors/resources/access-control-expose-headers-parsing.asis": [
+   "9cf4e4db6b0a74fa25f1ab500e91acf90b1c9db6",
+   "support"
+  ],
   "cors/resources/checkandremove.py": [
    "d891a6e489124e4ef7f82faa51a5e2a7221925f9",
    "support"
@@ -152118,39 +152557,43 @@
    "8307ed240a531033c96da89197dcfb5ea25cde87",
    "support"
   ],
+  "credential-management/credentialscontainer-create-basics.https.html": [
+   "22bc5347e667e5178834117f77f908a20ba6f247",
+   "testharness"
+  ],
   "credential-management/idl.https-expected.txt": [
-   "4b6d1aa7db8a2cfa50fb66658a87b3446e978566",
+   "16ad9b730d3bada02d3cb32db1cd8ac12074582a",
    "support"
   ],
   "credential-management/idl.https.html": [
-   "b5233d47417e91b3d9d72f2bd8e1f6cb099c01ec",
+   "29339c28aea6dcd662214ee196acbc106e6f82cb",
    "testharness"
   ],
   "css-font-loading/fontfacesetloadevent-constructor.html": [
    "ad355c3d5220c1b938182241a8e8abe030ace699",
    "testharness"
   ],
-  "css-timing-1/cubic-bezier-timing-functions-output-expected.txt": [
+  "css-timing/cubic-bezier-timing-functions-output-expected.txt": [
    "55d3fc7b0d318a2cbf418f5b386b0fac8eae0023",
    "support"
   ],
-  "css-timing-1/cubic-bezier-timing-functions-output.html": [
+  "css-timing/cubic-bezier-timing-functions-output.html": [
    "77a45437209844f7e5128bd6aa2efeeacf876187",
    "testharness"
   ],
-  "css-timing-1/frames-timing-functions-output.html": [
+  "css-timing/frames-timing-functions-output.html": [
    "fe9a931466f31605f1a09d5f95589cc54ee34663",
    "testharness"
   ],
-  "css-timing-1/frames-timing-functions-syntax.html": [
+  "css-timing/frames-timing-functions-syntax.html": [
    "7ac5eef9cec74746aa076912285398f525b01c06",
    "testharness"
   ],
-  "css-timing-1/step-timing-functions-output.html": [
+  "css-timing/step-timing-functions-output.html": [
    "4b514aac1efca5813e5a551290f8c84f678bd41d",
    "testharness"
   ],
-  "css-timing-1/testcommon.js": [
+  "css-timing/testcommon.js": [
    "a39c8c7fdd3b58d03d5a544ebe51f82e65ac5645",
    "support"
   ],
@@ -167823,7 +168266,7 @@
    "testharness"
   ],
   "css/css-shapes-1/shape-outside/values/support/parsing-utils.js": [
-   "7d903871fe761f90ac8df30094b36f2c66ccb1d3",
+   "52b60f43828972af1ad3f3f0cb131881f5ef65d7",
    "support"
   ],
   "css/css-shapes-1/spec-examples/reference/shape-outside-001-ref.html": [
@@ -181314,12 +181757,8 @@
    "88d834aadcd7b547720992a2894b9ab3251e3e04",
    "support"
   ],
-  "css/geometry-1/DOMMatrix-001-expected.txt": [
-   "a7ebf0fbf7839a2c3e89e007f06ba2ecf76a2e02",
-   "support"
-  ],
   "css/geometry-1/DOMMatrix-001.html": [
-   "f62f10d1bfba788e2741e149cdb704282bd4eb74",
+   "a8cfa83e572a766b61e4eae5946e7efb62e9eab7",
    "testharness"
   ],
   "css/geometry-1/DOMMatrix-002.html": [
@@ -181335,7 +181774,7 @@
    "testharness"
   ],
   "css/geometry-1/DOMMatrix-css-string.worker.js": [
-   "8e35b88e33e29fc06242fefead8a2319f26a1511",
+   "e97dcab8cdf554c5f60c12dd037ece69d7c854b2",
    "testharness"
   ],
   "css/geometry-1/DOMMatrix-newobject.html": [
@@ -181348,6 +181787,14 @@
   ],
   "css/geometry-1/DOMMatrix-stringifier.html": [
    "fbcaa50f5daab1a11325cbbd46e10c524a1f6f80",
+   "testharness"
+  ],
+  "css/geometry-1/DOMMatrixInit-validate-fixup-expected.txt": [
+   "688cedbc6dda3f162a6fff2785a5b5432a3dfe5c",
+   "support"
+  ],
+  "css/geometry-1/DOMMatrixInit-validate-fixup.html": [
+   "201d59db6923ae141d980ac40ddce08375bd1900",
    "testharness"
   ],
   "css/geometry-1/DOMPoint-001-expected.txt": [
@@ -181390,8 +181837,24 @@
    "35d9a1d1a7f655b55d94d0b409e9562a3fd08db5",
    "testharness"
   ],
+  "css/geometry-1/historical-expected.txt": [
+   "8511b6d1ffa140cd38cd68cd756c3d7b5e9afda5",
+   "support"
+  ],
   "css/geometry-1/historical.html": [
-   "0246effb1d5cc1136dcea4f70de08c66cabbaa89",
+   "f3462b981784755425a82ba050850ef8d3d36976",
+   "testharness"
+  ],
+  "css/geometry-1/interfaces-expected.txt": [
+   "c3e2e95577a843b349f9a8a26db0b5c176fa0546",
+   "support"
+  ],
+  "css/geometry-1/interfaces.html": [
+   "5381de7d65645da14f56f906363b00ffda90e524",
+   "testharness"
+  ],
+  "css/geometry-1/interfaces.worker.js": [
+   "22348a0aaeec8dcd677b8f60486f2e043b8f8a86",
    "testharness"
   ],
   "css/geometry-1/structured-serialization-expected.txt": [
@@ -181399,11 +181862,15 @@
    "support"
   ],
   "css/geometry-1/structured-serialization.html": [
-   "35b4dae0aaa7a7dd6614b9749ccbdf5344a16b44",
+   "6f38a37d56ffb9d2ddc17f7c4ed0613b7a5c8136",
    "testharness"
   ],
   "css/geometry-1/support/dommatrix-test-util.js": [
    "d0f0c482648ac39ccaebe359880b079369a8ba21",
+   "support"
+  ],
+  "css/geometry-1/support/interfaces.js": [
+   "083416b9f77bf1d06802ca30b6231c2897f4348d",
    "support"
   ],
   "css/motion-1/offset-path-ray-ref.html": [
@@ -184023,7 +184490,7 @@
    "testharness"
   ],
   "cssom-view/cssom-view-window-screen-interface.html": [
-   "8fb3e3327f8f657e2215c91c75f49fd739c15c57",
+   "ed3dc5f811d0e0920689b051da26c6b3c34b9a54",
    "testharness"
   ],
   "cssom-view/cssom-view/media-query-list-interface.xht": [
@@ -184097,10 +184564,6 @@
   "cssom-view/negativeMargins.html": [
    "ad44e3f4ba132bfb4a522b14a4ff5356dbbbad14",
    "testharness"
-  ],
-  "cssom-view/offsetParent_element_test-expected.txt": [
-   "055aaddbbf5a444b0b5971f7e018a2934ad725ae",
-   "support"
   ],
   "cssom-view/offsetParent_element_test.html": [
    "b2261ec702116c211ab5ac6fbb53698dfe60a7be",
@@ -185283,7 +185746,7 @@
    "support"
   ],
   "dom/historical.html": [
-   "1cbb05f47017bfb409e9c7e93bcac61c0d7582d6",
+   "99cd2739cdfcb5b2c6bf0df098abdfcc4203b891",
    "testharness"
   ],
   "dom/interface-objects.html": [
@@ -187295,7 +187758,7 @@
    "testharness"
   ],
   "encoding/OWNERS": [
-   "819d09eda87359c1f7960a0505a9d5ff5b01d56e",
+   "d05da4c74c8492ac796f43b22948c009a60975a2",
    "support"
   ],
   "encoding/api-basics.html": [
@@ -187931,7 +188394,7 @@
    "support"
   ],
   "encrypted-media/scripts/playback-persistent-license-events.js": [
-   "ca257eeab3e4dad7a9f6947b5d3484fb04b7d267",
+   "284440ac193d29168721569538ef93a60d80ce69",
    "support"
   ],
   "encrypted-media/scripts/playback-persistent-license.js": [
@@ -188999,7 +189462,7 @@
    "testharness"
   ],
   "fetch/api/request/request-consume-empty-expected.txt": [
-   "ffc764d46e0f708c97fc047e5fda1dd1af288da0",
+   "f8c653cc92bb230cdba438a0b15f33218f66c2e8",
    "support"
   ],
   "fetch/api/request/request-consume-empty.html": [
@@ -189167,7 +189630,7 @@
    "testharness"
   ],
   "fetch/api/response/response-consume-empty-expected.txt": [
-   "2db4eb98ff6726c6815c562a78c612176e21f8a2",
+   "aa2a688f53da92b088933eefe111872da385603c",
    "support"
   ],
   "fetch/api/response/response-consume-empty.html": [
@@ -189585,6 +190048,10 @@
   "fullscreen/api/historical.html": [
    "9d9bec938f185b2461da4d00a5683ad5d07ee577",
    "testharness"
+  ],
+  "fullscreen/interfaces-expected.txt": [
+   "b1e96c0a9d8d8ced44335fafa85c12c7f0c2e214",
+   "support"
   ],
   "fullscreen/interfaces.html": [
    "f6f0dbc8a505896a0e7ec7aca2746bbd5c1eb7d9",
@@ -192379,7 +192846,7 @@
    "testharness"
   ],
   "html/browsers/windows/noreferrer-window-name.html": [
-   "163e478a1fb6bb341d10f2ac94f868207b71bbf1",
+   "8fd82f21adec890ec3cf1271ab1c464b2e835222",
    "testharness"
   ],
   "html/browsers/windows/opener-cross-origin-manual.sub.html": [
@@ -192645,6 +193112,10 @@
   "html/dom/documents/dom-tree-accessors/nameditem-07.html": [
    "f9eddafeddf7f4e7ca99b080f98e3e379b5434d0",
    "testharness"
+  ],
+  "html/dom/documents/dom-tree-accessors/nameditem-08-expected.txt": [
+   "2443b696b4332e1811b328bb573b18cd51369288",
+   "support"
   ],
   "html/dom/documents/dom-tree-accessors/nameditem-08.html": [
    "5ae6d9718f6568cf9c42a7ebdf2cbae767c68852",
@@ -194230,12 +194701,8 @@
    "187b3657775b815f9360c01d2ddb358a53e1f920",
    "testharness"
   ],
-  "html/dom/self-origin.sub-expected.txt": [
-   "dde2c175ea7161cb0ba410701dd2fb26b229612a",
-   "support"
-  ],
   "html/dom/self-origin.sub.html": [
-   "ad9aadfb350cee1613a0884154706c632b0a8fe8",
+   "482b716c4e76fd71e99720e3b82658a5db010a5a",
    "testharness"
   ],
   "html/editing/.gitkeep": [
@@ -198071,7 +198538,7 @@
    "testharness"
   ],
   "html/infrastructure/safe-passing-of-structured-data/shared-array-buffers/broadcastchannel-success.html": [
-   "12bd51a62830514325b89263abc5710bbe6b510f",
+   "0a8847896c5a598c7cda654ec912447cfd2d6312",
    "testharness"
   ],
   "html/infrastructure/safe-passing-of-structured-data/shared-array-buffers/identity-not-preserved.html": [
@@ -200894,6 +201361,10 @@
    "2b9329c270fb73a2ab60f5e9549afdfa91a13522",
    "testharness"
   ],
+  "html/semantics/forms/resetting-a-form/reset-form-2-expected.txt": [
+   "1bbdbef29a0de14c8d12ce76c9205c45ecc604a2",
+   "support"
+  ],
   "html/semantics/forms/resetting-a-form/reset-form-2.html": [
    "6f9c1879eab27d8e54273d73eeffe815d0483935",
    "testharness"
@@ -200927,7 +201398,7 @@
    "testharness"
   ],
   "html/semantics/forms/textfieldselection/selection-after-content-change.html": [
-   "f4b7c92a9eebbfd272793ff7a5d56224220b2dd7",
+   "b239830964f86fd94304a4239b41413699fb2344",
    "testharness"
   ],
   "html/semantics/forms/textfieldselection/selection-not-application-textarea.html": [
@@ -200969,6 +201440,10 @@
   "html/semantics/forms/the-button-element/button-activate.html": [
    "fd6cbf436213e6a1324d3944f28199b5b7a04d87",
    "testharness"
+  ],
+  "html/semantics/forms/the-button-element/button-click-submits-expected.txt": [
+   "fe1c01013dc96cb3e377d1bcc493ce12acf8e046",
+   "support"
   ],
   "html/semantics/forms/the-button-element/button-click-submits.html": [
    "2572c669271b48b218a4ff058789fabed5f3751c",
@@ -201026,8 +201501,28 @@
    "da39a3ee5e6b4b0d3255bfef95601890afd80709",
    "support"
   ],
-  "html/semantics/forms/the-form-element/form-action-url.html": [
-   "999b3fa2309085d3fb04385bb159d86f1565bffd",
+  "html/semantics/forms/the-form-element/form-action-reflection-expected.txt": [
+   "224d20e73b53c8de8d950351fe971b6d7382853f",
+   "support"
+  ],
+  "html/semantics/forms/the-form-element/form-action-reflection-with-base-url-expected.txt": [
+   "9059eb09340f01de9ab5fe7b44fe495224490450",
+   "support"
+  ],
+  "html/semantics/forms/the-form-element/form-action-reflection-with-base-url.html": [
+   "e86e9b28d5f1bab91b198f59f877de0ccef32731",
+   "testharness"
+  ],
+  "html/semantics/forms/the-form-element/form-action-reflection.html": [
+   "5006f6381f10f5bb08a2bd89bab403a8db76d32a",
+   "testharness"
+  ],
+  "html/semantics/forms/the-form-element/form-action-submission-with-base-url.html": [
+   "614c1614bf86f202ee0c007778f5351f1cc66239",
+   "testharness"
+  ],
+  "html/semantics/forms/the-form-element/form-action-submission.html": [
+   "e2a223d34051f8c80a2e6cb2afb24dfc8971c33a",
    "testharness"
   ],
   "html/semantics/forms/the-form-element/form-autocomplete-expected.txt": [
@@ -201074,12 +201569,24 @@
    "928a0029fbad4251a30dc660de10ad6fd7f08def",
    "testharness"
   ],
-  "html/semantics/forms/the-form-element/resources/form-action-url-iframe.html": [
-   "75f2e51329853a6ff5e0a77f0eebf3ec7e4832ca",
+  "html/semantics/forms/the-form-element/resources/form-no-action-with-base.html": [
+   "e4baa661a5ffc42b0d79c99a9deb6302c62d5550",
+   "support"
+  ],
+  "html/semantics/forms/the-form-element/resources/form-no-action.html": [
+   "0b2be99bcdd371840f80edc1f6e00bcc14a9b3f8",
+   "support"
+  ],
+  "html/semantics/forms/the-form-element/resources/form-with-action-and-base.sub.html": [
+   "01bf510923d01ed51e6980c0dcd730521540b817",
+   "support"
+  ],
+  "html/semantics/forms/the-form-element/resources/form-with-action.sub.html": [
+   "77255eb0028ccd532b71b2022ca1ee551b0dd923",
    "support"
   ],
   "html/semantics/forms/the-form-element/resources/target/form-action-url-target.html": [
-   "e3066a4b4518618aa1326e8dd364c769964fe4af",
+   "6edba9819119125ff562cb8ecc4555106cba1993",
    "support"
   ],
   "html/semantics/forms/the-input-element/.gitkeep": [
@@ -201089,6 +201596,10 @@
   "html/semantics/forms/the-input-element/button.html": [
    "b827cd11bb58fdffa11fb8d1fa9634ab41368602",
    "testharness"
+  ],
+  "html/semantics/forms/the-input-element/checkbox-click-events-expected.txt": [
+   "742af4a02e9b69db7ceb9be24e7dcd12473d85e2",
+   "support"
   ],
   "html/semantics/forms/the-input-element/checkbox-click-events.html": [
    "9e1d67b4488c9ba65f103ab6a6780ee91362b128",
@@ -201325,6 +201836,10 @@
   "html/semantics/forms/the-option-element/option-disabled-manual.html": [
    "566d5202b873e0dddbbdf76d2a07fdb28554b709",
    "manual"
+  ],
+  "html/semantics/forms/the-option-element/option-element-constructor-expected.txt": [
+   "61a8925dac5d63bc662a13b2a3a5a8950d922a7a",
+   "support"
   ],
   "html/semantics/forms/the-option-element/option-element-constructor.html": [
    "bb33de080d303d8b2f60b31cd43cf55193cdd91f",
@@ -204347,19 +204862,15 @@
    "testharness"
   ],
   "html/webappapis/scripting/events/inline-event-handler-ordering-expected.txt": [
-   "a6e8e25d5f456d8a5454a10d59b0ad10b4ff25a6",
+   "07d43bac679645d8540e3d56e1d4a49c9a4cb1cf",
    "support"
   ],
   "html/webappapis/scripting/events/inline-event-handler-ordering.html": [
-   "0bf73411e0a015a81aefc1327d4c7ef1ca824a56",
+   "873c69a87a5257a0e5278532b162338e9de2a596",
    "testharness"
   ],
-  "html/webappapis/scripting/events/invalid-uncompiled-raw-handler-compiled-late-expected.txt": [
-   "933ca052487bcc69c3efcb8783ae6fc6bc4671ea",
-   "support"
-  ],
   "html/webappapis/scripting/events/invalid-uncompiled-raw-handler-compiled-late.html": [
-   "3a16be9d55c95a04eb426676ff89802974e88b95",
+   "f26d145d438561fb737956d50c37d165808d3ebf",
    "testharness"
   ],
   "html/webappapis/scripting/events/invalid-uncompiled-raw-handler-compiled-once.html": [
@@ -205128,6 +205639,10 @@
   ],
   "interfaces/fullscreen.idl": [
    "5e3b09972043101986b4d4613ac87685281028a8",
+   "support"
+  ],
+  "interfaces/geometry.idl": [
+   "b4c2837ade7a509306755eb7b682f6648c3684e3",
    "support"
   ],
   "interfaces/html.idl": [
@@ -208062,9 +208577,17 @@
    "049b5e9505165723cec70237e2ae5f0e2c7948f0",
    "testharness"
   ],
+  "page-visibility/idlharness-expected.txt": [
+   "557dcfc267cb643467559c40acf8614b04c79a89",
+   "support"
+  ],
   "page-visibility/idlharness.html": [
    "6bbcc548a783a56340aa256e5f51ca51c1b3f4d3",
    "testharness"
+  ],
+  "page-visibility/prerender_call-expected.txt": [
+   "f84a7ba1555b622760bfc8622fb7a458bb3b167b",
+   "support"
   ],
   "page-visibility/prerender_call.html": [
    "17f8962a145f6bd7047f236b5b4eb7f825769004",
@@ -208221,6 +208744,10 @@
   "performance-timeline/po-mark-measure.any.js": [
    "ea0043e68e7f2f8607a7a1f583557299b6f866a1",
    "testharness"
+  ],
+  "performance-timeline/po-navigation-expected.txt": [
+   "2df8fbb6b5a366d81c13219dd049f29786432194",
+   "support"
   ],
   "performance-timeline/po-navigation.html": [
    "d2381d3087344b6e1f9db8a79fbed7c9f45450b6",
@@ -208691,7 +209218,7 @@
    "support"
   ],
   "presentation-api/controlling-ua/PresentationAvailability_onchange-manual.https.html": [
-   "8053c6ff43feb6e76f2b9551770bc1e6a9e05b2e",
+   "5464608f20125a853ed46e96f86b274aa09e22bc",
    "manual"
   ],
   "presentation-api/controlling-ua/PresentationConnection_onclose-manual.https.html": [
@@ -208703,7 +209230,7 @@
    "manual"
   ],
   "presentation-api/controlling-ua/PresentationConnection_onmessage-manual.https.html": [
-   "724bf7c2c00fab23a86f9a925b430cf4d4a0fe19",
+   "b4b35bcb01a7399a5e4d4220be01fa1980cd454e",
    "manual"
   ],
   "presentation-api/controlling-ua/PresentationConnection_onterminate-manual.https.html": [
@@ -208727,7 +209254,7 @@
    "testharness"
   ],
   "presentation-api/controlling-ua/PresentationRequest_onconnectionavailable-manual.https.html": [
-   "7fb8f30c04407693c3bf9da9d1ae11937fc1f5c3",
+   "2f787b190b9135763255ab4cf5b8a8ec9fb0bab1",
    "manual"
   ],
   "presentation-api/controlling-ua/PresentationRequest_sandboxing_error.https.html": [
@@ -208859,15 +209386,15 @@
    "support"
   ],
   "presentation-api/receiving-ua/support/PresentationConnectionList_onconnectionavailable_receiving-ua.html": [
-   "8386247f99e2ef4e1a3378d499a8245d5ff3a5c8",
+   "9f18b9602f6866fd9b56ca4759a66b8624b05d17",
    "support"
   ],
   "presentation-api/receiving-ua/support/PresentationConnection_onclose_receiving-ua.html": [
-   "d925897d1ce2a15545e425d908ed7122ee657137",
+   "0e34d34220d548fdbda843b3864bc516fd1fa638",
    "support"
   ],
   "presentation-api/receiving-ua/support/PresentationConnection_onmessage_receiving-ua.html": [
-   "8dc8d4229c03ccc1575ccc2206f85574bbd79500",
+   "7d7b0bb899d0ab8415c1705f5bee2ca7a9866561",
    "support"
   ],
   "presentation-api/receiving-ua/support/PresentationConnection_send_receiving-ua.html": [
@@ -216431,16 +216958,28 @@
    "testharness"
   ],
   "resource-timing/resource-timing.js": [
-   "b5c7951856ebacd27c11a0685bb7730f02487fcb",
+   "9351f640380bd9a71bca28d32d724bd5f6373650",
+   "support"
+  ],
+  "resource-timing/resource_TAO_match_origin-expected.txt": [
+   "1056c37f0a3b456fd90f8b0af4dbd664d75d9664",
    "support"
   ],
   "resource-timing/resource_TAO_match_origin.htm": [
    "32faacb791313be60380fa744608853b24442f42",
    "testharness"
   ],
+  "resource-timing/resource_TAO_match_wildcard-expected.txt": [
+   "5a00fdedbdc947c78f306a1849413c17c4b92aed",
+   "support"
+  ],
   "resource-timing/resource_TAO_match_wildcard.htm": [
    "f21fa1fac755e91b21293abfd738a1220cec57c2",
    "testharness"
+  ],
+  "resource-timing/resource_TAO_multi-expected.txt": [
+   "490af85a0edd0e593fc93886a2657c797e7fc005",
+   "support"
   ],
   "resource-timing/resource_TAO_multi.htm": [
    "1325e992dd31943fde96038c215a73db1c382ce6",
@@ -216566,12 +217105,20 @@
    "59692fb2ebe890d65acba54aa2f814fcf9b46d39",
    "support"
   ],
+  "resource-timing/test_resource_timing-expected.txt": [
+   "a77bf35e3c070c54ab8a7c1f0a1ceb5ce1d8bbc6",
+   "support"
+  ],
   "resource-timing/test_resource_timing.html": [
    "16c8af27032f9babbc6b5443a033a44d5597ff1e",
    "testharness"
   ],
   "resource-timing/test_resource_timing.js": [
    "212dd1f05242ce9e850698b0c9f7eff085313838",
+   "support"
+  ],
+  "screen-orientation/lock-bad-argument-expected.txt": [
+   "a27f6264d5dce06d487ff4f8bf06766b96082dfa",
    "support"
   ],
   "screen-orientation/lock-bad-argument.html": [
@@ -216597,6 +217144,10 @@
   "screen-orientation/orientation-api.html": [
    "44225c2493c6ac472a9f2d4b871ee17368cf02be",
    "testharness"
+  ],
+  "screen-orientation/orientation-reading-expected.txt": [
+   "6abb770e054ce31bda0979ced11484c02d326b51",
+   "support"
   ],
   "screen-orientation/orientation-reading.html": [
    "863ce2783be30b5482733cb8cc31201d7f272128",
@@ -217410,6 +217961,14 @@
    "ce7e7cf76aace24a92d455cdb6b54fc9048960e8",
    "testharness"
   ],
+  "service-workers/service-worker/fetch-event-respond-with-readable-stream.https.html": [
+   "cf31c2b1cba37a016dc9e9a3ddb2429a5d518052",
+   "testharness"
+  ],
+  "service-workers/service-worker/fetch-event-respond-with-response-body-with-invalid-chunk.https.html": [
+   "b488946d3d00fdcc17249b6b2270537be8bcfa59",
+   "testharness"
+  ],
   "service-workers/service-worker/fetch-event-respond-with-stops-propagation.https.html": [
    "7d9e18d316c74f2b887f01a4576eb14b10d99b14",
    "testharness"
@@ -217567,11 +218126,11 @@
    "testharness"
   ],
   "service-workers/service-worker/invalid-blobtype.https.html": [
-   "ca29ab7c214d2fa4973cf7be633a7fb8507ae897",
+   "e2867d9813601fffbe2f8ea3827430015e0c4444",
    "testharness"
   ],
   "service-workers/service-worker/invalid-header.https.html": [
-   "393c3b3c393b58e74f82affecdd06c4e7be1787a",
+   "5cc3f2c872435df9c735390426a6cf8b4b788fb0",
    "testharness"
   ],
   "service-workers/service-worker/iso-latin1-header.https.html": [
@@ -217611,7 +218170,7 @@
    "testharness"
   ],
   "service-workers/service-worker/multiple-register.https.html": [
-   "3c4ec4fc7c72408211ff954b5a54ede3e5b0c656",
+   "88dd84637f82e942e5efe6caafb99a18df602353",
    "testharness"
   ],
   "service-workers/service-worker/multiple-update.https.html": [
@@ -217731,7 +218290,7 @@
    "testharness"
   ],
   "service-workers/service-worker/onactivate-script-error.https.html": [
-   "7c397361b27e4c4d90a84d92b16593ac40d443a9",
+   "bfef14af67c3a21523b5a7283d7cf86ac288f081",
    "testharness"
   ],
   "service-workers/service-worker/oninstall-script-error.https.html": [
@@ -217774,8 +218333,16 @@
    "ff14496607e396281d28fb9a8bfdcbb46b8a7e9c",
    "testharness"
   ],
+  "service-workers/service-worker/redirected-response.https.html": [
+   "2b98005929b6cff548cf3be0181eec1ffca9abb0",
+   "testharness"
+  ],
   "service-workers/service-worker/referer.https.html": [
    "a9e4073192f5b69984624ad7376ec7787101dfea",
+   "testharness"
+  ],
+  "service-workers/service-worker/referrer-policy-header.https.html": [
+   "eef44dace34ca278172d59a609ab4193c3c5af28",
    "testharness"
   ],
   "service-workers/service-worker/register-closed-window.https.html": [
@@ -217784,6 +218351,10 @@
   ],
   "service-workers/service-worker/register-default-scope.https.html": [
    "864f5435fc40124dbe2c1ffb0e1942fee58228d2",
+   "testharness"
+  ],
+  "service-workers/service-worker/register-foreign-fetch-errors.https.html": [
+   "785f0ea662160a5b7b3fe6a7580e62f793e100cf",
    "testharness"
   ],
   "service-workers/service-worker/register-link-element.https-expected.txt": [
@@ -217799,7 +218370,7 @@
    "testharness"
   ],
   "service-workers/service-worker/register-same-scope-different-script-url.https.html": [
-   "7c32948fe5ff738a38b08ff2d2497ddb63f0a8ef",
+   "2d337b2252fc4235830de53fcb3dc280d3aca82c",
    "testharness"
   ],
   "service-workers/service-worker/register-wait-forever-in-install-worker.https-expected.txt": [
@@ -217823,7 +218394,7 @@
    "testharness"
   ],
   "service-workers/service-worker/registration-service-worker-attributes.https.html": [
-   "7c49ce1c6170733033add6253a3f4a7e0483452e",
+   "04a6fd8d3ff62fa4d969b629eb5f541c6447ae12",
    "testharness"
   ],
   "service-workers/service-worker/registration.https-expected.txt": [
@@ -217842,12 +218413,8 @@
    "e141f4daca379d95b8be9ebe16a2475a41f3c6f5",
    "testharness"
   ],
-  "service-workers/service-worker/resource-timing.https-expected.txt": [
-   "b6c17055d98f1c5979098748042e14e4c2b4e13d",
-   "support"
-  ],
   "service-workers/service-worker/resource-timing.https.html": [
-   "587060940cb25ff8072fa83cb41d538a73320ca6",
+   "403b3a0183ece928ecd93570067c9eac078aa901",
    "testharness"
   ],
   "service-workers/service-worker/resources/404.py": [
@@ -218050,6 +218617,22 @@
    "b58b92a145a89f71c414de5e837c1db026beb1d6",
    "support"
   ],
+  "service-workers/service-worker/resources/fetch-event-respond-with-readable-stream-iframe.html": [
+   "16fe2d0f84bb7898f7a89182e24001b3bc64775e",
+   "support"
+  ],
+  "service-workers/service-worker/resources/fetch-event-respond-with-readable-stream-worker.js": [
+   "7f120661c9b24647f33dc41c36610ad3a1afef6a",
+   "support"
+  ],
+  "service-workers/service-worker/resources/fetch-event-respond-with-response-body-with-invalid-chunk-iframe.html": [
+   "a82860dd4b5e0e2edaeab79c445854c5d8264f01",
+   "support"
+  ],
+  "service-workers/service-worker/resources/fetch-event-respond-with-response-body-with-invalid-chunk-worker.js": [
+   "085ecdbb182a461d42f10444e82bfbb1de3728be",
+   "support"
+  ],
   "service-workers/service-worker/resources/fetch-event-respond-with-stops-propagation-worker.js": [
    "900fd1c2080fbb386589f7d6ee52c49da9d4fcb8",
    "support"
@@ -218170,6 +218753,14 @@
    "f94ad37a6f751b96a95c325b0787c1f0c28d2418",
    "support"
   ],
+  "service-workers/service-worker/resources/fetch-rewrite-worker-referrer-policy.js": [
+   "fe56d7e1920c1da3d01101269c8c686cf034d4f4",
+   "support"
+  ],
+  "service-workers/service-worker/resources/fetch-rewrite-worker-referrer-policy.js.headers": [
+   "0c0502e4e95eed858109d55995720689dacfdf3b",
+   "support"
+  ],
   "service-workers/service-worker/resources/fetch-rewrite-worker.js": [
    "e390cdc4fa2324db03069193e2b049dde82fbc2d",
    "support"
@@ -218235,7 +218826,7 @@
    "support"
   ],
   "service-workers/service-worker/resources/install-event-type-worker.js": [
-   "b6949fcd3d82a99595356448fce6ac830366200e",
+   "fd486a19472f142bbd2909929a67ac3d39adc845",
    "support"
   ],
   "service-workers/service-worker/resources/install-worker-helper.html": [
@@ -218243,7 +218834,7 @@
    "support"
   ],
   "service-workers/service-worker/resources/interfaces-worker.sub.js": [
-   "c94ee8dee0233f31c4f1577bf8b4bda5d2be2209",
+   "393be6f93713e198afc5d2b7e6d229a39d591426",
    "support"
   ],
   "service-workers/service-worker/resources/interfaces.js": [
@@ -218251,7 +218842,7 @@
    "support"
   ],
   "service-workers/service-worker/resources/invalid-blobtype-iframe.https.html": [
-   "288f0edf60fe60a22ea4436528572053def5ab3f",
+   "37dde3429bce5e20e7158b02840cc1954c79b4b0",
    "support"
   ],
   "service-workers/service-worker/resources/invalid-blobtype-worker.js": [
@@ -218267,7 +218858,7 @@
    "support"
   ],
   "service-workers/service-worker/resources/invalid-header-iframe.https.html": [
-   "fe4d734647044a68a35dbd0c0b9bdeb4f671c0b2",
+   "1ebab289fb121a6815cec017db2f1b3ce7447508",
    "support"
   ],
   "service-workers/service-worker/resources/invalid-header-worker.js": [
@@ -218442,8 +219033,16 @@
    "6b549d0a185a0fb76c230274a672ef4843d33a90",
    "support"
   ],
+  "service-workers/service-worker/resources/referrer-policy-iframe.html": [
+   "47fc8d4c110ff26a4ceadade703659af5464504d",
+   "support"
+  ],
   "service-workers/service-worker/resources/register-closed-window-iframe.html": [
    "18ee27c8d6a5497bf16b3315ba9eee2b474154b5",
+   "support"
+  ],
+  "service-workers/service-worker/resources/register-foreign-fetch-errors-worker.js": [
+   "20cbfcd09c00c81c0a3c433a6257f62237fecd64",
    "support"
   ],
   "service-workers/service-worker/resources/register-iframe.html": [
@@ -220995,7 +221594,7 @@
    "testharness"
   ],
   "url/urltestdata.json": [
-   "ddd80477f7604f6348bb4f2e35fbe901719f65fe",
+   "d52fa5f6c7565eea8e33277a7ad58986b21fc592",
    "support"
   ],
   "user-timing/clear_all_marks.any.js": [
@@ -221146,6 +221745,10 @@
    "d6cb0e31dc3cc6d83b5051cee38a0b8e118fd43f",
    "support"
   ],
+  "web-animations/animation-model/animation-types/accumulation-per-property.html": [
+   "316dd15ce99cbfb5754c236210ac9e04dfc0c7ba",
+   "testharness"
+  ],
   "web-animations/animation-model/animation-types/addition-per-property.html": [
    "24fae46b5f7b47e1d098fa446037bf9cc52e050e",
    "testharness"
@@ -221159,11 +221762,11 @@
    "testharness"
   ],
   "web-animations/animation-model/animation-types/property-list.js": [
-   "2843e53e0bf500d529062dce14889693fdf9f58a",
+   "83a52204cc36f6b757129dae947f03f6a8748bde",
    "support"
   ],
   "web-animations/animation-model/animation-types/property-types.js": [
-   "b42366e9ef71bc6671543a05a85a5b932b2e2e03",
+   "66c606f9451cc30ba6d23bcfffcb61871283b0b8",
    "support"
   ],
   "web-animations/animation-model/animation-types/spacing-keyframes-filters-expected.txt": [
@@ -221926,6 +222529,14 @@
    "629bb3f606b84cd201cff2ad420a736f019c0395",
    "testharness"
   ],
+  "webmessaging/broadcastchannel/origin.window.js": [
+   "7f906e51a34a5ee36c7407e3d0104c1bfb0c12bb",
+   "testharness"
+  ],
+  "webmessaging/broadcastchannel/resources/origin.html": [
+   "480c3aec73713c46808a1345d9f7199896fedb94",
+   "support"
+  ],
   "webmessaging/broadcastchannel/resources/sandboxed.html": [
    "19db2a3048a9599dcfc488534fce65bc2a34b6ad",
    "support"
@@ -222283,12 +222894,16 @@
    "testharness"
   ],
   "webrtc/RTCConfiguration-iceCandidatePoolSize-expected.txt": [
-   "6a8a8a37f23934a864d8480f3dfa39424240b843",
+   "a3c6a87b158deb84be0f56e8467b1f9bf16aba71",
    "support"
   ],
   "webrtc/RTCConfiguration-iceCandidatePoolSize.html": [
-   "9551402aed448bf6abde4aa815d174ba321cc655",
+   "7816790d82628acb7cf04e0a046046884c1207e7",
    "testharness"
+  ],
+  "webrtc/RTCDataChannel-id-expected.txt": [
+   "11feb0f3998424ebced390b8026455a91e9eceed",
+   "support"
   ],
   "webrtc/RTCDataChannel-id.html": [
    "28ce3983bf04db02c62ed29b332a4a4b612affd2",
@@ -222296,6 +222911,18 @@
   ],
   "webrtc/RTCDataChannelEvent-constructor.html": [
    "8a8b30a23abddb5d11a802fead534fd56aacbb62",
+   "testharness"
+  ],
+  "webrtc/RTCIceCandidate-constructor-expected.txt": [
+   "f313c2ac3b85c15a6d9ea25fc8231ffcc34f22e2",
+   "support"
+  ],
+  "webrtc/RTCIceCandidate-constructor.html": [
+   "6938c88a0167e418aa9e93416865c857cc3489c5",
+   "testharness"
+  ],
+  "webrtc/RTCPeerConnection-addIceCandidate.html": [
+   "6ca52e2e6ec19dc38a7cc0a4ce132f7c5de9e398",
    "testharness"
   ],
   "webrtc/RTCPeerConnection-canTrickleIceCandidates-expected.txt": [
@@ -223287,7 +223914,7 @@
    "testharness"
   ],
   "websockets/opening-handshake/003.html": [
-   "e42909561f03341ab160dddb541fc27842ab79cc",
+   "5bab98fc3a872927771fb59101f6c3c3b6d5423e",
    "testharness"
   ],
   "websockets/opening-handshake/005.html": [
@@ -223347,7 +223974,7 @@
    "support"
   ],
   "webstorage/OWNERS": [
-   "e831e24e141c3e6e8dc8232a1a0ee0f580356400",
+   "7f28e10fbdf19e1008053c98f4c622f074c2e8aa",
    "support"
   ],
   "webstorage/README.md": [
@@ -226635,7 +227262,7 @@
    "testharness"
   ],
   "workers/Worker_ErrorEvent_error.htm": [
-   "975ca8b575fb2f616623b810696287513b164d2d",
+   "9837be29024b23c182beae9d7722b9a3ce5f3a30",
    "testharness"
   ],
   "workers/Worker_ErrorEvent_filename.htm": [
@@ -226802,8 +227429,12 @@
    "f6b1ea1bc04df6207506ae337eb258beb0fb5108",
    "support"
   ],
+  "workers/constructors/SharedWorker/null-arguments-expected.txt": [
+   "cd16014c428b2c54b2349b541a29f9d0d0da5f4f",
+   "support"
+  ],
   "workers/constructors/SharedWorker/null-arguments.html": [
-   "9034961b63d92367fd2066be86179a9265fc6503",
+   "58a6bcb00711dc7fab954a8e030b9073a16d6bd7",
    "testharness"
   ],
   "workers/constructors/SharedWorker/number-arguments.html": [
@@ -226911,7 +227542,7 @@
    "support"
   ],
   "workers/constructors/Worker/unexpected-self-properties.worker.js": [
-   "5ae6b1457d41b9c1cf8d9bf3a0b3abedc77cad72",
+   "73bc10eac3f8659e1f5e41d3e8a86beec05ed0bc",
    "testharness"
   ],
   "workers/constructors/Worker/unresolvable-url.html": [
@@ -227169,6 +227800,10 @@
   "workers/interfaces/WorkerUtils/navigator/language.html": [
    "6bffa3be83d81e2faa93119e710e4fee93fb855e",
    "testharness"
+  ],
+  "workers/name-property-expected.txt": [
+   "a5bef9fb78bb5b11e9659f1daf50951fa93de700",
+   "support"
   ],
   "workers/name-property.html": [
    "762b7b4b65503e599560829675a1df07a61dd566",
@@ -227462,6 +228097,10 @@
    "2c7e385c9ff3066201cc891e589f96ceb50484c0",
    "support"
   ],
+  "workers/shared-worker-name-via-options-expected.txt": [
+   "980e614565a7e6894a5f096ea92ad47f6b904e22",
+   "support"
+  ],
   "workers/shared-worker-name-via-options.html": [
    "78a93e663e1abb37a044ac0934c4ab2ed2c501a9",
    "testharness"
@@ -227536,6 +228175,34 @@
   ],
   "workers/support/shared-name.js": [
    "671ecb263ceb15ca28ef9cfc2ee6efa6e08a70fb",
+   "support"
+  ],
+  "x-frame-options/deny.sub.html": [
+   "5a589f4b4c6f2503104b33ae7002dcc5c4153eb7",
+   "testharness"
+  ],
+  "x-frame-options/invalid.sub.html": [
+   "0b9d0c5d3bf242e898f6f239d827ce617df27da2",
+   "testharness"
+  ],
+  "x-frame-options/multiple.sub.html": [
+   "cd1431494daf1fdca5294de9c49dd4eb3c06d71f",
+   "testharness"
+  ],
+  "x-frame-options/sameorigin.sub.html": [
+   "502ac9429cb53cb18a214770172552fe16c3c847",
+   "testharness"
+  ],
+  "x-frame-options/support/helper.js": [
+   "6b824846aa40bc5cf25453b123883813da46dbc2",
+   "support"
+  ],
+  "x-frame-options/support/nested.py": [
+   "8cfd9ef877a813898ea2f5741ffc56ae1c6f95dc",
+   "support"
+  ],
+  "x-frame-options/support/xfo.py": [
+   "722b135e1633e63fbfcb06bca4759a9568a84ee8",
    "support"
   ]
  },

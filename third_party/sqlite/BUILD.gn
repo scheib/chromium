@@ -212,7 +212,7 @@ if (!use_system_sqlite) {
 
       deps = [
         ":sqlite",
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
         "//third_party/icu",
       ]
     }

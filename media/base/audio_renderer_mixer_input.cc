@@ -115,6 +115,10 @@ OutputDeviceInfo AudioRendererMixerInput::GetOutputDeviceInfo() {
                                                 device_id_, security_origin_);
 }
 
+bool AudioRendererMixerInput::IsOptimizedForHardwareParameters() {
+  return true;
+}
+
 bool AudioRendererMixerInput::CurrentThreadIsRenderingThread() {
   return mixer_->CurrentThreadIsRenderingThread();
 }

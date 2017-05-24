@@ -46,6 +46,9 @@ static const NamedCodec kMimeTypeToCodecMasks[] = {
 #if BUILDFLAG(USE_PROPRIETARY_CODECS)
     {"audio/mp4", EME_CODEC_MP4_AUDIO_ALL},
     {"video/mp4", EME_CODEC_MP4_VIDEO_ALL},
+#if BUILDFLAG(ENABLE_MSE_MPEG2TS_STREAM_PARSER)
+    {"video/mp2t", EME_CODEC_MP2T_VIDEO_ALL},
+#endif  // BUILDFLAG(ENABLE_MSE_MPEG2TS_STREAM_PARSER)
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 };
 
@@ -64,8 +67,8 @@ static const NamedCodec kCodecStrings[] = {
     {"ac-3", EME_CODEC_MP4_AC3},   // AC3.
     {"ec-3", EME_CODEC_MP4_EAC3},  // EAC3.
 #endif
-    {"avc1", EME_CODEC_MP4_AVC1},  // AVC1.
-    {"avc3", EME_CODEC_MP4_AVC1},  // AVC3.
+    {"avc1", EME_CODEC_MP4_AVC1},  // AVC1 for MP4 and MP2T
+    {"avc3", EME_CODEC_MP4_AVC1},  // AVC3 for MP4 and MP2T
 #if BUILDFLAG(ENABLE_HEVC_DEMUXING)
     {"hev1", EME_CODEC_MP4_HEVC},  // HEV1.
     {"hvc1", EME_CODEC_MP4_HEVC},  // HVC1.

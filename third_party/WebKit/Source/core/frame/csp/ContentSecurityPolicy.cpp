@@ -347,7 +347,7 @@ void ContentSecurityPolicy::AddPolicyFromHeaderValue(
     policies_.push_back(policy.Release());
 
     // Skip the comma, and begin the next header from the current position.
-    ASSERT(position == end || *position == ',');
+    DCHECK(position == end || *position == ',');
     skipExactly<UChar>(position, end, ',');
     begin = position;
   }
@@ -1174,7 +1174,7 @@ void ContentSecurityPolicy::ReportViolation(
     RedirectStatus redirect_status,
     Element* element,
     const String& source) {
-  ASSERT(violation_type == kURLViolation || blocked_url.IsEmpty());
+  DCHECK(violation_type == kURLViolation || blocked_url.IsEmpty());
 
   // TODO(lukasza): Support sending reports from OOPIFs -
   // https://crbug.com/611232 (or move CSP child-src and frame-src checks to the
@@ -1473,7 +1473,7 @@ void ContentSecurityPolicy::ReportInvalidPathCharacter(
     const String& directive_name,
     const String& value,
     const char invalid_char) {
-  ASSERT(invalid_char == '#' || invalid_char == '?');
+  DCHECK(invalid_char == '#' || invalid_char == '?');
 
   String ignoring =
       "The fragment identifier, including the '#', will be ignored.";
@@ -1684,7 +1684,7 @@ ContentSecurityPolicy::DirectiveType ContentSecurityPolicy::GetDirectiveType(
 bool ContentSecurityPolicy::Subsumes(const ContentSecurityPolicy& other) const {
   if (!policies_.size() || !other.policies_.size())
     return !policies_.size();
-  // Embedding-CSP must specify only one policy.
+  // Required-CSP must specify only one policy.
   if (policies_.size() != 1)
     return false;
 

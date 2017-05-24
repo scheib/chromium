@@ -372,8 +372,18 @@ class CORE_EXPORT ContainerNode : public Node {
 
   NodeListsNodeData& EnsureNodeLists();
   void RemoveBetween(Node* previous_child, Node* next_child, Node& old_child);
+  // Inserts the specified nodes before |next|.
+  // |next| may be nullptr.
+  // |post_insertion_notification_targets| must not be nullptr.
   template <typename Functor>
-  void InsertNodeVector(const NodeVector&, Node* next, const Functor&);
+  void InsertNodeVector(const NodeVector&,
+                        Node* next,
+                        const Functor&,
+                        NodeVector* post_insertion_notification_targets);
+  void DidInsertNodeVector(
+      const NodeVector&,
+      Node* next,
+      const NodeVector& post_insertion_notification_targets);
   class AdoptAndInsertBefore;
   class AdoptAndAppendChild;
   friend class AdoptAndInsertBefore;

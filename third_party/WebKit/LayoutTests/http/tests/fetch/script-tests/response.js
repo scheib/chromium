@@ -281,7 +281,13 @@ promise_test(function(t) {
   }, 'call blob() on null body response');
 
 promise_test(function(t) {
-    return new Response().json().then(unreached_rejection(t), e => {
+    return new Response().formData().then(unreached_fulfillment(t), e => {
+        assert_equals(e.constructor, TypeError);
+      });
+  }, 'call formData() on null body response');
+
+promise_test(function(t) {
+    return new Response().json().then(unreached_fulfillment(t), e => {
         assert_equals(e.constructor, SyntaxError);
       });
   }, 'call json() on null body response');

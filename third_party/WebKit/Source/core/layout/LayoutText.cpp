@@ -1019,7 +1019,7 @@ static float MinWordFragmentWidthForBreakAll(
   int end = start + length;
   for (int i = start; i < end;) {
     int fragment_length;
-    if (break_all_or_break_word == EWordBreak::kBreakAllWordBreak) {
+    if (break_all_or_break_word == EWordBreak::kBreakAll) {
       break_iterator.IsBreakable(i + 1, next_breakable,
                                  LineBreakType::kBreakAll);
       fragment_length = (next_breakable > i ? next_breakable : length) - i;
@@ -1122,20 +1122,20 @@ void LayoutText::ComputePreferredLogicalWidths(
   int last_word_boundary = 0;
   float cached_word_trailing_space_width[2] = {0, 0};  // LTR, RTL
 
-  EWordBreak break_all_or_break_word = EWordBreak::kNormalWordBreak;
+  EWordBreak break_all_or_break_word = EWordBreak::kNormal;
   LineBreakType line_break_type = LineBreakType::kNormal;
   if (style_to_use.AutoWrap()) {
-    if (style_to_use.WordBreak() == kBreakAllWordBreak ||
-        style_to_use.WordBreak() == kBreakWordBreak) {
+    if (style_to_use.WordBreak() == EWordBreak::kBreakAll ||
+        style_to_use.WordBreak() == EWordBreak::kBreakWord) {
       break_all_or_break_word = style_to_use.WordBreak();
-    } else if (style_to_use.WordBreak() == kKeepAllWordBreak) {
+    } else if (style_to_use.WordBreak() == EWordBreak::kKeepAll) {
       line_break_type = LineBreakType::kKeepAll;
     }
   }
 
   Hyphenation* hyphenation =
       style_to_use.AutoWrap() ? style_to_use.GetHyphenation() : nullptr;
-  bool disable_soft_hyphen = style_to_use.GetHyphens() == kHyphensNone;
+  bool disable_soft_hyphen = style_to_use.GetHyphens() == Hyphens::kNone;
   float max_word_width = 0;
   if (!hyphenation)
     max_word_width = std::numeric_limits<float>::infinity();
@@ -1307,7 +1307,7 @@ void LayoutText::ComputePreferredLogicalWidths(
         }
       }
 
-      if (break_all_or_break_word != EWordBreak::kNormalWordBreak) {
+      if (break_all_or_break_word != EWordBreak::kNormal) {
         // Because sum of character widths may not be equal to the word width,
         // we need to measure twice; once with normal break for max width,
         // another with break-all for min width.

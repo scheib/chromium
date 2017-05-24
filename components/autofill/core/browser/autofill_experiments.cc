@@ -33,8 +33,6 @@ const base::Feature kAutofillCreditCardPopupLayout{
     "AutofillCreditCardPopupLayout", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillCreditCardLastUsedDateDisplay{
     "AutofillCreditCardLastUsedDateDisplay", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kAutofillUkmLogging{"AutofillUkmLogging",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillUpstreamRequestCvcIfMissing{
     "AutofillUpstreamRequestCvcIfMissing", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillUpstreamUseAutofillProfileComparatorForName{
@@ -234,10 +232,6 @@ bool IsCreditCardUploadEnabled(const PrefService* pref_service,
   }
 
   return !group_name.empty() && group_name != "Disabled";
-}
-
-bool IsUkmLoggingEnabled() {
-  return base::FeatureList::IsEnabled(kAutofillUkmLogging);
 }
 
 bool IsAutofillUpstreamRequestCvcIfMissingExperimentEnabled() {

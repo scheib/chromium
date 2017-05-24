@@ -740,6 +740,18 @@ bool CanDuplicateTabAt(const Browser* browser, int index) {
          contents->GetController().GetLastCommittedEntry();
 }
 
+void PinTab(Browser* browser) {
+  browser->tab_strip_model()->ExecuteContextMenuCommand(
+      browser->tab_strip_model()->active_index(),
+      TabStripModel::ContextMenuCommand::CommandTogglePinned);
+}
+
+void MuteTab(Browser* browser) {
+  browser->tab_strip_model()->ExecuteContextMenuCommand(
+      browser->tab_strip_model()->active_index(),
+      TabStripModel::ContextMenuCommand::CommandToggleTabAudioMuted);
+}
+
 void ConvertPopupToTabbedBrowser(Browser* browser) {
   base::RecordAction(UserMetricsAction("ShowAsTab"));
   TabStripModel* tab_strip = browser->tab_strip_model();

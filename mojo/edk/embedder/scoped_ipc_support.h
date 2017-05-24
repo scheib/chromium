@@ -15,9 +15,9 @@ class TaskRunner;
 namespace mojo {
 namespace edk {
 
-// A simple class that calls |InitIPCSupport()| on construction and
-// |ShutdownIPCSupport()| on destruction, blocking the destructor on clean IPC
-// shutdown completion.
+// A simple class that initialized Mojo IPC support on construction and shuts
+// down IPC support on destruction, optionally blocking the destructor on clean
+// IPC shutdown completion.
 class MOJO_SYSTEM_IMPL_EXPORT ScopedIPCSupport {
  public:
   // ShutdownPolicy is a type for specifying the desired Mojo IPC support

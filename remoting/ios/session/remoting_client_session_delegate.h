@@ -39,7 +39,7 @@ class RemotingClientSessonDelegate : public ChromotingSession::Delegate {
 
  private:
   ChromotingClientRuntime* runtime_;
-  id client_;
+  __weak id client_;
 
   base::WeakPtrFactory<RemotingClientSessonDelegate> weak_factory_;
 

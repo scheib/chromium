@@ -606,7 +606,7 @@ static_library("sync") {
     "//third_party/cacheinvalidation",
     "//third_party/leveldatabase",
     "//third_party/zlib",
-    "//third_party/zlib:compression_utils",
+    "//third_party/zlib/google:compression_utils",
   ]
 
   if (is_android) {
@@ -986,7 +986,7 @@ source_set("unit_tests") {
     "//testing/gtest",
     "//third_party/leveldatabase",
     "//third_party/protobuf:protobuf_lite",
-    "//third_party/zlib:compression_utils",
+    "//third_party/zlib/google:compression_utils",
     "//url",
   ]
 
@@ -1090,7 +1090,7 @@ if (!is_ios) {
       ":test_support_testserver",
       "//base",
       "//base/test:test_support",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
       "//net:test_support",
       "//testing/gtest",

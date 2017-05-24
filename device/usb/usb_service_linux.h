@@ -21,7 +21,6 @@ class UsbServiceLinux : public UsbService {
   ~UsbServiceLinux() override;
 
   // device::UsbService implementation
-  void Shutdown() override;
   void GetDevices(const GetDevicesCallback& callback) override;
 
  private:

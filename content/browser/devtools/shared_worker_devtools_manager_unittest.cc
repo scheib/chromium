@@ -108,7 +108,8 @@ TEST_F(SharedWorkerDevToolsManagerTest, BasicTest) {
       GURL("http://example.com/w.js"), base::string16(), base::string16(),
       blink::kWebContentSecurityPolicyTypeReport, blink::kWebAddressSpacePublic,
       browser_context_->GetResourceContext(), partition_id_,
-      blink::kWebSharedWorkerCreationContextTypeNonsecure);
+      blink::kWebSharedWorkerCreationContextTypeNonsecure,
+      false /* data_saver_enabled */);
 
   agent_host = manager_->GetDevToolsAgentHostForWorker(1, 1);
   EXPECT_FALSE(agent_host.get());
@@ -190,12 +191,14 @@ TEST_F(SharedWorkerDevToolsManagerTest, AttachTest) {
       GURL("http://example.com/w1.js"), base::string16(), base::string16(),
       blink::kWebContentSecurityPolicyTypeReport, blink::kWebAddressSpacePublic,
       browser_context_->GetResourceContext(), partition_id_,
-      blink::kWebSharedWorkerCreationContextTypeNonsecure);
+      blink::kWebSharedWorkerCreationContextTypeNonsecure,
+      false /* data_saver_enabled */);
   SharedWorkerInstance instance2(
       GURL("http://example.com/w2.js"), base::string16(), base::string16(),
       blink::kWebContentSecurityPolicyTypeReport, blink::kWebAddressSpacePublic,
       browser_context_->GetResourceContext(), partition_id_,
-      blink::kWebSharedWorkerCreationContextTypeNonsecure);
+      blink::kWebSharedWorkerCreationContextTypeNonsecure,
+      false /* data_saver_enabled */);
 
   // Created -> GetDevToolsAgentHost -> Register -> Started -> Destroyed
   std::unique_ptr<TestDevToolsClientHost> client_host1(
@@ -275,7 +278,8 @@ TEST_F(SharedWorkerDevToolsManagerTest, ReattachTest) {
       GURL("http://example.com/w3.js"), base::string16(), base::string16(),
       blink::kWebContentSecurityPolicyTypeReport, blink::kWebAddressSpacePublic,
       browser_context_->GetResourceContext(), partition_id_,
-      blink::kWebSharedWorkerCreationContextTypeNonsecure);
+      blink::kWebSharedWorkerCreationContextTypeNonsecure,
+      false /* data_saver_enabled */);
   std::unique_ptr<TestDevToolsClientHost> client_host(
       new TestDevToolsClientHost());
   // Created -> GetDevToolsAgentHost -> Register -> Destroyed
@@ -306,7 +310,8 @@ TEST_F(SharedWorkerDevToolsManagerTest, PauseOnStartTest) {
       GURL("http://example.com/w3.js"), base::string16(), base::string16(),
       blink::kWebContentSecurityPolicyTypeReport, blink::kWebAddressSpacePublic,
       browser_context_->GetResourceContext(), partition_id_,
-      blink::kWebSharedWorkerCreationContextTypeNonsecure);
+      blink::kWebSharedWorkerCreationContextTypeNonsecure,
+      false /* data_saver_enabled */);
   std::unique_ptr<TestDevToolsClientHost> client_host(
       new TestDevToolsClientHost());
   manager_->WorkerCreated(3, 1, instance);

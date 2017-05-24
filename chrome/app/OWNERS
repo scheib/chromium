@@ -7,9 +7,6 @@ grt@chromium.org
 jcivelli@chromium.org
 rockot@chromium.org
 
-per-file address_input_strings*=estade@chromium.org
-per-file address_input_strings*=rouslan@chromium.org
-
 per-file bookmarks_strings.grdp=*
 per-file chromeos_strings.grdp=*
 per-file chromium_strings.grd=*

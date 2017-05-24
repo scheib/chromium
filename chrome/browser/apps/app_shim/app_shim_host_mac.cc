@@ -28,10 +28,10 @@ AppShimHost::~AppShimHost() {
 void AppShimHost::ServeChannel(mojo::edk::ScopedPlatformHandle handle) {
   DCHECK(CalledOnValidThread());
   DCHECK(!channel_.get());
-
   channel_ = IPC::ChannelProxy::Create(
       IPC::ChannelMojo::CreateServerFactory(
-          mojo::edk::ConnectToPeerProcess(std::move(handle)),
+          peer_connection_.Connect(mojo::edk::ConnectionParams(
+              mojo::edk::TransportProtocol::kLegacy, std::move(handle))),
           content::BrowserThread::GetTaskRunnerForThread(
               content::BrowserThread::IO)
               .get()),

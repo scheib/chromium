@@ -21,6 +21,7 @@ per-file pdf_strings.grdp=raymes@chromium.org
 per-file pdf_strings.grdp=tsergeant@chromium.org
 per-file physical_web_ui_strings.grdp=file://components/physical_web/OWNERS
 per-file policy_strings.grdp=file://components/policy/OWNERS
+per-file security_interstitials_resources.grdp=file://components/security_interstitials/OWNERS
 per-file security_interstitials_strings.grdp=file://components/security_interstitials/OWNERS
 per-file security_state_strings.grdp=file://components/security_state/OWNERS
 per-file ssl_errors_strings.grdp=file://components/ssl_errors/OWNERS

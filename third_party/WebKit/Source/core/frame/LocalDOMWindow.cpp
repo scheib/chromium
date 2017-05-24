@@ -1658,8 +1658,9 @@ DOMWindow* LocalDOMWindow::open(const String& url_string,
 
   if (target_frame) {
     if (!active_document->GetFrame() ||
-        !active_document->GetFrame()->CanNavigate(*target_frame))
+        !active_document->GetFrame()->CanNavigate(*target_frame)) {
       return nullptr;
+    }
 
     KURL completed_url = first_frame->GetDocument()->CompleteURL(url_string);
 

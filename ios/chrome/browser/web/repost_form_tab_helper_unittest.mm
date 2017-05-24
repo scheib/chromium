@@ -99,7 +99,7 @@ TEST_F(RepostFormTabHelperTest, DismissingOnWebViewDestruction) {
 // Tests that dialog is dismissed after provisional navigation has started.
 TEST_F(RepostFormTabHelperTest, DismissingOnNavigationStart) {
   PresentDialog();
-  web_state_->OnProvisionalNavigationStarted(GURL());
+  web_state_->OnNavigationStarted(nullptr /* navigation_context */);
   base::test::ios::WaitUntilCondition(^{
     return GetAlertController() != nil;
   });

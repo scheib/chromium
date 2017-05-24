@@ -16,6 +16,7 @@
 namespace blink {
 
 class BytesConsumer;
+class FormData;
 
 // FetchDataLoader subclasses
 // 1. take a BytesConsumer,
@@ -41,6 +42,7 @@ class MODULES_EXPORT FetchDataLoader
     virtual void DidFetchDataLoadedArrayBuffer(DOMArrayBuffer*) {
       NOTREACHED();
     }
+    virtual void DidFetchDataLoadedFormData(FormData*) { NOTREACHED(); }
     virtual void DidFetchDataLoadedString(const String&) { NOTREACHED(); }
     // This is called after all data are read from |handle| and written
     // to |out_data_pipe|, and |out_data_pipe| is closed or aborted.
@@ -57,6 +59,9 @@ class MODULES_EXPORT FetchDataLoader
 
   static FetchDataLoader* CreateLoaderAsBlobHandle(const String& mime_type);
   static FetchDataLoader* CreateLoaderAsArrayBuffer();
+  static FetchDataLoader* CreateLoaderAsFailure();
+  static FetchDataLoader* CreateLoaderAsFormData(
+      const String& multipart_boundary);
   static FetchDataLoader* CreateLoaderAsString();
   static FetchDataLoader* CreateLoaderAsDataPipe(
       mojo::ScopedDataPipeProducerHandle out_data_pipe);

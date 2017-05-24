@@ -391,5 +391,11 @@
   GLES2_GET_FUN(SwapBuffersWithBoundsCHROMIUM)
 #define glSetDrawRectangleCHROMIUM GLES2_GET_FUN(SetDrawRectangleCHROMIUM)
 #define glSetEnableDCLayersCHROMIUM GLES2_GET_FUN(SetEnableDCLayersCHROMIUM)
+#define glInitializeDiscardableTextureCHROMIUM \
+  GLES2_GET_FUN(InitializeDiscardableTextureCHROMIUM)
+#define glUnlockDiscardableTextureCHROMIUM \
+  GLES2_GET_FUN(UnlockDiscardableTextureCHROMIUM)
+#define glLockDiscardableTextureCHROMIUM \
+  GLES2_GET_FUN(LockDiscardableTextureCHROMIUM)
 
 #endif  // GPU_GLES2_GL2CHROMIUM_AUTOGEN_H_

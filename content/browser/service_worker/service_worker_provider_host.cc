@@ -97,9 +97,11 @@ ServiceWorkerProviderHost::PreCreateNavigationHost(
   // Generate a new browser-assigned id for the host.
   int provider_id = g_next_navigation_provider_id--;
   auto host = base::WrapUnique(new ServiceWorkerProviderHost(
-      ChildProcessHost::kInvalidUniqueID, MSG_ROUTING_NONE, provider_id,
-      SERVICE_WORKER_PROVIDER_FOR_WINDOW, are_ancestors_secure, context,
-      nullptr));
+      ChildProcessHost::kInvalidUniqueID,
+      ServiceWorkerProviderHostInfo(provider_id, MSG_ROUTING_NONE,
+                                    SERVICE_WORKER_PROVIDER_FOR_WINDOW,
+                                    are_ancestors_secure),
+      context, nullptr));
   host->web_contents_getter_ = web_contents_getter;
   return host;
 }
@@ -111,8 +113,7 @@ std::unique_ptr<ServiceWorkerProviderHost> ServiceWorkerProviderHost::Create(
     base::WeakPtr<ServiceWorkerContextCore> context,
     ServiceWorkerDispatcherHost* dispatcher_host) {
   return base::WrapUnique(new ServiceWorkerProviderHost(
-      process_id, info.route_id, info.provider_id, info.type,
-      info.is_parent_frame_secure, context, dispatcher_host));
+      process_id, std::move(info), context, dispatcher_host));
 }
 
 void ServiceWorkerProviderHost::BindWorkerFetchContext(
@@ -142,29 +143,23 @@ void ServiceWorkerProviderHost::UnregisterWorkerFetchContext(
 
 ServiceWorkerProviderHost::ServiceWorkerProviderHost(
     int render_process_id,
-    int route_id,
-    int provider_id,
-    ServiceWorkerProviderType provider_type,
-    bool is_parent_frame_secure,
+    ServiceWorkerProviderHostInfo info,
     base::WeakPtr<ServiceWorkerContextCore> context,
     ServiceWorkerDispatcherHost* dispatcher_host)
     : client_uuid_(base::GenerateGUID()),
       render_process_id_(render_process_id),
-      route_id_(route_id),
       render_thread_id_(kDocumentMainThreadId),
-      provider_id_(provider_id),
-      provider_type_(provider_type),
-      is_parent_frame_secure_(is_parent_frame_secure),
+      info_(std::move(info)),
       context_(context),
       dispatcher_host_(dispatcher_host),
       allow_association_(true) {
-  DCHECK_NE(SERVICE_WORKER_PROVIDER_UNKNOWN, provider_type_);
+  DCHECK_NE(SERVICE_WORKER_PROVIDER_UNKNOWN, info_.type);
 
   // PlzNavigate
   CHECK(render_process_id != ChildProcessHost::kInvalidUniqueID ||
         IsBrowserSideNavigationEnabled());
 
-  if (provider_type_ == SERVICE_WORKER_PROVIDER_FOR_CONTROLLER) {
+  if (info_.type == SERVICE_WORKER_PROVIDER_FOR_CONTROLLER) {
     // Actual thread id is set when the service worker context gets started.
     render_thread_id_ = kInvalidEmbeddedWorkerThreadId;
   }
@@ -188,8 +183,8 @@ ServiceWorkerProviderHost::~ServiceWorkerProviderHost() {
 }
 
 int ServiceWorkerProviderHost::frame_id() const {
-  if (provider_type_ == SERVICE_WORKER_PROVIDER_FOR_WINDOW)
-    return route_id_;
+  if (info_.type == SERVICE_WORKER_PROVIDER_FOR_WINDOW)
+    return info_.route_id;
   return MSG_ROUTING_NONE;
 }
 
@@ -304,7 +299,7 @@ void ServiceWorkerProviderHost::SetHostedVersion(
 }
 
 bool ServiceWorkerProviderHost::IsProviderForClient() const {
-  switch (provider_type_) {
+  switch (info_.type) {
     case SERVICE_WORKER_PROVIDER_FOR_WINDOW:
     case SERVICE_WORKER_PROVIDER_FOR_WORKER:
     case SERVICE_WORKER_PROVIDER_FOR_SHARED_WORKER:
@@ -312,15 +307,15 @@ bool ServiceWorkerProviderHost::IsProviderForClient() const {
     case SERVICE_WORKER_PROVIDER_FOR_CONTROLLER:
       return false;
     case SERVICE_WORKER_PROVIDER_UNKNOWN:
-      NOTREACHED() << provider_type_;
+      NOTREACHED() << info_.type;
   }
-  NOTREACHED() << provider_type_;
+  NOTREACHED() << info_.type;
   return false;
 }
 
 blink::WebServiceWorkerClientType ServiceWorkerProviderHost::client_type()
     const {
-  switch (provider_type_) {
+  switch (info_.type) {
     case SERVICE_WORKER_PROVIDER_FOR_WINDOW:
       return blink::kWebServiceWorkerClientTypeWindow;
     case SERVICE_WORKER_PROVIDER_FOR_WORKER:
@@ -329,9 +324,9 @@ blink::WebServiceWorkerClientType ServiceWorkerProviderHost::client_type()
       return blink::kWebServiceWorkerClientTypeSharedWorker;
     case SERVICE_WORKER_PROVIDER_FOR_CONTROLLER:
     case SERVICE_WORKER_PROVIDER_UNKNOWN:
-      NOTREACHED() << provider_type_;
+      NOTREACHED() << info_.type;
   }
-  NOTREACHED() << provider_type_;
+  NOTREACHED() << info_.type;
   return blink::kWebServiceWorkerClientTypeWindow;
 }
 
@@ -537,14 +532,13 @@ bool ServiceWorkerProviderHost::GetRegistrationForReady(
 std::unique_ptr<ServiceWorkerProviderHost>
 ServiceWorkerProviderHost::PrepareForCrossSiteTransfer() {
   DCHECK_NE(ChildProcessHost::kInvalidUniqueID, render_process_id_);
-  DCHECK_NE(MSG_ROUTING_NONE, route_id_);
+  DCHECK_NE(MSG_ROUTING_NONE, info_.route_id);
   DCHECK_EQ(kDocumentMainThreadId, render_thread_id_);
-  DCHECK_NE(SERVICE_WORKER_PROVIDER_UNKNOWN, provider_type_);
+  DCHECK_NE(SERVICE_WORKER_PROVIDER_UNKNOWN, info_.type);
 
-  std::unique_ptr<ServiceWorkerProviderHost> new_provider_host =
+  std::unique_ptr<ServiceWorkerProviderHost> provisional_host =
       base::WrapUnique(new ServiceWorkerProviderHost(
-          process_id(), frame_id(), provider_id(), provider_type(),
-          is_parent_frame_secure(), context_, dispatcher_host()));
+          process_id(), std::move(info_), context_, dispatcher_host()));
 
   for (const GURL& pattern : associated_patterns_)
     DecreaseProcessReference(pattern);
@@ -560,29 +554,24 @@ ServiceWorkerProviderHost::PrepareForCrossSiteTransfer() {
   }
 
   render_process_id_ = ChildProcessHost::kInvalidUniqueID;
-  route_id_ = MSG_ROUTING_NONE;
   render_thread_id_ = kInvalidEmbeddedWorkerThreadId;
-  provider_id_ = kInvalidServiceWorkerProviderId;
-  provider_type_ = SERVICE_WORKER_PROVIDER_UNKNOWN;
   dispatcher_host_ = nullptr;
-  return new_provider_host;
+  return provisional_host;
 }
 
 void ServiceWorkerProviderHost::CompleteCrossSiteTransfer(
-    int new_process_id,
-    int new_frame_id,
-    int new_provider_id,
-    ServiceWorkerProviderType new_provider_type,
-    ServiceWorkerDispatcherHost* new_dispatcher_host) {
+    ServiceWorkerProviderHost* provisional_host) {
   DCHECK_EQ(ChildProcessHost::kInvalidUniqueID, render_process_id_);
-  DCHECK_NE(ChildProcessHost::kInvalidUniqueID, new_process_id);
-  DCHECK_NE(MSG_ROUTING_NONE, new_frame_id);
+  DCHECK_NE(ChildProcessHost::kInvalidUniqueID, provisional_host->process_id());
+  DCHECK_NE(MSG_ROUTING_NONE, provisional_host->frame_id());
 
   render_thread_id_ = kDocumentMainThreadId;
-  provider_id_ = new_provider_id;
-  provider_type_ = new_provider_type;
+  info_.provider_id = provisional_host->provider_id();
+  info_.type = provisional_host->provider_type();
 
-  FinalizeInitialization(new_process_id, new_frame_id, new_dispatcher_host);
+  FinalizeInitialization(provisional_host->process_id(),
+                         provisional_host->frame_id(),
+                         provisional_host->dispatcher_host());
 }
 
 // PlzNavigate
@@ -592,7 +581,7 @@ void ServiceWorkerProviderHost::CompleteNavigationInitialized(
     ServiceWorkerDispatcherHost* dispatcher_host) {
   CHECK(IsBrowserSideNavigationEnabled());
   DCHECK_EQ(ChildProcessHost::kInvalidUniqueID, render_process_id_);
-  DCHECK_EQ(SERVICE_WORKER_PROVIDER_FOR_WINDOW, provider_type_);
+  DCHECK_EQ(SERVICE_WORKER_PROVIDER_FOR_WINDOW, info_.type);
   DCHECK_EQ(kDocumentMainThreadId, render_thread_id_);
 
   DCHECK_NE(ChildProcessHost::kInvalidUniqueID, process_id);
@@ -770,7 +759,7 @@ void ServiceWorkerProviderHost::FinalizeInitialization(
     int frame_routing_id,
     ServiceWorkerDispatcherHost* dispatcher_host) {
   render_process_id_ = process_id;
-  route_id_ = frame_routing_id;
+  info_.route_id = frame_routing_id;
   dispatcher_host_ = dispatcher_host;
 
   for (const GURL& pattern : associated_patterns_)

@@ -9,6 +9,7 @@
 
 #include "base/macros.h"
 #include "mojo/public/cpp/system/message_pipe.h"
+#include "services/service_manager/public/cpp/export.h"
 
 namespace service_manager {
 
@@ -17,7 +18,7 @@ struct BindSourceInfo;
 
 // The primary contract between a Service and the Service Manager, receiving
 // lifecycle notifications and connection requests.
-class Service {
+class SERVICE_MANAGER_PUBLIC_CPP_EXPORT Service {
  public:
   Service();
   virtual ~Service();
@@ -70,7 +71,7 @@ class Service {
 
 // TODO(rockot): Remove this. It's here to satisfy a few remaining use cases
 // where a Service impl is owned by something other than its ServiceContext.
-class ForwardingService : public Service {
+class SERVICE_MANAGER_PUBLIC_CPP_EXPORT ForwardingService : public Service {
  public:
   // |target| must outlive this object.
   explicit ForwardingService(Service* target);

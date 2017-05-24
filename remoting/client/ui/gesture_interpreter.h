@@ -23,17 +23,30 @@ class GestureInterpreter {
  public:
   enum GestureState { GESTURE_BEGAN, GESTURE_CHANGED, GESTURE_ENDED };
 
+  enum InputMode {
+    UNDEFINED_INPUT_MODE,
+    DIRECT_INPUT_MODE,
+    TRACKPAD_INPUT_MODE
+  };
+
   GestureInterpreter(RendererProxy* renderer, ChromotingSession* input_stub);
   ~GestureInterpreter();
 
+  // Must be called right after the renderer is ready.
+  void SetInputMode(InputMode mode);
+
+  // Returns the current input mode.
+  InputMode GetInputMode() const;
+
   // Coordinates of the OpenGL view surface will be used.
 
-  // This can happen in conjunction with Pan().
-  void Pinch(float pivot_x, float pivot_y, float scale);
+  // Called during a two-finger pinching gesture. This can happen in conjunction
+  // with Pan().
+  void Zoom(float pivot_x, float pivot_y, float scale, GestureState state);
 
   // Called whenever the user did a pan gesture. It can be one-finger pan, no
-  // matter long-press in on or not, or two-finger pan in conjunction with pinch
-  // and long-press. Two-finger pan without pinch is consider a scroll gesture.
+  // matter dragging in on or not, or two-finger pan in conjunction with zoom.
+  // Two-finger pan without zoom is consider a scroll gesture.
   void Pan(float translation_x, float translation_y);
 
   // Called when the user did a one-finger tap.
@@ -41,15 +54,15 @@ class GestureInterpreter {
 
   void TwoFingerTap(float x, float y);
 
-  // Caller is expected to call both Pan() and LongPress() when long-press is in
+  // Caller is expected to call both Pan() and Drag() when dragging is in
   // progress.
-  void LongPress(float x, float y, GestureState state);
+  void Drag(float x, float y, GestureState state);
 
-  // Called when the user has just done a one-finger pan (no long-press or
-  // pinching) and the pan gesture still has some final velocity.
+  // Called when the user has just done a one-finger pan (no dragging or
+  // zooming) and the pan gesture still has some final velocity.
   void OneFingerFling(float velocity_x, float velocity_y);
 
-  // Called during a two-finger scroll (panning without pinching) gesture.
+  // Called during a two-finger scroll (panning without zooming) gesture.
   void Scroll(float x, float y, float dx, float dy);
 
   // Called when the user has just done a scroll gesture and the scroll gesture
@@ -73,13 +86,14 @@ class GestureInterpreter {
                         float y,
                         protocol::MouseEvent_MouseButton button);
 
+  void InjectCursorPosition(float x, float y);
+
+  void SetGestureInProgress(InputStrategy::Gesture gesture,
+                            bool is_in_progress);
+
   // Tracks the touch point and gets back the cursor position from the input
   // strategy.
   ViewMatrix::Point TrackAndGetPosition(float touch_x, float touch_y);
-
-  // If the cursor is visible, send the cursor position from the input strategy
-  // to the renderer.
-  void SetCursorPositionOnRenderer();
 
   // Starts the given feedback at (cursor_x, cursor_y) if the feedback radius
   // is non-zero.
@@ -87,11 +101,12 @@ class GestureInterpreter {
                           float cursor_y,
                           InputStrategy::InputFeedbackType feedback_type);
 
+  InputMode input_mode_ = UNDEFINED_INPUT_MODE;
   std::unique_ptr<InputStrategy> input_strategy_;
   DesktopViewport viewport_;
   RendererProxy* renderer_;
   ChromotingSession* input_stub_;
-  bool is_dragging_mode_ = false;
+  InputStrategy::Gesture gesture_in_progress_;
 
   FlingAnimation pan_animation_;
   FlingAnimation scroll_animation_;

@@ -18,6 +18,7 @@
 #include "ash/wm/window_state_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm_window.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
@@ -169,11 +170,11 @@ void DefaultState::OnWMEvent(WindowState* window_state, const WMEvent* event) {
   }
 
   if (next_state_type == current_state_type && window_state->IsSnapped()) {
+    aura::Window* window = window_state->window()->aura_window();
     gfx::Rect snapped_bounds =
         event->type() == WM_EVENT_SNAP_LEFT
-            ? GetDefaultLeftSnappedWindowBoundsInParent(window_state->window())
-            : GetDefaultRightSnappedWindowBoundsInParent(
-                  window_state->window());
+            ? GetDefaultLeftSnappedWindowBoundsInParent(window)
+            : GetDefaultRightSnappedWindowBoundsInParent(window);
     window_state->SetBoundsDirectAnimated(snapped_bounds);
     return;
   }
@@ -584,7 +585,7 @@ void DefaultState::ReenterToCurrentState(
 
 void DefaultState::UpdateBoundsFromState(WindowState* window_state,
                                          WindowStateType previous_state_type) {
-  WmWindow* window = window_state->window();
+  aura::Window* window = window_state->window()->aura_window();
   gfx::Rect bounds_in_parent;
   switch (state_type_) {
     case WINDOW_STATE_TYPE_LEFT_SNAPPED:
@@ -598,7 +599,7 @@ void DefaultState::UpdateBoundsFromState(WindowState* window_state,
     case WINDOW_STATE_TYPE_DEFAULT:
     case WINDOW_STATE_TYPE_NORMAL: {
       gfx::Rect work_area_in_parent =
-          ScreenUtil::GetDisplayWorkAreaBoundsInParent(window->aura_window());
+          ScreenUtil::GetDisplayWorkAreaBoundsInParent(window);
       if (window_state->HasRestoreBounds()) {
         bounds_in_parent = window_state->GetRestoreBoundsInParent();
         // Check if the |window|'s restored size is bigger than the working area
@@ -612,7 +613,7 @@ void DefaultState::UpdateBoundsFromState(WindowState* window_state,
                                  kMaximizedWindowInset, kMaximizedWindowInset);
         }
       } else {
-        bounds_in_parent = window->GetBounds();
+        bounds_in_parent = window->bounds();
       }
       // Make sure that part of the window is always visible.
       if (!window_state->is_dragged()) {
@@ -625,15 +626,13 @@ void DefaultState::UpdateBoundsFromState(WindowState* window_state,
       break;
     }
     case WINDOW_STATE_TYPE_MAXIMIZED:
-      bounds_in_parent =
-          ScreenUtil::GetMaximizedWindowBoundsInParent(window->aura_window());
+      bounds_in_parent = ScreenUtil::GetMaximizedWindowBoundsInParent(window);
       break;
 
     case WINDOW_STATE_TYPE_FULLSCREEN:
     case WINDOW_STATE_TYPE_PINNED:
     case WINDOW_STATE_TYPE_TRUSTED_PINNED:
-      bounds_in_parent =
-          ScreenUtil::GetDisplayBoundsInParent(window->aura_window());
+      bounds_in_parent = ScreenUtil::GetDisplayBoundsInParent(window);
       break;
 
     case WINDOW_STATE_TYPE_MINIMIZED:
@@ -664,18 +663,17 @@ void DefaultState::UpdateBoundsFromState(WindowState* window_state,
   if (window_state->IsMinimized()) {
     // Save the previous show state so that we can correctly restore it after
     // exiting the minimized mode.
-    window->SetPreMinimizedShowState(ToWindowShowState(previous_state_type));
-    window->SetVisibilityAnimationType(
-        WINDOW_VISIBILITY_ANIMATION_TYPE_MINIMIZE);
+    window->SetProperty(aura::client::kPreMinimizedShowStateKey,
+                        ToWindowShowState(previous_state_type));
+    ::wm::SetWindowVisibilityAnimationType(
+        window, WINDOW_VISIBILITY_ANIMATION_TYPE_MINIMIZE);
 
-    // Hide the window.
     window->Hide();
-    // Activate another window.
     if (window_state->IsActive())
       window_state->Deactivate();
-  } else if ((window->GetTargetVisibility() ||
+  } else if ((window->layer()->GetTargetVisibility() ||
               IsMinimizedWindowState(previous_state_type)) &&
-             !window->GetLayerVisible()) {
+             !window->layer()->visible()) {
     // The layer may be hidden if the window was previously minimized. Make
     // sure it's visible.
     window->Show();

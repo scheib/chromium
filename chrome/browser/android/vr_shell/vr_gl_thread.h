@@ -33,7 +33,8 @@ class VrGLThread : public base::Thread,
       gvr_context* gvr_api,
       bool initially_web_vr,
       bool in_cct,
-      bool reprojected_rendering);
+      bool reprojected_rendering,
+      bool daydream_support);
 
   ~VrGLThread() override;
   base::WeakPtr<VrShellGl> GetVrShellGl() { return weak_vr_shell_gl_; }
@@ -57,6 +58,7 @@ class VrGLThread : public base::Thread,
       device::mojom::VRDisplayInfoPtr* info) override;
   void OnContentPaused(bool enabled) override;
   void NavigateBack() override;
+  void ExitCct() override;
 
   // UiInterface implementation (VrShell calling to the UI).
   void SetFullscreen(bool enabled) override;
@@ -70,6 +72,7 @@ class VrGLThread : public base::Thread,
   void SetVideoCapturingIndicator(bool enabled) override;
   void SetScreenCapturingIndicator(bool enabled) override;
   void SetAudioCapturingIndicator(bool enabled) override;
+  void SetIsExiting() override;
 
  protected:
   void Init() override;
@@ -90,6 +93,7 @@ class VrGLThread : public base::Thread,
   bool initially_web_vr_;
   bool in_cct_;
   bool reprojected_rendering_;
+  bool daydream_support_;
 
   DISALLOW_COPY_AND_ASSIGN(VrGLThread);
 };

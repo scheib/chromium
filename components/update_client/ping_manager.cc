@@ -67,6 +67,9 @@ void PingSender::OnRequestSenderComplete(int error,
 bool PingSender::SendPing(const Component& component) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
+  if (component.events().empty())
+    return false;
+
   auto urls(config_->PingUrl());
   if (component.crx_component().requires_network_encryption)
     RemoveUnsecureUrls(&urls);

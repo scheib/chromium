@@ -13,7 +13,7 @@ function test()
             continue;
         if (uiSourceCode.project().type() !== Workspace.projectTypes.Network)
             continue;
-        InspectorTest.addResult("Highlight mimeType: " + Bindings.NetworkProject.uiSourceCodeMimeType(uiSourceCode));
+        InspectorTest.addResult("Highlight mimeType: " + uiSourceCode.mimeType());
         InspectorTest.completeTest();
         return;
     }

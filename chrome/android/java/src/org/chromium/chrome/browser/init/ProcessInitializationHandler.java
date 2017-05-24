@@ -86,7 +86,6 @@ import org.chromium.ui.base.SelectFileDialog;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -503,34 +502,78 @@ public class ProcessInitializationHandler {
                         new CrashFileManager(ContextUtils.getApplicationContext().getCacheDir());
                 crashFileManager.cleanOutAllNonFreshMinidumpFiles();
 
-                // Finally, uploading any pending crash reports.
-                File[] minidumps = crashFileManager.getAllMinidumpFiles(
+                // Next, identify any minidumps that lack logcat output, and are too old to add
+                // logcat output to. Mark these as ready for upload. If there is a fresh minidump
+                // that still needs logcat output to be attached, stash it for now.
+                File minidumpMissingLogcat = processMinidumpsSansLogcat(crashFileManager);
+
+                // Now, upload all pending crash reports that are not still in need of logcat data.
+                File[] minidumps = crashFileManager.getMinidumpsReadyForUpload(
                         MinidumpUploadService.MAX_TRIES_ALLOWED);
-                if (minidumps.length == 0) return;
-
-                Log.i(TAG, "Attempting to upload %d accumulated crash dumps.", minidumps.length);
-                File mostRecentMinidump = minidumps[0];
-                if (doesCrashMinidumpNeedLogcat(mostRecentMinidump)) {
-                    AsyncTask.THREAD_POOL_EXECUTOR.execute(
-                            new LogcatExtractionRunnable(mostRecentMinidump));
-
-                    // The JobScheduler will schedule uploads for all of the available minidumps
-                    // once the logcat is attached. But if the JobScheduler API is not being used,
-                    // then the logcat extraction process will only initiate an upload for the first
-                    // minidump; it's required to manually initiate uploads for all of the remaining
-                    // minidumps.
-                    if (!MinidumpUploadService.shouldUseJobSchedulerForUploads()) {
-                        List<File> remainingMinidumps =
-                                Arrays.asList(minidumps).subList(1, minidumps.length);
-                        for (File minidump : remainingMinidumps) {
-                            MinidumpUploadService.tryUploadCrashDump(minidump);
-                        }
+                if (minidumps.length > 0) {
+                    Log.i(TAG, "Attempting to upload %d accumulated crash dumps.",
+                            minidumps.length);
+                    if (MinidumpUploadService.shouldUseJobSchedulerForUploads()) {
+                        MinidumpUploadService.scheduleUploadJob();
+                    } else {
+                        MinidumpUploadService.tryUploadAllCrashDumps();
                     }
-                } else if (MinidumpUploadService.shouldUseJobSchedulerForUploads()) {
-                    MinidumpUploadService.scheduleUploadJob();
-                } else {
-                    MinidumpUploadService.tryUploadAllCrashDumps();
                 }
+
+                // Finally, if there is a minidump that still needs logcat output to be attached, do
+                // so now. Note: It's important to do this strictly after calling
+                // |crashFileManager.getMinidumpsReadyForUpload()|. Otherwise, there is a race
+                // between appending the logcat and getting the results from that call, as the
+                // minidump will be renamed to be a valid file for upload upon logcat extraction
+                // success.
+                if (minidumpMissingLogcat != null) {
+                    // Note: When using the JobScheduler API to schedule uploads, this call might
+                    // result in a duplicate request to schedule minidump uploads -- if the call
+                    // succeeds, and there were also other pending minidumps found above. This is
+                    // fine; the job scheduler is robust to such duplicate calls.
+                    AsyncTask.THREAD_POOL_EXECUTOR.execute(
+                            new LogcatExtractionRunnable(minidumpMissingLogcat));
+                }
+            }
+
+            /**
+             * Process all pending minidump files that lack logcat output. As a simplifying
+             * assumption, assume that logcat output would only be relevant to the most recent
+             * pending minidump, if there are multiple. As of Chrome version 58, about 50% of
+             * startups that had *any* pending minidumps had at least one pending minidump without
+             * any logcat output. About 5% had multiple minidumps without any logcat output.
+             *
+             * TODO(isherman): This is the simplest approach to resolving the complexity of
+             * correctly attributing logcat output to the correct crash. However, it would be better
+             * to attach logcat output to each minidump file that lacks it, if the relevant output
+             * is still available. We can look at timestamps to correlate logcat lines with the
+             * minidumps they correspond to.
+             *
+             * @return A single fresh minidump that should have logcat attached to it, or null if no
+             *     such minidump exists.
+             */
+            private File processMinidumpsSansLogcat(CrashFileManager crashFileManager) {
+                File[] minidumpsSansLogcat = crashFileManager.getMinidumpsSansLogcat();
+
+                // If there are multiple minidumps present that are missing logcat output, only
+                // append it to the most recent one. Upload the rest as-is.
+                if (minidumpsSansLogcat.length > 1) {
+                    for (int i = 1; i < minidumpsSansLogcat.length; ++i) {
+                        CrashFileManager.trySetReadyForUpload(minidumpsSansLogcat[i]);
+                    }
+                }
+
+                // Try to identify a single fresh minidump that should have logcat output appended
+                // to it.
+                if (minidumpsSansLogcat.length > 0) {
+                    File mostRecentMinidumpSansLogcat = minidumpsSansLogcat[0];
+                    if (doesCrashMinidumpNeedLogcat(mostRecentMinidumpSansLogcat)) {
+                        return mostRecentMinidumpSansLogcat;
+                    } else {
+                        CrashFileManager.trySetReadyForUpload(mostRecentMinidumpSansLogcat);
+                    }
+                }
+                return null;
             }
 
             /**
@@ -548,7 +591,7 @@ public class ProcessInitializationHandler {
              *     the given minidump.
              */
             private boolean doesCrashMinidumpNeedLogcat(File minidump) {
-                if (!CrashFileManager.isMinidumpMIMEFirstTry(minidump.getName())) return false;
+                if (!CrashFileManager.isMinidumpSansLogcat(minidump.getName())) return false;
 
                 long ageInMillis = new Date().getTime() - minidump.lastModified();
                 long ageInHours = TimeUnit.HOURS.convert(ageInMillis, TimeUnit.MILLISECONDS);

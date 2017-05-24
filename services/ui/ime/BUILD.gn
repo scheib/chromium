@@ -25,19 +25,12 @@ source_set("lib") {
   ]
 }
 
-group("tests") {
+source_set("tests") {
   testonly = true
-  deps = [
-    ":mus_ime_unittests",
-  ]
-}
 
-service_test("mus_ime_unittests") {
   sources = [
     "ime_unittest.cc",
   ]
-
-  catalog = ":mus_ime_unittests_catalog"
 
   deps = [
     "//base",
@@ -54,15 +47,13 @@ service_test("mus_ime_unittests") {
   ]
 }
 
-service_manifest("test_manifest") {
-  name = "mus_ime_unittests"
+service_manifest("unittest_manifest") {
+  name = "ime_unittests"
   source = "test_manifest.json"
 }
 
-catalog("mus_ime_unittests_catalog") {
-  embedded_services = [ ":test_manifest" ]
-  standalone_services = [
-    "//services/ui:manifest",
-    "//services/ui/ime/test_ime_driver:manifest",
-  ]
+catalog("tests_catalog") {
+  testonly = true
+  embedded_services = [ ":unittest_manifest" ]
+  standalone_services = [ "//services/ui/ime/test_ime_driver:manifest" ]
 }

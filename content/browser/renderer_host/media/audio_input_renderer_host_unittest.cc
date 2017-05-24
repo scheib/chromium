@@ -167,15 +167,13 @@ class MockAudioInputController : public AudioInputController {
       AudioInputController::EventHandler* event_handler,
       media::UserInputMonitor* user_input_monitor,
       const media::AudioParameters& params,
-      StreamType type,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner)
+      StreamType type)
       : AudioInputController(std::move(task_runner),
                              event_handler,
                              writer,
                              user_input_monitor,
                              params,
-                             type,
-                             std::move(file_task_runner)) {
+                             type) {
     GetTaskRunnerForTesting()->PostTask(
         FROM_HERE,
         base::Bind(&AudioInputController::EventHandler::OnCreated,
@@ -239,9 +237,9 @@ class MockControllerFactory : public AudioInputController::Factory {
       media::UserInputMonitor* user_input_monitor,
       AudioInputController::StreamType type) override {
     ControllerCreated();
-    scoped_refptr<MockController> controller = new MockController(
-        task_runner, sync_writer, audio_manager, event_handler,
-        user_input_monitor, params, type, task_runner);
+    scoped_refptr<MockController> controller =
+        new MockController(task_runner, sync_writer, audio_manager,
+                           event_handler, user_input_monitor, params, type);
     controller_list_.push_back(controller);
     return controller.get();
   }

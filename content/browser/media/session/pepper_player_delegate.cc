@@ -4,6 +4,7 @@
 
 #include "content/browser/media/session/pepper_player_delegate.h"
 
+#include "base/command_line.h"
 #include "content/browser/frame_host/render_frame_host_impl.h"
 #include "content/browser/media/session/pepper_playback_observer.h"
 #include "content/common/frame_messages.h"

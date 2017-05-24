@@ -28,30 +28,6 @@ namespace {
 // are serialized on disk.
 enum class StorageFormat : uint8_t { UTF16 = 0 };
 
-base::string16 Uint8VectorToString16(const std::vector<uint8_t>& input) {
-  // TODO(mek): Better error recovery when corrupt (or otherwise invalid) data
-  // is detected.
-  if (input.size() % sizeof(base::char16) != 1 ||
-      input[0] != static_cast<uint8_t>(StorageFormat::UTF16)) {
-    VLOG(1) << "Corrupt data in localstorage";
-    return base::string16();
-  }
-  base::string16 result;
-  result.resize(input.size() / sizeof(base::char16));
-  std::memcpy(reinterpret_cast<void*>(&result[0]), input.data() + 1,
-              input.size() - 1);
-  return result;
-}
-
-std::vector<uint8_t> String16ToUint8Vector(const base::string16& input) {
-  const uint8_t* data = reinterpret_cast<const uint8_t*>(input.data());
-  std::vector<uint8_t> result;
-  result.reserve(input.size() * sizeof(base::char16) + 1);
-  result.push_back(static_cast<uint8_t>(StorageFormat::UTF16));
-  result.insert(result.end(), data, data + input.size() * sizeof(base::char16));
-  return result;
-}
-
 class GetAllCallback : public mojom::LevelDBWrapperGetAllCallback {
  public:
   static mojom::LevelDBWrapperGetAllCallbackAssociatedPtrInfo CreateAndBind(
@@ -182,6 +158,34 @@ void LocalStorageCachedArea::AreaDestroyed(LocalStorageArea* area) {
   areas_.erase(area->id());
 }
 
+// static
+base::string16 LocalStorageCachedArea::Uint8VectorToString16(
+    const std::vector<uint8_t>& input) {
+  // TODO(mek): Better error recovery when corrupt (or otherwise invalid) data
+  // is detected.
+  if (input.size() % sizeof(base::char16) != 1 ||
+      input[0] != static_cast<uint8_t>(StorageFormat::UTF16)) {
+    VLOG(1) << "Corrupt data in localstorage";
+    return base::string16();
+  }
+  base::string16 result;
+  result.resize(input.size() / sizeof(base::char16));
+  std::memcpy(reinterpret_cast<void*>(&result[0]), input.data() + 1,
+              input.size() - 1);
+  return result;
+}
+
+// static
+std::vector<uint8_t> LocalStorageCachedArea::String16ToUint8Vector(
+    const base::string16& input) {
+  const uint8_t* data = reinterpret_cast<const uint8_t*>(input.data());
+  std::vector<uint8_t> result;
+  result.reserve(input.size() * sizeof(base::char16) + 1);
+  result.push_back(static_cast<uint8_t>(StorageFormat::UTF16));
+  result.insert(result.end(), data, data + input.size() * sizeof(base::char16));
+  return result;
+}
+
 void LocalStorageCachedArea::KeyAdded(const std::vector<uint8_t>& key,
                                       const std::vector<uint8_t>& value,
                                       const std::string& source) {
@@ -215,7 +219,7 @@ void LocalStorageCachedArea::KeyDeleted(const std::vector<uint8_t>& key,
     // remove it from our cache if we haven't already changed it and are waiting
     // for the confirmation callback. In the latter case, we won't do anything
     // because ignore_key_mutations_ won't be updated until the callback runs.
-    if (ignore_key_mutations_.find(key_string) != ignore_key_mutations_.end()) {
+    if (ignore_key_mutations_.find(key_string) == ignore_key_mutations_.end()) {
       base::string16 unused;
       map_->RemoveItem(key_string, &unused);
     }
@@ -279,7 +283,7 @@ void LocalStorageCachedArea::KeyAddedOrChanged(
     // apply it to our cache if we haven't already changed it and are waiting
     // for the confirmation callback. In the latter case, we won't do anything
     // because ignore_key_mutations_ won't be updated until the callback runs.
-    if (ignore_key_mutations_.find(key_string) != ignore_key_mutations_.end()) {
+    if (ignore_key_mutations_.find(key_string) == ignore_key_mutations_.end()) {
       // We turn off quota checking here to accomodate the over budget allowance
       // that's provided in the browser process.
       base::NullableString16 unused;

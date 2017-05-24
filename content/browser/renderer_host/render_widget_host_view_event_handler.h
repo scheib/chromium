@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/macros.h"
+#include "base/timer/timer.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/native_web_keyboard_event.h"
 #include "ui/aura/window_tracker.h"
@@ -31,6 +32,11 @@ class TouchSelectionController;
 }
 
 namespace content {
+
+// The duration after which a synthetic wheel with zero deltas and
+// phase = |kPhaseEnded| will be sent after the last wheel event.
+const int64_t kDefaultMouseWheelLatchingTransactionMs = 100;
+
 struct ContextMenuParams;
 class OverscrollController;
 class RenderWidgetHostImpl;
@@ -187,6 +193,11 @@ class CONTENT_EXPORT RenderWidgetHostViewEventHandler
                               const ui::LatencyInfo& latency);
   void ProcessTouchEvent(const blink::WebTouchEvent& event,
                          const ui::LatencyInfo& latency);
+  void SendSyntheticWheelEventWithPhaseEnded(
+      blink::WebMouseWheelEvent last_mouse_wheel_event,
+      bool should_route_event);
+  void AddPhaseAndScheduleEndEvent(blink::WebMouseWheelEvent& mouse_wheel_event,
+                                   bool should_route_event);
 
   // Whether return characters should be passed on to the RenderWidgetHostImpl.
   bool accept_return_character_;
@@ -248,6 +259,8 @@ class CONTENT_EXPORT RenderWidgetHostViewEventHandler
   ui::EventHandler* popup_child_event_handler_;
   Delegate* const delegate_;
   aura::Window* window_;
+
+  base::OneShotTimer mouse_wheel_end_dispatch_timer_;
 
   DISALLOW_COPY_AND_ASSIGN(RenderWidgetHostViewEventHandler);
 };

@@ -1,12 +1,12 @@
 Tests that the security details for an origin are updated if its security state changes.
 
 Sidebar Origins --------------------------------
-Group: Main Origin
-Group: Secure Origins
+Group: Main origin
+Group: Secure origins
 <SPAN class=title >
 https://foo.test
 </SPAN>
-Group: Unknown / Canceled
+Group: Unknown / canceled
 <SPAN class=title >
 https://bar.test
 </SPAN>
@@ -43,7 +43,7 @@ TLS 1.2
             </DIV>
             <DIV class=details-table-row >
                 <DIV >
-Key Exchange
+Key exchange
                 </DIV>
                 <DIV >
 Key_Exchange
@@ -89,7 +89,7 @@ foo.test
             </DIV>
             <DIV class=details-table-row >
                 <DIV >
-Valid From
+Valid from
                 </DIV>
                 <DIV >
 Mon, 20 Mar 2017 08:53:20 GMT
@@ -97,7 +97,7 @@ Mon, 20 Mar 2017 08:53:20 GMT
             </DIV>
             <DIV class=details-table-row >
                 <DIV >
-Valid Until
+Valid until
                 </DIV>
                 <DIV >
 Wed, 18 May 2033 03:33:20 GMT

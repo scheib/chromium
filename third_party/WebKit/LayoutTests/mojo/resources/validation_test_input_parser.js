@@ -6,10 +6,7 @@
 // or ".data" files. The input format is described here:
 // mojo/public/cpp/bindings/tests/validation_test_input_parser.h
 
-define("mojo/resources/validation_test_input_parser", [
-    "mojo/public/js/buffer"
-  ], function(buffer) {
-
+(function() {
   // Files and Lines represent the raw text from an input string
   // or ".data" file.
 
@@ -138,7 +135,7 @@ define("mojo/resources/validation_test_input_parser", [
 
   function TestMessage(byteLength) {
     this.index = 0;
-    this.buffer = new buffer.Buffer(byteLength);
+    this.buffer = new mojo.internal.Buffer(byteLength);
     this.distances = {};
     this.handleCount = 0;
   }
@@ -293,8 +290,7 @@ define("mojo/resources/validation_test_input_parser", [
     return msg;
   }
 
-  var exports = {};
-  exports.parseTestMessage = parseTestMessage;
-  exports.InputError = InputError;
-  return exports;
-});
+  mojo.test = mojo.test || {};
+  mojo.test.parseTestMessage = parseTestMessage;
+  mojo.test.InputError = InputError;
+})();

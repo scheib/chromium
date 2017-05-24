@@ -43,7 +43,7 @@ class LockScreenActionTray::NewNoteActionView : public views::View {
 
   ~NewNoteActionView() override {}
 
-  gfx::Size GetPreferredSize() const override {
+  gfx::Size CalculatePreferredSize() const override {
     return gfx::Size(kItemViewPreferredSize, kItemViewPreferredSize);
   }
 

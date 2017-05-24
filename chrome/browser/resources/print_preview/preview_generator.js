@@ -224,24 +224,25 @@ cr.define('print_preview', function() {
      * @private
      */
     addEventListeners_: function() {
+      var nativeLayerEventTarget = this.nativeLayer_.getEventTarget();
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PAGE_LAYOUT_READY,
           this.onPageLayoutReady_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PAGE_COUNT_READY,
           this.onPageCountReady_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PAGE_PREVIEW_READY,
           this.onPagePreviewReady_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PREVIEW_GENERATION_DONE,
           this.onPreviewGenerationDone_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PREVIEW_GENERATION_FAIL,
           this.onPreviewGenerationFail_.bind(this));
     },

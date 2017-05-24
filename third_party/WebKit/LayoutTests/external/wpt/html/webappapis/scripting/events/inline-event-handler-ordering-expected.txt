@@ -1,5 +1,4 @@
 This is a testharness.js-based test.
-Harness Error. harness_status.status = 1 , harness_status.message = Uncaught SyntaxError: Unexpected token }
 FAIL Inline event handlers retain their ordering when invalid and force-compiled assert_array_equals: property 1, expected "TWO" but got "THREE"
 FAIL Inline event handlers retain their ordering when invalid and force-compiled via dispatch assert_array_equals: property 3, expected "TWO" but got "THREE"
 FAIL Inline event handlers retain their ordering when invalid and lazy-compiled assert_array_equals: property 1, expected "TWO" but got "THREE"

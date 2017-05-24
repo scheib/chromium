@@ -10,6 +10,7 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/ptr_util.h"
 #include "base/message_loop/message_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
@@ -786,7 +787,7 @@ void CdmAdapter::OnSessionKeysChange(const char* session_id,
   keys.reserve(keys_info_count);
   for (uint32_t i = 0; i < keys_info_count; ++i) {
     const auto& info = keys_info[i];
-    keys.push_back(new CdmKeyInformation(
+    keys.push_back(base::MakeUnique<CdmKeyInformation>(
         info.key_id, info.key_id_size,
         ToCdmKeyInformationKeyStatus(info.status), info.system_code));
   }

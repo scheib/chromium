@@ -11,6 +11,7 @@
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
+#include "base/version.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "extensions/browser/uninstall_reason.h"
 #include "extensions/common/extension_set.h"
@@ -81,6 +82,16 @@ class ExtensionRegistry : public KeyedService {
   //  * blocked_extensions()     --> ExtensionRegistry::BLOCKED
   std::unique_ptr<ExtensionSet> GenerateInstalledExtensionsSet(
       int include_mask) const;
+
+  // Returns the current version of the extension with the given |id|, if
+  // one exists.
+  // Note: If we are currently updating the extension, this returns the
+  // version stored currently, rather than the in-progress update.
+  //
+  // TODO(lazyboy): Consider updating callers to directly retrieve version()
+  // from either GetExtensionById() or querying ExtensionSet getters of this
+  // class.
+  base::Version GetStoredVersion(const ExtensionId& id) const;
 
   // The usual observer interface.
   void AddObserver(ExtensionRegistryObserver* observer);

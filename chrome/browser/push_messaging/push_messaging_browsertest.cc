@@ -20,6 +20,7 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browsing_data/browsing_data_helper.h"
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.h"
+#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/engagement/site_engagement_score.h"
 #include "chrome/browser/engagement/site_engagement_service.h"
@@ -52,6 +53,7 @@
 #include "components/gcm_driver/instance_id/fake_gcm_driver_for_instance_id.h"
 #include "components/gcm_driver/instance_id/instance_id_driver.h"
 #include "content/public/browser/browsing_data_remover.h"
+#include "content/public/browser/notification_service.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/push_subscription_options.h"
@@ -1071,6 +1073,31 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventSuccess) {
   histogram_tester_.ExpectUniqueSample(
       "PushMessaging.DeliveryStatus",
        content::PUSH_DELIVERY_STATUS_SUCCESS, 1);
+}
+
+IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventOnShutdown) {
+  std::string script_result;
+
+  ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
+  PushMessagingAppIdentifier app_identifier =
+      GetAppIdentifierForServiceWorkerRegistration(0LL);
+
+  ASSERT_TRUE(RunScript("isControlled()", &script_result));
+  ASSERT_EQ("false - is not controlled", script_result);
+  LoadTestPage();  // Reload to become controlled.
+  ASSERT_TRUE(RunScript("isControlled()", &script_result));
+  ASSERT_EQ("true - is controlled", script_result);
+
+  EXPECT_TRUE(IsRegisteredKeepAliveEqualTo(false));
+  gcm::IncomingMessage message;
+  message.sender_id = GetTestApplicationServerKey();
+  message.raw_data = "testdata";
+  message.decrypted = true;
+  push_service()->Observe(chrome::NOTIFICATION_APP_TERMINATING,
+                          content::NotificationService::AllSources(),
+                          content::NotificationService::NoDetails());
+  push_service()->OnMessage(app_identifier.app_id(), message);
+  EXPECT_TRUE(IsRegisteredKeepAliveEqualTo(false));
 }
 
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventWithoutPayload) {

@@ -205,12 +205,12 @@ void FrameCaptionButtonContainerView::UpdateSizeButtonVisibility() {
 }
 
 void FrameCaptionButtonContainerView::SetButtonSize(const gfx::Size& size) {
-  minimize_button_->set_size(size);
-  size_button_->set_size(size);
-  close_button_->set_size(size);
+  minimize_button_->set_preferred_size(size);
+  size_button_->set_preferred_size(size);
+  close_button_->set_preferred_size(size);
 }
 
-gfx::Size FrameCaptionButtonContainerView::GetPreferredSize() const {
+gfx::Size FrameCaptionButtonContainerView::CalculatePreferredSize() const {
   int width = 0;
   for (int i = 0; i < child_count(); ++i) {
     const views::View* child = child_at(i);

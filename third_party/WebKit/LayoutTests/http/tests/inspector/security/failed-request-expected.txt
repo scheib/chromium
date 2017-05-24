@@ -1,11 +1,11 @@
 Tests that origins with failed requests are shown correctly in the security panel origins list.
 
-Group: Main Origin
-Group: Secure Origins
+Group: Main origin
+Group: Secure origins
 <SPAN class=title >
 https://foo.test
 </SPAN>
-Group: Unknown / Canceled
+Group: Unknown / canceled
 <SPAN class=title >
 https://does-not-resolve.test
 </SPAN>

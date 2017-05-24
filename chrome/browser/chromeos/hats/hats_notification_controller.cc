@@ -26,6 +26,7 @@
 #include "chromeos/network/network_state.h"
 #include "components/image_fetcher/core/image_fetcher_impl.h"
 #include "components/prefs/pref_service.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/image/image_skia_rep.h"
@@ -234,11 +235,13 @@ void HatsNotificationController::OnPortalDetectionCompleted(
   image_fetcher_->StartOrQueueNetworkRequest(
       kImageFetcher1xId, GURL(kGoogleIcon1xUrl),
       base::Bind(&HatsNotificationController::OnImageFetched,
-                 weak_pointer_factory_.GetWeakPtr()));
+                 weak_pointer_factory_.GetWeakPtr()),
+      NO_TRAFFIC_ANNOTATION_YET);
   image_fetcher_->StartOrQueueNetworkRequest(
       kImageFetcher2xId, GURL(kGoogleIcon2xUrl),
       base::Bind(&HatsNotificationController::OnImageFetched,
-                 weak_pointer_factory_.GetWeakPtr()));
+                 weak_pointer_factory_.GetWeakPtr()),
+      NO_TRAFFIC_ANNOTATION_YET);
 }
 
 void HatsNotificationController::OnImageFetched(

@@ -39,7 +39,6 @@
 #include "chrome/browser/ui/views/location_bar/star_view.h"
 #include "chrome/browser/ui/views/outdated_upgrade_bubble_view.h"
 #include "chrome/browser/ui/views/toolbar/app_menu_button.h"
-#include "chrome/browser/ui/views/toolbar/back_button.h"
 #include "chrome/browser/ui/views/toolbar/browser_actions_container.h"
 #include "chrome/browser/ui/views/toolbar/home_button.h"
 #include "chrome/browser/ui/views/toolbar/reload_button.h"
@@ -168,7 +167,7 @@ void ToolbarView::Init() {
     return;
   }
 
-  back_ = new BackButton(
+  back_ = new ToolbarButton(
       browser_->profile(), this,
       new BackForwardMenuModel(browser_, BackForwardMenuModel::BACKWARD_MENU));
   back_->set_hide_ink_drop_when_showing_context_menu(false);
@@ -521,16 +520,11 @@ void ToolbarView::Layout() {
   //                http://crbug.com/5540
   const bool maximized =
       browser_->window() && browser_->window()->IsMaximized();
-  const int back_width = back_->GetPreferredSize().width();
   // The padding at either end of the toolbar.
   const int end_padding = GetToolbarHorizontalPadding();
-  if (maximized) {
-    back_->SetBounds(0, child_y, back_width + end_padding, child_height);
-    back_->SetLeadingMargin(end_padding);
-  } else {
-    back_->SetBounds(end_padding, child_y, back_width, child_height);
-    back_->SetLeadingMargin(0);
-  }
+  back_->SetLeadingMargin(maximized ? end_padding : 0);
+  back_->SetBounds(maximized ? 0 : end_padding, child_y,
+                   back_->GetPreferredSize().width(), child_height);
   const int element_padding = GetLayoutConstant(TOOLBAR_ELEMENT_PADDING);
   int next_element_x = back_->bounds().right() + element_padding;
 

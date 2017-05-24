@@ -182,9 +182,9 @@ void TestWebState::OnPageLoaded(
     observer.PageLoaded(load_completion_status);
 }
 
-void TestWebState::OnProvisionalNavigationStarted(const GURL& url) {
+void TestWebState::OnNavigationStarted(NavigationContext* navigation_context) {
   for (auto& observer : observers_)
-    observer.ProvisionalNavigationStarted(url);
+    observer.DidStartNavigation(navigation_context);
 }
 
 void TestWebState::OnRenderProcessGone() {

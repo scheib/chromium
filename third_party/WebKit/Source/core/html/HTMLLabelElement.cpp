@@ -173,7 +173,8 @@ void HTMLLabelElement::DefaultEventHandler(Event* evt) {
                 .IsRange() &&
             !frame->GetEventHandler()
                  .GetSelectionController()
-                 .MouseDownWasSingleClickInSelection())
+                 .MouseDownWasSingleClickInSelection() &&
+            evt->target()->ToNode()->CanStartSelection())
           is_label_text_selected = true;
         // If selection is there and is single click i.e. text is
         // selected by dragging over label text, then return.

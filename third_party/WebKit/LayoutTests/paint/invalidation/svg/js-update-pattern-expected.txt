@@ -21,14 +21,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourcePattern pattern id='Pattern'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGRect rect id='rect'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "SVG resource change"
     },

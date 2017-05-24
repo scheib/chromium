@@ -125,6 +125,7 @@ chrome_ios_eg_test("ios_chrome_flaky_egtests") {
 }
 
 chrome_ios_eg_test("ios_chrome_smoke_egtests") {
+  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "smoke_egtest.mm",
   ]

@@ -8,7 +8,7 @@ Test: Summary Override Text
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Secure Resources
+Secure resources
         </DIV>
         <DIV >
 All resources on this page are served securely.

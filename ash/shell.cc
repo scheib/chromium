@@ -43,6 +43,7 @@
 #include "ash/high_contrast/high_contrast_controller.h"
 #include "ash/keyboard/keyboard_ui.h"
 #include "ash/laser/laser_pointer_controller.h"
+#include "ash/login/lock_screen_controller.h"
 #include "ash/login_status.h"
 #include "ash/magnifier/magnification_controller.h"
 #include "ash/magnifier/partial_magnification_controller.h"
@@ -152,6 +153,7 @@
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/display/display.h"
+#include "ui/display/manager/chromeos/default_touch_transform_setter.h"
 #include "ui/display/manager/chromeos/display_change_observer.h"
 #include "ui/display/manager/chromeos/display_configurator.h"
 #include "ui/display/manager/display_manager.h"
@@ -557,6 +559,7 @@ Shell::Shell(std::unique_ptr<ShellDelegate> shell_delegate,
           base::MakeUnique<KeyboardBrightnessController>()),
       locale_notification_controller_(
           base::MakeUnique<LocaleNotificationController>()),
+      lock_screen_controller_(base::MakeUnique<LockScreenController>()),
       media_controller_(base::MakeUnique<MediaController>()),
       new_window_controller_(base::MakeUnique<NewWindowController>()),
       session_controller_(base::MakeUnique<SessionController>()),
@@ -777,6 +780,9 @@ Shell::~Shell() {
   shell_port_.reset();
   session_controller_->RemoveObserver(this);
   wallpaper_delegate_.reset();
+  // NightLightController depeneds on the PrefService and must be destructed
+  // before it. crbug.com/724231.
+  night_light_controller_ = nullptr;
   pref_service_ = nullptr;
   shell_delegate_.reset();
 
@@ -1054,7 +1060,8 @@ void Shell::Init(const ShellInitParams& init_params) {
   // TODO(sky): needs to to work for mus too.
   if (config == Config::CLASSIC) {
     touch_transformer_controller_.reset(new AshTouchTransformController(
-        display_configurator_.get(), display_manager_.get()));
+        display_configurator_.get(), display_manager_.get(),
+        base::MakeUnique<display::DefaultTouchTransformSetter>()));
   }
 
   keyboard_ui_ = shell_port_->CreateKeyboardUI();

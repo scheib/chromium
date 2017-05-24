@@ -21,7 +21,6 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
-#include "chrome/browser/favicon/fallback_icon_service_factory.h"
 #include "chrome/browser/favicon/large_icon_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/profile_sync_service_factory.h"
@@ -33,7 +32,6 @@
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
 #include "components/browser_sync/profile_sync_service.h"
-#include "components/favicon/core/fallback_icon_service.h"
 #include "components/favicon/core/fallback_url_util.h"
 #include "components/favicon/core/large_icon_service.h"
 #include "components/query_parser/snippet.h"
@@ -273,12 +271,9 @@ void BrowsingHistoryHandler::RegisterMessages() {
   Profile* profile = Profile::FromWebUI(web_ui());
 
 #if defined(OS_ANDROID)
-  favicon::FallbackIconService* fallback_icon_service =
-      FallbackIconServiceFactory::GetForBrowserContext(profile);
   favicon::LargeIconService* large_icon_service =
       LargeIconServiceFactory::GetForBrowserContext(profile);
-  content::URLDataSource::Add(
-      profile, new LargeIconSource(fallback_icon_service, large_icon_service));
+  content::URLDataSource::Add(profile, new LargeIconSource(large_icon_service));
 #else
   content::URLDataSource::Add(profile, new FaviconSource(profile));
 #endif

@@ -7,7 +7,6 @@
 #include <memory>
 #include "cc/layers/layer_impl.h"
 #include "cc/trees/layer_tree_impl.h"
-#include "platform/graphics/CompositorElementId.h"
 #include "platform/graphics/CompositorMutableProperties.h"
 #include "platform/graphics/CompositorMutableState.h"
 #include "platform/graphics/CompositorMutation.h"
@@ -23,13 +22,13 @@ CompositorMutableStateProvider::CompositorMutableStateProvider(
 CompositorMutableStateProvider::~CompositorMutableStateProvider() {}
 
 std::unique_ptr<CompositorMutableState>
-CompositorMutableStateProvider::GetMutableStateFor(uint64_t element_id) {
+CompositorMutableStateProvider::GetMutableStateFor(DOMNodeId dom_node_id) {
   cc::LayerImpl* main_layer =
       tree_->LayerByElementId(CompositorElementIdFromDOMNodeId(
-          element_id, CompositorElementIdNamespace::kPrimary));
+          dom_node_id, CompositorElementIdNamespace::kPrimaryCompositorProxy));
   cc::LayerImpl* scroll_layer =
       tree_->LayerByElementId(CompositorElementIdFromDOMNodeId(
-          element_id, CompositorElementIdNamespace::kScroll));
+          dom_node_id, CompositorElementIdNamespace::kScrollCompositorProxy));
 
   if (!main_layer && !scroll_layer)
     return nullptr;
@@ -37,7 +36,7 @@ CompositorMutableStateProvider::GetMutableStateFor(uint64_t element_id) {
   // Ensure that we have an entry in the map for |elementId| but do as few
   // allocations and queries as possible. This will update the map only if we
   // have not added a value for |elementId|.
-  auto result = mutations_->map.insert(element_id, nullptr);
+  auto result = mutations_->map.insert(dom_node_id, nullptr);
 
   // Only if this is a new entry do we want to allocate a new mutation.
   if (result.is_new_entry)

@@ -5,9 +5,13 @@
 #include "chrome/browser/ui/sad_tab.h"
 
 #include "base/metrics/histogram_macros.h"
+#include "base/time/time.h"
 #include "chrome/browser/net/referrer.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/chrome_pages.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/feedback/feedback_util.h"
@@ -59,13 +63,29 @@ constexpr char kCategoryTagCrash[] = "Crash";
 
 bool ShouldShowFeedbackButton() {
 #if defined(GOOGLE_CHROME_BUILD)
-  const int kCrashesBeforeFeedbackIsDisplayed = 1;
+  const int kMinSecondsBetweenCrashesForFeedbackButton = 10;
 
-  static int total_crashes = 0;
-  return ++total_crashes > kCrashesBeforeFeedbackIsDisplayed;
+  static int64_t last_called_ts = 0;
+  base::TimeTicks last_called(base::TimeTicks::UnixEpoch());
+
+  if (last_called_ts)
+    last_called = base::TimeTicks::FromInternalValue(last_called_ts);
+
+  bool should_show = (base::TimeTicks().Now() - last_called).InSeconds() <
+                     kMinSecondsBetweenCrashesForFeedbackButton;
+
+  last_called_ts = base::TimeTicks().Now().ToInternalValue();
+  return should_show;
 #else
   return false;
 #endif
+}
+
+bool AreOtherTabsOpen() {
+  size_t tab_count = 0;
+  for (auto* browser : *BrowserList::GetInstance())
+    tab_count += browser->tab_strip_model()->count();
+  return (tab_count > 1U);
 }
 
 }  // namespace
@@ -97,7 +117,23 @@ bool SadTab::ShouldShow(base::TerminationStatus status) {
 }
 
 int SadTab::GetTitle() {
-  return IDS_SAD_TAB_TITLE;
+  if (!show_feedback_button_)
+    return IDS_SAD_TAB_TITLE;
+  switch (kind_) {
+#if defined(OS_CHROMEOS)
+    case chrome::SAD_TAB_KIND_KILLED_BY_OOM:
+      return IDS_SAD_TAB_RELOAD_TITLE;
+#endif
+    case chrome::SAD_TAB_KIND_OOM:
+#if defined(OS_WIN)  // Only Windows has OOM sad tab strings.
+      return IDS_SAD_TAB_OOM_TITLE;
+#endif
+    case chrome::SAD_TAB_KIND_CRASHED:
+    case chrome::SAD_TAB_KIND_KILLED:
+      return IDS_SAD_TAB_RELOAD_TITLE;
+  }
+  NOTREACHED();
+  return 0;
 }
 
 int SadTab::GetMessage() {
@@ -107,10 +143,14 @@ int SadTab::GetMessage() {
       return IDS_KILLED_TAB_BY_OOM_MESSAGE;
 #endif
     case chrome::SAD_TAB_KIND_OOM:
-      return IDS_SAD_TAB_OOM_MESSAGE;
+      if (show_feedback_button_)
+        return AreOtherTabsOpen() ? IDS_SAD_TAB_OOM_MESSAGE_TABS
+                                  : IDS_SAD_TAB_OOM_MESSAGE_NOTABS;
+      return IDS_SAD_TAB_MESSAGE;
     case chrome::SAD_TAB_KIND_CRASHED:
     case chrome::SAD_TAB_KIND_KILLED:
-      return IDS_SAD_TAB_MESSAGE;
+      return show_feedback_button_ ? IDS_SAD_TAB_RELOAD_TRY
+                                   : IDS_SAD_TAB_MESSAGE;
   }
   NOTREACHED();
   return 0;
@@ -128,6 +168,39 @@ int SadTab::GetHelpLinkTitle() {
 const char* SadTab::GetHelpLinkURL() {
   return show_feedback_button_ ? chrome::kCrashReasonFeedbackDisplayedURL
                                : chrome::kCrashReasonURL;
+}
+
+int SadTab::GetSubMessage(size_t line_id) {
+  // Note: on macOS, Linux and ChromeOS, the first bullet is either one of
+  // IDS_SAD_TAB_RELOAD_CLOSE_TABS or IDS_SAD_TAB_RELOAD_CLOSE_NOTABS followed
+  // by one of these suggestions.
+  const int kLineIds[] = {IDS_SAD_TAB_RELOAD_INCOGNITO,
+                          IDS_SAD_TAB_RELOAD_RESTART_BROWSER,
+                          IDS_SAD_TAB_RELOAD_RESTART_DEVICE};
+
+  if (!show_feedback_button_)
+    return 0;
+  switch (kind_) {
+#if defined(OS_CHROMEOS)
+    case chrome::SAD_TAB_KIND_KILLED_BY_OOM:
+      return 0;
+#endif
+    case chrome::SAD_TAB_KIND_OOM:
+      return 0;
+    case chrome::SAD_TAB_KIND_CRASHED:
+    case chrome::SAD_TAB_KIND_KILLED:
+#if defined(OS_MACOSX) || defined(OS_LINUX) || defined(OS_CHROMEOS)
+      if (line_id == 0)
+        return AreOtherTabsOpen() ? IDS_SAD_TAB_RELOAD_CLOSE_TABS
+                                  : IDS_SAD_TAB_RELOAD_CLOSE_NOTABS;
+      line_id--;
+#endif
+      if (line_id > 2)
+        return 0;
+      return kLineIds[line_id];
+  }
+  NOTREACHED();
+  return 0;
 }
 
 void SadTab::RecordFirstPaint() {

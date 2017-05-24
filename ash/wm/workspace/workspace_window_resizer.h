@@ -54,7 +54,7 @@ class ASH_EXPORT WorkspaceWindowResizer : public WindowResizer {
 
   static WorkspaceWindowResizer* Create(
       wm::WindowState* window_state,
-      const std::vector<WmWindow*>& attached_windows);
+      const std::vector<aura::Window*>& attached_windows);
 
   // WindowResizer:
   void Drag(const gfx::Point& location_in_parent, int event_flags) override;
@@ -68,7 +68,7 @@ class ASH_EXPORT WorkspaceWindowResizer : public WindowResizer {
   enum SnapType { SNAP_LEFT, SNAP_RIGHT, SNAP_NONE };
 
   WorkspaceWindowResizer(wm::WindowState* window_state,
-                         const std::vector<WmWindow*>& attached_windows);
+                         const std::vector<aura::Window*>& attached_windows);
 
   // Lays out the attached windows. |bounds| is the bounds of the main window.
   void LayoutAttachedWindows(gfx::Rect* bounds);
@@ -156,7 +156,7 @@ class ASH_EXPORT WorkspaceWindowResizer : public WindowResizer {
 
   wm::WindowState* window_state() { return window_state_; }
 
-  const std::vector<WmWindow*> attached_windows_;
+  const std::vector<aura::Window*> attached_windows_;
 
   // Returns the currently used instance for test.
   static WorkspaceWindowResizer* GetInstanceForTest();
@@ -199,7 +199,7 @@ class ASH_EXPORT WorkspaceWindowResizer : public WindowResizer {
   gfx::Point last_mouse_location_;
 
   // Window the drag has magnetically attached to.
-  WmWindow* magnetism_window_;
+  aura::Window* magnetism_window_;
 
   // Used to verify |magnetism_window_| is still valid.
   aura::WindowTracker window_tracker_;

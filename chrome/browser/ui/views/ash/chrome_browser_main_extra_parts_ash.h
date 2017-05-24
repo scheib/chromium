@@ -19,6 +19,7 @@ class CastConfigClientMediaRouter;
 class ChromeLauncherController;
 class ChromeNewWindowClient;
 class ChromeShellContentState;
+class LockScreenClient;
 class ImmersiveContextMus;
 class ImmersiveHandlerFactoryMus;
 class MediaClient;
@@ -53,6 +54,7 @@ class ChromeBrowserMainExtraPartsAsh : public ChromeBrowserMainExtraParts {
   std::unique_ptr<VolumeController> volume_controller_;
   std::unique_ptr<VpnListForwarder> vpn_list_forwarder_;
   std::unique_ptr<AshInit> ash_init_;
+  std::unique_ptr<LockScreenClient> lock_screen_client_;
 
   // These are only used in Mash; corresponding instances are owned by Ash's
   // ShelfController and ChromeShellDelegate in classic Ash.

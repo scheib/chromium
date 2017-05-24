@@ -87,6 +87,7 @@ class GPU_EXPORT GpuChannel : public IPC::Listener, public FilteredSender {
              GpuWatchdogThread* watchdog,
              scoped_refptr<gl::GLShareGroup> share_group,
              scoped_refptr<gles2::MailboxManager> mailbox_manager,
+             ServiceDiscardableManager* discardable_manager_,
              scoped_refptr<PreemptionFlag> preempting_flag,
              scoped_refptr<PreemptionFlag> preempted_flag,
              scoped_refptr<base::SingleThreadTaskRunner> task_runner,
@@ -153,6 +154,10 @@ class GPU_EXPORT GpuChannel : public IPC::Listener, public FilteredSender {
   void OnCommandBufferDescheduled(GpuCommandBufferStub* stub);
 
   gl::GLShareGroup* share_group() const { return share_group_.get(); }
+
+  ServiceDiscardableManager* discardable_manager() const {
+    return discardable_manager_;
+  }
 
   GpuCommandBufferStub* LookupCommandBuffer(int32_t route_id);
 
@@ -271,6 +276,8 @@ class GPU_EXPORT GpuChannel : public IPC::Listener, public FilteredSender {
   scoped_refptr<gles2::MailboxManager> mailbox_manager_;
 
   GpuWatchdogThread* const watchdog_;
+
+  ServiceDiscardableManager* discardable_manager_;
 
   const bool is_gpu_host_;
 

@@ -265,6 +265,7 @@ class CORE_EXPORT V8DOMConfiguration final {
     }
 
     v8::Local<v8::Symbol> (*get_symbol)(v8::Isolate*);
+    const char* const symbol_alias;
     v8::FunctionCallback callback;
     // SymbolKeyedMethodConfiguration doesn't support per-world bindings.
     int length;

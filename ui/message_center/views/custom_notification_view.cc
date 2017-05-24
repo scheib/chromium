@@ -84,6 +84,11 @@ void CustomNotificationView::UpdateControlButtonsVisibility() {
     contents_view_delegate_->UpdateControlButtonsVisibility();
 }
 
+void CustomNotificationView::OnSlideChanged() {
+  if (contents_view_delegate_)
+    contents_view_delegate_->OnSlideChanged();
+}
+
 gfx::Size CustomNotificationView::GetPreferredSize() const {
   const gfx::Insets insets = GetInsets();
   const int contents_width = kNotificationWidth - insets.width();

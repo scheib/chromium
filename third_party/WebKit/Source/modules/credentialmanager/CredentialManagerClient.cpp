@@ -71,14 +71,13 @@ void CredentialManagerClient::DispatchRequireUserMediation(
 }
 
 void CredentialManagerClient::DispatchGet(
-    bool zero_click_only,
+    WebCredentialMediationRequirement mediation,
     bool include_passwords,
     const WebVector<WebURL>& federations,
     WebCredentialManagerClient::RequestCallbacks* callbacks) {
   if (!client_)
     return;
-  client_->DispatchGet(zero_click_only, include_passwords, federations,
-                       callbacks);
+  client_->DispatchGet(mediation, include_passwords, federations, callbacks);
 }
 
 }  // namespace blink

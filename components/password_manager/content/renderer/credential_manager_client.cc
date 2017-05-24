@@ -65,6 +65,21 @@ std::unique_ptr<blink::WebCredential> CredentialInfoToWebCredential(
   return nullptr;
 }
 
+CredentialMediationRequirement GetCredentialMediationRequirementFromBlink(
+    blink::WebCredentialMediationRequirement mediation) {
+  switch (mediation) {
+    case blink::WebCredentialMediationRequirement::kSilent:
+      return CredentialMediationRequirement::kSilent;
+    case blink::WebCredentialMediationRequirement::kOptional:
+      return CredentialMediationRequirement::kOptional;
+    case blink::WebCredentialMediationRequirement::kRequired:
+      return CredentialMediationRequirement::kRequired;
+  }
+
+  NOTREACHED();
+  return CredentialMediationRequirement::kOptional;
+}
+
 blink::WebCredentialManagerError GetWebCredentialManagerErrorFromMojo(
     mojom::CredentialManagerError error) {
   switch (error) {
@@ -227,7 +242,7 @@ void CredentialManagerClient::DispatchRequireUserMediation(
 }
 
 void CredentialManagerClient::DispatchGet(
-    bool zero_click_only,
+    blink::WebCredentialMediationRequirement mediation,
     bool include_passwords,
     const blink::WebVector<blink::WebURL>& federations,
     RequestCallbacks* callbacks) {
@@ -239,7 +254,8 @@ void CredentialManagerClient::DispatchGet(
     federation_vector.push_back(federations[i]);
 
   mojo_cm_service_->Get(
-      zero_click_only, include_passwords, federation_vector,
+      GetCredentialMediationRequirementFromBlink(mediation), include_passwords,
+      federation_vector,
       base::Bind(&RespondToRequestCallback,
                  base::Owned(new RequestCallbacksWrapper(callbacks))));
 }

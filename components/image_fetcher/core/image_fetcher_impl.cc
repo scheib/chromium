@@ -51,7 +51,8 @@ void ImageFetcherImpl::SetImageDownloadLimit(
 void ImageFetcherImpl::StartOrQueueNetworkRequest(
     const std::string& id,
     const GURL& image_url,
-    const ImageFetcherCallback& callback) {
+    const ImageFetcherCallback& callback,
+    const net::NetworkTrafficAnnotationTag& traffic_annotation) {
   // Before starting to fetch the image. Look for a request in progress for
   // |image_url|, and queue if appropriate.
   ImageRequestMap::iterator it = pending_net_requests_.find(image_url);
@@ -62,8 +63,10 @@ void ImageFetcherImpl::StartOrQueueNetworkRequest(
     pending_net_requests_[image_url].swap(&request);
 
     image_data_fetcher_->FetchImageData(
-        image_url, base::Bind(&ImageFetcherImpl::OnImageURLFetched,
-                              base::Unretained(this), image_url));
+        image_url,
+        base::Bind(&ImageFetcherImpl::OnImageURLFetched, base::Unretained(this),
+                   image_url),
+        traffic_annotation);
   } else {
     // Request in progress. Register as an interested callback.
     // TODO(treib,markusheintz): We're not guaranteed that the ID also matches.

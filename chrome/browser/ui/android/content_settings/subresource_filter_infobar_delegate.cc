@@ -12,7 +12,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/infobars/core/infobar.h"
 #include "components/strings/grit/components_strings.h"
-#include "components/subresource_filter/content/browser/content_subresource_filter_driver_factory.h"
 #include "components/subresource_filter/core/browser/subresource_filter_features.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -79,8 +78,7 @@ base::string16 SubresourceFilterInfobarDelegate::GetButtonLabel(
 bool SubresourceFilterInfobarDelegate::Cancel() {
   content::WebContents* web_contents =
       InfoBarService::WebContentsFromInfoBar(infobar());
-  subresource_filter::ContentSubresourceFilterDriverFactory::FromWebContents(
-      web_contents)
+  ChromeSubresourceFilterClient::FromWebContents(web_contents)
       ->OnReloadRequested();
   return true;
 }

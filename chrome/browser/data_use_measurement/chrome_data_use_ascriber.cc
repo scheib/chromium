@@ -194,6 +194,9 @@ void ChromeDataUseAscriber::OnUrlRequestDestroyed(net::URLRequest* request) {
   if (entry == data_use_recorders_.end())
     return;
 
+  for (auto& observer : observers_)
+    observer.OnPageResourceLoad(*request, &entry->data_use());
+
   RenderFrameHostID frame_key = entry->main_frame_id();
   auto frame_iter = main_render_frame_data_use_map_.find(frame_key);
   bool is_in_render_frame_map =
@@ -213,7 +216,7 @@ void ChromeDataUseAscriber::OnUrlRequestDestroyed(net::URLRequest* request) {
 
   if (entry->IsDataUseComplete() && !is_in_render_frame_map &&
       !is_in_pending_navigation_map) {
-    OnDataUseCompleted(entry);
+    NotifyDataUseCompleted(entry);
     data_use_recorders_.erase(entry);
   }
 }
@@ -264,7 +267,7 @@ void ChromeDataUseAscriber::RenderFrameDeleted(int render_process_id,
     auto frame_iter = main_render_frame_data_use_map_.find(key);
     DataUseRecorderEntry entry = frame_iter->second;
     if (entry->IsDataUseComplete()) {
-      OnDataUseCompleted(entry);
+      NotifyDataUseCompleted(entry);
       data_use_recorders_.erase(entry);
     }
     main_render_frame_data_use_map_.erase(frame_iter);
@@ -308,7 +311,7 @@ void ChromeDataUseAscriber::ReadyToCommitMainFrameNavigation(
           old_frame_entry->data_use().traffic_type();
       main_render_frame_data_use_map_.erase(frame_it);
       if (old_frame_entry->IsDataUseComplete()) {
-        OnDataUseCompleted(old_frame_entry);
+        NotifyDataUseCompleted(old_frame_entry);
         data_use_recorders_.erase(old_frame_entry);
       }
 
@@ -332,7 +335,7 @@ void ChromeDataUseAscriber::ReadyToCommitMainFrameNavigation(
   // completed its data use.
   if (frame_it == main_render_frame_data_use_map_.end()) {
     if (entry->IsDataUseComplete()) {
-      OnDataUseCompleted(entry);
+      NotifyDataUseCompleted(entry);
       data_use_recorders_.erase(entry);
     }
     return;
@@ -357,7 +360,7 @@ void ChromeDataUseAscriber::ReadyToCommitMainFrameNavigation(
     // |main_render_frame_data_use_map_|, possibly marking it complete.
     main_render_frame_data_use_map_.erase(frame_it);
     if (old_frame_entry->IsDataUseComplete()) {
-      OnDataUseCompleted(old_frame_entry);
+      NotifyDataUseCompleted(old_frame_entry);
       data_use_recorders_.erase(old_frame_entry);
 
       if (visible_main_render_frames_.find(
@@ -389,11 +392,15 @@ void ChromeDataUseAscriber::DidFinishNavigation(int render_process_id,
       RenderFrameHostID(render_process_id, render_frame_id));
   if (frame_it != main_render_frame_data_use_map_.end()) {
     frame_it->second->set_page_transition(page_transition);
+
+    for (auto& observer : observers_)
+      observer.OnPageLoadCommit(&frame_it->second->data_use());
   }
 }
 
-void ChromeDataUseAscriber::OnDataUseCompleted(DataUseRecorderEntry entry) {
-  // TODO(ryansturm): Notify observers that data use is complete.
+void ChromeDataUseAscriber::NotifyDataUseCompleted(DataUseRecorderEntry entry) {
+  for (auto& observer : observers_)
+    observer.OnPageLoadComplete(&entry->data_use());
 }
 
 std::unique_ptr<URLRequestClassifier>

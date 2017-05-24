@@ -60,6 +60,26 @@ void DesktopViewport::SetViewportCenter(float x, float y) {
   MoveViewport(x - old_center.x, y - old_center.y);
 }
 
+ViewMatrix::Point DesktopViewport::GetViewportCenter() const {
+  if (!IsViewportReady()) {
+    LOG(WARNING) << "Viewport is not ready before getting the viewport center";
+    return {0.f, 0.f};
+  }
+  return desktop_to_surface_transform_.Invert().MapPoint(
+      {surface_size_.x / 2.f, surface_size_.y / 2.f});
+}
+
+ViewMatrix::Point DesktopViewport::ConstrainPointToDesktop(
+    const ViewMatrix::Point& point) const {
+  if (!IsViewportReady()) {
+    LOG(WARNING) << "Cannot constrain point to desktop. Viewport is not ready.";
+    return point;
+  }
+
+  return ConstrainPointToBounds({0.f, desktop_size_.x, 0.f, desktop_size_.y},
+                                point);
+}
+
 void DesktopViewport::RegisterOnTransformationChangedCallback(
     const TransformationCallback& callback,
     bool run_immediately) {
@@ -210,11 +230,6 @@ DesktopViewport::Bounds DesktopViewport::GetViewportCenterBounds() const {
   }
 
   return bounds;
-}
-
-ViewMatrix::Point DesktopViewport::GetViewportCenter() const {
-  return desktop_to_surface_transform_.Invert().MapPoint(
-      {surface_size_.x / 2.f, surface_size_.y / 2.f});
 }
 
 void DesktopViewport::MoveViewportWithoutUpdate(float dx, float dy) {

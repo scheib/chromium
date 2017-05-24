@@ -61,13 +61,13 @@ bool CastEnvironment::CurrentlyOn(ThreadId identifier) {
   switch (identifier) {
     case CastEnvironment::MAIN:
       return main_thread_proxy_.get() &&
-             main_thread_proxy_->RunsTasksOnCurrentThread();
+             main_thread_proxy_->RunsTasksInCurrentSequence();
     case CastEnvironment::AUDIO:
       return audio_thread_proxy_.get() &&
-             audio_thread_proxy_->RunsTasksOnCurrentThread();
+             audio_thread_proxy_->RunsTasksInCurrentSequence();
     case CastEnvironment::VIDEO:
       return video_thread_proxy_.get() &&
-             video_thread_proxy_->RunsTasksOnCurrentThread();
+             video_thread_proxy_->RunsTasksInCurrentSequence();
     default:
       NOTREACHED() << "Invalid thread identifier";
       return false;

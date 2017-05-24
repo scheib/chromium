@@ -14,6 +14,7 @@
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/sequenced_task_runner.h"
+#include "base/task_scheduler/post_task.h"
 #include "base/threading/sequenced_worker_pool.h"
 #include "base/time/time.h"
 #include "chrome/browser/task_manager/sampling/shared_sampler_win_defines.h"
@@ -70,10 +71,7 @@ class SharedSamplerTest : public testing::Test {
 
  private:
   static scoped_refptr<base::SequencedTaskRunner> GetBlockingPoolRunner() {
-    base::SequencedWorkerPool* blocking_pool =
-        content::BrowserThread::GetBlockingPool();
-    return blocking_pool->GetSequencedTaskRunner(
-        blocking_pool->GetSequenceToken());
+    return base::CreateSequencedTaskRunnerWithTraits({base::MayBlock()});
   }
 
   void OnRefreshTypeFinished(int64_t finished_refresh_type) {

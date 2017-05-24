@@ -14,66 +14,38 @@
 namespace blink {
 
 GraphicsContextCanvas::GraphicsContextCanvas(PaintCanvas* canvas,
-                                             const SkIRect& user_clip_rect,
+                                             const SkIRect& paint_rect,
                                              SkScalar bitmap_scale_factor)
     : canvas_(canvas),
       cg_context_(0),
       bitmap_scale_factor_(bitmap_scale_factor),
-      bitmap_is_dummy_(false) {
-  canvas_->save();
-  canvas_->clipRect(SkRect::MakeFromIRect(user_clip_rect));
+      paint_rect_(paint_rect) {
+  // Callers should just avoid painting at all when this is the case.
+  DCHECK(!paint_rect_.isEmpty());
 }
 
 GraphicsContextCanvas::~GraphicsContextCanvas() {
   ReleaseIfNeeded();
-  canvas_->restore();
-}
-
-SkIRect GraphicsContextCanvas::ComputeDirtyRect() {
-  // If the user specified a clip region, assume that it was tight and that the
-  // dirty rect is approximately the whole bitmap.
-  return SkIRect::MakeWH(offscreen_.width(), offscreen_.height());
 }
 
 // This must be called to balance calls to cgContext
 void GraphicsContextCanvas::ReleaseIfNeeded() {
   if (!cg_context_)
     return;
-  if (!bitmap_is_dummy_) {
-    // Find the bits that were drawn to.
-    SkIRect bounds = ComputeDirtyRect();
-    SkBitmap subset;
-    if (!offscreen_.extractSubset(&subset, bounds)) {
-      return;
-    }
-    subset.setImmutable();  // Prevents a defensive copy inside Skia.
-    canvas_->save();
-    canvas_->setMatrix(SkMatrix::I());  // Reset back to device space.
-    canvas_->translate(bounds.x() + bitmap_offset_.x(),
-                       bounds.y() + bitmap_offset_.y());
-    canvas_->scale(1.f / bitmap_scale_factor_, 1.f / bitmap_scale_factor_);
-    canvas_->drawBitmap(subset, 0, 0);
-    canvas_->restore();
-  }
+  offscreen_.setImmutable();  // Prevents a defensive copy inside Skia.
+  canvas_->save();
+  canvas_->setMatrix(SkMatrix::I());  // Reset back to device space.
+  canvas_->translate(paint_rect_.x(), paint_rect_.y());
+  canvas_->scale(1.f / bitmap_scale_factor_, 1.f / bitmap_scale_factor_);
+  canvas_->drawBitmap(offscreen_, 0, 0);
+  canvas_->restore();
+
   CGContextRelease(cg_context_);
   cg_context_ = 0;
-  bitmap_is_dummy_ = false;
 }
 
 CGContextRef GraphicsContextCanvas::CgContext() {
   ReleaseIfNeeded();  // This flushes any prior bitmap use
-
-  SkIRect clip_bounds;
-  if (!canvas_->getDeviceClipBounds(&clip_bounds)) {
-    // If the clip is empty, then there is nothing to draw. The caller may
-    // attempt to draw (to-be-clipped) results, so ensure there is a dummy
-    // non-NULL CGContext to use.
-    bitmap_is_dummy_ = true;
-    clip_bounds = SkIRect::MakeXYWH(0, 0, 1, 1);
-  }
-
-  // remember the top/left, in case we need to compose this later
-  bitmap_offset_.set(clip_bounds.x(), clip_bounds.y());
 
   // Allocate an offscreen and draw into that, relying on the
   // compositing step to apply skia's clip.
@@ -83,8 +55,8 @@ CGContextRef GraphicsContextCanvas::CgContext() {
           : CGColorSpaceCreateDeviceRGB());
 
   bool result = offscreen_.tryAllocN32Pixels(
-      SkScalarCeilToInt(bitmap_scale_factor_ * clip_bounds.width()),
-      SkScalarCeilToInt(bitmap_scale_factor_ * clip_bounds.height()));
+      SkScalarCeilToInt(bitmap_scale_factor_ * paint_rect_.width()),
+      SkScalarCeilToInt(bitmap_scale_factor_ * paint_rect_.height()));
   DCHECK(result);
   if (!result)
     return 0;
@@ -97,18 +69,14 @@ CGContextRef GraphicsContextCanvas::CgContext() {
   DCHECK(cg_context_);
 
   SkMatrix matrix = canvas_->getTotalMatrix();
-  matrix.postTranslate(-SkIntToScalar(bitmap_offset_.x()),
-                       -SkIntToScalar(bitmap_offset_.y()));
+  matrix.postTranslate(-SkIntToScalar(paint_rect_.x()),
+                       -SkIntToScalar(paint_rect_.y()));
   matrix.postScale(bitmap_scale_factor_, -bitmap_scale_factor_);
   matrix.postTranslate(0, SkIntToScalar(display_height));
 
   CGContextConcatCTM(cg_context_, skia::SkMatrixToCGAffineTransform(matrix));
 
   return cg_context_;
-}
-
-bool GraphicsContextCanvas::HasEmptyClipRegion() const {
-  return canvas_->isClipEmpty();
 }
 
 }  // namespace blink

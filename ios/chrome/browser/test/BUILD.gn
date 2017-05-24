@@ -5,6 +5,7 @@
 import("//ios/public/provider/chrome/browser/build_config.gni")
 
 source_set("perf_test_support") {
+  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "perf_test_with_bvc_ios.h",

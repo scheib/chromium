@@ -103,7 +103,7 @@ DatabaseQuotaClient::DatabaseQuotaClient(
 
 DatabaseQuotaClient::~DatabaseQuotaClient() {
   if (db_tracker_thread_.get() &&
-      !db_tracker_thread_->RunsTasksOnCurrentThread() && db_tracker_.get()) {
+      !db_tracker_thread_->RunsTasksInCurrentSequence() && db_tracker_.get()) {
     DatabaseTracker* tracker = db_tracker_.get();
     tracker->AddRef();
     db_tracker_ = NULL;

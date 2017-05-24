@@ -34,114 +34,123 @@ ExtensionNavigationThrottle::~ExtensionNavigationThrottle() {}
 content::NavigationThrottle::ThrottleCheckResult
 ExtensionNavigationThrottle::WillStartRequest() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  GURL url(navigation_handle()->GetURL());
   content::WebContents* web_contents = navigation_handle()->GetWebContents();
   ExtensionRegistry* registry =
       ExtensionRegistry::Get(web_contents->GetBrowserContext());
 
+  // Is this navigation targeting an extension resource?
+  const GURL& url = navigation_handle()->GetURL();
+  bool url_has_extension_scheme = url.SchemeIs(kExtensionScheme);
+  url::Origin target_origin(url);
+  const Extension* target_extension = nullptr;
+  if (url_has_extension_scheme) {
+    // "chrome-extension://" URL.
+    target_extension =
+        registry->enabled_extensions().GetExtensionOrAppByURL(url);
+  } else if (target_origin.scheme() == kExtensionScheme) {
+    // "blob:chrome-extension://" or "filesystem:chrome-extension://" URL.
+    DCHECK(url.SchemeIsFileSystem() || url.SchemeIsBlob());
+    target_extension =
+        registry->enabled_extensions().GetByID(target_origin.host());
+  } else {
+    // If the navigation is not to a chrome-extension resource, no need to
+    // perform any more checks; it's outside of the purview of this throttle.
+    return content::NavigationThrottle::PROCEED;
+  }
+
+  // If the navigation is to an unknown or disabled extension, block it.
+  if (!target_extension) {
+    // TODO(nick): This yields an unsatisfying error page; use a different error
+    // code once that's supported. https://crbug.com/649869
+    return content::NavigationThrottle::BLOCK_REQUEST;
+  }
+
   if (navigation_handle()->IsInMainFrame()) {
     // Block top-level navigations to blob: or filesystem: URLs with extension
     // origin from non-extension processes.  See https://crbug.com/645028.
-    bool is_nested_url = url.SchemeIsFileSystem() || url.SchemeIsBlob();
-    bool is_extension = false;
-    if (registry) {
-      is_extension = !!registry->enabled_extensions().GetExtensionOrAppByURL(
-          navigation_handle()->GetStartingSiteInstance()->GetSiteURL());
-    }
+    bool current_frame_is_extension_process =
+        !!registry->enabled_extensions().GetExtensionOrAppByURL(
+            navigation_handle()->GetStartingSiteInstance()->GetSiteURL());
 
-    url::Origin origin(url);
-    if (is_nested_url && origin.scheme() == extensions::kExtensionScheme &&
-        !is_extension) {
+    if (!url_has_extension_scheme && !current_frame_is_extension_process) {
       // Relax this restriction for apps that use <webview>.  See
       // https://crbug.com/652077.
-      const extensions::Extension* extension =
-          registry->enabled_extensions().GetByID(origin.host());
       bool has_webview_permission =
-          extension &&
-          extension->permissions_data()->HasAPIPermission(
-              extensions::APIPermission::kWebView);
+          target_extension->permissions_data()->HasAPIPermission(
+              APIPermission::kWebView);
       if (!has_webview_permission)
         return content::NavigationThrottle::CANCEL;
     }
 
-    if (content::IsBrowserSideNavigationEnabled() &&
-        url.scheme() == extensions::kExtensionScheme) {
-      // This logic is performed for PlzNavigate sub-resources and for
-      // non-PlzNavigate in
-      // extensions::url_request_util::AllowCrossRendererResourceLoad.
-      const Extension* extension =
-          registry->enabled_extensions().GetExtensionOrAppByURL(url);
-      guest_view::GuestViewBase* guest =
-          guest_view::GuestViewBase::FromWebContents(web_contents);
-      if (guest) {
-        std::string owner_extension_id = guest->owner_host();
-        const Extension* owner_extension =
-            registry->enabled_extensions().GetByID(owner_extension_id);
+    guest_view::GuestViewBase* guest =
+        guest_view::GuestViewBase::FromWebContents(web_contents);
+    if (content::IsBrowserSideNavigationEnabled() && url_has_extension_scheme &&
+        guest) {
+      // This variant of this logic applies to PlzNavigate top-level
+      // navigations. It is performed for subresources, and for non-PlzNavigate
+      // top navigations, in url_request_util::AllowCrossRendererResourceLoad.
+      const std::string& owner_extension_id = guest->owner_host();
+      const Extension* owner_extension =
+          registry->enabled_extensions().GetByID(owner_extension_id);
 
-        std::string partition_domain, partition_id;
-        bool in_memory;
-        std::string resource_path = url.path();
-        bool is_guest = WebViewGuest::GetGuestPartitionConfigForSite(
-            navigation_handle()->GetStartingSiteInstance()->GetSiteURL(),
-            &partition_domain, &partition_id, &in_memory);
+      std::string partition_domain;
+      std::string partition_id;
+      bool in_memory = false;
+      bool is_guest = WebViewGuest::GetGuestPartitionConfigForSite(
+          navigation_handle()->GetStartingSiteInstance()->GetSiteURL(),
+          &partition_domain, &partition_id, &in_memory);
 
-        bool allowed = true;
-        url_request_util::AllowCrossRendererResourceLoadHelper(
-            is_guest, extension, owner_extension, partition_id, resource_path,
-            navigation_handle()->GetPageTransition(), &allowed);
-        if (!allowed)
-          return content::NavigationThrottle::BLOCK_REQUEST;
-      }
+      bool allowed = true;
+      url_request_util::AllowCrossRendererResourceLoadHelper(
+          is_guest, target_extension, owner_extension, partition_id, url.path(),
+          navigation_handle()->GetPageTransition(), &allowed);
+      if (!allowed)
+        return content::NavigationThrottle::BLOCK_REQUEST;
     }
 
     return content::NavigationThrottle::PROCEED;
   }
 
-  // Now enforce web_accessible_resources for navigations. Top-level navigations
-  // should always be allowed.
+  // This is a subframe navigation to a |target_extension| resource.
+  // Enforce the web_accessible_resources restriction.
+  content::RenderFrameHost* parent = navigation_handle()->GetParentFrame();
 
-  // If the navigation is not to a chrome-extension:// URL, no need to perform
-  // any more checks.
-  if (!url.SchemeIs(extensions::kExtensionScheme))
-    return content::NavigationThrottle::PROCEED;
-
-  // The subframe which is navigated needs to have all of its ancestors be
-  // at the same origin, otherwise the resource needs to be explicitly listed
-  // in web_accessible_resources.
-  content::RenderFrameHost* ancestor = navigation_handle()->GetParentFrame();
+  // Look to see if all ancestors belong to |target_extension|. If not,
+  // then the web_accessible_resource restriction applies.
   bool external_ancestor = false;
-  while (ancestor) {
-    if (ancestor->GetLastCommittedURL().GetOrigin() != url.GetOrigin()) {
-      // Ignore DevTools, as it is allowed to embed extension pages.
-      if (!ancestor->GetLastCommittedURL().SchemeIs(
-              content::kChromeDevToolsScheme)) {
-        external_ancestor = true;
-        break;
-      }
-    }
-    ancestor = ancestor->GetParent();
+  for (auto* ancestor = parent; ancestor; ancestor = ancestor->GetParent()) {
+    // Look for a match on the last committed origin. This handles the
+    // common case, and the about:blank case.
+    if (ancestor->GetLastCommittedOrigin() == target_origin)
+      continue;
+    // Look for an origin match with the last committed URL. This handles the
+    // case of sandboxed extension resources, which commit with a null origin,
+    // but are permitted to load non-webaccessible extension resources in
+    // subframes.
+    if (url::Origin(ancestor->GetLastCommittedURL()) == target_origin)
+      continue;
+    // Ignore DevTools, as it is allowed to embed extension pages.
+    if (ancestor->GetLastCommittedURL().SchemeIs(
+            content::kChromeDevToolsScheme))
+      continue;
+
+    // Otherwise, we have an external ancestor.
+    external_ancestor = true;
+    break;
   }
 
-  if (!external_ancestor)
-    return content::NavigationThrottle::PROCEED;
+  if (external_ancestor) {
+    // Cancel navigations to nested URLs, to match the main frame behavior.
+    if (!url_has_extension_scheme)
+      return content::NavigationThrottle::CANCEL;
 
-  // Since there was at least one origin different than the navigation URL,
-  // explicitly check for the resource in web_accessible_resources.
-  std::string resource_path = url.path();
-  if (!registry)
-    return content::NavigationThrottle::BLOCK_REQUEST;
-
-  const extensions::Extension* extension =
-      registry->enabled_extensions().GetByID(url.host());
-  if (!extension)
-    return content::NavigationThrottle::BLOCK_REQUEST;
-
-  if (WebAccessibleResourcesInfo::IsResourceWebAccessible(extension,
-                                                          resource_path)) {
-    return content::NavigationThrottle::PROCEED;
+    // |url| must be in the manifest's "web_accessible_resources" section.
+    if (!WebAccessibleResourcesInfo::IsResourceWebAccessible(target_extension,
+                                                             url.path()))
+      return content::NavigationThrottle::BLOCK_REQUEST;
   }
 
-  return content::NavigationThrottle::BLOCK_REQUEST;
+  return content::NavigationThrottle::PROCEED;
 }
 
 const char* ExtensionNavigationThrottle::GetNameForLogging() {

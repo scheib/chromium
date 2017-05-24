@@ -11,14 +11,12 @@
 namespace blink {
 
 class DocumentMarker;
-class RenderedDocumentMarker;
 
 class DocumentMarkerListEditor {
  public:
-  using MarkerList = HeapVector<Member<RenderedDocumentMarker>>;
+  using MarkerList = HeapVector<Member<DocumentMarker>>;
 
-  static void AddMarkerWithoutMergingOverlapping(MarkerList*,
-                                                 const DocumentMarker*);
+  static void AddMarkerWithoutMergingOverlapping(MarkerList*, DocumentMarker*);
 
   // Returns true if a marker was moved, false otherwise.
   static bool MoveMarkers(MarkerList* src_list,

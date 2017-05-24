@@ -114,7 +114,6 @@
     dialog,
     directory,
     disclosure_triangle,
-    div,
     document,
     embedded_object,
     feed,
@@ -122,6 +121,7 @@
     figure,
     footer,
     form,
+    generic_container,
     grid,
     group,
     heading,
@@ -469,9 +469,6 @@
 
     // ARIA readonly flag.
     aria_readonly,
-
-    // Writeable attributes
-    can_set_value,
 
     // If this is set, all of the other fields in this struct should
     // be ignored and only the locations should change.

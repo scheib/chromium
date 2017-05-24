@@ -31,6 +31,8 @@ class CORE_EXPORT NGLineBoxFragmentBuilder final {
   void MoveChildrenInBlockDirection(LayoutUnit);
   void MoveChildrenInBlockDirection(LayoutUnit, unsigned start, unsigned end);
 
+  void MoveChildrenInInlineDirection(LayoutUnit delta);
+
   const Vector<RefPtr<NGPhysicalFragment>>& Children() const {
     return children_;
   }

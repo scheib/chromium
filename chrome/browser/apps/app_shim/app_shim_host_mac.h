@@ -14,6 +14,7 @@
 #include "chrome/browser/apps/app_shim/app_shim_handler_mac.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_sender.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "mojo/edk/embedder/scoped_platform_handle.h"
 
 namespace IPC {
@@ -77,6 +78,7 @@ class AppShimHost : public IPC::Listener,
   // Closes the channel and destroys the AppShimHost.
   void Close();
 
+  mojo::edk::PeerConnection peer_connection_;
   std::unique_ptr<IPC::ChannelProxy> channel_;
   std::string app_id_;
   base::FilePath profile_path_;

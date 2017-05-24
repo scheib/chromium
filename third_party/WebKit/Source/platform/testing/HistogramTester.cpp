@@ -33,4 +33,10 @@ void HistogramTester::ExpectTotalCount(const std::string& name,
   histogram_tester_->ExpectTotalCount(name, count);
 }
 
+base::HistogramBase::Count HistogramTester::GetBucketCount(
+    const std::string& name,
+    base::HistogramBase::Sample sample) const {
+  return histogram_tester_->GetBucketCount(name, sample);
+}
+
 }  // namespace blink

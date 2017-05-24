@@ -236,6 +236,10 @@
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app", "platform_app"]
   },
+  "mediaPerceptionPrivate": {
+    "dependencies": ["permission:mediaPerceptionPrivate"],
+    "contexts": ["blessed_extension"]
+  },
   "metricsPrivate": [{
     "dependencies": ["permission:metricsPrivate"],
     "contexts": ["blessed_extension"],

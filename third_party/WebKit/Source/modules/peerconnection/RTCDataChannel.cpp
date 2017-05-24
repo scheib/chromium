@@ -25,6 +25,7 @@
 #include "modules/peerconnection/RTCDataChannel.h"
 
 #include <memory>
+#include <utility>
 #include "bindings/core/v8/ExceptionState.h"
 #include "core/dom/DOMArrayBuffer.h"
 #include "core/dom/DOMArrayBufferView.h"
@@ -244,7 +245,8 @@ void RTCDataChannel::send(Blob* data, ExceptionState& exception_state) {
 }
 
 void RTCDataChannel::close() {
-  handler_->Close();
+  if (handler_)
+    handler_->Close();
 }
 
 void RTCDataChannel::DidChangeReadyState(
@@ -319,6 +321,7 @@ void RTCDataChannel::ContextDestroyed(ExecutionContext*) {
   stopped_ = true;
   handler_->SetClient(nullptr);
   handler_.reset();
+  ready_state_ = kReadyStateClosed;
 }
 
 // ActiveScriptWrappable

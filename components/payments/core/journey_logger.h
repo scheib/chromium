@@ -136,6 +136,10 @@ class JourneyLogger {
     bool is_requested_;
   };
 
+  // Records the histograms for all the steps of a complete checkout flow that
+  // were reached.
+  void RecordCheckoutFlowMetrics();
+
   // Records the histograms for all the sections that were requested by the
   // merchant.
   void RecordSectionSpecificStats(CompletionStatus completion_status);

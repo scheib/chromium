@@ -38,6 +38,7 @@
 #include "content/shell/common/shell_messages.h"
 #include "content/shell/common/shell_switches.h"
 #include "content/shell/grit/shell_resources.h"
+#include "media/mojo/features.h"
 #include "net/url_request/url_request_context_getter.h"
 #include "storage/browser/quota/quota_settings.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -63,7 +64,7 @@
 #include "sandbox/win/src/sandbox.h"
 #endif
 
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
 #include "media/mojo/services/media_service_factory.h"  // nogncheck
 #endif
 
@@ -197,7 +198,7 @@ bool ShellContentBrowserClient::IsHandledURL(const GURL& url) {
 
 void ShellContentBrowserClient::RegisterInProcessServices(
     StaticServiceMap* services) {
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
   {
     content::ServiceInfo info;
     info.factory = base::Bind(&media::CreateMediaServiceForTesting);

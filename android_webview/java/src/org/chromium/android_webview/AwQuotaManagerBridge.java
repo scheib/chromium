@@ -50,7 +50,7 @@ public class AwQuotaManagerBridge {
     }
 
     // This is not owning. The native object is owned by the native AwBrowserContext.
-    private long mNativeAwQuotaManagerBridgeImpl;
+    private long mNativeAwQuotaManagerBridge;
 
     // The Java callbacks are saved here. An incrementing callback id is generated for each saved
     // callback and is passed to the native side to identify callback.
@@ -59,13 +59,13 @@ public class AwQuotaManagerBridge {
     private SparseArray<ValueCallback<Long>> mPendingGetQuotaForOriginCallbacks;
     private SparseArray<ValueCallback<Long>> mPendingGetUsageForOriginCallbacks;
 
-    private AwQuotaManagerBridge(long nativeAwQuotaManagerBridgeImpl) {
-        mNativeAwQuotaManagerBridgeImpl = nativeAwQuotaManagerBridgeImpl;
+    private AwQuotaManagerBridge(long nativeAwQuotaManagerBridge) {
+        mNativeAwQuotaManagerBridge = nativeAwQuotaManagerBridge;
         mPendingGetOriginCallbacks =
                 new SparseArray<ValueCallback<Origins>>();
         mPendingGetQuotaForOriginCallbacks = new SparseArray<ValueCallback<Long>>();
         mPendingGetUsageForOriginCallbacks = new SparseArray<ValueCallback<Long>>();
-        nativeInit(mNativeAwQuotaManagerBridgeImpl);
+        nativeInit(mNativeAwQuotaManagerBridge);
     }
 
     private int getNextId() {
@@ -88,14 +88,14 @@ public class AwQuotaManagerBridge {
      * TODO(boliu): Actually clear Web Storage.
      */
     public void deleteAllData() {
-        nativeDeleteAllData(mNativeAwQuotaManagerBridgeImpl);
+        nativeDeleteAllData(mNativeAwQuotaManagerBridge);
     }
 
     /**
      * Implements WebStorage.deleteOrigin(). Clear the storage of APIs 2-5 for the given origin.
      */
     public void deleteOrigin(String origin) {
-        nativeDeleteOrigin(mNativeAwQuotaManagerBridgeImpl, origin);
+        nativeDeleteOrigin(mNativeAwQuotaManagerBridge, origin);
     }
 
     /**
@@ -106,7 +106,7 @@ public class AwQuotaManagerBridge {
         int callbackId = getNextId();
         assert mPendingGetOriginCallbacks.get(callbackId) == null;
         mPendingGetOriginCallbacks.put(callbackId, callback);
-        nativeGetOrigins(mNativeAwQuotaManagerBridgeImpl, callbackId);
+        nativeGetOrigins(mNativeAwQuotaManagerBridge, callbackId);
     }
 
     /**
@@ -117,7 +117,7 @@ public class AwQuotaManagerBridge {
         int callbackId = getNextId();
         assert mPendingGetQuotaForOriginCallbacks.get(callbackId) == null;
         mPendingGetQuotaForOriginCallbacks.put(callbackId, callback);
-        nativeGetUsageAndQuotaForOrigin(mNativeAwQuotaManagerBridgeImpl, origin, callbackId, true);
+        nativeGetUsageAndQuotaForOrigin(mNativeAwQuotaManagerBridge, origin, callbackId, true);
     }
 
     /**
@@ -128,7 +128,7 @@ public class AwQuotaManagerBridge {
         int callbackId = getNextId();
         assert mPendingGetUsageForOriginCallbacks.get(callbackId) == null;
         mPendingGetUsageForOriginCallbacks.put(callbackId, callback);
-        nativeGetUsageAndQuotaForOrigin(mNativeAwQuotaManagerBridgeImpl, origin, callbackId, false);
+        nativeGetUsageAndQuotaForOrigin(mNativeAwQuotaManagerBridge, origin, callbackId, false);
     }
 
     @CalledByNative
@@ -154,10 +154,10 @@ public class AwQuotaManagerBridge {
         }
     }
 
-    private native void nativeInit(long nativeAwQuotaManagerBridgeImpl);
-    private native void nativeDeleteAllData(long nativeAwQuotaManagerBridgeImpl);
-    private native void nativeDeleteOrigin(long nativeAwQuotaManagerBridgeImpl, String origin);
-    private native void nativeGetOrigins(long nativeAwQuotaManagerBridgeImpl, int callbackId);
-    private native void nativeGetUsageAndQuotaForOrigin(long nativeAwQuotaManagerBridgeImpl,
-            String origin, int callbackId, boolean isQuota);
+    private native void nativeInit(long nativeAwQuotaManagerBridge);
+    private native void nativeDeleteAllData(long nativeAwQuotaManagerBridge);
+    private native void nativeDeleteOrigin(long nativeAwQuotaManagerBridge, String origin);
+    private native void nativeGetOrigins(long nativeAwQuotaManagerBridge, int callbackId);
+    private native void nativeGetUsageAndQuotaForOrigin(
+            long nativeAwQuotaManagerBridge, String origin, int callbackId, boolean isQuota);
 }

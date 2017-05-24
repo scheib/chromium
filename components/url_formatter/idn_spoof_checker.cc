@@ -8,9 +8,11 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/threading/thread_local_storage.h"
+#include "net/base/lookup_string_in_fixed_set.h"
 #include "third_party/icu/source/common/unicode/schriter.h"
 #include "third_party/icu/source/common/unicode/unistr.h"
 #include "third_party/icu/source/i18n/unicode/regex.h"
+#include "third_party/icu/source/i18n/unicode/translit.h"
 #include "third_party/icu/source/i18n/unicode/uspoof.h"
 
 namespace url_formatter {
@@ -20,6 +22,31 @@ base::ThreadLocalStorage::StaticSlot tls_index = TLS_INITIALIZER;
 
 void OnThreadTermination(void* regex_matcher) {
   delete reinterpret_cast<icu::RegexMatcher*>(regex_matcher);
+}
+
+#include "components/url_formatter/top_domains/alexa_skeletons-inc.cc"
+// All the domains in the above file have 3 or fewer labels.
+const size_t kNumberOfLabelsToCheck = 3;
+
+bool LookupMatchInTopDomains(base::StringPiece skeleton) {
+  DCHECK_NE(skeleton.back(), '.');
+  auto labels = base::SplitStringPiece(skeleton, ".", base::KEEP_WHITESPACE,
+                                       base::SPLIT_WANT_ALL);
+
+  if (labels.size() > kNumberOfLabelsToCheck) {
+    labels.erase(labels.begin(),
+                 labels.begin() + labels.size() - kNumberOfLabelsToCheck);
+  }
+
+  while (labels.size() > 1) {
+    std::string partial_skeleton = base::JoinString(labels, ".");
+    if (net::LookupStringInFixedSet(
+            kDafsa, arraysize(kDafsa), partial_skeleton.data(),
+            partial_skeleton.length()) != net::kDafsaNotFound)
+      return true;
+    labels.erase(labels.begin());
+  }
+  return false;
 }
 
 }  // namespace
@@ -68,11 +95,14 @@ IDNSpoofChecker::IDNSpoofChecker() {
       icu::UnicodeSet(UNICODE_STRING_SIMPLE("[[:Latin:] - [a-zA-Z]]"), status);
   non_ascii_latin_letters_.freeze();
 
-  // These letters are parts of |dangerous_patterns_|.
+  // The following two sets are parts of |dangerous_patterns_|.
   kana_letters_exceptions_ = icu::UnicodeSet(
       UNICODE_STRING_SIMPLE("[\\u3078-\\u307a\\u30d8-\\u30da\\u30fb-\\u30fe]"),
       status);
   kana_letters_exceptions_.freeze();
+  combining_diacritics_exceptions_ =
+      icu::UnicodeSet(UNICODE_STRING_SIMPLE("[\\u0300-\\u0339]"), status);
+  combining_diacritics_exceptions_.freeze();
 
   // These Cyrillic letters look like Latin. A domain label entirely made of
   // these letters is blocked as a simplified whole-script-spoofable.
@@ -85,6 +115,36 @@ IDNSpoofChecker::IDNSpoofChecker() {
   cyrillic_letters_.freeze();
 
   DCHECK(U_SUCCESS(status));
+  // This set is used to determine whether or not to apply a slow
+  // transliteration to remove diacritics to a given hostname before the
+  // confusable skeleton calculation for comparison with top domain names. If
+  // it has any character outside the set, the expensive step will be skipped
+  // because it cannot match any of top domain names.
+  // The last ([\u0300-\u0339] is a shorthand for "[:Identifier_Status=Allowed:]
+  // & [:Script_Extensions=Inherited:] - [\\u200C\\u200D]". The latter is a
+  // subset of the former but it does not matter because hostnames with
+  // characters outside the latter set would be rejected in an earlier step.
+  lgc_letters_n_ascii_ = icu::UnicodeSet(
+      UNICODE_STRING_SIMPLE("[[:Latin:][:Greek:][:Cyrillic:][0-9\\u002e_"
+                            "\\u002d][\\u0300-\\u0339]]"),
+      status);
+  lgc_letters_n_ascii_.freeze();
+
+  // Used for diacritics-removal before the skeleton calculation. Add
+  // "ł > l; ø > o; đ > d" that are not handled by "NFD; Nonspacing mark
+  // removal; NFC". On top of that, supplement the Unicode confusable list by
+  // replacing {U+043A (к), U+0138(ĸ), U+03BA(κ)}, U+04CF (ӏ) and U+043F(п) by
+  // 'k', 'l' and 'n', respectively.
+  // TODO(jshin): Revisit "ł > l; ø > o" mapping.
+  UParseError parse_error;
+  transliterator_.reset(icu::Transliterator::createFromRules(
+      UNICODE_STRING_SIMPLE("DropAcc"),
+      icu::UnicodeString("::NFD; ::[:Nonspacing Mark:] Remove; ::NFC;"
+                         " ł > l; ø > o; đ > d; ӏ > l; [кĸκ] > k; п > n;"),
+      UTRANS_FORWARD, parse_error, status));
+  DCHECK(U_SUCCESS(status))
+      << "Spoofchecker initalization failed due to an error: "
+      << u_errorName(status);
 }
 
 IDNSpoofChecker::~IDNSpoofChecker() {
@@ -120,9 +180,13 @@ bool IDNSpoofChecker::SafeToDisplayAsUnicode(base::StringPiece16 label,
     return false;
 
   // If there's no script mixing, the input is regarded as safe without any
-  // extra check unless it contains Kana letter exceptions or it's made entirely
-  // of Cyrillic letters that look like Latin letters. Note that the following
-  // combinations of scripts are treated as a 'logical' single script.
+  // extra check unless it falls into one of three categories:
+  //   - contains Kana letter exceptions
+  //   - the TLD is ASCII and the input is made entirely of Cyrillic letters
+  //     that look like Latin letters.
+  //   - it has combining diacritic marks.
+  // Note that the following combinations of scripts are treated as a 'logical'
+  // single script.
   //  - Chinese: Han, Bopomofo, Common
   //  - Japanese: Han, Hiragana, Katakana, Common
   //  - Korean: Hangul, Han, Common
@@ -130,14 +194,19 @@ bool IDNSpoofChecker::SafeToDisplayAsUnicode(base::StringPiece16 label,
   if (result == USPOOF_ASCII)
     return true;
   if (result == USPOOF_SINGLE_SCRIPT_RESTRICTIVE &&
-      kana_letters_exceptions_.containsNone(label_string)) {
+      kana_letters_exceptions_.containsNone(label_string) &&
+      combining_diacritics_exceptions_.containsNone(label_string)) {
     // Check Cyrillic confusable only for ASCII TLDs.
     return !is_tld_ascii || !IsMadeOfLatinAlikeCyrillic(label_string);
   }
 
   // Additional checks for |label| with multiple scripts, one of which is Latin.
   // Disallow non-ASCII Latin letters to mix with a non-Latin script.
-  if (non_ascii_latin_letters_.containsSome(label_string))
+  // Note that the non-ASCII Latin check should not be applied when the entire
+  // label is made of Latin. Checking with lgc_letters set here should be fine
+  // because script mixing of LGC is already rejected.
+  if (non_ascii_latin_letters_.containsSome(label_string) &&
+      !lgc_letters_n_ascii_.containsAll(label_string))
     return false;
 
   if (!tls_index.initialized())
@@ -167,6 +236,9 @@ bool IDNSpoofChecker::SafeToDisplayAsUnicode(base::StringPiece16 label,
     //   Letter Co) to be next to Latin.
     // - Disallow Latin 'o' and 'g' next to Armenian.
     // - Disalow mixing of Latin and Canadian Syllabary.
+    // - Disallow combining diacritical mark (U+0300-U+0339) after a non-LGC
+    //   character. Other combining diacritical marks are not in the allowed
+    //   character set.
     dangerous_pattern = new icu::RegexMatcher(
         icu::UnicodeString(
             R"([^\p{scx=kana}\p{scx=hira}\p{scx=hani}])"
@@ -181,7 +253,8 @@ bool IDNSpoofChecker::SafeToDisplayAsUnicode(base::StringPiece16 label,
             R"([a-z][\u0585\u0581]+[a-z]|)"
             R"(^[og]+[\p{scx=armn}]|[\p{scx=armn}][og]+$|)"
             R"([\p{scx=armn}][og]+[\p{scx=armn}]|)"
-            R"([\p{sc=cans}].*[a-z]|[a-z].*[\p{sc=cans}])",
+            R"([\p{sc=cans}].*[a-z]|[a-z].*[\p{sc=cans}]|)"
+            R"([^\p{scx=latn}\p{scx=grek}\p{scx=cyrl}][\u0300-\u0339])",
             -1, US_INV),
         0, status);
     tls_index.Set(dangerous_pattern);
@@ -190,10 +263,33 @@ bool IDNSpoofChecker::SafeToDisplayAsUnicode(base::StringPiece16 label,
   return !dangerous_pattern->find();
 }
 
+bool IDNSpoofChecker::SimilarToTopDomains(base::StringPiece16 hostname) {
+  size_t hostname_length = hostname.length() - (hostname.back() == '.' ? 1 : 0);
+  icu::UnicodeString ustr_host(FALSE, hostname.data(), hostname_length);
+  // If input has any characters outside Latin-Greek-Cyrillic and [0-9._-],
+  // there is no point in getting rid of diacritics because combining marks
+  // attached to non-LGC characters are already blocked.
+  if (lgc_letters_n_ascii_.span(ustr_host, 0, USET_SPAN_CONTAINED) ==
+      ustr_host.length())
+    transliterator_.get()->transliterate(ustr_host);
+
+  UErrorCode status = U_ZERO_ERROR;
+  icu::UnicodeString ustr_skeleton;
+  uspoof_getSkeletonUnicodeString(checker_, 0, ustr_host, ustr_skeleton,
+                                  &status);
+  if (U_FAILURE(status))
+    return false;
+  std::string skeleton;
+  ustr_skeleton.toUTF8String(skeleton);
+  return LookupMatchInTopDomains(skeleton);
+}
+
 bool IDNSpoofChecker::IsMadeOfLatinAlikeCyrillic(
     const icu::UnicodeString& label) {
+  // Collect all the Cyrillic letters in |label_string| and see if they're
+  // a subset of |cyrillic_letters_latin_alike_|.
   // A shortcut of defining cyrillic_letters_latin_alike_ to include [0-9] and
-  // [_-] and checking if the set contains all letters of |label_string|
+  // [_-] and checking if the set contains all letters of |label|
   // would work in most cases, but not if a label has non-letters outside
   // ASCII.
   icu::UnicodeSet cyrillic_in_label;

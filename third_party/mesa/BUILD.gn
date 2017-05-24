@@ -763,7 +763,7 @@ loadable_module("osmesa") {
     ":mesa",
     ":mesa_headers",
     ":mesa_libglslcommon",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
 
   if (is_win) {

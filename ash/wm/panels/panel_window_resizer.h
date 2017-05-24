@@ -19,6 +19,8 @@ class Point;
 
 namespace ash {
 
+class PanelLayoutManager;
+
 // PanelWindowResizer is used by ToplevelWindowEventFilter to handle dragging,
 // moving or resizing panel window. These can be attached and detached from the
 // launcher.
@@ -60,6 +62,9 @@ class ASH_EXPORT PanelWindowResizer : public WindowResizer {
   // Updates the dragged panel's index in the launcher.
   void UpdateLauncherPosition();
 
+  // Returns the PanelLayoutManager associated with |panel_container_|.
+  PanelLayoutManager* GetPanelLayoutManager();
+
   // Last pointer location in screen coordinates.
   gfx::Point last_location_;
 
@@ -68,8 +73,8 @@ class ASH_EXPORT PanelWindowResizer : public WindowResizer {
   std::unique_ptr<WindowResizer> next_window_resizer_;
 
   // Panel container window.
-  WmWindow* panel_container_;
-  WmWindow* initial_panel_container_;
+  aura::Window* panel_container_;
+  aura::Window* initial_panel_container_;
 
   // Set to true once Drag() is invoked and the bounds of the window change.
   bool did_move_or_resize_;

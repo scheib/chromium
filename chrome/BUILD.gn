@@ -152,7 +152,7 @@ if (!is_android && !is_mac) {
     defines = []
     public_deps = []
     deps = [
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//printing/features",
     ]
 
@@ -347,7 +347,7 @@ if (is_win) {
       ":chrome_dll_manifest",
       ":chrome_dll_version",
       "//base/trace_event/etw_manifest:chrome_events_win",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//chrome/app:chrome_dll_resources",
       "//chrome/app:command_ids",
       "//chrome/app/theme:chrome_unscaled_resources",
@@ -443,7 +443,7 @@ if (is_win) {
         ":child_dependencies",
         ":chrome_child_manifest",
         ":chrome_dll_version",
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
         "//chrome/browser/policy:path_parser",
         "//chrome/common:features",
         "//chrome/install_static:install_static_util",
@@ -558,7 +558,7 @@ if (is_win) {
       ":chrome_app_strings_bundle_data",
       ":chrome_resources",
       ":chrome_versioned_bundle_data",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//chrome/common:version_header",
     ]
 
@@ -744,11 +744,13 @@ if (is_win) {
     defines = [ "HELPER_EXECUTABLE" ]
 
     deps = [
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//chrome/common:version_header",
     ]
 
     ldflags = []
+
+    ldflags += ["-F"+"../../third_party/Syphon/mac/"]
 
     if (is_component_build) {
       ldflags += [
@@ -1178,7 +1180,7 @@ if (is_win) {
       ":chrome_framework_services",
       ":packed_resources",
       ":widevine_cdm_library",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//chrome/app/nibs:chrome_xibs",
     ]
 
@@ -1194,6 +1196,8 @@ if (is_win) {
       chrome_dylib_version,
       "-Wl,-order_file," + rebase_path("app/framework.order", root_build_dir),
     ]
+
+    ldflags += ["-F"+"../../third_party/Syphon/mac/"]
 
     if (is_component_build) {
       ldflags += [

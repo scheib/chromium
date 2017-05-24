@@ -626,7 +626,16 @@ public class UrlBar extends AutocompleteEditText {
             }
         }
 
-        setSelection(urlComponents.first.length());
+        // We want to bring the end of the domain into view. But since we want
+        // to bias towards displaying the beginning of the URL as well, first
+        // we bring the beginning into view. We can't use offset 0, because
+        // this TextView is in force-LTR mode, and for RTL domains, offset 0 is
+        // outside the RTL-extent that contains the domain. crbug.com/723100
+        if (urlComponents.first.length() > 1) {
+            bringPointIntoView(1);
+        }
+        bringPointIntoView(urlComponents.first.length());
+
         return true;
     }
 

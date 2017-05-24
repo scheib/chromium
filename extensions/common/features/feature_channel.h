@@ -18,20 +18,22 @@ version_info::Channel GetCurrentChannel();
 
 // Sets the current channel as seen by the Feature system. In the browser
 // process this should be chrome::GetChannel(), and in the renderer this will
-// need to come from an IPC.
+// need to come from an IPC. Note that the value set through this function may
+// be overridden by |ScopedCurrentChannel|.
 void SetCurrentChannel(version_info::Channel channel);
 
-// Gets the default channel as seen by the Feature system.
-version_info::Channel GetDefaultChannel();
-
 // Scoped channel setter. Use for tests.
+// Note that the lifetimes of multiple instances of this class must be disjoint
+// or nested, but never overlapping.
 class ScopedCurrentChannel {
  public:
   explicit ScopedCurrentChannel(version_info::Channel channel);
   ~ScopedCurrentChannel();
 
  private:
-  version_info::Channel original_channel_;
+  const version_info::Channel channel_;
+  const version_info::Channel original_overridden_channel_;
+  const int original_override_count_;
 
   DISALLOW_COPY_AND_ASSIGN(ScopedCurrentChannel);
 };

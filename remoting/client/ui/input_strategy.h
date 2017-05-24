@@ -17,25 +17,31 @@ class InputStrategy {
  public:
   enum InputFeedbackType {
     TAP_FEEDBACK,
-    LONG_PRESS_FEEDBACK,
+    DRAG_FEEDBACK,
+  };
+
+  enum Gesture {
+    NONE,
+    ZOOM,
+    DRAG,
   };
 
   virtual ~InputStrategy() {}
 
-  // Called when the GestureInterpreter receives a pinch gesture. The
+  // Called when the GestureInterpreter receives a zoom gesture. The
   // implementation is responsible for modifying the viewport and observing the
   // change.
-  virtual void HandlePinch(const ViewMatrix::Point& pivot,
-                           float scale,
-                           DesktopViewport* viewport) = 0;
+  virtual void HandleZoom(const ViewMatrix::Point& pivot,
+                          float scale,
+                          DesktopViewport* viewport) = 0;
 
   // Called when the GestureInterpreter receives a pan gesture. The
   // implementation is responsible for modifying the viewport and observing the
   // change.
-  // is_dragging_mode: true if the user is trying to drag something while
-  //     panning on the screen.
-  virtual void HandlePan(const ViewMatrix::Vector2D& translation,
-                         bool is_dragging_mode,
+  // simultaneous_gesture: Gesture that is simultaneously in progress.
+  // Returns true if this changes the cursor position.
+  virtual bool HandlePan(const ViewMatrix::Vector2D& translation,
+                         Gesture simultaneous_gesture,
                          DesktopViewport* viewport) = 0;
 
   // Called when a touch input (which will end up injecting a mouse event at

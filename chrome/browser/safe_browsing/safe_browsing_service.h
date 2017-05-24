@@ -234,6 +234,7 @@ class SafeBrowsingService : public base::RefCountedThreadSafe<
       content::BrowserThread::UI>;
   friend class base::DeleteHelper<SafeBrowsingService>;
   friend class SafeBrowsingBlockingPageTest;
+  friend class SafeBrowsingBlockingQuietPageTest;
   friend class SafeBrowsingServerTest;
   friend class SafeBrowsingServiceTest;
   friend class SafeBrowsingURLRequestContextGetter;

@@ -20,37 +20,6 @@
 
 namespace subresource_filter {
 
-namespace {
-
-// Used to forward calls to WillProcessResonse to the driver.
-// TODO(https://crbug.com/708181): Remove this once the safe browsing navigation
-// throttle is responsible for all activation decisions.
-class ForwardingNavigationThrottle : public content::NavigationThrottle {
- public:
-  ForwardingNavigationThrottle(
-      content::NavigationHandle* handle,
-      ContentSubresourceFilterThrottleManager::Delegate* delegate)
-      : content::NavigationThrottle(handle), delegate_(delegate) {}
-  ~ForwardingNavigationThrottle() override {}
-
-  // content::NavigationThrottle:
-  content::NavigationThrottle::ThrottleCheckResult WillProcessResponse()
-      override {
-    delegate_->WillProcessResponse(navigation_handle());
-    return content::NavigationThrottle::PROCEED;
-  }
-  const char* GetNameForLogging() override {
-    return "ForwardingNavigationThrottle";
-  }
-
- private:
-  ContentSubresourceFilterThrottleManager::Delegate* delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(ForwardingNavigationThrottle);
-};
-
-}  // namespace
-
 ContentSubresourceFilterThrottleManager::
     ContentSubresourceFilterThrottleManager(
         Delegate* delegate,
@@ -174,10 +143,6 @@ void ContentSubresourceFilterThrottleManager::MaybeAppendNavigationThrottles(
     content::NavigationHandle* navigation_handle,
     std::vector<std::unique_ptr<content::NavigationThrottle>>* throttles) {
   DCHECK(!navigation_handle->IsSameDocument());
-  if (navigation_handle->IsInMainFrame()) {
-    throttles->push_back(base::MakeUnique<ForwardingNavigationThrottle>(
-        navigation_handle, delegate_));
-  }
   if (!dealer_handle_)
     return;
   if (auto filtering_throttle =

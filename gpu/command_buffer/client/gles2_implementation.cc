@@ -4630,6 +4630,8 @@ void GLES2Implementation::DeleteTexturesHelper(
     return;
   }
   for (GLsizei ii = 0; ii < n; ++ii) {
+    share_group_->discardable_manager()->FreeTexture(textures[ii]);
+
     for (GLint tt = 0; tt < capabilities_.max_combined_texture_image_units;
          ++tt) {
       TextureUnit& unit = texture_units_[tt];
@@ -7036,6 +7038,47 @@ void GLES2Implementation::ProgramPathFragmentInputGenCHROMIUM(
                                                  buffer.offset());
   }
   CheckGLError();
+}
+
+void GLES2Implementation::InitializeDiscardableTextureCHROMIUM(
+    GLuint texture_id) {
+  ClientDiscardableManager* manager = share_group()->discardable_manager();
+  if (manager->TextureIsValid(texture_id)) {
+    SetGLError(GL_INVALID_VALUE, "glInitializeDiscardableTextureCHROMIUM",
+               "Texture ID already initialized");
+    return;
+  }
+  ClientDiscardableHandle handle =
+      manager->InitializeTexture(helper_->command_buffer(), texture_id);
+  helper_->InitializeDiscardableTextureCHROMIUM(texture_id, handle.shm_id(),
+                                                handle.byte_offset());
+}
+
+void GLES2Implementation::UnlockDiscardableTextureCHROMIUM(GLuint texture_id) {
+  ClientDiscardableManager* manager = share_group()->discardable_manager();
+  if (!manager->TextureIsValid(texture_id)) {
+    SetGLError(GL_INVALID_VALUE, "glUnlockDiscardableTextureCHROMIUM",
+               "Texture ID not initialized");
+    return;
+  }
+  helper_->UnlockDiscardableTextureCHROMIUM(texture_id);
+}
+
+bool GLES2Implementation::LockDiscardableTextureCHROMIUM(GLuint texture_id) {
+  ClientDiscardableManager* manager = share_group()->discardable_manager();
+  if (!manager->TextureIsValid(texture_id)) {
+    SetGLError(GL_INVALID_VALUE, "glLockDiscardableTextureCHROMIUM",
+               "Texture ID not initialized");
+    return false;
+  }
+  if (!manager->LockTexture(texture_id)) {
+    // Failure to lock means that this texture has been deleted on the service
+    // side. Delete it here as well.
+    DeleteTexturesHelper(1, &texture_id);
+    return false;
+  }
+  helper_->LockDiscardableTextureCHROMIUM(texture_id);
+  return true;
 }
 
 void GLES2Implementation::UpdateCachedExtensionsIfNeeded() {

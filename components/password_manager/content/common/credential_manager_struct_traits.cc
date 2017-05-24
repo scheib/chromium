@@ -49,6 +49,45 @@ bool EnumTraits<mojom::CredentialType, CredentialType>::FromMojom(
 }
 
 // static
+mojom::CredentialMediationRequirement EnumTraits<
+    mojom::CredentialMediationRequirement,
+    CredentialMediationRequirement>::ToMojom(CredentialMediationRequirement
+                                                 input) {
+  switch (input) {
+    case CredentialMediationRequirement::kSilent:
+      return mojom::CredentialMediationRequirement::kSilent;
+    case CredentialMediationRequirement::kOptional:
+      return mojom::CredentialMediationRequirement::kOptional;
+    case CredentialMediationRequirement::kRequired:
+      return mojom::CredentialMediationRequirement::kRequired;
+  }
+
+  NOTREACHED();
+  return mojom::CredentialMediationRequirement::kOptional;
+}
+
+// static
+bool EnumTraits<mojom::CredentialMediationRequirement,
+                CredentialMediationRequirement>::
+    FromMojom(mojom::CredentialMediationRequirement input,
+              CredentialMediationRequirement* output) {
+  switch (input) {
+    case mojom::CredentialMediationRequirement::kSilent:
+      *output = CredentialMediationRequirement::kSilent;
+      return true;
+    case mojom::CredentialMediationRequirement::kOptional:
+      *output = CredentialMediationRequirement::kOptional;
+      return true;
+    case mojom::CredentialMediationRequirement::kRequired:
+      *output = CredentialMediationRequirement::kRequired;
+      return true;
+  }
+
+  NOTREACHED();
+  return false;
+}
+
+// static
 bool StructTraits<mojom::CredentialInfoDataView, CredentialInfo>::Read(
     mojom::CredentialInfoDataView data,
     CredentialInfo* out) {

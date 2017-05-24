@@ -12,7 +12,6 @@
 #include "ash/shell_port.h"
 #include "ash/wm/fullscreen_window_finder.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/wm_window_animations.h"
 #include "ash/wm/workspace/backdrop_controller.h"
 #include "ash/wm/workspace/backdrop_delegate.h"

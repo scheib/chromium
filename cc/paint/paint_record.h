@@ -17,12 +17,10 @@ namespace cc {
 using PaintRecord = PaintOpBuffer;
 
 // TODO(enne): Remove these if possible, they are really expensive.
-CC_PAINT_EXPORT sk_sp<SkPicture> ToSkPicture(sk_sp<PaintRecord> record,
-                                             const SkRect& bounds);
+CC_PAINT_EXPORT sk_sp<SkPicture> ToSkPicture(sk_sp<PaintRecord> record);
 
 CC_PAINT_EXPORT sk_sp<const SkPicture> ToSkPicture(
-    sk_sp<const PaintRecord> record,
-    const SkRect& bounds);
+    sk_sp<const PaintRecord> record);
 
 }  // namespace cc
 

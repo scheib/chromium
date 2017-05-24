@@ -17,11 +17,13 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/browser_side_navigation_policy.h"
 #include "content/public/common/result_codes.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/browser_test_utils.h"
@@ -244,7 +246,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, WindowOpenExtension) {
   WebContents* newtab = NULL;
   ASSERT_NO_FATAL_FAILURE(
       OpenWindow(browser()->tab_strip_model()->GetActiveWebContents(),
-      start_url.Resolve("newtab.html"), true, &newtab));
+                 start_url.Resolve("newtab.html"), true, &newtab));
 
   bool result = false;
   ASSERT_TRUE(content::ExecuteScriptAndExtractBool(newtab, "testExtensionApi()",
@@ -255,19 +257,32 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, WindowOpenExtension) {
 // Tests that if an extension page calls window.open to an invalid extension
 // URL, the browser doesn't crash.
 IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, WindowOpenInvalidExtension) {
-  ASSERT_TRUE(LoadExtension(
-      test_data_dir_.AppendASCII("uitest").AppendASCII("window_open")));
+  const extensions::Extension* extension = LoadExtension(
+      test_data_dir_.AppendASCII("uitest").AppendASCII("window_open"));
+  ASSERT_TRUE(extension);
 
-  GURL start_url(std::string(extensions::kExtensionScheme) +
-                     url::kStandardSchemeSeparator +
-                     last_loaded_extension_id() + "/test.html");
+  GURL start_url = extension->GetResourceURL("/test.html");
   ui_test_utils::NavigateToURL(browser(), start_url);
-  ASSERT_NO_FATAL_FAILURE(
-      OpenWindow(browser()->tab_strip_model()->GetActiveWebContents(),
+  WebContents* newtab = nullptr;
+  bool expect_error_page_in_new_process =
+      content::IsBrowserSideNavigationEnabled();
+  ASSERT_NO_FATAL_FAILURE(OpenWindow(
+      browser()->tab_strip_model()->GetActiveWebContents(),
       GURL("chrome-extension://thisissurelynotavalidextensionid/newtab.html"),
-      false, NULL));
+      expect_error_page_in_new_process, &newtab));
 
-  // If we got to this point, we didn't crash, so we're good.
+  // This is expected to commit an error page.
+  ASSERT_EQ(content::PAGE_TYPE_ERROR,
+            newtab->GetController().GetLastCommittedEntry()->GetPageType());
+
+  std::string document_body;
+  EXPECT_TRUE(content::ExecuteScriptAndExtractString(
+      newtab, "domAutomationController.send(document.body.innerText.trim());",
+      &document_body));
+
+  // Currently, in this test, the error page is blocked by CSP. This is
+  // https://crbug.com/703801.
+  EXPECT_EQ("", document_body);
 }
 
 // Tests that calling window.open from the newtab page to an extension URL

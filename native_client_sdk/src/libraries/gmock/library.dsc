@@ -1,8 +1,6 @@
 {
-      #   gmock-spec-builders.cc:248: error: enumeration value ‘FAIL’ not handled in switch
-      #'CXXFLAGS': ['-Wno-switch-enum'],
   'SEARCH': [
-    '../../../../testing/gmock',
+    '../../../../third_party/googletest/src/googlemock',
   ],
   'DATA': [
     'src/gmock.cc',

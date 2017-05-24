@@ -19,6 +19,7 @@ import org.json.JSONObject;
 import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.VisibleForTesting;
+import org.chromium.chrome.browser.instantapps.InstantAppsHandler;
 import org.chromium.installedapp.mojom.InstalledAppProvider;
 import org.chromium.installedapp.mojom.RelatedApplication;
 import org.chromium.mojo.system.MojoException;
@@ -41,11 +42,16 @@ public class InstalledAppProviderImpl implements InstalledAppProvider {
     public static final String ASSET_STATEMENT_NAMESPACE_WEB = "web";
     @VisibleForTesting
     public static final String RELATED_APP_PLATFORM_ANDROID = "play";
+    @VisibleForTesting
+    public static final String RELATED_APP_PLATFORM_INSTANT_APP = "instant-app";
+    @VisibleForTesting
+    public static final String HOLDBACK_STRING = "holdback";
 
     private static final String TAG = "InstalledAppProvider";
 
     private final FrameUrlDelegate mFrameUrlDelegate;
     private final Context mContext;
+    private final InstantAppsHandler mInstantAppsHandler;
 
     /**
      * Small interface for dynamically getting the URL of the current frame.
@@ -64,9 +70,12 @@ public class InstalledAppProviderImpl implements InstalledAppProvider {
         public boolean isIncognito();
     }
 
-    public InstalledAppProviderImpl(FrameUrlDelegate frameUrlDelegate, Context context) {
+    public InstalledAppProviderImpl(FrameUrlDelegate frameUrlDelegate, Context context,
+            InstantAppsHandler instantAppsHandler) {
+        assert instantAppsHandler != null;
         mFrameUrlDelegate = frameUrlDelegate;
         mContext = context;
+        mInstantAppsHandler = instantAppsHandler;
     }
 
     @Override
@@ -135,6 +144,11 @@ public class InstalledAppProviderImpl implements InstalledAppProvider {
             if (app.platform.equals(RELATED_APP_PLATFORM_ANDROID) && app.id != null) {
                 delayMillis += calculateDelayForPackageMs(app.id);
                 if (isAppInstalledAndAssociatedWithOrigin(app.id, frameUrl, pm)) {
+                    installedApps.add(app);
+                }
+            } else if (app.platform.equals(RELATED_APP_PLATFORM_INSTANT_APP) && app.url != null) {
+                boolean checkHoldback = HOLDBACK_STRING.equals(app.id);
+                if (mInstantAppsHandler.isInstantAppAvailable(app.url, checkHoldback)) {
                     installedApps.add(app);
                 }
             }

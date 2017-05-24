@@ -8,14 +8,31 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/signin/signin_ui_util.h"
+#include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/user_manager.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "content/public/browser/web_ui.h"
 #include "url/gurl.h"
 
-SigninErrorHandler::SigninErrorHandler(bool is_system_profile)
-    : is_system_profile_(is_system_profile) {}
+SigninErrorHandler::SigninErrorHandler(Browser* browser, bool is_system_profile)
+    : browser_(browser), is_system_profile_(is_system_profile) {
+  // |browser_| must not be null when this dialog is presented from the
+  // user manager.
+  DCHECK(browser_ || is_system_profile_);
+  if (!is_system_profile_)
+    BrowserList::AddObserver(this);
+}
+
+SigninErrorHandler::~SigninErrorHandler() {
+  if (!is_system_profile_)
+    BrowserList::RemoveObserver(this);
+}
+
+void SigninErrorHandler::OnBrowserRemoved(Browser* browser) {
+  if (browser_ == browser)
+    browser_ = nullptr;
+}
 
 void SigninErrorHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
@@ -25,9 +42,11 @@ void SigninErrorHandler::RegisterMessages() {
       "switchToExistingProfile",
       base::Bind(&SigninErrorHandler::HandleSwitchToExistingProfile,
                  base::Unretained(this)));
-  web_ui()->RegisterMessageCallback(
-      "learnMore",
-      base::Bind(&SigninErrorHandler::HandleLearnMore, base::Unretained(this)));
+  if (!is_system_profile_) {
+    web_ui()->RegisterMessageCallback(
+        "learnMore", base::Bind(&SigninErrorHandler::HandleLearnMore,
+                                base::Unretained(this)));
+  }
   web_ui()->RegisterMessageCallback(
       "initializedWithSize",
       base::Bind(&SigninErrorHandler::HandleInitializedWithSize,
@@ -58,10 +77,12 @@ void SigninErrorHandler::HandleConfirm(const base::ListValue* args) {
 }
 
 void SigninErrorHandler::HandleLearnMore(const base::ListValue* args) {
-  Browser* browser = signin::GetDesktopBrowser(web_ui());
-  DCHECK(browser);
-  browser->signin_view_controller()->CloseModalSignin();
-  signin_ui_util::ShowSigninErrorLearnMorePage(browser->profile());
+  // "Learn more" only shown when is_system_profile_=false
+  DCHECK(!is_system_profile_);
+  if (!browser_)
+    return;
+  CloseDialog();
+  signin_ui_util::ShowSigninErrorLearnMorePage(browser_->profile());
 }
 
 void SigninErrorHandler::HandleInitializedWithSize(
@@ -70,8 +91,7 @@ void SigninErrorHandler::HandleInitializedWithSize(
   if (duplicate_profile_path_.empty())
     CallJavascriptFunction("signin.error.removeSwitchButton");
 
-  signin::SetInitializedModalHeight(signin::GetDesktopBrowser(web_ui()),
-                                    web_ui(), args);
+  signin::SetInitializedModalHeight(browser_, web_ui(), args);
 
   // After the dialog is shown, some platforms might have an element focused.
   // To be consistent, clear the focused element on all platforms.
@@ -87,8 +107,7 @@ void SigninErrorHandler::CloseDialog() {
     // without browser window.
     UserManagerProfileDialog::HideDialog();
   } else {
-    Browser* browser = signin::GetDesktopBrowser(web_ui());
-    DCHECK(browser);
-    browser->signin_view_controller()->CloseModalSignin();
+    if (browser_)
+      browser_->signin_view_controller()->CloseModalSignin();
   }
 }

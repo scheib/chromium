@@ -98,9 +98,12 @@ void DoodleFetcherImpl::FetchDoodle(FinishedCallback callback) {
           setting:
             "Choosing a non-Google search engine in Chromium settings under "
             "'Search Engine' will disable this feature."
-          policy_exception_justification:
-            "Not implemented, considered not useful as it does not upload any "
-            "data."
+          chrome_policy {
+            DefaultSearchProviderEnabled {
+              policy_options {mode: MANDATORY}
+              DefaultSearchProviderEnabled: false
+            }
+          }
         })");
   fetcher_ = URLFetcher::Create(
       BuildDoodleURL(GetGoogleBaseUrl(), gray_background_, override_url_),

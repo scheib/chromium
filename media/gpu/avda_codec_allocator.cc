@@ -50,7 +50,7 @@ std::unique_ptr<MediaCodecBridge> CreateMediaCodecInternal(
       MediaCodecBridgeImpl::CreateVideoDecoder(
           codec_config->codec, codec_config->needs_protected_surface,
           codec_config->initial_expected_coded_size,
-          codec_config->surface_bundle->j_surface().obj(), media_crypto,
+          codec_config->surface_bundle->GetJavaSurface().obj(), media_crypto,
           codec_config->csd0, codec_config->csd1, true,
           require_software_codec));
 

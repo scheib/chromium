@@ -28,6 +28,10 @@ class SERVICES_RESOURCE_COORDINATOR_PUBLIC_CPP_EXPORT
   ResourceCoordinatorInterface(service_manager::Connector* connector,
                                const CoordinationUnitType& type,
                                const std::string& id);
+  ResourceCoordinatorInterface(service_manager::Connector* connector,
+                               const CoordinationUnitType& type,
+                               uint64_t id);
+
   ~ResourceCoordinatorInterface();
 
   const mojom::CoordinationUnitPtr& service() const { return service_; }
@@ -37,8 +41,7 @@ class SERVICES_RESOURCE_COORDINATOR_PUBLIC_CPP_EXPORT
 
  private:
   void ConnectToService(service_manager::Connector* connector,
-                        const CoordinationUnitType& type,
-                        const std::string& id);
+                        const CoordinationUnitID& cu_id);
   void AddChildByID(const CoordinationUnitID& child_id);
 
   mojom::CoordinationUnitPtr service_;

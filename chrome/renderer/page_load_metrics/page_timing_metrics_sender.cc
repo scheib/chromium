@@ -9,8 +9,7 @@
 #include "base/callback.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "chrome/common/page_load_metrics/page_load_metrics_messages.h"
-#include "ipc/ipc_sender.h"
+#include "chrome/renderer/page_load_metrics/page_timing_sender.h"
 
 namespace page_load_metrics {
 
@@ -20,15 +19,13 @@ const int kTimerDelayMillis = 1000;
 }  // namespace
 
 PageTimingMetricsSender::PageTimingMetricsSender(
-    IPC::Sender* ipc_sender,
-    int routing_id,
+    std::unique_ptr<PageTimingSender> sender,
     std::unique_ptr<base::Timer> timer,
     mojom::PageLoadTimingPtr initial_timing)
-    : ipc_sender_(ipc_sender),
-      routing_id_(routing_id),
+    : sender_(std::move(sender)),
       timer_(std::move(timer)),
       last_timing_(std::move(initial_timing)),
-      metadata_(mojom::PageLoadMetadata()) {
+      metadata_(mojom::PageLoadMetadata::New()) {
   if (!IsEmpty(*last_timing_)) {
     EnsureSendTimer();
   }
@@ -45,9 +42,9 @@ PageTimingMetricsSender::~PageTimingMetricsSender() {
 
 void PageTimingMetricsSender::DidObserveLoadingBehavior(
     blink::WebLoadingBehaviorFlag behavior) {
-  if (behavior & metadata_.behavior_flags)
+  if (behavior & metadata_->behavior_flags)
     return;
-  metadata_.behavior_flags |= behavior;
+  metadata_->behavior_flags |= behavior;
   EnsureSendTimer();
 }
 
@@ -81,8 +78,7 @@ void PageTimingMetricsSender::EnsureSendTimer() {
 
 void PageTimingMetricsSender::SendNow() {
   have_sent_ipc_ = true;
-  ipc_sender_->Send(new PageLoadMetricsMsg_TimingUpdated(
-      routing_id_, *last_timing_, metadata_));
+  sender_->SendTiming(last_timing_, metadata_);
 }
 
 }  // namespace page_load_metrics

@@ -80,7 +80,7 @@ var CrPolicyNetworkBehavior = {
   },
 
   /**
-   * @param {String} source
+   * @param {string} source
    * @return {!CrPolicyIndicatorType}
    * @private
    */

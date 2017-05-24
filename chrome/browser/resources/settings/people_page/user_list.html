@@ -1,7 +1,8 @@
+<link rel="import" href="chrome://resources/html/polymer.html">
+
 <link rel="import" href="chrome://resources/cr_elements/cr_scrollable_behavior.html">
 <link rel="import" href="chrome://resources/cr_elements/icons.html">
 <link rel="import" href="chrome://resources/html/i18n_behavior.html">
-<link rel="import" href="chrome://resources/html/polymer.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-flex-layout/iron-flex-layout-classes.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-icon-button/paper-icon-button.html">
 <link rel="import" href="../route.html">
@@ -41,7 +42,7 @@
           <div class="flex user-info">
             <div>[[getUserName_(item)]]</div>
             <template is="dom-if" if="[[shouldShowEmail_(item)]]">
-              <div class="secondary">[[item.email]]</div>
+              <div class="secondary">[[item.displayEmail]]</div>
             </template>
           </div>
           <paper-icon-button icon="cr:clear" class="clear-icon"

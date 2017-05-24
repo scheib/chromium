@@ -139,9 +139,8 @@ void MediaDevicesSelectionHandler::UpdateDevicesMenu(
 
   base::Value default_value(default_id);
   base::Value type_value(device_type);
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("updateDevicesMenu"), type_value,
-                         device_list, default_value);
+  FireWebUIListener("updateDevicesMenu", type_value, device_list,
+                    default_value);
 }
 
 std::string MediaDevicesSelectionHandler::GetDeviceDisplayName(

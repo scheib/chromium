@@ -287,10 +287,10 @@ const base::Feature kPreloadLockScreen{"PreloadLockScreen",
                                        base::FEATURE_ENABLED_BY_DEFAULT};
 #endif
 
-#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+#if BUILDFLAG(ENABLE_PRINT_PREVIEW) && !defined(OS_WIN) && !defined(OS_MACOSX)
 // Enables the Print as Image feature in print preview.
 const base::Feature kPrintPdfAsImage{"PrintPdfAsImage",
-                                     base::FEATURE_DISABLED_BY_DEFAULT};
+                                     base::FEATURE_ENABLED_BY_DEFAULT};
 #endif
 
 // Enables or disables push subscriptions keeping Chrome running in the
@@ -375,6 +375,10 @@ const base::Feature kCrosCompUpdates{"CrosCompUpdates",
 const base::Feature kCrOSComponent{"CrOSComponent",
                                    base::FEATURE_DISABLED_BY_DEFAULT};
 #endif  // defined(OS_CHROMEOS)
+
+// Enables or disables Page Load Metrics using mojo IPC.
+const base::Feature kPageLoadMetricsMojofication{
+    "PLMMojofication", base::FEATURE_DISABLED_BY_DEFAULT};
 
 bool PrefServiceEnabled() {
   return base::FeatureList::IsEnabled(features::kPrefService) ||

@@ -129,11 +129,8 @@ void ProtocolHandlersHandler::UpdateHandlerList() {
 
   std::unique_ptr<base::ListValue> ignored_handlers(new base::ListValue());
   GetIgnoredHandlers(ignored_handlers.get());
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("setProtocolHandlers"), handlers);
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("setIgnoredProtocolHandlers"),
-                         *ignored_handlers);
+  FireWebUIListener("setProtocolHandlers", handlers);
+  FireWebUIListener("setIgnoredProtocolHandlers", *ignored_handlers);
 }
 
 void ProtocolHandlersHandler::HandleObserveProtocolHandlers(
@@ -150,9 +147,8 @@ void ProtocolHandlersHandler::HandleObserveProtocolHandlersEnabledState(
 }
 
 void ProtocolHandlersHandler::SendHandlersEnabledValue() {
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("setHandlersEnabled"),
-                         base::Value(GetProtocolHandlerRegistry()->enabled()));
+  FireWebUIListener("setHandlersEnabled",
+                    base::Value(GetProtocolHandlerRegistry()->enabled()));
 }
 
 void ProtocolHandlersHandler::HandleRemoveHandler(const base::ListValue* args) {

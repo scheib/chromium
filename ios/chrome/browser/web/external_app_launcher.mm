@@ -25,8 +25,6 @@
 
 namespace {
 
-typedef void (^AlertHandler)(UIAlertAction* action);
-
 // Returns a set of NSStrings that are URL schemes for iTunes Stores.
 NSSet<NSString*>* ITMSSchemes() {
   static NSSet<NSString*>* schemes;
@@ -71,26 +69,17 @@ NSString* PromptActionString(NSString* scheme) {
   return @"";
 }
 
-// Keys for dictionary parameters passed into
-// -openExternalAppWithPromptWithParams:.
-NSString* const kAlertPrompt = @"prompt";
-NSString* const kAlertAction = @"action";
-NSString* const kAlertURL = @"url";
-
 }  // namespace
 
 @interface ExternalAppLauncher ()
 // Returns the Phone/FaceTime call argument from |URL|.
 + (NSString*)formatCallArgument:(NSURL*)URL;
-// Asks user for confirmation before moving to external app. |params| is a
-// dictionary keyed with values of kAlert* above.
-- (void)openExternalAppWithPromptWithParams:
-    (NSDictionary<NSString*, id>*)params;
-// Presents a configured alert controller on the root view controller.
-- (void)presentAlertControllerWithMessage:(NSString*)message
-                                openTitle:(NSString*)openTitle
-                              openHandler:(AlertHandler)openHandler
-                            cancelHandler:(AlertHandler)cancelHandler;
+// Presents an alert controller with |prompt| and |openLabel| as button label
+// on the root view controller before launching an external app identified by
+// |URL|.
+- (void)openExternalAppWithURL:(NSURL*)URL
+                        prompt:(NSString*)prompt
+                     openLabel:(NSString*)openLabel;
 @end
 
 @implementation ExternalAppLauncher
@@ -111,39 +100,26 @@ NSString* const kAlertURL = @"url";
   return prompt;
 }
 
-- (void)openExternalAppWithPromptWithParams:
-    (NSDictionary<NSString*, id>*)params {
-  NSURL* URL = base::mac::ObjCCastStrict<NSURL>(params[kAlertURL]);
-  NSString* prompt = base::mac::ObjCCastStrict<NSString>(params[kAlertPrompt]);
-  NSString* actionTitle =
-      base::mac::ObjCCastStrict<NSString>(params[kAlertAction]);
-  [self presentAlertControllerWithMessage:prompt
-      openTitle:actionTitle
-      openHandler:^(UIAlertAction* action) {
-        RecordExternalApplicationOpened(true);
-        OpenUrlWithCompletionHandler(URL, nil);
-      }
-      cancelHandler:^(UIAlertAction* action) {
-        RecordExternalApplicationOpened(false);
-      }];
-}
-
-- (void)presentAlertControllerWithMessage:(NSString*)message
-                                openTitle:(NSString*)openTitle
-                              openHandler:(AlertHandler)openHandler
-                            cancelHandler:(AlertHandler)cancelHandler {
+- (void)openExternalAppWithURL:(NSURL*)URL
+                        prompt:(NSString*)prompt
+                     openLabel:(NSString*)openLabel {
   UIAlertController* alertController =
       [UIAlertController alertControllerWithTitle:nil
-                                          message:message
+                                          message:prompt
                                    preferredStyle:UIAlertControllerStyleAlert];
   UIAlertAction* openAction =
-      [UIAlertAction actionWithTitle:openTitle
+      [UIAlertAction actionWithTitle:openLabel
                                style:UIAlertActionStyleDefault
-                             handler:openHandler];
+                             handler:^(UIAlertAction* action) {
+                               RecordExternalApplicationOpened(true);
+                               OpenUrlWithCompletionHandler(URL, nil);
+                             }];
   UIAlertAction* cancelAction =
       [UIAlertAction actionWithTitle:l10n_util::GetNSString(IDS_CANCEL)
                                style:UIAlertActionStyleCancel
-                             handler:cancelHandler];
+                             handler:^(UIAlertAction* action) {
+                               RecordExternalApplicationOpened(false);
+                             }];
   [alertController addAction:cancelAction];
   [alertController addAction:openAction];
 
@@ -163,42 +139,34 @@ NSString* const kAlertURL = @"url";
     return NO;
 
   NSURL* URL = net::NSURLWithGURL(gURL);
-  NSMutableDictionary<NSString*, id>* params = [NSMutableDictionary dictionary];
   if (base::ios::IsRunningOnOrLater(10, 3, 0)) {
     if (UrlHasAppStoreScheme(gURL)) {
-      params[kAlertPrompt] =
-          l10n_util::GetNSString(IDS_IOS_OPEN_IN_ANOTHER_APP);
-      params[kAlertAction] =
+      NSString* prompt = l10n_util::GetNSString(IDS_IOS_OPEN_IN_ANOTHER_APP);
+      NSString* openLabel =
           l10n_util::GetNSString(IDS_IOS_APP_LAUNCHER_OPEN_APP_BUTTON_LABEL);
+      [self openExternalAppWithURL:URL prompt:prompt openLabel:openLabel];
+      return YES;
     }
   } else {
     // Prior to iOS 10.3, iOS does not prompt user when facetime: and
     // facetime-audio: URL schemes are opened, so Chrome needs to present an
     // alert before placing a phone call.
     if (UrlHasPhoneCallScheme(gURL)) {
-      params[kAlertPrompt] = [[self class] formatCallArgument:URL];
-      params[kAlertAction] = PromptActionString([URL scheme]);
+      [self openExternalAppWithURL:URL
+                            prompt:[[self class] formatCallArgument:URL]
+                         openLabel:PromptActionString([URL scheme])];
+      return YES;
     }
     // Prior to iOS 10.3, Chrome prompts user with an alert before opening
     // App Store when user did not tap on any links and an iTunes app URL is
     // opened. This maintains parity with Safari in pre-10.3 environment.
     if (!linkClicked && UrlHasAppStoreScheme(gURL)) {
-      params[kAlertPrompt] =
-          l10n_util::GetNSString(IDS_IOS_OPEN_IN_ANOTHER_APP);
-      params[kAlertAction] =
+      NSString* prompt = l10n_util::GetNSString(IDS_IOS_OPEN_IN_ANOTHER_APP);
+      NSString* openLabel =
           l10n_util::GetNSString(IDS_IOS_APP_LAUNCHER_OPEN_APP_BUTTON_LABEL);
+      [self openExternalAppWithURL:URL prompt:prompt openLabel:openLabel];
+      return YES;
     }
-  }
-  if ([params count] > 0) {
-    params[kAlertURL] = URL;
-    // Note: Showing an alert view immediately has a side-effect where focus is
-    // taken from the UIWebView so quickly that mouseup events are lost and
-    // buttons get 'stuck' in the on position. The solution is to defer
-    // showing the view using -performSelector:withObject:afterDelay:.
-    [self performSelector:@selector(openExternalAppWithPromptWithParams:)
-               withObject:params
-               afterDelay:0.0];
-    return YES;
   }
 
   // Replaces |URL| with a rewritten URL if it is of mailto: scheme.
@@ -207,9 +175,8 @@ NSString* const kAlertURL = @"url";
     MailtoURLRewriter* rewriter =
         [[MailtoURLRewriter alloc] initWithStandardHandlers];
     NSString* launchURL = [rewriter rewriteMailtoURL:gURL];
-    if (launchURL) {
+    if (launchURL)
       URL = [NSURL URLWithString:launchURL];
-    }
     UMA_HISTOGRAM_BOOLEAN("IOS.MailtoURLRewritten", launchURL != nil);
   }
 

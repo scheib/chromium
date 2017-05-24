@@ -110,8 +110,7 @@ interface SearchBox {
 
   SetSuggestionToPrefetch(InstantSuggestion suggestion);
 
-  Submit(mojo.common.mojom.String16 value,
-         EmbeddedSearchRequestParams params);
+  Submit(EmbeddedSearchRequestParams params);
 
   ThemeChanged(ThemeBackgroundInfo value);
 

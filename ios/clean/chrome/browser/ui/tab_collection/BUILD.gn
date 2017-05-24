@@ -19,7 +19,8 @@ source_set("tab_collection") {
 source_set("tab_collection_ui") {
   sources = [
     "tab_collection_consumer.h",
-    "tab_collection_data_source.h",
+    "tab_collection_item.h",
+    "tab_collection_item.mm",
     "tab_collection_tab_cell.h",
     "tab_collection_tab_cell.mm",
     "tab_collection_view_controller.h",
@@ -36,6 +37,7 @@ source_set("tab_collection_ui") {
 source_set("unit_tests") {
   sources = [
     "tab_collection_mediator_unittest.mm",
+    "tab_collection_view_controller_unittest.mm",
   ]
   deps = [
     ":tab_collection",

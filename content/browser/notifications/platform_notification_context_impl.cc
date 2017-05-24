@@ -9,7 +9,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/stl_util.h"
-#include "base/threading/sequenced_worker_pool.h"
+#include "base/task_scheduler/post_task.h"
 #include "content/browser/notifications/blink_notification_service_impl.h"
 #include "content/browser/notifications/notification_database.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -478,10 +478,8 @@ void PlatformNotificationContextImpl::LazyInitialize(
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
   if (!task_runner_) {
-    base::SequencedWorkerPool* pool = BrowserThread::GetBlockingPool();
-    base::SequencedWorkerPool::SequenceToken token = pool->GetSequenceToken();
-
-    task_runner_ = pool->GetSequencedTaskRunner(token);
+    task_runner_ = base::CreateSequencedTaskRunnerWithTraits(
+        {base::MayBlock(), base::TaskPriority::BACKGROUND});
   }
 
   task_runner_->PostTask(

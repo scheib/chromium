@@ -90,7 +90,8 @@ class WebSharedWorkerImpl final : public WebFrameClient,
                           const WebString& name,
                           const WebString& content_security_policy,
                           WebContentSecurityPolicyType,
-                          WebAddressSpace) override;
+                          WebAddressSpace,
+                          bool data_saver_enabled) override;
   void Connect(std::unique_ptr<WebMessagePortChannel>) override;
   void TerminateWorkerContext() override;
 
@@ -125,7 +126,7 @@ class WebSharedWorkerImpl final : public WebFrameClient,
   void TerminateWorkerThread();
 
   // Creates the shadow loader used for worker network requests.
-  void InitializeLoader();
+  void InitializeLoader(bool data_saver_enabled);
 
   void LoadShadowPage();
   void DidReceiveScriptLoaderResponse();

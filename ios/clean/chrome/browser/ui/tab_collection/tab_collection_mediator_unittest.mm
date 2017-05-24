@@ -28,7 +28,7 @@ class TabCollectionMediatorTest : public PlatformTest {
     SetUpWebStateList();
     mediator_ = [[TabCollectionMediator alloc] init];
     mediator_.webStateList = web_state_list_.get();
-    consumer_ = [OCMockObject mockForProtocol:@protocol(TabCollectionConsumer)];
+    consumer_ = OCMProtocolMock(@protocol(TabCollectionConsumer));
     mediator_.consumer = consumer_;
   }
   ~TabCollectionMediatorTest() override { [mediator_ disconnect]; }
@@ -60,67 +60,37 @@ class TabCollectionMediatorTest : public PlatformTest {
   id consumer_;
 };
 
-// Tests that -numberOfTabs returns the expected number of elements from
-// web_state_list_.
-TEST_F(TabCollectionMediatorTest, TestNumberOfTabs) {
-  EXPECT_EQ(3, [mediator_ numberOfTabs]);
-}
-
-// Tests that -indexOfActiveTab returns the expected active_index from
-// web_state_list_.
-TEST_F(TabCollectionMediatorTest, TestActiveTabIndex) {
-  EXPECT_EQ(0, [mediator_ indexOfActiveTab]);
-}
-
-// Tests that -titleAtIndex: returns the expected title from web_state_list_.
-TEST_F(TabCollectionMediatorTest, TestTitleAtIndex) {
-  EXPECT_NSEQ(@"http://test/0", [mediator_ titleAtIndex:0]);
-}
-
 // Tests that the consumer is notified of an insert into webStateList.
 TEST_F(TabCollectionMediatorTest, TestInsertWebState) {
-  [[consumer_ expect] insertItemAtIndex:2];
   InsertWebState(2);
-  EXPECT_OCMOCK_VERIFY(consumer_);
+  [[consumer_ verify] insertItem:[OCMArg any] atIndex:2];
 }
 
 // Tests that the consumer is notified that a web state has been moved in
 // webStateList.
 TEST_F(TabCollectionMediatorTest, TestMoveWebState) {
-  NSMutableIndexSet* indexes = [NSMutableIndexSet indexSet];
-  [indexes addIndex:0];
-  [indexes addIndex:1];
-  [indexes addIndex:2];
-  [[consumer_ expect] reloadItemsAtIndexes:indexes];
   web_state_list_->MoveWebStateAt(0, 2);
-  EXPECT_OCMOCK_VERIFY(consumer_);
+  [[consumer_ verify] moveItemFromIndex:0 toIndex:2];
 }
 
 // Tests that the consumer is notified that a web state has been replaced in
 // webStateList.
 TEST_F(TabCollectionMediatorTest, TestReplaceWebState) {
-  NSIndexSet* indexes = [NSIndexSet indexSetWithIndex:1];
-  [[consumer_ expect] reloadItemsAtIndexes:indexes];
   auto different_web_state = base::MakeUnique<web::TestWebState>();
   web_state_list_->ReplaceWebStateAt(1, std::move(different_web_state));
-  EXPECT_OCMOCK_VERIFY(consumer_);
+  [[consumer_ verify] replaceItemAtIndex:1 withItem:[OCMArg any]];
 }
 
 // Tests that the consumer is notified that a web state has been deleted from
 // webStateList.
 TEST_F(TabCollectionMediatorTest, TestDetachWebState) {
-  [[consumer_ expect] deleteItemAtIndex:1];
   web_state_list_->CloseWebStateAt(1);
-  EXPECT_OCMOCK_VERIFY(consumer_);
+  [[consumer_ verify] deleteItemAtIndex:1];
 }
 
 // Tests that the consumer is notified that the active web state has changed in
 // webStateList.
 TEST_F(TabCollectionMediatorTest, TestChangeActiveWebState) {
-  NSMutableIndexSet* indexes = [NSMutableIndexSet indexSet];
-  [indexes addIndex:0];
-  [indexes addIndex:2];
-  [[consumer_ expect] reloadItemsAtIndexes:indexes];
   web_state_list_->ActivateWebStateAt(2);
-  EXPECT_OCMOCK_VERIFY(consumer_);
+  [[consumer_ verify] selectItemAtIndex:2];
 }

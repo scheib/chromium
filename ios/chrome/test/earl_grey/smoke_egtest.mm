@@ -11,6 +11,10 @@
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 
+#if !defined(__has_feature) || !__has_feature(objc_arc)
+#error "This file requires ARC support."
+#endif
+
 // Test case to verify that EarlGrey tests can be launched and perform basic UI
 // interactions.
 @interface SmokeTestCase : ChromeTestCase

@@ -11,7 +11,6 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/wm_event.h"
 #include "base/compiler_specific.h"
 #include "base/time/time.h"

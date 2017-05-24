@@ -48,7 +48,7 @@ TEST_F(DisplayItemListTest, AppendVisualRect_Simple) {
   IntRect drawing_bounds(5, 6, 7, 8);
   list_.AllocateAndConstruct<DrawingDisplayItem>(
       client_, DisplayItem::Type::kDocumentBackground,
-      CreateRectRecord(drawing_bounds), drawing_bounds, true);
+      CreateRectRecord(drawing_bounds), true);
   list_.AppendVisualRect(drawing_bounds);
 
   EXPECT_EQ(static_cast<size_t>(1), list_.size());
@@ -64,7 +64,7 @@ TEST_F(DisplayItemListTest, AppendVisualRect_BlockContainingDrawing) {
   IntRect drawing_bounds(5, 6, 1, 1);
   list_.AllocateAndConstruct<DrawingDisplayItem>(
       client_, DisplayItem::Type::kDocumentBackground,
-      CreateRectRecord(drawing_bounds), drawing_bounds, true);
+      CreateRectRecord(drawing_bounds), true);
   list_.AppendVisualRect(drawing_bounds);
 
   EXPECT_EQ(static_cast<size_t>(1), list_.size());

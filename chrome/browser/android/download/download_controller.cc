@@ -14,7 +14,6 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/synchronization/lock.h"
-#include "chrome/browser/android/download/chrome_download_delegate.h"
 #include "chrome/browser/android/download/dangerous_download_infobar_delegate.h"
 #include "chrome/browser/android/download/download_manager_service.h"
 #include "chrome/browser/android/tab_android.h"
@@ -108,14 +107,9 @@ bool IsInterruptedDownloadAutoResumable(content::DownloadItem* download_item) {
 
 }  // namespace
 
-// JNI methods
-static void Init(JNIEnv* env, const JavaParamRef<jobject>& obj) {
-  DownloadController::GetInstance()->Init(env, obj);
-}
-
 static void OnAcquirePermissionResult(
     JNIEnv* env,
-    const JavaParamRef<jobject>& obj,
+    const JavaParamRef<jclass>& clazz,
     jlong callback_id,
     jboolean granted,
     const JavaParamRef<jstring>& jpermission_to_update) {
@@ -156,13 +150,6 @@ static void OnRequestFileAccessResult(
   cb.Run(granted);
 }
 
-struct DownloadController::JavaObject {
-  ScopedJavaLocalRef<jobject> Controller(JNIEnv* env) {
-    return GetRealObject(env, obj_);
-  }
-  jweak obj_;
-};
-
 // static
 bool DownloadController::RegisterDownloadController(JNIEnv* env) {
   return RegisterNativesImpl(env);
@@ -195,24 +182,9 @@ DownloadController* DownloadController::GetInstance() {
   return base::Singleton<DownloadController>::get();
 }
 
-DownloadController::DownloadController()
-    : java_object_(NULL) {
-}
+DownloadController::DownloadController() = default;
 
-DownloadController::~DownloadController() {
-  if (java_object_) {
-    JNIEnv* env = base::android::AttachCurrentThread();
-    env->DeleteWeakGlobalRef(java_object_->obj_);
-    delete java_object_;
-    base::android::CheckException(env);
-  }
-}
-
-// Initialize references to Java object.
-void DownloadController::Init(JNIEnv* env, jobject obj) {
-  java_object_ = new JavaObject;
-  java_object_->obj_ = env->NewWeakGlobalRef(obj);
-}
+DownloadController::~DownloadController() = default;
 
 void DownloadController::AcquireFileAccessPermission(
     const content::ResourceRequestInfo::WebContentsGetter& web_contents_getter,
@@ -231,8 +203,7 @@ void DownloadController::AcquireFileAccessPermission(
   intptr_t callback_id =
       reinterpret_cast<intptr_t>(new AcquirePermissionCallback(callback));
   JNIEnv* env = base::android::AttachCurrentThread();
-  Java_DownloadController_requestFileAccess(
-      env, GetJavaObject()->Controller(env), callback_id);
+  Java_DownloadController_requestFileAccess(env, callback_id);
 }
 
 void DownloadController::CreateAndroidDownload(
@@ -288,9 +259,8 @@ void DownloadController::StartAndroidDownloadInternal(
   WebContents* web_contents = wc_getter.Run();
   if (web_contents) {
     TabAndroid* tab = TabAndroid::FromWebContents(web_contents);
-    if (tab && !tab->GetJavaObject().is_null()) {
+    if (tab && !tab->GetJavaObject().is_null())
       Java_DownloadController_closeTabIfBlank(env, tab->GetJavaObject());
-    }
   }
 }
 
@@ -298,8 +268,7 @@ bool DownloadController::HasFileAccessPermission() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   JNIEnv* env = base::android::AttachCurrentThread();
-  return Java_DownloadController_hasFileAccess(
-      env, GetJavaObject()->Controller(env));
+  return Java_DownloadController_hasFileAccess(env);
 }
 
 void DownloadController::OnDownloadStarted(
@@ -309,10 +278,8 @@ void DownloadController::OnDownloadStarted(
   // For dangerous item, we need to show the dangerous infobar before the
   // download can start.
   JNIEnv* env = base::android::AttachCurrentThread();
-  if (!download_item->IsDangerous()) {
-    Java_DownloadController_onDownloadStarted(
-        env, GetJavaObject()->Controller(env));
-  }
+  if (!download_item->IsDangerous())
+    Java_DownloadController_onDownloadStarted(env);
 
   WebContents* web_contents = download_item->GetWebContents();
   if (web_contents) {
@@ -342,8 +309,7 @@ void DownloadController::OnDownloadUpdated(DownloadItem* item) {
       DownloadManagerService::CreateJavaDownloadInfo(env, item);
   switch (item->GetState()) {
     case DownloadItem::IN_PROGRESS: {
-      Java_DownloadController_onDownloadUpdated(
-          env, GetJavaObject()->Controller(env), j_item);
+      Java_DownloadController_onDownloadUpdated(env, j_item);
       break;
     }
     case DownloadItem::COMPLETE:
@@ -352,14 +318,12 @@ void DownloadController::OnDownloadUpdated(DownloadItem* item) {
       item->RemoveObserver(this);
 
       // Call onDownloadCompleted
-      Java_DownloadController_onDownloadCompleted(
-          env, GetJavaObject()->Controller(env), j_item);
+      Java_DownloadController_onDownloadCompleted(env, j_item);
       DownloadController::RecordDownloadCancelReason(
              DownloadController::CANCEL_REASON_NOT_CANCELED);
       break;
     case DownloadItem::CANCELLED:
-      Java_DownloadController_onDownloadCancelled(
-          env, GetJavaObject()->Controller(env), j_item);
+      Java_DownloadController_onDownloadCancelled(env, j_item);
       DownloadController::RecordDownloadCancelReason(
           DownloadController::CANCEL_REASON_OTHER_NATIVE_RESONS);
       break;
@@ -367,8 +331,7 @@ void DownloadController::OnDownloadUpdated(DownloadItem* item) {
       // When device loses/changes network, we get a NETWORK_TIMEOUT,
       // NETWORK_FAILED or NETWORK_DISCONNECTED error. Download should auto
       // resume in this case.
-      Java_DownloadController_onDownloadInterrupted(
-          env, GetJavaObject()->Controller(env), j_item,
+      Java_DownloadController_onDownloadInterrupted(env, j_item,
           IsInterruptedDownloadAutoResumable(item));
       item->RemoveObserver(this);
       break;
@@ -386,20 +349,6 @@ void DownloadController::OnDangerousDownload(DownloadItem* item) {
 
   DangerousDownloadInfoBarDelegate::Create(
         InfoBarService::FromWebContents(web_contents), item);
-}
-
-DownloadController::JavaObject*
-    DownloadController::GetJavaObject() {
-  if (!java_object_) {
-    // Initialize Java DownloadController by calling
-    // DownloadController.getInstance(), which will call Init()
-    // if Java DownloadController is not instantiated already.
-    JNIEnv* env = base::android::AttachCurrentThread();
-    Java_DownloadController_getInstance(env);
-  }
-
-  DCHECK(java_object_);
-  return java_object_;
 }
 
 void DownloadController::StartContextMenuDownload(

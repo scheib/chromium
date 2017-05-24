@@ -71,12 +71,15 @@ class ShippingAddressEditorViewController : public EditorViewController {
     ~ShippingAddressValidationDelegate() override;
 
     // ValidationDelegate:
-    bool ValidateTextfield(views::Textfield* textfield) override;
-    bool ValidateCombobox(views::Combobox* combobox) override;
+    bool IsValidTextfield(views::Textfield* textfield) override;
+    bool IsValidCombobox(views::Combobox* combobox) override;
+    bool TextfieldValueChanged(views::Textfield* textfield) override;
+    bool ComboboxValueChanged(views::Combobox* combobox) override;
     void ComboboxModelChanged(views::Combobox* combobox) override;
 
    private:
-    bool ValidateValue(const base::string16& value);
+    bool ValidateValue(const base::string16& value,
+                       base::string16* error_message);
 
     EditorField field_;
 

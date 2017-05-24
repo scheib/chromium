@@ -54,41 +54,17 @@ PrintContext::~PrintContext() {
   DCHECK(!is_printing_);
 }
 
-void PrintContext::ComputePageRects(const FloatRect& print_rect,
-                                    float header_height,
-                                    float footer_height,
-                                    float user_scale_factor,
-                                    float& out_page_height) {
+void PrintContext::ComputePageRects(const FloatSize& print_size) {
   page_rects_.clear();
-  out_page_height = 0;
 
   if (!IsFrameValid())
     return;
 
-  if (user_scale_factor <= 0) {
-    DLOG(ERROR) << "userScaleFactor has bad value " << user_scale_factor;
-    return;
-  }
-
   LayoutViewItem view = frame_->GetDocument()->GetLayoutViewItem();
   const IntRect& document_rect = view.DocumentRect();
   FloatSize page_size = frame_->ResizePageRectsKeepingRatio(
-      FloatSize(print_rect.Width(), print_rect.Height()),
-      FloatSize(document_rect.Width(), document_rect.Height()));
-  float page_width = page_size.Width();
-  float page_height = page_size.Height();
-
-  out_page_height =
-      page_height;  // this is the height of the page adjusted by margins
-  page_height -= header_height + footer_height;
-
-  if (page_height <= 0) {
-    DLOG(ERROR) << "pageHeight has bad value " << page_height;
-    return;
-  }
-
-  ComputePageRectsWithPageSizeInternal(FloatSize(
-      page_width / user_scale_factor, page_height / user_scale_factor));
+      print_size, FloatSize(document_rect.Width(), document_rect.Height()));
+  ComputePageRectsWithPageSizeInternal(page_size);
 }
 
 void PrintContext::ComputePageRectsWithPageSize(

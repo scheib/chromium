@@ -17,6 +17,7 @@
 #include "base/run_loop.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_local.h"
+#include "base/trace_event/trace_event.h"
 #include "mojo/public/cpp/bindings/lib/may_auto_lock.h"
 #include "mojo/public/cpp/bindings/sync_handle_watcher.h"
 #include "mojo/public/cpp/system/wait.h"
@@ -302,9 +303,10 @@ bool Connector::SyncWatch(const bool* should_stop) {
 }
 
 void Connector::SetWatcherHeapProfilerTag(const char* tag) {
-  heap_profiler_tag_ = tag;
-  if (handle_watcher_) {
-    handle_watcher_->set_heap_profiler_tag(tag);
+  if (tag) {
+    heap_profiler_tag_ = tag;
+    if (handle_watcher_)
+      handle_watcher_->set_heap_profiler_tag(tag);
   }
 }
 
@@ -342,8 +344,7 @@ void Connector::WaitToReadMore() {
 
   handle_watcher_.reset(new SimpleWatcher(
       FROM_HERE, SimpleWatcher::ArmingPolicy::MANUAL, task_runner_));
-  if (heap_profiler_tag_)
-    handle_watcher_->set_heap_profiler_tag(heap_profiler_tag_);
+  handle_watcher_->set_heap_profiler_tag(heap_profiler_tag_);
   MojoResult rv = handle_watcher_->Watch(
       message_pipe_.get(), MOJO_HANDLE_SIGNAL_READABLE,
       base::Bind(&Connector::OnWatcherHandleReady, base::Unretained(this)));
@@ -384,6 +385,7 @@ bool Connector::ReadSingleMessage(MojoResult* read_result) {
       dispatch_tracker.emplace(weak_self);
     }
 
+    TRACE_EVENT0("mojom", heap_profiler_tag_);
     receiver_result =
         incoming_receiver_ && incoming_receiver_->Accept(&message);
 

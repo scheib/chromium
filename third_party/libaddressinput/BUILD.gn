@@ -22,7 +22,7 @@ config("internal_config") {
 }
 
 grit("strings") {
-  source = "//chrome/app/address_input_strings.grd"
+  source = "chromium/address_input_strings.grd"
 
   outputs = [
     "messages.h",

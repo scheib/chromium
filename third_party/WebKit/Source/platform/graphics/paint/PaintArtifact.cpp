@@ -28,14 +28,16 @@ void ComputeChunkBoundsAndOpaqueness(const DisplayItemList& display_items,
       if (!item.IsDrawing())
         continue;
       const auto& drawing = static_cast<const DrawingDisplayItem&>(item);
-      if (drawing.GetPaintRecord() && drawing.KnownToBeOpaque()) {
-        // TODO(pdr): It may be too conservative to round in to the
-        // EnclosedIntRect.
-        SkIRect conservative_rounded_rect;
-        const SkRect& record_bounds = drawing.GetPaintRecordBounds();
-        record_bounds.roundIn(&conservative_rounded_rect);
-        known_to_be_opaque_region.op(conservative_rounded_rect,
-                                     SkRegion::kUnion_Op);
+      if (const PaintRecord* record = drawing.GetPaintRecord().get()) {
+        if (drawing.KnownToBeOpaque()) {
+          // TODO(pdr): It may be too conservative to round in to the
+          // enclosedIntRect.
+          SkIRect conservative_rounded_rect;
+          const SkRect& cull_rect = record->cullRect();
+          cull_rect.roundIn(&conservative_rounded_rect);
+          known_to_be_opaque_region.op(conservative_rounded_rect,
+                                       SkRegion::kUnion_Op);
+        }
       }
     }
     chunk.bounds = bounds;

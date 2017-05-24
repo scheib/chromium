@@ -19,6 +19,9 @@ enum class EmeInitDataType { UNKNOWN, WEBM, CENC, KEYIDS, MAX = KEYIDS };
 // Defines bitmask values that specify codecs used in Encrypted Media Extension
 // (EME). Each value represents a codec within a specific container.
 // The mask values are stored in a SupportedCodecs.
+//
+// TODO(yucliu): Remove container name from the enum. See crbug.com/724362 for
+// more details.
 enum EmeCodec {
   // *_ALL values should only be used for masking, do not use them to specify
   // codec support because they may be extended to include more codecs.
@@ -28,6 +31,7 @@ enum EmeCodec {
   EME_CODEC_WEBM_VP8 = 1 << 2,
   EME_CODEC_WEBM_VP9 = 1 << 3,
   EME_CODEC_MP4_AAC = 1 << 4,
+  // AVC1 is shared by MP4 and MP2T.
   EME_CODEC_MP4_AVC1 = 1 << 5,
   EME_CODEC_COMMON_VP9 = 1 << 6,
   EME_CODEC_MP4_HEVC = 1 << 7,
@@ -62,9 +66,18 @@ enum EmeCodec {
 #endif  // BUILDFLAG(ENABLE_DOLBY_VISION_DEMUXING)
                              ),
   EME_CODEC_MP4_ALL = (EME_CODEC_MP4_AUDIO_ALL | EME_CODEC_MP4_VIDEO_ALL),
+#if BUILDFLAG(ENABLE_MSE_MPEG2TS_STREAM_PARSER)
+  EME_CODEC_MP2T_VIDEO_ALL = EME_CODEC_MP4_AVC1,
+  EME_CODEC_MP2T_ALL = EME_CODEC_MP2T_VIDEO_ALL,
+  EME_CODEC_AUDIO_ALL = (EME_CODEC_WEBM_AUDIO_ALL | EME_CODEC_MP4_AUDIO_ALL),
+  EME_CODEC_VIDEO_ALL = (EME_CODEC_WEBM_VIDEO_ALL | EME_CODEC_MP4_VIDEO_ALL |
+                         EME_CODEC_MP2T_VIDEO_ALL),
+  EME_CODEC_ALL = (EME_CODEC_WEBM_ALL | EME_CODEC_MP4_ALL | EME_CODEC_MP2T_ALL),
+#else
   EME_CODEC_AUDIO_ALL = (EME_CODEC_WEBM_AUDIO_ALL | EME_CODEC_MP4_AUDIO_ALL),
   EME_CODEC_VIDEO_ALL = (EME_CODEC_WEBM_VIDEO_ALL | EME_CODEC_MP4_VIDEO_ALL),
   EME_CODEC_ALL = (EME_CODEC_WEBM_ALL | EME_CODEC_MP4_ALL),
+#endif  // BUILDFLAG(ENABLE_MSE_MPEG2TS_STREAM_PARSER)
 #else
   EME_CODEC_AUDIO_ALL = EME_CODEC_WEBM_AUDIO_ALL,
   EME_CODEC_VIDEO_ALL = EME_CODEC_WEBM_VIDEO_ALL,

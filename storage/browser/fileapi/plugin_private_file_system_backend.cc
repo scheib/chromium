@@ -37,7 +37,7 @@ class PluginPrivateFileSystemBackend::FileSystemIDToPluginMap {
   ~FileSystemIDToPluginMap() {}
 
   std::string GetPluginIDForURL(const FileSystemURL& url) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
     Map::iterator found = map_.find(url.filesystem_id());
     if (url.type() != kFileSystemTypePluginPrivate || found == map_.end()) {
       NOTREACHED() << "Unsupported url is given: " << url.DebugString();
@@ -48,14 +48,14 @@ class PluginPrivateFileSystemBackend::FileSystemIDToPluginMap {
 
   void RegisterFileSystem(const std::string& filesystem_id,
                           const std::string& plugin_id) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
     DCHECK(!filesystem_id.empty());
     DCHECK(!base::ContainsKey(map_, filesystem_id)) << filesystem_id;
     map_[filesystem_id] = plugin_id;
   }
 
   void RemoveFileSystem(const std::string& filesystem_id) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
     map_.erase(filesystem_id);
   }
 
@@ -113,7 +113,7 @@ PluginPrivateFileSystemBackend::PluginPrivateFileSystemBackend(
 }
 
 PluginPrivateFileSystemBackend::~PluginPrivateFileSystemBackend() {
-  if (!file_task_runner_->RunsTasksOnCurrentThread()) {
+  if (!file_task_runner_->RunsTasksInCurrentSequence()) {
     AsyncFileUtil* file_util = file_util_.release();
     if (!file_task_runner_->DeleteSoon(FROM_HERE, file_util))
       delete file_util;
@@ -268,7 +268,7 @@ int64_t PluginPrivateFileSystemBackend::GetOriginUsageOnFileTaskRunner(
     FileSystemContext* context,
     const GURL& origin_url,
     FileSystemType type) {
-  DCHECK(file_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(file_task_runner_->RunsTasksInCurrentSequence());
 
   if (!CanHandleType(type))
     return 0;
@@ -285,7 +285,7 @@ void PluginPrivateFileSystemBackend::GetOriginDetailsOnFileTaskRunner(
     const GURL& origin_url,
     int64_t* total_size,
     base::Time* last_modified_time) {
-  DCHECK(file_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(file_task_runner_->RunsTasksInCurrentSequence());
 
   *total_size = 0;
   *last_modified_time = base::Time::UnixEpoch();

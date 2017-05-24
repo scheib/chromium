@@ -73,6 +73,8 @@ _NEGATIVE_FILTER = [
 
 _VERSION_SPECIFIC_FILTER = {}
 _VERSION_SPECIFIC_FILTER['HEAD'] = [
+    # https://bugs.chromium.org/p/chromedriver/issues/detail?id=1819
+    'ChromeExtensionsCapabilityTest.testIFrameWithExtensionsSource',
 ]
 _VERSION_SPECIFIC_FILTER['58'] = [
     # https://bugs.chromium.org/p/chromedriver/issues/detail?id=1673
@@ -1838,6 +1840,17 @@ class ChromeExtensionsCapabilityTest(ChromeDriverBaseTest):
         return
     self.fail("couldn't find generated background page for test app")
 
+  def testIFrameWithExtensionsSource(self):
+    crx_path = os.path.join(_TEST_DATA_DIR, 'frames_extension.crx')
+    driver = self.CreateDriver(
+        chrome_extensions=[self._PackExtension(crx_path)])
+    driver.Load(
+        ChromeDriverTest._http_server.GetUrl() +
+          '/chromedriver/iframe_extension.html')
+    driver.SwitchToFrame('testframe')
+    element = driver.FindElement('id', 'p1')
+    self.assertEqual('Its a frame with extension source', element.GetText())
+
   def testDontExecuteScriptsInContentScriptContext(self):
     # This test extension has a content script which runs in all frames (see
     # https://developer.chrome.com/extensions/content_scripts) which causes each
@@ -2223,7 +2236,7 @@ class ChromeDriverLogTest(ChromeDriverBaseTest):
   def testDisablingDriverLogsSuppressesChromeDriverLog(self):
     _, tmp_log_path = tempfile.mkstemp(prefix='chromedriver_log_')
     chromedriver_server = server.Server(
-        _CHROMEDRIVER_BINARY, log_path=tmp_log_path)
+        _CHROMEDRIVER_BINARY, log_path=tmp_log_path, verbose=False)
     try:
       driver = self.CreateDriver(
           chromedriver_server.GetUrl(), logging_prefs={'driver':'OFF'})

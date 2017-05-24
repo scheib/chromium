@@ -34,6 +34,11 @@ interface SystemTray {
   ShowUpdateIcon(UpdateSeverity severity,
                  bool factory_reset_required,
                  UpdateType update_type);
+
+  // Shows an icon in the system tray indicating that a software update is
+  // available but user's agreement is required as current connection is
+  // cellular. Once shown the icon persists until reboot.
+  ShowUpdateOverCellularAvailableIcon();
 };
 
 // Allows ash system tray to control a client (e.g. Chrome browser). Requests
@@ -72,13 +77,17 @@ interface SystemTrayClient {
   // Shows settings related to input methods.
   ShowIMESettings();
 
-  // Shows help.
+  // Shows the about chrome OS page and checks for updates after the page is
+  // loaded.
+  ShowAboutChromeOS();
+
+  // Shows the Chromebook help app.
   ShowHelp();
 
-  // Show accessibility help.
+  // Shows accessibility help.
   ShowAccessibilityHelp();
 
-  // Show the settings related to accessibility.
+  // Shows the settings related to accessibility.
   ShowAccessibilitySettings();
 
   // Shows the help center article for the stylus tool palette.

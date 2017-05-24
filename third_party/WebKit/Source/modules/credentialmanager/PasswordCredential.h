@@ -45,9 +45,10 @@ class MODULES_EXPORT PasswordCredential final : public CredentialUserData {
     out = additional_data_;
   }
 
+  const String& password() const;
+
   // Internal methods
   PassRefPtr<EncodedFormData> EncodeFormData(String& content_type) const;
-  const String& Password() const;
   DECLARE_VIRTUAL_TRACE();
 
  private:

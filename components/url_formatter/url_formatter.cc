@@ -212,6 +212,7 @@ base::string16 IDNToUnicodeWithAdjustments(
   // Do each component of the host separately, since we enforce script matching
   // on a per-component basis.
   base::string16 out16;
+  bool has_idn_component = false;
   for (size_t component_start = 0, component_end;
        component_start < input16.length();
        component_start = component_end + 1) {
@@ -227,6 +228,7 @@ base::string16 IDNToUnicodeWithAdjustments(
       converted_idn =
           IDNToUnicodeOneComponent(input16.data() + component_start,
                                    component_length, is_tld_ascii, &out16);
+      has_idn_component |= converted_idn;
     }
     size_t new_component_length = out16.length() - new_component_start;
 
@@ -239,6 +241,15 @@ base::string16 IDNToUnicodeWithAdjustments(
     if (component_end < input16.length())
       out16.push_back('.');
   }
+
+  // Leave as punycode any inputs that spoof top domains.
+  if (has_idn_component &&
+      g_idn_spoof_checker.Get().SimilarToTopDomains(out16)) {
+    if (adjustments)
+      adjustments->clear();
+    return input16;
+  }
+
   return out16;
 }
 

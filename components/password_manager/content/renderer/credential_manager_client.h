@@ -11,6 +11,7 @@
 #include "content/public/renderer/render_view_observer.h"
 #include "third_party/WebKit/public/platform/WebCredentialManagerClient.h"
 #include "third_party/WebKit/public/platform/WebCredentialManagerError.h"
+#include "third_party/WebKit/public/platform/WebCredentialMediationRequirement.h"
 #include "third_party/WebKit/public/platform/WebVector.h"
 
 namespace blink {
@@ -47,7 +48,7 @@ class CredentialManagerClient : public blink::WebCredentialManagerClient,
       const blink::WebCredential& credential,
       WebCredentialManagerClient::NotificationCallbacks* callbacks) override;
   void DispatchRequireUserMediation(NotificationCallbacks* callbacks) override;
-  void DispatchGet(bool zero_click_only,
+  void DispatchGet(blink::WebCredentialMediationRequirement mediation,
                    bool include_passwords,
                    const blink::WebVector<blink::WebURL>& federations,
                    RequestCallbacks* callbacks) override;

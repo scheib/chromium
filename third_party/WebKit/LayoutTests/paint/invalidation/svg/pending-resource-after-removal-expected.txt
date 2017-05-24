@@ -7,11 +7,6 @@
       "drawsContent": true,
       "paintInvalidations": [
         {
-          "object": "LayoutSVGRect rect",
-          "rect": [0, 0, 200, 200],
-          "reason": "disappeared"
-        },
-        {
           "object": "LayoutSVGRect rect id='shape'",
           "rect": [0, 0, 200, 200],
           "reason": "style change"
@@ -26,14 +21,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourcePattern pattern id='pat'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGRect rect id='shape'",
       "reason": "style change"
     },
@@ -44,14 +31,6 @@
     {
       "object": "LayoutSVGResourcePattern pattern id='pat'",
       "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGResourcePattern pattern id='pat'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
     },
     {
       "object": "LayoutSVGRect rect id='shape'",

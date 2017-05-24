@@ -8,7 +8,9 @@
 
 #include <Cocoa/Cocoa.h>
 
-#include "base/mac/scoped_nsobject.h"
+#import "base/mac/foundation_util.h"
+#include "base/mac/scoped_cftyperef.h"
+#import "base/mac/scoped_nsobject.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/gfx/canvas.h"
@@ -18,6 +20,60 @@
 namespace gfx {
 
 namespace {
+
+// How to get from NORMAL weight to a fine-grained font weight using calls to
+// -[NSFontManager convertWeight:(BOOL)upFlag ofFont:(NSFont)].
+struct WeightSolver {
+  int steps_up;    // Times to call with upFlag:YES.
+  int steps_down;  // Times to call with upFlag:NO.
+  // Either NORMAL or BOLD: whether to set the NSBoldFontMask symbolic trait.
+  Font::Weight nearest;
+};
+
+// Solve changes to the font weight according to the following table, from
+// https://developer.apple.com/reference/appkit/nsfontmanager/1462321-convertweight
+// 1. ultralight                     | none
+// 2. thin                           | W1. ultralight
+// 3. light, extralight              | W2. extralight
+// 4. book                           | W3. light
+// 5. regular, plain, display, roman | W4. semilight
+// 6. medium                         | W5. medium
+// 7. demi, demibold                 | none
+// 8. semi, semibold                 | W6. semibold
+// 9. bold                           | W7. bold
+// 10. extra, extrabold              | W8. extrabold
+// 11. heavy, heavyface              | none
+// 12. black, super                  | W9. ultrabold
+// 13. ultra, ultrablack, fat        | none
+// 14. extrablack, obese, nord       | none
+WeightSolver WeightChangeFromNormal(Font::Weight desired) {
+  using Weight = Font::Weight;
+  switch (desired) {
+    case Weight::THIN:
+      // It's weird, but to get LIGHT and THIN fonts, first go up a step.
+      // Without this, the font stays stuck at NORMAL. See
+      // PlatformFontMacTest, FontWeightAPIConsistency.
+      return {1, 3, Weight::NORMAL};
+    case Weight::EXTRA_LIGHT:
+      return {1, 2, Weight::NORMAL};
+    case Weight::LIGHT:
+      return {1, 1, Weight::NORMAL};
+    case Weight::NORMAL:
+      return {0, 0, Weight::NORMAL};
+    case Weight::MEDIUM:
+      return {1, 0, Weight::NORMAL};
+    case Weight::SEMIBOLD:
+      return {0, 1, Weight::BOLD};
+    case Weight::BOLD:
+      return {0, 0, Weight::BOLD};
+    case Weight::EXTRA_BOLD:
+      return {1, 0, Weight::BOLD};
+    case Weight::BLACK:
+      return {3, 0, Weight::BOLD};  // Skip row 12.
+    case Weight::INVALID:
+      return {0, 0, Weight::NORMAL};
+  }
+}
 
 // Returns the font style for |font|. Disregards Font::UNDERLINE, since NSFont
 // does not support it as a trait.
@@ -31,8 +87,56 @@ int GetFontStyleFromNSFont(NSFont* font) {
 
 // Returns the Font weight for |font|.
 Font::Weight GetFontWeightFromNSFont(NSFont* font) {
-  NSFontSymbolicTraits traits = [[font fontDescriptor] symbolicTraits];
-  return (traits & NSFontBoldTrait) ? Font::Weight::BOLD : Font::Weight::NORMAL;
+  if (!font)
+    return Font::Weight::INVALID;
+
+  // Map CoreText weights in a manner similar to ct_weight_to_fontstyle() from
+  // SkFontHost_mac.cpp, but adjust for MEDIUM so that the San Francisco's
+  // custom MEDIUM weight can be picked out. San Francisco has weights:
+  // [0.23, 0.23, 0.3, 0.4, 0.56, 0.62, 0.62, ...] (no thin weights).
+  // See PlatformFontMacTest.FontWeightAPIConsistency for details.
+  // Note that the table Skia uses is also determined by experiment.
+  constexpr struct {
+    CGFloat ct_weight;
+    Font::Weight gfx_weight;
+  } weight_map[] = {
+      // Missing: Apple "ultralight".
+      {-0.70, Font::Weight::THIN},
+      {-0.50, Font::Weight::EXTRA_LIGHT},
+      {-0.23, Font::Weight::LIGHT},
+      {0.00, Font::Weight::NORMAL},
+      {0.23, Font::Weight::MEDIUM},  // Note: adjusted from 0.20 vs Skia.
+      // Missing: Apple "demibold".
+      {0.30, Font::Weight::SEMIBOLD},
+      {0.40, Font::Weight::BOLD},
+      {0.60, Font::Weight::EXTRA_BOLD},
+      // Missing: Apple "heavyface".
+      // Values will be capped to BLACK (this entry is here for consistency).
+      {0.80, Font::Weight::BLACK},
+      // Missing: Apple "ultrablack".
+      // Missing: Apple "extrablack".
+  };
+  base::ScopedCFTypeRef<CFDictionaryRef> traits(
+      CTFontCopyTraits(base::mac::NSToCFCast(font)));
+  DCHECK(traits);
+  CFNumberRef cf_weight = base::mac::GetValueFromDictionary<CFNumberRef>(
+      traits, kCTFontWeightTrait);
+  // A missing weight attribute just means 0 -> NORMAL.
+  if (!cf_weight)
+    return Font::Weight::NORMAL;
+
+  // Documentation is vague about what sized floating point type should be used.
+  // However, numeric_limits::epsilon() for 64-bit types is too small to match
+  // the above table, so use 32-bit float.
+  float weight_value;
+  Boolean success =
+      CFNumberGetValue(cf_weight, kCFNumberFloatType, &weight_value);
+  DCHECK(success);
+  for (const auto& item : weight_map) {
+    if (weight_value - item.ct_weight <= std::numeric_limits<float>::epsilon())
+      return item.gfx_weight;
+  }
+  return Font::Weight::BLACK;
 }
 
 // Returns an autoreleased NSFont created with the passed-in specifications.
@@ -100,24 +204,43 @@ Font PlatformFontMac::DeriveFont(int size_delta,
                                  Font::Weight weight) const {
   // For some reason, creating fonts using the NSFontDescriptor API's seem to be
   // unreliable. Hence use the NSFontManager.
-  NSFont* derived_font = native_font_;
+  NSFont* derived = native_font_;
   NSFontManager* font_manager = [NSFontManager sharedFontManager];
 
-  NSFontTraitMask bold_trait_mask =
-      weight >= Font::Weight::BOLD ? NSBoldFontMask : NSUnboldFontMask;
-  derived_font =
-      [font_manager convertFont:derived_font toHaveTrait:bold_trait_mask];
+  if (weight != font_weight_) {
+    // Find a font without any bold traits. Ideally, all bold traits are
+    // removed here, but non-symbolic traits are read-only properties of a
+    // particular set of glyphs. And attempting to "reset" the attribute with a
+    // new font descriptor will lose internal properties that Mac decorates its
+    // UI fonts with. E.g., solving the plans below from NORMAL result in a
+    // CTFontDescriptor attribute entry of NSCTFontUIUsageAttribute in
+    // CTFont{Regular,Medium,Demi,Emphasized,Heavy,Black}Usage. Attempting to
+    // "solve" weights starting at other than NORMAL has unpredictable results.
+    if (font_weight_ != Font::Weight::NORMAL)
+      derived = [font_manager convertFont:derived toHaveTrait:NSUnboldFontMask];
+    DLOG_IF(WARNING, GetFontWeightFromNSFont(derived) != Font::Weight::NORMAL)
+        << "Deriving from a font with an internal unmodifiable weight.";
 
-  NSFontTraitMask italic_trait_mask =
-      (style & Font::ITALIC) ? NSItalicFontMask : NSUnitalicFontMask;
-  derived_font =
-      [font_manager convertFont:derived_font toHaveTrait:italic_trait_mask];
+    WeightSolver plan = WeightChangeFromNormal(weight);
+    if (plan.nearest == Font::Weight::BOLD)
+      derived = [font_manager convertFont:derived toHaveTrait:NSBoldFontMask];
+    for (int i = 0; i < plan.steps_up; ++i)
+      derived = [font_manager convertWeight:YES ofFont:derived];
+    for (int i = 0; i < plan.steps_down; ++i)
+      derived = [font_manager convertWeight:NO ofFont:derived];
+  }
 
-  derived_font =
-      [font_manager convertFont:derived_font toSize:font_size_ + size_delta];
+  if (style != font_style_) {
+    NSFontTraitMask italic_trait_mask =
+        (style & Font::ITALIC) ? NSItalicFontMask : NSUnitalicFontMask;
+    derived = [font_manager convertFont:derived toHaveTrait:italic_trait_mask];
+  }
 
-  return Font(new PlatformFontMac(derived_font, font_name_,
-                                  font_size_ + size_delta, style, weight));
+  if (size_delta != 0)
+    derived = [font_manager convertFont:derived toSize:font_size_ + size_delta];
+
+  return Font(new PlatformFontMac(derived, font_name_, font_size_ + size_delta,
+                                  style, weight));
 }
 
 int PlatformFontMac::GetHeight() {

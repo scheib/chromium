@@ -10,11 +10,16 @@
 #include "base/files/file_path.h"
 #include "content/common/content_export.h"
 #include "content/common/leveldb_wrapper.mojom.h"
+#include "content/public/browser/browser_thread.h"
 #include "services/file/public/interfaces/file_system.mojom.h"
 #include "url/origin.h"
 
 namespace service_manager {
 class Connector;
+}
+
+namespace storage {
+class SpecialStoragePolicy;
 }
 
 namespace content {
@@ -25,16 +30,21 @@ struct LocalStorageUsageInfo;
 
 // Used for mojo-based LocalStorage implementation (behind --mojo-local-storage
 // for now).
+// Created on the UI thread, but all further methods are called on the IO
+// thread. Furthermore since destruction of this class can involve asynchronous
+// steps, it can only be deleted by calling ShutdownAndDelete (on the IO
+// thread),
 class CONTENT_EXPORT LocalStorageContextMojo {
  public:
   using GetStorageUsageCallback =
       base::OnceCallback<void(std::vector<LocalStorageUsageInfo>)>;
 
-  LocalStorageContextMojo(service_manager::Connector* connector,
-                          scoped_refptr<DOMStorageTaskRunner> task_runner,
-                          const base::FilePath& old_localstorage_path,
-                          const base::FilePath& subdirectory);
-  ~LocalStorageContextMojo();
+  LocalStorageContextMojo(
+      service_manager::Connector* connector,
+      scoped_refptr<DOMStorageTaskRunner> task_runner,
+      const base::FilePath& old_localstorage_path,
+      const base::FilePath& subdirectory,
+      scoped_refptr<storage::SpecialStoragePolicy> special_storage_policy);
 
   void OpenLocalStorage(const url::Origin& origin,
                         mojom::LevelDBWrapperRequest request);
@@ -43,6 +53,18 @@ class CONTENT_EXPORT LocalStorageContextMojo {
   // Like DeleteStorage(), but also deletes storage for all sub-origins.
   void DeleteStorageForPhysicalOrigin(const url::Origin& origin);
   void Flush();
+
+  // Used by content settings to alter the behavior around
+  // what data to keep and what data to discard at shutdown.
+  // The policy is not so straight forward to describe, see
+  // the implementation for details.
+  void SetForceKeepSessionState() { force_keep_session_state_ = true; }
+
+  // Called when the owning BrowserContext is ending.
+  // Schedules the commit of any unsaved changes and will delete
+  // and keep data on disk per the content settings and special storage
+  // policies.
+  void ShutdownAndDelete();
 
   // Clears any caches, to free up as much memory as possible. Next access to
   // storage for a particular origin will reload the data from the database.
@@ -57,6 +79,8 @@ class CONTENT_EXPORT LocalStorageContextMojo {
   friend class MojoDOMStorageBrowserTest;
 
   class LevelDBWrapperHolder;
+
+  ~LocalStorageContextMojo();
 
   // Runs |callback| immediately if already connected to a database, otherwise
   // delays running |callback| untill after a connection has been established.
@@ -91,15 +115,22 @@ class CONTENT_EXPORT LocalStorageContextMojo {
       const url::Origin& origin,
       std::vector<LocalStorageUsageInfo> usage);
 
-  service_manager::Connector* const connector_;
+  void OnGotStorageUsageForShutdown(std::vector<LocalStorageUsageInfo> usage);
+  void OnShutdownComplete(leveldb::mojom::DatabaseError error);
+
+  std::unique_ptr<service_manager::Connector> connector_;
   const base::FilePath subdirectory_;
 
   enum ConnectionState {
     NO_CONNECTION,
     CONNECTION_IN_PROGRESS,
-    CONNECTION_FINISHED
+    CONNECTION_FINISHED,
+    CONNECTION_SHUTDOWN
   } connection_state_ = NO_CONNECTION;
   bool database_initialized_ = false;
+
+  bool force_keep_session_state_ = false;
+  scoped_refptr<storage::SpecialStoragePolicy> special_storage_policy_;
 
   file::mojom::FileSystemPtr file_system_;
   filesystem::mojom::DirectoryPtr directory_;

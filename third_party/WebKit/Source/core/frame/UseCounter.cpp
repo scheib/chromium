@@ -1101,7 +1101,6 @@ int UseCounter::MapCSSPropertyIdToCSSSampleIdForHistogram(
 
 UseCounter::UseCounter(Context context)
     : mute_count_(0),
-      disable_reporting_(false),
       context_(context),
       features_recorded_(kNumberOfFeatures),
       css_recorded_(numCSSPropertyIDs),
@@ -1119,15 +1118,15 @@ void UseCounter::RecordMeasurement(Feature feature) {
   if (mute_count_)
     return;
 
-  DCHECK(feature != kOBSOLETE_PageDestruction &&
-         feature !=
-             kPageVisits);  // PageDestruction is reserved as a scaling factor.
-  DCHECK(feature < kNumberOfFeatures);
+  // PageDestruction is reserved as a scaling factor.
+  DCHECK_NE(kOBSOLETE_PageDestruction, feature);
+  DCHECK_NE(kPageVisits, feature);
+  DCHECK_GE(kNumberOfFeatures, feature);
 
   if (!features_recorded_.QuickGet(feature)) {
     // Note that HTTPArchive tooling looks specifically for this event - see
     // https://github.com/HTTPArchive/httparchive/issues/59
-    if (!disable_reporting_) {
+    if (context_ != kDisabledContext) {
       TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("blink.feature_usage"),
                    "FeatureFirstUsed", "feature", feature);
       FeaturesHistogram().Count(feature);
@@ -1142,10 +1141,10 @@ bool UseCounter::HasRecordedMeasurement(Feature feature) const {
   if (mute_count_)
     return false;
 
-  DCHECK(feature != kOBSOLETE_PageDestruction &&
-         feature !=
-             kPageVisits);  // PageDestruction is reserved as a scaling factor.
-  DCHECK(feature < kNumberOfFeatures);
+  // PageDestruction is reserved as a scaling factor.
+  DCHECK_NE(kOBSOLETE_PageDestruction, feature);
+  DCHECK_NE(kPageVisits, feature);
+  DCHECK_GE(kNumberOfFeatures, feature);
 
   return features_recorded_.QuickGet(feature);
 }
@@ -1158,23 +1157,27 @@ void UseCounter::DidCommitLoad(KURL url) {
   legacy_counter_.UpdateMeasurements();
 
   // Reset state from previous load.
-  disable_reporting_ = false;
-
   // Use the protocol of the document being loaded into the main frame to
   // decide whether this page is interesting from a metrics perspective.
   // Note that SVGImage cases always have an about:blank URL
-  if (context_ == kDefaultContext &&
-      !SchemeRegistry::ShouldTrackUsageMetricsForScheme(url.Protocol())) {
-    disable_reporting_ = true;
+  if (context_ != kSVGImageContext) {
+    if (url.ProtocolIs("chrome-extension"))
+      context_ = kExtensionContext;
+    else if (SchemeRegistry::ShouldTrackUsageMetricsForScheme(url.Protocol()))
+      context_ = kDefaultContext;
+    else
+      context_ = kDisabledContext;
   }
 
   features_recorded_.ClearAll();
   css_recorded_.ClearAll();
   animated_css_recorded_.ClearAll();
-  if (!disable_reporting_ && !mute_count_) {
+  if (context_ != kDisabledContext && !mute_count_) {
     FeaturesHistogram().Count(kPageVisits);
-    CssHistogram().Count(totalPagesMeasuredCSSSampleId());
-    AnimatedCSSHistogram().Count(totalPagesMeasuredCSSSampleId());
+    if (context_ != kExtensionContext) {
+      CssHistogram().Count(totalPagesMeasuredCSSSampleId());
+      AnimatedCSSHistogram().Count(totalPagesMeasuredCSSSampleId());
+    }
   }
 }
 
@@ -1247,7 +1250,7 @@ void UseCounter::Count(CSSParserMode css_parser_mode, CSSPropertyID property) {
     // Note that HTTPArchive tooling looks specifically for this event - see
     // https://github.com/HTTPArchive/httparchive/issues/59
     int sample_id = MapCSSPropertyIdToCSSSampleIdForHistogram(property);
-    if (!disable_reporting_) {
+    if (context_ != kDisabledContext && context_ != kExtensionContext) {
       TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("blink.feature_usage"),
                    "CSSFirstUsed", "feature", sample_id);
       CssHistogram().Count(sample_id);
@@ -1294,7 +1297,7 @@ void UseCounter::CountAnimatedCSS(CSSPropertyID property) {
 
   if (!animated_css_recorded_.QuickGet(property)) {
     int sample_id = MapCSSPropertyIdToCSSSampleIdForHistogram(property);
-    if (!disable_reporting_) {
+    if (context_ != kDisabledContext && context_ != kExtensionContext) {
       TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("blink.feature_usage"),
                    "AnimatedCSSFirstUsed", "feature", sample_id);
       AnimatedCSSHistogram().Count(sample_id);
@@ -1305,7 +1308,7 @@ void UseCounter::CountAnimatedCSS(CSSPropertyID property) {
 
 void UseCounter::NotifyFeatureCounted(Feature feature) {
   DCHECK(!mute_count_);
-  DCHECK(!disable_reporting_);
+  DCHECK_NE(kDisabledContext, context_);
   HeapHashSet<Member<Observer>> to_be_removed;
   for (auto observer : observers_) {
     if (observer->OnCountFeature(feature))
@@ -1315,23 +1318,37 @@ void UseCounter::NotifyFeatureCounted(Feature feature) {
 }
 
 EnumerationHistogram& UseCounter::FeaturesHistogram() const {
+  DCHECK_NE(kDisabledContext, context_);
   // Every SVGImage has it's own Page instance, and multiple web pages can
   // share the usage of a single SVGImage.  Ideally perhaps we'd delegate
   // metrics from an SVGImage to one of the Page's it's displayed in, but
   // that's tricky (SVGImage is intentionally isolated, and the Page that
   // created it may not even exist anymore).
   // So instead we just use a dedicated histogram for the SVG case.
-  DEFINE_STATIC_LOCAL(
-      blink::EnumerationHistogram, histogram,
-      ("Blink.UseCounter.Features", blink::UseCounter::kNumberOfFeatures));
   DEFINE_STATIC_LOCAL(blink::EnumerationHistogram, svg_histogram,
                       ("Blink.UseCounter.SVGImage.Features",
                        blink::UseCounter::kNumberOfFeatures));
-
-  return context_ == kSVGImageContext ? svg_histogram : histogram;
+  DEFINE_STATIC_LOCAL(blink::EnumerationHistogram, extension_histogram,
+                      ("Blink.UseCounter.Extensions.Features",
+                       blink::UseCounter::kNumberOfFeatures));
+  DEFINE_STATIC_LOCAL(
+      blink::EnumerationHistogram, histogram,
+      ("Blink.UseCounter.Features", blink::UseCounter::kNumberOfFeatures));
+  switch (context_) {
+    case kSVGImageContext:
+      return svg_histogram;
+    case kExtensionContext:
+      return extension_histogram;
+    case kDefaultContext:
+    case kDisabledContext:
+      break;
+  }
+  return histogram;
 }
 
 EnumerationHistogram& UseCounter::CssHistogram() const {
+  DCHECK_NE(kExtensionContext, context_);
+  DCHECK_NE(kDisabledContext, context_);
   DEFINE_STATIC_LOCAL(blink::EnumerationHistogram, histogram,
                       ("Blink.UseCounter.CSSProperties", kMaximumCSSSampleId));
   DEFINE_STATIC_LOCAL(

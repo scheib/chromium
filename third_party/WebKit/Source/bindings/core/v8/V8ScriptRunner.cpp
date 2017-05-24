@@ -504,14 +504,15 @@ v8::MaybeLocal<v8::Module> V8ScriptRunner::CompileModule(
     v8::Isolate* isolate,
     const String& source,
     const String& file_name,
-    AccessControlStatus access_control_status) {
+    AccessControlStatus access_control_status,
+    const TextPosition& start_position) {
   TRACE_EVENT1("v8", "v8.compileModule", "fileName", file_name.Utf8());
   // TODO(adamk): Add Inspector integration?
   // TODO(adamk): Pass more info into ScriptOrigin.
   v8::ScriptOrigin origin(
       V8String(isolate, file_name),
-      v8::Integer::New(isolate, 0),  // line_offset
-      v8::Integer::New(isolate, 0),  // col_offset
+      v8::Integer::New(isolate, start_position.line_.ZeroBasedInt()),
+      v8::Integer::New(isolate, start_position.column_.ZeroBasedInt()),
       v8::Boolean::New(isolate, access_control_status == kSharableCrossOrigin),
       v8::Local<v8::Integer>(),    // script id
       v8::String::Empty(isolate),  // source_map_url

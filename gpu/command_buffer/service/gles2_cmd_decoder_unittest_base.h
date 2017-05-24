@@ -25,6 +25,7 @@
 #include "gpu/command_buffer/service/query_manager.h"
 #include "gpu/command_buffer/service/renderbuffer_manager.h"
 #include "gpu/command_buffer/service/sampler_manager.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/shader_manager.h"
 #include "gpu/command_buffer/service/test_helper.h"
 #include "gpu/command_buffer/service/texture_manager.h"
@@ -472,6 +473,11 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool> {
   void AddExpectationsForBindVertexArrayOES();
   void AddExpectationsForRestoreAttribState(GLuint attrib);
 
+  void DoInitializeDiscardableTextureCHROMIUM(GLuint texture_id);
+  void DoUnlockDiscardableTextureCHROMIUM(GLuint texture_id);
+  void DoLockDiscardableTextureCHROMIUM(GLuint texture_id);
+  bool IsDiscardableTextureUnlocked(GLuint texture_id);
+
   GLvoid* BufferOffset(unsigned i) { return static_cast<int8_t*>(NULL) + (i); }
 
   template <typename Command, typename Result>
@@ -760,6 +766,7 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool> {
 
   std::unique_ptr<::testing::StrictMock<MockCommandBufferEngine>> engine_;
   GpuPreferences gpu_preferences_;
+  ServiceDiscardableManager discardable_manager_;
   scoped_refptr<ContextGroup> group_;
   MockGLStates gl_states_;
   base::MessageLoop message_loop_;

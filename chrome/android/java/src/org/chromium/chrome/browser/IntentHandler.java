@@ -32,6 +32,7 @@ import org.chromium.chrome.browser.omnibox.AutocompleteController;
 import org.chromium.chrome.browser.rappor.RapporServiceBridge;
 import org.chromium.chrome.browser.search_engines.TemplateUrlService;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tabmodel.TabModel.TabLaunchType;
 import org.chromium.chrome.browser.tabmodel.document.ActivityDelegate;
 import org.chromium.chrome.browser.util.IntentUtils;
 import org.chromium.content_public.browser.LoadUrlParams;
@@ -147,6 +148,12 @@ public class IntentHandler {
      * this intent.
      */
     public static final String EXTRA_EXTERNAL_NAV_PACKAGES = "org.chromium.chrome.browser.eenp";
+
+    /**
+     * Extra to indicate the launch type of the tab to be created.
+     */
+    private static final String EXTRA_TAB_LAUNCH_TYPE =
+            "org.chromium.chrome.browser.tab_launch_type";
 
     /**
      * A hash code for the URL to verify intent data hasn't been modified.
@@ -787,6 +794,21 @@ public class IntentHandler {
         return false;
     }
 
+    /**
+     * @param intent An Intent to be checked.
+     * @param packageName The app where the intent is expected to originate from
+     * @return Whether the intent originates from the first-party app with the given package name.
+     */
+    public static boolean isIntentFromTrustedApp(Intent intent, String packageName) {
+        if (intent == null) return false;
+
+        PendingIntent token = fetchAuthenticationTokenFromIntent(intent);
+        if (token == null) return false;
+
+        return isIntentChromeOrFirstParty(intent)
+                && ApiCompatibilityUtils.getCreatorPackage(token).equals(packageName);
+    }
+
     @VisibleForTesting
     boolean isIntentUserVisible() {
         // Only process Intents if the screen is on and the device is unlocked;
@@ -1008,5 +1030,21 @@ public class IntentHandler {
             return transitionType;
         }
         return defaultTransition;
+    }
+
+    /**
+     * Sets the launch type in a tab creation intent.
+     * @param intent The Intent to be set.
+     */
+    public static void setTabLaunchType(Intent intent, TabLaunchType type) {
+        intent.putExtra(EXTRA_TAB_LAUNCH_TYPE, type);
+    }
+
+    /**
+     * @param intent An Intent to be checked.
+     * @return The launch type of the tab to be created.
+     */
+    public static TabLaunchType getTabLaunchType(Intent intent) {
+        return IntentUtils.safeGetSerializableExtra(intent, EXTRA_TAB_LAUNCH_TYPE);
     }
 }

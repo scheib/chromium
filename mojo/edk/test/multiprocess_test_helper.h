@@ -20,6 +20,8 @@ namespace mojo {
 
 namespace edk {
 
+class PeerConnection;
+
 namespace test {
 
 class MultiprocessTestHelper {
@@ -98,7 +100,7 @@ class MultiprocessTestHelper {
 
   ProcessErrorCallback process_error_callback_;
 
-  std::string peer_token_;
+  std::unique_ptr<PeerConnection> peer_connection_;
 
   DISALLOW_COPY_AND_ASSIGN(MultiprocessTestHelper);
 };

@@ -77,6 +77,7 @@ void ClientCompositorFrameSink::SubmitCompositorFrame(
   if (!compositor_frame_sink_)
     return;
 
+  DCHECK(frame.metadata.begin_frame_ack.has_damage);
   DCHECK_LE(cc::BeginFrameArgs::kStartingFrameNumber,
             frame.metadata.begin_frame_ack.sequence_number);
 
@@ -89,6 +90,13 @@ void ClientCompositorFrameSink::SubmitCompositorFrame(
   }
   compositor_frame_sink_->SubmitCompositorFrame(local_surface_id_,
                                                 std::move(frame));
+}
+
+void ClientCompositorFrameSink::DidNotProduceFrame(
+    const cc::BeginFrameAck& ack) {
+  DCHECK(!ack.has_damage);
+  DCHECK_LE(cc::BeginFrameArgs::kStartingFrameNumber, ack.sequence_number);
+  compositor_frame_sink_->DidNotProduceFrame(ack);
 }
 
 ClientCompositorFrameSink::ClientCompositorFrameSink(
@@ -131,12 +139,6 @@ void ClientCompositorFrameSink::ReclaimResources(
 
 void ClientCompositorFrameSink::OnNeedsBeginFrames(bool needs_begin_frames) {
   compositor_frame_sink_->SetNeedsBeginFrame(needs_begin_frames);
-}
-
-void ClientCompositorFrameSink::OnDidFinishFrame(const cc::BeginFrameAck& ack) {
-  // If there was damage, the submitted CompositorFrame includes the ack.
-  if (!ack.has_damage)
-    compositor_frame_sink_->BeginFrameDidNotSwap(ack);
 }
 
 ClientCompositorFrameSinkBinding::~ClientCompositorFrameSinkBinding() {}

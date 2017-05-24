@@ -23,6 +23,9 @@ class SlideOutController : public ui::EventHandler,
     // Returns the layer for slide operations.
     virtual ui::Layer* GetSlideOutLayer() = 0;
 
+    // Called when a slide starts, ends, or is updated.
+    virtual void OnSlideChanged() = 0;
+
     // Called when user intends to close the View by sliding it out.
     virtual void OnSlideOut() = 0;
   };

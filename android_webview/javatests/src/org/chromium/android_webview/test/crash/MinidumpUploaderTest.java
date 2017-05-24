@@ -101,7 +101,7 @@ public class MinidumpUploaderTest extends CrashTestCase {
         // Note that these minidump files are set up directly in the cache dir - not in the WebView
         // crash dir. This is to ensure the CrashFileManager doesn't see these minidumps without us
         // first copying them.
-        File minidumpToCopy = new File(getExistingCacheDir(), "toCopy.dmp");
+        File minidumpToCopy = new File(getExistingCacheDir(), "toCopy.dmp.try0");
         setUpMinidumpFile(minidumpToCopy, BOUNDARY, "browser");
         final String expectedFileContent = readEntireFile(minidumpToCopy);
 
@@ -178,8 +178,8 @@ public class MinidumpUploaderTest extends CrashTestCase {
                 new WebViewUserConsentMinidumpUploaderDelegate(userConsent);
         MinidumpUploader minidumpUploader = new TestMinidumpUploaderImpl(delegate);
 
-        File firstFile = createMinidumpFileInCrashDir("1_abc.dmp0");
-        File secondFile = createMinidumpFileInCrashDir("12_abcd.dmp0");
+        File firstFile = createMinidumpFileInCrashDir("1_abc.dmp0.try0");
+        File secondFile = createMinidumpFileInCrashDir("12_abcd.dmp0.try0");
         File expectedFirstFile = new File(
                 mCrashDir, firstFile.getName().replace(".dmp", userConsent ? ".up" : ".skipped"));
         File expectedSecondFile = new File(
@@ -213,8 +213,8 @@ public class MinidumpUploaderTest extends CrashTestCase {
         // Note that these minidump files are set up directly in the cache dir - not in the WebView
         // crash dir. This is to ensure the CrashFileManager doesn't see these minidumps without us
         // first copying them.
-        File firstMinidumpToCopy = new File(getExistingCacheDir(), "firstToCopy.dmp");
-        File secondMinidumpToCopy = new File(getExistingCacheDir(), "secondToCopy.dmp");
+        File firstMinidumpToCopy = new File(getExistingCacheDir(), "firstToCopy.dmp.try0");
+        File secondMinidumpToCopy = new File(getExistingCacheDir(), "secondToCopy.dmp.try0");
         setUpMinidumpFile(firstMinidumpToCopy, BOUNDARY, "browser");
         setUpMinidumpFile(secondMinidumpToCopy, BOUNDARY, "renderer");
         final String expectedFirstFileContent = readEntireFile(firstMinidumpToCopy);
@@ -254,8 +254,8 @@ public class MinidumpUploaderTest extends CrashTestCase {
         CrashReceiverService crashReceiverService = new CrashReceiverService();
         assertEquals(minidumps.length, uids.length);
         // Ensure the upload service minidump directory is empty before we start copying files.
-        File[] initialMinidumps =
-                fileManager.getAllMinidumpFiles(MinidumpUploaderImpl.MAX_UPLOAD_TRIES_ALLOWED);
+        File[] initialMinidumps = fileManager.getMinidumpsReadyForUpload(
+                MinidumpUploaderImpl.MAX_UPLOAD_TRIES_ALLOWED);
         assertEquals(0, initialMinidumps.length);
 
         // Open file descriptors to the files and then delete the files.
@@ -292,8 +292,8 @@ public class MinidumpUploaderTest extends CrashTestCase {
         MinidumpUploadTestUtility.uploadMinidumpsSync(
                 minidumpUploader, false /* expectReschedule */);
         // Ensure there are no minidumps left to upload.
-        File[] nonUploadedMinidumps =
-                fileManager.getAllMinidumpFiles(MinidumpUploaderImpl.MAX_UPLOAD_TRIES_ALLOWED);
+        File[] nonUploadedMinidumps = fileManager.getMinidumpsReadyForUpload(
+                MinidumpUploaderImpl.MAX_UPLOAD_TRIES_ALLOWED);
         assertEquals(0, nonUploadedMinidumps.length);
 
         File[] uploadedFiles = fileManager.getAllUploadedFiles();

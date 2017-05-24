@@ -49,6 +49,10 @@ function emitExpectedResult(path, expected)
       return;
     if (propertyPath == 'navigator.connection.downlinkMax')
       return;
+    if (propertyPath == 'navigator.connection.rtt')
+      return;
+    if (propertyPath == 'navigator.connection.downlink')
+      return;
 
     switch (propertyPath) {
     case "location.href":

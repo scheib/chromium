@@ -219,7 +219,8 @@ class ArcSessionImpl : public ArcSession,
 
   // DBus callback for StartArcInstance().
   void OnInstanceStarted(mojo::edk::ScopedPlatformHandle socket_fd,
-                         StartArcInstanceResult result);
+                         StartArcInstanceResult result,
+                         const std::string& container_instance_id);
 
   // Synchronously accepts a connection on |socket_fd| and then processes the
   // connected socket's file descriptor.
@@ -232,7 +233,8 @@ class ArcSessionImpl : public ArcSession,
   void StopArcInstance();
 
   // chromeos::SessionManagerClient::Observer:
-  void ArcInstanceStopped(bool clean) override;
+  void ArcInstanceStopped(bool clean,
+                          const std::string& container_instance_id) override;
 
   // Completes the termination procedure.
   void OnStopped(ArcStopReason reason);
@@ -252,6 +254,10 @@ class ArcSessionImpl : public ArcSession,
 
   // When Stop() is called, this flag is set.
   bool stop_requested_ = false;
+
+  // Container instance id passed from session_manager.
+  // Should be available only after OnInstanceStarted().
+  std::string container_instance_id_;
 
   // In CONNECTING_MOJO state, this is set to the write side of the pipe
   // to notify cancelling of the procedure.
@@ -381,16 +387,11 @@ void ArcSessionImpl::OnSocketCreated(
 
 void ArcSessionImpl::OnInstanceStarted(
     mojo::edk::ScopedPlatformHandle socket_fd,
-    StartArcInstanceResult result) {
+    StartArcInstanceResult result,
+    const std::string& container_instance_id) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  if (state_ == State::STOPPED) {
-    // This is the case that error is notified via DBus before the
-    // OnInstanceStarted() callback is invoked. The stopping procedure has
-    // been run, so do nothing.
-    return;
-  }
-
   DCHECK_EQ(state_, State::STARTING_INSTANCE);
+  container_instance_id_ = container_instance_id;
 
   if (stop_requested_) {
     if (result == StartArcInstanceResult::SUCCESS) {
@@ -481,14 +482,6 @@ mojo::ScopedMessagePipeHandle ArcSessionImpl::ConnectMojo(
 void ArcSessionImpl::OnMojoConnected(
     mojo::ScopedMessagePipeHandle server_pipe) {
   DCHECK(thread_checker_.CalledOnValidThread());
-
-  if (state_ == State::STOPPED) {
-    // This is the case that error is notified via DBus before the
-    // OnMojoConnected() callback is invoked. The stopping procedure has
-    // been run, so do nothing.
-    return;
-  }
-
   DCHECK_EQ(state_, State::CONNECTING_MOJO);
   accept_cancel_pipe_.reset();
 
@@ -576,10 +569,21 @@ void ArcSessionImpl::StopArcInstance() {
       base::Bind(&DoNothingInstanceStopped));
 }
 
-void ArcSessionImpl::ArcInstanceStopped(bool clean) {
+void ArcSessionImpl::ArcInstanceStopped(
+    bool clean,
+    const std::string& container_instance_id) {
   DCHECK(thread_checker_.CalledOnValidThread());
   VLOG(1) << "Notified that ARC instance is stopped "
           << (clean ? "cleanly" : "uncleanly");
+
+  if (container_instance_id != container_instance_id_) {
+    VLOG(1) << "Container instance id mismatch. Do nothing."
+            << container_instance_id << " vs " << container_instance_id_;
+    return;
+  }
+
+  // Release |container_instance_id_| to avoid duplicate invocation situation.
+  container_instance_id_.clear();
 
   // In case that crash happens during before the Mojo channel is connected,
   // unlock the BlockingPool thread.

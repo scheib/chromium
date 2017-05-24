@@ -122,7 +122,7 @@ class ExternalVideoEncoder::VEAClientImpl
                   VideoCodecProfile codec_profile,
                   int start_bit_rate,
                   FrameId first_frame_id) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     requested_bit_rate_ = start_bit_rate;
     encoder_active_ = video_encode_accelerator_->Initialize(
@@ -143,7 +143,7 @@ class ExternalVideoEncoder::VEAClientImpl
   }
 
   void SetBitRate(int bit_rate) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     requested_bit_rate_ = bit_rate;
     video_encode_accelerator_->RequestEncodingParametersChange(
@@ -153,7 +153,7 @@ class ExternalVideoEncoder::VEAClientImpl
   // The destruction call back of the copied video frame to free its use of
   // the input buffer.
   void ReturnInputBufferToPool(int index) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
     DCHECK_GE(index, 0);
     DCHECK_LT(index, static_cast<int>(input_buffers_.size()));
     free_input_buffer_index_.push_back(index);
@@ -164,7 +164,7 @@ class ExternalVideoEncoder::VEAClientImpl
       const base::TimeTicks& reference_time,
       bool key_frame_requested,
       const VideoEncoder::FrameEncodedCallback& frame_encoded_callback) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     if (!encoder_active_)
       return;
@@ -218,7 +218,7 @@ class ExternalVideoEncoder::VEAClientImpl
 
  protected:
   void NotifyError(VideoEncodeAccelerator::Error error) final {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     DCHECK(error != VideoEncodeAccelerator::kInvalidArgumentError &&
            error != VideoEncodeAccelerator::kIllegalStateError);
@@ -238,7 +238,7 @@ class ExternalVideoEncoder::VEAClientImpl
   void RequireBitstreamBuffers(unsigned int input_count,
                                const gfx::Size& input_coded_size,
                                size_t output_buffer_size) final {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     frame_coded_size_ = input_coded_size;
 
@@ -258,7 +258,7 @@ class ExternalVideoEncoder::VEAClientImpl
                             size_t payload_size,
                             bool key_frame,
                             base::TimeDelta /* timestamp */) final {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
     if (bitstream_buffer_id < 0 ||
         bitstream_buffer_id >= static_cast<int32_t>(output_buffers_.size())) {
       NOTREACHED();
@@ -452,7 +452,7 @@ class ExternalVideoEncoder::VEAClientImpl
   }
 
   void OnReceivedSharedMemory(std::unique_ptr<base::SharedMemory> memory) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     output_buffers_.push_back(std::move(memory));
 
@@ -470,7 +470,7 @@ class ExternalVideoEncoder::VEAClientImpl
   }
 
   void OnReceivedInputSharedMemory(std::unique_ptr<base::SharedMemory> memory) {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     if (memory.get()) {
       input_buffers_.push_back(std::move(memory));
@@ -482,7 +482,7 @@ class ExternalVideoEncoder::VEAClientImpl
   // This is called when copy errors occur in encoding process when there is
   // need to copy the VideoFrames to match the required coded size for encoder.
   void ExitEncodingWithErrors() {
-    DCHECK(task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
     std::unique_ptr<SenderEncodedFrame> no_result(nullptr);
     cast_environment_->PostTask(

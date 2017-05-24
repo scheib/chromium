@@ -138,6 +138,8 @@ CHROMEOS_EXPORT void SetNetworkPortalDetector(
 // and deleted by Shutdown().
 CHROMEOS_EXPORT void InitializeForTesting(
     NetworkPortalDetector* network_portal_detector);
+
+// Returns true if the network portal detector has been set for testing.
 CHROMEOS_EXPORT bool SetForTesting();
 
 }  // namespace network_portal_detector

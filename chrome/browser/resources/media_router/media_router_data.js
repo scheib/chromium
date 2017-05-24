@@ -104,10 +104,11 @@ cr.define('media_router', function() {
    * @param {number} type The type of cast mode.
    * @param {string} description The description of the cast mode.
    * @param {?string} host The hostname of the site to cast.
+   * @param {boolean} isForced True if the mode is forced.
    * @constructor
    * @struct
    */
-  var CastMode = function(type, description, host) {
+  var CastMode = function(type, description, host, isForced) {
     /** @type {number} */
     this.type = type;
 
@@ -116,6 +117,9 @@ cr.define('media_router', function() {
 
     /** @type {?string} */
     this.host = host || null;
+
+    /** @type {boolean} */
+    this.isForced = isForced;
   };
 
   /**
@@ -123,7 +127,8 @@ cr.define('media_router', function() {
    * @const {!media_router.CastMode}
    */
   var AUTO_CAST_MODE = new CastMode(media_router.CastModeType.AUTO,
-      loadTimeData.getString('autoCastMode'), null);
+                                    loadTimeData.getString('autoCastMode'),
+                                    null, false);
 
   /**
    * @param {number} id The ID of this issue.

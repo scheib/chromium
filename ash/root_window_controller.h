@@ -199,7 +199,7 @@ class ASH_EXPORT RootWindowController : public ShellObserver {
   //
   // NOTE: the returned window may not contain the location as resize handles
   // may extend outside the bounds of the window.
-  WmWindow* FindEventTarget(const gfx::Point& location_in_screen);
+  aura::Window* FindEventTarget(const gfx::Point& location_in_screen);
 
   // Gets the last location seen in a mouse event in this root window's
   // coordinates. This may return a point outside the root window's bounds.

@@ -80,7 +80,13 @@ TEST_F(NGInlineLayoutAlgorithmTest, BreakToken) {
   EXPECT_EQ(0u, wrapper2_break_token->ChildBreakTokens().size());
 }
 
-TEST_F(NGInlineLayoutAlgorithmTest, VerticalAlignBottomReplaced) {
+// The test leaks memory. crbug.com/721932
+#if defined(ADDRESS_SANITIZER)
+#define MAYBE_VerticalAlignBottomReplaced DISABLED_VerticalAlignBottomReplaced
+#else
+#define MAYBE_VerticalAlignBottomReplaced VerticalAlignBottomReplaced
+#endif
+TEST_F(NGInlineLayoutAlgorithmTest, MAYBE_VerticalAlignBottomReplaced) {
   SetBodyInnerHTML(R"HTML(
     <!DOCTYPE html>
     <style>

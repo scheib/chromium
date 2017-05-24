@@ -10,8 +10,6 @@ cd "$SCRIPT_DIR/../.."  # src/.
 
 export GYP_GENERATORS="ninja"
 
-tools/gyp/gyp --no-circular-check \
-third_party/closure_compiler/compiled_resources.gyp \
-third_party/closure_compiler/compiled_resources2.gyp
+tools/gyp/gyp --no-circular-check third_party/closure_compiler/compiled_resources2.gyp
 
 ninja -C out/Default -j `nproc` $@

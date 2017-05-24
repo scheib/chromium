@@ -185,13 +185,14 @@ blah /* hey! */
 .className,
 .ClassName,
 .class-name /* We should not catch this. */,
-.class_name {
+.class_name,
+[i18n-values*='.innerHTML:'] {
   display: block;
 }""", """
  - Classes use .dash-form.
     .className,
     .ClassName,
-    .class_name {""")
+    .class_name,""")
 
   def testCssCloseBraceOnNewLine(self):
     self.VerifyContentsProducesOutput("""
@@ -409,6 +410,7 @@ b:before,
   10% {
     width: 10px;
   }
+  50% { background-image: url(blah.svg); }
   100% {
     width: 100px;
   }
@@ -425,6 +427,7 @@ body.alternate-logo #logo {
 /* http://crbug.com/359682 */
 #spinner-container #spinner {
   -webkit-animation-duration: 1.0s;
+  background-image: url(images/google_logo0.svg);
 }
 
 .media-button.play > .state0.active,

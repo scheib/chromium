@@ -378,8 +378,8 @@ Response InspectorLayerTreeAgent::makeSnapshot(const String& layer_id,
   GraphicsContext context(layer->GetPaintController());
   context.BeginRecording(interest_rect);
   layer->GetPaintController().GetPaintArtifact().Replay(interest_rect, context);
-  RefPtr<PictureSnapshot> snapshot = AdoptRef(
-      new PictureSnapshot(ToSkPicture(context.EndRecording(), interest_rect)));
+  RefPtr<PictureSnapshot> snapshot =
+      AdoptRef(new PictureSnapshot(ToSkPicture(context.EndRecording())));
 
   *snapshot_id = String::Number(++last_snapshot_id_);
   bool new_entry = snapshot_by_id_.insert(*snapshot_id, snapshot).is_new_entry;

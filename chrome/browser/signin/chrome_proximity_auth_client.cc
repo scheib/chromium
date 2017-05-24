@@ -97,7 +97,14 @@ PrefService* ChromeProximityAuthClient::GetPrefService() {
 
 std::unique_ptr<cryptauth::SecureMessageDelegate>
 ChromeProximityAuthClient::CreateSecureMessageDelegate() {
-  return GetCryptAuthService()->CreateSecureMessageDelegate();
+// Note: Although CryptAuthService::CreateSecureMessageDelegate() exists, we
+// don't use it here (as opposed to other methods in this class) because the
+// CryptAuthService is not available on the ChromeOS login screen.
+#if defined(OS_CHROMEOS)
+  return base::MakeUnique<chromeos::SecureMessageDelegateChromeOS>();
+#else
+  return nullptr;
+#endif
 }
 
 std::unique_ptr<cryptauth::CryptAuthClientFactory>

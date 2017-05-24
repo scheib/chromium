@@ -12,6 +12,8 @@ import org.chromium.chrome.browser.contextualsearch.ContextualSearchRankerLogger
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchUma;
 import org.chromium.chrome.browser.contextualsearch.QuickActionCategory;
 
+import java.net.URL;
+
 /**
  * This class is responsible for all the logging related to Contextual Search.
  */
@@ -121,7 +123,7 @@ public class ContextualSearchPanelMetrics {
                         mQuickActionCategory);
                 ContextualSearchUma.logQuickActionClicked(mWasQuickActionClicked,
                         mQuickActionCategory);
-                mTapSuppressionRankerLogger.log(
+                mTapSuppressionRankerLogger.logOutcome(
                         ContextualSearchRankerLogger.Feature.OUTCOME_WAS_QUICK_ACTION_CLICKED,
                         mWasQuickActionClicked);
             }
@@ -138,11 +140,15 @@ public class ContextualSearchPanelMetrics {
                         mWasSearchContentViewSeen, wasAnySuppressionHeuristicSatisfied);
                 // Log all the experiments to the Ranker logger.
                 if (mRankerLogExperiments != null) {
-                    mTapSuppressionRankerLogger.logOutcome(mWasSearchContentViewSeen);
+                    mTapSuppressionRankerLogger.logOutcome(
+                            ContextualSearchRankerLogger.Feature.OUTCOME_WAS_PANEL_OPENED,
+                            mWasSearchContentViewSeen);
                     mRankerLogExperiments.logRankerTapSuppression(mTapSuppressionRankerLogger);
-                    mTapSuppressionRankerLogger.writeLogAndReset();
                     mRankerLogExperiments = null;
                 }
+                // Reset writing to Ranker so whatever interactions occurred are recorded as a
+                // complete record.
+                mTapSuppressionRankerLogger.writeLogAndReset();
 
                 ContextualSearchUma.logSelectionLengthResultsSeen(
                         mWasSearchContentViewSeen, mSelectionLength);
@@ -324,11 +330,14 @@ public class ContextualSearchPanelMetrics {
 
     /**
      * Sets the experiments to log through Ranker with results seen.
-     * @param rankerLogExperiments The experiments to log through ranker when the panel results
+     * @param rankerLogExperiments The experiments to log through Ranker when the panel results
      *        are known.
+     * @param basePageUrl The URL of the base page to log along with Ranker data.
      */
-    public void setRankerLogExperiments(ContextualSearchHeuristics rankerLogExperiments) {
+    public void setRankerLogExperiments(
+            ContextualSearchHeuristics rankerLogExperiments, URL basePageUrl) {
         mRankerLogExperiments = rankerLogExperiments;
+        mTapSuppressionRankerLogger.setupLoggingForPage(basePageUrl);
     }
 
     /**

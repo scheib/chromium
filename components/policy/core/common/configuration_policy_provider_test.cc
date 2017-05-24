@@ -187,7 +187,7 @@ void ConfigurationPolicyProviderTest::SetUp() {
   PolicyTestBase::SetUp();
 
   test_harness_.reset((*GetParam())());
-  test_harness_->SetUp();
+  ASSERT_NO_FATAL_FAILURE(test_harness_->SetUp());
 
   const PolicyNamespace chrome_ns(POLICY_DOMAIN_CHROME, "");
   Schema chrome_schema = *schema_registry_.schema_map()->GetSchema(chrome_ns);

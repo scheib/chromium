@@ -15,9 +15,7 @@ PushPropertiesCountingLayerImpl::Create(LayerTreeImpl* tree_impl, int id) {
 PushPropertiesCountingLayerImpl::PushPropertiesCountingLayerImpl(
     LayerTreeImpl* tree_impl,
     int id)
-    : LayerImpl(tree_impl, id), push_properties_count_(0) {
-  SetBounds(gfx::Size(1, 1));
-}
+    : LayerImpl(tree_impl, id), push_properties_count_(0) {}
 
 PushPropertiesCountingLayerImpl::~PushPropertiesCountingLayerImpl() = default;
 

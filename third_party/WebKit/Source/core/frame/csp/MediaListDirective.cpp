@@ -79,7 +79,7 @@ void MediaListDirective::Parse(const UChar* begin, const UChar* end) {
     }
     plugin_types_.insert(String(begin, position - begin));
 
-    ASSERT(position == end || IsASCIISpace(*position));
+    DCHECK(position == end || IsASCIISpace(*position));
   }
 }
 

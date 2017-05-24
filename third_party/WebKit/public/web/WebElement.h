@@ -31,7 +31,7 @@
 #ifndef WebElement_h
 #define WebElement_h
 
-#include "../platform/WebImage.h"
+#include "public/platform/WebImage.h"
 #include "WebNode.h"
 
 namespace blink {

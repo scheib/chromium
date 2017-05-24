@@ -288,6 +288,10 @@ base::string16 PageInfoUI::PermissionActionToUIString(
       NOTREACHED();
       return base::string16();
   }
+  // The subresource filter permission uses the user managed strings
+  // (i.e. Allow / Block).
+  if (type == CONTENT_SETTINGS_TYPE_SUBRESOURCE_FILTER)
+    button_text_ids = kPermissionButtonTextIDUserManaged;
   int button_text_id = button_text_ids[effective_setting];
   DCHECK_NE(button_text_id, kInvalidResourceID);
   return l10n_util::GetStringUTF16(button_text_id);

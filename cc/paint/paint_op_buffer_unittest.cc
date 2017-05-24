@@ -429,7 +429,7 @@ TEST(PaintOpBufferTest, DiscardableImagesTracking_NestedDrawOp) {
 
   scoped_refptr<DisplayItemList> list = new DisplayItemList;
   list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-      gfx::Rect(100, 100), record, SkRect::MakeWH(100, 100));
+      gfx::Rect(0, 0, 100, 100), record);
   list->Finalize();
   PaintOpBuffer new_buffer;
   new_buffer.push<DrawDisplayItemListOp>(list);

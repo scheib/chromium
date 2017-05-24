@@ -10,11 +10,14 @@
 #include "core/dom/DOMArrayBuffer.h"
 #include "core/dom/DOMTypedArray.h"
 #include "core/dom/ExecutionContext.h"
+#include "core/dom/URLSearchParams.h"
 #include "core/fileapi/Blob.h"
+#include "core/html/FormData.h"
 #include "modules/fetch/BodyStreamBuffer.h"
 #include "modules/fetch/FetchDataLoader.h"
 #include "platform/bindings/ScriptState.h"
 #include "platform/bindings/V8ThrowException.h"
+#include "platform/network/ParsedContentType.h"
 #include "platform/wtf/PassRefPtr.h"
 #include "platform/wtf/RefPtr.h"
 #include "public/platform/WebDataConsumerHandle.h"
@@ -69,6 +72,25 @@ class BodyArrayBufferConsumer final : public BodyConsumerBase {
 
   void DidFetchDataLoadedArrayBuffer(DOMArrayBuffer* array_buffer) override {
     Resolver()->Resolve(array_buffer);
+  }
+};
+
+class BodyFormDataConsumer final : public BodyConsumerBase {
+  WTF_MAKE_NONCOPYABLE(BodyFormDataConsumer);
+
+ public:
+  explicit BodyFormDataConsumer(ScriptPromiseResolver* resolver)
+      : BodyConsumerBase(resolver) {}
+
+  void DidFetchDataLoadedFormData(FormData* formData) override {
+    Resolver()->Resolve(formData);
+  }
+
+  void DidFetchDataLoadedString(const String& string) override {
+    FormData* formData = FormData::Create();
+    for (const auto& pair : URLSearchParams::Create(string)->Params())
+      formData->append(pair.first, pair.second);
+    DidFetchDataLoadedFormData(formData);
   }
 };
 
@@ -155,6 +177,49 @@ ScriptPromise Body::blob(ScriptState* script_state) {
     resolver->Resolve(
         Blob::Create(BlobDataHandle::Create(std::move(blob_data), 0)));
   }
+  return promise;
+}
+
+ScriptPromise Body::formData(ScriptState* script_state) {
+  ScriptPromise promise = RejectInvalidConsumption(script_state);
+  if (!promise.IsEmpty())
+    return promise;
+
+  // See above comment.
+  if (!ExecutionContext::From(script_state))
+    return ScriptPromise();
+
+  ScriptPromiseResolver* resolver = ScriptPromiseResolver::Create(script_state);
+  const ParsedContentType parsedTypeWithParameters(ContentType());
+  const String parsedType = parsedTypeWithParameters.MimeType().LowerASCII();
+  promise = resolver->Promise();
+  if (parsedType == "multipart/form-data") {
+    const String boundary =
+        parsedTypeWithParameters.ParameterValueForName("boundary");
+    if (BodyBuffer() && !boundary.IsEmpty()) {
+      BodyBuffer()->StartLoading(
+          FetchDataLoader::CreateLoaderAsFormData(boundary),
+          new BodyFormDataConsumer(resolver));
+      return promise;
+    }
+  } else if (parsedType == "application/x-www-form-urlencoded") {
+    if (BodyBuffer()) {
+      BodyBuffer()->StartLoading(FetchDataLoader::CreateLoaderAsString(),
+                                 new BodyFormDataConsumer(resolver));
+    } else {
+      resolver->Resolve(FormData::Create());
+    }
+    return promise;
+  } else {
+    if (BodyBuffer()) {
+      BodyBuffer()->StartLoading(FetchDataLoader::CreateLoaderAsFailure(),
+                                 new BodyFormDataConsumer(resolver));
+      return promise;
+    }
+  }
+
+  resolver->Reject(V8ThrowException::CreateTypeError(script_state->GetIsolate(),
+                                                     "Invalid MIME type"));
   return promise;
 }
 

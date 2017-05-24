@@ -44,7 +44,7 @@ BluetoothSocketNet::BluetoothSocketNet(
     scoped_refptr<BluetoothSocketThread> socket_thread)
     : ui_task_runner_(ui_task_runner),
       socket_thread_(socket_thread) {
-  DCHECK(ui_task_runner->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner->RunsTasksInCurrentSequence());
   socket_thread_->OnSocketActivate();
 }
 
@@ -55,14 +55,14 @@ BluetoothSocketNet::~BluetoothSocketNet() {
 }
 
 void BluetoothSocketNet::Close() {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   socket_thread_->task_runner()->PostTask(
       FROM_HERE, base::Bind(&BluetoothSocketNet::DoClose, this));
 }
 
 void BluetoothSocketNet::Disconnect(
     const base::Closure& success_callback) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   socket_thread_->task_runner()->PostTask(
       FROM_HERE,
       base::Bind(
@@ -77,7 +77,7 @@ void BluetoothSocketNet::Receive(
     int buffer_size,
     const ReceiveCompletionCallback& success_callback,
     const ReceiveErrorCompletionCallback& error_callback) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   socket_thread_->task_runner()->PostTask(
       FROM_HERE,
       base::Bind(
@@ -97,7 +97,7 @@ void BluetoothSocketNet::Send(
     int buffer_size,
     const SendCompletionCallback& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   socket_thread_->task_runner()->PostTask(
       FROM_HERE,
       base::Bind(
@@ -136,7 +136,7 @@ void BluetoothSocketNet::PostErrorCompletion(
 }
 
 void BluetoothSocketNet::DoClose() {
-  DCHECK(socket_thread_->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread_->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   if (tcp_socket_) {
@@ -155,7 +155,7 @@ void BluetoothSocketNet::DoClose() {
 }
 
 void BluetoothSocketNet::DoDisconnect(const base::Closure& callback) {
-  DCHECK(socket_thread_->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread_->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   DoClose();
@@ -166,7 +166,7 @@ void BluetoothSocketNet::DoReceive(
     int buffer_size,
     const ReceiveCompletionCallback& success_callback,
     const ReceiveErrorCompletionCallback& error_callback) {
-  DCHECK(socket_thread_->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread_->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   if (!tcp_socket_) {
@@ -200,7 +200,7 @@ void BluetoothSocketNet::OnSocketReadComplete(
     const ReceiveCompletionCallback& success_callback,
     const ReceiveErrorCompletionCallback& error_callback,
     int read_result) {
-  DCHECK(socket_thread_->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread_->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   scoped_refptr<net::IOBufferWithSize> buffer;
@@ -223,7 +223,7 @@ void BluetoothSocketNet::DoSend(
     int buffer_size,
     const SendCompletionCallback& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(socket_thread_->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread_->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   if (!tcp_socket_) {
@@ -244,7 +244,7 @@ void BluetoothSocketNet::DoSend(
 }
 
 void BluetoothSocketNet::SendFrontWriteRequest() {
-  DCHECK(socket_thread_->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread_->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   if (!tcp_socket_)
@@ -270,7 +270,7 @@ void BluetoothSocketNet::OnSocketWriteComplete(
     const SendCompletionCallback& success_callback,
     const ErrorCompletionCallback& error_callback,
     int send_result) {
-  DCHECK(socket_thread_->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread_->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   write_queue_.pop();

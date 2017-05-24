@@ -133,27 +133,6 @@ TEST_F(ArcUtilTest, IsArcAvailable_OfficiallySupported) {
   EXPECT_TRUE(IsArcKioskAvailable());
 }
 
-TEST_F(ArcUtilTest, IsArcAvailable_OfficiallySupportedWithActiveDirectory) {
-  // Regardless of FeatureList, IsArcAvailable() should return true.
-  auto* command_line = base::CommandLine::ForCurrentProcess();
-  command_line->InitFromArgv(
-      {"", "--arc-availability=officially-supported-with-active-directory"});
-  EXPECT_TRUE(IsArcAvailable());
-}
-
-TEST_F(ArcUtilTest, IsArcAllowedForActiveDirectoryUsers_Allowed) {
-  auto* command_line = base::CommandLine::ForCurrentProcess();
-  command_line->InitFromArgv(
-      {"", "--arc-availability=officially-supported-with-active-directory"});
-  EXPECT_TRUE(IsArcAllowedForActiveDirectoryUsers());
-}
-
-TEST_F(ArcUtilTest, IsArcAllowedForActiveDirectoryUsers_NotAllowed) {
-  auto* command_line = base::CommandLine::ForCurrentProcess();
-  command_line->InitFromArgv({"", "--arc-availability=officially-supported"});
-  EXPECT_FALSE(IsArcAllowedForActiveDirectoryUsers());
-}
-
 // TODO(hidehiko): Add test for IsArcKioskMode().
 // It depends on UserManager, but a utility to inject fake instance is
 // available only in chrome/. To use it in components/, refactoring is needed.

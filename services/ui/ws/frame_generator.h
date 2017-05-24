@@ -8,15 +8,15 @@
 #include <memory>
 
 #include "base/macros.h"
-#include "cc/output/compositor_frame.h"
-#include "cc/output/compositor_frame_sink_client.h"
+#include "cc/ipc/mojo_compositor_frame_sink.mojom.h"
 #include "cc/scheduler/begin_frame_source.h"
+#include "cc/surfaces/local_surface_id_allocator.h"
 #include "cc/surfaces/surface_id.h"
 #include "cc/surfaces/surface_info.h"
+#include "services/ui/ws/compositor_frame_sink_client_binding.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace cc {
-class CompositorFrameSink;
 class RenderPass;
 }
 
@@ -25,11 +25,9 @@ namespace ws {
 
 // Responsible for redrawing the display in response to the redraw requests by
 // submitting CompositorFrames to the owned CompositorFrameSink.
-class FrameGenerator : public cc::CompositorFrameSinkClient,
-                       public cc::BeginFrameObserver {
+class FrameGenerator : public cc::mojom::MojoCompositorFrameSinkClient {
  public:
-  explicit FrameGenerator(
-      std::unique_ptr<cc::CompositorFrameSink> compositor_frame_sink);
+  FrameGenerator();
   ~FrameGenerator() override;
 
   void SetDeviceScaleFactor(float device_scale_factor);
@@ -40,26 +38,15 @@ class FrameGenerator : public cc::CompositorFrameSinkClient,
 
   void OnWindowDamaged();
   void OnWindowSizeChanged(const gfx::Size& pixel_size);
+  void Bind(std::unique_ptr<cc::mojom::MojoCompositorFrameSink>
+                compositor_frame_sink);
 
  private:
-  // cc::CompositorFrameSinkClient implementation:
-  void SetBeginFrameSource(cc::BeginFrameSource* source) override;
-  void ReclaimResources(const cc::ReturnedResourceArray& resources) override;
-  void SetTreeActivationCallback(const base::Closure& callback) override;
-  void DidReceiveCompositorFrameAck() override;
-  void DidLoseCompositorFrameSink() override;
-  void OnDraw(const gfx::Transform& transform,
-              const gfx::Rect& viewport,
-              bool resourceless_software_draw) override;
-  void SetMemoryPolicy(const cc::ManagedMemoryPolicy& policy) override;
-  void SetExternalTilePriorityConstraints(
-      const gfx::Rect& viewport_rect,
-      const gfx::Transform& transform) override;
-
-  // cc::BeginFrameObserver implementation:
+  // cc::mojom::MojoCompositorFrameSinkClient implementation:
+  void DidReceiveCompositorFrameAck(
+      const cc::ReturnedResourceArray& resources) override;
   void OnBeginFrame(const cc::BeginFrameArgs& args) override;
-  const cc::BeginFrameArgs& LastUsedBeginFrameArgs() const override;
-  void OnBeginFrameSourcePausedChanged(bool paused) override;
+  void ReclaimResources(const cc::ReturnedResourceArray& resources) override;
 
   // Generates the CompositorFrame.
   cc::CompositorFrame GenerateCompositorFrame();
@@ -68,19 +55,19 @@ class FrameGenerator : public cc::CompositorFrameSinkClient,
   // the provided cc::RenderPass.
   void DrawWindow(cc::RenderPass* pass);
 
-  // SetNeedsBeginFrame sets observing_begin_frames_ and add/remove
-  // FrameGenerator as an observer to/from begin_frame_source_ accordingly.
   void SetNeedsBeginFrame(bool needs_begin_frame);
 
   float device_scale_factor_ = 1.f;
   gfx::Size pixel_size_;
 
-  std::unique_ptr<cc::CompositorFrameSink> compositor_frame_sink_;
+  std::unique_ptr<cc::mojom::MojoCompositorFrameSink> compositor_frame_sink_;
   cc::BeginFrameArgs last_begin_frame_args_;
   cc::BeginFrameAck current_begin_frame_ack_;
-  cc::BeginFrameSource* begin_frame_source_ = nullptr;
-  bool observing_begin_frames_ = false;
   bool high_contrast_mode_enabled_ = false;
+  gfx::Size last_submitted_frame_size_;
+  cc::LocalSurfaceId local_surface_id_;
+  cc::LocalSurfaceIdAllocator id_allocator_;
+  float last_device_scale_factor_ = 0.0f;
 
   cc::SurfaceInfo window_manager_surface_info_;
 

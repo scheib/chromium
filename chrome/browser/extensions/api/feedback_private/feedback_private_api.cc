@@ -295,13 +295,14 @@ bool FeedbackPrivateSendFeedbackFunction::RunAsync() {
     feedback_data->set_screenshot_uuid(*feedback_info.screenshot_blob_uuid);
   }
 
-  std::unique_ptr<FeedbackData::SystemLogsMap> sys_logs(
-      new FeedbackData::SystemLogsMap);
-  SystemInformationList* sys_info = feedback_info.system_information.get();
+  auto sys_logs = base::MakeUnique<FeedbackData::SystemLogsMap>();
+  const SystemInformationList* sys_info =
+      feedback_info.system_information.get();
   if (sys_info) {
     for (const SystemInformation& info : *sys_info)
-      (*sys_logs)[info.key] = info.value;
+      sys_logs->emplace(info.key, info.value);
   }
+
   feedback_data->SetAndCompressSystemInfo(std::move(sys_logs));
 
   FeedbackService* service =
@@ -309,7 +310,7 @@ bool FeedbackPrivateSendFeedbackFunction::RunAsync() {
   DCHECK(service);
 
   if (feedback_info.send_histograms) {
-    std::unique_ptr<std::string> histograms(new std::string);
+    auto histograms = base::MakeUnique<std::string>();
     *histograms = base::StatisticsRecorder::ToJSON(std::string());
     if (!histograms->empty())
       feedback_data->SetAndCompressHistograms(std::move(histograms));

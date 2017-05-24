@@ -193,6 +193,7 @@ class CORE_EXPORT ChromeClient : public PlatformChromeClient {
   virtual void SetCursor(const Cursor&, LocalFrame* local_root) = 0;
   // End methods used by PlatformChromeClient.
 
+  virtual void SetCursorOverridden(bool) = 0;
   virtual Cursor LastSetCursorForTesting() const = 0;
   Node* LastSetTooltipNodeForTesting() const {
     return last_mouse_over_node_.Get();

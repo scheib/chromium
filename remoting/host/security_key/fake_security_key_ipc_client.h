@@ -19,6 +19,12 @@ class Channel;
 class Message;
 }  // IPC
 
+namespace mojo {
+namespace edk {
+class PeerConnection;
+}
+}
+
 namespace remoting {
 
 // Simulates the SecurityKeyIpcClient and provides access to data members
@@ -101,6 +107,7 @@ class FakeSecurityKeyIpcClient : public SecurityKeyIpcClient {
   base::Closure on_channel_connected_callback_;
 
   // Used for sending/receiving security key messages between processes.
+  std::unique_ptr<mojo::edk::PeerConnection> peer_connection_;
   std::unique_ptr<IPC::Channel> client_channel_;
 
   // Provides the contents of the last IPC message received.

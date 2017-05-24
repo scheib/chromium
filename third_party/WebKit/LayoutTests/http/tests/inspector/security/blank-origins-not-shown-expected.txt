@@ -1,7 +1,7 @@
 Tests that blank origins aren't shown in the security panel origins list.
 
-Group: Main Origin
-Group: Unknown / Canceled
+Group: Main origin
+Group: Unknown / canceled
 <SPAN class=title >
 https://foo.test
 </SPAN>

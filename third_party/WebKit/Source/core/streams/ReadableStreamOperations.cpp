@@ -44,7 +44,7 @@ ScriptValue ReadableStreamOperations::CreateCountQueuingStrategy(
 ScriptValue ReadableStreamOperations::GetReader(ScriptState* script_state,
                                                 ScriptValue stream,
                                                 ExceptionState& es) {
-  ASSERT(IsReadableStream(script_state, stream));
+  DCHECK(IsReadableStream(script_state, stream));
 
   v8::TryCatch block(script_state->GetIsolate());
   v8::Local<v8::Value> args[] = {stream.V8Value()};
@@ -73,7 +73,7 @@ bool ReadableStreamOperations::IsReadableStream(ScriptState* script_state,
 
 bool ReadableStreamOperations::IsDisturbed(ScriptState* script_state,
                                            ScriptValue stream) {
-  ASSERT(IsReadableStream(script_state, stream));
+  DCHECK(IsReadableStream(script_state, stream));
 
   v8::Local<v8::Value> args[] = {stream.V8Value()};
   return V8ScriptRunner::CallExtraOrCrash(script_state,
@@ -84,7 +84,7 @@ bool ReadableStreamOperations::IsDisturbed(ScriptState* script_state,
 
 bool ReadableStreamOperations::IsLocked(ScriptState* script_state,
                                         ScriptValue stream) {
-  ASSERT(IsReadableStream(script_state, stream));
+  DCHECK(IsReadableStream(script_state, stream));
 
   v8::Local<v8::Value> args[] = {stream.V8Value()};
   return V8ScriptRunner::CallExtraOrCrash(script_state,
@@ -95,7 +95,7 @@ bool ReadableStreamOperations::IsLocked(ScriptState* script_state,
 
 bool ReadableStreamOperations::IsReadable(ScriptState* script_state,
                                           ScriptValue stream) {
-  ASSERT(IsReadableStream(script_state, stream));
+  DCHECK(IsReadableStream(script_state, stream));
 
   v8::Local<v8::Value> args[] = {stream.V8Value()};
   return V8ScriptRunner::CallExtraOrCrash(script_state,
@@ -106,7 +106,7 @@ bool ReadableStreamOperations::IsReadable(ScriptState* script_state,
 
 bool ReadableStreamOperations::IsClosed(ScriptState* script_state,
                                         ScriptValue stream) {
-  ASSERT(IsReadableStream(script_state, stream));
+  DCHECK(IsReadableStream(script_state, stream));
 
   v8::Local<v8::Value> args[] = {stream.V8Value()};
   return V8ScriptRunner::CallExtraOrCrash(script_state,
@@ -117,7 +117,7 @@ bool ReadableStreamOperations::IsClosed(ScriptState* script_state,
 
 bool ReadableStreamOperations::IsErrored(ScriptState* script_state,
                                          ScriptValue stream) {
-  ASSERT(IsReadableStream(script_state, stream));
+  DCHECK(IsReadableStream(script_state, stream));
 
   v8::Local<v8::Value> args[] = {stream.V8Value()};
   return V8ScriptRunner::CallExtraOrCrash(script_state,
@@ -144,7 +144,7 @@ bool ReadableStreamOperations::IsReadableStreamDefaultReader(
 ScriptPromise ReadableStreamOperations::DefaultReaderRead(
     ScriptState* script_state,
     ScriptValue reader) {
-  ASSERT(IsReadableStreamDefaultReader(script_state, reader));
+  DCHECK(IsReadableStreamDefaultReader(script_state, reader));
 
   v8::Local<v8::Value> args[] = {reader.V8Value()};
   return ScriptPromise::Cast(

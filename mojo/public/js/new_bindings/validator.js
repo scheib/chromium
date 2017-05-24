@@ -15,6 +15,9 @@
     UNEXPECTED_INVALID_HANDLE: 'VALIDATION_ERROR_UNEXPECTED_INVALID_HANDLE',
     ILLEGAL_POINTER: 'VALIDATION_ERROR_ILLEGAL_POINTER',
     UNEXPECTED_NULL_POINTER: 'VALIDATION_ERROR_UNEXPECTED_NULL_POINTER',
+    ILLEGAL_INTERFACE_ID: 'VALIDATION_ERROR_ILLEGAL_INTERFACE_ID',
+    UNEXPECTED_INVALID_INTERFACE_ID:
+        'VALIDATION_ERROR_UNEXPECTED_INVALID_INTERFACE_ID',
     MESSAGE_HEADER_INVALID_FLAGS:
         'VALIDATION_ERROR_MESSAGE_HEADER_INVALID_FLAGS',
     MESSAGE_HEADER_MISSING_REQUEST_ID:
@@ -27,6 +30,42 @@
   };
 
   var NULL_MOJO_POINTER = "NULL_MOJO_POINTER";
+  var gValidationErrorObserver = null;
+
+  function reportValidationError(error) {
+    if (gValidationErrorObserver) {
+      gValidationErrorObserver.lastError = error;
+    } else {
+      console.warn('Invalid message: ' + error);
+    }
+  }
+
+  var ValidationErrorObserverForTesting = (function() {
+    function Observer() {
+      this.lastError = validationError.NONE;
+    }
+
+    Observer.prototype.reset = function() {
+      this.lastError = validationError.NONE;
+    };
+
+    return {
+      getInstance: function() {
+        if (!gValidationErrorObserver) {
+          gValidationErrorObserver = new Observer();
+        }
+        return gValidationErrorObserver;
+      }
+    };
+  })();
+
+  function isTestingMode() {
+    return Boolean(gValidationErrorObserver);
+  }
+
+  function clearTestingMode() {
+    gValidationErrorObserver = null;
+  }
 
   function isEnumClass(cls) {
     return cls instanceof internal.Enum;
@@ -49,9 +88,21 @@
         cls === internal.NullableInterfaceRequest;
   }
 
+  function isAssociatedInterfaceClass(cls) {
+    return cls === internal.AssociatedInterfacePtrInfo ||
+        cls === internal.NullableAssociatedInterfacePtrInfo;
+  }
+
+  function isAssociatedInterfaceRequestClass(cls) {
+    return cls === internal.AssociatedInterfaceRequest ||
+        cls === internal.NullableAssociatedInterfaceRequest;
+  }
+
   function isNullable(type) {
     return type === internal.NullableString ||
         type === internal.NullableHandle ||
+        type === internal.NullableAssociatedInterfacePtrInfo ||
+        type === internal.NullableAssociatedInterfaceRequest ||
         type === internal.NullableInterface ||
         type === internal.NullableInterfaceRequest ||
         type instanceof internal.NullableArrayOf ||
@@ -62,14 +113,19 @@
     this.message = message;
     this.offset = 0;
     this.handleIndex = 0;
+    this.associatedEndpointHandleIndex = 0;
+    this.payloadInterfaceIds = null;
+    this.offsetLimit = this.message.buffer.byteLength;
   }
-
-  Object.defineProperty(Validator.prototype, "offsetLimit", {
-    get: function() { return this.message.buffer.byteLength; }
-  });
 
   Object.defineProperty(Validator.prototype, "handleIndexLimit", {
     get: function() { return this.message.handles.length; }
+  });
+
+  Object.defineProperty(Validator.prototype, "associatedHandleIndexLimit", {
+    get: function() {
+      return this.payloadInterfaceIds ? this.payloadInterfaceIds.length : 0;
+    }
   });
 
   // True if we can safely allocate a block of bytes from start to
@@ -109,6 +165,21 @@
     return true;
   };
 
+  Validator.prototype.claimAssociatedEndpointHandle = function(index) {
+    if (index === internal.kEncodedInvalidHandleValue) {
+      return true;
+    }
+
+    if (index < this.associatedEndpointHandleIndex ||
+        index >= this.associatedHandleIndexLimit) {
+      return false;
+    }
+
+    // This is safe because handle indices are uint32.
+    this.associatedEndpointHandleIndex = index + 1;
+    return true;
+  };
+
   Validator.prototype.validateEnum = function(offset, enumClass) {
     // Note: Assumes that enums are always 32 bits! But this matches
     // mojom::generate::pack::PackedField::GetSizeForKind, so it should be okay.
@@ -129,12 +200,38 @@
     return validationError.NONE;
   };
 
+  Validator.prototype.validateAssociatedEndpointHandle = function(offset,
+      nullable) {
+    var index = this.message.buffer.getUint32(offset);
+
+    if (index === internal.kEncodedInvalidHandleValue) {
+      return nullable ? validationError.NONE :
+          validationError.UNEXPECTED_INVALID_INTERFACE_ID;
+    }
+
+    if (!this.claimAssociatedEndpointHandle(index)) {
+      return validationError.ILLEGAL_INTERFACE_ID;
+    }
+
+    return validationError.NONE;
+  };
+
   Validator.prototype.validateInterface = function(offset, nullable) {
     return this.validateHandle(offset, nullable);
   };
 
   Validator.prototype.validateInterfaceRequest = function(offset, nullable) {
     return this.validateHandle(offset, nullable);
+  };
+
+  Validator.prototype.validateAssociatedInterface = function(offset,
+      nullable) {
+    return this.validateAssociatedEndpointHandle(offset, nullable);
+  };
+
+  Validator.prototype.validateAssociatedInterfaceRequest = function(
+      offset, nullable) {
+    return this.validateAssociatedEndpointHandle(offset, nullable);
   };
 
   Validator.prototype.validateStructHeader = function(offset, minNumBytes) {
@@ -181,31 +278,63 @@
   };
 
   Validator.prototype.validateMessageHeader = function() {
-
-    var err = this.validateStructHeader(0, internal.kMessageHeaderSize);
-    if (err != validationError.NONE)
+    var err = this.validateStructHeader(0, internal.kMessageV0HeaderSize);
+    if (err != validationError.NONE) {
       return err;
+    }
 
     var numBytes = this.message.getHeaderNumBytes();
     var version = this.message.getHeaderVersion();
 
     var validVersionAndNumBytes =
-        (version == 0 && numBytes == internal.kMessageHeaderSize) ||
-        (version == 1 &&
-         numBytes == internal.kMessageWithRequestIDHeaderSize) ||
-        (version > 1 &&
-         numBytes >= internal.kMessageWithRequestIDHeaderSize);
-    if (!validVersionAndNumBytes)
+        (version == 0 && numBytes == internal.kMessageV0HeaderSize) ||
+        (version == 1 && numBytes == internal.kMessageV1HeaderSize) ||
+        (version == 2 && numBytes == internal.kMessageV2HeaderSize) ||
+        (version > 2 && numBytes >= internal.kMessageV2HeaderSize);
+
+    if (!validVersionAndNumBytes) {
       return validationError.UNEXPECTED_STRUCT_HEADER;
+    }
 
     var expectsResponse = this.message.expectsResponse();
     var isResponse = this.message.isResponse();
 
-    if (version == 0 && (expectsResponse || isResponse))
+    if (version == 0 && (expectsResponse || isResponse)) {
       return validationError.MESSAGE_HEADER_MISSING_REQUEST_ID;
+    }
 
-    if (isResponse && expectsResponse)
+    if (isResponse && expectsResponse) {
       return validationError.MESSAGE_HEADER_INVALID_FLAGS;
+    }
+
+    if (version < 2) {
+      return validationError.NONE;
+    }
+
+    var err = this.validateArrayPointer(
+        internal.kMessagePayloadInterfaceIdsPointerOffset,
+        internal.Uint32.encodedSize, internal.Uint32, true, [0], 0);
+
+    if (err != validationError.NONE) {
+      return err;
+    }
+
+    this.payloadInterfaceIds = this.message.getPayloadInterfaceIds();
+    if (this.payloadInterfaceIds) {
+      for (var interfaceId of this.payloadInterfaceIds) {
+        if (!internal.isValidInterfaceId(interfaceId) ||
+            internal.isMasterInterfaceId(interfaceId)) {
+          return validationError.ILLEGAL_INTERFACE_ID;
+        }
+      }
+    }
+
+    // Set offset to the start of the payload and offsetLimit to the start of
+    // the payload interface Ids so that payload can be validated using the
+    // same messageValidator.
+    this.offset = this.message.getHeaderNumBytes();
+    this.offsetLimit = this.decodePointer(
+        internal.kMessagePayloadInterfaceIdsPointerOffset);
 
     return validationError.NONE;
   };
@@ -323,7 +452,7 @@
           validationError.NONE : validationError.UNEXPECTED_NULL_POINTER;
 
     var mapEncodedSize = internal.kStructHeaderSize +
-        internal.kMapStructPayloadSize;
+                         internal.kMapStructPayloadSize;
     var err = this.validateStructHeader(structOffset, mapEncodedSize);
     if (err !== validationError.NONE)
         return err;
@@ -408,6 +537,12 @@
     if (isInterfaceRequestClass(elementType))
       return this.validateInterfaceRequestElements(
           elementsOffset, numElements, nullable);
+    if (isAssociatedInterfaceClass(elementType))
+      return this.validateAssociatedInterfaceElements(
+          elementsOffset, numElements, nullable);
+    if (isAssociatedInterfaceRequestClass(elementType))
+      return this.validateAssociatedInterfaceRequestElements(
+          elementsOffset, numElements, nullable);
     if (isStringClass(elementType))
       return this.validateArrayElements(
           elementsOffset, numElements, internal.Uint8, nullable, [0], 0);
@@ -465,6 +600,33 @@
     return validationError.NONE;
   };
 
+  Validator.prototype.validateAssociatedInterfaceElements =
+      function(offset, numElements, nullable) {
+    var elementSize = internal.AssociatedInterfacePtrInfo.prototype.encodedSize;
+    for (var i = 0; i < numElements; i++) {
+      var elementOffset = offset + i * elementSize;
+      var err = this.validateAssociatedInterface(elementOffset, nullable);
+      if (err != validationError.NONE) {
+        return err;
+      }
+    }
+    return validationError.NONE;
+  };
+
+  Validator.prototype.validateAssociatedInterfaceRequestElements =
+      function(offset, numElements, nullable) {
+    var elementSize = internal.AssociatedInterfaceRequest.encodedSize;
+    for (var i = 0; i < numElements; i++) {
+      var elementOffset = offset + i * elementSize;
+      var err = this.validateAssociatedInterfaceRequest(elementOffset,
+          nullable);
+      if (err != validationError.NONE) {
+        return err;
+      }
+    }
+    return validationError.NONE;
+  };
+
   // The elementClass parameter is the element type of the element arrays.
   Validator.prototype.validateArrayElements =
       function(offset, numElements, elementClass, nullable,
@@ -508,4 +670,9 @@
 
   internal.validationError = validationError;
   internal.Validator = Validator;
+  internal.ValidationErrorObserverForTesting =
+      ValidationErrorObserverForTesting;
+  internal.reportValidationError = reportValidationError;
+  internal.isTestingMode = isTestingMode;
+  internal.clearTestingMode = clearTestingMode;
 })();

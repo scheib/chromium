@@ -22,6 +22,16 @@ struct EnumTraits<password_manager::mojom::CredentialType,
 };
 
 template <>
+struct EnumTraits<password_manager::mojom::CredentialMediationRequirement,
+                  password_manager::CredentialMediationRequirement> {
+  static password_manager::mojom::CredentialMediationRequirement ToMojom(
+      password_manager::CredentialMediationRequirement input);
+  static bool FromMojom(
+      password_manager::mojom::CredentialMediationRequirement input,
+      password_manager::CredentialMediationRequirement* output);
+};
+
+template <>
 struct StructTraits<password_manager::mojom::CredentialInfoDataView,
                     password_manager::CredentialInfo> {
   static password_manager::CredentialType type(

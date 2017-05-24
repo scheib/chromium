@@ -11,6 +11,7 @@
 #include "base/base64url.h"
 #include "base/bind.h"
 #include "base/command_line.h"
+#include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/sys_info.h"
@@ -104,6 +105,7 @@ void EasyUnlockServiceRegular::LoadRemoteDevices() {
       GetCryptAuthEnrollmentManager()->GetUserPrivateKey(),
       proximity_auth_client()->CreateSecureMessageDelegate()));
   remote_device_loader_->Load(
+      true /* should_load_beacon_seeds */,
       base::Bind(&EasyUnlockServiceRegular::OnRemoteDevicesLoaded,
                  weak_ptr_factory_.GetWeakPtr()));
 }
@@ -135,6 +137,23 @@ void EasyUnlockServiceRegular::OnRemoteDevicesLoaded(
     dict->SetString("permitRecord.id", b64_public_key);
     dict->SetString("permitRecord.type", "license");
     dict->SetString("permitRecord.data", b64_public_key);
+
+    // TODO(tengs): Retrieve the actual BeaconSeeds from the RemoteDevice.
+    std::vector<cryptauth::BeaconSeed> beacon_seeds;
+    std::unique_ptr<base::ListValue> beacon_seed_list(new base::ListValue());
+    for (const auto& beacon_seed : beacon_seeds) {
+      std::string b64_beacon_seed;
+      base::Base64UrlEncode(beacon_seed.SerializeAsString(),
+                            base::Base64UrlEncodePolicy::INCLUDE_PADDING,
+                            &b64_beacon_seed);
+      beacon_seed_list->AppendString(b64_beacon_seed);
+    }
+
+    std::string serialized_beacon_seeds;
+    JSONStringValueSerializer serializer(&serialized_beacon_seeds);
+    serializer.Serialize(*beacon_seed_list);
+    dict->SetString("serializedBeaconSeeds", serialized_beacon_seeds);
+
     device_list->Append(std::move(dict));
   }
 
@@ -255,6 +274,11 @@ const base::ListValue* EasyUnlockServiceRegular::GetRemoteDevices() const {
 
 void EasyUnlockServiceRegular::SetRemoteDevices(
     const base::ListValue& devices) {
+  std::string remote_devices_json;
+  JSONStringValueSerializer serializer(&remote_devices_json);
+  serializer.Serialize(devices);
+  PA_LOG(INFO) << "Setting RemoteDevices:\n  " << remote_devices_json;
+
   DictionaryPrefUpdate pairing_update(profile()->GetPrefs(),
                                       prefs::kEasyUnlockPairing);
   if (devices.empty())

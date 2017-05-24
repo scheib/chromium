@@ -1,4 +1,4 @@
- 
+
 Dispaching a click event on #details-child
 
 event.path on node #details-child

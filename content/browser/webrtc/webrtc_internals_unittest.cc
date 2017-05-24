@@ -12,6 +12,7 @@
 #include "base/values.h"
 #include "content/browser/webrtc/webrtc_internals_ui_observer.h"
 #include "content/public/test/test_browser_thread.h"
+#include "mojo/public/cpp/bindings/binding.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace content {
@@ -44,13 +45,42 @@ class MockWebRtcInternalsProxy : public WebRTCInternalsUIObserver {
   base::RunLoop* loop_;
 };
 
+class MockWakeLockService : public device::mojom::WakeLockService {
+ public:
+  MockWakeLockService(device::mojom::WakeLockServiceRequest request)
+      : binding_(this, std::move(request)), has_wakelock_(false) {}
+  ~MockWakeLockService() override {}
+
+  // Implement device::mojom::WakeLockService:
+  void RequestWakeLock() override { has_wakelock_ = true; }
+  void CancelWakeLock() override { has_wakelock_ = false; }
+  void AddClient(device::mojom::WakeLockServiceRequest request) override {}
+  void HasWakeLockForTests(
+      const HasWakeLockForTestsCallback& callback) override {}
+
+  bool HasWakeLock() {
+    base::RunLoop().RunUntilIdle();
+    return has_wakelock_;
+  }
+
+ private:
+  mojo::Binding<device::mojom::WakeLockService> binding_;
+  bool has_wakelock_;
+};
+
 // Derived class for testing only.  Allows the tests to have their own instance
 // for testing and control the period for which WebRTCInternals will bulk up
 // updates (changes down from 500ms to 1ms).
 class WebRTCInternalsForTest : public NON_EXPORTED_BASE(WebRTCInternals) {
  public:
-  WebRTCInternalsForTest() : WebRTCInternals(1, true) {}
+  WebRTCInternalsForTest()
+      : WebRTCInternals(1, true),
+        mock_wake_lock_service_(mojo::MakeRequest(&wake_lock_service_)) {}
   ~WebRTCInternalsForTest() override {}
+  bool HasWakeLock() { return mock_wake_lock_service_.HasWakeLock(); }
+
+ private:
+  MockWakeLockService mock_wake_lock_service_;
 };
 
 }  // namespace
@@ -395,7 +425,7 @@ TEST_F(WebRtcInternalsTest, AudioDebugRecordingsFileSelectionCanceled) {
   EXPECT_EQ(nullptr, observer.value());
 }
 
-TEST_F(WebRtcInternalsTest, PowerSaveBlock) {
+TEST_F(WebRtcInternalsTest, WakeLock) {
   int kRenderProcessId = 1;
   const int pid = 1;
   const int lid[] = {1, 2, 3};
@@ -404,44 +434,44 @@ TEST_F(WebRtcInternalsTest, PowerSaveBlock) {
 
   // Add a few peer connections.
   EXPECT_EQ(0, webrtc_internals.num_open_connections());
-  EXPECT_FALSE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_FALSE(webrtc_internals.HasWakeLock());
   webrtc_internals.OnAddPeerConnection(kRenderProcessId, pid, lid[0], kUrl,
                                        kRtcConfiguration, kContraints);
   EXPECT_EQ(1, webrtc_internals.num_open_connections());
-  EXPECT_TRUE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_TRUE(webrtc_internals.HasWakeLock());
 
   webrtc_internals.OnAddPeerConnection(kRenderProcessId, pid, lid[1], kUrl,
                                        kRtcConfiguration, kContraints);
   EXPECT_EQ(2, webrtc_internals.num_open_connections());
-  EXPECT_TRUE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_TRUE(webrtc_internals.HasWakeLock());
 
   webrtc_internals.OnAddPeerConnection(kRenderProcessId, pid, lid[2], kUrl,
                                        kRtcConfiguration, kContraints);
   EXPECT_EQ(3, webrtc_internals.num_open_connections());
-  EXPECT_TRUE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_TRUE(webrtc_internals.HasWakeLock());
 
   // Remove a peer connection without closing it first.
   webrtc_internals.OnRemovePeerConnection(pid, lid[2]);
   EXPECT_EQ(2, webrtc_internals.num_open_connections());
-  EXPECT_TRUE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_TRUE(webrtc_internals.HasWakeLock());
 
   // Close the remaining peer connections.
   webrtc_internals.OnUpdatePeerConnection(pid, lid[1], "stop", std::string());
   EXPECT_EQ(1, webrtc_internals.num_open_connections());
-  EXPECT_TRUE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_TRUE(webrtc_internals.HasWakeLock());
 
   webrtc_internals.OnUpdatePeerConnection(pid, lid[0], "stop", std::string());
   EXPECT_EQ(0, webrtc_internals.num_open_connections());
-  EXPECT_FALSE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_FALSE(webrtc_internals.HasWakeLock());
 
   // Remove the remaining peer connections.
   webrtc_internals.OnRemovePeerConnection(pid, lid[1]);
   EXPECT_EQ(0, webrtc_internals.num_open_connections());
-  EXPECT_FALSE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_FALSE(webrtc_internals.HasWakeLock());
 
   webrtc_internals.OnRemovePeerConnection(pid, lid[0]);
   EXPECT_EQ(0, webrtc_internals.num_open_connections());
-  EXPECT_FALSE(webrtc_internals.IsPowerSavingBlocked());
+  EXPECT_FALSE(webrtc_internals.HasWakeLock());
 }
 
 }  // namespace content

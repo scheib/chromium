@@ -65,6 +65,8 @@ class VideoCaptureDeviceMac : public VideoCaptureDevice {
   void StopAndDeAllocate() override;
   void TakePhoto(TakePhotoCallback callback) override;
   void GetPhotoCapabilities(GetPhotoCapabilitiesCallback callback) override;
+  void SetPhotoOptions(mojom::PhotoSettingsPtr settings,
+                       SetPhotoOptionsCallback callback) override;
 
   bool Init(VideoCaptureApi capture_api_type);
 

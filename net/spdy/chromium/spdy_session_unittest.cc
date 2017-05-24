@@ -5637,18 +5637,18 @@ TEST_F(AltSvcFrameTest, ProcessAltSvcFrame) {
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
+  AlternativeServiceInfoVector altsvc_info_vector =
+      spdy_session_pool_->http_server_properties()->GetAlternativeServiceInfos(
           session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(altsvc_info_vector.empty());
 
-  altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
+  altsvc_info_vector =
+      spdy_session_pool_->http_server_properties()->GetAlternativeServiceInfos(
           url::SchemeHostPort(GURL(origin)));
-  ASSERT_EQ(1u, altsvc_vector.size());
-  EXPECT_EQ(kProtoQUIC, altsvc_vector[0].protocol);
-  EXPECT_EQ("alternative.example.org", altsvc_vector[0].host);
-  EXPECT_EQ(443u, altsvc_vector[0].port);
+  ASSERT_EQ(1u, altsvc_info_vector.size());
+  AlternativeService alternative_service(kProtoQUIC, "alternative.example.org",
+                                         443u);
+  EXPECT_EQ(alternative_service, altsvc_info_vector[0].alternative_service);
 }
 
 TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameOnInsecureSession) {
@@ -5666,15 +5666,14 @@ TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameOnInsecureSession) {
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(session_origin)
+                  .empty());
 
-  altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          url::SchemeHostPort(GURL(origin)));
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(
+      spdy_session_pool_->http_server_properties()
+          ->GetAlternativeServiceInfos(url::SchemeHostPort(GURL(origin)))
+          .empty());
 }
 
 TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameForOriginNotCoveredByCert) {
@@ -5692,15 +5691,14 @@ TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameForOriginNotCoveredByCert) {
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(session_origin)
+                  .empty());
 
-  altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          url::SchemeHostPort(GURL(origin)));
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(
+      spdy_session_pool_->http_server_properties()
+          ->GetAlternativeServiceInfos(url::SchemeHostPort(GURL(origin)))
+          .empty());
 }
 
 // An ALTSVC frame on stream 0 with empty origin MUST be ignored.
@@ -5718,10 +5716,9 @@ TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameWithEmptyOriginOnStreamZero) {
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(session_origin)
+                  .empty());
 }
 
 // An ALTSVC frame on a stream other than stream 0 with non-empty origin MUST be
@@ -5741,10 +5738,9 @@ TEST_F(AltSvcFrameTest,
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(session_origin)
+                  .empty());
 }
 
 TEST_F(AltSvcFrameTest, ProcessAltSvcFrameOnActiveStream) {
@@ -5787,18 +5783,18 @@ TEST_F(AltSvcFrameTest, ProcessAltSvcFrameOnActiveStream) {
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(session_origin)
+                  .empty());
 
-  altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
+  AlternativeServiceInfoVector altsvc_info_vector =
+      spdy_session_pool_->http_server_properties()->GetAlternativeServiceInfos(
           url::SchemeHostPort(GURL(request_origin)));
-  ASSERT_EQ(1u, altsvc_vector.size());
-  EXPECT_EQ(kProtoQUIC, altsvc_vector[0].protocol);
-  EXPECT_EQ("alternative.example.org", altsvc_vector[0].host);
-  EXPECT_EQ(443u, altsvc_vector[0].port);
+  ASSERT_EQ(1u, altsvc_info_vector.size());
+  EXPECT_EQ(kProtoQUIC, altsvc_info_vector[0].alternative_service.protocol);
+  EXPECT_EQ("alternative.example.org",
+            altsvc_info_vector[0].alternative_service.host);
+  EXPECT_EQ(443u, altsvc_info_vector[0].alternative_service.port);
 }
 
 TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameOnStreamWithInsecureOrigin) {
@@ -5841,15 +5837,14 @@ TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameOnStreamWithInsecureOrigin) {
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(session_origin)
+                  .empty());
 
-  altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          url::SchemeHostPort(GURL(request_origin)));
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(
+                      url::SchemeHostPort(GURL(request_origin)))
+                  .empty());
 }
 
 TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameOnNonExistentStream) {
@@ -5865,10 +5860,9 @@ TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameOnNonExistentStream) {
 
   const url::SchemeHostPort session_origin("https", test_url_.host(),
                                            test_url_.EffectiveIntPort());
-  AlternativeServiceVector altsvc_vector =
-      spdy_session_pool_->http_server_properties()->GetAlternativeServices(
-          session_origin);
-  ASSERT_TRUE(altsvc_vector.empty());
+  ASSERT_TRUE(spdy_session_pool_->http_server_properties()
+                  ->GetAlternativeServiceInfos(session_origin)
+                  .empty());
 }
 
 TEST(MapFramerErrorToProtocolError, MapsValues) {

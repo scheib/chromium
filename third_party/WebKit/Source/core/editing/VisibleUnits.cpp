@@ -1815,7 +1815,7 @@ EphemeralRange ExpandRangeToSentenceBoundary(const EphemeralRange& range) {
 
 static bool NodeIsUserSelectAll(const Node* node) {
   return node && node->GetLayoutObject() &&
-         node->GetLayoutObject()->Style()->UserSelect() == SELECT_ALL;
+         node->GetLayoutObject()->Style()->UserSelect() == EUserSelect::kAll;
 }
 
 template <typename Strategy>
@@ -4119,10 +4119,11 @@ static void CollectAbsoluteBoundsForRange(unsigned start,
   layout_text.AbsoluteQuadsForRange(quads, start, end);
 }
 
-template <typename RectType>
-static Vector<RectType> ComputeTextBounds(const EphemeralRange& range) {
-  const Position& start_position = range.StartPosition();
-  const Position& end_position = range.EndPosition();
+template <typename RectType, typename Strategy>
+static Vector<RectType> ComputeTextBounds(
+    const EphemeralRangeTemplate<Strategy>& range) {
+  const PositionTemplate<Strategy>& start_position = range.StartPosition();
+  const PositionTemplate<Strategy>& end_position = range.EndPosition();
   Node* const start_container = start_position.ComputeContainerNode();
   DCHECK(start_container);
   Node* const end_container = end_position.ComputeContainerNode();
@@ -4145,8 +4146,22 @@ static Vector<RectType> ComputeTextBounds(const EphemeralRange& range) {
   return result;
 }
 
-Vector<IntRect> ComputeTextRects(const EphemeralRange& range) {
-  return ComputeTextBounds<IntRect>(range);
+template <typename Strategy>
+static IntRect ComputeTextRectTemplate(
+    const EphemeralRangeTemplate<Strategy>& range) {
+  IntRect result;
+  const Vector<IntRect>& rects = ComputeTextBounds<IntRect, Strategy>(range);
+  for (const IntRect& rect : rects)
+    result.Unite(rect);
+  return result;
+}
+
+IntRect ComputeTextRect(const EphemeralRange& range) {
+  return ComputeTextRectTemplate(range);
+}
+
+IntRect ComputeTextRect(const EphemeralRangeInFlatTree& range) {
+  return ComputeTextRectTemplate(range);
 }
 
 Vector<FloatQuad> ComputeTextQuads(const EphemeralRange& range) {

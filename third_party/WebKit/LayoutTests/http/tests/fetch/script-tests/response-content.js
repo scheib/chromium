@@ -78,7 +78,7 @@ promise_test(function() {
         });
   }, 'Behavior of Response with ArrayBufferView content with a slice.');
 
-promise_test(function() {
+promise_test(function(t) {
     var formData = new FormData();
     formData.append('sample string', '1234567890');
     formData.append('sample blob', new Blob(['blob content']));
@@ -111,6 +111,25 @@ promise_test(function() {
           assert_equals(
             result, expected_body,
             'Creating a Response with FormData body must succeed.');
+          response = new Response(
+            expected_body, {headers: [['Content-Type', regResult[0]]]});
+          return response.formData();
+        })
+      .then(function(result) {
+          assert_equals(result.get('sample string'),
+                        formData.get('sample string'));
+          assert_equals(result.get('sample blob').name,
+                        formData.get('sample blob').name);
+          assert_equals(result.get('sample blob').size,
+                        formData.get('sample blob').size);
+          assert_equals(result.get('sample blob').type,
+                        'application/octet-stream');
+          assert_equals(result.get('sample file').name,
+                        formData.get('sample file').name);
+          assert_equals(result.get('sample file').size,
+                        formData.get('sample file').size);
+          assert_equals(result.get('sample file').type,
+                        'application/octet-stream');
         });
   }, 'Behavior of Response with FormData content');
 
@@ -125,9 +144,22 @@ promise_test(function() {
       'A Response constructed with a URLSearchParams should have a Content-Type.');
     return response.text()
       .then(function(result) {
+          const expected_body =
+            'sample+string=1234567890&sample+string+2=1234567890+%26+2';
           assert_equals(
-            result, 'sample+string=1234567890&sample+string+2=1234567890+%26+2',
+            result, expected_body,
             'Creating a Response with URLSearchParams body must succeed.');
+          response = new Response(
+            expected_body, {headers: [
+              ['Content-Type',
+               'application/x-www-form-urlencoded; charset=UTF-8']]});
+          return response.formData();
+        })
+      .then(function(result) {
+          assert_equals(result.get('sample string'),
+                        urlSearchParams.get('sample string'));
+          assert_equals(result.get('sample string 2'),
+                        urlSearchParams.get('sample string 2'));
         });
   }, 'Behavior of Response with URLSearchParams content');
 

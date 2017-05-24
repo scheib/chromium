@@ -55,8 +55,7 @@ PaymentRequestSpec::PaymentRequestSpec(
     : options_(std::move(options)),
       details_(std::move(details)),
       app_locale_(app_locale),
-      selected_shipping_option_(nullptr),
-      observer_for_testing_(nullptr) {
+      selected_shipping_option_(nullptr) {
   if (observer)
     AddObserver(observer);
   UpdateSelectedShippingOption(/*after_update=*/false);
@@ -69,6 +68,7 @@ void PaymentRequestSpec::UpdateWith(mojom::PaymentDetailsPtr details) {
   // We reparse the |details_| and update the observers.
   UpdateSelectedShippingOption(/*after_update=*/true);
   NotifyOnSpecUpdated();
+  current_update_reason_ = UpdateReason::NONE;
 }
 
 void PaymentRequestSpec::AddObserver(Observer* observer) {
@@ -131,6 +131,7 @@ std::string PaymentRequestSpec::GetFormattedCurrencyCode(
 
 void PaymentRequestSpec::StartWaitingForUpdateWith(
     PaymentRequestSpec::UpdateReason reason) {
+  current_update_reason_ = reason;
   for (auto& observer : observers_) {
     observer.OnStartUpdating(reason);
   }
@@ -229,8 +230,6 @@ void PaymentRequestSpec::UpdateSelectedShippingOption(bool after_update) {
 void PaymentRequestSpec::NotifyOnSpecUpdated() {
   for (auto& observer : observers_)
     observer.OnSpecUpdated();
-  if (observer_for_testing_)
-    observer_for_testing_->OnSpecUpdated();
 }
 
 CurrencyFormatter* PaymentRequestSpec::GetOrCreateCurrencyFormatter(

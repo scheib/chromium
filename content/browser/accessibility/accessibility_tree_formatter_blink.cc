@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "content/browser/accessibility/accessibility_tree_formatter_blink.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
@@ -134,6 +135,16 @@ void AccessibilityTreeFormatterBlink::AddProperties(
       dict->Set(ui::ToString(attr), value_list);
     }
   }
+
+  std::vector<std::string> actions_strings;
+  for (int action_index = ui::AX_ACTION_NONE + 1;
+       action_index <= ui::AX_ACTION_LAST; ++action_index) {
+    auto action = static_cast<ui::AXAction>(action_index);
+    if (node.HasAction(action))
+      actions_strings.push_back(ui::ToString(action));
+  }
+  if (!actions_strings.empty())
+    dict->SetString("actions", base::JoinString(actions_strings, ","));
 }
 
 base::string16 AccessibilityTreeFormatterBlink::ToString(
@@ -260,6 +271,13 @@ base::string16 AccessibilityTreeFormatterBlink::ToString(
       }
     }
     WriteAttribute(false, attr_string, &line);
+  }
+
+  std::string string_value;
+  if (dict.GetString("actions", &string_value)) {
+    WriteAttribute(false,
+                   base::StringPrintf("%s=%s", "actions", string_value.c_str()),
+                   &line);
   }
 
   return line;

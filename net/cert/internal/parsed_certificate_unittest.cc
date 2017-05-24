@@ -425,6 +425,20 @@ TEST(ParsedCertificateTest, SerialNumber37BytesLong) {
   EXPECT_EQ(der::Input(expected_serial), cert->tbs().serial_number);
 }
 
+// Tests parsing a certificate that has an inhibitAnyPolicy extension.
+TEST(ParsedCertificateTest, InhibitAnyPolicy) {
+  scoped_refptr<ParsedCertificate> cert =
+      ParseCertificateFromFile("inhibit_any_policy.pem", {});
+  ASSERT_TRUE(cert);
+
+  ParsedExtension extension;
+  ASSERT_TRUE(cert->GetExtension(InhibitAnyPolicyOid(), &extension));
+
+  uint8_t skip_count;
+  ASSERT_TRUE(ParseInhibitAnyPolicy(extension.value, &skip_count));
+  EXPECT_EQ(3, skip_count);
+}
+
 }  // namespace
 
 }  // namespace net

@@ -230,7 +230,7 @@ static_library("common") {
     "//third_party/icu",
     "//third_party/re2",
     "//third_party/widevine/cdm:headers",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:zip",
     "//ui/accessibility",
     "//ui/base",
     "//ui/gfx/ipc",

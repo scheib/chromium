@@ -12,7 +12,6 @@
 #include "android_webview/browser/aw_permission_manager.h"
 #include "android_webview/browser/aw_quota_manager_bridge.h"
 #include "android_webview/browser/aw_resource_context.h"
-#include "android_webview/browser/jni_dependency_factory.h"
 #include "android_webview/browser/net/aw_url_request_context_getter.h"
 #include "android_webview/common/aw_content_client.h"
 #include "base/base_paths_android.h"
@@ -112,11 +111,8 @@ policy::URLBlacklistManager* CreateURLBlackListManager(
 // Delete the legacy cache dir (in the app data dir) in 10 seconds after init.
 int AwBrowserContext::legacy_cache_removal_delay_ms_ = 10000;
 
-AwBrowserContext::AwBrowserContext(
-    const FilePath path,
-    JniDependencyFactory* native_factory)
-    : context_storage_path_(path),
-      native_factory_(native_factory) {
+AwBrowserContext::AwBrowserContext(const FilePath path)
+    : context_storage_path_(path) {
   DCHECK(!g_browser_context);
   g_browser_context = this;
   BrowserContext::Initialize(this, path);
@@ -227,7 +223,7 @@ void AwBrowserContext::AddVisitedURLs(const std::vector<GURL>& urls) {
 
 AwQuotaManagerBridge* AwBrowserContext::GetQuotaManagerBridge() {
   if (!quota_manager_bridge_.get()) {
-    quota_manager_bridge_ = native_factory_->CreateAwQuotaManagerBridge(this);
+    quota_manager_bridge_ = AwQuotaManagerBridge::Create(this);
   }
   return quota_manager_bridge_.get();
 }

@@ -10,11 +10,6 @@
           "object": "LayoutSVGRect rect",
           "rect": [0, 0, 110, 110],
           "reason": "full"
-        },
-        {
-          "object": "LayoutSVGRect rect id='rect'",
-          "rect": [0, 0, 1, 100],
-          "reason": "disappeared"
         }
       ]
     }
@@ -23,18 +18,6 @@
     {
       "object": "LayoutSVGRect rect id='rect'",
       "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGRect rect id='rect'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGContainer use id='use'",
-      "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGRect rect id='rect'",
-      "reason": "appeared"
     },
     {
       "object": "LayoutSVGRect rect",

@@ -266,7 +266,6 @@ test("webkit_unit_tests") {
     # FIXME: Move the tests from web/tests/ to appropriate places.
     # crbug.com/353585
     "tests/AccessibilityObjectModelTest.cpp",
-    "tests/ActiveConnectionThrottlingTest.cpp",
     "tests/ActivityLoggerTest.cpp",
     "tests/AnimationSimTest.cpp",
     "tests/BrowserControlsTest.cpp",
@@ -280,7 +279,6 @@ test("webkit_unit_tests") {
     "tests/FrameSerializerTest.cpp",
     "tests/FrameTestHelpers.cpp",
     "tests/FrameTestHelpers.h",
-    "tests/FrameThrottlingTest.cpp",
     "tests/HTMLDocumentParserLoadingTest.cpp",
     "tests/HTMLImportSheetsTest.cpp",
     "tests/ImeOnFocusTest.cpp",
@@ -331,6 +329,9 @@ test("webkit_unit_tests") {
     "tests/WebUserGestureTokenTest.cpp",
     "tests/WebViewTest.cpp",
     "tests/WindowProxyTest.cpp",
+    "tests/scheduler/ActiveConnectionThrottlingTest.cpp",
+    "tests/scheduler/FrameThrottlingTest.cpp",
+    "tests/scheduler/ThrottlingTest.cpp",
     "tests/sim/SimCanvas.cpp",
     "tests/sim/SimCanvas.h",
     "tests/sim/SimCompositor.cpp",

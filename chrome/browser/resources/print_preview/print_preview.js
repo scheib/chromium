@@ -331,7 +331,8 @@ cr.define('print_preview', function() {
       if (!this.previewArea_.hasCompatiblePlugin) {
         this.setIsEnabled_(false);
       }
-      this.nativeLayer_.startGetInitialSettings();
+      this.nativeLayer_.getInitialSettings().then(
+          this.onInitialSettingsSet_.bind(this));
       print_preview.PrintPreviewFocusManager.getInstance().initialize();
       cr.ui.FocusOutlineManager.forDocument(document);
     },
@@ -339,44 +340,41 @@ cr.define('print_preview', function() {
     /** @override */
     enterDocument: function() {
       // Native layer events.
+      var nativeLayerEventTarget = this.nativeLayer_.getEventTarget();
       this.tracker.add(
-          this.nativeLayer_,
-          print_preview.NativeLayer.EventType.INITIAL_SETTINGS_SET,
-          this.onInitialSettingsSet_.bind(this));
-      this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.CLOUD_PRINT_ENABLE,
           this.onCloudPrintEnable_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PRINT_TO_CLOUD,
           this.onPrintToCloud_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.FILE_SELECTION_CANCEL,
           this.onFileSelectionCancel_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.FILE_SELECTION_COMPLETE,
           this.onFileSelectionComplete_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.SETTINGS_INVALID,
           this.onSettingsInvalid_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PRINT_PRESET_OPTIONS,
           this.onPrintPresetOptionsFromDocument_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PAGE_COUNT_READY,
           this.onPageCountReady_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PRIVET_PRINT_FAILED,
           this.onPrivetPrintFailed_.bind(this));
       this.tracker.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.MANIPULATE_SETTINGS_FOR_TEST,
           this.onManipulateSettingsForTest_.bind(this));
 
@@ -638,17 +636,16 @@ cr.define('print_preview', function() {
      * Called when the native layer has initial settings to set. Sets the
      * initial settings of the print preview and begins fetching print
      * destinations.
-     * @param {Event} event Contains the initial print preview settings
-     *     persisted through the session.
+     * @param {!print_preview.NativeInitialSettings} settings The initial print
+     *     preview settings persisted through the session.
      * @private
      */
-    onInitialSettingsSet_: function(event) {
+    onInitialSettingsSet_: function(settings) {
       assert(this.uiState_ == PrintPreviewUiState_.INITIALIZING,
              'Updating initial settings when not in initializing state: ' +
                  this.uiState_);
       this.uiState_ = PrintPreviewUiState_.READY;
 
-      var settings = event.initialSettings;
       this.isInKioskAutoPrintMode_ = settings.isInKioskAutoPrintMode;
       this.isInAppKioskMode_ = settings.isInAppKioskMode;
 
@@ -1351,12 +1348,10 @@ cr.define('print_preview', function() {
 // <include src="search/destination_search.js">
 // <include src="search/provisional_destination_resolver.js">
 
-/**
- * Global instance of PrintPreview, used by browser tests.
- * @type {print_preview.PrintPreview}
- */
-var printPreview;
 window.addEventListener('DOMContentLoaded', function() {
-  printPreview = new print_preview.PrintPreview();
-  printPreview.initialize();
+  var previewWindow = /** @type {{isTest: boolean}} */ (window);
+  if (!previewWindow.isTest) {
+    var printPreview = new print_preview.PrintPreview();
+    printPreview.initialize();
+  }
 });

@@ -19,6 +19,7 @@
 #include "chrome/browser/ui/ash/chrome_new_window_client.h"
 #include "chrome/browser/ui/ash/chrome_shell_content_state.h"
 #include "chrome/browser/ui/ash/launcher/chrome_launcher_controller.h"
+#include "chrome/browser/ui/ash/lock_screen_client.h"
 #include "chrome/browser/ui/ash/media_client.h"
 #include "chrome/browser/ui/ash/session_controller_client.h"
 #include "chrome/browser/ui/ash/system_tray_client.h"
@@ -112,6 +113,7 @@ void ChromeBrowserMainExtraPartsAsh::PostProfileInit() {
   cast_config_client_media_router_ =
       base::MakeUnique<CastConfigClientMediaRouter>();
   media_client_ = base::MakeUnique<MediaClient>();
+  lock_screen_client_ = base::MakeUnique<LockScreenClient>();
 
   if (!ash::Shell::HasInstance())
     return;
@@ -131,6 +133,7 @@ void ChromeBrowserMainExtraPartsAsh::PostMainMessageLoopRun() {
   volume_controller_.reset();
   new_window_client_.reset();
   system_tray_client_.reset();
+  lock_screen_client_.reset();
   media_client_.reset();
   cast_config_client_media_router_.reset();
   session_controller_client_.reset();

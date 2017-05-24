@@ -11,6 +11,7 @@
 #import "components/image_fetcher/ios/webp_decoder.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/url_request/url_fetcher.h"
 #include "url/url_constants.h"
 
@@ -36,7 +37,8 @@ void IOSImageDataFetcherWrapper::FetchImageDataWebpDecoded(
     const GURL& image_url,
     IOSImageDataFetcherCallback callback) {
   image_data_fetcher_.FetchImageData(image_url,
-                                     CallbackForImageDataFetcher(callback));
+                                     CallbackForImageDataFetcher(callback),
+                                     NO_TRAFFIC_ANNOTATION_YET);
 }
 
 void IOSImageDataFetcherWrapper::FetchImageDataWebpDecoded(
@@ -46,9 +48,9 @@ void IOSImageDataFetcherWrapper::FetchImageDataWebpDecoded(
     net::URLRequest::ReferrerPolicy referrer_policy) {
   DCHECK(callback);
 
-  image_data_fetcher_.FetchImageData(image_url,
-                                     CallbackForImageDataFetcher(callback),
-                                     referrer, referrer_policy);
+  image_data_fetcher_.FetchImageData(
+      image_url, CallbackForImageDataFetcher(callback), referrer,
+      referrer_policy, NO_TRAFFIC_ANNOTATION_YET);
 }
 
 void IOSImageDataFetcherWrapper::SetDataUseServiceName(

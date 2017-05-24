@@ -243,6 +243,24 @@ class MouseWheelEventQueueTest : public testing::TestWithParam<bool>,
     SendMouseWheel(x, y, global_x, global_y, dX, dY, modifiers, high_precision,
                    WebInputEvent::kRailsModeFree);
   }
+  void SendMouseWheelWithPhase(float x,
+                               float y,
+                               float global_x,
+                               float global_y,
+                               float dX,
+                               float dY,
+                               int modifiers,
+                               bool high_precision,
+                               blink::WebMouseWheelEvent::Phase phase,
+                               blink::WebMouseWheelEvent::Phase momentum_phase,
+                               WebInputEvent::RailsMode rails_mode) {
+    WebMouseWheelEvent event = SyntheticWebMouseWheelEventBuilder::Build(
+        x, y, global_x, global_y, dX, dY, modifiers, high_precision);
+    event.phase = phase;
+    event.momentum_phase = momentum_phase;
+    event.rails_mode = rails_mode;
+    queue_->QueueEvent(MouseWheelEventWithLatencyInfo(event));
+  }
   void SendMouseWheelWithPhase(
       float x,
       float y,
@@ -254,11 +272,49 @@ class MouseWheelEventQueueTest : public testing::TestWithParam<bool>,
       bool high_precision,
       blink::WebMouseWheelEvent::Phase phase,
       blink::WebMouseWheelEvent::Phase momentum_phase) {
-    WebMouseWheelEvent event = SyntheticWebMouseWheelEventBuilder::Build(
-        x, y, global_x, global_y, dX, dY, modifiers, high_precision);
-    event.phase = phase;
-    event.momentum_phase = momentum_phase;
-    queue_->QueueEvent(MouseWheelEventWithLatencyInfo(event));
+    SendMouseWheelWithPhase(x, y, global_x, global_y, dX, dY, modifiers,
+                            high_precision, phase, momentum_phase,
+                            WebInputEvent::kRailsModeFree);
+  }
+
+  void SendMouseWheelPossiblyIncludingPhase(
+      bool ignore_phase,
+      float x,
+      float y,
+      float global_x,
+      float global_y,
+      float dX,
+      float dY,
+      int modifiers,
+      bool high_precision,
+      blink::WebMouseWheelEvent::Phase phase,
+      blink::WebMouseWheelEvent::Phase momentum_phase,
+      WebInputEvent::RailsMode rails_mode) {
+    if (ignore_phase) {
+      SendMouseWheel(x, y, global_x, global_y, dX, dY, modifiers,
+                     high_precision, rails_mode);
+    } else {
+      SendMouseWheelWithPhase(x, y, global_x, global_y, dX, dY, modifiers,
+                              high_precision, phase, momentum_phase,
+                              rails_mode);
+    }
+  }
+
+  void SendMouseWheelPossiblyIncludingPhase(
+      bool ignore_phase,
+      float x,
+      float y,
+      float global_x,
+      float global_y,
+      float dX,
+      float dY,
+      int modifiers,
+      bool high_precision,
+      blink::WebMouseWheelEvent::Phase phase,
+      blink::WebMouseWheelEvent::Phase momentum_phase) {
+    SendMouseWheelPossiblyIncludingPhase(
+        ignore_phase, x, y, global_x, global_y, dX, dY, modifiers,
+        high_precision, phase, momentum_phase, WebInputEvent::kRailsModeFree);
   }
 
   void SendGestureEvent(WebInputEvent::Type type) {
@@ -279,16 +335,20 @@ class MouseWheelEventQueueTest : public testing::TestWithParam<bool>,
     const WebGestureEvent::ScrollUnits scroll_units =
         high_precision ? WebGestureEvent::kPrecisePixels
                        : WebGestureEvent::kPixels;
-    SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                   kWheelScrollGlobalY, 1, 1, 0, high_precision);
+    SendMouseWheelPossiblyIncludingPhase(
+        !scroll_latching_enabled_, kWheelScrollX, kWheelScrollY,
+        kWheelScrollGlobalX, kWheelScrollGlobalY, 1, 1, 0, high_precision,
+        WebMouseWheelEvent::kPhaseBegan, WebMouseWheelEvent::kPhaseNone);
     EXPECT_EQ(0U, queued_event_count());
     EXPECT_TRUE(event_in_flight());
     EXPECT_EQ(1U, GetAndResetSentEventCount());
 
     // The second mouse wheel should not be sent since one is already in
     // queue.
-    SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                   kWheelScrollGlobalY, 5, 5, 0, high_precision);
+    SendMouseWheelPossiblyIncludingPhase(
+        !scroll_latching_enabled_, kWheelScrollX, kWheelScrollY,
+        kWheelScrollGlobalX, kWheelScrollGlobalY, 5, 5, 0, high_precision,
+        WebMouseWheelEvent::kPhaseChanged, WebMouseWheelEvent::kPhaseNone);
     EXPECT_EQ(1U, queued_event_count());
     EXPECT_TRUE(event_in_flight());
     EXPECT_EQ(0U, GetAndResetSentEventCount());
@@ -302,14 +362,10 @@ class MouseWheelEventQueueTest : public testing::TestWithParam<bool>,
     EXPECT_EQ(1U, GetAndResetAckedEventCount());
     if (scroll_latching_enabled_) {
       EXPECT_EQ(3U, all_sent_events().size());
-      EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
-      EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(1));
+      EXPECT_GESTURE_SCROLL_BEGIN_WITH_PHASE(sent_gesture_event(0));
+      EXPECT_GESTURE_SCROLL_UPDATE_WITH_PHASE(sent_gesture_event(1));
       EXPECT_MOUSE_WHEEL(sent_input_event(2));
       EXPECT_EQ(3U, GetAndResetSentEventCount());
-
-      RunTasksAndWait(DefaultScrollEndTimeoutDelay() * 2);
-      EXPECT_EQ(1U, all_sent_events().size());
-      EXPECT_GESTURE_SCROLL_END(sent_gesture_event(0));
     } else {
       EXPECT_EQ(4U, all_sent_events().size());
       EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
@@ -362,33 +418,31 @@ class MouseWheelEventQueueTest : public testing::TestWithParam<bool>,
       EXPECT_EQ(3U, GetAndResetSentEventCount());
     }
 
-    SendMouseWheelWithPhase(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                            kWheelScrollGlobalY, 0, 0, 0, high_precision,
-                            WebMouseWheelEvent::kPhaseEnded,
-                            WebMouseWheelEvent::kPhaseNone);
-    EXPECT_EQ(1U, GetAndResetSentEventCount());
-    SendMouseWheelEventAck(INPUT_EVENT_ACK_STATE_NOT_CONSUMED);
-    if (scroll_latching_enabled_) {
-      // ScrollEnd is not sent right away, a timer starts instead,
-      // to see if a wheel event with momentumPhase arrives or not.
-      EXPECT_EQ(0U, all_sent_events().size());
-      EXPECT_EQ(0U, GetAndResetSentEventCount());
-    } else {
+    // When wheel scroll latching is enabled no wheel event with phase =
+    // |kPhaseEnded| will be sent before a wheel event with momentum_phase =
+    // |kPhaseBegan|.
+    if (!scroll_latching_enabled_) {
+      SendMouseWheelWithPhase(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
+                              kWheelScrollGlobalY, 0, 0, 0, high_precision,
+                              WebMouseWheelEvent::kPhaseEnded,
+                              WebMouseWheelEvent::kPhaseNone);
+      EXPECT_EQ(1U, GetAndResetSentEventCount());
+      SendMouseWheelEventAck(INPUT_EVENT_ACK_STATE_NOT_CONSUMED);
       EXPECT_EQ(2U, all_sent_events().size());
       EXPECT_SYNTHETIC_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
       EXPECT_GESTURE_SCROLL_END_WITH_PHASE(sent_gesture_event(1));
       EXPECT_EQ(2U, GetAndResetSentEventCount());
-    }
 
-    // Send a double phase end; OSX does it consistently.
-    SendMouseWheelWithPhase(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                            kWheelScrollGlobalY, 0, 0, 0, high_precision,
-                            WebMouseWheelEvent::kPhaseEnded,
-                            WebMouseWheelEvent::kPhaseNone);
-    EXPECT_EQ(1U, GetAndResetSentEventCount());
-    SendMouseWheelEventAck(INPUT_EVENT_ACK_STATE_NOT_CONSUMED);
-    EXPECT_EQ(0U, all_sent_events().size());
-    EXPECT_EQ(0U, GetAndResetSentEventCount());
+      // Send a double phase end; OSX does it consistently.
+      SendMouseWheelWithPhase(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
+                              kWheelScrollGlobalY, 0, 0, 0, high_precision,
+                              WebMouseWheelEvent::kPhaseEnded,
+                              WebMouseWheelEvent::kPhaseNone);
+      EXPECT_EQ(1U, GetAndResetSentEventCount());
+      SendMouseWheelEventAck(INPUT_EVENT_ACK_STATE_NOT_CONSUMED);
+      EXPECT_EQ(0U, all_sent_events().size());
+      EXPECT_EQ(0U, GetAndResetSentEventCount());
+    }
 
     SendMouseWheelWithPhase(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
                             kWheelScrollGlobalY, 5, 5, 0, high_precision,
@@ -508,9 +562,10 @@ TEST_P(MouseWheelEventQueueTest,
 
 TEST_P(MouseWheelEventQueueTest, GestureSendingInterrupted) {
   const WebGestureEvent::ScrollUnits scroll_units = WebGestureEvent::kPixels;
-
-  SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                 kWheelScrollGlobalY, 1, 1, 0, false);
+  SendMouseWheelPossiblyIncludingPhase(
+      !scroll_latching_enabled_, kWheelScrollX, kWheelScrollY,
+      kWheelScrollGlobalX, kWheelScrollGlobalY, 1, 1, 0, false,
+      WebMouseWheelEvent::kPhaseBegan, WebMouseWheelEvent::kPhaseNone);
   EXPECT_EQ(0U, queued_event_count());
   EXPECT_TRUE(event_in_flight());
   EXPECT_EQ(1U, GetAndResetSentEventCount());
@@ -523,8 +578,8 @@ TEST_P(MouseWheelEventQueueTest, GestureSendingInterrupted) {
   EXPECT_EQ(1U, GetAndResetAckedEventCount());
   if (scroll_latching_enabled_) {
     EXPECT_EQ(2U, all_sent_events().size());
-    EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
-    EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(1));
+    EXPECT_GESTURE_SCROLL_BEGIN_WITH_PHASE(sent_gesture_event(0));
+    EXPECT_GESTURE_SCROLL_UPDATE_WITH_PHASE(sent_gesture_event(1));
     EXPECT_EQ(2U, GetAndResetSentEventCount());
   } else {
     EXPECT_EQ(3U, all_sent_events().size());
@@ -534,19 +589,34 @@ TEST_P(MouseWheelEventQueueTest, GestureSendingInterrupted) {
     EXPECT_EQ(3U, GetAndResetSentEventCount());
   }
 
+  // When wheel scroll latching is enabled and a touch based GSB arrives in the
+  // middle of wheel scrolling sequence, a synthetic wheel event with zero
+  // deltas and phase = |kPhaseEnded| will be sent.
+  if (scroll_latching_enabled_) {
+    SendMouseWheelWithPhase(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
+                            kWheelScrollGlobalY, 0, 0, 0, false,
+                            WebMouseWheelEvent::kPhaseEnded,
+                            WebMouseWheelEvent::kPhaseNone);
+    SendMouseWheelEventAck(INPUT_EVENT_ACK_STATE_NOT_CONSUMED);
+    EXPECT_EQ(1U, GetAndResetAckedEventCount());
+  }
   // Ensure that a gesture scroll begin terminates the current scroll event.
   SendGestureEvent(WebInputEvent::kGestureScrollBegin);
+
   if (scroll_latching_enabled_) {
-    EXPECT_EQ(1U, all_sent_events().size());
-    EXPECT_GESTURE_SCROLL_END(sent_gesture_event(0));
-    EXPECT_EQ(1U, GetAndResetSentEventCount());
+    EXPECT_EQ(2U, all_sent_events().size());
+    EXPECT_GESTURE_SCROLL_END_WITH_PHASE(sent_gesture_event(1));
+    EXPECT_EQ(2U, GetAndResetSentEventCount());
   } else {
     // ScrollEnd has already been sent.
     EXPECT_EQ(0U, all_sent_events().size());
   }
 
-  SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                 kWheelScrollGlobalY, 1, 1, 0, false);
+  SendMouseWheelPossiblyIncludingPhase(
+      !scroll_latching_enabled_, kWheelScrollX, kWheelScrollY,
+      kWheelScrollGlobalX, kWheelScrollGlobalY, 1, 1, 0, false,
+      WebMouseWheelEvent::kPhaseBegan, WebMouseWheelEvent::kPhaseNone);
+
   EXPECT_EQ(0U, queued_event_count());
   EXPECT_TRUE(event_in_flight());
   EXPECT_EQ(1U, GetAndResetSentEventCount());
@@ -563,8 +633,11 @@ TEST_P(MouseWheelEventQueueTest, GestureSendingInterrupted) {
   SendGestureEvent(WebInputEvent::kGestureScrollEnd);
   EXPECT_EQ(0U, all_sent_events().size());
 
-  SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                 kWheelScrollGlobalY, 1, 1, 0, false);
+  SendMouseWheelPossiblyIncludingPhase(
+      !scroll_latching_enabled_, kWheelScrollX, kWheelScrollY,
+      kWheelScrollGlobalX, kWheelScrollGlobalY, 1, 1, 0, false,
+      WebMouseWheelEvent::kPhaseBegan, WebMouseWheelEvent::kPhaseNone);
+
   EXPECT_EQ(0U, queued_event_count());
   EXPECT_TRUE(event_in_flight());
   EXPECT_EQ(1U, GetAndResetSentEventCount());
@@ -577,8 +650,8 @@ TEST_P(MouseWheelEventQueueTest, GestureSendingInterrupted) {
   EXPECT_EQ(1U, GetAndResetAckedEventCount());
   if (scroll_latching_enabled_) {
     EXPECT_EQ(2U, all_sent_events().size());
-    EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
-    EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(1));
+    EXPECT_GESTURE_SCROLL_BEGIN_WITH_PHASE(sent_gesture_event(0));
+    EXPECT_GESTURE_SCROLL_UPDATE_WITH_PHASE(sent_gesture_event(1));
     EXPECT_EQ(2U, GetAndResetSentEventCount());
   } else {
     EXPECT_EQ(3U, all_sent_events().size());
@@ -592,9 +665,11 @@ TEST_P(MouseWheelEventQueueTest, GestureSendingInterrupted) {
 TEST_P(MouseWheelEventQueueTest, GestureRailScrolling) {
   const WebGestureEvent::ScrollUnits scroll_units = WebGestureEvent::kPixels;
 
-  SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                 kWheelScrollGlobalY, 1, 1, 0, false,
-                 WebInputEvent::kRailsModeHorizontal);
+  SendMouseWheelPossiblyIncludingPhase(
+      !scroll_latching_enabled_, kWheelScrollX, kWheelScrollY,
+      kWheelScrollGlobalX, kWheelScrollGlobalY, 1, 1, 0, false,
+      WebMouseWheelEvent::kPhaseBegan, WebMouseWheelEvent::kPhaseNone,
+      WebInputEvent::kRailsModeHorizontal);
   EXPECT_EQ(0U, queued_event_count());
   EXPECT_TRUE(event_in_flight());
   EXPECT_EQ(1U, GetAndResetSentEventCount());
@@ -607,15 +682,11 @@ TEST_P(MouseWheelEventQueueTest, GestureRailScrolling) {
   EXPECT_EQ(1U, GetAndResetAckedEventCount());
   if (scroll_latching_enabled_) {
     EXPECT_EQ(2U, all_sent_events().size());
-    EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
-    EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(1));
+    EXPECT_GESTURE_SCROLL_BEGIN_WITH_PHASE(sent_gesture_event(0));
+    EXPECT_GESTURE_SCROLL_UPDATE_WITH_PHASE(sent_gesture_event(1));
     EXPECT_EQ(1U, sent_gesture_event(1)->data.scroll_update.delta_x);
     EXPECT_EQ(0U, sent_gesture_event(1)->data.scroll_update.delta_y);
     EXPECT_EQ(2U, GetAndResetSentEventCount());
-    RunTasksAndWait(DefaultScrollEndTimeoutDelay() * 2);
-    EXPECT_EQ(1U, all_sent_events().size());
-    EXPECT_GESTURE_SCROLL_END(sent_gesture_event(0));
-    EXPECT_EQ(1U, GetAndResetSentEventCount());
   } else {
     EXPECT_EQ(3U, all_sent_events().size());
     EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
@@ -625,10 +696,12 @@ TEST_P(MouseWheelEventQueueTest, GestureRailScrolling) {
     EXPECT_EQ(0U, sent_gesture_event(1)->data.scroll_update.delta_y);
     EXPECT_EQ(3U, GetAndResetSentEventCount());
   }
+  SendMouseWheelPossiblyIncludingPhase(
+      !scroll_latching_enabled_, kWheelScrollX, kWheelScrollY,
+      kWheelScrollGlobalX, kWheelScrollGlobalY, 1, 1, 0, false,
+      WebMouseWheelEvent::kPhaseChanged, WebMouseWheelEvent::kPhaseNone,
+      WebInputEvent::kRailsModeVertical);
 
-  SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                 kWheelScrollGlobalY, 1, 1, 0, false,
-                 WebInputEvent::kRailsModeVertical);
   EXPECT_EQ(0U, queued_event_count());
   EXPECT_TRUE(event_in_flight());
   EXPECT_EQ(1U, GetAndResetSentEventCount());
@@ -639,20 +712,23 @@ TEST_P(MouseWheelEventQueueTest, GestureRailScrolling) {
   EXPECT_FALSE(event_in_flight());
   EXPECT_EQ(WebInputEvent::kMouseWheel, acked_event().GetType());
   EXPECT_EQ(1U, GetAndResetAckedEventCount());
+  size_t scroll_update_index = 0;
   if (scroll_latching_enabled_) {
-    EXPECT_EQ(2U, all_sent_events().size());
-    EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
-    EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(1));
+    EXPECT_EQ(1U, all_sent_events().size());
+    EXPECT_GESTURE_SCROLL_UPDATE_WITH_PHASE(sent_gesture_event(0));
   } else {
     EXPECT_EQ(3U, all_sent_events().size());
     EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
     EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(1));
     EXPECT_GESTURE_SCROLL_END(sent_gesture_event(2));
+    scroll_update_index = 1;
   }
-  EXPECT_EQ(0U, sent_gesture_event(1)->data.scroll_update.delta_x);
-  EXPECT_EQ(1U, sent_gesture_event(1)->data.scroll_update.delta_y);
+  EXPECT_EQ(
+      0U, sent_gesture_event(scroll_update_index)->data.scroll_update.delta_x);
+  EXPECT_EQ(
+      1U, sent_gesture_event(scroll_update_index)->data.scroll_update.delta_y);
   if (scroll_latching_enabled_)
-    EXPECT_EQ(2U, GetAndResetSentEventCount());
+    EXPECT_EQ(1U, GetAndResetSentEventCount());
   else
     EXPECT_EQ(3U, GetAndResetSentEventCount());
 }
@@ -662,9 +738,10 @@ TEST_P(MouseWheelEventQueueTest, WheelScrollLatching) {
     return;
 
   const WebGestureEvent::ScrollUnits scroll_units = WebGestureEvent::kPixels;
-  SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                 kWheelScrollGlobalY, 1, 1, 0, false,
-                 WebInputEvent::kRailsModeVertical);
+  SendMouseWheelWithPhase(
+      kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX, kWheelScrollGlobalY, 1,
+      1, 0, false, WebMouseWheelEvent::kPhaseBegan,
+      WebMouseWheelEvent::kPhaseNone, WebInputEvent::kRailsModeVertical);
   EXPECT_EQ(0U, queued_event_count());
   EXPECT_TRUE(event_in_flight());
   EXPECT_EQ(1U, GetAndResetSentEventCount());
@@ -676,17 +753,16 @@ TEST_P(MouseWheelEventQueueTest, WheelScrollLatching) {
   EXPECT_EQ(WebInputEvent::kMouseWheel, acked_event().GetType());
   EXPECT_EQ(1U, GetAndResetAckedEventCount());
   EXPECT_EQ(2U, all_sent_events().size());
-  EXPECT_GESTURE_SCROLL_BEGIN(sent_gesture_event(0));
-  EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(1));
+  EXPECT_GESTURE_SCROLL_BEGIN_WITH_PHASE(sent_gesture_event(0));
+  EXPECT_GESTURE_SCROLL_UPDATE_WITH_PHASE(sent_gesture_event(1));
   EXPECT_EQ(0U, sent_gesture_event(1)->data.scroll_update.delta_x);
   EXPECT_EQ(1U, sent_gesture_event(1)->data.scroll_update.delta_y);
   EXPECT_EQ(2U, GetAndResetSentEventCount());
 
-  RunTasksAndWait(DefaultScrollEndTimeoutDelay() / 2);
-  EXPECT_EQ(0U, GetAndResetSentEventCount());
-  SendMouseWheel(kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX,
-                 kWheelScrollGlobalY, 1, 1, 0, false,
-                 WebInputEvent::kRailsModeVertical);
+  SendMouseWheelWithPhase(
+      kWheelScrollX, kWheelScrollY, kWheelScrollGlobalX, kWheelScrollGlobalY, 1,
+      1, 0, false, WebMouseWheelEvent::kPhaseChanged,
+      WebMouseWheelEvent::kPhaseNone, WebInputEvent::kRailsModeVertical);
   EXPECT_EQ(0U, queued_event_count());
   EXPECT_TRUE(event_in_flight());
   EXPECT_EQ(1U, GetAndResetSentEventCount());
@@ -700,7 +776,7 @@ TEST_P(MouseWheelEventQueueTest, WheelScrollLatching) {
 
   // Scroll latching: no new scroll begin expected.
   EXPECT_EQ(1U, all_sent_events().size());
-  EXPECT_GESTURE_SCROLL_UPDATE(sent_gesture_event(0));
+  EXPECT_GESTURE_SCROLL_UPDATE_WITH_PHASE(sent_gesture_event(0));
   EXPECT_EQ(0U, sent_gesture_event(0)->data.scroll_update.delta_x);
   EXPECT_EQ(1U, sent_gesture_event(0)->data.scroll_update.delta_y);
   EXPECT_EQ(1U, GetAndResetSentEventCount());

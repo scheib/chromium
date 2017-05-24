@@ -45,11 +45,6 @@ class InputRouter : public IPC::Listener {
   // the site has a mobile-friendly viewport).
   virtual void NotifySiteIsMobileOptimized(bool is_mobile_optimized) = 0;
 
-  // Request a notification from the input router when all events have been
-  // fully dispatched and there are no longer any pending events.
-  // Note: This may trigger a synchronous notification if the router is empty.
-  virtual void RequestNotificationWhenFlushed() = 0;
-
   // Whether there are any events pending dispatch to or ack from the renderer.
   virtual bool HasPendingEvents() const = 0;
 

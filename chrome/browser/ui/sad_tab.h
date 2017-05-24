@@ -38,6 +38,10 @@ class SadTab {
   int GetButtonTitle();
   int GetHelpLinkTitle();
 
+  // Returns the resource string Id for bullet point |line_id| or 0 if no
+  // message should be displayed for the |line_id|. Line ids count from 0.
+  int GetSubMessage(size_t line_id);
+
   // Returns the target of the "Learn more" link. Use it for the context menu
   // and to show the URL on hover, but call PerformAction() for regular clicks.
   const char* GetHelpLinkURL();

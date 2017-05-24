@@ -37,6 +37,7 @@
 #include "core/layout/api/LayoutPartItem.h"
 #include "core/layout/api/LayoutViewItem.h"
 #include "core/layout/compositing/PaintLayerCompositor.h"
+#include "core/layout/svg/LayoutSVGRoot.h"
 #include "core/page/ChromeClient.h"
 #include "core/page/Page.h"
 #include "core/paint/PaintLayer.h"
@@ -641,6 +642,87 @@ LayoutRect LayoutView::OverflowClipRect(
     ExcludeScrollbars(rect, overlay_scrollbar_clip_behavior);
 
   return rect;
+}
+
+void LayoutView::CalculateScrollbarModes(ScrollbarMode& h_mode,
+                                         ScrollbarMode& v_mode) const {
+#define RETURN_SCROLLBAR_MODE(mode) \
+  {                                 \
+    h_mode = v_mode = mode;         \
+    return;                         \
+  }
+
+  LocalFrame* frame = GetFrame();
+  if (!frame)
+    RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
+
+  if (FrameOwner* owner = frame->Owner()) {
+    // Setting scrolling="no" on an iframe element disables scrolling.
+    if (owner->ScrollingMode() == kScrollbarAlwaysOff)
+      RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
+  }
+
+  Document& document = GetDocument();
+  if (Node* body = document.body()) {
+    // Framesets can't scroll.
+    if (isHTMLFrameSetElement(body) && body->GetLayoutObject())
+      RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
+  }
+
+  if (FrameView* frameView = GetFrameView()) {
+    // Scrollbars can be disabled by FrameView::setCanHaveScrollbars.
+    if (!frameView->CanHaveScrollbars())
+      RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
+  }
+
+  Element* viewportDefiningElement = document.ViewportDefiningElement();
+  if (!viewportDefiningElement)
+    RETURN_SCROLLBAR_MODE(kScrollbarAuto);
+
+  LayoutObject* viewport = viewportDefiningElement->GetLayoutObject();
+  if (!viewport)
+    RETURN_SCROLLBAR_MODE(kScrollbarAuto);
+
+  const ComputedStyle* style = viewport->Style();
+  if (!style)
+    RETURN_SCROLLBAR_MODE(kScrollbarAuto);
+
+  if (viewport->IsSVGRoot()) {
+    // Don't allow overflow to affect <img> and css backgrounds
+    if (ToLayoutSVGRoot(viewport)->IsEmbeddedThroughSVGImage())
+      RETURN_SCROLLBAR_MODE(kScrollbarAuto);
+
+    // FIXME: evaluate if we can allow overflow for these cases too.
+    // Overflow is always hidden when stand-alone SVG documents are embedded.
+    if (ToLayoutSVGRoot(viewport)
+            ->IsEmbeddedThroughFrameContainingSVGDocument())
+      RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
+  }
+
+  h_mode = v_mode = kScrollbarAuto;
+
+  EOverflow overflow_x = style->OverflowX();
+  EOverflow overflow_y = style->OverflowY();
+
+  bool shouldIgnoreOverflowHidden = false;
+  if (Settings* settings = document.GetSettings()) {
+    if (settings->GetIgnoreMainFrameOverflowHiddenQuirk() &&
+        frame->IsMainFrame())
+      shouldIgnoreOverflowHidden = true;
+  }
+  if (!shouldIgnoreOverflowHidden) {
+    if (overflow_x == EOverflow::kHidden)
+      h_mode = kScrollbarAlwaysOff;
+    if (overflow_y == EOverflow::kHidden)
+      v_mode = kScrollbarAlwaysOff;
+  }
+
+  if (overflow_x == EOverflow::kScroll)
+    h_mode = kScrollbarAlwaysOn;
+  if (overflow_y == EOverflow::kScroll)
+    v_mode = kScrollbarAlwaysOn;
+
+#undef RETURN_SCROLLBAR_MODE
 }
 
 IntRect LayoutView::DocumentRect() const {

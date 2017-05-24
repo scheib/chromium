@@ -42,7 +42,7 @@ test(function(t){
     assert_equals(axLabelledby.name, "Label 1");
     assert_equals(axLabelledby.nameFrom, "relatedElement");
     assert_equals(axLabelledby.nameElementCount(), 1);
-    assert_equals(axLabelledby.nameElementAtIndex(0).role, "AXRole: AXDiv");
+    assert_equals(axLabelledby.nameElementAtIndex(0).role, "AXRole: AXGenericContainer");
 }, "Button with aria-labelledby referencing the id of another element.");
 </script>
 
@@ -72,7 +72,7 @@ test(function(t){
     assert_equals(axLabelledby3.nameFrom, "relatedElement");
     assert_equals(axLabelledby3.nameElementCount(), 2);
     assert_equals(axLabelledby3.nameElementAtIndex(0).role, "AXRole: AXButton");
-    assert_equals(axLabelledby3.nameElementAtIndex(1).role, "AXRole: AXDiv");
+    assert_equals(axLabelledby3.nameElementAtIndex(1).role, "AXRole: AXGenericContainer");
 }, "Button with aria-labelledby referencing itself and the id of another element.");
 </script>
 
@@ -88,7 +88,7 @@ test(function(t){
     assert_equals(axLabelledby4.name, "Contents 4");
     assert_equals(axLabelledby4.nameFrom, "relatedElement");
     assert_equals(axLabelledby4.nameElementCount(), 1);
-    assert_equals(axLabelledby4.nameElementAtIndex(0).role, "AXRole: AXDiv");
+    assert_equals(axLabelledby4.nameElementAtIndex(0).role, "AXRole: AXGenericContainer");
 }, "Button with chain of aria-labelledby references.");
 </script>
 
@@ -116,7 +116,7 @@ test(function(t){
     assert_equals(axLabelledby6.name, "");
     assert_equals(axLabelledby6.nameFrom, "relatedElement");
     assert_equals(axLabelledby6.nameElementCount(), 1);
-    assert_equals(axLabelledby6.nameElementAtIndex(0).role, "AXRole: AXDiv");
+    assert_equals(axLabelledby6.nameElementAtIndex(0).role, "AXRole: AXGenericContainer");
 }, "aria-labelledby reference to element with no text.");
 </script>
 

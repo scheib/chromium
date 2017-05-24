@@ -25,10 +25,10 @@ TestInterfaceEventInit& TestInterfaceEventInit::operator=(const TestInterfaceEve
 bool TestInterfaceEventInit::hasStringMember() const {
   return !m_stringMember.IsNull();
 }
-String TestInterfaceEventInit::stringMember() const {
+const String& TestInterfaceEventInit::stringMember() const {
   return m_stringMember;
 }
-void TestInterfaceEventInit::setStringMember(String value) {
+void TestInterfaceEventInit::setStringMember(const String& value) {
   m_stringMember = value;
 }
 

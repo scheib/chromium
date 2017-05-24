@@ -32,7 +32,7 @@ void RepostFormTabHelper::PresentDialog(
   [coordinator_ start];
 }
 
-void RepostFormTabHelper::ProvisionalNavigationStarted(const GURL&) {
+void RepostFormTabHelper::DidStartNavigation(web::NavigationContext*) {
   coordinator_.reset();
 }
 

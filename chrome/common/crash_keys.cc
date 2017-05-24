@@ -59,8 +59,6 @@ const char kPrinterInfo[] = "prn-info-%" PRIuS;
 
 #if defined(OS_CHROMEOS)
 const char kNumberOfUsers[] = "num-users";
-// Temporary for https://crbug.com/660960
-const char kLastGoodCloseStack[] = "last-good-close-stack";
 #endif
 
 #if defined(OS_MACOSX)
@@ -149,8 +147,6 @@ size_t RegisterChromeCrashKeys() {
     {kInputEventFilterSendFailure, kSmallSize},
 #if defined(OS_CHROMEOS)
     {kNumberOfUsers, kSmallSize},
-    // Temporary for https://crbug.com/660960
-    {kLastGoodCloseStack, kMediumSize},
     // Temporary for https://crbug.com/629521
     {"mmap_params", kSmallSize},
     {"buffer_size", kSmallSize},

@@ -69,7 +69,7 @@ class TaskRunnerBoundObserverList {
         "bad unbound method params");
     for (typename ObserversListMap::const_iterator it = observers_.begin();
          it != observers_.end(); ++it) {
-      if (!it->second.get() || it->second->RunsTasksOnCurrentThread()) {
+      if (!it->second.get() || it->second->RunsTasksInCurrentSequence()) {
         base::DispatchToMethod(it->first, method, params);
         continue;
       }

@@ -174,13 +174,6 @@ public class AccountSigninView extends FrameLayout implements ProfileDownloader.
 
         mSigninConfirmationView =
                 (AccountSigninConfirmationView) findViewById(R.id.signin_confirmation_view);
-        mSigninConfirmationView.setScrolledToBottomObserver(
-                new AccountSigninConfirmationView.Observer() {
-                    @Override
-                    public void onScrolledToBottom() {
-                        setUpMoreButtonVisible(false);
-                    }
-                });
         mSigninAccountImage = (ImageView) findViewById(R.id.signin_account_image);
         mSigninAccountName = (TextView) findViewById(R.id.signin_account_name);
         mSigninAccountEmail = (TextView) findViewById(R.id.signin_account_email);
@@ -568,9 +561,16 @@ public class AccountSigninView extends FrameLayout implements ProfileDownloader.
                     RecordUserAction.record("Signin_MoreButton_Shown");
                 }
             });
+            mSigninConfirmationView.setObserver(new AccountSigninConfirmationView.Observer() {
+                @Override
+                public void onScrolledToBottom() {
+                    setUpMoreButtonVisible(false);
+                }
+            });
         } else {
             mPositiveButton.setVisibility(View.VISIBLE);
             mMoreButton.setVisibility(View.GONE);
+            mSigninConfirmationView.setObserver(null);
         }
     }
 

@@ -47,6 +47,8 @@ class NonPresentingGvrDelegate : public device::GvrDelegate,
   void Resume();
   device::mojom::VRVSyncProviderRequest OnSwitchToPresentingDelegate();
 
+  void UpdateContext(gvr_context* context);
+
  private:
   void StopVSyncLoop();
   void StartVSyncLoop();

@@ -374,12 +374,11 @@ def interface_context(interface, interfaces):
     })
 
     # Methods
-    methods, iterator_method = methods_context(interface)
+    context.update(methods_context(interface))
+    methods = context['methods']
     context.update({
         'has_origin_safe_method_setter': any(method['is_cross_origin'] and not method['is_unforgeable']
             for method in methods),
-        'iterator_method': iterator_method,
-        'methods': methods,
         'conditionally_enabled_methods': v8_methods.filter_conditionally_enabled(methods, interface.is_partial),
     })
 
@@ -507,7 +506,11 @@ def methods_context(interface):
         interface: An interface to create contexts for
 
     Returns:
-        A list of method contexts, and an iterator context if available or None
+        A dictionary with 3 keys:
+        'iterator_method': An iterator context if available or None.
+        'iterator_method_alias': A string that can also be used to refer to the
+                                 @@iterator symbol or None.
+        'methods': A list of method contexts.
     """
 
     methods = []
@@ -551,6 +554,10 @@ def methods_context(interface):
 
     # iterable<>, maplike<> and setlike<>
     iterator_method = None
+
+    # Depending on the declaration, @@iterator may be a synonym for e.g.
+    # 'entries' or 'values'.
+    iterator_method_alias = None
 
     # FIXME: support Iterable in partial interfaces. However, we don't
     # need to support iterator overloads between interface and
@@ -602,11 +609,19 @@ def methods_context(interface):
 
             # For value iterators, the |entries|, |forEach|, |keys| and |values| are originally set
             # to corresponding properties in %ArrayPrototype%.
+            # For pair iterators and maplike declarations, |entries| is an alias for @@iterator
+            # itself. For setlike declarations, |values| is an alias for @@iterator.
             if not is_value_iterator:
+                if not interface.setlike:
+                    iterator_method_alias = 'entries'
+                    entries_or_values_method = generated_iterator_method('values')
+                else:
+                    iterator_method_alias = 'values'
+                    entries_or_values_method = generated_iterator_method('entries')
+
                 non_overridable_methods.extend([
                     generated_iterator_method('keys'),
-                    generated_iterator_method('values'),
-                    generated_iterator_method('entries'),
+                    entries_or_values_method,
 
                     # void forEach(Function callback, [Default=Undefined] optional any thisArg)
                     generated_method(IdlType('void'), 'forEach',
@@ -733,7 +748,11 @@ def methods_context(interface):
         method['length'] = (method['overloads']['length'] if 'overloads' in method else
                             method['number_of_required_arguments'])
 
-    return methods, iterator_method
+    return {
+        'iterator_method': iterator_method,
+        'iterator_method_alias': iterator_method_alias,
+        'methods': methods,
+    }
 
 
 def reflected_name(constant_name):

@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 #include "bindings/core/v8/Dictionary.h"
+#include "bindings/core/v8/ExceptionState.h"
 #include "bindings/core/v8/ScriptPromise.h"
 #include "bindings/core/v8/ScriptPromiseResolver.h"
 #include "core/dom/DOMException.h"
@@ -15,8 +16,10 @@
 #include "core/dom/ExecutionContext.h"
 #include "core/frame/Frame.h"
 #include "core/frame/UseCounter.h"
+#include "core/inspector/ConsoleMessage.h"
 #include "core/page/FrameTree.h"
 #include "modules/credentialmanager/Credential.h"
+#include "modules/credentialmanager/CredentialCreationOptions.h"
 #include "modules/credentialmanager/CredentialManagerClient.h"
 #include "modules/credentialmanager/CredentialRequestOptions.h"
 #include "modules/credentialmanager/FederatedCredential.h"
@@ -28,6 +31,7 @@
 #include "public/platform/WebCredential.h"
 #include "public/platform/WebCredentialManagerClient.h"
 #include "public/platform/WebCredentialManagerError.h"
+#include "public/platform/WebCredentialMediationRequirement.h"
 #include "public/platform/WebFederatedCredential.h"
 #include "public/platform/WebPasswordCredential.h"
 
@@ -168,6 +172,27 @@ ScriptPromise CredentialsContainer::get(
   if (!CheckBoilerplate(resolver))
     return promise;
 
+  ExecutionContext* context = ExecutionContext::From(script_state);
+  // Set the default mediation option if none is provided.
+  // If both 'unmediated' and 'mediation' are set log a warning if they are
+  // contradicting.
+  // Also sets 'mediation' appropriately when only 'unmediated' is set.
+  // TODO(http://crbug.com/715077): Remove this when 'unmediated' is removed.
+  String mediation = "optional";
+  if (options.hasUnmediated() && !options.hasMediation()) {
+    mediation = options.unmediated() ? "silent" : "optional";
+  } else if (options.hasMediation()) {
+    mediation = options.mediation();
+    if (options.hasUnmediated() &&
+        ((options.unmediated() && options.mediation() != "silent") ||
+         (!options.unmediated() && options.mediation() != "optional"))) {
+      context->AddConsoleMessage(ConsoleMessage::Create(
+          kJSMessageSource, kWarningMessageLevel,
+          "mediation: '" + options.mediation() + "' overrides unmediated: " +
+              (options.unmediated() ? "true" : "false") + "."));
+    }
+  }
+
   Vector<KURL> providers;
   if (options.hasFederated() && options.federated().hasProviders()) {
     for (const auto& string : options.federated().providers()) {
@@ -177,14 +202,26 @@ ScriptPromise CredentialsContainer::get(
     }
   }
 
-  UseCounter::Count(ExecutionContext::From(script_state),
-                    options.unmediated()
-                        ? UseCounter::kCredentialManagerGetWithoutUI
-                        : UseCounter::kCredentialManagerGetWithUI);
+  WebCredentialMediationRequirement requirement;
 
-  CredentialManagerClient::From(ExecutionContext::From(script_state))
-      ->DispatchGet(options.unmediated(), options.password(), providers,
-                    new RequestCallbacks(resolver));
+  if (mediation == "silent") {
+    UseCounter::Count(context,
+                      UseCounter::kCredentialManagerGetMediationSilent);
+    requirement = WebCredentialMediationRequirement::kSilent;
+  } else if (mediation == "optional") {
+    UseCounter::Count(context,
+                      UseCounter::kCredentialManagerGetMediationOptional);
+    requirement = WebCredentialMediationRequirement::kOptional;
+  } else {
+    DCHECK_EQ("required", mediation);
+    UseCounter::Count(context,
+                      UseCounter::kCredentialManagerGetMediationRequired);
+    requirement = WebCredentialMediationRequirement::kRequired;
+  }
+
+  CredentialManagerClient::From(context)->DispatchGet(
+      requirement, options.password(), providers,
+      new RequestCallbacks(resolver));
   return promise;
 }
 
@@ -199,6 +236,41 @@ ScriptPromise CredentialsContainer::store(ScriptState* script_state,
       WebCredential::Create(credential->GetPlatformCredential());
   CredentialManagerClient::From(ExecutionContext::From(script_state))
       ->DispatchStore(*web_credential, new NotificationCallbacks(resolver));
+  return promise;
+}
+
+ScriptPromise CredentialsContainer::create(
+    ScriptState* script_state,
+    const CredentialCreationOptions& options,
+    ExceptionState& exception_state) {
+  ScriptPromiseResolver* resolver = ScriptPromiseResolver::Create(script_state);
+  ScriptPromise promise = resolver->Promise();
+  if (!CheckBoilerplate(resolver))
+    return promise;
+
+  // TODO(http://crbug.com/715077): Generalize this check when 'publicKey'
+  // becomes a supported option.
+  if (!(options.hasPassword() ^ options.hasFederated())) {
+    resolver->Reject(DOMException::Create(kNotSupportedError,
+                                          "Only 'password' and 'federated' "
+                                          "credential types are currently "
+                                          "supported."));
+    return promise;
+  }
+
+  if (options.hasPassword()) {
+    if (options.password().isPasswordCredentialData()) {
+      resolver->Resolve(PasswordCredential::Create(
+          options.password().getAsPasswordCredentialData(), exception_state));
+    } else {
+      resolver->Resolve(PasswordCredential::Create(
+          options.password().getAsHTMLFormElement(), exception_state));
+    }
+  } else {
+    resolver->Resolve(
+        FederatedCredential::Create(options.federated(), exception_state));
+  }
+
   return promise;
 }
 

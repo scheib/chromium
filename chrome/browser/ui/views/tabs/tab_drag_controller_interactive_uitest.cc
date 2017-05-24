@@ -68,7 +68,6 @@
 #include "ash/test/immersive_fullscreen_controller_test_api.h"
 #include "ash/wm/root_window_finder.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_window.h"
 #include "chrome/browser/ui/views/frame/immersive_mode_controller.h"

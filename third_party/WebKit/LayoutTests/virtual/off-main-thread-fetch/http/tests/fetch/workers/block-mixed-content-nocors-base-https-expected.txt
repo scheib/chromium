@@ -1,9 +1,0 @@
-This is a testharness.js-based test.
-PASS Startup 
-FAIL Mixed content fetch (no-cors, HTTPS->HTTP) assert_unreached: unexpected fulfillment: [object Response] Reached unreachable code
-FAIL Mixed content redirect (no-cors, HTTPS->HTTPS->HTTP) assert_unreached: unexpected fulfillment: [object Response] Reached unreachable code
-FAIL Mixed content redirect no-cors, HTTPS->HTTP->HTTPS) assert_unreached: unexpected fulfillment: [object Response] Reached unreachable code
-PASS Same origin redirect (no-cors, HTTPS->HTTPS->HTTPS) 
-PASS Cross origin redirect (no-cors, HTTPS->HTTPS->HTTPS 
-Harness: the test ran to completion.
-

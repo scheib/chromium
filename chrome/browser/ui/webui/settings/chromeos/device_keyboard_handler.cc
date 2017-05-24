@@ -75,9 +75,7 @@ void KeyboardHandler::UpdateShowKeys() {
   const base::Value has_diamond_key(
       base::CommandLine::ForCurrentProcess()->HasSwitch(
           chromeos::switches::kHasChromeOSDiamondKey));
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("show-keys-changed"), has_caps_lock,
-                         has_diamond_key);
+  FireWebUIListener("show-keys-changed", has_caps_lock, has_diamond_key);
 }
 
 }  // namespace settings

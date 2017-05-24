@@ -138,6 +138,7 @@ class WEB_EXPORT ChromeClientImpl final : public ChromeClient {
   void OpenFileChooser(LocalFrame*, PassRefPtr<FileChooser>) override;
   void EnumerateChosenDirectory(FileChooser*) override;
   void SetCursor(const Cursor&, LocalFrame*) override;
+  void SetCursorOverridden(bool) override;
   Cursor LastSetCursorForTesting() const override;
   // The client keeps track of which touch/mousewheel event types have handlers,
   // and if they do, whether the handlers are passive and/or blocking. This
@@ -180,7 +181,6 @@ class WEB_EXPORT ChromeClientImpl final : public ChromeClient {
 
   // ChromeClientImpl:
   void SetNewWindowNavigationPolicy(WebNavigationPolicy);
-  void SetCursorOverridden(bool);
 
   bool HasOpenedPopup() const override;
   PopupMenu* OpenPopupMenu(LocalFrame&, HTMLSelectElement&) override;

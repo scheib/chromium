@@ -93,7 +93,7 @@ class ASH_EXPORT PaletteTray : public TrayBackgroundView,
 
   // PaletteToolManager::Delegate:
   void OnActiveToolChanged() override;
-  WmWindow* GetWindow() override;
+  aura::Window* GetWindow() override;
 
   // Updates the tray icon from the palette tool manager.
   void UpdateTrayIcon();

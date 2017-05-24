@@ -302,6 +302,7 @@ TEST_F(CreditCardFieldTest, ParseExpMonthYear2) {
 }
 
 typedef struct {
+  const std::string cc_fields_form_control_type;
   const std::string label;
   const int max_length;
   const ServerFieldType expected_prediction;
@@ -326,6 +327,7 @@ TEST_P(ParseExpFieldTest, ParseExpField) {
   list_.push_back(
       base::MakeUnique<AutofillField>(field, ASCIIToUTF16("name1")));
 
+  field.form_control_type = test_case.cc_fields_form_control_type;
   field.label = ASCIIToUTF16("Card Number");
   field.name = ASCIIToUTF16("card_number");
   list_.push_back(base::MakeUnique<AutofillField>(field, ASCIIToUTF16("num2")));
@@ -375,68 +377,140 @@ INSTANTIATE_TEST_CASE_P(
     CreditCardFieldTest,
     ParseExpFieldTest,
     testing::Values(
+        // CC fields input_type="text"
         // General label, no maxlength.
-        ParseExpFieldTestCase{"Expiration Date", 0,
+        ParseExpFieldTestCase{"text", "Expiration Date", 0,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
         // General label, maxlength 4.
-        ParseExpFieldTestCase{"Expiration Date", 4,
+        ParseExpFieldTestCase{"text", "Expiration Date", 4,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
         // General label, maxlength 5.
-        ParseExpFieldTestCase{"Expiration Date", 5,
+        ParseExpFieldTestCase{"text", "Expiration Date", 5,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
         // General label, maxlength 6.
-        ParseExpFieldTestCase{"Expiration Date", 6,
+        ParseExpFieldTestCase{"text", "Expiration Date", 6,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
         // General label, maxlength 7.
-        ParseExpFieldTestCase{"Expiration Date", 7,
+        ParseExpFieldTestCase{"text", "Expiration Date", 7,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
         // General label, large maxlength.
-        ParseExpFieldTestCase{"Expiration Date", 12,
+        ParseExpFieldTestCase{"text", "Expiration Date", 12,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
 
         // Unsupported maxlength, general label.
-        ParseExpFieldTestCase{"Expiration Date", 3, UNKNOWN_TYPE},
+        ParseExpFieldTestCase{"text", "Expiration Date", 3, UNKNOWN_TYPE},
         // Unsupported maxlength, two digit year label.
-        ParseExpFieldTestCase{"Expiration Date (MM/YY)", 3, UNKNOWN_TYPE},
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YY)", 3,
+                              UNKNOWN_TYPE},
         // Unsupported maxlength, four digit year label.
-        ParseExpFieldTestCase{"Expiration Date (MM/YYYY)", 3, UNKNOWN_TYPE},
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YYYY)", 3,
+                              UNKNOWN_TYPE},
 
         // Two digit year, simple label.
-        ParseExpFieldTestCase{"MM / YY", 0, CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        ParseExpFieldTestCase{"text", "MM / YY", 0,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
         // Two digit year, with slash (MM/YY).
-        ParseExpFieldTestCase{"Expiration Date (MM/YY)", 0,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YY)", 0,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
         // Two digit year, no slash (MMYY).
-        ParseExpFieldTestCase{"Expiration Date (MMYY)", 4,
+        ParseExpFieldTestCase{"text", "Expiration Date (MMYY)", 4,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
         // Two digit year, with slash and maxlength (MM/YY).
-        ParseExpFieldTestCase{"Expiration Date (MM/YY)", 5,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YY)", 5,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
         // Two digit year, with slash and large maxlength (MM/YY).
-        ParseExpFieldTestCase{"Expiration Date (MM/YY)", 12,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YY)", 12,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
 
         // Four digit year, simple label.
-        ParseExpFieldTestCase{"MM / YYYY", 0,
+        ParseExpFieldTestCase{"text", "MM / YYYY", 0,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
         // Four digit year, with slash (MM/YYYY).
-        ParseExpFieldTestCase{"Expiration Date (MM/YYYY)", 0,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YYYY)", 0,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
         // Four digit year, no slash (MMYYYY).
-        ParseExpFieldTestCase{"Expiration Date (MMYYYY)", 6,
+        ParseExpFieldTestCase{"text", "Expiration Date (MMYYYY)", 6,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
         // Four digit year, with slash and maxlength (MM/YYYY).
-        ParseExpFieldTestCase{"Expiration Date (MM/YYYY)", 7,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YYYY)", 7,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
         // Four digit year, with slash and large maxlength (MM/YYYY).
-        ParseExpFieldTestCase{"Expiration Date (MM/YYYY)", 12,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YYYY)", 12,
                               CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
 
         // Four digit year label with restrictive maxlength (4).
-        ParseExpFieldTestCase{"Expiration Date (MM/YYYY)", 4,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YYYY)", 4,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
         // Four digit year label with restrictive maxlength (5).
-        ParseExpFieldTestCase{"Expiration Date (MM/YYYY)", 5,
+        ParseExpFieldTestCase{"text", "Expiration Date (MM/YYYY)", 5,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+
+        // CC fields input_type="number"
+        // General label, no maxlength.
+        ParseExpFieldTestCase{"number", "Expiration Date", 0,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+        // General label, maxlength 4.
+        ParseExpFieldTestCase{"number", "Expiration Date", 4,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        // General label, maxlength 5.
+        ParseExpFieldTestCase{"number", "Expiration Date", 5,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        // General label, maxlength 6.
+        ParseExpFieldTestCase{"number", "Expiration Date", 6,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+        // General label, maxlength 7.
+        ParseExpFieldTestCase{"number", "Expiration Date", 7,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+        // General label, large maxlength.
+        ParseExpFieldTestCase{"number", "Expiration Date", 12,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+
+        // Unsupported maxlength, general label.
+        ParseExpFieldTestCase{"number", "Expiration Date", 3, UNKNOWN_TYPE},
+        // Unsupported maxlength, two digit year label.
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YY)", 3,
+                              UNKNOWN_TYPE},
+        // Unsupported maxlength, four digit year label.
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YYYY)", 3,
+                              UNKNOWN_TYPE},
+
+        // Two digit year, simple label.
+        ParseExpFieldTestCase{"number", "MM / YY", 0,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        // Two digit year, with slash (MM/YY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YY)", 0,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        // Two digit year, no slash (MMYY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MMYY)", 4,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        // Two digit year, with slash and maxlength (MM/YY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YY)", 5,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        // Two digit year, with slash and large maxlength (MM/YY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YY)", 12,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+
+        // Four digit year, simple label.
+        ParseExpFieldTestCase{"number", "MM / YYYY", 0,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+        // Four digit year, with slash (MM/YYYY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YYYY)", 0,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+        // Four digit year, no slash (MMYYYY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MMYYYY)", 6,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+        // Four digit year, with slash and maxlength (MM/YYYY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YYYY)", 7,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+        // Four digit year, with slash and large maxlength (MM/YYYY).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YYYY)", 12,
+                              CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR},
+
+        // Four digit year label with restrictive maxlength (4).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YYYY)", 4,
+                              CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR},
+        // Four digit year label with restrictive maxlength (5).
+        ParseExpFieldTestCase{"number", "Expiration Date (MM/YYYY)", 5,
                               CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR}));
 
 TEST_F(CreditCardFieldTest, ParseCreditCardHolderNameWithCCFullName) {

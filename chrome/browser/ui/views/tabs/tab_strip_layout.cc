@@ -25,7 +25,8 @@ void CalculateNormalTabWidths(const TabSizeInfo& tab_size_info,
                               int* inactive_width) {
   DCHECK_NE(0, num_normal_tabs);
 
-  *inactive_width = tab_size_info.min_inactive_width;
+  const int min_inactive_width = tab_size_info.min_inactive_width;
+  *inactive_width = min_inactive_width;
   *active_width = tab_size_info.min_active_width;
 
   // Calculate the desired tab widths by dividing the available space into equal
@@ -35,8 +36,7 @@ void CalculateNormalTabWidths(const TabSizeInfo& tab_size_info,
   const int desired_tab_width =
       std::min((normal_width + total_overlap) / num_normal_tabs,
                tab_size_info.max_size.width());
-  *inactive_width =
-      std::max(desired_tab_width, tab_size_info.min_inactive_width);
+  *inactive_width = std::max(desired_tab_width, min_inactive_width);
   *active_width = std::max(desired_tab_width, tab_size_info.min_active_width);
 
   // |desired_tab_width| was calculated assuming the active and inactive tabs
@@ -46,7 +46,7 @@ void CalculateNormalTabWidths(const TabSizeInfo& tab_size_info,
       num_normal_tabs > 1) {
     *inactive_width = std::max(
         (normal_width + total_overlap - *active_width) / (num_normal_tabs - 1),
-        tab_size_info.min_inactive_width);
+        min_inactive_width);
   }
 }
 

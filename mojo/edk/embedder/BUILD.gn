@@ -15,6 +15,7 @@ source_set("headers") {
     "named_platform_handle.h",
     "named_platform_handle_utils.h",
     "outgoing_broker_client_invitation.h",
+    "peer_connection.h",
     "platform_channel_pair.h",
     "platform_handle.h",
     "platform_handle_utils.h",
@@ -45,6 +46,7 @@ source_set("embedder") {
     "entrypoints.h",
     "incoming_broker_client_invitation.cc",
     "outgoing_broker_client_invitation.cc",
+    "peer_connection.cc",
     "scoped_ipc_support.cc",
 
     # Test-only code:

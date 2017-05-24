@@ -1732,7 +1732,7 @@ def _CheckUselessForwardDeclarations(input_api, output_api):
         for decl in useless_fwd_decls:
           if input_api.re.search(r'\b%s\b' % decl, line[1:]):
             results.append(output_api.PresubmitPromptWarning(
-              '%s: %s forward declaration is becoming useless' %
+              '%s: %s forward declaration is no longer needed' %
               (f.LocalPath(), decl)))
             useless_fwd_decls.remove(decl)
 
@@ -2059,26 +2059,6 @@ def _CheckSingletonInHeaders(input_api, output_api):
   return []
 
 
-def _CheckNoDeprecatedCompiledResourcesGyp(input_api, output_api):
-  """Checks for old style compiled_resources.gyp files."""
-  is_compiled_resource = lambda fp: fp.endswith('compiled_resources.gyp')
-
-  added_compiled_resources = filter(is_compiled_resource, [
-    f.LocalPath() for f in input_api.AffectedFiles() if f.Action() == 'A'
-  ])
-
-  if not added_compiled_resources:
-    return []
-
-  return [output_api.PresubmitError(
-      "Found new compiled_resources.gyp files:\n%s\n\n"
-      "compiled_resources.gyp files are deprecated,\n"
-      "please use compiled_resources2.gyp instead:\n"
-      "https://chromium.googlesource.com/chromium/src/+/master/docs/closure_compilation.md"
-      %
-      "\n".join(added_compiled_resources))]
-
-
 _DEPRECATED_CSS = [
   # Values
   ( "-webkit-box", "flex" ),
@@ -2234,7 +2214,6 @@ def _CommonChecks(input_api, output_api):
   results.extend(_CheckForIPCRules(input_api, output_api))
   results.extend(_CheckForWindowsLineEndings(input_api, output_api))
   results.extend(_CheckSingletonInHeaders(input_api, output_api))
-  results.extend(_CheckNoDeprecatedCompiledResourcesGyp(input_api, output_api))
   results.extend(_CheckPydepsNeedsUpdating(input_api, output_api))
   results.extend(_CheckJavaStyle(input_api, output_api))
   results.extend(_CheckIpcOwners(input_api, output_api))

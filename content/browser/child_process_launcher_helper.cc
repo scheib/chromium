@@ -4,6 +4,7 @@
 
 #include "content/browser/child_process_launcher_helper.h"
 
+#include "base/command_line.h"
 #include "base/metrics/histogram_macros.h"
 #include "content/browser/child_process_launcher.h"
 #include "content/public/common/content_switches.h"

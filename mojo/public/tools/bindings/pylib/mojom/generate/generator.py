@@ -25,9 +25,9 @@ def ToCamel(identifier, lower_initial=False, dilimiter='_'):
   if |lower_initial| is set to True), and joins the words. Please note that for
   each word, all the characters except the first one are untouched.
   """
-  result = ''.join(
-      word[0].upper() + word[1:] for word in identifier.split(dilimiter))
-  if lower_initial:
+  result = ''.join(word[0].upper() + word[1:]
+      for word in identifier.split(dilimiter) if word)
+  if lower_initial and result:
     result = result[0].lower() + result[1:]
   return result
 

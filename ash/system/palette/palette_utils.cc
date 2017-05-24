@@ -10,7 +10,6 @@
 #include "ash/shell.h"
 #include "ash/system/palette/palette_tray.h"
 #include "ash/system/status_area_widget.h"
-#include "ash/wm_window.h"
 #include "base/command_line.h"
 #include "ui/display/display.h"
 #include "ui/events/devices/input_device_manager.h"

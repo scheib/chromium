@@ -21,6 +21,7 @@
 #include "net/proxy/proxy_server.h"
 #include "net/proxy/proxy_service.h"
 #include "net/socket/socket_test_util.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/url_request.h"
 #include "net/url_request/url_request_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -177,8 +178,8 @@ TEST(ChromeNetworkDailyDataSavingMetricsTest,
     mock_socket_factory.AddSocketDataProvider(&socket_data_provider);
 
     net::TestDelegate delegate;
-    std::unique_ptr<net::URLRequest> request =
-        context.CreateRequest(test_case.url, net::IDLE, &delegate);
+    std::unique_ptr<net::URLRequest> request = context.CreateRequest(
+        test_case.url, net::IDLE, &delegate, TRAFFIC_ANNOTATION_FOR_TESTS);
     request->SetLoadFlags(test_case.load_flags);
     request->Start();
     test_context->RunUntilIdle();

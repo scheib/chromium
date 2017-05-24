@@ -27,6 +27,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/display/display.h"
+#include "ui/display/screen.h"
 #include "ui/events/devices/input_device_manager.h"
 #include "ui/events/devices/stylus_state.h"
 #include "ui/gfx/color_palette.h"
@@ -72,8 +73,8 @@ bool IsInUserSession() {
 // display if requested from the command line.
 bool ShouldShowOnDisplay(PaletteTray* palette_tray) {
   const display::Display& display =
-      WmWindow::Get(palette_tray->GetWidget()->GetNativeWindow())
-          ->GetDisplayNearestWindow();
+      display::Screen::GetScreen()->GetDisplayNearestWindow(
+          palette_tray->GetWidget()->GetNativeWindow());
   return display.IsInternal() ||
          palette_utils::IsPaletteEnabledOnEveryDisplay();
 }
@@ -308,8 +309,7 @@ void PaletteTray::OnBeforeBubbleWidgetInit(
     views::Widget* bubble_widget,
     views::Widget::InitParams* params) const {
   // Place the bubble in the same root window as |anchor_widget|.
-  WmWindow::Get(anchor_widget->GetNativeWindow())
-      ->GetRootWindowController()
+  RootWindowController::ForWindow(anchor_widget->GetNativeWindow())
       ->ConfigureWidgetInitParamsForContainer(
           bubble_widget, kShellWindowId_SettingBubbleContainer, params);
 }
@@ -358,8 +358,8 @@ void PaletteTray::OnActiveToolChanged() {
   UpdateTrayIcon();
 }
 
-WmWindow* PaletteTray::GetWindow() {
-  return shelf()->GetWindow();
+aura::Window* PaletteTray::GetWindow() {
+  return shelf()->GetWindow()->aura_window();
 }
 
 void PaletteTray::AnchorUpdated() {

@@ -292,12 +292,7 @@ UsbServiceWin::UsbServiceWin()
 }
 
 UsbServiceWin::~UsbServiceWin() {
-  DCHECK(!helper_);
-}
-
-void UsbServiceWin::Shutdown() {
   blocking_task_runner()->DeleteSoon(FROM_HERE, helper_.release());
-  UsbService::Shutdown();
 }
 
 void UsbServiceWin::GetDevices(const GetDevicesCallback& callback) {

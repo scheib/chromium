@@ -505,7 +505,7 @@ source_set("unit_tests") {
     "//net:test_support",
     "//storage/browser:test_support",
     "//third_party/leveldatabase",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:zip",
   ]
 
   if (is_chromeos) {

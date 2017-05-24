@@ -28,8 +28,6 @@
 [
     Exposed=(Window,Worker),
 ] interface IDBFactory {
-    [CallWith=ScriptState, ImplementedAs=getDatabaseNames, RaisesException, DeprecateAs=V8IDBFactory_WebkitGetDatabaseNames_Method] IDBRequest webkitGetDatabaseNames();
-
     [NewObject, CallWith=ScriptState, RaisesException] IDBOpenDBRequest open(DOMString name,
                                                                              [EnforceRange] optional unsigned long long version);
     [NewObject, CallWith=ScriptState, RaisesException] IDBOpenDBRequest deleteDatabase(DOMString name);

@@ -7,6 +7,8 @@
 
 #include <string>
 
+#include "components/autofill/core/browser/field_types.h"
+
 namespace base {
 class ListValue;
 class DictionaryValue;
@@ -57,6 +59,11 @@ extern const char kShortField[];
 
 // AddressUiComponent::HINT_LONG.
 extern const char kLongField[];
+
+// Converts a field type in string format as returned by
+// autofill::GetAddressComponents into the appropriate autofill::ServerFieldType
+// enum.
+ServerFieldType GetFieldTypeFromString(const std::string& type);
 
 // Fills |components| with the address UI components that should be used to
 // input an address for |country_code| when UI BCP 47 language code is

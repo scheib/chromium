@@ -5,6 +5,8 @@
 #ifndef IOS_WEB_PUBLIC_WEB_STATE_NAVIGATION_CONTEXT_H_
 #define IOS_WEB_PUBLIC_WEB_STATE_NAVIGATION_CONTEXT_H_
 
+#import <Foundation/Foundation.h>
+
 class GURL;
 
 namespace net {
@@ -35,8 +37,8 @@ class NavigationContext {
   // * same document history navigation
   virtual bool IsSameDocument() const = 0;
 
-  // Whether the navigation resulted in an error page.
-  virtual bool IsErrorPage() const = 0;
+  // Returns error if the navigation has failed.
+  virtual NSError* GetError() const = 0;
 
   // Returns the response headers for the request, or null if there aren't any
   // response headers or they have not been received yet. The response headers

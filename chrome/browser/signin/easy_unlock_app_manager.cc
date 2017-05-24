@@ -17,6 +17,7 @@
 #include "chrome/browser/ui/extensions/application_launch.h"
 #include "chrome/common/extensions/api/easy_unlock_private.h"
 #include "chrome/common/extensions/extension_constants.h"
+#include "components/proximity_auth/logging/logging.h"
 #include "components/proximity_auth/switches.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_system.h"
@@ -78,15 +79,20 @@ void EasyUnlockAppManagerImpl::EnsureReady(
 }
 
 void EasyUnlockAppManagerImpl::LaunchSetup() {
+  PA_LOG(WARNING) << "LaunchSetup()";
   ExtensionService* extension_service = extension_system_->extension_service();
   if (!extension_service)
     return;
+  PA_LOG(WARNING) << "got extension service";
 
   const extensions::Extension* extension =
       extension_service->GetExtensionById(app_id_, false);
-  if (!extension)
+  if (!extension) {
+    PA_LOG(WARNING) << "No extension";
     return;
+  }
 
+  PA_LOG(WARNING) << "launching app...";
   OpenApplication(AppLaunchParams(extension_service->profile(), extension,
                                   extensions::LAUNCH_CONTAINER_WINDOW,
                                   WindowOpenDisposition::NEW_WINDOW,

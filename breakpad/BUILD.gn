@@ -195,7 +195,7 @@ if (!is_win) {
 
       deps = [
         ":stackwalk_common",
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
 
       defines = [ "BPLOG_MINIMUM_SEVERITY=SEVERITY_ERROR" ]
@@ -215,7 +215,7 @@ if (!is_win) {
 
       deps = [
         ":stackwalk_common",
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
 
       defines = [ "BPLOG_MINIMUM_SEVERITY=SEVERITY_ERROR" ]
@@ -260,7 +260,7 @@ if (!is_win) {
       configs += [ "//build/config/compiler:no_chromium_code" ]
 
       deps = [
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
     }
   } else {
@@ -340,7 +340,7 @@ if (is_mac) {
       }
 
       deps = [
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
     }
 
@@ -358,7 +358,7 @@ if (is_mac) {
       configs += [ "//build/config/compiler:no_chromium_code" ]
 
       deps = [
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
     }
   } else {
@@ -430,7 +430,7 @@ if (is_mac) {
 
     deps = [
       ":utilities",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
   }
 
@@ -493,7 +493,7 @@ if (is_linux || is_android) {
       libs = [ "dl" ]
 
       deps = [
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
     }
 
@@ -556,7 +556,7 @@ if (is_linux || is_android) {
       include_dirs = [ "src" ]
 
       deps = [
-        "//build/config/sanitizers:deps",
+        "//build/config:exe_and_shlib_deps",
       ]
     }
   } else {
@@ -721,7 +721,7 @@ if (is_linux || is_android) {
       ":client",
       ":linux_dumper_unittest_helper",
       ":processor_support",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//testing/gmock",
       "//testing/gtest",
       "//testing/gtest:gtest_main",
@@ -768,7 +768,7 @@ if (is_linux || is_android) {
     ]
     deps = [
       ":processor_support",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
 
     configs += [ ":client_config" ]
@@ -790,7 +790,7 @@ if (is_linux || is_android) {
 
     deps = [
       ":client",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
 
     if (is_android) {
@@ -808,7 +808,7 @@ if (is_linux || is_android) {
 
     deps = [
       ":client",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
   }
 
@@ -820,7 +820,7 @@ if (is_linux || is_android) {
 
     deps = [
       ":client",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
 
     include_dirs = [ "src" ]

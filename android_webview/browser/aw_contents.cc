@@ -23,7 +23,6 @@
 #include "android_webview/browser/child_frame.h"
 #include "android_webview/browser/deferred_gpu_command_service.h"
 #include "android_webview/browser/java_browser_view_renderer_helper.h"
-#include "android_webview/browser/net_disk_cache_remover.h"
 #include "android_webview/browser/permission/aw_permission_request.h"
 #include "android_webview/browser/permission/permission_request_handler.h"
 #include "android_webview/browser/permission/simple_permission_request.h"
@@ -59,6 +58,7 @@
 #include "content/public/browser/android/content_view_core.h"
 #include "content/public/browser/android/synchronous_compositor.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/favicon_status.h"
 #include "content/public/browser/interstitial_page.h"
@@ -711,8 +711,16 @@ void AwContents::ClearCache(JNIEnv* env,
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   render_view_host_ext_->ClearCache();
 
-  if (include_disk_files)
-    RemoveHttpDiskCache(web_contents_->GetRenderProcessHost());
+  if (include_disk_files) {
+    content::BrowsingDataRemover* remover =
+        content::BrowserContext::GetBrowsingDataRemover(
+            web_contents_->GetBrowserContext());
+    remover->Remove(
+        base::Time(), base::Time::Max(),
+        content::BrowsingDataRemover::DATA_TYPE_CACHE,
+        content::BrowsingDataRemover::ORIGIN_TYPE_UNPROTECTED_WEB |
+            content::BrowsingDataRemover::ORIGIN_TYPE_PROTECTED_WEB);
+  }
 }
 
 void AwContents::KillRenderProcess(JNIEnv* env,

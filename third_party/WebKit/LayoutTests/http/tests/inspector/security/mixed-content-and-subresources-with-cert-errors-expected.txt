@@ -5,7 +5,7 @@ Tests addition of explanation when there was both mixed content and subresources
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Active Mixed Content
+Active mixed content
         </DIV>
         <DIV >
 You have recently allowed non-secure content (such as scripts or iframes) to run on this site.
@@ -20,7 +20,7 @@ Reload the page to record requests for HTTP resources.
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Mixed Content
+Mixed content
         </DIV>
         <DIV >
 The site includes HTTP resources.

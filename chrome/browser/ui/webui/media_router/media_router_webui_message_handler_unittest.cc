@@ -168,13 +168,11 @@ class MediaRouterWebUIMessageHandlerTest : public MediaRouterWebUITest {
 
   // Gets the call data for the function call made to |web_ui_|. There needs
   // to be one call made, and its function name must be |function_name|.
-  const content::TestWebUI::CallData& GetCallData(
-      const std::string& function_name) {
-    EXPECT_EQ(1u, web_ui_->call_data().size());
+  const base::Value* GetCallData(const std::string& function_name) {
+    CHECK(1u == web_ui_->call_data().size());
     const content::TestWebUI::CallData& call_data = *web_ui_->call_data()[0];
-    EXPECT_EQ(function_name, call_data.function_name());
-
-    return call_data;
+    CHECK(function_name == call_data.function_name());
+    return call_data.arg1();
   }
 
   // Gets the dictionary passed into a call to the |web_ui_| as the argument.
@@ -182,12 +180,19 @@ class MediaRouterWebUIMessageHandlerTest : public MediaRouterWebUITest {
   // |function_name|.
   const base::DictionaryValue* ExtractDictFromCallArg(
       const std::string& function_name) {
-    const content::TestWebUI::CallData& call_data = GetCallData(function_name);
-    const base::Value* arg1 = call_data.arg1();
     const base::DictionaryValue* dict_value = nullptr;
-    CHECK(arg1->GetAsDictionary(&dict_value));
-
+    CHECK(GetCallData(function_name)->GetAsDictionary(&dict_value));
     return dict_value;
+  }
+
+  // Gets the list passed into a call to the |web_ui_| as the argument.
+  // There needs to be one call made, and its function name must be
+  // |function_name|.
+  const base::ListValue* ExtractListFromCallArg(
+      const std::string& function_name) {
+    const base::ListValue* list_value = nullptr;
+    CHECK(GetCallData(function_name)->GetAsList(&list_value));
+    return list_value;
   }
 
   // Gets the first element of the list passed in as the argument to a call to
@@ -195,13 +200,10 @@ class MediaRouterWebUIMessageHandlerTest : public MediaRouterWebUITest {
   // function name must be |function_name|.
   const base::DictionaryValue* ExtractDictFromListFromCallArg(
       const std::string& function_name) {
-    const content::TestWebUI::CallData& call_data = GetCallData(function_name);
-    const base::Value* arg1 = call_data.arg1();
     const base::ListValue* list_value = nullptr;
-    CHECK(arg1->GetAsList(&list_value));
+    CHECK(GetCallData(function_name)->GetAsList(&list_value));
     const base::DictionaryValue* dict_value = nullptr;
     CHECK(list_value->GetDictionary(0, &dict_value));
-
     return dict_value;
   }
 
@@ -382,6 +384,26 @@ TEST_F(MediaRouterWebUIMessageHandlerTest, UpdateRoutesIncognito) {
       route_value->GetString("customControllerPath", &custom_controller_path));
 }
 
+TEST_F(MediaRouterWebUIMessageHandlerTest, SetCastModesList) {
+  CastModeSet cast_modes({MediaCastMode::DEFAULT, MediaCastMode::TAB_MIRROR,
+                          MediaCastMode::DESKTOP_MIRROR});
+  handler_->UpdateCastModes(cast_modes, "www.host.com", MediaCastMode::DEFAULT);
+  const base::ListValue* set_cast_mode_list =
+      ExtractListFromCallArg("media_router.ui.setCastModeList");
+
+  const base::DictionaryValue* cast_mode = nullptr;
+  size_t index = 0;
+  for (auto i = cast_modes.begin(); i != cast_modes.end(); i++) {
+    CHECK(set_cast_mode_list->GetDictionary(index++, &cast_mode));
+    EXPECT_EQ(static_cast<int>(*i), GetIntegerFromDict(cast_mode, "type"));
+    EXPECT_EQ(MediaCastModeToDescription(*i, "www.host.com"),
+              GetStringFromDict(cast_mode, "description"));
+    EXPECT_EQ("www.host.com", GetStringFromDict(cast_mode, "host"));
+    EXPECT_EQ(*i == MediaCastMode::DEFAULT,
+              GetBooleanFromDict(cast_mode, "isForced"));
+  }
+}
+
 TEST_F(MediaRouterWebUIMessageHandlerTest, UpdateMediaRouteStatus) {
   MediaStatus status;
   status.title = "test title";
@@ -422,11 +444,13 @@ TEST_F(MediaRouterWebUIMessageHandlerTest, OnCreateRouteResponseReceived) {
   EXPECT_CALL(*mock_media_router_ui_, GetRouteProviderExtensionId())
       .WillOnce(ReturnRef(provider_extension_id()));
   handler_->OnCreateRouteResponseReceived(route.media_sink_id(), &route);
-  const content::TestWebUI::CallData& call_data =
-      GetCallData("media_router.ui.onCreateRouteResponseReceived");
-  const base::Value* sink_id_value = nullptr;
+
+  const content::TestWebUI::CallData& call_data = *web_ui_->call_data()[0];
+  EXPECT_EQ("media_router.ui.onCreateRouteResponseReceived",
+            call_data.function_name());
+  std::string sink_id_value;
   ASSERT_TRUE(call_data.arg1()->GetAsString(&sink_id_value));
-  EXPECT_EQ(route.media_sink_id(), sink_id_value->GetString());
+  EXPECT_EQ(route.media_sink_id(), sink_id_value);
 
   const base::DictionaryValue* route_value = nullptr;
   ASSERT_TRUE(call_data.arg2()->GetAsDictionary(&route_value));
@@ -455,11 +479,13 @@ TEST_F(MediaRouterWebUIMessageHandlerTest,
   EXPECT_CALL(*mock_media_router_ui_, GetRouteProviderExtensionId()).WillOnce(
       ReturnRef(provider_extension_id()));
   handler_->OnCreateRouteResponseReceived(route.media_sink_id(), &route);
-  const content::TestWebUI::CallData& call_data =
-      GetCallData("media_router.ui.onCreateRouteResponseReceived");
-  const base::Value* sink_id_value = nullptr;
+
+  const content::TestWebUI::CallData& call_data = *web_ui_->call_data()[0];
+  EXPECT_EQ("media_router.ui.onCreateRouteResponseReceived",
+            call_data.function_name());
+  std::string sink_id_value;
   ASSERT_TRUE(call_data.arg1()->GetAsString(&sink_id_value));
-  EXPECT_EQ(route.media_sink_id(), sink_id_value->GetString());
+  EXPECT_EQ(route.media_sink_id(), sink_id_value);
 
   const base::DictionaryValue* route_value = nullptr;
   ASSERT_TRUE(call_data.arg2()->GetAsDictionary(&route_value));

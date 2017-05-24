@@ -26,8 +26,7 @@ script_dir = os.path.dirname(os.path.realpath(__file__))
 from_file = os.path.abspath(os.path.join(
     script_dir, os.pardir, os.pardir, 'src', 'cpp', 'res', 'messages.grdp'))
 to_file = os.path.abspath(os.path.join(
-    script_dir, os.pardir, os.pardir, os.pardir, os.pardir, 'chrome', 'app',
-   'address_input_strings.grdp'))
+    script_dir, os.pardir, os.pardir, 'chromium', 'address_input_strings.grdp'))
 
 with open(from_file, 'r') as source:
   with open(to_file, 'w') as destination:

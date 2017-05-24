@@ -95,6 +95,7 @@ component("printing") {
     "//base:i18n",
     "//base/third_party/dynamic_annotations",
     "//cc/paint",
+    "//printing/common",
     "//skia",
     "//third_party/icu",
     "//ui/gfx",

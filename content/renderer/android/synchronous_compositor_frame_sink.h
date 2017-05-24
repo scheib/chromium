@@ -86,6 +86,7 @@ class SynchronousCompositorFrameSink
   bool BindToClient(cc::CompositorFrameSinkClient* sink_client) override;
   void DetachFromClient() override;
   void SubmitCompositorFrame(cc::CompositorFrame frame) override;
+  void DidNotProduceFrame(const cc::BeginFrameAck& ack) override;
   void Invalidate() override;
 
   // Partial SynchronousCompositor API implementation.

@@ -31,6 +31,7 @@
 #include "net/base/net_errors.h"
 #include "net/base/request_priority.h"
 #include "net/http/http_response_headers.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/url_request.h"
 #include "net/url_request/url_request_context.h"
 #include "net/url_request/url_request_error_job.h"
@@ -460,7 +461,8 @@ class AppCacheURLRequestJobTest : public testing::Test {
   void Basic() {
     AppCacheStorage* storage = service_->storage();
     request_ = empty_context_->CreateRequest(GURL("http://blah/"),
-                                             net::DEFAULT_PRIORITY, nullptr);
+                                             net::DEFAULT_PRIORITY, nullptr,
+                                             TRAFFIC_ANNOTATION_FOR_TESTS);
 
     // Create an instance and see that it looks as expected.
 
@@ -484,7 +486,8 @@ class AppCacheURLRequestJobTest : public testing::Test {
   void DeliveryOrders() {
     AppCacheStorage* storage = service_->storage();
     std::unique_ptr<net::URLRequest> request(empty_context_->CreateRequest(
-        GURL("http://blah/"), net::DEFAULT_PRIORITY, nullptr));
+        GURL("http://blah/"), net::DEFAULT_PRIORITY, nullptr,
+        TRAFFIC_ANNOTATION_FOR_TESTS));
 
     // Create an instance, give it a delivery order and see that
     // it looks as expected.
@@ -530,9 +533,9 @@ class AppCacheURLRequestJobTest : public testing::Test {
                    base::Unretained(this)));
 
     AppCacheStorage* storage = service_->storage();
-    request_ = empty_context_->CreateRequest(GURL("http://blah/"),
-                                             net::DEFAULT_PRIORITY,
-                                             url_request_delegate_.get());
+    request_ = empty_context_->CreateRequest(
+        GURL("http://blah/"), net::DEFAULT_PRIORITY,
+        url_request_delegate_.get(), TRAFFIC_ANNOTATION_FOR_TESTS);
 
     // Set up to create an AppCacheURLRequestJob with orders to deliver
     // a network response.
@@ -568,9 +571,9 @@ class AppCacheURLRequestJobTest : public testing::Test {
                    base::Unretained(this)));
 
     AppCacheStorage* storage = service_->storage();
-    request_ = empty_context_->CreateRequest(GURL("http://blah/"),
-                                             net::DEFAULT_PRIORITY,
-                                             url_request_delegate_.get());
+    request_ = empty_context_->CreateRequest(
+        GURL("http://blah/"), net::DEFAULT_PRIORITY,
+        url_request_delegate_.get(), TRAFFIC_ANNOTATION_FOR_TESTS);
 
     // Setup to create an AppCacheURLRequestJob with orders to deliver
     // a network response.
@@ -620,9 +623,9 @@ class AppCacheURLRequestJobTest : public testing::Test {
 
   void RequestAppCachedResource(bool start_after_delivery_orders) {
     AppCacheStorage* storage = service_->storage();
-    request_ = empty_context_->CreateRequest(GURL("http://blah/"),
-                                             net::DEFAULT_PRIORITY,
-                                             url_request_delegate_.get());
+    request_ = empty_context_->CreateRequest(
+        GURL("http://blah/"), net::DEFAULT_PRIORITY,
+        url_request_delegate_.get(), TRAFFIC_ANNOTATION_FOR_TESTS);
 
     // Setup to create an AppCacheURLRequestJob with orders to deliver
     // a network response.
@@ -736,9 +739,9 @@ class AppCacheURLRequestJobTest : public testing::Test {
 
   void MakeRangeRequest() {
     AppCacheStorage* storage = service_->storage();
-    request_ = empty_context_->CreateRequest(GURL("http://blah/"),
-                                             net::DEFAULT_PRIORITY,
-                                             url_request_delegate_.get());
+    request_ = empty_context_->CreateRequest(
+        GURL("http://blah/"), net::DEFAULT_PRIORITY,
+        url_request_delegate_.get(), TRAFFIC_ANNOTATION_FOR_TESTS);
 
     // Request a range, the 3 middle chars out of 'Hello'
     net::HttpRequestHeaders extra_headers;

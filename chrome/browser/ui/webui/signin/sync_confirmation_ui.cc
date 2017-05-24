@@ -17,7 +17,7 @@
 #include "ui/base/webui/web_ui_util.h"
 
 SyncConfirmationUI::SyncConfirmationUI(content::WebUI* web_ui)
-    : WebDialogUI(web_ui) {
+    : SigninWebDialogUI(web_ui) {
   Profile* profile = Profile::FromWebUI(web_ui);
   bool is_sync_allowed = profile->IsSyncAllowed();
 

@@ -66,15 +66,10 @@ bool Editor::HandleEditingKeyboardEvent(KeyboardEvent* evt) {
     // We may lose focused element by |command.execute(evt)|.
     return false;
   }
-  if (!focused_element->ContainsIncludingHostElements(
-          *frame_->Selection()
-               .ComputeVisibleSelectionInDOMTreeDeprecated()
-               .Start()
-               .ComputeContainerNode())) {
-    // We should not insert text at selection start if selection doesn't have
-    // focus. See http://crbug.com/89026
+  // We should not insert text at selection start if selection doesn't have
+  // focus.
+  if (!frame_->Selection().SelectionHasFocus())
     return false;
-  }
 
   // Return true to prevent default action. e.g. Space key scroll.
   if (DispatchBeforeInputInsertText(evt->target()->ToNode(), key_event->text) !=

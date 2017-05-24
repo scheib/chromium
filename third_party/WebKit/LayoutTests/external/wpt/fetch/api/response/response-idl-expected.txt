@@ -18,7 +18,7 @@ PASS Response interface: attribute body
 PASS Response interface: attribute bodyUsed 
 PASS Response interface: operation arrayBuffer() 
 PASS Response interface: operation blob() 
-FAIL Response interface: operation formData() assert_own_property: interface prototype object missing non-static operation expected property "formData" missing
+PASS Response interface: operation formData() 
 PASS Response interface: operation json() 
 PASS Response interface: operation text() 
 PASS Response interface: new Response() must inherit property "error" with the proper type (0) 
@@ -36,7 +36,7 @@ PASS Response interface: new Response() must inherit property "body" with the pr
 PASS Response interface: new Response() must inherit property "bodyUsed" with the proper type (11) 
 PASS Response interface: new Response() must inherit property "arrayBuffer" with the proper type (12) 
 PASS Response interface: new Response() must inherit property "blob" with the proper type (13) 
-FAIL Response interface: new Response() must inherit property "formData" with the proper type (14) assert_inherits: property "formData" not found in prototype chain
+PASS Response interface: new Response() must inherit property "formData" with the proper type (14) 
 PASS Response interface: new Response() must inherit property "json" with the proper type (15) 
 PASS Response interface: new Response() must inherit property "text" with the proper type (16) 
 Harness: the test ran to completion.

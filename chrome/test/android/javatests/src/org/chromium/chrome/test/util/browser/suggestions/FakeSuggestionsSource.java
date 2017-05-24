@@ -181,6 +181,11 @@ public class FakeSuggestionsSource implements SuggestionsSource {
     }
 
     @Override
+    public void fetchContextualSuggestions(String url, Callback<List<SnippetArticle>> callback) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void setObserver(Observer observer) {
         mObserver = observer;
     }

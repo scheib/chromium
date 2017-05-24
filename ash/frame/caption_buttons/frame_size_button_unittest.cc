@@ -12,7 +12,6 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "base/i18n/rtl.h"
 #include "ui/aura/window.h"
 #include "ui/display/display.h"

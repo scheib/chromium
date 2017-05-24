@@ -11,6 +11,7 @@
           "ash::mojom::AcceleratorController",
           "ash::mojom::CastConfig",
           "ash::mojom::LocaleNotificationController",
+          "ash::mojom::LockScreen",
           "ash::mojom::MediaController",
           "ash::mojom::NewWindowController",
           "ash::mojom::SessionController",

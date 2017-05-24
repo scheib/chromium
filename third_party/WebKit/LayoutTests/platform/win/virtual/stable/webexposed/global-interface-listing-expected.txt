@@ -580,6 +580,7 @@ interface Credential
 interface CredentialsContainer
     attribute @@toStringTag
     method constructor
+    method create
     method get
     method requireUserMediation
     method store
@@ -2916,7 +2917,6 @@ interface IDBFactory
     method constructor
     method deleteDatabase
     method open
-    method webkitGetDatabaseNames
 interface IDBIndex
     attribute @@toStringTag
     getter keyPath
@@ -3746,6 +3746,7 @@ interface PasswordCredential : Credential
     getter iconURL
     getter idName
     getter name
+    getter password
     getter passwordName
     method constructor
     setter additionalData
@@ -4277,6 +4278,7 @@ interface Request
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface Response
@@ -4296,6 +4298,7 @@ interface Response
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface SVGAElement : SVGGraphicsElement

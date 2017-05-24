@@ -37,6 +37,7 @@
 #include "core/html/HTMLFrameOwnerElement.h"
 #include "core/html/HTMLImageElement.h"
 #include "core/layout/LayoutBox.h"
+#include "core/layout/LayoutView.h"
 #include "core/page/FrameTree.h"
 #include "core/page/Page.h"
 #include "platform/geometry/IntRect.h"
@@ -249,16 +250,16 @@ bool ScrollInDirection(Node* container, WebFocusType type) {
         dx = -pixels_per_line_step;
         break;
       case kWebFocusTypeRight:
-        ASSERT(container->GetLayoutBox()->ScrollWidth() >
-               (container->GetLayoutBox()->ScrollLeft() +
-                container->GetLayoutBox()->ClientWidth()));
+        DCHECK_GT(container->GetLayoutBox()->ScrollWidth(),
+                  (container->GetLayoutBox()->ScrollLeft() +
+                   container->GetLayoutBox()->ClientWidth()));
         dx = pixels_per_line_step;
         break;
       case kWebFocusTypeUp:
         dy = -pixels_per_line_step;
         break;
       case kWebFocusTypeDown:
-        ASSERT(container->GetLayoutBox()->ScrollHeight() -
+        DCHECK(container->GetLayoutBox()->ScrollHeight() -
                (container->GetLayoutBox()->ScrollTop() +
                 container->GetLayoutBox()->ClientHeight()));
         dy = pixels_per_line_step;
@@ -359,9 +360,12 @@ bool CanScrollInDirection(const Node* container, WebFocusType type) {
 bool CanScrollInDirection(const LocalFrame* frame, WebFocusType type) {
   if (!frame->View())
     return false;
+  LayoutView* layoutView = frame->ContentLayoutObject();
+  if (!layoutView)
+    return false;
   ScrollbarMode vertical_mode;
   ScrollbarMode horizontal_mode;
-  frame->View()->CalculateScrollbarModes(horizontal_mode, vertical_mode);
+  layoutView->CalculateScrollbarModes(horizontal_mode, vertical_mode);
   if ((type == kWebFocusTypeLeft || type == kWebFocusTypeRight) &&
       kScrollbarAlwaysOff == horizontal_mode)
     return false;
@@ -408,8 +412,9 @@ static LayoutRect RectToAbsoluteCoordinates(LocalFrame* initial_frame,
 }
 
 LayoutRect NodeRectInAbsoluteCoordinates(Node* node, bool ignore_border) {
-  ASSERT(node && node->GetLayoutObject() &&
-         !node->GetDocument().View()->NeedsLayout());
+  DCHECK(node);
+  DCHECK(node->GetLayoutObject());
+  DCHECK(!node->GetDocument().View()->NeedsLayout());
 
   if (node->IsDocumentNode())
     return FrameRectInAbsoluteCoordinates(ToDocument(node)->GetFrame());
@@ -624,7 +629,8 @@ void DistanceDataForNode(WebFocusType type,
 }
 
 bool CanBeScrolledIntoView(WebFocusType type, const FocusCandidate& candidate) {
-  ASSERT(candidate.visible_node && candidate.is_offscreen);
+  DCHECK(candidate.visible_node);
+  DCHECK(candidate.is_offscreen);
   LayoutRect candidate_rect = candidate.rect;
   for (Node& parent_node :
        NodeTraversal::AncestorsOf(*candidate.visible_node)) {

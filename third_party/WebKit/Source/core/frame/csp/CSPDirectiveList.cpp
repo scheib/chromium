@@ -962,7 +962,7 @@ void CSPDirectiveList::Parse(const UChar* begin, const UChar* end) {
       AddDirective(name, value);
     }
 
-    ASSERT(position == end || *position == ';');
+    DCHECK(position == end || *position == ';');
     skipExactly<UChar>(position, end, ';');
   }
 }

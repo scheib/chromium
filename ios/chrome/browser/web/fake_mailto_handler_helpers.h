@@ -20,6 +20,10 @@
 @interface FakeMailtoHandlerGmailInstalled : MailtoHandlerGmail
 @end
 
+// Fake mailto: handler
+@interface FakeMailtoHandlerForTesting : MailtoHandler
+@end
+
 // An observer object that counts and reports the number of times it has been
 // called by the MailtoURLRewriter object.
 @interface CountingMailtoURLRewriterObserver

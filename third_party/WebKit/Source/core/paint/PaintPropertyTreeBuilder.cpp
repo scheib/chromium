@@ -72,12 +72,11 @@ static bool UpdateContentClip(
   return true;
 }
 
-static CompositorElementId CreateDomNodeBasedCompositorElementId(
+static CompositorElementId CreatePaintLayereBasedCompositorElementId(
     const LayoutObject& object) {
-  // TODO(wkorman): Centralize this implementation with similar across
-  // animation, scrolling and compositing logic.
-  return CompositorElementIdFromDOMNodeId(
-      DOMNodeIds::IdForNode(object.GetNode()),
+  DCHECK(object.IsBoxModelObject() && object.HasLayer());
+  return CompositorElementIdFromPaintLayerId(
+      ToLayoutBoxModelObject(object).Layer()->UniqueId(),
       CompositorElementIdNamespace::kPrimary);
 }
 
@@ -97,7 +96,7 @@ static bool UpdateScrollTranslation(
     WebLayerScrollClient* scroll_client) {
   DCHECK(!RuntimeEnabledFeatures::rootLayerScrollingEnabled());
   CompositorElementId compositor_element_id =
-      CreateDomNodeBasedCompositorElementId(*frame_view.GetLayoutView());
+      CreatePaintLayereBasedCompositorElementId(*frame_view.GetLayoutView());
   if (auto* existing_scroll_translation = frame_view.ScrollTranslation()) {
     auto existing_reasons = existing_scroll_translation->ScrollNode()
                                 ->GetMainThreadScrollingReasons();
@@ -750,11 +749,11 @@ void PaintPropertyTreeBuilder::UpdateLocalBorderBoxContext(
 }
 
 static bool NeedsScrollbarPaintOffset(const LayoutObject& object) {
-  if (object.IsBoxModelObject()) {
-    if (auto* area = ToLayoutBoxModelObject(object).GetScrollableArea()) {
-      if (area->HorizontalScrollbar() || area->VerticalScrollbar())
-        return true;
-    }
+  if (!object.IsBoxModelObject())
+    return false;
+  if (auto* area = ToLayoutBoxModelObject(object).GetScrollableArea()) {
+    if (area->HorizontalScrollbar() || area->VerticalScrollbar())
+      return true;
   }
   return false;
 }
@@ -915,14 +914,12 @@ static MainThreadScrollingReasons GetMainThreadScrollingReasons(
 }
 
 static bool NeedsScrollTranslation(const LayoutObject& object) {
-  if (object.HasOverflowClip()) {
-    const LayoutBox& box = ToLayoutBox(object);
-    auto* scrollable_area = box.GetScrollableArea();
-    IntSize scroll_offset = box.ScrolledContentOffset();
-    if (!scroll_offset.IsZero() || scrollable_area->ScrollsOverflow())
-      return true;
-  }
-  return false;
+  if (!object.HasOverflowClip())
+    return false;
+  const LayoutBox& box = ToLayoutBox(object);
+  auto* scrollable_area = box.GetScrollableArea();
+  IntSize scroll_offset = box.ScrolledContentOffset();
+  return !scroll_offset.IsZero() || scrollable_area->ScrollsOverflow();
 }
 
 void PaintPropertyTreeBuilder::UpdateScrollAndScrollTranslation(
@@ -975,11 +972,6 @@ void PaintPropertyTreeBuilder::UpdateScrollAndScrollTranslation(
     context.current.scroll = context.current.transform->ScrollNode();
     context.current.should_flatten_inherited_transform = false;
   }
-}
-
-static bool NeedsCssClipFixedPosition(const LayoutObject& object) {
-  return !object.IsLayoutView() && !object.CanContainFixedPositionObjects() &&
-         NeedsCssClip(object);
 }
 
 void PaintPropertyTreeBuilder::UpdateOutOfFlowContext(
@@ -1170,15 +1162,16 @@ void PaintPropertyTreeBuilder::UpdatePaintProperties(
       NeedsFilter(object) || NeedsCssClip(object) ||
       NeedsScrollbarPaintOffset(object) || NeedsOverflowClip(object) ||
       NeedsPerspective(object) || NeedsSVGLocalToBorderBoxTransform(object) ||
-      NeedsScrollTranslation(object) || NeedsCssClipFixedPosition(object);
+      NeedsScrollTranslation(object);
+
   bool had_paint_properties = object.PaintProperties();
 
   if (needs_paint_properties && !had_paint_properties) {
     ObjectPaintProperties& paint_properties =
         object.GetMutableForPainting().EnsurePaintProperties();
-    if (RuntimeEnabledFeatures::slimmingPaintV2Enabled()) {
+    if (RuntimeEnabledFeatures::slimmingPaintV2Enabled() && object.HasLayer()) {
       paint_properties.SetCompositorElementId(
-          CreateDomNodeBasedCompositorElementId(object));
+          CreatePaintLayereBasedCompositorElementId(object));
     }
   } else if (!needs_paint_properties && had_paint_properties) {
     object.GetMutableForPainting().ClearPaintProperties();

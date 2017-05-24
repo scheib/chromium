@@ -31,14 +31,6 @@
     {
       "object": "LayoutSVGRect rect",
       "reason": "style change"
-    },
-    {
-      "object": "LayoutSVGResourceMasker mask id='dynMask'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
     }
   ]
 }

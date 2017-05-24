@@ -96,10 +96,14 @@ class MOJO_SYSTEM_IMPL_EXPORT Core {
   // Called to connect to a peer process. This should be called only if there
   // is no common ancestor for the processes involved within this mojo system.
   // Both processes must call this function, each passing one end of a platform
-  // channel. This returns one end of a message pipe to each process.
-  ScopedMessagePipeHandle ConnectToPeerProcess(ScopedPlatformHandle pipe_handle,
-                                               const std::string& peer_token);
-  void ClosePeerConnection(const std::string& peer_token);
+  // channel. |port| is a port to be merged with the remote peer's port, which
+  // it will provide via the same API.
+  //
+  // Returns an ID which can be later used to close the connection via
+  // ClosePeerConnection().
+  uint64_t ConnectToPeer(ConnectionParams connection_params,
+                         const ports::PortRef& port);
+  void ClosePeerConnection(uint64_t peer_connection_id);
 
   // Sets the mach port provider for this process.
   void SetMachPortProvider(base::PortProvider* port_provider);

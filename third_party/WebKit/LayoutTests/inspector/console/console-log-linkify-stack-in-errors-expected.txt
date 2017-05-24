@@ -63,66 +63,66 @@ Test that console.log(new Error().stack) would linkify links in stacks for sourc
 
 foob.js:5 Error: Some test
     at namedFunction (foob.js:5)
-    at foob.js:8 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link
+    at foob.js:8 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:4 Error: line
 break
     at forStack (console-log-linkify-stack-in-errors.html:4)
-    at console-log-linkify-stack-in-errors.html:7 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:7 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:23 TypeError: Cannot read property 'removeChild' of null
     at domError (console-log-linkify-stack-in-errors.html:21)
-    at console-log-linkify-stack-in-errors.html:27 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:27 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:34 Error: some error
     at logError (console-log-linkify-stack-in-errors.html:32)
-    at console-log-linkify-stack-in-errors.html:38 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > object-value-error source-code > devtools-link > devtools-link
-console-log-linkify-stack-in-errors.html:40 Error message without stacks http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link
+    at console-log-linkify-stack-in-errors.html:38 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > object-value-error source-code > devtools-link > devtools-link
+console-log-linkify-stack-in-errors.html:40 Error message without stacks http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link
 console-log-linkify-stack-in-errors.html:42 Error valid stack #2
     at www.chromium.org/boo.js:40
-    at foo(www.chromium.org/foo.js:10) console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link
+    at foo(www.chromium.org/foo.js:10) console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:43 Error valid stack #3
-    at www.chromium.org/foo.js:40 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link
+    at www.chromium.org/foo.js:40 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link
 console-log-linkify-stack-in-errors.html:44 Error: MyError
     at throwError (www.chromium.org/foo.js:40)
     at eval (eval at <anonymous> (www.chromium.org/foo.js:42), <anonymous>:1:1)
-    at www.chromium.org/foo.js:239 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link > devtools-link
+    at www.chromium.org/foo.js:239 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:13 ReferenceError: valid stack
     at stack2 (console-log-linkify-stack-in-errors.html:13)
     at stack1 (console-log-linkify-stack-in-errors.html:15)
-    at console-log-linkify-stack-in-errors.html:46 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:46 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:13 EvalError: valid stack
     at stack2 (console-log-linkify-stack-in-errors.html:13)
     at stack1 (console-log-linkify-stack-in-errors.html:15)
-    at console-log-linkify-stack-in-errors.html:47 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:47 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:13 SyntaxError: valid stack
     at stack2 (console-log-linkify-stack-in-errors.html:13)
     at stack1 (console-log-linkify-stack-in-errors.html:15)
-    at console-log-linkify-stack-in-errors.html:48 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:48 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:13 RangeError: valid stack
     at stack2 (console-log-linkify-stack-in-errors.html:13)
     at stack1 (console-log-linkify-stack-in-errors.html:15)
-    at console-log-linkify-stack-in-errors.html:49 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:49 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:13 TypeError: valid stack
     at stack2 (console-log-linkify-stack-in-errors.html:13)
     at stack1 (console-log-linkify-stack-in-errors.html:15)
-    at console-log-linkify-stack-in-errors.html:50 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:50 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:13 URIError: valid stack
     at stack2 (console-log-linkify-stack-in-errors.html:13)
     at stack1 (console-log-linkify-stack-in-errors.html:15)
-    at console-log-linkify-stack-in-errors.html:51 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link > devtools-link
+    at console-log-linkify-stack-in-errors.html:51 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link > devtools-link
 console-log-linkify-stack-in-errors.html:53 Error broken stack
     at function_name(foob.js foob.js:30:1)
- at foob.js:40:70 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text
+ at foob.js:40:70 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text
 console-log-linkify-stack-in-errors.html:54 Error broken stack #2
-    at function_name(foob.js:20:30 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text
+    at function_name(foob.js:20:30 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text
 console-log-linkify-stack-in-errors.html:55 Error broken stack #3
-    at function_name(foob:20.js:30   bla console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text
+    at function_name(foob:20.js:30   bla console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text
 console-log-linkify-stack-in-errors.html:56 Error broken stack #4
-    at function_name)foob.js:20:30( console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text
+    at function_name)foob.js:20:30( console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text
 console-log-linkify-stack-in-errors.html:57 Error broken stack #5
-    at function_name foob.js:20:30) console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text
+    at function_name foob.js:20:30) console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text
 console-log-linkify-stack-in-errors.html:58 Error broken stack #6
-    at foob.js foob.js:40:70 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text
+    at foob.js foob.js:40:70 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text
 stack-with-sourceMap.coffee:3 Error
     at Failure.letsFailWithStack (stack-with-sourceMap.coffee:3)
     at window.failure (stack-with-sourceMap.coffee:7)
-    at <anonymous>:1:1 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link > devtools-link
+    at <anonymous>:1:1 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link > devtools-link
 

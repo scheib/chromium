@@ -8,6 +8,7 @@
 #include "base/supports_user_data.h"
 #import "ios/web/public/navigation_item.h"
 #import "ios/web/public/navigation_manager.h"
+#include "ios/web/public/web_state/navigation_context.h"
 #import "ios/web/public/web_state/web_state.h"
 
 namespace {
@@ -76,7 +77,8 @@ GURL TestRedirectObserver::GetFinalUrlForUrl(const GURL& url) {
   return GURL();
 }
 
-void TestRedirectObserver::ProvisionalNavigationStarted(const GURL& url) {
+void TestRedirectObserver::DidStartNavigation(NavigationContext* context) {
+  GURL url = context->GetUrl();
   NavigationItem* item = web_state()->GetNavigationManager()->GetVisibleItem();
   DCHECK(item);
   if (redirect_chains_.find(item) != redirect_chains_.end()) {

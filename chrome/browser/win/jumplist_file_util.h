@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_WIN_JUMPLIST_FILE_UTIL_H_
 #define CHROME_BROWSER_WIN_JUMPLIST_FILE_UTIL_H_
 
+#include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
 
 // Maximum number of icon files allowed to delete per jumplist update.
@@ -38,5 +39,13 @@ void DeleteDirectory(const base::FilePath& path, int max_file_deleted);
 // http://crbug.com/40407.
 void DeleteDirectoryContentAndLogRuntime(const base::FilePath& path,
                                          int max_file_deleted);
+
+// Returns true if the directory at |path| has more than |max_files| files.
+// Sub-directories are not taken into account here.
+bool FilesExceedLimitInDir(const base::FilePath& path, int max_files);
+
+// Deletes all files in the directory at |path| but not in set |cached_files|.
+void DeleteNonCachedFiles(const base::FilePath& path,
+                          const base::flat_set<base::FilePath>& cached_files);
 
 #endif  // CHROME_BROWSER_WIN_JUMPLIST_FILE_UTIL_H_

@@ -20,6 +20,7 @@
 #include "base/test/scoped_task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "components/favicon/core/favicon_driver.h"
+#include "components/favicon/core/features.h"
 #include "components/favicon/core/test/mock_favicon_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"

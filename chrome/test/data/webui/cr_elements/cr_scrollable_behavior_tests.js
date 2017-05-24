@@ -18,7 +18,7 @@ suite('cr-scrollable-behavior', function() {
             }
           </style>
           <div id="container" scrollable>
-            <iron-list scroll-target="container" items=[[items]]>
+            <iron-list scroll-target="container" items="[[items]]">
               <template>
                 <div>[[item]]</div>
               </template>

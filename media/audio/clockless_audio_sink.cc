@@ -134,6 +134,10 @@ OutputDeviceInfo ClocklessAudioSink::GetOutputDeviceInfo() {
   return device_info_;
 }
 
+bool ClocklessAudioSink::IsOptimizedForHardwareParameters() {
+  return false;
+}
+
 bool ClocklessAudioSink::CurrentThreadIsRenderingThread() {
   NOTIMPLEMENTED();
   return false;

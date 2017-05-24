@@ -5,6 +5,7 @@
 #include "web/tests/sim/SimWebViewClient.h"
 
 #include "public/platform/WebLayerTreeView.h"
+#include "public/web/WebLocalFrame.h"
 
 namespace blink {
 
@@ -27,6 +28,15 @@ void SimWebViewClient::DidMeaningfulLayout(
       finished_loading_layout_count_++;
       break;
   }
+}
+
+WebView* SimWebViewClient::CreateView(WebLocalFrame* opener,
+                                      const WebURLRequest&,
+                                      const WebWindowFeatures&,
+                                      const WebString& name,
+                                      WebNavigationPolicy,
+                                      bool) {
+  return web_view_helper_.InitializeWithOpener(opener, true);
 }
 
 }  // namespace blink

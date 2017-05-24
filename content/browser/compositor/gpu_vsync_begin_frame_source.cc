@@ -39,6 +39,4 @@ void GpuVSyncBeginFrameSource::OnNeedsBeginFrames(bool needs_begin_frames) {
   vsync_control_->SetNeedsVSync(needs_begin_frames);
 }
 
-void GpuVSyncBeginFrameSource::OnDidFinishFrame(const cc::BeginFrameAck& ack) {}
-
 }  // namespace content

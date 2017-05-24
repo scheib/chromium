@@ -23,7 +23,7 @@ class CredentialManagerLogger {
   ~CredentialManagerLogger();
 
   void LogRequestCredential(const GURL& url,
-                            bool zero_click_only,
+                            CredentialMediationRequirement mediation,
                             const std::vector<GURL>& federations);
   void LogSendCredential(const GURL& url, CredentialType type);
   void LogStoreCredential(const GURL& url, CredentialType type);

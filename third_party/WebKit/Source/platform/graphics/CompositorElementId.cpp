@@ -4,6 +4,8 @@
 
 #include "platform/graphics/CompositorElementId.h"
 
+#include "platform/RuntimeEnabledFeatures.h"
+
 namespace blink {
 
 static CompositorElementId CreateCompositorElementId(
@@ -22,14 +24,30 @@ static CompositorElementId CreateCompositorElementId(
 }
 
 CompositorElementId PLATFORM_EXPORT
+CompositorElementIdFromPaintLayerId(PaintLayerId id,
+                                    CompositorElementIdNamespace namespace_id) {
+  DCHECK(namespace_id == CompositorElementIdNamespace::kPrimary ||
+         namespace_id == CompositorElementIdNamespace::kScroll);
+  return CreateCompositorElementId(id, namespace_id);
+}
+
+CompositorElementId PLATFORM_EXPORT
 CompositorElementIdFromDOMNodeId(DOMNodeId id,
                                  CompositorElementIdNamespace namespace_id) {
+  DCHECK(namespace_id == CompositorElementIdNamespace::kViewport ||
+         namespace_id == CompositorElementIdNamespace::kLinkHighlight ||
+         namespace_id == CompositorElementIdNamespace::kRootScroll ||
+         namespace_id == CompositorElementIdNamespace::kScrollState ||
+         namespace_id ==
+             CompositorElementIdNamespace::kPrimaryCompositorProxy ||
+         namespace_id == CompositorElementIdNamespace::kScrollCompositorProxy);
   return CreateCompositorElementId(id, namespace_id);
 }
 
 CompositorElementId PLATFORM_EXPORT
 CompositorElementIdFromScrollbarId(ScrollbarId id,
                                    CompositorElementIdNamespace namespace_id) {
+  DCHECK(namespace_id == CompositorElementIdNamespace::kScrollbar);
   return CreateCompositorElementId(id, namespace_id);
 }
 

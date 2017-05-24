@@ -163,10 +163,7 @@ div.needs-restart {
   box-shadow: 0 -2px 2px #ddd;
   box-sizing: border-box;
   left: 0;
-  padding-bottom: 15px;
-  padding-left: 15px;
-  padding-right: 15px;
-  padding-top: 15px;
+  padding: 15px;
   position: fixed;
   width: 100%;
 }

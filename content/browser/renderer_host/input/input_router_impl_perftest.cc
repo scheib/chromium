@@ -90,7 +90,6 @@ class NullInputRouterClient : public InputRouterClient {
       blink::WebInputEvent::Type event_type) override {}
   void DecrementInFlightEventCount(InputEventAckSource ack_source) override {}
   void OnHasTouchEventHandlers(bool has_handlers) override {}
-  void DidFlush() override {}
   void DidOverscroll(const ui::DidOverscrollParams& params) override {}
   void DidStopFlinging() override {}
   void ForwardGestureEventWithLatencyInfo(

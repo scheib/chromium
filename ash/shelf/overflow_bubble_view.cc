@@ -95,7 +95,7 @@ void OverflowBubbleView::ScrollByYOffset(int y_offset) {
   scroll_offset_.set_y(y);
 }
 
-gfx::Size OverflowBubbleView::GetPreferredSize() const {
+gfx::Size OverflowBubbleView::CalculatePreferredSize() const {
   gfx::Size preferred_size = shelf_view_->GetPreferredSize();
 
   const gfx::Rect monitor_rect =

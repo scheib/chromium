@@ -28,7 +28,7 @@ import org.chromium.ui.resources.dynamics.DynamicResourceLoader;
  */
 public class LayoutManagerChromePhone extends LayoutManagerChrome {
     // Layouts
-    private final Layout mSimpleAnimationLayout;
+    private final SimpleAnimationLayout mSimpleAnimationLayout;
 
     /**
      * Creates an instance of a {@link LayoutManagerChromePhone}.
@@ -170,5 +170,14 @@ public class LayoutManagerChromePhone extends LayoutManagerChrome {
 
             return super.isSwipeEnabled(direction);
         }
+    }
+
+    /**
+     * Sets whether the foreground tab animation is disabled.
+     * TODO(twellington): Remove this after Chrome Home NTP animations are complete.
+     * @param disabled Whether the foreground tab animation should be disabled.
+     */
+    public void setForegroundTabAnimationDisabled(boolean disabled) {
+        mSimpleAnimationLayout.setForegroundTabAnimationDisabled(disabled);
     }
 }

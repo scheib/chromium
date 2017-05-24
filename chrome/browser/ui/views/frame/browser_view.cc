@@ -1294,7 +1294,8 @@ void BrowserView::ShowPageInfo(
     const GURL& virtual_url,
     const security_state::SecurityInfo& security_info) {
   PageInfoBubbleView::ShowBubble(
-      GetLocationBarView()->GetSecurityBubbleAnchorView(), gfx::Rect(), profile,
+      GetLocationBarView()->GetSecurityBubbleAnchorView(),
+      GetLocationBarView()->location_icon_view(), gfx::Rect(), profile,
       web_contents, virtual_url, security_info);
 }
 

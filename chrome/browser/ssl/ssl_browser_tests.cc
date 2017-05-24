@@ -81,6 +81,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/browser_side_navigation_policy.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/page_state.h"
 #include "content/public/test/browser_test_utils.h"
@@ -485,19 +486,8 @@ class SSLUITest : public InProcessBrowserTest {
   }
 
   static void GetPageWithUnsafeWorkerPath(
-      const net::EmbeddedTestServer& https_server,
+      const std::string& unsafe_worker_path,
       std::string* page_with_unsafe_worker_path) {
-    // Get the "imported.js" URL from the expired https server and
-    // substitute it into the unsafe_worker.js file.
-    GURL imported_js_url = https_server.GetURL("/ssl/imported.js");
-    base::StringPairs replacement_text_for_unsafe_worker;
-    replacement_text_for_unsafe_worker.push_back(
-        make_pair("REPLACE_WITH_IMPORTED_JS_URL", imported_js_url.spec()));
-    std::string unsafe_worker_path;
-    net::test_server::GetFilePathWithReplacements(
-        "unsafe_worker.js", replacement_text_for_unsafe_worker,
-        &unsafe_worker_path);
-
     // Now, substitute this into the page with unsafe worker.
     base::StringPairs replacement_text_for_page_with_unsafe_worker;
     replacement_text_for_page_with_unsafe_worker.push_back(
@@ -506,6 +496,40 @@ class SSLUITest : public InProcessBrowserTest {
         "/ssl/page_with_unsafe_worker.html",
         replacement_text_for_page_with_unsafe_worker,
         page_with_unsafe_worker_path);
+  }
+
+  static void GetPageWithUnsafeImportingWorkerPath(
+      const net::EmbeddedTestServer& https_server,
+      std::string* page_with_unsafe_importing_worker_path) {
+    // Get the "imported.js" URL from the expired https server and
+    // substitute it into the unsafe_importing_worker.js file.
+    GURL imported_js_url = https_server.GetURL("/ssl/imported.js");
+    base::StringPairs replacement_text_for_unsafe_worker;
+    replacement_text_for_unsafe_worker.push_back(
+        make_pair("REPLACE_WITH_IMPORTED_JS_URL", imported_js_url.spec()));
+    std::string unsafe_importing_worker_path;
+    net::test_server::GetFilePathWithReplacements(
+        "unsafe_importing_worker.js", replacement_text_for_unsafe_worker,
+        &unsafe_importing_worker_path);
+    GetPageWithUnsafeWorkerPath(unsafe_importing_worker_path,
+                                page_with_unsafe_importing_worker_path);
+  }
+
+  static void GetPageWithUnsafeFetchingWorkerPath(
+      const net::EmbeddedTestServer& https_server,
+      std::string* page_with_unsafe_fetching_worker_path) {
+    // Get the "imported.js" URL from the expired https server and
+    // substitute it into the unsafe_fetching_worker.js file.
+    GURL test_file_url = https_server.GetURL("/ssl/imported.js");
+    base::StringPairs replacement_text_for_unsafe_worker;
+    replacement_text_for_unsafe_worker.push_back(
+        make_pair("REPLACE_WITH_TEST_FILE_URL", test_file_url.spec()));
+    std::string unsafe_fetcing_worker_path;
+    net::test_server::GetFilePathWithReplacements(
+        "unsafe_fetching_worker.js", replacement_text_for_unsafe_worker,
+        &unsafe_fetcing_worker_path);
+    GetPageWithUnsafeWorkerPath(unsafe_fetcing_worker_path,
+                                page_with_unsafe_fetching_worker_path);
   }
 
   // Helper function for testing invalid certificate chain reporting.
@@ -2454,17 +2478,53 @@ IN_PROC_BROWSER_TEST_F(SSLUITest, TestUnauthenticatedFrameNavigation) {
   EXPECT_FALSE(is_content_evil);
 }
 
-IN_PROC_BROWSER_TEST_F(SSLUITest, TestUnsafeContentsInWorkerFiltered) {
+enum class OffMainThreadFetchMode { kEnabled, kDisabled };
+enum class SSLUIWorkerFetchTestType { kUseFetch, kUseImportScripts };
+
+class SSLUIWorkerFetchTest
+    : public testing::WithParamInterface<
+          std::pair<OffMainThreadFetchMode, SSLUIWorkerFetchTestType>>,
+      public SSLUITest {
+ public:
+  ~SSLUIWorkerFetchTest() override {}
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    SSLUITest::SetUpCommandLine(command_line);
+    if (GetParam().first == OffMainThreadFetchMode::kEnabled) {
+      command_line->AppendSwitchASCII(switches::kEnableFeatures,
+                                      features::kOffMainThreadFetch.name);
+    } else {
+      command_line->AppendSwitchASCII(switches::kDisableFeatures,
+                                      features::kOffMainThreadFetch.name);
+    }
+  }
+
+ protected:
+  void GetTestWorkerPagePath(const net::EmbeddedTestServer& https_server,
+                             std::string* test_worker_page_path) {
+    switch (GetParam().second) {
+      case SSLUIWorkerFetchTestType::kUseFetch:
+        GetPageWithUnsafeFetchingWorkerPath(https_server,
+                                            test_worker_page_path);
+        break;
+      case SSLUIWorkerFetchTestType::kUseImportScripts:
+        GetPageWithUnsafeImportingWorkerPath(https_server,
+                                             test_worker_page_path);
+        break;
+    }
+  }
+};
+
+IN_PROC_BROWSER_TEST_P(SSLUIWorkerFetchTest,
+                       TestUnsafeContentsInWorkerFiltered) {
   ASSERT_TRUE(https_server_.Start());
   ASSERT_TRUE(https_server_expired_.Start());
 
   // This page will spawn a Worker which will try to load content from
   // BadCertServer.
-  std::string page_with_unsafe_worker_path;
-  GetPageWithUnsafeWorkerPath(https_server_expired_,
-                              &page_with_unsafe_worker_path);
-  ui_test_utils::NavigateToURL(browser(), https_server_.GetURL(
-      page_with_unsafe_worker_path));
+  std::string test_worker_page_path;
+  GetTestWorkerPagePath(https_server_expired_, &test_worker_page_path);
+  ui_test_utils::NavigateToURL(browser(),
+                               https_server_.GetURL(test_worker_page_path));
   WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
   // Expect Worker not to load insecure content.
   CheckWorkerLoadResult(tab, false);
@@ -2475,7 +2535,8 @@ IN_PROC_BROWSER_TEST_F(SSLUITest, TestUnsafeContentsInWorkerFiltered) {
 // This test, and the related test TestUnsafeContentsWithUserException, verify
 // that if unsafe content is loaded but the host of that unsafe content has a
 // user exception, the content runs and the security style is downgraded.
-IN_PROC_BROWSER_TEST_F(SSLUITest, TestUnsafeContentsInWorkerWithUserException) {
+IN_PROC_BROWSER_TEST_P(SSLUIWorkerFetchTest,
+                       TestUnsafeContentsInWorkerWithUserException) {
   ASSERT_TRUE(https_server_.Start());
   // Note that it is necessary to user https_server_mismatched_ here over the
   // other invalid cert servers. This is because the test relies on the two
@@ -2507,11 +2568,11 @@ IN_PROC_BROWSER_TEST_F(SSLUITest, TestUnsafeContentsInWorkerWithUserException) {
   // Navigate to safe page that has Worker loading unsafe content.
   // Expect content to load but be marked as auth broken due to running insecure
   // content.
-  std::string page_with_unsafe_worker_path;
-  GetPageWithUnsafeWorkerPath(https_server_mismatched_,
-                              &page_with_unsafe_worker_path);
-  ui_test_utils::NavigateToURL(
-      browser(), https_server_.GetURL(page_with_unsafe_worker_path));
+  std::string test_worker_page_path;
+  GetTestWorkerPagePath(https_server_mismatched_, &test_worker_page_path);
+
+  ui_test_utils::NavigateToURL(browser(),
+                               https_server_.GetURL(test_worker_page_path));
   CheckWorkerLoadResult(tab, true);  // Worker loads insecure content
   CheckAuthenticationBrokenState(tab, CertError::NONE, AuthState::NONE);
 
@@ -2521,6 +2582,19 @@ IN_PROC_BROWSER_TEST_F(SSLUITest, TestUnsafeContentsInWorkerWithUserException) {
   EXPECT_EQ(security_state::CONTENT_STATUS_RAN,
             security_info.content_with_cert_errors_status);
 }
+
+INSTANTIATE_TEST_CASE_P(
+    /* no prefix */,
+    SSLUIWorkerFetchTest,
+    ::testing::Values(
+        std::make_pair(OffMainThreadFetchMode::kDisabled,
+                       SSLUIWorkerFetchTestType::kUseFetch),
+        std::make_pair(OffMainThreadFetchMode::kDisabled,
+                       SSLUIWorkerFetchTestType::kUseImportScripts),
+        std::make_pair(OffMainThreadFetchMode::kEnabled,
+                       SSLUIWorkerFetchTestType::kUseFetch),
+        std::make_pair(OffMainThreadFetchMode::kEnabled,
+                       SSLUIWorkerFetchTestType::kUseImportScripts)));
 
 // Visits a page with unsafe content and makes sure that if a user exception to
 // the certificate error is present, the image is loaded and script executes.

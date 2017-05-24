@@ -229,7 +229,6 @@ SearchBox::SearchBox(content::RenderFrame* render_frame)
       is_input_in_progress_(false),
       is_key_capture_enabled_(false),
       most_visited_items_cache_(kMaxInstantMostVisitedItemCacheSize),
-      query_(),
       binding_(this) {
   // Connect to the embedded search interface in the browser.
   chrome::mojom::EmbeddedSearchConnectorAssociatedPtr connector;
@@ -412,15 +411,12 @@ void SearchBox::SetSuggestionToPrefetch(const InstantSuggestion& suggestion) {
       render_frame()->GetWebFrame());
 }
 
-void SearchBox::Submit(const base::string16& query,
-                       const EmbeddedSearchRequestParams& params) {
-  query_ = query;
+void SearchBox::Submit(const EmbeddedSearchRequestParams& params) {
   embedded_search_request_params_ = params;
   DVLOG(1) << render_frame() << " Submit";
   extensions_v8::SearchBoxExtension::DispatchSubmit(
       render_frame()->GetWebFrame());
-  if (!query.empty())
-    Reset();
+  Reset();
 }
 
 void SearchBox::ThemeChanged(const ThemeBackgroundInfo& theme_info) {
@@ -443,7 +439,6 @@ void SearchBox::Bind(chrome::mojom::SearchBoxAssociatedRequest request) {
 }
 
 void SearchBox::Reset() {
-  query_.clear();
   embedded_search_request_params_ = EmbeddedSearchRequestParams();
   suggestion_ = InstantSuggestion();
   is_focused_ = false;

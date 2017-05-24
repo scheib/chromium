@@ -47,7 +47,7 @@ import java.util.Set;
 @Config(manifest = Config.NONE)
 public class CompositorSurfaceManagerTest {
     @Mock
-    private SurfaceHolder.Callback mCallback;
+    private CompositorSurfaceManager.SurfaceHolderCallbackTarget mCallback;
 
     private CompositorSurfaceManager mManager;
 

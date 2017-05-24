@@ -88,9 +88,6 @@
 // Caveats
 // -----------------------
 //
-//   * Usage counters are incomplete for shared workers and service workers
-//   (http://crbug.com/376039)
-//
 //   * Measurements when there are errors (the Promise is rejected) are
 //   inconsistent.
 //

@@ -181,7 +181,7 @@ TEST(SecurityStateContentUtilsTest, ConnectionExplanation) {
     GetSecurityStyle(security_info, &explanations);
     content::SecurityStyleExplanation explanation;
     ASSERT_TRUE(FindSecurityStyleExplanation(
-        explanations.secure_explanations, "Secure Connection", &explanation));
+        explanations.secure_explanations, "Secure connection", &explanation));
     EXPECT_EQ(
         "The connection to this site is encrypted and authenticated using a "
         "strong protocol (TLS 1.2), a strong key exchange (ECDHE_RSA with "
@@ -197,7 +197,7 @@ TEST(SecurityStateContentUtilsTest, ConnectionExplanation) {
     GetSecurityStyle(security_info, &explanations);
     content::SecurityStyleExplanation explanation;
     ASSERT_TRUE(FindSecurityStyleExplanation(
-        explanations.secure_explanations, "Secure Connection", &explanation));
+        explanations.secure_explanations, "Secure connection", &explanation));
     EXPECT_EQ(
         "The connection to this site is encrypted and authenticated using a "
         "strong protocol (TLS 1.2), a strong key exchange (ECDHE_RSA), and a "
@@ -216,7 +216,7 @@ TEST(SecurityStateContentUtilsTest, ConnectionExplanation) {
     GetSecurityStyle(security_info, &explanations);
     content::SecurityStyleExplanation explanation;
     ASSERT_TRUE(FindSecurityStyleExplanation(
-        explanations.secure_explanations, "Secure Connection", &explanation));
+        explanations.secure_explanations, "Secure connection", &explanation));
     EXPECT_EQ(
         "The connection to this site is encrypted and authenticated using a "
         "strong protocol (TLS 1.3), a strong key exchange (X25519), and a "

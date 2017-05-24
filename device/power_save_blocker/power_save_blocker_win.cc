@@ -115,7 +115,7 @@ class PowerSaveBlocker::Delegate
 };
 
 void PowerSaveBlocker::Delegate::ApplyBlock() {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   if (base::win::GetVersion() < base::win::VERSION_WIN7)
     return ApplySimpleBlock(type_, 1);
 
@@ -123,7 +123,7 @@ void PowerSaveBlocker::Delegate::ApplyBlock() {
 }
 
 void PowerSaveBlocker::Delegate::RemoveBlock() {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   if (base::win::GetVersion() < base::win::VERSION_WIN7)
     return ApplySimpleBlock(type_, -1);
 

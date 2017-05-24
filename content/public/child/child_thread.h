@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/logging.h"
+#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "ipc/ipc_sender.h"
@@ -17,6 +17,7 @@
 #endif
 
 namespace base {
+class SingleThreadTaskRunner;
 struct UserMetricsAction;
 }
 
@@ -73,6 +74,8 @@ class CONTENT_EXPORT ChildThread : public IPC::Sender {
   // Returns a connector that can be used to bind interfaces exposed by other
   // services.
   virtual service_manager::Connector* GetConnector() = 0;
+
+  virtual scoped_refptr<base::SingleThreadTaskRunner> GetIOTaskRunner() = 0;
 };
 
 }  // namespace content

@@ -81,7 +81,9 @@ class TestWindow : public views::WidgetDelegateView {
   }
 
   // Overridden from views::View:
-  gfx::Size GetPreferredSize() const override { return gfx::Size(50, 50); }
+  gfx::Size CalculatePreferredSize() const override {
+    return gfx::Size(50, 50);
+  }
 
   // Overridden from views::WidgetDelegate:
   ui::ModalType GetModalType() const override {

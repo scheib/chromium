@@ -17,19 +17,36 @@ const int kCompositorNamespaceBitCount = 3;
 
 enum class CompositorElementIdNamespace {
   kPrimary,
+  kRootScroll,
   kScroll,
+  kScrollbar,
+  kScrollState,
   kViewport,
   kLinkHighlight,
-  kScrollbar,
+  kPrimaryCompositorProxy,
+  kScrollCompositorProxy,
   // A sentinel to indicate the maximum representable namespace id
   // (the maximum is one less than this value).
   kMaxRepresentableNamespaceId = 1 << kCompositorNamespaceBitCount
 };
 
 using CompositorElementId = cc::ElementId;
-using DOMNodeId = uint64_t;
+using PaintLayerId = uint64_t;
 using ScrollbarId = uint64_t;
+using DOMNodeId = uint64_t;
 
+CompositorElementId PLATFORM_EXPORT
+    CompositorElementIdFromPaintLayerId(PaintLayerId,
+                                        CompositorElementIdNamespace);
+
+// This method should only be used for "special" layers that are not allocated
+// during the normal lifecycle. Examples include VisualViewport,
+// root scrolling (when rootLayerScrollingEnabled is off), and LinkHighlight,
+// or when CompositorProxies are involved.
+
+// Otherwise, CompositorElementIdFromPaintLayerId is preferred for performance
+// reasons (since computing a DOMNodeId requires a hash map lookup),
+// and future compatibility with multicol/pagination.
 CompositorElementId PLATFORM_EXPORT
     CompositorElementIdFromDOMNodeId(DOMNodeId, CompositorElementIdNamespace);
 

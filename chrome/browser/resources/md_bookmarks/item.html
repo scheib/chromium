@@ -1,4 +1,5 @@
 <link rel="import" href="chrome://resources/html/polymer.html">
+
 <link rel="import" href="chrome://resources/cr_elements/icons.html">
 <link rel="import" href="chrome://resources/html/icon.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-icon/iron-icon.html">
@@ -11,14 +12,19 @@
   <template>
     <style include="shared-style">
       :host {
+        display: block;
+        flex-direction: row;
+        position: relative;
+      }
+
+      #url {
         -webkit-padding-start: 20px;
         -webkit-user-select: none;
         align-items: center;
-        cursor: pointer;
+        color: inherit;
         display: flex;
-        flex-direction: row;
         height: 40px;
-        position: relative;
+        text-decoration: none;
       }
 
       :host([mouse-focus_]) {
@@ -30,7 +36,6 @@
       }
 
       #website-title {
-        color: var(--primary-text-color);
         flex: 1;
         overflow: hidden;
         text-decoration: none;
@@ -57,21 +62,23 @@
         -webkit-margin-end: 12px;
       }
     </style>
-    <div id="icon-wrapper">
-      <iron-icon id="folder-icon" icon="cr:folder" hidden$="[[!isFolder_]]">
-      </iron-icon>
-      <div id="icon" hidden$="[[isFolder_]]"></div>
-    </div>
-    <div id="website-title">
-      [[item_.title]]
-    </div>
-    <button is="paper-icon-button-light" class="more-vert-button"
-        on-click="onMenuButtonClick_" on-dblclick="onMenuButtonDblClick_"
-        tabindex$="[[ironListTabIndex]]" on-focus="onItemBlur_">
-      <div></div>
-      <div></div>
-      <div></div>
-    </button>
+    <a id="url" href="[[openItemUrl_]]">
+      <div id="icon-wrapper">
+        <iron-icon id="folder-icon" icon="cr:folder" hidden$="[[!isFolder_]]">
+        </iron-icon>
+        <div id="icon" hidden$="[[isFolder_]]"></div>
+      </div>
+      <div id="website-title">
+        [[item_.title]]
+      </div>
+      <button is="paper-icon-button-light" class="more-vert-button"
+          on-click="onMenuButtonClick_" on-dblclick="onMenuButtonDblClick_"
+          tabindex$="[[ironListTabIndex]]" on-focus="onItemBlur_">
+        <div></div>
+        <div></div>
+        <div></div>
+      </button>
+    </a>
   </template>
   <script src="chrome://bookmarks/item.js"></script>
 <dom-module>

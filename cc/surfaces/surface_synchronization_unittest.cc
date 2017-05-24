@@ -986,10 +986,10 @@ TEST_F(SurfaceSynchronizationTest, PassesOnBeginFrameAcks) {
       CreateBeginFrameArgsForTesting(BEGINFRAME_FROM_HERE, 0, 1);
   begin_frame_source()->TestOnBeginFrame(args);
 
-  // Check that the support forwards a BeginFrameDidNotSwap ack to the
+  // Check that the support forwards a DidNotProduceFrame ack to the
   // BeginFrameSource.
   BeginFrameAck ack(0, 1, 1, false);
-  display_support().BeginFrameDidNotSwap(ack);
+  display_support().DidNotProduceFrame(ack);
   EXPECT_EQ(ack, begin_frame_source()->LastAckForObserver(&display_support()));
 
   // Issue another BeginFrame.

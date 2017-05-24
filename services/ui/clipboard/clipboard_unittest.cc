@@ -27,7 +27,7 @@ const char* kHtmlData = "<html>data</html>";
 
 class ClipboardAppTest : public service_manager::test::ServiceTest {
  public:
-  ClipboardAppTest() : ServiceTest("mus_clipboard_unittests") {}
+  ClipboardAppTest() : ServiceTest("clipboard_unittests") {}
   ~ClipboardAppTest() override {}
 
   // Overridden from service_manager::test::ServiceTest:

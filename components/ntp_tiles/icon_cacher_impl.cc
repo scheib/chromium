@@ -15,6 +15,7 @@
 #include "components/favicon_base/favicon_util.h"
 #include "components/image_fetcher/core/image_decoder.h"
 #include "components/image_fetcher/core/image_fetcher.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
@@ -100,11 +101,30 @@ void IconCacherImpl::OnGetFaviconImageForPageURLFinished(
   std::unique_ptr<CancelableImageCallback> preliminary_callback =
       MaybeProvideDefaultIcon(site, preliminary_icon_available);
 
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("icon_cacher", R"(
+        semantics {
+          sender: "Popular Sites New Tab Fetch"
+          description:
+            "Chrome may display a list of regionally-popular web sites on the "
+            "New Tab Page. This service fetches icons from those sites."
+          trigger:
+            "Whenever a popular site would be displayed, but its icon is not "
+            "yet cached in the browser."
+          data: "The URL for which to retrieve an icon."
+          destination: WEBSITE
+        }
+        policy {
+          cookies_allowed: false
+          setting: "This feature cannot be disabled in settings."
+          policy_exception_justification: "Not implemented."
+        })");
   image_fetcher_->StartOrQueueNetworkRequest(
       std::string(), IconURL(site),
       base::Bind(&IconCacherImpl::OnPopularSitesFaviconDownloaded,
                  base::Unretained(this), site,
-                 base::Passed(std::move(preliminary_callback))));
+                 base::Passed(std::move(preliminary_callback))),
+      traffic_annotation);
 }
 
 void IconCacherImpl::OnPopularSitesFaviconDownloaded(

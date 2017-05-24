@@ -13,11 +13,14 @@
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_container.h"
 #include "ash/wm/maximize_mode/maximize_mode_controller.h"
+#include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/overview/window_selector_controller.h"
+#include "ash/wm_window.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
+#include "ui/wm/core/window_util.h"
 
 namespace ash {
 
@@ -52,9 +55,32 @@ void OverviewButtonTray::UpdateAfterLoginStatusChange(LoginStatus status) {
 }
 
 bool OverviewButtonTray::PerformAction(const ui::Event& event) {
+  if (event.type() == ui::ET_GESTURE_TAP) {
+    if (event.AsGestureEvent()->details().tap_count() == 2) {
+      // If the second tap is not on the window selection page, that means we
+      // started on the window selection page. Ignore these double taps. (ie.
+      // treat them as single taps by ignoring the second tap)
+      if (!Shell::Get()->window_selector_controller()->IsSelecting())
+        return true;
+
+      MruWindowTracker::WindowList mru_window_list =
+          Shell::Get()->mru_window_tracker()->BuildMruWindowList();
+
+      // Switch to the second most recently used window (most recent is the
+      // current window), if it exists.
+      if (mru_window_list.size() > 1) {
+        AnimateInkDrop(views::InkDropState::DEACTIVATED, nullptr);
+        ::wm::ActivateWindow(WmWindow::GetAuraWindow(mru_window_list[1]));
+        return true;
+      }
+    }
+  }
+
   WindowSelectorController* controller =
       Shell::Get()->window_selector_controller();
-  // Toggling overview mode will fail if there is no window to show.
+  // Note: Toggling overview mode will fail if there is no window to show, the
+  // screen is locked, a modal dialog is open or is running in kiosk app
+  // session.
   bool performed = controller->ToggleOverview();
   ShellPort::Get()->RecordUserMetricsAction(UMA_TRAY_OVERVIEW);
   return performed;

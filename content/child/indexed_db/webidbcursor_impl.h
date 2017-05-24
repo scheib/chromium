@@ -36,11 +36,9 @@ class CONTENT_EXPORT WebIDBCursorImpl
   ~WebIDBCursorImpl() override;
 
   void Advance(unsigned long count, blink::WebIDBCallbacks* callback) override;
-  virtual void continueFunction(const blink::WebIDBKey& key,
-                                blink::WebIDBCallbacks* callback);
-  void ContinueFunction(const blink::WebIDBKey& key,
-                        const blink::WebIDBKey& primary_key,
-                        blink::WebIDBCallbacks* callback) override;
+  void Continue(const blink::WebIDBKey& key,
+                const blink::WebIDBKey& primary_key,
+                blink::WebIDBCallbacks* callback) override;
   void PostSuccessHandlerCallback() override;
 
   void SetPrefetchData(const std::vector<IndexedDBKey>& keys,

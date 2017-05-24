@@ -32,7 +32,7 @@
 #include "ipc/ipc_logging.h"
 #include "ipc/message_filter.h"
 #include "mojo/edk/embedder/embedder.h"
-#include "services/resource_coordinator/public/interfaces/memory/constants.mojom.h"
+#include "services/resource_coordinator/public/interfaces/memory_instrumentation/constants.mojom.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 
 #if defined(OS_LINUX)

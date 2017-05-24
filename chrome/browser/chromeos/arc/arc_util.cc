@@ -129,11 +129,9 @@ bool IsArcAllowedInAppListForProfile(const Profile* profile) {
   const user_manager::User* user =
       chromeos::ProfileHelper::Get()->GetUserByProfile(profile);
   const bool has_gaia_account = user && user->HasGaiaAccount();
-  const bool is_arc_active_directory_user =
-      user && user->IsActiveDirectoryUser() &&
-      IsArcAllowedForActiveDirectoryUsers();
-  if (!has_gaia_account && !is_arc_active_directory_user && !IsArcKioskMode()) {
-    VLOG(1) << "Users without GAIA accounts are not supported in ARC.";
+  const bool is_active_directory_user = user && user->IsActiveDirectoryUser();
+  if (!has_gaia_account && !is_active_directory_user && !IsArcKioskMode()) {
+    VLOG(1) << "Users without GAIA or AD accounts are not supported in ARC.";
     return false;
   }
 

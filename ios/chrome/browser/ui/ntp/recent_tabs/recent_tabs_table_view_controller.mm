@@ -824,13 +824,13 @@ enum CellType {
       if (!_signinPromoViewMediator) {
         _signinPromoViewMediator = [[SigninPromoViewMediator alloc] init];
         _signinPromoViewMediator.consumer = self;
+        _signinPromoViewMediator.accessPoint =
+            signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS;
       }
       contentViewTopMargin = kSigninPromoViewTopMargin;
       SigninPromoView* signinPromoView =
           [[SigninPromoView alloc] initWithFrame:CGRectZero];
-      [signinPromoView
-          enableChromeCommandWithAccessPoint:signin_metrics::AccessPoint::
-                                                 ACCESS_POINT_RECENT_TABS];
+      signinPromoView.delegate = _signinPromoViewMediator;
       signinPromoView.textLabel.text =
           l10n_util::GetNSString(IDS_IOS_SIGNIN_PROMO_RECENT_TABS);
       signinPromoView.textLabel.preferredMaxLayoutWidth =

@@ -980,13 +980,13 @@ Element* EnclosingBlockFlowElement(const Node& node) {
 
 EUserSelect UsedValueOfUserSelect(const Node& node) {
   if (node.IsHTMLElement() && ToHTMLElement(node).IsTextControl())
-    return SELECT_TEXT;
+    return EUserSelect::kText;
   if (!node.GetLayoutObject())
-    return SELECT_NONE;
+    return EUserSelect::kNone;
 
   const ComputedStyle* style = node.GetLayoutObject()->Style();
   if (style->UserModify() != EUserModify::kReadOnly)
-    return SELECT_TEXT;
+    return EUserSelect::kText;
 
   return style->UserSelect();
 }

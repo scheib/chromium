@@ -28,4 +28,8 @@ CoordinationUnitID::CoordinationUnitID(const CoordinationUnitType& type,
   }
 }
 
+CoordinationUnitID::CoordinationUnitID(const CoordinationUnitType& type,
+                                       uint64_t new_id)
+    : id(new_id), type(type) {}
+
 }  // resource_coordinator

@@ -79,6 +79,7 @@ class UpdateScreen : public BaseScreen,
   FRIEND_TEST_ALL_PREFIXES(UpdateScreenTest, TestBasic);
   FRIEND_TEST_ALL_PREFIXES(UpdateScreenTest, TestUpdateAvailable);
   FRIEND_TEST_ALL_PREFIXES(UpdateScreenTest, TestAPReselection);
+  friend class UpdateScreenUnitTest;
 
   enum class State {
     STATE_IDLE = 0,
@@ -124,6 +125,18 @@ class UpdateScreen : public BaseScreen,
 
   // The user requested an attempt to connect to the network should be made.
   void OnConnectRequested();
+
+  // Records the fact that we performed an update check but do not yet
+  // know if this update check is going to result in an update.
+  void RecordUpdateCheckWithNoUpdateYet();
+
+  // When an update is found, this is called to clear the time of update check
+  // which had saved when we did not yet know whether it would result in an
+  // update.
+  void ClearUpdateCheckNoUpdateTime();
+
+  // Returns true if we should check for an update.
+  bool ShouldCheckForUpdate();
 
   // Timer for the interval to wait for the reboot.
   // If reboot didn't happen - ask user to reboot manually.

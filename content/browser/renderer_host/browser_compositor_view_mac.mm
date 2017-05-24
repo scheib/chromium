@@ -293,9 +293,8 @@ void BrowserCompositorMac::SubmitCompositorFrame(
                                                std::move(frame));
 }
 
-void BrowserCompositorMac::OnBeginFrameDidNotSwap(
-    const cc::BeginFrameAck& ack) {
-  delegated_frame_host_->BeginFrameDidNotSwap(ack);
+void BrowserCompositorMac::OnDidNotProduceFrame(const cc::BeginFrameAck& ack) {
+  delegated_frame_host_->DidNotProduceFrame(ack);
 }
 
 void BrowserCompositorMac::SetHasTransparentBackground(bool transparent) {

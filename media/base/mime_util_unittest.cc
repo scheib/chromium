@@ -9,10 +9,13 @@
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_command_line.h"
 #include "build/build_config.h"
+#include "media/base/audio_codecs.h"
 #include "media/base/media.h"
 #include "media/base/media_switches.h"
 #include "media/base/mime_util.h"
 #include "media/base/mime_util_internal.h"
+#include "media/base/video_codecs.h"
+#include "media/base/video_color_space.h"
 #include "media/media_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -22,6 +25,12 @@
 
 namespace media {
 namespace internal {
+
+#if BUILDFLAG(USE_PROPRIETARY_CODECS)
+const bool kUsePropCodecs = true;
+#else
+const bool kUsePropCodecs = false;
+#endif  //  BUILDFLAG(USE_PROPRIETARY_CODECS)
 
 // MIME type for use with IsCodecSupportedOnAndroid() test; type is ignored in
 // all cases except for when paired with the Opus codec.
@@ -234,9 +243,129 @@ TEST(MimeUtilTest, SplitCodecsToVector) {
   EXPECT_EQ("mp4a.40.2", codecs_out[1]);
 }
 
+// Basic smoke test for API. More exhaustive codec string testing found in
+// media_canplaytype_browsertest.cc.
+TEST(MimeUtilTest, ParseVideoCodecString) {
+  bool out_is_ambiguous;
+  VideoCodec out_codec;
+  VideoCodecProfile out_profile;
+  uint8_t out_level;
+  VideoColorSpace out_colorspace;
+
+  // Valid AVC string whenever proprietary codecs are supported.
+  EXPECT_EQ(kUsePropCodecs,
+            ParseVideoCodecString("video/mp4", "avc3.42E01E", &out_is_ambiguous,
+                                  &out_codec, &out_profile, &out_level,
+                                  &out_colorspace));
+  if (kUsePropCodecs) {
+    EXPECT_FALSE(out_is_ambiguous);
+    EXPECT_EQ(kCodecH264, out_codec);
+    EXPECT_EQ(H264PROFILE_BASELINE, out_profile);
+    EXPECT_EQ(30, out_level);
+    EXPECT_EQ(VideoColorSpace::REC709(), out_colorspace);
+  }
+
+  // Valid VP9 string.
+  EnableNewVp9CodecStringSupport();
+  EXPECT_TRUE(ParseVideoCodecString("video/webm", "vp09.00.10.08",
+                                    &out_is_ambiguous, &out_codec, &out_profile,
+                                    &out_level, &out_colorspace));
+  EXPECT_FALSE(out_is_ambiguous);
+  EXPECT_EQ(kCodecVP9, out_codec);
+  EXPECT_EQ(VP9PROFILE_PROFILE0, out_profile);
+  EXPECT_EQ(10, out_level);
+  EXPECT_EQ(VideoColorSpace::REC709(), out_colorspace);
+
+  // Valid VP9 string with REC601 color space.
+  EXPECT_TRUE(ParseVideoCodecString("video/webm", "vp09.02.10.10.01.06.06.06",
+                                    &out_is_ambiguous, &out_codec, &out_profile,
+                                    &out_level, &out_colorspace));
+  EXPECT_FALSE(out_is_ambiguous);
+  EXPECT_EQ(kCodecVP9, out_codec);
+  EXPECT_EQ(VP9PROFILE_PROFILE2, out_profile);
+  EXPECT_EQ(10, out_level);
+  EXPECT_EQ(VideoColorSpace::REC601(), out_colorspace);
+
+  // Restore to avoid polluting other tests.
+  DisableNewVp9CodecStringSupport_ForTesting();
+
+  // Ambiguous AVC string (when proprietary codecs are supported).
+  EXPECT_EQ(
+      kUsePropCodecs,
+      ParseVideoCodecString("video/mp4", "avc3", &out_is_ambiguous, &out_codec,
+                            &out_profile, &out_level, &out_colorspace));
+  if (kUsePropCodecs) {
+    EXPECT_TRUE(out_is_ambiguous);
+    EXPECT_EQ(kCodecH264, out_codec);
+    EXPECT_EQ(VIDEO_CODEC_PROFILE_UNKNOWN, out_profile);
+    EXPECT_EQ(0, out_level);
+    EXPECT_EQ(VideoColorSpace::REC709(), out_colorspace);
+  }
+
+  // Audio codecs codec is not valid for video API.
+  EXPECT_FALSE(ParseVideoCodecString("video/webm", "opus", &out_is_ambiguous,
+                                     &out_codec, &out_profile, &out_level,
+                                     &out_colorspace));
+
+  // Made up codec is invalid.
+  EXPECT_FALSE(ParseVideoCodecString("video/webm", "bogus", &out_is_ambiguous,
+                                     &out_codec, &out_profile, &out_level,
+                                     &out_colorspace));
+}
+
+TEST(MimeUtilTest, ParseAudioCodecString) {
+  bool out_is_ambiguous;
+  AudioCodec out_codec;
+
+  // Valid Opus string.
+  EXPECT_TRUE(ParseAudioCodecString("audio/webm", "opus", &out_is_ambiguous,
+                                    &out_codec));
+  EXPECT_FALSE(out_is_ambiguous);
+  EXPECT_EQ(kCodecOpus, out_codec);
+
+  // Valid AAC string when proprietary codecs are supported.
+  EXPECT_EQ(kUsePropCodecs,
+            ParseAudioCodecString("audio/mp4", "mp4a.40.2", &out_is_ambiguous,
+                                  &out_codec));
+  if (kUsePropCodecs) {
+    EXPECT_FALSE(out_is_ambiguous);
+    EXPECT_EQ(kCodecAAC, out_codec);
+  }
+
+  // Ambiguous AAC string.
+  // TODO(chcunningha): This can probably be allowed. I think we treat all
+  // MPEG4_AAC the same.
+  EXPECT_EQ(kUsePropCodecs,
+            ParseAudioCodecString("audio/mp4", "mp4a.40", &out_is_ambiguous,
+                                  &out_codec));
+  if (kUsePropCodecs) {
+    EXPECT_TRUE(out_is_ambiguous);
+    EXPECT_EQ(kCodecAAC, out_codec);
+  }
+
+  // Valid empty codec string. Codec unambiguously implied by mime type.
+  EXPECT_TRUE(
+      ParseAudioCodecString("audio/flac", "", &out_is_ambiguous, &out_codec));
+  EXPECT_FALSE(out_is_ambiguous);
+  EXPECT_EQ(kCodecFLAC, out_codec);
+
+  // Valid audio codec should still be allowed with video mime type.
+  EXPECT_TRUE(ParseAudioCodecString("video/webm", "opus", &out_is_ambiguous,
+                                    &out_codec));
+  EXPECT_FALSE(out_is_ambiguous);
+  EXPECT_EQ(kCodecOpus, out_codec);
+
+  // Video codec is not valid for audio API.
+  EXPECT_FALSE(ParseAudioCodecString("audio/webm", "vp09.00.10.08",
+                                     &out_is_ambiguous, &out_codec));
+
+  // Made up codec is also not valid.
+  EXPECT_FALSE(ParseAudioCodecString("audio/webm", "bogus", &out_is_ambiguous,
+                                     &out_codec));
+}
+
 // See deeper string parsing testing in video_codecs_unittests.cc.
 TEST(MimeUtilTest, ExperimentalMultiPartVp9) {
-  base::test::ScopedCommandLine scoped_command_line;
 
   // Multi-part VP9 string not enabled by default.
   EXPECT_FALSE(IsSupportedMediaFormat("video/webm", {"vp09.00.10.08"}));
@@ -244,6 +373,8 @@ TEST(MimeUtilTest, ExperimentalMultiPartVp9) {
   // Should work if enabled.
   EnableNewVp9CodecStringSupport();
   EXPECT_TRUE(IsSupportedMediaFormat("video/webm", {"vp09.00.10.08"}));
+  // Restore to avoid polluting other tests.
+  DisableNewVp9CodecStringSupport_ForTesting();
 }
 
 TEST(IsCodecSupportedOnAndroidTest, EncryptedCodecsFailWithoutPlatformSupport) {

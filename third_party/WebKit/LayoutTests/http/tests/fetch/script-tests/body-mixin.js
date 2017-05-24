@@ -103,6 +103,25 @@ promise_test(function(test) {
       .then(function(res) {
           response = res;
           assert_false(response.bodyUsed);
+          var p = response.formData();
+          assert_true(response.bodyUsed);
+          assert_true(isLocked(response.body));
+          return p;
+        })
+      .then(
+        unreached_fulfillment(test),
+        function(e) {
+          assert_true(isLocked(response.body));
+          assert_equals(e.name, 'TypeError', 'expected MIME type error');
+        })
+    }, 'FormDataFailedTest');
+
+promise_test(function(test) {
+    var response;
+    return fetch('/fetch/resources/doctype.html')
+      .then(function(res) {
+          response = res;
+          assert_false(response.bodyUsed);
           var p = response.json();
           assert_true(response.bodyUsed);
           assert_true(isLocked(response.body));
@@ -245,6 +264,14 @@ promise_test(t => {
 promise_test(t => {
     var res = new Response('');
     res.body.cancel();
+    return res.formData().then(unreached_fulfillment(t), e => {
+        assert_equals(e.name, 'TypeError');
+      });
+  }, 'Used => formData');
+
+promise_test(t => {
+    var res = new Response('');
+    res.body.cancel();
     return res.json().then(unreached_fulfillment(t), e => {
         assert_equals(e.name, 'TypeError');
       });
@@ -276,6 +303,15 @@ promise_test(t => {
         assert_equals(e.name, 'TypeError');
       });
   }, 'Locked => blob');
+
+promise_test(t => {
+    var res = new Response('');
+    const reader = res.body.getReader();
+    return res.formData().then(unreached_fulfillment(t), e => {
+        reader.releaseLock();
+        assert_equals(e.name, 'TypeError');
+      });
+  }, 'Locked => formData');
 
 promise_test(t => {
     var res = new Response('');

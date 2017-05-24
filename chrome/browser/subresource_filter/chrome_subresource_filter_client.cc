@@ -85,6 +85,22 @@ void ChromeSubresourceFilterClient::MaybeAppendNavigationThrottles(
       navigation_handle, throttles);
 }
 
+void ChromeSubresourceFilterClient::OnReloadRequested() {
+  UMA_HISTOGRAM_BOOLEAN("SubresourceFilter.Prompt.NumReloads", true);
+  const GURL& whitelist_url = web_contents_->GetLastCommittedURL();
+
+  // Only whitelist via content settings when using the experimental UI,
+  // otherwise could get into a situation where content settings cannot be
+  // adjusted.
+  if (base::FeatureList::IsEnabled(
+          subresource_filter::kSafeBrowsingSubresourceFilterExperimentalUI)) {
+    WhitelistByContentSettings(whitelist_url);
+  } else {
+    WhitelistInCurrentWebContents(whitelist_url);
+  }
+  web_contents_->GetController().Reload(content::ReloadType::NORMAL, true);
+}
+
 void ChromeSubresourceFilterClient::ToggleNotificationVisibility(
     bool visibility) {
   if (did_show_ui_for_navigation_ && visibility)

@@ -213,11 +213,13 @@ bool ContainerNode::CollectChildrenAndRemoveFromOldParentWithCheck(
 }
 
 template <typename Functor>
-void ContainerNode::InsertNodeVector(const NodeVector& targets,
-                                     Node* next,
-                                     const Functor& mutator) {
+void ContainerNode::InsertNodeVector(
+    const NodeVector& targets,
+    Node* next,
+    const Functor& mutator,
+    NodeVector* post_insertion_notification_targets) {
+  DCHECK(post_insertion_notification_targets);
   probe::willInsertDOMNode(this);
-  NodeVector post_insertion_notification_targets;
   {
     EventDispatchForbiddenScope assert_no_event_dispatch;
     ScriptForbiddenScope forbid_script;
@@ -230,9 +232,15 @@ void ContainerNode::InsertNodeVector(const NodeVector& targets,
       if (GetDocument().ContainsV1ShadowTree())
         child.CheckSlotChangeAfterInserted();
       probe::didInsertDOMNode(&child);
-      NotifyNodeInsertedInternal(child, post_insertion_notification_targets);
+      NotifyNodeInsertedInternal(child, *post_insertion_notification_targets);
     }
   }
+}
+
+void ContainerNode::DidInsertNodeVector(
+    const NodeVector& targets,
+    Node* next,
+    const NodeVector& post_insertion_notification_targets) {
   Node* unchanged_previous =
       targets.size() > 0 ? targets[0]->previousSibling() : nullptr;
   for (const auto& target_node : targets) {
@@ -306,8 +314,13 @@ Node* ContainerNode::InsertBefore(Node* new_child,
           ref_child, nullptr, *new_child, targets, exception_state))
     return new_child;
 
-  ChildListMutationScope mutation(*this);
-  InsertNodeVector(targets, ref_child, AdoptAndInsertBefore());
+  NodeVector post_insertion_notification_targets;
+  {
+    ChildListMutationScope mutation(*this);
+    InsertNodeVector(targets, ref_child, AdoptAndInsertBefore(),
+                     &post_insertion_notification_targets);
+  }
+  DidInsertNodeVector(targets, ref_child, post_insertion_notification_targets);
   return new_child;
 }
 
@@ -450,40 +463,47 @@ Node* ContainerNode::ReplaceChild(Node* new_child,
       return nullptr;
   }
 
-  // 9. Let previousSibling be child’s previous sibling.
-  // 11. Let removedNodes be the empty list.
-  // 15. Queue a mutation record of "childList" for target parent with
-  // addedNodes nodes, removedNodes removedNodes, nextSibling reference child,
-  // and previousSibling previousSibling.
-  ChildListMutationScope mutation(*this);
-
-  // 12. If child’s parent is not null, run these substeps:
-  //    1. Set removedNodes to a list solely containing child.
-  //    2. Remove child from its parent with the suppress observers flag set.
-  if (ContainerNode* old_child_parent = old_child->parentNode()) {
-    old_child_parent->RemoveChild(old_child, exception_state);
-    if (exception_state.HadException())
-      return nullptr;
-  }
-
-  // Does this one more time because removeChild() fires a MutationEvent.
-  if (!CheckAcceptChild(new_child, old_child, exception_state))
-    return old_child;
-
-  // 13. Let nodes be node’s children if node is a DocumentFragment node, and a
-  // list containing solely node otherwise.
   NodeVector targets;
-  if (!CollectChildrenAndRemoveFromOldParentWithCheck(
-          next, old_child, *new_child, targets, exception_state))
-    return old_child;
+  NodeVector post_insertion_notification_targets;
+  {
+    // 9. Let previousSibling be child’s previous sibling.
+    // 11. Let removedNodes be the empty list.
+    // 15. Queue a mutation record of "childList" for target parent with
+    // addedNodes nodes, removedNodes removedNodes, nextSibling reference child,
+    // and previousSibling previousSibling.
+    ChildListMutationScope mutation(*this);
 
-  // 10. Adopt node into parent’s node document.
-  // 14. Insert node into parent before reference child with the suppress
-  // observers flag set.
-  if (next)
-    InsertNodeVector(targets, next, AdoptAndInsertBefore());
-  else
-    InsertNodeVector(targets, nullptr, AdoptAndAppendChild());
+    // 12. If child’s parent is not null, run these substeps:
+    //    1. Set removedNodes to a list solely containing child.
+    //    2. Remove child from its parent with the suppress observers flag set.
+    if (ContainerNode* old_child_parent = old_child->parentNode()) {
+      old_child_parent->RemoveChild(old_child, exception_state);
+      if (exception_state.HadException())
+        return nullptr;
+    }
+
+    // Does this one more time because removeChild() fires a MutationEvent.
+    if (!CheckAcceptChild(new_child, old_child, exception_state))
+      return old_child;
+
+    // 13. Let nodes be node’s children if node is a DocumentFragment node, and
+    // a list containing solely node otherwise.
+    if (!CollectChildrenAndRemoveFromOldParentWithCheck(
+            next, old_child, *new_child, targets, exception_state))
+      return old_child;
+
+    // 10. Adopt node into parent’s node document.
+    // 14. Insert node into parent before reference child with the suppress
+    // observers flag set.
+    if (next) {
+      InsertNodeVector(targets, next, AdoptAndInsertBefore(),
+                       &post_insertion_notification_targets);
+    } else {
+      InsertNodeVector(targets, nullptr, AdoptAndAppendChild(),
+                       &post_insertion_notification_targets);
+    }
+  }
+  DidInsertNodeVector(targets, next, post_insertion_notification_targets);
 
   // 16. Return child.
   return old_child;
@@ -706,8 +726,13 @@ Node* ContainerNode::AppendChild(Node* new_child,
           nullptr, nullptr, *new_child, targets, exception_state))
     return new_child;
 
-  ChildListMutationScope mutation(*this);
-  InsertNodeVector(targets, nullptr, AdoptAndAppendChild());
+  NodeVector post_insertion_notification_targets;
+  {
+    ChildListMutationScope mutation(*this);
+    InsertNodeVector(targets, nullptr, AdoptAndAppendChild(),
+                     &post_insertion_notification_targets);
+  }
+  DidInsertNodeVector(targets, nullptr, post_insertion_notification_targets);
   return new_child;
 }
 

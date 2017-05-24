@@ -19,6 +19,15 @@ class InfoBarWrapper extends FrameLayout {
 
     private final InfoBarContainerLayout.Item mItem;
 
+    /** Whether or not the height of the layout should be restricted for animations. */
+    private boolean mRestrictHeightForAnimation;
+
+    /**
+     * The height in px that this view will be restricted to if
+     * {@link #mRestrictHeightForAnimation} is set.
+     */
+    private int mHeightForAnimationPx;
+
     /**
      * Constructor for inflating from Java.
      */
@@ -33,10 +42,36 @@ class InfoBarWrapper extends FrameLayout {
         // setBackgroundResource() changes the padding, so call setPadding() second.
         setBackgroundResource(R.drawable.infobar_wrapper_bg);
         setPadding(0, shadowHeight, 0, 0);
+        setClipChildren(true);
+    }
+
+    /**
+     * @param restrict Whether or not the height of this view should be restricted for animations.
+     */
+    public void setRestrictHeightForAnimation(boolean restrict) {
+        mRestrictHeightForAnimation = restrict;
+    }
+
+    /**
+     * @param heightPx The restricted height in px that will be used if
+     *                 {@link #mRestrictHeightForAnimation} is set.
+     */
+    public void setHeightForAnimation(int heightPx) {
+        mHeightForAnimationPx = heightPx;
     }
 
     InfoBarContainerLayout.Item getItem() {
         return mItem;
+    }
+
+    @Override
+    public void onMeasure(int widthSpec, int heightSpec) {
+        if (mRestrictHeightForAnimation) {
+            int heightPx = Math.min(mHeightForAnimationPx, MeasureSpec.getSize(heightSpec));
+            heightSpec = MeasureSpec.makeMeasureSpec(heightPx, MeasureSpec.getMode(heightSpec));
+        }
+
+        super.onMeasure(widthSpec, heightSpec);
     }
 
     @Override

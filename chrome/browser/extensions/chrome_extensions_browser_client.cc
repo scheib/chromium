@@ -74,9 +74,7 @@ namespace extensions {
 ChromeExtensionsBrowserClient::ChromeExtensionsBrowserClient() {
   process_manager_delegate_.reset(new ChromeProcessManagerDelegate);
   api_client_.reset(new ChromeExtensionsAPIClient);
-  // Only set if it hasn't already been set (e.g. by a test).
-  if (GetCurrentChannel() == GetDefaultChannel())
-    SetCurrentChannel(chrome::GetChannel());
+  SetCurrentChannel(chrome::GetChannel());
   resource_manager_.reset(new ChromeComponentExtensionResourceManager());
 }
 

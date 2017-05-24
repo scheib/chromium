@@ -29,6 +29,13 @@ class SimWebViewClient final : public FrameTestHelpers::TestWebViewClient {
     return finished_loading_layout_count_;
   }
 
+  WebView* CreateView(WebLocalFrame* opener,
+                      const WebURLRequest&,
+                      const WebWindowFeatures&,
+                      const WebString& name,
+                      WebNavigationPolicy,
+                      bool) override;
+
  private:
   // WebWidgetClient overrides.
   void DidMeaningfulLayout(WebMeaningfulLayout) override;
@@ -38,6 +45,7 @@ class SimWebViewClient final : public FrameTestHelpers::TestWebViewClient {
   int finished_loading_layout_count_;
 
   WebLayerTreeView* layer_tree_view_;
+  FrameTestHelpers::WebViewHelper web_view_helper_;
 };
 
 }  // namespace blink

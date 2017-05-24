@@ -59,6 +59,15 @@ class StartupUtils {
   // Sets initial locale in local settings.
   static void SetInitialLocale(const std::string& locale);
 
+  // Saves the time of the last update check which did not result in any update.
+  static void SaveTimeOfLastUpdateCheckWithoutUpdate(base::Time time);
+
+  // Clears the update check time which was previously saved.
+  static void ClearTimeOfLastUpdateCheckWithoutUpdate();
+
+  // Returns the time of the last update check which did not lead to an update.
+  static base::Time GetTimeOfLastUpdateCheckWithoutUpdate();
+
   // Registers OOBE preferences.
   static void RegisterPrefs(PrefRegistrySimple* registry);
 };

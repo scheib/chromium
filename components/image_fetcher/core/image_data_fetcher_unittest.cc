@@ -13,6 +13,7 @@
 #include "net/base/load_flags.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/test_url_fetcher_factory.h"
 #include "net/url_request/url_request_status.h"
 #include "net/url_request/url_request_test_util.h"
@@ -60,8 +61,10 @@ class ImageDataFetcherTest : public testing::Test {
 
 TEST_F(ImageDataFetcherTest, FetchImageData) {
   image_data_fetcher_.FetchImageData(
-      GURL(kImageURL), base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
-                                  base::Unretained(this)));
+      GURL(kImageURL),
+      base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
+                 base::Unretained(this)),
+      TRAFFIC_ANNOTATION_FOR_TESTS);
 
   RequestMetadata expected_metadata;
   expected_metadata.mime_type = std::string("image/png");
@@ -95,8 +98,10 @@ TEST_F(ImageDataFetcherTest, FetchImageData) {
 
 TEST_F(ImageDataFetcherTest, FetchImageData_FromCache) {
   image_data_fetcher_.FetchImageData(
-      GURL(kImageURL), base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
-                                  base::Unretained(this)));
+      GURL(kImageURL),
+      base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
+                 base::Unretained(this)),
+      TRAFFIC_ANNOTATION_FOR_TESTS);
 
   RequestMetadata expected_metadata;
   expected_metadata.mime_type = std::string("image/png");
@@ -128,8 +133,10 @@ TEST_F(ImageDataFetcherTest, FetchImageData_FromCache) {
 
 TEST_F(ImageDataFetcherTest, FetchImageData_NotFound) {
   image_data_fetcher_.FetchImageData(
-      GURL(kImageURL), base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
-                                  base::Unretained(this)));
+      GURL(kImageURL),
+      base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
+                 base::Unretained(this)),
+      TRAFFIC_ANNOTATION_FOR_TESTS);
 
   RequestMetadata expected_metadata;
   expected_metadata.mime_type = std::string("image/png");
@@ -158,8 +165,10 @@ TEST_F(ImageDataFetcherTest, FetchImageData_NotFound) {
 
 TEST_F(ImageDataFetcherTest, FetchImageData_WithContentLocation) {
   image_data_fetcher_.FetchImageData(
-      GURL(kImageURL), base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
-                                  base::Unretained(this)));
+      GURL(kImageURL),
+      base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
+                 base::Unretained(this)),
+      TRAFFIC_ANNOTATION_FOR_TESTS);
 
   RequestMetadata expected_metadata;
   expected_metadata.mime_type = std::string("image/png");
@@ -192,7 +201,8 @@ TEST_F(ImageDataFetcherTest, FetchImageData_FailedRequest) {
   image_data_fetcher_.FetchImageData(
       GURL(kImageURL),
       base::Bind(&ImageDataFetcherTest::OnImageDataFetchedFailedRequest,
-                 base::Unretained(this)));
+                 base::Unretained(this)),
+      TRAFFIC_ANNOTATION_FOR_TESTS);
 
   RequestMetadata expected_metadata;
   expected_metadata.http_response_code = net::URLFetcher::RESPONSE_CODE_INVALID;
@@ -216,8 +226,10 @@ TEST_F(ImageDataFetcherTest, FetchImageData_MultipleRequests) {
   EXPECT_CALL(*this, OnImageDataFetchedMultipleRequests(testing::_, testing::_))
       .Times(2);
 
-  image_data_fetcher_.FetchImageData(GURL(kImageURL), callback);
-  image_data_fetcher_.FetchImageData(GURL(kImageURL), callback);
+  image_data_fetcher_.FetchImageData(GURL(kImageURL), callback,
+                                     TRAFFIC_ANNOTATION_FOR_TESTS);
+  image_data_fetcher_.FetchImageData(GURL(kImageURL), callback,
+                                     TRAFFIC_ANNOTATION_FOR_TESTS);
 
   // Multiple calls to FetchImageData for the same URL will result in
   // multiple URLFetchers being created.
@@ -238,8 +250,10 @@ TEST_F(ImageDataFetcherTest, FetchImageData_CancelFetchIfImageExceedsMaxSize) {
   const int64_t kMaxDownloadBytes = 1024 * 1024;
   image_data_fetcher_.SetImageDownloadLimit(kMaxDownloadBytes);
   image_data_fetcher_.FetchImageData(
-      GURL(kImageURL), base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
-                                  base::Unretained(this)));
+      GURL(kImageURL),
+      base::Bind(&ImageDataFetcherTest::OnImageDataFetched,
+                 base::Unretained(this)),
+      TRAFFIC_ANNOTATION_FOR_TESTS);
 
   // Fetching an oversized image will behave like any other failed request.
   // There will be exactly one call to OnImageDataFetched containing a response

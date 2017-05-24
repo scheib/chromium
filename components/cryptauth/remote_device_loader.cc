@@ -56,7 +56,8 @@ RemoteDeviceLoader::RemoteDeviceLoader(
     const std::string& user_id,
     const std::string& user_private_key,
     std::unique_ptr<cryptauth::SecureMessageDelegate> secure_message_delegate)
-    : remaining_devices_(device_info_list),
+    : should_load_beacon_seeds_(false),
+      remaining_devices_(device_info_list),
       user_id_(user_id),
       user_private_key_(user_private_key),
       secure_message_delegate_(std::move(secure_message_delegate)),
@@ -64,8 +65,10 @@ RemoteDeviceLoader::RemoteDeviceLoader(
 
 RemoteDeviceLoader::~RemoteDeviceLoader() {}
 
-void RemoteDeviceLoader::Load(const RemoteDeviceCallback& callback) {
+void RemoteDeviceLoader::Load(bool should_load_beacon_seeds,
+                              const RemoteDeviceCallback& callback) {
   DCHECK(callback_.is_null());
+  should_load_beacon_seeds_ = should_load_beacon_seeds;
   callback_ = callback;
   PA_LOG(INFO) << "Loading " << remaining_devices_.size()
                << " remote devices";
@@ -101,9 +104,18 @@ void RemoteDeviceLoader::OnPSKDerived(
   PA_LOG(INFO) << "Derived PSK for " << device.friendly_device_name()
                << ", " << remaining_devices_.size() << " keys remaining.";
 
-  remote_devices_.push_back(cryptauth::RemoteDevice(
+  cryptauth::RemoteDevice remote_device(
       user_id_, device.friendly_device_name(), device.public_key(),
-      device.bluetooth_address(), psk, std::string()));
+      device.bluetooth_address(), psk, std::string());
+
+  if (should_load_beacon_seeds_) {
+    std::vector<BeaconSeed> beacon_seeds;
+    for (const BeaconSeed& beacon_seed : device.beacon_seeds()) {
+      beacon_seeds.push_back(beacon_seed);
+    }
+    remote_device.LoadBeaconSeeds(beacon_seeds);
+  }
+  remote_devices_.push_back(remote_device);
 
   if (remaining_devices_.empty())
     callback_.Run(remote_devices_);

@@ -28,6 +28,7 @@ class TestCompositorFrameSink : public CompositorFrameSink {
   void SubmitCompositorFrame(CompositorFrame frame) override {
     client_->DidReceiveCompositorFrameAck();
   }
+  void DidNotProduceFrame(const BeginFrameAck& ack) override {}
 };
 
 TEST(CompositorFrameSinkTest, ContextLossInformsClient) {

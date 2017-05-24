@@ -21,6 +21,24 @@ message FieldTrialEvent {
   repeated FieldTrial field_trials = 1;
 }
 
+// Language detection output.
+message LanguageDetection {
+  message Language {
+    // ISO 639 language code will be used.
+    optional string language_code = 1;
+    // Whether the detected language is reliable, note this is determined by
+    // the CLD3.
+    optional bool is_reliable = 2;
+  }
+  // Top n languages. Typically we just log the top language, but for page that
+  // we're not confident about, we may log up to 3 top languages in descending
+  // order.
+  repeated Language detected_languages = 1;
+  // Adopted language is the final determined language.
+  // It will be stored only if it's different from the first detected language.
+  optional string adopted_language = 2;
+}
+
 message UserEventSpecifics {
   // Time of event, as measured on the client (unix epoch).
   optional int64 event_time_usec = 1;
@@ -32,5 +50,8 @@ message UserEventSpecifics {
   // other events belonged to.
   optional fixed64 session_id = 3;
 
-  oneof event { FieldTrialEvent field_trial_event = 4; }
+  oneof event {
+    FieldTrialEvent field_trial_event = 4;
+    LanguageDetection language_detection = 5;
+  }
 }

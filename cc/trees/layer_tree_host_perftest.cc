@@ -156,13 +156,25 @@ class LayerTreeHostPerfTestJsonReader : public LayerTreeHostPerfTest {
 };
 
 // Simulates a tab switcher scene with two stacks of 10 tabs each.
-TEST_F(LayerTreeHostPerfTestJsonReader, TenTenSingleThread) {
+// Timed out on Android: http://crbug.com/723821
+#if defined(OS_ANDROID)
+#define MAYBE_TenTenSingleThread DISABLED_TenTenSingleThread
+#else
+#define MAYBE_TenTenSingleThread TenTenSingleThread
+#endif
+TEST_F(LayerTreeHostPerfTestJsonReader, MAYBE_TenTenSingleThread) {
   SetTestName("10_10_single_thread");
   ReadTestFile("10_10_layer_tree");
   RunTest(CompositorMode::SINGLE_THREADED);
 }
 
-TEST_F(LayerTreeHostPerfTestJsonReader, TenTenThreaded) {
+// Timed out on Android: http://crbug.com/723821
+#if defined(OS_ANDROID)
+#define MAYBE_TenTenThreaded DISABLED_TenTenThreaded
+#else
+#define MAYBE_TenTenThreaded TenTenThreaded
+#endif
+TEST_F(LayerTreeHostPerfTestJsonReader, MAYBE_TenTenThreaded) {
   SetTestName("10_10_threaded_impl_side");
   ReadTestFile("10_10_layer_tree");
   RunTest(CompositorMode::THREADED);
@@ -218,7 +230,8 @@ TEST_F(LayerTreeHostPerfTestLeafInvalidates, TenTenSingleThread) {
   RunTest(CompositorMode::SINGLE_THREADED);
 }
 
-TEST_F(LayerTreeHostPerfTestLeafInvalidates, TenTenThreaded) {
+// Timed out on Android: http://crbug.com/723821
+TEST_F(LayerTreeHostPerfTestLeafInvalidates, MAYBE_TenTenThreaded) {
   SetTestName("10_10_threaded_impl_side_leaf_invalidates");
   ReadTestFile("10_10_layer_tree");
   RunTest(CompositorMode::THREADED);
@@ -249,13 +262,26 @@ class ScrollingLayerTreePerfTest : public LayerTreeHostPerfTestJsonReader {
   scoped_refptr<Layer> scrollable_;
 };
 
-TEST_F(ScrollingLayerTreePerfTest, LongScrollablePageSingleThread) {
+// Timed out on Android: http://crbug.com/723821
+#if defined(OS_ANDROID)
+#define MAYBE_LongScrollablePageSingleThread \
+    DISABLED_LongScrollablePageSingleThread
+#else
+#define MAYBE_LongScrollablePageSingleThread LongScrollablePageSingleThread
+#endif
+TEST_F(ScrollingLayerTreePerfTest, MAYBE_LongScrollablePageSingleThread) {
   SetTestName("long_scrollable_page");
   ReadTestFile("long_scrollable_page");
   RunTest(CompositorMode::SINGLE_THREADED);
 }
 
-TEST_F(ScrollingLayerTreePerfTest, LongScrollablePageThreaded) {
+// Timed out on Android: http://crbug.com/723821
+#if defined(OS_ANDROID)
+#define MAYBE_LongScrollablePageThreaded DISABLED_LongScrollablePageThreaded
+#else
+#define MAYBE_LongScrollablePageThreaded LongScrollablePageThreaded
+#endif
+TEST_F(ScrollingLayerTreePerfTest, MAYBE_LongScrollablePageThreaded) {
   SetTestName("long_scrollable_page_threaded_impl_side");
   ReadTestFile("long_scrollable_page");
   RunTest(CompositorMode::THREADED);
@@ -350,7 +376,13 @@ TEST_F(BrowserCompositorInvalidateLayerTreePerfTest, DenseBrowserUIThreaded) {
 }
 
 // Simulates a page with several large, transformed and animated layers.
-TEST_F(LayerTreeHostPerfTestJsonReader, HeavyPageThreaded) {
+// Timed out on Android: http://crbug.com/723821
+#if defined(OS_ANDROID)
+#define MAYBE_HeavyPageThreaded DISABLED_HeavyPageThreaded
+#else
+#define MAYBE_HeavyPageThreaded HeavyPageThreaded
+#endif
+TEST_F(LayerTreeHostPerfTestJsonReader, MAYBE_HeavyPageThreaded) {
   begin_frame_driven_drawing_ = true;
   measure_commit_cost_ = true;
   SetTestName("heavy_page");

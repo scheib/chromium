@@ -41,9 +41,11 @@
 #include "core/events/UIEventWithKeyState.h"
 #include "core/events/WebInputEventConversion.h"
 #include "core/exported/WebFileChooserCompletionImpl.h"
+#include "core/exported/WebPluginContainerBase.h"
 #include "core/exported/WebViewBase.h"
 #include "core/frame/FrameView.h"
 #include "core/frame/Settings.h"
+#include "core/frame/UseCounter.h"
 #include "core/frame/VisualViewport.h"
 #include "core/html/HTMLInputElement.h"
 #include "core/html/forms/ColorChooser.h"
@@ -122,7 +124,6 @@
 #include "web/PopupMenuImpl.h"
 #include "web/WebFrameWidgetImpl.h"
 #include "web/WebLocalFrameImpl.h"
-#include "web/WebPluginContainerImpl.h"
 #include "web/WebRemoteFrameImpl.h"
 #include "web/WebSettingsImpl.h"
 
@@ -658,8 +659,8 @@ void ChromeClientImpl::ShowMouseOverURL(const HitTestResult& result) {
       if (object && object->IsLayoutPart()) {
         PluginView* plugin_view = ToLayoutPart(object)->Plugin();
         if (plugin_view && plugin_view->IsPluginContainer()) {
-          WebPluginContainerImpl* plugin =
-              ToWebPluginContainerImpl(plugin_view);
+          WebPluginContainerBase* plugin =
+              ToWebPluginContainerBase(plugin_view);
           url = plugin->Plugin()->LinkAtPosition(
               result.RoundedPointInInnerNodeFrame());
         }
@@ -1136,12 +1137,15 @@ void ChromeClientImpl::HandleKeyboardEventOnTextField(
 
 void ChromeClientImpl::DidChangeValueInTextField(
     HTMLFormControlElement& element) {
-  WebLocalFrameImpl* webframe =
-      WebLocalFrameImpl::FromFrame(element.GetDocument().GetFrame());
+  Document& doc = element.GetDocument();
+  WebLocalFrameImpl* webframe = WebLocalFrameImpl::FromFrame(doc.GetFrame());
   if (webframe->AutofillClient())
     webframe->AutofillClient()->TextFieldDidChange(
         WebFormControlElement(&element));
 
+  UseCounter::Count(doc, doc.IsSecureContext()
+                             ? UseCounter::kFieldEditInSecureContext
+                             : UseCounter::kFieldEditInNonSecureContext);
   web_view_->PageImportanceSignals()->SetHadFormInteraction();
 }
 

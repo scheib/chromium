@@ -26,6 +26,7 @@ import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.toolbar.ToolbarDataProvider;
 import org.chromium.chrome.browser.util.MathUtils;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheet;
+import org.chromium.chrome.browser.widget.bottomsheet.BottomSheetContentController;
 import org.chromium.chrome.browser.widget.bottomsheet.EmptyBottomSheetObserver;
 import org.chromium.ui.UiUtils;
 
@@ -356,5 +357,17 @@ public class LocationBarPhone extends LocationBarLayout {
                 }
             }
         });
+    }
+
+    @Override
+    public void backKeyPressed() {
+        super.backKeyPressed();
+
+        // If the back button was pressed while the placeholder content was showing, hide the sheet.
+        if (mBottomSheet != null && mBottomSheet.getCurrentSheetContent() != null
+                && mBottomSheet.getCurrentSheetContent().getType()
+                        == BottomSheetContentController.TYPE_PLACEHOLDER) {
+            mBottomSheet.setSheetState(BottomSheet.SHEET_STATE_PEEK, true);
+        }
     }
 }

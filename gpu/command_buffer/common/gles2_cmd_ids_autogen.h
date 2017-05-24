@@ -334,7 +334,10 @@
   OP(OverlayPromotionHintCHROMIUM)                         /* 575 */ \
   OP(SwapBuffersWithBoundsCHROMIUMImmediate)               /* 576 */ \
   OP(SetDrawRectangleCHROMIUM)                             /* 577 */ \
-  OP(SetEnableDCLayersCHROMIUM)                            /* 578 */
+  OP(SetEnableDCLayersCHROMIUM)                            /* 578 */ \
+  OP(InitializeDiscardableTextureCHROMIUM)                 /* 579 */ \
+  OP(UnlockDiscardableTextureCHROMIUM)                     /* 580 */ \
+  OP(LockDiscardableTextureCHROMIUM)                       /* 581 */
 
 enum CommandId {
   kOneBeforeStartPoint =

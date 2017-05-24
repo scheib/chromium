@@ -590,7 +590,7 @@ void IEImporter::ImportPasswordsIE6() {
     return;
   }
 
-  base::win::ScopedComPtr<IPStore, &IID_IPStore> pstore;
+  base::win::ScopedComPtr<IPStore> pstore;
   HRESULT result = PStoreCreateInstance(pstore.GetAddressOf(), 0, 0, 0);
   if (result != S_OK) {
     FreeLibrary(pstorec_dll);
@@ -600,7 +600,7 @@ void IEImporter::ImportPasswordsIE6() {
   std::vector<AutoCompleteInfo> ac_list;
 
   // Enumerates AutoComplete items in the protected database.
-  base::win::ScopedComPtr<IEnumPStoreItems, &IID_IEnumPStoreItems> item;
+  base::win::ScopedComPtr<IEnumPStoreItems> item;
   result = pstore->EnumItems(0, &AutocompleteGUID, &AutocompleteGUID, 0,
                              item.GetAddressOf());
   if (result != PST_E_OK) {

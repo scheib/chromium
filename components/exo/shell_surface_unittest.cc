@@ -13,7 +13,6 @@
 #include "ash/test/shell_test_api.h"
 #include "ash/test/workspace_controller_test_api.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/workspace/workspace_window_resizer.h"
 #include "ash/wm_window.h"

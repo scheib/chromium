@@ -119,7 +119,10 @@ public class ShareHelper {
     private static void deleteShareImageFiles(File file) {
         if (!file.exists()) return;
         if (file.isDirectory()) {
-            for (File f : file.listFiles()) deleteShareImageFiles(f);
+            File[] file_list = file.listFiles();
+            if (file_list != null) {
+                for (File f : file_list) deleteShareImageFiles(f);
+            }
         }
         if (!file.delete()) {
             Log.w(TAG, "Failed to delete share image file: %s", file.getAbsolutePath());

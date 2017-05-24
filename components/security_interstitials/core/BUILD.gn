@@ -16,6 +16,8 @@ static_library("core") {
     "metrics_helper.h",
     "safe_browsing_loud_error_ui.cc",
     "safe_browsing_loud_error_ui.h",
+    "safe_browsing_quiet_error_ui.cc",
+    "safe_browsing_quiet_error_ui.h",
     "ssl_error_ui.cc",
     "ssl_error_ui.h",
   ]

@@ -150,6 +150,9 @@ Polymer({
 // <if expr="not chromeos">
     this.startListening_();
 // </if>
+    if (settings.getQueryParameters().get('checkForUpdate') == 'true') {
+      this.onCheckUpdatesTap_();
+    }
   },
 
   /** @private */

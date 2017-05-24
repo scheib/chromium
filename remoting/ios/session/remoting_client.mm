@@ -20,6 +20,7 @@
 #include "remoting/client/chromoting_client_runtime.h"
 #include "remoting/client/chromoting_session.h"
 #include "remoting/client/connect_to_host_info.h"
+#include "remoting/client/input/keyboard_interpreter.h"
 #include "remoting/client/ui/gesture_interpreter.h"
 #include "remoting/client/ui/renderer_proxy.h"
 #include "remoting/ios/session/remoting_client_session_delegate.h"
@@ -36,13 +37,13 @@ NSString* const kHostSessionPin = @"kHostSessionPin";
 @interface RemotingClient () {
   remoting::ChromotingClientRuntime* _runtime;
   std::unique_ptr<remoting::ChromotingSession> _session;
-  remoting::RemotingClientSessonDelegate* _sessonDelegate;
+  std::unique_ptr<remoting::RemotingClientSessonDelegate> _sessonDelegate;
   ClientSessionDetails* _sessionDetails;
   // Call _secretFetchedCallback on the network thread.
   remoting::protocol::SecretFetchedCallback _secretFetchedCallback;
   std::unique_ptr<remoting::RendererProxy> _renderer;
   std::unique_ptr<remoting::GestureInterpreter> _gestureInterpreter;
-  //  std::unique_ptr<remoting::KeyboardInterpreter> _keyboardInterpreter;
+  std::unique_ptr<remoting::KeyboardInterpreter> _keyboardInterpreter;
 }
 @end
 
@@ -54,7 +55,7 @@ NSString* const kHostSessionPin = @"kHostSessionPin";
   self = [super init];
   if (self) {
     _runtime = remoting::ChromotingClientRuntime::GetInstance();
-    _sessonDelegate = new remoting::RemotingClientSessonDelegate(self);
+    _sessonDelegate.reset(new remoting::RemotingClientSessonDelegate(self));
     _sessionDetails = [[ClientSessionDetails alloc] init];
 
     [[NSNotificationCenter defaultCenter]
@@ -99,16 +100,25 @@ NSString* const kHostSessionPin = @"kHostSessionPin";
   client_auth_config.host_id = info.host_id;
   client_auth_config.pairing_client_id = info.pairing_id;
   client_auth_config.pairing_secret = info.pairing_secret;
+
+  // ChromotingClient keeps strong reference to |client_auth_config| through its
+  // lifetime.
+  __weak RemotingClient* weakSelf = self;
   client_auth_config.fetch_secret_callback = base::BindBlockArc(
       ^(bool pairing_supported, const remoting::protocol::SecretFetchedCallback&
                                     secret_fetched_callback) {
-        _secretFetchedCallback = secret_fetched_callback;
-        _sessionDetails.state = SessionPinPrompt;
+        RemotingClient* strongSelf = weakSelf;
+        if (!strongSelf) {
+          return;
+        }
+        strongSelf->_secretFetchedCallback = secret_fetched_callback;
+        strongSelf->_sessionDetails.state = SessionPinPrompt;
         [[NSNotificationCenter defaultCenter]
             postNotificationName:kHostSessionStatusChanged
-                          object:self
+                          object:weakSelf
                         userInfo:[NSDictionary
-                                     dictionaryWithObject:_sessionDetails
+                                     dictionaryWithObject:strongSelf
+                                                              ->_sessionDetails
                                                    forKey:kSessionDetails]];
       });
 
@@ -122,11 +132,10 @@ NSString* const kHostSessionPin = @"kHostSessionPin";
       _sessonDelegate->GetWeakPtr(), [_displayHandler CreateCursorShapeStub],
       [_displayHandler CreateVideoRenderer], audioPlayer, info,
       client_auth_config));
-
   _renderer = [_displayHandler CreateRendererProxy];
-
   _gestureInterpreter.reset(
       new remoting::GestureInterpreter(_renderer.get(), _session.get()));
+  _keyboardInterpreter.reset(new remoting::KeyboardInterpreter(_session.get()));
 
   _session->Connect();
 }
@@ -134,9 +143,17 @@ NSString* const kHostSessionPin = @"kHostSessionPin";
 - (void)disconnectFromHost {
   if (_session) {
     _session->Disconnect();
+    _runtime->network_task_runner()->DeleteSoon(FROM_HERE, _session.release());
   }
   _displayHandler = nil;
-  // TODO(nicholss): Do we need to cleanup more?
+
+  // This needs to be deleted on the display thread since GlDisplayHandler binds
+  // its WeakPtrFactory to the display thread.
+  // TODO(yuweih): Ideally this constraint can be removed once we allow
+  // GlRenderer to be created on the UI thread before being used.
+  if (_renderer) {
+    _runtime->display_task_runner()->DeleteSoon(FROM_HERE, _renderer.release());
+  }
 }
 
 #pragma mark - Eventing
@@ -159,6 +176,10 @@ NSString* const kHostSessionPin = @"kHostSessionPin";
 
 - (remoting::GestureInterpreter*)gestureInterpreter {
   return _gestureInterpreter.get();
+}
+
+- (remoting::KeyboardInterpreter*)keyboardInterpreter {
+  return _keyboardInterpreter.get();
 }
 
 #pragma mark - ChromotingSession::Delegate

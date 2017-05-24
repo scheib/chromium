@@ -351,7 +351,7 @@ void ConvertProtoToPipelineStatistics(
 void ConvertCdmKeyInfoToProto(
     const CdmKeysInfo& keys_information,
     pb::CdmClientOnSessionKeysChange* key_change_message) {
-  for (auto* info : keys_information) {
+  for (auto& info : keys_information) {
     pb::CdmKeyInformation* key = key_change_message->add_key_information();
     key->set_key_id(info->key_id.data(), info->key_id.size());
     key->set_status(ToProtoCdmKeyInformation(info->status).value());

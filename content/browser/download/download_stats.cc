@@ -339,6 +339,10 @@ const base::FilePath::CharType* kDangerousFileTypes[] = {
   FILE_PATH_LITERAL(".udif"),
 };
 
+// The maximum size in KB for the file size metric, file size larger than this
+// will be kept in overflow bucket.
+const int64_t kMaxFileSizeKb = 4 * 1024 * 1024; /* 4GB. */
+
 // Maps extensions to their matching UMA histogram int value.
 int GetDangerousFileType(const base::FilePath& file_path) {
   for (size_t i = 0; i < arraysize(kDangerousFileTypes); ++i) {
@@ -796,6 +800,11 @@ void RecordParallelizableDownloadStats(
     size_t bytes_downloaded_without_parallel_streams,
     base::TimeDelta time_without_parallel_streams,
     bool uses_parallel_requests) {
+  RecordParallelizableDownloadAverageStats(
+      bytes_downloaded_with_parallel_streams +
+          bytes_downloaded_without_parallel_streams,
+      time_with_parallel_streams + time_without_parallel_streams);
+
   int64_t bandwidth_without_parallel_streams = 0;
   if (bytes_downloaded_without_parallel_streams > 0) {
     bandwidth_without_parallel_streams = CalculateBandwidthBytesPerSecond(
@@ -861,6 +870,22 @@ void RecordParallelizableDownloadStats(
         "Download.EstimatedTimeWastedWithParallelDownload",
         -time_saved.InMilliseconds(), 0, kMillisecondsPerHour, 50);
   }
+}
+
+void RecordParallelizableDownloadAverageStats(
+    int64_t bytes_downloaded,
+    const base::TimeDelta& time_span) {
+  if (time_span.is_zero() || bytes_downloaded <= 0)
+    return;
+
+  int64_t average_bandwidth =
+      CalculateBandwidthBytesPerSecond(bytes_downloaded, time_span);
+  int64_t file_size_kb = bytes_downloaded / 1024;
+  RecordBandwidthMetric("Download.ParallelizableDownloadBandwidth",
+                        average_bandwidth);
+  UMA_HISTOGRAM_LONG_TIMES("Download.Parallelizable.DownloadTime", time_span);
+  UMA_HISTOGRAM_CUSTOM_COUNTS("Download.Parallelizable.FileSize", file_size_kb,
+                              1, kMaxFileSizeKb, 50);
 }
 
 void RecordParallelDownloadCreationEvent(ParallelDownloadCreationEvent event) {

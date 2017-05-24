@@ -234,7 +234,7 @@ source_set("ppapi_tests_sources") {
   deps = [
     ":copy_test_files",
     ":copy_test_files2",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//ppapi/cpp",
     "//ppapi/shared_impl",
   ]
@@ -258,7 +258,7 @@ source_set("power_saver_test_plugin_sources") {
   ]
 
   deps = [
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//ppapi/cpp",
     "//ppapi/shared_impl",
   ]
@@ -285,7 +285,7 @@ source_set("blink_deprecated_test_plugin_sources") {
 
   deps = [
     "//base",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//ppapi/cpp",
     "//ppapi/shared_impl",
   ]
@@ -312,7 +312,7 @@ source_set("blink_test_plugin_sources") {
 
   deps = [
     "//base",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//ppapi/cpp",
     "//ppapi/shared_impl",
   ]
@@ -411,7 +411,7 @@ executable("pepper_hash_for_uma") {
 
   deps = [
     "//base",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//build/win:default_exe_manifest",
   ]
 }

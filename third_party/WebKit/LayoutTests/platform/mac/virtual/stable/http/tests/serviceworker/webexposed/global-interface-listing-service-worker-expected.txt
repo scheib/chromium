@@ -280,7 +280,6 @@ interface IDBFactory
     method constructor
     method deleteDatabase
     method open
-    method webkitGetDatabaseNames
 interface IDBIndex
     getter keyPath
     getter multiEntry
@@ -503,6 +502,7 @@ interface Request
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface Response
@@ -521,6 +521,7 @@ interface Response
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface ServiceWorkerGlobalScope : WorkerGlobalScope

@@ -52,10 +52,6 @@ class VIEWS_EXPORT InkDropImpl : public InkDrop,
   InkDropImpl(InkDropHost* ink_drop_host, const gfx::Size& host_size);
   ~InkDropImpl() override;
 
-  void SetShowHighlightOnHover(bool show_highlight_on_hover);
-
-  void SetShowHighlightOnFocus(bool show_highlight_on_focus);
-
   // Auto highlighting is a mechanism to show/hide the highlight based on the
   // visibility of the ripple. See the documentation of the AutoHighlightMode
   // for more info on the different modes.
@@ -72,6 +68,9 @@ class VIEWS_EXPORT InkDropImpl : public InkDrop,
   void SnapToActivated() override;
   void SetHovered(bool is_hovered) override;
   void SetFocused(bool is_focused) override;
+  bool IsHighlightFadingInOrVisible() const override;
+  void SetShowHighlightOnHover(bool show_highlight_on_hover) override;
+  void SetShowHighlightOnFocus(bool show_highlight_on_focus) override;
 
  private:
   friend class InkDropImplTest;
@@ -221,10 +220,6 @@ class VIEWS_EXPORT InkDropImpl : public InkDrop,
   // Removes the |root_layer_| from the |ink_drop_host_| if no ink drop ripple
   // or highlight is active.
   void RemoveRootLayerFromHostIfNeeded();
-
-  // Returns true if the highlight animation is in the process of fading in or
-  // is visible.
-  bool IsHighlightFadingInOrVisible() const;
 
   // views::InkDropRippleObserver:
   void AnimationStarted(InkDropState ink_drop_state) override;

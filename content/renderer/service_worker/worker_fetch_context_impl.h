@@ -16,10 +16,20 @@ namespace base {
 class SingleThreadTaskRunner;
 }  // namespace base
 
+namespace IPC {
+class Message;
+}  // namespace IPC
+
 namespace content {
 
 class ResourceDispatcher;
+class ThreadSafeSender;
 
+// This class is used while fetching resource requests on workers (dedicated
+// worker and shared worker) when off-main-thread-fetch is enabled. This class
+// is created on the main thread and passed to the worker thread.
+// This class is not used for service workers. For service workers,
+// ServiceWorkerFetchContextImpl class is used instead.
 class WorkerFetchContextImpl : public blink::WebWorkerFetchContext,
                                public mojom::ServiceWorkerWorkerClient {
  public:
@@ -35,18 +45,27 @@ class WorkerFetchContextImpl : public blink::WebWorkerFetchContext,
   void SetDataSaverEnabled(bool) override;
   bool IsDataSaverEnabled() const override;
   blink::WebURL FirstPartyForCookies() const override;
+  void DidRunContentWithCertificateErrors(const blink::WebURL& url) override;
+  void DidDisplayContentWithCertificateErrors(
+      const blink::WebURL& url) override;
 
   // mojom::ServiceWorkerWorkerClient implementation:
   void SetControllerServiceWorker(int64_t controller_version_id) override;
 
-  // Sets the fetch context status of the parent frame.
+  // Sets the fetch context status copied from the frame; the parent frame for a
+  // dedicated worker, the main frame of the shadow page for a shared worker.
   void set_service_worker_provider_id(int id);
   void set_is_controlled_by_service_worker(bool flag);
   void set_parent_frame_id(int id);
   void set_first_party_for_cookies(
       const blink::WebURL& first_party_for_cookies);
+  // Sets whether the worker context is a secure context.
+  // https://w3c.github.io/webappsec-secure-contexts/
+  void set_is_secure_context(bool flag);
 
  private:
+  bool Send(IPC::Message* message);
+
   mojom::WorkerURLLoaderFactoryProviderPtrInfo provider_info_;
   int service_worker_provider_id_ = kInvalidServiceWorkerProviderId;
   bool is_controlled_by_service_worker_ = false;
@@ -62,9 +81,11 @@ class WorkerFetchContextImpl : public blink::WebWorkerFetchContext,
   // is called from the browser process via mojo IPC.
   int controller_version_id_ = kInvalidServiceWorkerVersionId;
 
+  scoped_refptr<ThreadSafeSender> thread_safe_sender_;
   bool is_data_saver_enabled_ = false;
   int parent_frame_id_ = MSG_ROUTING_NONE;
   GURL first_party_for_cookies_;
+  bool is_secure_context_ = false;
 };
 
 }  // namespace content

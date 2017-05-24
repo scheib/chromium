@@ -8,8 +8,12 @@ var test = function() {
 
   var maxElements = 1000;
   var elements = 0;
-  InspectorTest.domModel.requestDocument(documentRequested);
-  function documentRequested() {
+
+  // Make sure the sidebar is loaded
+
+  // make sure the tree is loaded
+  InspectorTest.selectNodeAndWaitForStyles("node-to-select",nodeSelected);
+  function nodeSelected() {
     eventSender.keyDown("Tab");
     var startElement = document.deepActiveElement();
     do {
@@ -59,5 +63,6 @@ var test = function() {
 </head>
 <body onload="runTest()">
 <p>Tests what elements have focus after pressing tab.</p>
+<span id="node-to-select"></span>
 </body>
 </html>

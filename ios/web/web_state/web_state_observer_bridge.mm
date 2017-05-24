@@ -14,19 +14,19 @@ WebStateObserverBridge::WebStateObserverBridge(web::WebState* webState,
 WebStateObserverBridge::~WebStateObserverBridge() {
 }
 
-void WebStateObserverBridge::ProvisionalNavigationStarted(const GURL& url) {
-  SEL selector = @selector(webState:didStartProvisionalNavigationForURL:);
-  if ([observer_ respondsToSelector:selector]) {
-    [observer_ webState:web_state() didStartProvisionalNavigationForURL:url];
-  }
-}
-
 void WebStateObserverBridge::NavigationItemCommitted(
     const web::LoadCommittedDetails& load_detatils) {
   SEL selector = @selector(webState:didCommitNavigationWithDetails:);
   if ([observer_ respondsToSelector:selector]) {
     [observer_ webState:web_state()
         didCommitNavigationWithDetails:load_detatils];
+  }
+}
+
+void WebStateObserverBridge::DidStartNavigation(
+    web::NavigationContext* navigation_context) {
+  if ([observer_ respondsToSelector:@selector(webState:didStartNavigation:)]) {
+    [observer_ webState:web_state() didStartNavigation:navigation_context];
   }
 }
 

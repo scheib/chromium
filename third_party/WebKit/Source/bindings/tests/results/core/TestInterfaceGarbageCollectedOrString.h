@@ -30,9 +30,9 @@ class CORE_EXPORT TestInterfaceGarbageCollectedOrString final {
   bool isNull() const { return m_type == SpecificTypeNone; }
 
   bool isString() const { return m_type == SpecificTypeString; }
-  String getAsString() const;
-  void setString(String);
-  static TestInterfaceGarbageCollectedOrString fromString(String);
+  const String& getAsString() const;
+  void setString(const String&);
+  static TestInterfaceGarbageCollectedOrString fromString(const String&);
 
   bool isTestInterfaceGarbageCollected() const { return m_type == SpecificTypeTestInterfaceGarbageCollected; }
   TestInterfaceGarbageCollected* getAsTestInterfaceGarbageCollected() const;

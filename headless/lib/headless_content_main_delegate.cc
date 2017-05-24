@@ -43,8 +43,8 @@
 namespace headless {
 namespace {
 // Keep in sync with content/common/content_constants_internal.h.
-// TODO(skyostil): Add a tracing test for this.
 #if !defined(CHROME_MULTIPLE_DLL_CHILD)
+// TODO(skyostil): Add a tracing test for this.
 const int kTraceEventBrowserProcessSortIndex = -6;
 #endif
 
@@ -180,8 +180,8 @@ void HeadlessContentMainDelegate::InitCrashReporter(
     breakpad::InitCrashReporter(process_type);
 #elif defined(OS_MACOSX)
   crash_reporter::InitializeCrashpad(process_type.empty(), process_type);
-// Avoid adding this dependency in Windows Chrome component build, since it 
-// chrashpad is already enabled.
+// Avoid adding this dependency in Windows Chrome component build, since
+// crashpad is already enabled.
 // TODO(dvallet): Ideally we would also want to avoid this for component build.
 #elif defined(OS_WIN) && !defined(CHROME_MULTIPLE_DLL)
   crash_reporter::InitializeCrashpadWithEmbeddedHandler(process_type.empty(),
@@ -204,12 +204,10 @@ void HeadlessContentMainDelegate::PreSandboxStartup() {
   InitializeResourceBundle();
 }
 
+#if !defined(CHROME_MULTIPLE_DLL_CHILD)
 int HeadlessContentMainDelegate::RunProcess(
     const std::string& process_type,
     const content::MainFunctionParams& main_function_params) {
-// TODO(dvallet): Consider making a Windows specific class to make specific
-// child builds clearer.
-#if !defined(CHROME_MULTIPLE_DLL_CHILD)
 
   if (!process_type.empty())
     return -1;
@@ -232,10 +230,8 @@ int HeadlessContentMainDelegate::RunProcess(
 
   // Return value >=0 here to disable calling content::BrowserMain.
   return 0;
-#else
-  return -1;
-#endif  // !defined(CHROME_MULTIPLE_DLL_CHILD)
 }
+#endif  // !defined(CHROME_MULTIPLE_DLL_CHILD)
 
 #if !defined(OS_MACOSX) && defined(OS_POSIX) && !defined(OS_ANDROID)
 void HeadlessContentMainDelegate::ZygoteForked() {
@@ -293,25 +289,21 @@ void HeadlessContentMainDelegate::InitializeResourceBundle() {
 #endif
 }
 
+#if !defined(CHROME_MULTIPLE_DLL_CHILD)
 content::ContentBrowserClient*
 HeadlessContentMainDelegate::CreateContentBrowserClient() {
-#if defined(CHROME_MULTIPLE_DLL_CHILD)
-  return nullptr;
-#else
   browser_client_ =
       base::MakeUnique<HeadlessContentBrowserClient>(browser_.get());
   return browser_client_.get();
-#endif
 }
+#endif  // !defined(CHROME_MULTIPLE_DLL_CHILD)
 
+#if !defined(CHROME_MULTIPLE_DLL_BROWSER)
 content::ContentRendererClient*
 HeadlessContentMainDelegate::CreateContentRendererClient() {
-#if defined(CHROME_MULTIPLE_DLL_BROWSER)
-  return nullptr;
-#else
   renderer_client_ = base::MakeUnique<HeadlessContentRendererClient>();
   return renderer_client_.get();
-#endif
 }
+#endif  // !defined(CHROME_MULTIPLE_DLL_BROWSER)
 
 }  // namespace headless

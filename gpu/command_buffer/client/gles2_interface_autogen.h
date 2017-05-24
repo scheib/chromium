@@ -914,4 +914,7 @@ virtual void SetDrawRectangleCHROMIUM(GLint x,
                                       GLint width,
                                       GLint height) = 0;
 virtual void SetEnableDCLayersCHROMIUM(GLboolean enabled) = 0;
+virtual void InitializeDiscardableTextureCHROMIUM(GLuint texture_id) = 0;
+virtual void UnlockDiscardableTextureCHROMIUM(GLuint texture_id) = 0;
+virtual bool LockDiscardableTextureCHROMIUM(GLuint texture_id) = 0;
 #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_INTERFACE_AUTOGEN_H_

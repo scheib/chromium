@@ -218,6 +218,8 @@ ui::Layer* MessageView::GetSlideOutLayer() {
   return is_nested_ ? layer() : GetWidget()->GetLayer();
 }
 
+void MessageView::OnSlideChanged() {}
+
 void MessageView::OnSlideOut() {
   controller_->RemoveNotification(notification_id_, true);  // By user.
 }

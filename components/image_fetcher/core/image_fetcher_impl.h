@@ -16,6 +16,7 @@
 #include "components/image_fetcher/core/image_data_fetcher.h"
 #include "components/image_fetcher/core/image_decoder.h"
 #include "components/image_fetcher/core/image_fetcher.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
 
@@ -52,7 +53,8 @@ class ImageFetcherImpl : public ImageFetcher {
   void StartOrQueueNetworkRequest(
       const std::string& id,
       const GURL& image_url,
-      const ImageFetcherCallback& callback) override;
+      const ImageFetcherCallback& callback,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation) override;
 
   ImageDecoder* GetImageDecoder() override;
 

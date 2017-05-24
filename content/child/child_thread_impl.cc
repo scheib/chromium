@@ -67,8 +67,8 @@
 #include "mojo/public/cpp/system/buffer.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 #include "services/device/public/cpp/power_monitor/power_monitor_broadcast_source.h"
-#include "services/resource_coordinator/public/cpp/memory/process_local_dump_manager_impl.h"
-#include "services/resource_coordinator/public/interfaces/memory/memory_instrumentation.mojom.h"
+#include "services/resource_coordinator/public/cpp/memory_instrumentation/client_process_impl.h"
+#include "services/resource_coordinator/public/interfaces/memory_instrumentation/memory_instrumentation.mojom.h"
 #include "services/service_manager/public/cpp/connector.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "services/service_manager/runner/common/client_util.h"
@@ -510,10 +510,9 @@ void ChildThreadImpl::Init(const Options& options) {
       else if (process_type_str == switches::kPpapiPluginProcess)
         process_type = memory_instrumentation::mojom::ProcessType::PLUGIN;
 
-      memory_instrumentation::ProcessLocalDumpManagerImpl::Config config(
+      memory_instrumentation::ClientProcessImpl::Config config(
           GetConnector(), mojom::kBrowserServiceName, process_type);
-      memory_instrumentation::ProcessLocalDumpManagerImpl::CreateInstance(
-          config);
+      memory_instrumentation::ClientProcessImpl::CreateInstance(config);
     }
   }
 

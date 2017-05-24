@@ -364,19 +364,22 @@ public class SnippetArticleViewHolder extends CardViewHolder implements Impressi
         }
 
         int fileType = DownloadFilter.fromMimeType(mArticle.getAssetDownloadMimeType());
-        if (fileType != DownloadFilter.FILTER_IMAGE) {
-            setThumbnailFromFileType(fileType);
-            return;
+        if (fileType == DownloadFilter.FILTER_IMAGE) {
+            // For image downloads, attempt to fetch a thumbnail.
+            cancelImageFetch();
+            mImageCallback = new FetchImageCallback(this, mArticle, THUMBNAIL_SOURCE_DOWNLOAD);
+            mDownloadThumbnailCallback = new ThumbnailCallback(mImageCallback, mArticle);
+            Bitmap thumbnail = mThumbnailProvider.getThumbnail(mDownloadThumbnailCallback);
+            if (thumbnail != null) {
+                // If there is already a thumbnail available, use it immediately, otherwise fall
+                // through to using the default icon for the type. Once the thumbnail is fetched
+                // it will be faded in.
+                mArticle.setThumbnailBitmap(mUiDelegate.getReferencePool().put(thumbnail));
+                setThumbnailFromBitmap(thumbnail);
+                return;
+            }
         }
-
-        cancelImageFetch();
-        mImageCallback = new FetchImageCallback(this, mArticle, THUMBNAIL_SOURCE_DOWNLOAD);
-        mDownloadThumbnailCallback = new ThumbnailCallback(mImageCallback, mArticle);
-        Bitmap thumbnail = mThumbnailProvider.getThumbnail(mDownloadThumbnailCallback);
-        if (thumbnail == null) return;
-
-        mArticle.setThumbnailBitmap(mUiDelegate.getReferencePool().put(thumbnail));
-        setThumbnailFromBitmap(thumbnail);
+        setThumbnailFromFileType(fileType);
     }
 
     private void setThumbnail() {
@@ -431,11 +434,10 @@ public class SnippetArticleViewHolder extends CardViewHolder implements Impressi
         // able to do so when using a TransitionDrawable (as opposed to the straight bitmap).
         // That's a limitation of TransitionDrawable, which doesn't handle layers of varying sizes.
         if (thumbnail.getHeight() != mThumbnailSize || thumbnail.getWidth() != mThumbnailSize) {
-            // Resize the thumbnail, recycling the input image in the process. We can only do this
-            // if we fully own the input bitmap (e.g. it isn't cached anywhere else).
-            assert owned;
+            // Resize the thumbnail. If we fully own the input bitmap (e.g. it isn't cached anywhere
+            // else), recycle the input image in the process.
             thumbnail = ThumbnailUtils.extractThumbnail(thumbnail, mThumbnailSize, mThumbnailSize,
-                    ThumbnailUtils.OPTIONS_RECYCLE_INPUT);
+                    owned ? ThumbnailUtils.OPTIONS_RECYCLE_INPUT : 0);
         }
 
         // Store the bitmap to skip the download task next time we display this snippet.

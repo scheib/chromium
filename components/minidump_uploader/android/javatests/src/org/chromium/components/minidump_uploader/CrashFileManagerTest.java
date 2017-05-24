@@ -38,6 +38,9 @@ public class CrashFileManagerTest extends CrashTestCase {
     private File mTmpFile2;
     private File mTmpFile3;
 
+    private File mDmpSansLogcatFile1;
+    private File mDmpSansLogcatFile2;
+
     private File mDmpFile1;
     private File mDmpFile2;
 
@@ -76,7 +79,17 @@ public class CrashFileManagerTest extends CrashTestCase {
         mTmpFile3.setLastModified(mModificationTimestamp);
         mModificationTimestamp += 1000;
 
-        mDmpFile1 = new File(mCrashDir, "123_abc.dmp0");
+        mDmpSansLogcatFile1 = new File(mCrashDir, "123_abc.dmp");
+        mDmpSansLogcatFile1.createNewFile();
+        mDmpSansLogcatFile1.setLastModified(mModificationTimestamp);
+        mModificationTimestamp += 1000;
+
+        mDmpSansLogcatFile2 = new File(mCrashDir, "chromium-renderer_abc.dmp" + TEST_PID);
+        mDmpSansLogcatFile2.createNewFile();
+        mDmpSansLogcatFile2.setLastModified(mModificationTimestamp);
+        mModificationTimestamp += 1000;
+
+        mDmpFile1 = new File(mCrashDir, "123_abc.dmp.try0");
         mDmpFile1.createNewFile();
         mDmpFile1.setLastModified(mModificationTimestamp);
         mModificationTimestamp += 1000;
@@ -110,7 +123,7 @@ public class CrashFileManagerTest extends CrashTestCase {
         mMultiDigitMaxTriesFile.setLastModified(mModificationTimestamp);
         mModificationTimestamp += 1000;
 
-        mUpFile1 = new File(mCrashDir, "123_abcd.up0");
+        mUpFile1 = new File(mCrashDir, "123_abcd.up.try0");
         mUpFile1.createNewFile();
         mUpFile1.setLastModified(mModificationTimestamp);
         mModificationTimestamp += 1000;
@@ -142,7 +155,7 @@ public class CrashFileManagerTest extends CrashTestCase {
     public void testGetMatchingFiles() {
         CrashFileManager crashFileManager = new CrashFileManager(mCacheDir);
         // Three files begin with 123.
-        File[] expectedFiles = new File[] { mUpFile1, mDmpFile1, mTmpFile1 };
+        File[] expectedFiles = new File[] {mUpFile1, mDmpFile1, mDmpSansLogcatFile1, mTmpFile1};
         Pattern testPattern = Pattern.compile("^123");
         File[] actualFiles = crashFileManager.listCrashFiles(testPattern);
         assertNotNull(actualFiles);
@@ -167,7 +180,8 @@ public class CrashFileManagerTest extends CrashTestCase {
         CrashFileManager crashFileManager = new CrashFileManager(mCacheDir);
         File[] expectedFiles = new File[] {mLogfile, mUpFile2, mUpFile1, mMultiDigitMaxTriesFile,
                 mOneBelowMultiDigitMaxTriesFile, mMaxTriesFile, mOneBelowMaxTriesFile, mDmpFile2,
-                mDmpFile1, mTmpFile3, mTmpFile2, mTmpFile1};
+                mDmpFile1, mDmpSansLogcatFile2, mDmpSansLogcatFile1, mTmpFile3, mTmpFile2,
+                mTmpFile1};
         File[] actualFiles = crashFileManager.listCrashFiles(null);
         assertNotNull(actualFiles);
         MoreAsserts.assertEquals(
@@ -193,16 +207,52 @@ public class CrashFileManagerTest extends CrashTestCase {
 
     @SmallTest
     @Feature({"Android-AppBase"})
-    @SuppressFBWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE")
-    public void testGetAllMinidumpFiles() throws IOException {
-        File forcedFile = new File(mCrashDir, "456_def.forced" + TEST_PID + ".try2");
-        forcedFile.createNewFile();
-        forcedFile.setLastModified(mModificationTimestamp);
-        mModificationTimestamp += 1000;
+    public void testIsMinidumpSansLogcat() {
+        assertTrue(CrashFileManager.isMinidumpSansLogcat("foo.dmp"));
+        assertTrue(CrashFileManager.isMinidumpSansLogcat("foo.dmp" + TEST_PID));
 
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.other"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmp.try0"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmp.try2"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmpblah"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmp.other"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmp" + TEST_PID + ".try0"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmp" + TEST_PID + ".try2"));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmpblah" + TEST_PID));
+        assertFalse(CrashFileManager.isMinidumpSansLogcat("foo.dmp" + TEST_PID + ".other"));
+    }
+
+    @SmallTest
+    @Feature({"Android-AppBase"})
+    @SuppressFBWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE")
+    public void testSetReadyForUpload_MinidumpWithoutPid() throws IOException {
+        File minidumpWithoutLogcat = new File(mCrashDir, "foo.dmp");
+        minidumpWithoutLogcat.createNewFile();
+
+        File result = CrashFileManager.trySetReadyForUpload(minidumpWithoutLogcat);
+        assertEquals("foo.dmp.try0", result.getName());
+        assertTrue(result.exists());
+    }
+
+    @SmallTest
+    @Feature({"Android-AppBase"})
+    @SuppressFBWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE")
+    public void testSetReadyForUpload_MinidumpWithPid() throws IOException {
+        File minidumpWithoutLogcat = new File(mCrashDir, "foo.dmp" + TEST_PID);
+        minidumpWithoutLogcat.createNewFile();
+
+        File result = CrashFileManager.trySetReadyForUpload(minidumpWithoutLogcat);
+        assertEquals("foo.dmp" + TEST_PID + ".try0", result.getName());
+        assertTrue(result.exists());
+    }
+
+    @SmallTest
+    @Feature({"Android-AppBase"})
+    public void testGetMinidumpsSansLogcat() throws IOException {
         CrashFileManager crashFileManager = new CrashFileManager(mCacheDir);
-        File[] expectedFiles = new File[] {forcedFile, mOneBelowMaxTriesFile, mDmpFile2, mDmpFile1};
-        File[] actualFiles = crashFileManager.getAllMinidumpFiles(MAX_TRIES_ALLOWED);
+        File[] expectedFiles = new File[] {mDmpSansLogcatFile2, mDmpSansLogcatFile1};
+        File[] actualFiles = crashFileManager.getMinidumpsSansLogcat();
         assertNotNull(actualFiles);
         MoreAsserts.assertEquals("Failed to get the correct minidump files in directory",
                 expectedFiles, actualFiles);
@@ -210,11 +260,29 @@ public class CrashFileManagerTest extends CrashTestCase {
 
     @SmallTest
     @Feature({"Android-AppBase"})
-    public void testGetAllMinidumpFilesMultiDigitMaxTries() {
+    @SuppressFBWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE")
+    public void testGetMinidumpsReadyForUpload() throws IOException {
+        File forcedFile = new File(mCrashDir, "456_def.forced" + TEST_PID + ".try2");
+        forcedFile.createNewFile();
+        forcedFile.setLastModified(mModificationTimestamp);
+        mModificationTimestamp += 1000;
+
+        CrashFileManager crashFileManager = new CrashFileManager(mCacheDir);
+        File[] expectedFiles = new File[] {forcedFile, mOneBelowMaxTriesFile, mDmpFile2, mDmpFile1};
+        File[] actualFiles = crashFileManager.getMinidumpsReadyForUpload(MAX_TRIES_ALLOWED);
+        assertNotNull(actualFiles);
+        MoreAsserts.assertEquals("Failed to get the correct minidump files in directory",
+                expectedFiles, actualFiles);
+    }
+
+    @SmallTest
+    @Feature({"Android-AppBase"})
+    public void testGetMinidumpsReadyForUpload_MultiDigitMaxTries() {
         CrashFileManager crashFileManager = new CrashFileManager(mCacheDir);
         File[] expectedFiles = new File[] {mOneBelowMultiDigitMaxTriesFile, mMaxTriesFile,
                 mOneBelowMaxTriesFile, mDmpFile2, mDmpFile1};
-        File[] actualFiles = crashFileManager.getAllMinidumpFiles(MULTI_DIGIT_MAX_TRIES_ALLOWED);
+        File[] actualFiles =
+                crashFileManager.getMinidumpsReadyForUpload(MULTI_DIGIT_MAX_TRIES_ALLOWED);
         assertNotNull(actualFiles);
         MoreAsserts.assertEquals("Failed to get the correct minidump files in directory",
                 expectedFiles, actualFiles);
@@ -366,7 +434,7 @@ public class CrashFileManagerTest extends CrashTestCase {
     public void testMarkUploadSuccess() {
         CrashFileManager.markUploadSuccess(mDmpFile1);
         assertFalse(mDmpFile1.exists());
-        assertTrue(new File(mCrashDir, "123_abc.up0").exists());
+        assertTrue(new File(mCrashDir, "123_abc.up.try0").exists());
 
         CrashFileManager.markUploadSuccess(mDmpFile2);
         assertFalse(mDmpFile2.exists());
@@ -389,7 +457,7 @@ public class CrashFileManagerTest extends CrashTestCase {
     public void testMarkUploadSkipped() {
         CrashFileManager.markUploadSkipped(mDmpFile1);
         assertFalse(mDmpFile1.exists());
-        assertTrue(new File(mCrashDir, "123_abc.skipped0").exists());
+        assertTrue(new File(mCrashDir, "123_abc.skipped.try0").exists());
 
         CrashFileManager.markUploadSkipped(mDmpFile2);
         assertFalse(mDmpFile2.exists());
@@ -400,43 +468,44 @@ public class CrashFileManagerTest extends CrashTestCase {
     @SmallTest
     @Feature({"Android-AppBase"})
     public void testFilterMinidumpFilesOnUid() {
-        assertArrayEquals(new File[] {new File("1_md.dmp")},
-                CrashFileManager.filterMinidumpFilesOnUid(
-                        new File[] {new File("1_md.dmp")}, 1).toArray());
+        assertArrayEquals(new File[] {new File("1_md.dmp.try0")},
+                CrashFileManager.filterMinidumpFilesOnUid(new File[] {new File("1_md.dmp.try0")}, 1)
+                        .toArray());
         assertArrayEquals(new File[0],
-                CrashFileManager.filterMinidumpFilesOnUid(
-                        new File[] {new File("1_md.dmp")}, 12).toArray());
+                CrashFileManager
+                        .filterMinidumpFilesOnUid(new File[] {new File("1_md.dmp.try0")}, 12)
+                        .toArray());
         assertArrayEquals(new File[0],
-                CrashFileManager.filterMinidumpFilesOnUid(
-                        new File[] {new File("12_md.dmp")}, 1).toArray());
-        assertArrayEquals(new File[] {new File("1000_md.dmp")},
-                CrashFileManager.filterMinidumpFilesOnUid(
-                        new File[] {new File("1000_md.dmp")}, 1000).toArray());
-        assertArrayEquals(new File[0], CrashFileManager.filterMinidumpFilesOnUid(
-                new File[] {new File("-1000_md.dmp")}, -10).toArray());
-        assertArrayEquals(new File[] {new File("-10_md.dmp")},
-                CrashFileManager.filterMinidumpFilesOnUid(
-                        new File[] {new File("-10_md.dmp")}, -10).toArray());
-        assertArrayEquals(new File[] {
-                new File("12_md.dmp"),
-                new File("12_.dmp"),
-                new File("12_minidump.dmp"),
-                new File("12_1_md.dmp")},
-                CrashFileManager.filterMinidumpFilesOnUid(new File[] {
-                        new File("12_md.dmp"),
-                        new File("100_.dmp"),
-                        new File("4000_.dmp"),
-                        new File("12_.dmp"),
-                        new File("12_minidump.dmp"),
-                        new File("23_.dmp"),
-                        new File("12-.dmp"),
-                        new File("12*.dmp"),
-                        new File("12<.dmp"),
-                        new File("12=.dmp"),
-                        new File("12+.dmp"),
-                        new File("12_1_md.dmp"),
-                        new File("1_12_md.dmp")},
-                        12 /* uid */).toArray());
+                CrashFileManager
+                        .filterMinidumpFilesOnUid(new File[] {new File("12_md.dmp.try0")}, 1)
+                        .toArray());
+        assertArrayEquals(new File[] {new File("1000_md.dmp.try0")},
+                CrashFileManager
+                        .filterMinidumpFilesOnUid(new File[] {new File("1000_md.dmp.try0")}, 1000)
+                        .toArray());
+        assertArrayEquals(new File[0],
+                CrashFileManager
+                        .filterMinidumpFilesOnUid(new File[] {new File("-1000_md.dmp.try0")}, -10)
+                        .toArray());
+        assertArrayEquals(new File[] {new File("-10_md.dmp.try0")},
+                CrashFileManager
+                        .filterMinidumpFilesOnUid(new File[] {new File("-10_md.dmp.try0")}, -10)
+                        .toArray());
+
+        File[] expected = new File[] {new File("12_md.dmp.try0"), new File("12_.dmp.try0"),
+                new File("12_minidump.dmp.try0"), new File("12_1_md.dmp.try0")};
+        assertArrayEquals(expected,
+                CrashFileManager
+                        .filterMinidumpFilesOnUid(
+                                new File[] {new File("12_md.dmp.try0"), new File("100_.dmp.try0"),
+                                        new File("4000_.dmp.try0"), new File("12_.dmp.try0"),
+                                        new File("12_minidump.dmp.try0"), new File("23_.dmp.try0"),
+                                        new File("12-.dmp.try0"), new File("12*.dmp.try0"),
+                                        new File("12<.dmp.try0"), new File("12=.dmp.try0"),
+                                        new File("12+.dmp.try0"), new File("12_1_md.dmp.try0"),
+                                        new File("1_12_md.dmp.try0")},
+                                12 /* uid */)
+                        .toArray());
     }
 
     /**
@@ -477,16 +546,16 @@ public class CrashFileManagerTest extends CrashTestCase {
         CrashFileManager fileManager = new CrashFileManager(mCacheDir);
         // Delete existing minidumps to ensure they don't interfere with this test.
         deleteFilesInDirIfExists(fileManager.getCrashDirectory());
-        assertEquals(0, fileManager.getAllMinidumpFiles(10000 /* maxTries */).length);
+        assertEquals(0, fileManager.getMinidumpsReadyForUpload(10000 /* maxTries */).length);
         File tmpCopyDir = new File(getExistingCacheDir(), "tmpDir");
 
         // Note that these minidump files are set up directly in the cache dir - not in the crash
         // dir. This is to ensure the CrashFileManager doesn't see these minidumps without us first
         // copying them.
-        File minidumpToCopy = new File(getExistingCacheDir(), "toCopy.dmp");
+        File minidumpToCopy = new File(getExistingCacheDir(), "toCopy.dmp.try0");
         setUpMinidumpFile(minidumpToCopy, "BOUNDARY");
         // Ensure we didn't add any new minidumps to the crash directory.
-        assertEquals(0, fileManager.getAllMinidumpFiles(10000 /* maxTries */).length);
+        assertEquals(0, fileManager.getMinidumpsReadyForUpload(10000 /* maxTries */).length);
 
         int minidumpLimit = perUid ? CrashFileManager.MAX_CRASH_REPORTS_TO_UPLOAD_PER_UID
                                    : CrashFileManager.MAX_CRASH_REPORTS_TO_UPLOAD;
@@ -499,7 +568,7 @@ public class CrashFileManagerTest extends CrashTestCase {
 
         // Update time-stamps of copied files.
         long initialTimestamp = new Date().getTime();
-        File[] minidumps = fileManager.getAllMinidumpFiles(10000 /* maxTries */);
+        File[] minidumps = fileManager.getMinidumpsReadyForUpload(10000 /* maxTries */);
         for (int n = 0; n < minidumps.length; n++) {
             if (!minidumps[n].setLastModified(initialTimestamp + n * 1000)) {
                 throw new RuntimeException(
@@ -507,7 +576,7 @@ public class CrashFileManagerTest extends CrashTestCase {
             }
         }
 
-        File[] allMinidumps = fileManager.getAllMinidumpFiles(10000 /* maxTries */);
+        File[] allMinidumps = fileManager.getMinidumpsReadyForUpload(10000 /* maxTries */);
         assertEquals(minidumpLimit, allMinidumps.length);
 
         File oldestMinidump = getOldestFile(allMinidumps);
@@ -516,8 +585,8 @@ public class CrashFileManagerTest extends CrashTestCase {
         // existing minidump to be deleted.
         createFdForandCopyFile(fileManager, minidumpToCopy, tmpCopyDir, 1 /* uid */,
                 true /* shouldSucceed */);
-        assertEquals(minidumpLimit,
-                fileManager.getAllMinidumpFiles(10000 /* maxTries */).length);
+        assertEquals(
+                minidumpLimit, fileManager.getMinidumpsReadyForUpload(10000 /* maxTries */).length);
         // Ensure we removed the oldest file.
         assertFalse(oldestMinidump.exists());
     }
@@ -566,13 +635,13 @@ public class CrashFileManagerTest extends CrashTestCase {
         CrashFileManager fileManager = new CrashFileManager(mCacheDir);
         // Delete existing minidumps to ensure they don't interfere with this test.
         deleteFilesInDirIfExists(fileManager.getCrashDirectory());
-        assertEquals(0, fileManager.getAllMinidumpFiles(10000 /* maxTries */).length);
+        assertEquals(0, fileManager.getMinidumpsReadyForUpload(10000 /* maxTries */).length);
         File tmpCopyDir = new File(getExistingCacheDir(), "tmpDir");
 
         // Note that these minidump files are set up directly in the cache dir - not in the crash
         // dir. This is to ensure the CrashFileManager doesn't see these minidumps without us first
         // copying them.
-        File minidumpToCopy = new File(getExistingCacheDir(), "toCopy.dmp");
+        File minidumpToCopy = new File(getExistingCacheDir(), "toCopy.dmp.try0");
         setUpMinidumpFile(minidumpToCopy, "BOUNDARY");
         // Write ~1MB data into the minidump file.
         final int kilo = 1024;
@@ -589,7 +658,7 @@ public class CrashFileManagerTest extends CrashTestCase {
         createFdForandCopyFile(fileManager, minidumpToCopy, tmpCopyDir, 0 /* uid */,
                 false /* shouldSucceed */);
         assertEquals(0, tmpCopyDir.listFiles().length);
-        assertEquals(0, fileManager.getAllMinidumpFiles(10000 /* maxTries */).length);
+        assertEquals(0, fileManager.getMinidumpsReadyForUpload(10000 /* maxTries */).length);
     }
 
     @SuppressFBWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE")
@@ -619,7 +688,7 @@ public class CrashFileManagerTest extends CrashTestCase {
         }
 
         // Create some additional successful uploads.
-        File success1 = new File(mCrashDir, "chromium-renderer-minidump-cafebebe1.up0");
+        File success1 = new File(mCrashDir, "chromium-renderer-minidump-cafebebe1.up.try0");
         File success2 =
                 new File(mCrashDir, "chromium-renderer-minidump-cafebebe2.up" + TEST_PID + ".try1");
         File success3 =

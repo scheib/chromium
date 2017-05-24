@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/logging.h"
 #include "base/macros.h"
 #include "device/base/device_client.h"
 
@@ -20,18 +19,11 @@ class ShellDeviceClient : device::DeviceClient {
   ShellDeviceClient();
   ~ShellDeviceClient() override;
 
-  // Must be called before the destructor, when the FILE thread is still alive.
-  void Shutdown();
-
   // device::DeviceClient implementation
   device::UsbService* GetUsbService() override;
   device::HidService* GetHidService() override;
 
  private:
-#if DCHECK_IS_ON()
-  bool did_shutdown_ = false;
-#endif
-
   std::unique_ptr<device::HidService> hid_service_;
   std::unique_ptr<device::UsbService> usb_service_;
 

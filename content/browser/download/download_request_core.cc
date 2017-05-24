@@ -337,14 +337,15 @@ bool DownloadRequestCore::OnResponseStarted(
         headers->HasHeaderValue("Accept-Ranges", "bytes");
   }
 
-  // Blink verifies that the requester of this download is allowed to set a
-  // suggested name for the security origin of the download URL. However, this
-  // assumption doesn't hold if there were cross origin redirects. Therefore,
-  // clear the suggested_name for such requests.
-  if (create_info->url_chain.size() > 1 &&
-      create_info->url_chain.front().GetOrigin() !=
-          create_info->url_chain.back().GetOrigin())
+  // GURL::GetOrigin() doesn't support getting the inner origin of a blob URL.
+  // However, requesting a cross origin blob URL would have resulted in a
+  // network error, so we'll just ignore them here.
+  if (request()->initiator().has_value() &&
+      !create_info->url_chain.back().SchemeIsBlob() &&
+      request()->initiator()->GetURL() !=
+          create_info->url_chain.back().GetOrigin()) {
     create_info->save_info->suggested_name.clear();
+  }
 
   RecordDownloadContentDisposition(create_info->content_disposition);
   RecordDownloadSourcePageTransitionType(create_info->transition_type);

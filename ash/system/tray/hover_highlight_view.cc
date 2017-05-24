@@ -210,7 +210,7 @@ void HoverHighlightView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->AddIntAttribute(ui::AX_ATTR_CHECKED_STATE, checked_state);
 }
 
-gfx::Size HoverHighlightView::GetPreferredSize() const {
+gfx::Size HoverHighlightView::CalculatePreferredSize() const {
   gfx::Size size = ActionableView::GetPreferredSize();
 
   if (!expandable_ || size.height() < kTrayPopupItemMinHeight)

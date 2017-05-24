@@ -2,13 +2,13 @@
 <head>
 <script src="../../../http/tests/inspector/inspector-test.js"></script>
 <script src="../../../http/tests/inspector/debugger-test.js"></script>
-<script>
+<script type="module">
 "use strict";
 
 let globalLet = 41;
 const globalConst = 42;
 
-function makeClosure(n)
+window.makeClosure = function(n)
 {
     let makeClosureBlockVar = "block." + n;
     var makeClosureLocalVar = "local." + n;
@@ -38,13 +38,18 @@ function makeClosure(n)
         }
     }
 }
+</script>
+<script>
+let globalScriptLet = 41;
+const globalScriptConst = 42;
 
 function testFunction()
 {
     var f = makeClosure("TextParam");
     f(2014);
 }
-
+</script>
+<script>
 function test()
 {
     InspectorTest.startDebuggerTest(onTestStarted);

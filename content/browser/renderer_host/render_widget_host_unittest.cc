@@ -135,7 +135,6 @@ class MockInputRouter : public InputRouter {
     return NULL;
   }
   void NotifySiteIsMobileOptimized(bool is_mobile_optimized) override {}
-  void RequestNotificationWhenFlushed() override {}
   bool HasPendingEvents() const override { return false; }
   void SetDeviceScaleFactor(float device_scale_factor) override {}
   void SetFrameTreeNodeId(int frameTreeNodeId) override {}

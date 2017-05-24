@@ -35,8 +35,7 @@ const double kDefaultDialogHeight = 350.0;
 
 class TestingSyncConfirmationHandler : public SyncConfirmationHandler {
  public:
-  explicit TestingSyncConfirmationHandler(Browser* browser,
-                                          content::WebUI* web_ui)
+  TestingSyncConfirmationHandler(Browser* browser, content::WebUI* web_ui)
       : SyncConfirmationHandler(browser) {
     set_web_ui(web_ui);
   }

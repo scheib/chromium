@@ -7,8 +7,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/singleton.h"
-#include "base/sequenced_task_runner.h"
-#include "base/threading/sequenced_worker_pool.h"
+#include "base/task_scheduler/post_task.h"
 #include "components/gcm_driver/gcm_client_factory.h"
 #include "components/gcm_driver/gcm_profile_service.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
@@ -57,11 +56,10 @@ IOSChromeGCMProfileServiceFactory::BuildServiceInstanceFor(
     web::BrowserState* context) const {
   DCHECK(!context->IsOffTheRecord());
 
-  base::SequencedWorkerPool* worker_pool = web::WebThread::GetBlockingPool();
   scoped_refptr<base::SequencedTaskRunner> blocking_task_runner(
-      worker_pool->GetSequencedTaskRunnerWithShutdownBehavior(
-          worker_pool->GetSequenceToken(),
-          base::SequencedWorkerPool::SKIP_ON_SHUTDOWN));
+      base::CreateSequencedTaskRunnerWithTraits(
+          {base::MayBlock(), base::TaskPriority::BACKGROUND,
+           base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}));
   ios::ChromeBrowserState* browser_state =
       ios::ChromeBrowserState::FromBrowserState(context);
   return base::MakeUnique<gcm::GCMProfileService>(

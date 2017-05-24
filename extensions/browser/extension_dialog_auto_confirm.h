@@ -13,9 +13,11 @@ namespace extensions {
 class ScopedTestDialogAutoConfirm {
  public:
   enum AutoConfirm {
-    NONE,    // The prompt will show normally.
-    ACCEPT,  // The prompt will always accept.
-    CANCEL,  // The prompt will always cancel.
+    NONE,               // The prompt will show normally.
+    ACCEPT,             // The prompt will always accept.
+    ACCEPT_AND_OPTION,  // The prompt will always check an option (if any)
+                        // and accept.
+    CANCEL,             // The prompt will always cancel.
   };
 
   explicit ScopedTestDialogAutoConfirm(AutoConfirm override_value);

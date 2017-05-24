@@ -87,10 +87,12 @@ class PostmortemReportCollector {
       const base::FilePath::StringType& debug_file_pattern,
       const std::set<base::FilePath>& excluded_debug_files);
 
-  CollectionStatus CollectAndSubmitOneReport(
-      const crashpad::UUID& client_id,
-      const base::FilePath& file,
-      crashpad::CrashReportDatabase* report_database);
+  // Collects a stability file, generates a report and registers it with the
+  // database. Returns true on success. False otherwise.
+  bool CollectAndSubmitOneReport(const crashpad::UUID& client_id,
+                                 const base::FilePath& file,
+                                 crashpad::CrashReportDatabase* report_database,
+                                 bool* system_unclean);
 
   virtual CollectionStatus CollectOneReport(
       const base::FilePath& stability_file,

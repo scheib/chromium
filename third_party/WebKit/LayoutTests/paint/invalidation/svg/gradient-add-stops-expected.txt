@@ -16,14 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourceLinearGradient linearGradient id='test'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "SVG resource change"
     }

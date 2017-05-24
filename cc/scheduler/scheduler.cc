@@ -462,6 +462,8 @@ void Scheduler::SendBeginFrameAck(const BeginFrameArgs& args,
   BeginFrameAck ack(args.source_id, args.sequence_number,
                     latest_confirmed_sequence_number, did_submit);
   begin_frame_source_->DidFinishFrame(this, ack);
+  if (!did_submit)
+    client_->DidNotProduceFrame(ack);
 }
 
 // BeginImplFrame starts a compositor frame that will wait up until a deadline

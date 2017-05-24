@@ -30,12 +30,12 @@
 
 #include "web/WebHelperPluginImpl.h"
 
+#include "core/exported/WebPluginContainerBase.h"
 #include "core/frame/LocalFrameClient.h"
 #include "core/frame/WebLocalFrameBase.h"
 #include "core/html/HTMLObjectElement.h"
 #include "core/loader/FrameLoader.h"
 #include "public/web/WebPlugin.h"
-#include "web/WebPluginContainerImpl.h"
 
 namespace blink {
 
@@ -64,7 +64,7 @@ bool WebHelperPluginImpl::Initialize(const String& plugin_type,
   Vector<String> attribute_names;
   Vector<String> attribute_values;
   DCHECK(frame->GetFrame()->GetDocument()->Url().IsValid());
-  plugin_container_ = ToWebPluginContainerImpl(
+  plugin_container_ = ToWebPluginContainerBase(
       frame->GetFrame()->Loader().Client()->CreatePlugin(
           object_element_.Get(), frame->GetFrame()->GetDocument()->Url(),
           attribute_names, attribute_values, plugin_type, false,

@@ -47,6 +47,7 @@ class QuotaPolicyChannelIDStore
       const net::DefaultChannelIDStore::ChannelID& channel_id) override;
   void DeleteChannelID(
       const net::DefaultChannelIDStore::ChannelID& channel_id) override;
+  void Flush() override;
   void SetForceKeepSessionState() override;
 
  private:

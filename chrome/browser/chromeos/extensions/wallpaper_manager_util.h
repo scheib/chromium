@@ -9,6 +9,9 @@ class Profile;
 
 namespace wallpaper_manager_util {
 
+extern const char kAndroidWallpapersAppPackage[];
+extern const char kAndroidWallpapersAppActivity[];
+
 bool ShouldUseAndroidWallpapersApp(Profile* profile);
 
 // Opens wallpaper manager application.

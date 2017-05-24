@@ -17,6 +17,7 @@
 #include "remoting/client/client_telemetry_logger.h"
 #include "remoting/client/client_user_interface.h"
 #include "remoting/client/connect_to_host_info.h"
+#include "remoting/client/input/client_input_injector.h"
 #include "remoting/proto/control.pb.h"
 #include "remoting/proto/event.pb.h"
 #include "remoting/protocol/clipboard_stub.h"
@@ -39,7 +40,8 @@ class ChromotingClientRuntime;
 // destroyed on the network thread. Except where indicated, all methods are
 // called on the network thread.
 class ChromotingSession : public ClientUserInterface,
-                          public protocol::ClipboardStub {
+                          public protocol::ClipboardStub,
+                          public ClientInputInjector {
  public:
   class Delegate {
    public:
@@ -114,10 +116,9 @@ class ChromotingSession : public ClientUserInterface,
                       bool button_down);
   void SendMouseWheelEvent(int delta_x, int delta_y);
 
-  // Sends the provided keyboard scan code to the host.
-  bool SendKeyEvent(int scan_code, int key_code, bool key_down);
-
-  void SendTextEvent(const std::string& text);
+  //  ClientInputInjector implementation.
+  bool SendKeyEvent(int scan_code, int key_code, bool key_down) override;
+  void SendTextEvent(const std::string& text) override;
 
   // Sends the provided touch event payload to the host.
   void SendTouchEvent(const protocol::TouchEvent& touch_event);

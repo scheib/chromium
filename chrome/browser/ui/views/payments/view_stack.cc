@@ -21,6 +21,9 @@ ViewStack::ViewStack()
   // are out of bounds of their parent.
   SetPaintToLayer();
   layer()->SetMasksToBounds(true);
+
+  slide_in_animator_->set_tween_type(gfx::Tween::FAST_OUT_SLOW_IN);
+  slide_out_animator_->set_tween_type(gfx::Tween::FAST_OUT_SLOW_IN);
 }
 
 ViewStack::~ViewStack() {}

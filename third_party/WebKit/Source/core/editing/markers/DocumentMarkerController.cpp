@@ -33,6 +33,7 @@
 #include "core/dom/NodeTraversal.h"
 #include "core/dom/Range.h"
 #include "core/dom/Text.h"
+#include "core/editing/VisibleUnits.h"
 #include "core/editing/iterators/TextIterator.h"
 #include "core/editing/markers/CompositionMarkerListImpl.h"
 #include "core/editing/markers/DocumentMarkerListEditor.h"
@@ -95,6 +96,20 @@ Member<DocumentMarkerList>& DocumentMarkerController::ListForType(
 
 inline bool DocumentMarkerController::PossiblyHasMarkers(
     DocumentMarker::MarkerTypes types) {
+  if (markers_.IsEmpty()) {
+    // It's possible for markers_ to become empty through garbage collection if
+    // all its Nodes are GC'ed since we only hold weak references, in which case
+    // possibly_existing_marker_types_ isn't reset to 0 as it is in the other
+    // codepaths that remove from markers_. Therefore, we check for this case
+    // here.
+
+    // Alternatively, we could handle this case at the time the Node is GC'ed,
+    // but that operation is more performance-sensitive than anywhere
+    // PossiblyHasMarkers() is used.
+    possibly_existing_marker_types_ = 0;
+    return false;
+  }
+
   return possibly_existing_marker_types_.Intersects(types);
 }
 
@@ -187,23 +202,10 @@ void DocumentMarkerController::RemoveMarkersInRange(
 
 static void UpdateMarkerRenderedRect(const Node& node,
                                      RenderedDocumentMarker& marker) {
-  Range* range = Range::Create(node.GetDocument());
-  // The offsets of the marker may be out-dated, so check for exceptions.
-  DummyExceptionStateForTesting exception_state;
-  range->setStart(&const_cast<Node&>(node), marker.StartOffset(),
-                  exception_state);
-  if (!exception_state.HadException()) {
-    range->setEnd(&const_cast<Node&>(node), marker.EndOffset(),
-                  IGNORE_EXCEPTION_FOR_TESTING);
-  }
-  if (!exception_state.HadException()) {
-    // TODO(yosin): Once we have a |EphemeralRange| version of |boundingBox()|,
-    // we should use it instead of |Range| version.
-    marker.SetRenderedRect(LayoutRect(range->BoundingBox()));
-  } else {
-    marker.NullifyRenderedRect();
-  }
-  range->Dispose();
+  const Position startPosition(&const_cast<Node&>(node), marker.StartOffset());
+  const Position endPostion(&const_cast<Node&>(node), marker.EndOffset());
+  EphemeralRange range(startPosition, endPostion);
+  marker.SetRenderedRect(LayoutRect(ComputeTextRect(range)));
 }
 
 // Markers are stored in order sorted by their start offset.
@@ -393,11 +395,9 @@ DocumentMarkerVector DocumentMarkerController::Markers() {
   return result;
 }
 
-Vector<IntRect> DocumentMarkerController::RenderedRectsForMarkers(
-    DocumentMarker::MarkerType marker_type) {
+Vector<IntRect> DocumentMarkerController::RenderedRectsForTextMatchMarkers() {
   Vector<IntRect> result;
-
-  if (!PossiblyHasMarkers(marker_type))
+  if (!PossiblyHasMarkers(DocumentMarker::kTextMatch))
     return result;
   DCHECK(!(markers_.IsEmpty()));
 
@@ -410,17 +410,18 @@ Vector<IntRect> DocumentMarkerController::RenderedRectsForMarkers(
     if (!node.isConnected())
       continue;
     MarkerLists* markers = node_iterator->value.Get();
-    for (DocumentMarker::MarkerType type : DocumentMarker::AllMarkers()) {
-      DocumentMarkerList* const list = ListForType(markers, type);
-      if (!list || list->IsEmpty() || type != marker_type)
-        continue;
+    DocumentMarkerList* const list =
+        ListForType(markers, DocumentMarker::kTextMatch);
+    if (!list || list->IsEmpty())
+      continue;
 
-      for (RenderedDocumentMarker* rendered_marker : list->GetMarkers()) {
-        UpdateMarkerRenderedRectIfNeeded(node, *rendered_marker);
-        if (!rendered_marker->IsRendered())
-          continue;
-        result.push_back(rendered_marker->RenderedRect());
-      }
+    for (DocumentMarker* marker : list->GetMarkers()) {
+      RenderedDocumentMarker* const rendered_marker =
+          ToRenderedDocumentMarker(marker);
+      UpdateMarkerRenderedRectIfNeeded(node, *rendered_marker);
+      if (!rendered_marker->IsRendered())
+        continue;
+      result.push_back(rendered_marker->RenderedRect());
     }
   }
 
@@ -441,39 +442,27 @@ void DocumentMarkerController::UpdateMarkerRenderedRectIfNeeded(
     UpdateMarkerRenderedRect(node, marker);
 }
 
-void DocumentMarkerController::InvalidateRectsForMarkersInNode(
+void DocumentMarkerController::InvalidateRectsForTextMatchMarkersInNode(
     const Node& node) {
   MarkerLists* markers = markers_.at(&node);
 
-  for (auto& marker_list : *markers) {
-    if (!marker_list || marker_list->IsEmpty())
-      continue;
+  const DocumentMarkerList* const marker_list =
+      ListForType(markers, DocumentMarker::kTextMatch);
+  if (!marker_list || marker_list->IsEmpty())
+    return;
 
-    const HeapVector<Member<RenderedDocumentMarker>>& markers_in_list =
-        marker_list->GetMarkers();
-    for (auto& marker : markers_in_list)
-      marker->Invalidate();
+  const HeapVector<Member<DocumentMarker>>& markers_in_list =
+      marker_list->GetMarkers();
+  for (auto& marker : markers_in_list)
+    ToRenderedDocumentMarker(marker)->Invalidate();
 
-    if (markers_in_list.front()->GetType() == DocumentMarker::kTextMatch)
-      InvalidatePaintForTickmarks(node);
-  }
+  InvalidatePaintForTickmarks(node);
 }
 
-void DocumentMarkerController::InvalidateRectsForAllMarkers() {
+void DocumentMarkerController::InvalidateRectsForAllTextMatchMarkers() {
   for (auto& node_markers : markers_) {
     const Node& node = *node_markers.key;
-    for (auto& marker_list : *node_markers.value) {
-      if (!marker_list || marker_list->IsEmpty())
-        continue;
-
-      const HeapVector<Member<RenderedDocumentMarker>>& markers_in_list =
-          marker_list->GetMarkers();
-      for (DocumentMarker* marker : markers_in_list)
-        ToRenderedDocumentMarker(marker)->Invalidate();
-
-      if (markers_in_list.front()->GetType() == DocumentMarker::kTextMatch)
-        InvalidatePaintForTickmarks(node);
-    }
+    InvalidateRectsForTextMatchMarkersInNode(node);
   }
 }
 
@@ -608,9 +597,10 @@ void DocumentMarkerController::RepaintMarkers(
   }
 }
 
-bool DocumentMarkerController::SetMarkersActive(const EphemeralRange& range,
-                                                bool active) {
-  if (!PossiblyHasMarkers(DocumentMarker::AllMarkers()))
+bool DocumentMarkerController::SetTextMatchMarkersActive(
+    const EphemeralRange& range,
+    bool active) {
+  if (!PossiblyHasMarkers(DocumentMarker::kTextMatch))
     return false;
 
   DCHECK(!markers_.IsEmpty());
@@ -629,15 +619,16 @@ bool DocumentMarkerController::SetMarkersActive(const EphemeralRange& range,
   for (Node& node : range.Nodes()) {
     int start_offset = node == start_container ? container_start_offset : 0;
     int end_offset = node == end_container ? container_end_offset : INT_MAX;
-    marker_found |= SetMarkersActive(&node, start_offset, end_offset, active);
+    marker_found |=
+        SetTextMatchMarkersActive(&node, start_offset, end_offset, active);
   }
   return marker_found;
 }
 
-bool DocumentMarkerController::SetMarkersActive(Node* node,
-                                                unsigned start_offset,
-                                                unsigned end_offset,
-                                                bool active) {
+bool DocumentMarkerController::SetTextMatchMarkersActive(Node* node,
+                                                         unsigned start_offset,
+                                                         unsigned end_offset,
+                                                         bool active) {
   MarkerLists* markers = markers_.at(node);
   if (!markers)
     return false;
@@ -649,7 +640,7 @@ bool DocumentMarkerController::SetMarkersActive(Node* node,
   if (!list)
     return false;
 
-  const HeapVector<Member<RenderedDocumentMarker>>& markers_in_list =
+  const HeapVector<Member<DocumentMarker>>& markers_in_list =
       list->GetMarkers();
   // TODO(rlanday): this assumes that the markers are stored in sorted order.
   // This method should probably eventually be implemented by a
@@ -688,7 +679,7 @@ void DocumentMarkerController::ShowMarkers() const {
     MarkerLists* markers = markers_.at(node);
     for (DocumentMarker::MarkerType type : DocumentMarker::AllMarkers()) {
       DocumentMarkerList* const list = ListForType(markers, type);
-      const HeapVector<Member<RenderedDocumentMarker>>& markers_in_list =
+      const HeapVector<Member<DocumentMarker>>& markers_in_list =
           list->GetMarkers();
       for (const DocumentMarker* marker : markers_in_list) {
         builder.Append(" ");
@@ -735,7 +726,7 @@ void DocumentMarkerController::DidUpdateCharacterData(CharacterData* node,
     return;
   if (!node->GetLayoutObject())
     return;
-  InvalidateRectsForMarkersInNode(*node);
+  InvalidateRectsForTextMatchMarkersInNode(*node);
   // repaint the affected node
   node->GetLayoutObject()->SetShouldDoFullPaintInvalidation();
 }

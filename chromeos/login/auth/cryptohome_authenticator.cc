@@ -550,7 +550,7 @@ void CryptohomeAuthenticator::AuthenticateToUnlock(
 
 void CryptohomeAuthenticator::LoginAsSupervisedUser(
     const UserContext& user_context) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   DCHECK_EQ(user_manager::USER_TYPE_SUPERVISED, user_context.GetUserType());
 
   // TODO(nkostylev): Pass proper value for |user_is_new| or remove (not used).
@@ -565,7 +565,7 @@ void CryptohomeAuthenticator::LoginAsSupervisedUser(
 }
 
 void CryptohomeAuthenticator::LoginOffTheRecord() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   current_state_.reset(
       new AuthAttemptState(UserContext(user_manager::USER_TYPE_GUEST,
                                        user_manager::GuestAccountId()),
@@ -580,7 +580,7 @@ void CryptohomeAuthenticator::LoginOffTheRecord() {
 
 void CryptohomeAuthenticator::LoginAsPublicSession(
     const UserContext& user_context) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   DCHECK_EQ(user_manager::USER_TYPE_PUBLIC_ACCOUNT, user_context.GetUserType());
 
   current_state_.reset(
@@ -598,7 +598,7 @@ void CryptohomeAuthenticator::LoginAsPublicSession(
 void CryptohomeAuthenticator::LoginAsKioskAccount(
     const AccountId& app_account_id,
     bool use_guest_mount) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
   const AccountId& account_id =
       use_guest_mount ? user_manager::GuestAccountId() : app_account_id;
@@ -622,7 +622,7 @@ void CryptohomeAuthenticator::LoginAsKioskAccount(
 
 void CryptohomeAuthenticator::LoginAsArcKioskAccount(
     const AccountId& app_account_id) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
   current_state_.reset(new AuthAttemptState(
       UserContext(user_manager::USER_TYPE_ARC_KIOSK_APP, app_account_id),
@@ -637,7 +637,7 @@ void CryptohomeAuthenticator::LoginAsArcKioskAccount(
 }
 
 void CryptohomeAuthenticator::OnAuthSuccess() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   VLOG(1) << "Login success";
   // Send notification of success
   chromeos::LoginEventRecorder::Get()->RecordAuthenticationSuccess();
@@ -650,21 +650,21 @@ void CryptohomeAuthenticator::OnAuthSuccess() {
 }
 
 void CryptohomeAuthenticator::OnOffTheRecordAuthSuccess() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   chromeos::LoginEventRecorder::Get()->RecordAuthenticationSuccess();
   if (consumer_)
     consumer_->OnOffTheRecordAuthSuccess();
 }
 
 void CryptohomeAuthenticator::OnPasswordChangeDetected() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   if (consumer_)
     consumer_->OnPasswordChangeDetected();
 }
 
 void CryptohomeAuthenticator::OnOldEncryptionDetected(
     bool has_incomplete_migration) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   if (consumer_) {
     consumer_->OnOldEncryptionDetected(current_state_->user_context,
                                        has_incomplete_migration);
@@ -672,7 +672,7 @@ void CryptohomeAuthenticator::OnOldEncryptionDetected(
 }
 
 void CryptohomeAuthenticator::OnAuthFailure(const AuthFailure& error) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
   // OnAuthFailure will be called again with the same |error|
   // after the cryptohome has been removed.
@@ -746,7 +746,7 @@ void CryptohomeAuthenticator::OnUnmount(DBusMethodCallStatus call_status,
 }
 
 void CryptohomeAuthenticator::Resolve() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   bool create_if_nonexistent = false;
   CryptohomeAuthenticator::AuthState state = ResolveState();
   VLOG(1) << "Resolved state to: " << state;
@@ -889,7 +889,7 @@ CryptohomeAuthenticator::~CryptohomeAuthenticator() {
 }
 
 CryptohomeAuthenticator::AuthState CryptohomeAuthenticator::ResolveState() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   // If we haven't mounted the user's home dir yet or
   // haven't got sanitized username value, we can't be done.
   // We never get past here if any of these two cryptohome ops is still pending.
@@ -935,7 +935,7 @@ CryptohomeAuthenticator::AuthState CryptohomeAuthenticator::ResolveState() {
 
 CryptohomeAuthenticator::AuthState
 CryptohomeAuthenticator::ResolveCryptohomeFailureState() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   if (remove_attempted_ || resync_attempted_)
     return FAILED_REMOVE;
   if (ephemeral_mount_attempted_)
@@ -987,7 +987,7 @@ CryptohomeAuthenticator::ResolveCryptohomeFailureState() {
 
 CryptohomeAuthenticator::AuthState
 CryptohomeAuthenticator::ResolveCryptohomeSuccessState() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   if (resync_attempted_)
     return CREATE_NEW;
   if (remove_attempted_)
@@ -1016,7 +1016,7 @@ CryptohomeAuthenticator::ResolveCryptohomeSuccessState() {
 CryptohomeAuthenticator::AuthState
 CryptohomeAuthenticator::ResolveOnlineSuccessState(
     CryptohomeAuthenticator::AuthState offline_state) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   switch (offline_state) {
     case POSSIBLE_PW_CHANGE:
       return NEED_OLD_PW;

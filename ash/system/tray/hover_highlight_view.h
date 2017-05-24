@@ -115,7 +115,7 @@ class HoverHighlightView : public ActionableView {
   bool PerformAction(const ui::Event& event) override;
 
   // views::View:
-  gfx::Size GetPreferredSize() const override;
+  gfx::Size CalculatePreferredSize() const override;
   int GetHeightForWidth(int width) const override;
   void OnEnabledChanged() override;
   void OnFocus() override;

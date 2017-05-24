@@ -3,7 +3,7 @@
   "ignored": false,
   "role": {
     "type": "internalRole",
-    "value": "Div"
+    "value": "GenericContainer"
   },
   "name": {
     "type": "computedString",

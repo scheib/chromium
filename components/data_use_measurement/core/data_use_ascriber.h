@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include "base/observer_list.h"
+#include "base/threading/thread_checker.h"
 #include "components/data_use_measurement/core/data_use_measurement.h"
 #include "components/metrics/data_use_tracker.h"
 #include "url/gurl.h"
@@ -20,6 +22,7 @@ class URLRequest;
 
 namespace data_use_measurement {
 
+class DataUse;
 class DataUseRecorder;
 class URLRequestClassifier;
 
@@ -30,7 +33,28 @@ class URLRequestClassifier;
 // together and reported as a single use.
 class DataUseAscriber {
  public:
-  virtual ~DataUseAscriber() {}
+  // Provides the interface for observing data use of a pageload.
+  class PageLoadObserver {
+   public:
+    virtual ~PageLoadObserver() {}
+
+    // The page load committed. |data_use| contains the currently committed URL,
+    // and the network data used by the page so far.
+    virtual void OnPageLoadCommit(DataUse* data_use) = 0;
+
+    // A resource of a page loaded. This includes main frame, sub frame
+    // resource, subresource. |data_use| contains the network data used by the
+    // page so far. URL in |data_use| may not be available until OnCommit.
+    virtual void OnPageResourceLoad(const net::URLRequest& request,
+                                    DataUse* data_use) = 0;
+
+    // The page load completed. This is when the tab is closed or another
+    // navigation starts due to omnibox search, link clicks, page reload, etc.
+    virtual void OnPageLoadComplete(DataUse* data_use) = 0;
+  };
+
+  DataUseAscriber();
+  virtual ~DataUseAscriber();
 
   // Creates a network delegate that will be used to track data use.
   std::unique_ptr<net::NetworkDelegate> CreateNetworkDelegate(
@@ -53,6 +77,18 @@ class DataUseAscriber {
   virtual std::unique_ptr<URLRequestClassifier> CreateURLRequestClassifier()
       const = 0;
 
+  // Observers should be added or removed in IO thread. The notifications will
+  // be called in the same thread.
+  void AddObserver(PageLoadObserver* observer) {
+    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+    observers_.AddObserver(observer);
+  }
+
+  void RemoveObserver(PageLoadObserver* observer) {
+    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+    observers_.RemoveObserver(observer);
+  }
+
   // Methods called by DataUseNetworkDelegate to propagate data use information:
   virtual void OnBeforeUrlRequest(net::URLRequest* request);
   virtual void OnNetworkBytesSent(net::URLRequest* request, int64_t bytes_sent);
@@ -61,6 +97,12 @@ class DataUseAscriber {
   virtual void OnUrlRequestCompleted(const net::URLRequest& request,
                                      bool started);
   virtual void OnUrlRequestDestroyed(net::URLRequest* request);
+
+ protected:
+  base::ObserverList<PageLoadObserver> observers_;
+
+ private:
+  THREAD_CHECKER(thread_checker_);
 };
 
 }  // namespace data_use_measurement

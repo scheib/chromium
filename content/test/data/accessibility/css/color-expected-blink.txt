@@ -2,7 +2,7 @@ rootWebArea backgroundColor=-1 color=-16777216
 ++paragraph backgroundColor=-16776961 color=-65536
 ++++staticText name='Red on blue.' backgroundColor=-16776961 color=-65536
 ++++++inlineTextBox name='Red on blue.' color=-16777216
-++div backgroundColor=-1 color=-16777216
+++genericContainer backgroundColor=-1 color=-16777216
 ++++staticText name='Default.' backgroundColor=-1 color=-16777216
 ++++++inlineTextBox name='Default.' color=-16777216
 ++++staticText name='Blue background.' backgroundColor=-16776961 color=-16777216

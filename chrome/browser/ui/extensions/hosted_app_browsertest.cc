@@ -99,6 +99,11 @@ class HostedAppTest : public ExtensionBrowserTest {
     ASSERT_TRUE(app_browser_ != browser());
   }
 
+  void SetUpOnMainThread() override {
+    ExtensionBrowserTest::SetUpOnMainThread();
+    host_resolver()->AddRule("*", "127.0.0.1");
+  }
+
   Browser* app_browser_;
 
  private:
@@ -198,6 +203,52 @@ IN_PROC_BROWSER_TEST_F(HostedAppTest,
       app_browser_, "http://www.foo.com/blah", true);
 }
 
+// Check that a subframe on a regular web page can navigate to a URL that
+// redirects to a hosted app.  https://crbug.com/721949.
+IN_PROC_BROWSER_TEST_F(HostedAppTest, SubframeRedirectsToHostedApp) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  // Set up an app which covers app.com URLs.
+  GURL app_url = embedded_test_server()->GetURL("app.com", "/title1.html");
+  extensions::TestExtensionDir test_app_dir;
+  test_app_dir.WriteManifest(base::StringPrintf(
+      R"( { "name": "Hosted App",
+            "version": "1",
+            "manifest_version": 2,
+            "app": {
+              "launch": {
+                "web_url": "%s"
+              },
+              "urls": ["*://app.com/"]
+            }
+          } )",
+      app_url.spec().c_str()));
+  SetupApp(test_app_dir.UnpackedPath(), false);
+
+  // Navigate a regular tab to a page with a subframe.
+  GURL url = embedded_test_server()->GetURL("foo.com", "/iframe.html");
+  content::WebContents* tab =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  ui_test_utils::NavigateToURL(browser(), url);
+
+  // Navigate the subframe to a URL that redirects to a URL in the hosted app's
+  // web extent.
+  GURL redirect_url = embedded_test_server()->GetURL(
+      "bar.com", "/server-redirect?" + app_url.spec());
+  EXPECT_TRUE(NavigateIframeToURL(tab, "test", redirect_url));
+
+  // Ensure that the frame navigated successfully and that it has correct
+  // content.
+  content::RenderFrameHost* subframe =
+      content::ChildFrameAt(tab->GetMainFrame(), 0);
+  EXPECT_EQ(app_url, subframe->GetLastCommittedURL());
+  std::string result;
+  EXPECT_TRUE(ExecuteScriptAndExtractString(
+      subframe, "window.domAutomationController.send(document.body.innerText);",
+      &result));
+  EXPECT_EQ("This page has no title.", result);
+}
+
 class HostedAppVsTdiTest : public HostedAppTest {
  public:
   HostedAppVsTdiTest() {}
@@ -206,7 +257,6 @@ class HostedAppVsTdiTest : public HostedAppTest {
   void SetUpOnMainThread() override {
     scoped_feature_list_.InitAndEnableFeature(features::kTopDocumentIsolation);
     HostedAppTest::SetUpOnMainThread();
-    host_resolver()->AddRule("*", "127.0.0.1");
     ASSERT_TRUE(embedded_test_server()->Start());
   }
 

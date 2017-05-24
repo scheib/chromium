@@ -4,6 +4,8 @@
 
 #include "components/sync_preferences/pref_model_associator.h"
 
+#include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include "base/auto_reset.h"
@@ -238,9 +240,9 @@ std::unique_ptr<base::Value> PrefModelAssociator::MergePreference(
   if (client_) {
     std::string new_pref_name;
     if (client_->IsMergeableListPreference(name))
-      return base::WrapUnique(MergeListValues(local_value, server_value));
+      return MergeListValues(local_value, server_value);
     if (client_->IsMergeableDictionaryPreference(name))
-      return base::WrapUnique(MergeDictionaryValues(local_value, server_value));
+      return MergeDictionaryValues(local_value, server_value);
   }
 
   // If this is not a specially handled preference, server wins.
@@ -275,12 +277,13 @@ bool PrefModelAssociator::CreatePrefSyncData(
   return true;
 }
 
-base::Value* PrefModelAssociator::MergeListValues(const base::Value& from_value,
-                                                  const base::Value& to_value) {
+std::unique_ptr<base::Value> PrefModelAssociator::MergeListValues(
+    const base::Value& from_value,
+    const base::Value& to_value) {
   if (from_value.GetType() == base::Value::Type::NONE)
-    return to_value.DeepCopy();
+    return base::MakeUnique<base::Value>(to_value);
   if (to_value.GetType() == base::Value::Type::NONE)
-    return from_value.DeepCopy();
+    return base::MakeUnique<base::Value>(from_value);
 
   DCHECK(from_value.GetType() == base::Value::Type::LIST);
   DCHECK(to_value.GetType() == base::Value::Type::LIST);
@@ -288,21 +291,24 @@ base::Value* PrefModelAssociator::MergeListValues(const base::Value& from_value,
       static_cast<const base::ListValue&>(from_value);
   const base::ListValue& to_list_value =
       static_cast<const base::ListValue&>(to_value);
-  base::ListValue* result = to_list_value.DeepCopy();
 
-  for (const auto& value : from_list_value) {
-    result->AppendIfNotPresent(value.CreateDeepCopy());
-  }
-  return result;
+  auto result = base::MakeUnique<base::ListValue>(to_list_value);
+  base::Value::ListStorage& list = result->GetList();
+  std::copy_if(
+      from_list_value.GetList().begin(), from_list_value.GetList().end(),
+      std::back_inserter(list), [&list](const base::Value& value) {
+        return std::find(list.begin(), list.end(), value) == list.end();
+      });
+  return std::move(result);
 }
 
-base::Value* PrefModelAssociator::MergeDictionaryValues(
+std::unique_ptr<base::Value> PrefModelAssociator::MergeDictionaryValues(
     const base::Value& from_value,
     const base::Value& to_value) {
   if (from_value.GetType() == base::Value::Type::NONE)
-    return to_value.DeepCopy();
+    return base::MakeUnique<base::Value>(to_value);
   if (to_value.GetType() == base::Value::Type::NONE)
-    return from_value.DeepCopy();
+    return base::MakeUnique<base::Value>(from_value);
 
   DCHECK_EQ(from_value.GetType(), base::Value::Type::DICTIONARY);
   DCHECK_EQ(to_value.GetType(), base::Value::Type::DICTIONARY);
@@ -310,7 +316,7 @@ base::Value* PrefModelAssociator::MergeDictionaryValues(
       static_cast<const base::DictionaryValue&>(from_value);
   const base::DictionaryValue& to_dict_value =
       static_cast<const base::DictionaryValue&>(to_value);
-  base::DictionaryValue* result = to_dict_value.DeepCopy();
+  auto result = base::MakeUnique<base::DictionaryValue>(to_dict_value);
 
   for (base::DictionaryValue::Iterator it(from_dict_value); !it.IsAtEnd();
        it.Advance()) {
@@ -319,17 +325,18 @@ base::Value* PrefModelAssociator::MergeDictionaryValues(
     if (result->GetWithoutPathExpansion(it.key(), &to_key_value)) {
       if (from_key_value->GetType() == base::Value::Type::DICTIONARY &&
           to_key_value->GetType() == base::Value::Type::DICTIONARY) {
-        base::Value* merged_value =
+        std::unique_ptr<base::Value> merged_value =
             MergeDictionaryValues(*from_key_value, *to_key_value);
-        result->SetWithoutPathExpansion(it.key(), merged_value);
+        result->SetWithoutPathExpansion(it.key(), std::move(merged_value));
       }
       // Note that for all other types we want to preserve the "to"
       // values so we do nothing here.
     } else {
-      result->SetWithoutPathExpansion(it.key(), from_key_value->DeepCopy());
+      result->SetWithoutPathExpansion(
+          it.key(), base::MakeUnique<base::Value>(*from_key_value));
     }
   }
-  return result;
+  return std::move(result);
 }
 
 // Note: This will build a model of all preferences registered as syncable

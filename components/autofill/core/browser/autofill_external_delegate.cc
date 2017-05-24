@@ -83,9 +83,8 @@ void AutofillExternalDelegate::OnSuggestionsReturned(
   if (query_id != query_id_)
     return;
 
-  // The suggestions and warnings are "above the fold" and are separated from
-  // other menu items with a separator.
   std::vector<Suggestion> suggestions(input_suggestions);
+
   // Hide warnings as appropriate.
   PossiblyRemoveAutofillWarnings(&suggestions);
 
@@ -339,19 +338,31 @@ void AutofillExternalDelegate::ApplyAutofillOptions(
   if (query_field_.is_autofilled) {
     base::string16 value =
         l10n_util::GetStringUTF16(IDS_AUTOFILL_CLEAR_FORM_MENU_ITEM);
+#if defined(OS_ANDROID)
     if (IsKeyboardAccessoryEnabled())
       value = base::i18n::ToUpper(value);
+#endif
 
     suggestions->push_back(Suggestion(value));
     suggestions->back().frontend_id = POPUP_ITEM_ID_CLEAR_FORM;
   }
 
   // Append the 'Chrome Autofill options' menu item, or the menu item specified
-  // in the popup layout experiment.
+  // in the popup layout experiment. If we do not include
+  // |POPUP_ITEM_ID_CLEAR_FORM|, include a hint for keyboard accessory.
   suggestions->push_back(Suggestion(GetSettingsSuggestionValue()));
   suggestions->back().frontend_id = POPUP_ITEM_ID_AUTOFILL_OPTIONS;
-  if (IsKeyboardAccessoryEnabled())
+#if defined(OS_ANDROID)
+  if (IsKeyboardAccessoryEnabled()) {
     suggestions->back().icon = base::ASCIIToUTF16("settings");
+    if (IsHintEnabledInKeyboardAccessory() && !query_field_.is_autofilled) {
+      Suggestion create_icon;
+      create_icon.icon = base::ASCIIToUTF16("create");
+      create_icon.frontend_id = POPUP_ITEM_ID_CREATE_HINT;
+      suggestions->push_back(create_icon);
+    }
+  }
+#endif
 }
 
 void AutofillExternalDelegate::InsertDataListValues(

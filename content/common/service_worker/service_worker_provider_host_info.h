@@ -9,6 +9,7 @@
 
 namespace content {
 
+// Container object to create a ServiceWorkerProviderHost.
 struct CONTENT_EXPORT ServiceWorkerProviderHostInfo {
   ServiceWorkerProviderHostInfo();
   ServiceWorkerProviderHostInfo(ServiceWorkerProviderHostInfo&& other);

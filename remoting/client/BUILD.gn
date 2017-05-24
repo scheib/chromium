@@ -58,6 +58,7 @@ static_library("client") {
 
   deps = [
     "//remoting/base",
+    "//remoting/client/input",
     "//remoting/codec:decoder",
     "//remoting/protocol",
     "//third_party/libyuv",

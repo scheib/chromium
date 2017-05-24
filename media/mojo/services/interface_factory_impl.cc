@@ -13,26 +13,26 @@
 #include "mojo/public/cpp/bindings/strong_binding.h"
 #include "services/service_manager/public/interfaces/interface_provider.mojom.h"
 
-#if defined(ENABLE_MOJO_AUDIO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
 #include "media/mojo/services/mojo_audio_decoder_service.h"
-#endif  // defined(ENABLE_MOJO_AUDIO_DECODER)
+#endif  // BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
 
-#if defined(ENABLE_MOJO_VIDEO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
 #include "media/mojo/services/mojo_video_decoder_service.h"
-#endif  // defined(ENABLE_MOJO_VIDEO_DECODER)
+#endif  // BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
 
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
 #include "base/bind_helpers.h"
 #include "media/base/audio_renderer_sink.h"
 #include "media/base/renderer_factory.h"
 #include "media/base/video_renderer_sink.h"
 #include "media/mojo/services/mojo_renderer_service.h"
-#endif  // defined(ENABLE_MOJO_RENDERER)
+#endif  // BUILDFLAG(ENABLE_MOJO_RENDERER)
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
 #include "media/base/cdm_factory.h"
 #include "media/mojo/services/mojo_cdm_service.h"
-#endif  // defined(ENABLE_MOJO_CDM)
+#endif  // BUILDFLAG(ENABLE_MOJO_CDM)
 
 namespace media {
 
@@ -42,10 +42,10 @@ InterfaceFactoryImpl::InterfaceFactoryImpl(
     std::unique_ptr<service_manager::ServiceContextRef> connection_ref,
     MojoMediaClient* mojo_media_client)
     :
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
       media_log_(media_log),
 #endif
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
       interfaces_(std::move(interfaces)),
 #endif
       connection_ref_(std::move(connection_ref)),
@@ -62,7 +62,7 @@ InterfaceFactoryImpl::~InterfaceFactoryImpl() {
 
 void InterfaceFactoryImpl::CreateAudioDecoder(
     mojo::InterfaceRequest<mojom::AudioDecoder> request) {
-#if defined(ENABLE_MOJO_AUDIO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
   scoped_refptr<base::SingleThreadTaskRunner> task_runner(
       base::ThreadTaskRunnerHandle::Get());
 
@@ -77,22 +77,22 @@ void InterfaceFactoryImpl::CreateAudioDecoder(
       base::MakeUnique<MojoAudioDecoderService>(
           cdm_service_context_.GetWeakPtr(), std::move(audio_decoder)),
       std::move(request));
-#endif  // defined(ENABLE_MOJO_AUDIO_DECODER)
+#endif  // BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
 }
 
 void InterfaceFactoryImpl::CreateVideoDecoder(
     mojom::VideoDecoderRequest request) {
-#if defined(ENABLE_MOJO_VIDEO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
   video_decoder_bindings_.AddBinding(
       base::MakeUnique<MojoVideoDecoderService>(mojo_media_client_),
       std::move(request));
-#endif  // defined(ENABLE_MOJO_VIDEO_DECODER)
+#endif  // BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
 }
 
 void InterfaceFactoryImpl::CreateRenderer(
     const std::string& audio_device_id,
     mojo::InterfaceRequest<mojom::Renderer> request) {
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
   RendererFactory* renderer_factory = GetRendererFactory();
   if (!renderer_factory)
     return;
@@ -127,12 +127,12 @@ void InterfaceFactoryImpl::CreateRenderer(
       base::Bind(base::IgnoreResult(
                      &mojo::StrongBindingSet<mojom::Renderer>::RemoveBinding),
                  base::Unretained(&renderer_bindings_), binding_id));
-#endif  // defined(ENABLE_MOJO_RENDERER)
+#endif  // BUILDFLAG(ENABLE_MOJO_RENDERER)
 }
 
 void InterfaceFactoryImpl::CreateCdm(
     mojo::InterfaceRequest<mojom::ContentDecryptionModule> request) {
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
   CdmFactory* cdm_factory = GetCdmFactory();
   if (!cdm_factory)
     return;
@@ -140,10 +140,10 @@ void InterfaceFactoryImpl::CreateCdm(
   cdm_bindings_.AddBinding(base::MakeUnique<MojoCdmService>(
                                cdm_service_context_.GetWeakPtr(), cdm_factory),
                            std::move(request));
-#endif  // defined(ENABLE_MOJO_CDM)
+#endif  // BUILDFLAG(ENABLE_MOJO_CDM)
 }
 
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
 RendererFactory* InterfaceFactoryImpl::GetRendererFactory() {
   if (!renderer_factory_) {
     renderer_factory_ = mojo_media_client_->CreateRendererFactory(media_log_);
@@ -151,9 +151,9 @@ RendererFactory* InterfaceFactoryImpl::GetRendererFactory() {
   }
   return renderer_factory_.get();
 }
-#endif  // defined(ENABLE_MOJO_RENDERER)
+#endif  // BUILDFLAG(ENABLE_MOJO_RENDERER)
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
 CdmFactory* InterfaceFactoryImpl::GetCdmFactory() {
   if (!cdm_factory_) {
     cdm_factory_ = mojo_media_client_->CreateCdmFactory(interfaces_.get());
@@ -161,6 +161,6 @@ CdmFactory* InterfaceFactoryImpl::GetCdmFactory() {
   }
   return cdm_factory_.get();
 }
-#endif  // defined(ENABLE_MOJO_CDM)
+#endif  // BUILDFLAG(ENABLE_MOJO_CDM)
 
 }  // namespace media

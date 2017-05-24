@@ -105,6 +105,7 @@ struct SameSizeAsPaintLayer : DisplayItemClient {
     void* pointer;
     LayoutRect rect;
   } previous_paint_status;
+  uint64_t unique_id;
 };
 
 static_assert(sizeof(PaintLayer) == sizeof(SameSizeAsPaintLayer),
@@ -167,6 +168,8 @@ PaintLayer::PaintLayer(LayoutBoxModelObject& layout_object)
       static_inline_position_(0),
       static_block_position_(0),
       ancestor_overflow_layer_(nullptr) {
+  static PaintLayerId paint_layer_id_counter = 0;
+  unique_id_ = ++paint_layer_id_counter;
   UpdateStackingNode();
 
   is_self_painting_layer_ = ShouldBeSelfPaintingLayer();

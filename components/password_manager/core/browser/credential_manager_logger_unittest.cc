@@ -53,7 +53,8 @@ TEST_F(CredentialManagerLoggerTest, LogRequestCredential) {
   EXPECT_CALL(log_manager(),
               LogSavePasswordProgress(
                   AllOf(HasSubstr(kSiteOrigin), HasSubstr(kFederationOrigin))));
-  logger().LogRequestCredential(GURL(kSiteOrigin), true,
+  logger().LogRequestCredential(GURL(kSiteOrigin),
+                                CredentialMediationRequirement::kSilent,
                                 {GURL(kFederationOrigin)});
 }
 

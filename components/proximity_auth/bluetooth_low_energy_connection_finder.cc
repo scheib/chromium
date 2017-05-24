@@ -41,24 +41,20 @@ const int kRestartDiscoveryOnErrorDelaySeconds = 2;
 
 BluetoothLowEnergyConnectionFinder::BluetoothLowEnergyConnectionFinder(
     const cryptauth::RemoteDevice remote_device,
-    const std::vector<cryptauth::BeaconSeed>& beacon_seeds,
     cryptauth::BluetoothThrottler* bluetooth_throttler)
     : BluetoothLowEnergyConnectionFinder(
           remote_device,
           kBLEGattServiceUUID,
-          beacon_seeds,
           base::MakeUnique<cryptauth::BackgroundEidGenerator>(),
           bluetooth_throttler) {}
 
 BluetoothLowEnergyConnectionFinder::BluetoothLowEnergyConnectionFinder(
     const cryptauth::RemoteDevice remote_device,
     const std::string& service_uuid,
-    const std::vector<cryptauth::BeaconSeed>& beacon_seeds,
     std::unique_ptr<cryptauth::BackgroundEidGenerator> eid_generator,
     cryptauth::BluetoothThrottler* bluetooth_throttler)
     : remote_device_(remote_device),
       service_uuid_(service_uuid),
-      beacon_seeds_(beacon_seeds),
       eid_generator_(std::move(eid_generator)),
       bluetooth_throttler_(bluetooth_throttler),
       weak_ptr_factory_(this) {}
@@ -168,9 +164,10 @@ bool BluetoothLowEnergyConnectionFinder::IsRightDevice(
   if (!service_data)
     return false;
 
+  PA_LOG(INFO) << "Generating EIDs for: " << device->GetAddress();
   std::string service_data_string(service_data->begin(), service_data->end());
   std::vector<cryptauth::DataWithTimestamp> nearest_eids =
-      eid_generator_->GenerateNearestEids(beacon_seeds_);
+      eid_generator_->GenerateNearestEids(remote_device_.beacon_seeds);
   for (const cryptauth::DataWithTimestamp& eid : nearest_eids) {
     if (eid.data == service_data_string) {
       PA_LOG(INFO) << "Found a matching EID: " << eid.DataInHex();

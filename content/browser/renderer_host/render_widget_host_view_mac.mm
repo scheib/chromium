@@ -1446,9 +1446,9 @@ void RenderWidgetHostViewMac::SubmitCompositorFrame(
   UpdateDisplayVSyncParameters();
 }
 
-void RenderWidgetHostViewMac::OnBeginFrameDidNotSwap(
+void RenderWidgetHostViewMac::OnDidNotProduceFrame(
     const cc::BeginFrameAck& ack) {
-  browser_compositor_->OnBeginFrameDidNotSwap(ack);
+  browser_compositor_->OnDidNotProduceFrame(ack);
 }
 
 void RenderWidgetHostViewMac::ClearCompositorFrame() {

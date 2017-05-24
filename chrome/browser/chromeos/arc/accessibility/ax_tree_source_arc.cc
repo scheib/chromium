@@ -155,7 +155,7 @@ void PopulateAXRole(arc::mojom::AccessibilityNodeInfoData* node,
   MAP_ROLE(ui::kAXSwitchClassname, ui::AX_ROLE_SWITCH);
   MAP_ROLE(ui::kAXTabWidgetClassname, ui::AX_ROLE_TAB_LIST);
   MAP_ROLE(ui::kAXToggleButtonClassname, ui::AX_ROLE_TOGGLE_BUTTON);
-  MAP_ROLE(ui::kAXViewClassname, ui::AX_ROLE_DIV);
+  MAP_ROLE(ui::kAXViewClassname, ui::AX_ROLE_GENERIC_CONTAINER);
   MAP_ROLE(ui::kAXViewGroupClassname, ui::AX_ROLE_GROUP);
   MAP_ROLE(ui::kAXWebViewClassname, ui::AX_ROLE_WEB_VIEW);
 
@@ -166,7 +166,7 @@ void PopulateAXRole(arc::mojom::AccessibilityNodeInfoData* node,
   if (!text.empty())
     out_data->role = ui::AX_ROLE_STATIC_TEXT;
   else
-    out_data->role = ui::AX_ROLE_DIV;
+    out_data->role = ui::AX_ROLE_GENERIC_CONTAINER;
 }
 
 void PopulateAXState(arc::mojom::AccessibilityNodeInfoData* node,

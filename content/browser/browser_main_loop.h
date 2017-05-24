@@ -14,7 +14,6 @@
 #include "build/build_config.h"
 #include "content/browser/browser_process_sub_thread.h"
 #include "content/public/browser/browser_main_runner.h"
-#include "services/resource_coordinator/memory/coordinator/coordinator_impl.h"
 
 #if defined(USE_AURA)
 namespace aura {
@@ -52,6 +51,10 @@ class UserInputMonitor;
 class DeviceMonitorMac;
 #endif
 }  // namespace media
+
+namespace memory_instrumentation {
+class CoordinatorImpl;
+}  // memory_instrumentation
 
 namespace midi {
 class MidiService;

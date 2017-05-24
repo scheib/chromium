@@ -5,7 +5,7 @@
 #include "services/service_manager/public/cpp/identity.h"
 
 #include "base/guid.h"
-#include "services/service_manager/public/interfaces/connector.mojom.h"
+#include "services/service_manager/public/interfaces/constants.mojom.h"
 
 namespace service_manager {
 

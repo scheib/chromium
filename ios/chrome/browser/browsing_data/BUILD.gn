@@ -52,6 +52,7 @@ source_set("browsing_data") {
 }
 
 source_set("unit_tests") {
+  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "browsing_data_removal_controller_unittest.mm",

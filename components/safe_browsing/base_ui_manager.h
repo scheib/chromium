@@ -61,9 +61,11 @@ class BaseUIManager
 
   // This is a no-op in the base class, but should be overridden to report hits
   // to the unsafe contents (malware, phishing, unsafe download URL)
-  // to the server. Can only be called on UI thread.
+  // to the server. Can only be called on UI thread. Will only upload a hit
+  // report if the user has enabled SBER and is not currently in incognito mode.
   virtual void MaybeReportSafeBrowsingHit(
-      const safe_browsing::HitReport& hit_report);
+      const safe_browsing::HitReport& hit_report,
+      const content::WebContents* web_contents);
 
   // A convenience wrapper method for IsUrlWhitelistedOrPendingForWebContents.
   virtual bool IsWhitelisted(const UnsafeResource& resource);

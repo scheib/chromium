@@ -189,14 +189,7 @@ UsbServiceLinux::UsbServiceLinux()
 }
 
 UsbServiceLinux::~UsbServiceLinux() {
-  DCHECK(!helper_);
-}
-
-void UsbServiceLinux::Shutdown() {
-  const bool did_post_task =
-      blocking_task_runner()->DeleteSoon(FROM_HERE, helper_.release());
-  DCHECK(did_post_task);
-  UsbService::Shutdown();
+  blocking_task_runner()->DeleteSoon(FROM_HERE, helper_.release());
 }
 
 void UsbServiceLinux::GetDevices(const GetDevicesCallback& callback) {

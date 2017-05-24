@@ -31,7 +31,7 @@ Black         50,50,50      50,49,50      1
 --------------------------------------------
 
 Result: total RMS color error: 0.98
- * Munsell Cyan is outside 255 sRGB gamut
+* Munsell Cyan is outside 255 sRGB gamut
 
   
 

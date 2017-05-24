@@ -12,8 +12,6 @@
 // StackView subclass that contains the Overflow Toolbar Buttons that will be
 // inserted in the first row of ToolMenu in compact widths.
 @interface MenuOverflowControlsStackView : UIStackView
-// ToolsMenu ToolbarButton.
-@property(nonatomic, strong) ToolbarButton* toolsMenuButton;
 // Share ToolbarButton.
 @property(nonatomic, strong) ToolbarButton* shareButton;
 // Reload ToolbarButton.

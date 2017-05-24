@@ -432,21 +432,6 @@ void GlassBrowserFrameView::Layout() {
   LayoutClientView();
 }
 
-void GlassBrowserFrameView::ChildPreferredSizeChanged(views::View* child) {
-  if (child == GetProfileSwitcherView()) {
-    // Need to layout the root view here, too, as the avatar button may change
-    // between the text and the icon when a profile is added or removed, which
-    // changes its width. This may cause it to start or stop overlapping the
-    // the tabstrip horizontally, which in turn causes it to change height, as
-    // calculated in LayoutProfileSwitcher(). Calling LayoutProfileSwitcher()
-    // is not enough here - it does not re-draw the line below the tabstrip
-    // properly when a profile is added or removed. Even adding
-    // browser_view()->tabstrip()->Layout() and SchedulePaint() is not enough.
-    // TODO(bsep): Figure out the most efficient way to do this.
-    frame()->GetRootView()->Layout();
-  }
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // GlassBrowserFrameView, protected:
 

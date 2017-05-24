@@ -332,6 +332,14 @@ class ContentSuggestionsService : public KeyedService,
 
   // Get the domain of the suggestion suitable for fetching the favicon.
   GURL GetFaviconDomain(const ContentSuggestion::ID& suggestion_id);
+
+  // Initiate the fetch of a favicon from the local cache.
+  void GetFaviconFromCache(const GURL& publisher_url,
+                           int minimum_size_in_pixel,
+                           int desired_size_in_pixel,
+                           const ImageFetchedCallback& callback,
+                           bool continue_to_google_server);
+
   // Callbacks for fetching favicons.
   void OnGetFaviconFromCacheFinished(
       const GURL& publisher_url,

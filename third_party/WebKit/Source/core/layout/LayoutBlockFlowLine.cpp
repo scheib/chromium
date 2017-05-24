@@ -2499,8 +2499,8 @@ void LayoutBlockFlow::CheckLinesForTextOverflow() {
           curr->MoveInInlineDirection(
               logical_left - (available_logical_width - total_logical_width));
       } else {
-        TryPlacingEllipsisOnAtomicInlines(curr, block_right_edge,
-                                          block_left_edge, width,
+        TryPlacingEllipsisOnAtomicInlines(curr, LogicalRightOffsetForContent(),
+                                          LogicalLeftOffsetForContent(), width,
                                           selected_ellipsis_str);
       }
     }
@@ -2569,7 +2569,7 @@ void LayoutBlockFlow::TryPlacingEllipsisOnAtomicInlines(
           logical_left_offset += max_root_box_width - curr->LogicalWidth();
         curr->PlaceEllipsis(selected_ellipsis_str, ltr, block_left_edge,
                             block_right_edge, ellipsis_width,
-                            LayoutUnit(logical_left_offset.Ceil()), found_box);
+                            logical_left_offset, found_box);
         placed_ellipsis = true;
       }
     }

@@ -25,9 +25,9 @@
     }
 
     --cr-paper-icon-button-margin: {
-      /* Allow ripple to overlap the end. */
+      /* Shift button so ripple overlaps the end of the row. */
       -webkit-margin-end: calc(var(--cr-icon-ripple-padding) * -1);
-      -webkit-margin-start: 16px;
+      -webkit-margin-start: calc(var(--cr-icon-ripple-padding) * -1);
     }
 
     --cr-selectable-focus: {

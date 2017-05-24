@@ -14,14 +14,12 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.ThreadUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.ChromeActivity;
 import org.chromium.chrome.browser.ChromeSwitches;
 import org.chromium.chrome.browser.SearchGeolocationDisclosureTabHelper;
-import org.chromium.chrome.browser.preferences.PrefServiceBridge;
 import org.chromium.chrome.test.ChromeActivityTestRule;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.util.InfoBarTestAnimationListener;
@@ -53,12 +51,6 @@ public class SearchGeolocationDisclosureInfoBarTest {
         mActivityTestRule.startMainActivityOnBlankPage();
         mTestServer = EmbeddedTestServer.createAndStartServer(
                 InstrumentationRegistry.getInstrumentation().getContext());
-        ThreadUtils.runOnUiThreadBlocking(new Runnable() {
-            @Override
-            public void run() {
-                PrefServiceBridge.getInstance().setEulaAccepted();
-            }
-        });
     }
 
     @After

@@ -186,3 +186,80 @@ suite('<bookmarks-command-manager>', function() {
     assertFalse(commandItem[Command.OPEN_INCOGNITO].hidden);
   });
 });
+
+suite('<bookmarks-item> CommandManager integration', function() {
+  var list;
+  var items;
+  var commandManager;
+  var openedTabs;
+
+  setup(function() {
+    store = new bookmarks.TestStore({
+      nodes: testTree(createFolder(
+          '1',
+          [
+            createFolder(
+                '11',
+                [
+                  createItem('111', {url: 'http://111/'}),
+                ]),
+            createItem('12', {url: 'http://12/'}),
+            createItem('13', {url: 'http://13/'}),
+          ])),
+      selectedFolder: '1',
+    });
+    store.setReducersEnabled(true);
+    bookmarks.Store.instance_ = store;
+
+    commandManager = document.createElement('bookmarks-command-manager');
+
+    list = document.createElement('bookmarks-list');
+    replaceBody(list);
+    document.body.appendChild(commandManager);
+    Polymer.dom.flush();
+
+    items = list.root.querySelectorAll('bookmarks-item');
+
+    openedTabs = [];
+    chrome.tabs.create = function(createConfig) {
+      openedTabs.push(createConfig);
+    }
+  });
+
+  function assertOpenedTabs(tabs) {
+    assertDeepEquals(tabs, openedTabs.map(createConfig => createConfig.url));
+  }
+
+  function simulateDoubleClick(element, config) {
+    config = config || {};
+    customClick(element, config);
+    config.detail = 2;
+    customClick(element, config);
+  }
+
+  test('double click opens folders in bookmark manager', function() {
+    simulateDoubleClick(items[0]);
+    assertEquals(store.data.selectedFolder, '11');
+  });
+
+  test('double click opens items in foreground tab', function() {
+    simulateDoubleClick(items[1]);
+    assertOpenedTabs(['http://12/']);
+  });
+
+  test('shift-double click opens full selection', function() {
+    // Shift-double click works because the first click event selects the range
+    // of items, then the second doubleclick event opens that whole selection.
+    customClick(items[0]);
+    simulateDoubleClick(items[1], {shiftKey: true});
+
+    assertOpenedTabs(['http://111/', 'http://12/']);
+  });
+
+  test('control-double click opens full selection', function() {
+    customClick(items[0]);
+    simulateDoubleClick(items[2], {ctrlKey: true});
+
+    assertOpenedTabs(['http://111/', 'http://13/']);
+  });
+});

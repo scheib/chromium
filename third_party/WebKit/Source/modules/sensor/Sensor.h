@@ -13,6 +13,7 @@
 #include "modules/EventTargetModules.h"
 #include "modules/sensor/SensorOptions.h"
 #include "modules/sensor/SensorProxy.h"
+#include "platform/WebTaskRunner.h"
 #include "platform/bindings/ActiveScriptWrappable.h"
 #include "platform/bindings/ScriptWrappable.h"
 #include "platform/heap/Handle.h"
@@ -115,7 +116,7 @@ class Sensor : public EventTargetWithInlineData,
   Member<SensorProxy> sensor_proxy_;
   device::SensorReading reading_;
   SensorConfigurationPtr configuration_;
-  bool pending_reading_update_;
+  TaskHandle pending_reading_update_;
 };
 
 }  // namespace blink

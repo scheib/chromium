@@ -7,6 +7,10 @@
 
 #include "ash/ash_export.h"
 
+namespace aura {
+class Window;
+}
+
 namespace display {
 class Display;
 }
@@ -48,12 +52,12 @@ ASH_EXPORT void AdjustBoundsToEnsureMinimumWindowVisibility(
 // Returns the bounds of a left snapped window with default width in parent
 // coordinates.
 ASH_EXPORT gfx::Rect GetDefaultLeftSnappedWindowBoundsInParent(
-    WmWindow* window);
+    aura::Window* window);
 
 // Returns the bounds of a right snapped window with default width in parent
 // coordinates.
 ASH_EXPORT gfx::Rect GetDefaultRightSnappedWindowBoundsInParent(
-    WmWindow* window);
+    aura::Window* window);
 
 // Moves the window to the center of the display.
 ASH_EXPORT void CenterWindow(WmWindow* window);

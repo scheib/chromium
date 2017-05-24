@@ -23,15 +23,9 @@
 
 class SkBitmap;
 
-namespace base {
-struct Feature;
-}  // namespace base
-
 namespace favicon {
 
 class FaviconService;
-
-extern const base::Feature kFaviconsFromWebManifest;
 
 // FaviconHandler works with FaviconDriver to fetch the specific type of
 // favicon.

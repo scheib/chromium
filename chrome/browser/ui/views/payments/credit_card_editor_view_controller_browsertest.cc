@@ -8,6 +8,7 @@
 #include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "chrome/browser/ui/views/payments/editor_view_controller.h"
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "chrome/browser/ui/views/payments/validating_textfield.h"
@@ -190,10 +191,11 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCreditCardEditorTest,
 
   EXPECT_FALSE(IsEditorTextfieldInvalid(autofill::CREDIT_CARD_NAME_FULL));
   EXPECT_FALSE(IsEditorTextfieldInvalid(autofill::CREDIT_CARD_NUMBER));
-  // TODO(mathp): Both expiration fields should be marked as invalid when the
-  // card is expired.
-  EXPECT_FALSE(IsEditorComboboxInvalid(autofill::CREDIT_CARD_EXP_MONTH));
-  EXPECT_FALSE(IsEditorComboboxInvalid(autofill::CREDIT_CARD_EXP_4_DIGIT_YEAR));
+  EXPECT_TRUE(IsEditorComboboxInvalid(autofill::CREDIT_CARD_EXP_MONTH));
+  EXPECT_TRUE(IsEditorComboboxInvalid(autofill::CREDIT_CARD_EXP_4_DIGIT_YEAR));
+  EXPECT_EQ(l10n_util::GetStringUTF16(
+                IDS_PAYMENTS_VALIDATION_INVALID_CREDIT_CARD_EXPIRED),
+            GetErrorLabelForType(autofill::CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR));
 
   autofill::PersonalDataManager* personal_data_manager = GetDataManager();
   EXPECT_EQ(0u, personal_data_manager->GetCreditCards().size());
@@ -485,14 +487,12 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCreditCardEditorTest,
 IN_PROC_BROWSER_TEST_F(PaymentRequestCreditCardEditorTest,
                        CreateNewBillingAddress) {
   autofill::CreditCard card = autofill::test::GetCreditCard();
-  // Make sure to clear billing address.
+  // Make sure to clear billing address and have none available.
   card.set_billing_address_id("");
   AddCreditCard(card);
 
   autofill::TestAutofillClock test_clock;
   test_clock.SetNow(kJune2017);
-  autofill::AutofillProfile billing_profile(autofill::test::GetFullProfile());
-  AddAutofillProfile(billing_profile);
 
   InvokePaymentRequestUI();
 
@@ -506,6 +506,13 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCreditCardEditorTest,
   ResetEventObserver(DialogEvent::CREDIT_CARD_EDITOR_OPENED);
   ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
                                 DialogViewID::PAYMENT_METHOD_SHEET_LIST_VIEW);
+  // Billing address combobox must be disabled since there are no saved address.
+  views::View* billing_address_combobox =
+      dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
+          autofill::ADDRESS_BILLING_LINE1));
+  ASSERT_NE(nullptr, billing_address_combobox);
+  EXPECT_FALSE(billing_address_combobox->enabled());
+
   // Click to open the address editor
   ResetEventObserver(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
   ClickOnDialogViewAndWait(DialogViewID::ADD_BILLING_ADDRESS_BUTTON);
@@ -527,7 +534,8 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCreditCardEditorTest,
 
   // The billing address must be properly selected and valid.
   views::Combobox* billing_combobox = static_cast<views::Combobox*>(
-      dialog_view()->GetViewByID(autofill::ADDRESS_BILLING_LINE1));
+      dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
+          autofill::ADDRESS_BILLING_LINE1)));
   ASSERT_NE(nullptr, billing_combobox);
   EXPECT_FALSE(billing_combobox->invalid());
 
@@ -595,11 +603,11 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCreditCardEditorTest, EnteringEmptyData) {
   SetEditorTextfieldValue(base::ASCIIToUTF16(""),
                           autofill::CREDIT_CARD_NAME_FULL);
 
-  ValidatingTextfield* textfield =
-      static_cast<ValidatingTextfield*>(dialog_view()->GetViewByID(
-          static_cast<int>(autofill::CREDIT_CARD_NAME_FULL)));
+  ValidatingTextfield* textfield = static_cast<ValidatingTextfield*>(
+      dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
+          autofill::CREDIT_CARD_NAME_FULL)));
   EXPECT_TRUE(textfield);
-  EXPECT_TRUE(textfield->invalid());
+  EXPECT_FALSE(textfield->IsValid());
 }
 
 }  // namespace payments

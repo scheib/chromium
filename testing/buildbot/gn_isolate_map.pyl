@@ -533,10 +533,6 @@
     "label": "//headless:headless_unittests",
     "type": "console_test_launcher",
   },
-  "input_device_unittests": {
-    "label": "//services/ui/input_devices:input_device_unittests",
-    "type": "console_test_launcher",
-  },
   "installer_util_unittests": {
     "label": "//chrome/installer/util:installer_util_unittests",
     "type": "console_test_launcher",
@@ -750,14 +746,6 @@
       "--service-overrides=../../chrome/app/mash/mash_service_overrides.json",
     ],
   },
-  "mus_clipboard_unittests": {
-    "label": "//services/ui/clipboard:mus_clipboard_unittests",
-    "type": "windowed_test_launcher",
-  },
-  "mus_public_unittests": {
-    "label": "//services/ui/public/cpp/tests:mus_public_unittests",
-    "type": "windowed_test_launcher",
-  },
   "message_center_unittests": {
     "label": "//ui/message_center:message_center_unittests",
     "type": "windowed_test_launcher",
@@ -769,14 +757,6 @@
   "mus_gpu_unittests": {
     "label": "//services/ui/gpu:mus_gpu_unittests",
     "type": "console_test_launcher",
-  },
-  "mus_demo_unittests": {
-    "label": "//services/ui/demo:mus_demo_unittests",
-    "type": "windowed_test_launcher",
-  },
-  "mus_ws_unittests": {
-    "label": "//services/ui/ws:mus_ws_unittests",
-    "type": "windowed_test_launcher",
   },
   "nacl_helper_nonsfi_unittests": {
     "label": "//components/nacl/loader:nacl_helper_nonsfi_unittests",
@@ -867,7 +847,7 @@
   },
   "service_unittests": {
     "label": "//services:service_unittests",
-    "type": "console_test_launcher",
+    "type": "windowed_test_launcher",
   },
   "setup_unittests": {
     "label": "//chrome/installer/setup:setup_unittests",
@@ -1021,10 +1001,6 @@
       "--enable-gpu"
     ],
   },
-  "mus_ime_unittests": {
-    "label": "//services/ui/ime:mus_ime_unittests",
-    "type": "windowed_test_launcher",
-  },
   "native_theme_unittests": {
     "label": "//ui/native_theme:native_theme_unittests",
     "type": "windowed_test_launcher",
@@ -1050,9 +1026,9 @@
     "label": "//ui/android:ui_junit_tests",
     "type": "junit_test",
   },
-  "ui_struct_traits_unittests": {
-    "label": "//services/ui/public/interfaces:ui_struct_traits_unittests",
-    "type": "console_test_launcher",
+  "ui_service_unittests": {
+    "label": "//services/ui/ws:ui_service_unittests",
+    "type": "windowed_test_launcher",
   },
   "ui_touch_selection_unittests": {
     "label": "//ui/touch_selection:ui_touch_selection_unittests",

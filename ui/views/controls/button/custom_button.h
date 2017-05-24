@@ -151,6 +151,12 @@ class VIEWS_EXPORT CustomButton : public Button, public gfx::AnimationDelegate {
   // This implementation returns true if the left mouse button is down.
   virtual bool IsTriggerableEvent(const ui::Event& event);
 
+  // Returns true if the ink drop should be updated by CustomButton when
+  // OnClickCanceled() is called. This method is provided for subclasses.
+  // If the method is overriden and returns false, the subclass is responsible
+  // will be responsible for updating the ink drop.
+  virtual bool ShouldUpdateInkDropOnClickCanceled() const;
+
   // Returns true if the button should become pressed when the user
   // holds the mouse down over the button. For this implementation,
   // we simply return IsTriggerableEvent(event).

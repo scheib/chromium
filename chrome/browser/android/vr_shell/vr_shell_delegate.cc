@@ -142,6 +142,14 @@ void VrShellDelegate::OnResume(JNIEnv* env, const JavaParamRef<jobject>& obj) {
   }
 }
 
+void VrShellDelegate::UpdateNonPresentingContext(
+    JNIEnv* env,
+    const JavaParamRef<jobject>& obj,
+    jlong context) {
+  gvr_context* ctx = reinterpret_cast<gvr_context*>(context);
+  non_presenting_delegate_->UpdateContext(ctx);
+}
+
 void VrShellDelegate::Destroy(JNIEnv* env, const JavaParamRef<jobject>& obj) {
   delete this;
 }

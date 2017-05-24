@@ -78,7 +78,7 @@ scoped_refptr<BluetoothSocketWin>
 BluetoothSocketWin::CreateBluetoothSocket(
     scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
     scoped_refptr<device::BluetoothSocketThread> socket_thread) {
-  DCHECK(ui_task_runner->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner->RunsTasksInCurrentSequence());
 
   return make_scoped_refptr(
       new BluetoothSocketWin(ui_task_runner, socket_thread));
@@ -101,7 +101,7 @@ void BluetoothSocketWin::Connect(
     const BluetoothUUID& uuid,
     const base::Closure& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(ui_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
   DCHECK(device);
 
   if (!uuid.IsValid()) {
@@ -138,7 +138,7 @@ void BluetoothSocketWin::Listen(scoped_refptr<BluetoothAdapter> adapter,
                                 const BluetoothAdapter::ServiceOptions& options,
                                 const base::Closure& success_callback,
                                 const ErrorCompletionCallback& error_callback) {
-  DCHECK(ui_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
 
   adapter_ = adapter;
   int rfcomm_channel = options.channel ? *options.channel : 0;
@@ -167,7 +167,7 @@ void BluetoothSocketWin::ResetData() {
 void BluetoothSocketWin::Accept(
     const AcceptCompletionCallback& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(ui_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
 
   socket_thread()->task_runner()->PostTask(
       FROM_HERE,
@@ -180,7 +180,7 @@ void BluetoothSocketWin::Accept(
 void BluetoothSocketWin::DoConnect(
     const base::Closure& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(socket_thread()->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread()->task_runner()->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   if (tcp_socket()) {
@@ -237,7 +237,7 @@ void BluetoothSocketWin::DoListen(
     int rfcomm_channel,
     const base::Closure& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(socket_thread()->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread()->task_runner()->RunsTasksInCurrentSequence());
   DCHECK(!tcp_socket() && !service_reg_data_);
 
   // The valid range is 0-30. 0 means BT_PORT_ANY and 1-30 are the
@@ -337,7 +337,7 @@ void BluetoothSocketWin::DoListen(
 void BluetoothSocketWin::DoAccept(
     const AcceptCompletionCallback& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(socket_thread()->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread()->task_runner()->RunsTasksInCurrentSequence());
   int result = tcp_socket()->Accept(
       &accept_socket_,
       &accept_address_,
@@ -355,7 +355,7 @@ void BluetoothSocketWin::OnAcceptOnSocketThread(
     const AcceptCompletionCallback& success_callback,
     const ErrorCompletionCallback& error_callback,
     int accept_result) {
-  DCHECK(socket_thread()->task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(socket_thread()->task_runner()->RunsTasksInCurrentSequence());
   if (accept_result != net::OK) {
     LOG(WARNING) << "OnAccept error, net err=" << accept_result;
     PostErrorCompletion(error_callback, kFailedToAccept);
@@ -377,7 +377,7 @@ void BluetoothSocketWin::OnAcceptOnUI(
     const net::IPEndPoint& peer_address,
     const AcceptCompletionCallback& success_callback,
     const ErrorCompletionCallback& error_callback) {
-  DCHECK(ui_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
 
   const std::string peer_device_address =
       IPEndPointToBluetoothAddress(peer_address);

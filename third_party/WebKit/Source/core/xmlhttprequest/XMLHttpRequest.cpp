@@ -1402,7 +1402,7 @@ String XMLHttpRequest::getAllResponseHeaders() const {
         !access_control_expose_header_set.Contains(it->key))
       continue;
 
-    string_builder.Append(it->key);
+    string_builder.Append(it->key.LowerASCII());
     string_builder.Append(':');
     string_builder.Append(' ');
     string_builder.Append(it->value);
@@ -1637,8 +1637,6 @@ void XMLHttpRequest::NotifyParserStopped() {
     return;
 
   ClearVariablesForLoading();
-
-  response_document_->CheckCompleted();
 
   if (!response_document_->WellFormed())
     response_document_ = nullptr;

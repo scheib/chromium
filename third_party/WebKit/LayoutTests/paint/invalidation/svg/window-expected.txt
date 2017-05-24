@@ -256,42 +256,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGHiddenContainer symbol id='closeButton'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGPath line",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGPath line",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGHiddenContainer symbol id='maximizeButton'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGHiddenContainer symbol id='minimizeButton'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGPath line",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGContainer g id='Windows'",
       "reason": "appeared"
     },

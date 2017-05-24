@@ -10,6 +10,7 @@
 #include "components/signin/core/browser/signin_metrics.h"
 
 @class MDCFlatButton;
+@protocol SigninPromoViewDelegate;
 
 typedef NS_ENUM(NSInteger, SigninPromoViewMode) {
   // No identity available on the device.
@@ -33,6 +34,7 @@ typedef NS_ENUM(NSInteger, SigninPromoViewMode) {
 //   - the title for |secondaryButton|
 @interface SigninPromoView : UIView
 
+@property(nonatomic, weak) id<SigninPromoViewDelegate> delegate;
 @property(nonatomic) SigninPromoViewMode mode;
 @property(nonatomic, readonly) UIImageView* imageView;
 @property(nonatomic, readonly) UILabel* textLabel;
@@ -50,15 +52,6 @@ typedef NS_ENUM(NSInteger, SigninPromoViewMode) {
 // using CircularImageFromImage() (so if the image is not squared, it will be
 // cropped first). Must only be called in the "Warm State" mode.
 - (void)setProfileImage:(UIImage*)image;
-
-// Enables SigninPromoView to send ShowSigninCommand when primary or secondary
-// buttons are tapped, and sets the metric access point. By default, command is
-// disabled.
-- (void)enableChromeCommandWithAccessPoint:
-    (signin_metrics::AccessPoint)accessPoint;
-
-// Disables ShowSigninCommand to be sent.
-- (void)disableChromeCommand;
 
 @end
 

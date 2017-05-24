@@ -877,7 +877,7 @@ bool CoreAudioUtil::FillRenderEndpointBufferWithSilence(
 
 bool CoreAudioUtil::GetDxDiagDetails(std::string* driver_name,
                                      std::string* driver_version) {
-  ScopedComPtr<IDxDiagProvider, &IID_IDxDiagProvider> provider;
+  ScopedComPtr<IDxDiagProvider> provider;
   HRESULT hr =
       ::CoCreateInstance(CLSID_DxDiagProvider, NULL, CLSCTX_INPROC_SERVER,
                          IID_IDxDiagProvider, &provider);
@@ -892,14 +892,14 @@ bool CoreAudioUtil::GetDxDiagDetails(std::string* driver_name,
   if (FAILED(hr))
     return false;
 
-  ScopedComPtr<IDxDiagContainer, &IID_IDxDiagContainer> root;
+  ScopedComPtr<IDxDiagContainer> root;
   hr = provider->GetRootContainer(root.GetAddressOf());
   if (FAILED(hr))
     return false;
 
   // Limit to the SoundDevices subtree. The tree in its entirity is
   // enormous and only this branch contains useful information.
-  ScopedComPtr<IDxDiagContainer, &IID_IDxDiagContainer> sound_devices;
+  ScopedComPtr<IDxDiagContainer> sound_devices;
   hr = root->GetChildContainer(L"DxDiag_DirectSound.DxDiag_SoundDevices.0",
                                sound_devices.GetAddressOf());
   if (FAILED(hr))

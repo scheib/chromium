@@ -779,45 +779,51 @@ void RenderWidgetCompositor::DidStopFlinging() {
 }
 
 void RenderWidgetCompositor::RegisterViewportLayers(
-    const blink::WebLayer* overscrollElasticityLayer,
-    const blink::WebLayer* pageScaleLayer,
-    const blink::WebLayer* innerViewportContainerLayer,
-    const blink::WebLayer* outerViewportContainerLayer,
-    const blink::WebLayer* innerViewportScrollLayer,
-    const blink::WebLayer* outerViewportScrollLayer) {
-  layer_tree_host_->RegisterViewportLayers(
-      // TODO(bokan): This check can probably be removed now, but it looks
-      // like overscroll elasticity may still be nullptr until VisualViewport
-      // registers its layers.
-      overscrollElasticityLayer ? static_cast<const cc_blink::WebLayerImpl*>(
-                                      overscrollElasticityLayer)
-                                      ->layer()
-                                : nullptr,
-      static_cast<const cc_blink::WebLayerImpl*>(pageScaleLayer)->layer(),
-      innerViewportContainerLayer ? static_cast<const cc_blink::WebLayerImpl*>(
-                                        innerViewportContainerLayer)
-                                        ->layer()
-                                  : nullptr,
-      outerViewportContainerLayer ? static_cast<const cc_blink::WebLayerImpl*>(
-                                        outerViewportContainerLayer)
-                                        ->layer()
-                                  : nullptr,
-      static_cast<const cc_blink::WebLayerImpl*>(innerViewportScrollLayer)
-          ->layer(),
-      // TODO(bokan): This check can probably be removed now, but it looks
-      // like overscroll elasticity may still be nullptr until VisualViewport
-      // registers its layers.
-      outerViewportScrollLayer
-          ? static_cast<const cc_blink::WebLayerImpl*>(outerViewportScrollLayer)
-                ->layer()
-          : nullptr);
+    const blink::WebLayer* overscroll_elasticity_layer,
+    const blink::WebLayer* page_scale_layer,
+    const blink::WebLayer* inner_viewport_container_layer,
+    const blink::WebLayer* outer_viewport_container_layer,
+    const blink::WebLayer* inner_viewport_scroll_layer,
+    const blink::WebLayer* outer_viewport_scroll_layer) {
+  cc::LayerTreeHost::ViewportLayers viewport_layers;
+  // TODO(bokan): This check can probably be removed now, but it looks
+  // like overscroll elasticity may still be nullptr until VisualViewport
+  // registers its layers.
+  if (overscroll_elasticity_layer) {
+    viewport_layers.overscroll_elasticity =
+        static_cast<const cc_blink::WebLayerImpl*>(overscroll_elasticity_layer)
+            ->layer();
+  }
+  viewport_layers.page_scale =
+      static_cast<const cc_blink::WebLayerImpl*>(page_scale_layer)->layer();
+  if (inner_viewport_container_layer) {
+    viewport_layers.inner_viewport_container =
+        static_cast<const cc_blink::WebLayerImpl*>(
+            inner_viewport_container_layer)
+            ->layer();
+  }
+  if (outer_viewport_container_layer) {
+    viewport_layers.outer_viewport_container =
+        static_cast<const cc_blink::WebLayerImpl*>(
+            outer_viewport_container_layer)
+            ->layer();
+  }
+  viewport_layers.inner_viewport_scroll =
+      static_cast<const cc_blink::WebLayerImpl*>(inner_viewport_scroll_layer)
+          ->layer();
+  // TODO(bokan): This check can probably be removed now, but it looks
+  // like overscroll elasticity may still be nullptr until VisualViewport
+  // registers its layers.
+  if (outer_viewport_scroll_layer) {
+    viewport_layers.outer_viewport_scroll =
+        static_cast<const cc_blink::WebLayerImpl*>(outer_viewport_scroll_layer)
+            ->layer();
+  }
+  layer_tree_host_->RegisterViewportLayers(viewport_layers);
 }
 
 void RenderWidgetCompositor::ClearViewportLayers() {
-  layer_tree_host_->RegisterViewportLayers(
-      scoped_refptr<cc::Layer>(), scoped_refptr<cc::Layer>(),
-      scoped_refptr<cc::Layer>(), scoped_refptr<cc::Layer>(),
-      scoped_refptr<cc::Layer>(), scoped_refptr<cc::Layer>());
+  layer_tree_host_->RegisterViewportLayers(cc::LayerTreeHost::ViewportLayers());
 }
 
 void RenderWidgetCompositor::RegisterSelection(

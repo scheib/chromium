@@ -1644,16 +1644,16 @@ To obtain new licenses, connect to the internet and play your downloaded content
 
       <!-- Runtime permission strings -->
       <message name="IDS_INFOBAR_MISSING_CAMERA_PERMISSION_TEXT" desc="Text shown in an infobar when a website has requested access to the camera capabilities, but Chrome is missing the Android camera permission.">
-        Chrome needs camera access to share it with this site.
+        Chrome needs permission to access your camera for this site.
       </message>
       <message name="IDS_INFOBAR_MISSING_MICROPHONE_PERMISSION_TEXT" desc="Text shown in an infobar when a website has requested access to the microphone capabilities, but Chrome is missing the Android microphone permission.">
-        Chrome needs microphone access to share it with this site.
+        Chrome needs permission to access your microphone for this site.
+      </message>
+      <message name="IDS_INFOBAR_MISSING_MICROPHONE_CAMERA_PERMISSIONS_TEXT" desc="Text shown in an infobar when a website has requested access to the microphone and camera capabilities, but Chrome is missing the Android microphone and camera permissions.">
+        Chrome needs permission to access your camera and microphone for this site.
       </message>
       <message name="IDS_INFOBAR_MISSING_LOCATION_PERMISSION_TEXT" desc="Text shown in an infobar when a website has requested access to the location capabilities, but Chrome is missing the Android location permission.">
-        Chrome needs location access to share it with this site.
-      </message>
-      <message name="IDS_INFOBAR_MISSING_MULTIPLE_PERMISSIONS_TEXT" desc="Text shown in an infobar when a website has requested access to the multiple restricted capabilities (e.g. location, camera, microphone), but Chrome is missing the corresponding Android permissions.">
-        Chrome needs permissions access to share them with this site.
+        Chrome needs access to to your location to share your location with this site.
       </message>
       <message name="IDS_MISSING_STORAGE_PERMISSION_DOWNLOAD_EDUCATION_TEXT" desc="Text shown educating the user that Chrome is missing the Android storage permission, which is required to download files.">
         Chrome needs storage access to download files.
@@ -1725,6 +1725,23 @@ To obtain new licenses, connect to the internet and play your downloaded content
       <!-- Swipe refresh -->
       <message name="IDS_ACCESSIBILITY_SWIPE_REFRESH" desc="Content description for the swipe refresh action.">
         Refreshing page
+      </message>
+
+      <!-- Browser Action strings -->
+      <message name="IDS_BROWSER_ACTIONS_OPEN_IN_BACKGROUND" desc="Browser Actions menu item to open the selected link in a Chrome tab in the background. [CHAR-LIMIT=30]">
+        Open in new Chrome tab
+      </message>
+      <message name="IDS_BROWSER_ACTIONS_OPEN_IN_INCOGNITO_TAB" desc="Browser Actions menu item to open the selected link in a Chrome incognito tab. [CHAR-LIMIT=30]">
+        Open in incognito tab
+      </message>
+      <message name="IDS_BROWSER_ACTIONS_SAVE_LINK_AS" desc="Browser Actions menu item to download the page of the selected link. [CHAR-LIMIT=30]">
+        Download page
+      </message>
+      <message name="IDS_BROWSER_ACTIONS_COPY_ADDRESS" desc="Browser Actions menu item to copy the url address of the selected link. [CHAR-LIMIT=30]">
+        Copy link
+      </message>
+      <message name="IDS_BROWSER_ACTIONS_SHARE" desc="Browser Actions menu item to share the url address of the selected link. [CHAR-LIMIT=30]">
+        Share...
       </message>
 
       <!-- App banner strings -->

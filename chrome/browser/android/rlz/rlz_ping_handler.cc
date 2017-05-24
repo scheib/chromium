@@ -106,7 +106,7 @@ void RlzPingHandler::Ping(
 void RlzPingHandler::OnURLFetchComplete(const net::URLFetcher* source) {
   DCHECK_EQ(source, url_fetcher_.get());
 
-  jboolean valid = false;
+  bool valid = false;
   if (!source->GetStatus().is_success() ||
       source->GetResponseCode() != net::HTTP_OK) {
     LOG(WARNING) << base::StringPrintf("Rlz endpoint responded with code %d.",

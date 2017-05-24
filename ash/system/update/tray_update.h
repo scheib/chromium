@@ -38,6 +38,11 @@ class ASH_EXPORT TrayUpdate : public TrayImageItem {
                       bool factory_reset_required,
                       mojom::UpdateType update_type);
 
+  // Shows an icon in the system tray indicating that a software update is
+  // available but user's agreement is required as current connection is
+  // cellular. Once shown the icon persists until reboot.
+  void ShowUpdateOverCellularAvailableIcon();
+
  private:
   FRIEND_TEST_ALL_PREFIXES(TrayUpdateTest, VisibilityAfterUpdate);
   FRIEND_TEST_ALL_PREFIXES(TrayUpdateTest, VisibilityAfterFlashUpdate);
@@ -60,6 +65,7 @@ class ASH_EXPORT TrayUpdate : public TrayImageItem {
   static mojom::UpdateSeverity severity_;
   static bool factory_reset_required_;
   static mojom::UpdateType update_type_;
+  static bool update_over_cellular_available_;
 
   DISALLOW_COPY_AND_ASSIGN(TrayUpdate);
 };

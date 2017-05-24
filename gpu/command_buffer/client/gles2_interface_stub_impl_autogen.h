@@ -1193,4 +1193,12 @@ void GLES2InterfaceStub::SetDrawRectangleCHROMIUM(GLint /* x */,
                                                   GLint /* width */,
                                                   GLint /* height */) {}
 void GLES2InterfaceStub::SetEnableDCLayersCHROMIUM(GLboolean /* enabled */) {}
+void GLES2InterfaceStub::InitializeDiscardableTextureCHROMIUM(
+    GLuint /* texture_id */) {}
+void GLES2InterfaceStub::UnlockDiscardableTextureCHROMIUM(
+    GLuint /* texture_id */) {}
+bool GLES2InterfaceStub::LockDiscardableTextureCHROMIUM(
+    GLuint /* texture_id */) {
+  return 0;
+}
 #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_INTERFACE_STUB_IMPL_AUTOGEN_H_

@@ -21,7 +21,6 @@
 #include "ash/wm/drag_window_resizer.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm_window.h"
 #include "base/i18n/rtl.h"
@@ -72,9 +71,8 @@ class PanelWindowResizerTest : public test::AshTestBase {
   }
 
   void DragStart(aura::Window* window) {
-    resizer_ =
-        CreateWindowResizer(WmWindow::Get(window), window->bounds().origin(),
-                            HTCAPTION, aura::client::WINDOW_MOVE_SOURCE_MOUSE);
+    resizer_ = CreateWindowResizer(window, window->bounds().origin(), HTCAPTION,
+                                   aura::client::WINDOW_MOVE_SOURCE_MOUSE);
   }
 
   void DragMove(int dx, int dy) {

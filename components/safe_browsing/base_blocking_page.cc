@@ -75,12 +75,13 @@ BaseBlockingPage::CreateDefaultDisplayOptions(
     const UnsafeResourceList& unsafe_resources) {
   return BaseSafeBrowsingErrorUI::SBErrorDisplayOptions(
       IsMainPageLoadBlocked(unsafe_resources),
-      false,  // kSafeBrowsingExtendedReportingOptInAllowed
-      false,  // is_off_the_record
-      false,  // is_extended_reporting
-      false,  // is_scout
-      false,  // kSafeBrowsingProceedAnywayDisabled
-      true);  // is_resource_cancellable
+      false,                 // kSafeBrowsingExtendedReportingOptInAllowed
+      false,                 // is_off_the_record
+      false,                 // is_extended_reporting
+      false,                 // is_scout
+      false,                 // kSafeBrowsingProceedAnywayDisabled
+      true,                  // is_resource_cancellable
+      "cpn_safe_browsing");  // help_center_article_link
 }
 
 // static
@@ -208,7 +209,7 @@ bool BaseBlockingPage::ShouldCreateNewNavigation() const {
 
 void BaseBlockingPage::PopulateInterstitialStrings(
     base::DictionaryValue* load_time_data) {
-  sb_error_ui_->PopulateStringsForHTML(load_time_data);
+  sb_error_ui_->PopulateStringsForHtml(load_time_data);
 }
 
 void BaseBlockingPage::FinishThreatDetails(const base::TimeDelta& delay,

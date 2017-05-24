@@ -25,22 +25,25 @@
 #include "ash/wm_window.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
+#include "ui/aura/window.h"
+#include "ui/aura/window_delegate.h"
 #include "ui/base/hit_test.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/transform.h"
+#include "ui/wm/core/coordinate_conversion.h"
 #include "ui/wm/public/window_types.h"
 
 namespace ash {
 
 std::unique_ptr<WindowResizer> CreateWindowResizer(
-    WmWindow* window,
+    aura::Window* window,
     const gfx::Point& point_in_parent,
     int window_component,
     aura::client::WindowMoveSource source) {
   DCHECK(window);
-  wm::WindowState* window_state = window->GetWindowState();
+  wm::WindowState* window_state = wm::GetWindowState(window);
   // No need to return a resizer when the window cannot get resized or when a
   // resizer already exists for this window.
   if ((!window_state->CanResize() && window_component != HTCAPTION) ||
@@ -72,18 +75,18 @@ std::unique_ptr<WindowResizer> CreateWindowResizer(
 
   window_state->CreateDragDetails(point_in_parent, window_component, source);
   const int parent_shell_window_id =
-      window->GetParent() ? window->GetParent()->aura_window()->id() : -1;
-  if (window->GetParent() &&
+      window->parent() ? window->parent()->id() : -1;
+  if (window->parent() &&
       (parent_shell_window_id == kShellWindowId_DefaultContainer ||
        parent_shell_window_id == kShellWindowId_PanelContainer)) {
-    window_resizer.reset(
-        WorkspaceWindowResizer::Create(window_state, std::vector<WmWindow*>()));
+    window_resizer.reset(WorkspaceWindowResizer::Create(
+        window_state, std::vector<aura::Window*>()));
   } else {
     window_resizer.reset(DefaultWindowResizer::Create(window_state));
   }
   window_resizer = ShellPort::Get()->CreateDragWindowResizer(
       std::move(window_resizer), window_state);
-  if (window->GetType() == ui::wm::WINDOW_TYPE_PANEL) {
+  if (window->type() == ui::wm::WINDOW_TYPE_PANEL) {
     window_resizer.reset(
         PanelWindowResizer::Create(window_resizer.release(), window_state));
   }
@@ -314,7 +317,7 @@ WorkspaceWindowResizer::~WorkspaceWindowResizer() {
 // static
 WorkspaceWindowResizer* WorkspaceWindowResizer::Create(
     wm::WindowState* window_state,
-    const std::vector<WmWindow*>& attached_windows) {
+    const std::vector<aura::Window*>& attached_windows) {
   return new WorkspaceWindowResizer(window_state, attached_windows);
 }
 
@@ -335,7 +338,7 @@ void WorkspaceWindowResizer::Drag(const gfx::Point& location_in_parent,
   gfx::Rect bounds = CalculateBoundsForDrag(location_in_parent);
   AdjustBoundsForMainWindow(sticky_size, &bounds);
 
-  if (bounds != GetTarget()->GetBounds()) {
+  if (bounds != GetTarget()->bounds()) {
     if (!did_move_or_resize_) {
       if (!details().restore_bounds.IsEmpty())
         window_state()->ClearRestoreBounds();
@@ -344,21 +347,21 @@ void WorkspaceWindowResizer::Drag(const gfx::Point& location_in_parent,
     did_move_or_resize_ = true;
   }
 
-  gfx::Point location_in_screen =
-      GetTarget()->GetParent()->ConvertPointToScreen(location_in_parent);
+  gfx::Point location_in_screen = location_in_parent;
+  ::wm::ConvertPointToScreen(GetTarget()->parent(), &location_in_screen);
 
-  WmWindow* root = nullptr;
+  aura::Window* root = nullptr;
   display::Display display =
       display::Screen::GetScreen()->GetDisplayNearestPoint(location_in_screen);
   // Track the last screen that the pointer was on to keep the snap phantom
   // window there.
   if (display.bounds().Contains(location_in_screen)) {
-    root =
-        Shell::GetRootWindowControllerWithDisplayId(display.id())->GetWindow();
+    root = Shell::GetRootWindowControllerWithDisplayId(display.id())
+               ->GetRootWindow();
   }
   if (!attached_windows_.empty())
     LayoutAttachedWindows(&bounds);
-  if (bounds != GetTarget()->GetBounds()) {
+  if (bounds != GetTarget()->bounds()) {
     // SetBounds needs to be called to update the layout which affects where the
     // phantom window is drawn. Keep track if the window was destroyed during
     // the drag and quit early if so.
@@ -395,8 +398,8 @@ void WorkspaceWindowResizer::CompleteDrag() {
   bool snapped = false;
   if (snap_type_ == SNAP_LEFT || snap_type_ == SNAP_RIGHT) {
     if (!window_state()->HasRestoreBounds()) {
-      gfx::Rect initial_bounds = GetTarget()->GetParent()->ConvertRectToScreen(
-          details().initial_bounds_in_parent);
+      gfx::Rect initial_bounds = details().initial_bounds_in_parent;
+      ::wm::ConvertRectToScreen(GetTarget()->parent(), &initial_bounds);
       window_state()->SetRestoreBoundsInScreen(
           details().restore_bounds.IsEmpty() ? initial_bounds
                                              : details().restore_bounds);
@@ -420,7 +423,7 @@ void WorkspaceWindowResizer::CompleteDrag() {
       // is slightly less confusing.
       if (details().window_component == HTCAPTION ||
           !AreBoundsValidSnappedBounds(window_state()->GetStateType(),
-                                       GetTarget()->GetBounds())) {
+                                       GetTarget()->bounds())) {
         // Set the window to WINDOW_STATE_TYPE_NORMAL but keep the
         // window at the bounds that the user has moved/resized the
         // window to.
@@ -450,27 +453,27 @@ void WorkspaceWindowResizer::RevertDrag() {
   if (details().window_component == HTRIGHT) {
     int last_x = details().initial_bounds_in_parent.right();
     for (size_t i = 0; i < attached_windows_.size(); ++i) {
-      gfx::Rect bounds(attached_windows_[i]->GetBounds());
+      gfx::Rect bounds(attached_windows_[i]->bounds());
       bounds.set_x(last_x);
       bounds.set_width(initial_size_[i]);
       attached_windows_[i]->SetBounds(bounds);
-      last_x = attached_windows_[i]->GetBounds().right();
+      last_x = attached_windows_[i]->bounds().right();
     }
   } else {
     int last_y = details().initial_bounds_in_parent.bottom();
     for (size_t i = 0; i < attached_windows_.size(); ++i) {
-      gfx::Rect bounds(attached_windows_[i]->GetBounds());
+      gfx::Rect bounds(attached_windows_[i]->bounds());
       bounds.set_y(last_y);
       bounds.set_height(initial_size_[i]);
       attached_windows_[i]->SetBounds(bounds);
-      last_y = attached_windows_[i]->GetBounds().bottom();
+      last_y = attached_windows_[i]->bounds().bottom();
     }
   }
 }
 
 WorkspaceWindowResizer::WorkspaceWindowResizer(
     wm::WindowState* window_state,
-    const std::vector<WmWindow*>& attached_windows)
+    const std::vector<aura::Window*>& attached_windows)
     : WindowResizer(window_state),
       attached_windows_(attached_windows),
       did_lock_cursor_(false),
@@ -500,9 +503,10 @@ WorkspaceWindowResizer::WorkspaceWindowResizer(
   // Calculate sizes so that we can maintain the ratios if we need to resize.
   int total_available = 0;
   for (size_t i = 0; i < attached_windows_.size(); ++i) {
-    gfx::Size min(attached_windows_[i]->GetMinimumSize());
-    int initial_size =
-        PrimaryAxisSize(attached_windows_[i]->GetBounds().size());
+    gfx::Size min(attached_windows_[i]->delegate()
+                      ? attached_windows_[i]->delegate()->GetMinimumSize()
+                      : gfx::Size());
+    int initial_size = PrimaryAxisSize(attached_windows_[i]->bounds().size());
     initial_size_.push_back(initial_size);
     // If current size is smaller than the min, use the current size as the min.
     // This way we don't snap on resize.
@@ -517,7 +521,7 @@ WorkspaceWindowResizer::WorkspaceWindowResizer(
 
 void WorkspaceWindowResizer::LayoutAttachedWindows(gfx::Rect* bounds) {
   gfx::Rect work_area(
-      ScreenUtil::GetDisplayWorkAreaBoundsInParent(GetTarget()->aura_window()));
+      ScreenUtil::GetDisplayWorkAreaBoundsInParent(GetTarget()));
   int initial_size = PrimaryAxisSize(details().initial_bounds_in_parent.size());
   int current_size = PrimaryAxisSize(bounds->size());
   int start = PrimaryAxisCoordinate(bounds->right(), bounds->bottom());
@@ -546,7 +550,7 @@ void WorkspaceWindowResizer::LayoutAttachedWindows(gfx::Rect* bounds) {
   DCHECK_EQ(attached_windows_.size(), sizes.size());
   int last = PrimaryAxisCoordinate(bounds->right(), bounds->bottom());
   for (size_t i = 0; i < attached_windows_.size(); ++i) {
-    gfx::Rect attached_bounds(attached_windows_[i]->GetBounds());
+    gfx::Rect attached_bounds(attached_windows_[i]->bounds());
     if (details().window_component == HTRIGHT) {
       attached_bounds.set_x(last);
       attached_bounds.set_width(sizes[i]);
@@ -645,8 +649,11 @@ void WorkspaceWindowResizer::CreateBucketsForAttached(
     std::vector<WindowSize>* sizes) const {
   for (size_t i = 0; i < attached_windows_.size(); i++) {
     int initial_size = initial_size_[i];
-    int min = PrimaryAxisSize(attached_windows_[i]->GetMinimumSize());
-    int max = PrimaryAxisSize(attached_windows_[i]->GetMaximumSize());
+    aura::WindowDelegate* window_delegate = attached_windows_[i]->delegate();
+    int min = PrimaryAxisSize(
+        window_delegate ? window_delegate->GetMinimumSize() : gfx::Size());
+    int max = PrimaryAxisSize(
+        window_delegate ? window_delegate->GetMaximumSize() : gfx::Size());
 
     sizes->push_back(WindowSize(initial_size, min, max));
   }
@@ -654,10 +661,12 @@ void WorkspaceWindowResizer::CreateBucketsForAttached(
 
 void WorkspaceWindowResizer::MagneticallySnapToOtherWindows(gfx::Rect* bounds) {
   if (UpdateMagnetismWindow(*bounds, kAllMagnetismEdges)) {
+    gfx::Rect bounds_in_screen = *bounds;
+    ::wm::ConvertRectToScreen(GetTarget()->parent(), &bounds_in_screen);
     gfx::Point point = OriginForMagneticAttach(
-        GetTarget()->GetParent()->ConvertRectToScreen(*bounds),
-        magnetism_window_->GetBoundsInScreen(), magnetism_edge_);
-    point = GetTarget()->GetParent()->ConvertPointFromScreen(point);
+        bounds_in_screen, magnetism_window_->GetBoundsInScreen(),
+        magnetism_edge_);
+    ::wm::ConvertPointFromScreen(GetTarget()->parent(), &point);
     bounds->set_origin(point);
   }
 }
@@ -667,29 +676,31 @@ void WorkspaceWindowResizer::MagneticallySnapResizeToOtherWindows(
   const uint32_t edges =
       WindowComponentToMagneticEdge(details().window_component);
   if (UpdateMagnetismWindow(*bounds, edges)) {
-    *bounds = GetTarget()->GetParent()->ConvertRectFromScreen(
-        BoundsForMagneticResizeAttach(
-            GetTarget()->GetParent()->ConvertRectToScreen(*bounds),
-            magnetism_window_->GetBoundsInScreen(), magnetism_edge_));
+    gfx::Rect bounds_in_screen = *bounds;
+    ::wm::ConvertRectToScreen(GetTarget()->parent(), &bounds_in_screen);
+    *bounds = BoundsForMagneticResizeAttach(
+        bounds_in_screen, magnetism_window_->GetBoundsInScreen(),
+        magnetism_edge_);
+    ::wm::ConvertRectFromScreen(GetTarget()->parent(), bounds);
   }
 }
 
 bool WorkspaceWindowResizer::UpdateMagnetismWindow(const gfx::Rect& bounds,
                                                    uint32_t edges) {
   // |bounds| are in coordinates of original window's parent.
-  gfx::Rect bounds_in_screen =
-      GetTarget()->GetParent()->ConvertRectToScreen(bounds);
+  gfx::Rect bounds_in_screen = bounds;
+  ::wm::ConvertRectToScreen(GetTarget()->parent(), &bounds_in_screen);
   MagnetismMatcher matcher(bounds_in_screen, edges);
 
   // If we snapped to a window then check it first. That way we don't bounce
   // around when close to multiple edges.
   if (magnetism_window_) {
-    if (window_tracker_.Contains(magnetism_window_->aura_window()) &&
+    if (window_tracker_.Contains(magnetism_window_) &&
         matcher.ShouldAttach(magnetism_window_->GetBoundsInScreen(),
                              &magnetism_edge_)) {
       return true;
     }
-    window_tracker_.Remove(magnetism_window_->aura_window());
+    window_tracker_.Remove(magnetism_window_);
     magnetism_window_ = NULL;
   }
 
@@ -698,23 +709,22 @@ bool WorkspaceWindowResizer::UpdateMagnetismWindow(const gfx::Rect& bounds,
   if (!window_state()->CanResize())
     return false;
 
-  for (WmWindow* root_window : ShellPort::Get()->GetAllRootWindows()) {
+  for (aura::Window* root_window : Shell::Get()->GetAllRootWindows()) {
     // Test all children from the desktop in each root window.
-    const std::vector<WmWindow*> children =
-        root_window->GetChildByShellWindowId(kShellWindowId_DefaultContainer)
-            ->GetChildren();
+    const std::vector<aura::Window*>& children =
+        root_window->GetChildById(kShellWindowId_DefaultContainer)->children();
     for (auto i = children.rbegin();
          i != children.rend() && !matcher.AreEdgesObscured(); ++i) {
-      wm::WindowState* other_state = (*i)->GetWindowState();
-      if (other_state->window() == GetTarget() ||
+      wm::WindowState* other_state = wm::GetWindowState(*i);
+      if (other_state->window()->aura_window() == GetTarget() ||
           !other_state->window()->IsVisible() ||
           !other_state->IsNormalOrSnapped() || !other_state->CanResize()) {
         continue;
       }
       if (matcher.ShouldAttach(other_state->window()->GetBoundsInScreen(),
                                &magnetism_edge_)) {
-        magnetism_window_ = other_state->window();
-        window_tracker_.Add(magnetism_window_->aura_window());
+        magnetism_window_ = other_state->window()->aura_window();
+        window_tracker_.Add(magnetism_window_);
         return true;
       }
     }
@@ -724,13 +734,14 @@ bool WorkspaceWindowResizer::UpdateMagnetismWindow(const gfx::Rect& bounds,
 
 void WorkspaceWindowResizer::AdjustBoundsForMainWindow(int sticky_size,
                                                        gfx::Rect* bounds) {
-  gfx::Point last_mouse_location_in_screen =
-      GetTarget()->GetParent()->ConvertPointToScreen(last_mouse_location_);
+  gfx::Point last_mouse_location_in_screen = last_mouse_location_;
+  ::wm::ConvertPointToScreen(GetTarget()->parent(),
+                             &last_mouse_location_in_screen);
   display::Display display =
       display::Screen::GetScreen()->GetDisplayNearestPoint(
           last_mouse_location_in_screen);
-  gfx::Rect work_area =
-      GetTarget()->GetParent()->ConvertRectFromScreen(display.work_area());
+  gfx::Rect work_area = display.work_area();
+  ::wm::ConvertRectFromScreen(GetTarget()->parent(), &work_area);
   if (details().window_component == HTCAPTION) {
     // Adjust the bounds to the work area where the mouse cursor is located.
     // Always keep kMinOnscreenHeight or the window height (whichever is less)
@@ -883,11 +894,12 @@ void WorkspaceWindowResizer::UpdateSnapPhantomWindow(const gfx::Point& location,
           : wm::GetDefaultRightSnappedWindowBoundsInParent(GetTarget());
 
   if (!snap_phantom_window_controller_) {
-    snap_phantom_window_controller_.reset(
-        new PhantomWindowController(GetTarget()));
+    snap_phantom_window_controller_ =
+        base::MakeUnique<PhantomWindowController>(WmWindow::Get(GetTarget()));
   }
-  snap_phantom_window_controller_->Show(
-      GetTarget()->GetParent()->ConvertRectToScreen(phantom_bounds));
+  gfx::Rect phantom_bounds_in_screen(phantom_bounds);
+  ::wm::ConvertRectToScreen(GetTarget()->parent(), &phantom_bounds_in_screen);
+  snap_phantom_window_controller_->Show(phantom_bounds_in_screen);
 }
 
 void WorkspaceWindowResizer::RestackWindows() {
@@ -895,14 +907,14 @@ void WorkspaceWindowResizer::RestackWindows() {
     return;
   // Build a map from index in children to window, returning if there is a
   // window with a different parent.
-  using IndexToWindowMap = std::map<size_t, WmWindow*>;
+  using IndexToWindowMap = std::map<size_t, aura::Window*>;
   IndexToWindowMap map;
-  WmWindow* parent = GetTarget()->GetParent();
-  const std::vector<WmWindow*> windows(parent->GetChildren());
+  aura::Window* parent = GetTarget()->parent();
+  const std::vector<aura::Window*>& windows(parent->children());
   map[std::find(windows.begin(), windows.end(), GetTarget()) -
       windows.begin()] = GetTarget();
   for (auto i = attached_windows_.begin(); i != attached_windows_.end(); ++i) {
-    if ((*i)->GetParent() != parent)
+    if ((*i)->parent() != parent)
       return;
     size_t index =
         std::find(windows.begin(), windows.end(), *i) - windows.begin();
@@ -912,7 +924,7 @@ void WorkspaceWindowResizer::RestackWindows() {
   // Reorder the windows starting at the topmost.
   parent->StackChildAtTop(map.rbegin()->second);
   for (auto i = map.rbegin(); i != map.rend();) {
-    WmWindow* window = i->second;
+    aura::Window* window = i->second;
     ++i;
     if (i != map.rend())
       parent->StackChildBelow(i->second, window);
@@ -923,13 +935,11 @@ WorkspaceWindowResizer::SnapType WorkspaceWindowResizer::GetSnapType(
     const gfx::Point& location) const {
   // TODO: this likely only wants total display area, not the area of a single
   // display.
-  gfx::Rect area(
-      ScreenUtil::GetDisplayWorkAreaBoundsInParent(GetTarget()->aura_window()));
+  gfx::Rect area(ScreenUtil::GetDisplayWorkAreaBoundsInParent(GetTarget()));
   if (details().source == aura::client::WINDOW_MOVE_SOURCE_TOUCH) {
     // Increase tolerance for touch-snapping near the screen edges. This is only
     // necessary when the work area left or right edge is same as screen edge.
-    gfx::Rect display_bounds(
-        ScreenUtil::GetDisplayBoundsInParent(GetTarget()->aura_window()));
+    gfx::Rect display_bounds(ScreenUtil::GetDisplayBoundsInParent(GetTarget()));
     int inset_left = 0;
     if (area.x() == display_bounds.x())
       inset_left = kScreenEdgeInsetForTouchDrag;
@@ -951,7 +961,7 @@ bool WorkspaceWindowResizer::AreBoundsValidSnappedBounds(
   DCHECK(snapped_type == wm::WINDOW_STATE_TYPE_LEFT_SNAPPED ||
          snapped_type == wm::WINDOW_STATE_TYPE_RIGHT_SNAPPED);
   gfx::Rect snapped_bounds =
-      ScreenUtil::GetDisplayWorkAreaBoundsInParent(GetTarget()->aura_window());
+      ScreenUtil::GetDisplayWorkAreaBoundsInParent(GetTarget());
   if (snapped_type == wm::WINDOW_STATE_TYPE_RIGHT_SNAPPED)
     snapped_bounds.set_x(snapped_bounds.right() - bounds_in_parent.width());
   snapped_bounds.set_width(bounds_in_parent.width());

@@ -24,4 +24,12 @@ void InkDropStub::SetHovered(bool is_hovered) {}
 
 void InkDropStub::SetFocused(bool is_hovered) {}
 
+bool InkDropStub::IsHighlightFadingInOrVisible() const {
+  return false;
+}
+
+void InkDropStub::SetShowHighlightOnHover(bool show_highlight_on_hover) {}
+
+void InkDropStub::SetShowHighlightOnFocus(bool show_highlight_on_focus) {}
+
 }  // namespace views

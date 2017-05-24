@@ -6,6 +6,9 @@
 #define SERVICES_RESOURCE_COORDINATOR_COORDINATION_UNIT_COORDINATION_UNIT_IMPL_H_
 
 #include <list>
+#include <memory>
+#include <set>
+#include <utility>
 
 #include "base/optional.h"
 #include "mojo/public/cpp/bindings/binding_set.h"
@@ -33,6 +36,11 @@ class CoordinationUnitImpl : public mojom::CoordinationUnit {
   void SetCoordinationPolicyCallback(
       mojom::CoordinationPolicyCallbackPtr callback) override;
 
+  virtual double GetCPUUsageForTesting();
+
+ protected:
+  CoordinationUnitID id_;
+
  private:
   bool AddChild(CoordinationUnitImpl* child);
   void RemoveChild(CoordinationUnitImpl* child);
@@ -54,7 +62,6 @@ class CoordinationUnitImpl : public mojom::CoordinationUnit {
 
   std::unique_ptr<service_manager::ServiceContextRef> service_ref_;
   mojo::BindingSet<mojom::CoordinationUnit> bindings_;
-  CoordinationUnitID id_;
 
   std::set<CoordinationUnitImpl*> children_;
   std::set<CoordinationUnitImpl*> parents_;

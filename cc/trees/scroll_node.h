@@ -32,11 +32,6 @@ struct CC_EXPORT ScrollNode {
   // composited layer list.
   int owning_layer_id;
 
-  // This is used for subtrees that should not be scrolled independently. For
-  // example, when there is a layer that is not scrollable itself but is inside
-  // a scrolling layer.
-  bool scrollable;
-
   uint32_t main_thread_scrolling_reasons;
 
   Region non_fast_scrollable_region;
@@ -48,17 +43,21 @@ struct CC_EXPORT ScrollNode {
   // Bounds of the overflow scrolling area.
   gfx::Size bounds;
 
-  bool max_scroll_offset_affected_by_page_scale;
-  bool scrolls_inner_viewport;
-  bool scrolls_outer_viewport;
+  // This is used for subtrees that should not be scrolled independently. For
+  // example, when there is a layer that is not scrollable itself but is inside
+  // a scrolling layer.
+  bool scrollable : 1;
+  bool max_scroll_offset_affected_by_page_scale : 1;
+  bool scrolls_inner_viewport : 1;
+  bool scrolls_outer_viewport : 1;
+  bool should_flatten : 1;
+  bool user_scrollable_horizontal : 1;
+  bool user_scrollable_vertical : 1;
 
   // This offset is used when |scrollable| is false and there isn't a transform
   // node already present that covers this offset.
   gfx::Vector2dF offset_to_transform_parent;
 
-  bool should_flatten;
-  bool user_scrollable_horizontal;
-  bool user_scrollable_vertical;
   ElementId element_id;
   int transform_id;
 

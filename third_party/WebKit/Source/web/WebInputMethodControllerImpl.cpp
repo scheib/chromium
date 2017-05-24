@@ -13,6 +13,7 @@
 #include "core/editing/FrameSelection.h"
 #include "core/editing/InputMethodController.h"
 #include "core/editing/PlainTextRange.h"
+#include "core/exported/WebPluginContainerBase.h"
 #include "core/frame/LocalFrame.h"
 #include "core/page/FocusController.h"
 #include "core/page/Page.h"
@@ -21,7 +22,6 @@
 #include "public/web/WebPlugin.h"
 #include "public/web/WebRange.h"
 #include "web/WebLocalFrameImpl.h"
-#include "web/WebPluginContainerImpl.h"
 
 namespace blink {
 
@@ -158,7 +158,7 @@ InputMethodController& WebInputMethodControllerImpl::GetInputMethodController()
 
 WebPlugin* WebInputMethodControllerImpl::FocusedPluginIfInputMethodSupported()
     const {
-  WebPluginContainerImpl* container =
+  WebPluginContainerBase* container =
       WebLocalFrameImpl::CurrentPluginContainer(GetFrame());
   if (container && container->SupportsInputMethod())
     return container->Plugin();

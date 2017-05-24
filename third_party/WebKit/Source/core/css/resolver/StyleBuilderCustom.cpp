@@ -302,7 +302,7 @@ void StyleBuilderFunctions::applyInitialCSSPropertyOutlineStyle(
     StyleResolverState& state) {
   state.Style()->SetOutlineStyleIsAuto(
       ComputedStyle::InitialOutlineStyleIsAuto());
-  state.Style()->SetOutlineStyle(ComputedStyle::InitialBorderStyle());
+  state.Style()->SetOutlineStyle(EBorderStyle::kNone);
 }
 
 void StyleBuilderFunctions::applyInheritCSSPropertyOutlineStyle(

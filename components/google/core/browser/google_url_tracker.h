@@ -26,8 +26,7 @@ class PrefRegistrySyncable;
 // change.  The current value is saved to prefs.
 //
 // Most consumers should only call google_url().  Consumers who need to be
-// notified when things change should register a callback that provides the
-// original and updated values via RegisterCallback().
+// notified when things change should use RegisterCallback().
 //
 // To protect users' privacy and reduce server load, no updates will be
 // performed (ever) unless at least one consumer registers interest by calling
@@ -37,8 +36,7 @@ class GoogleURLTracker
       public net::NetworkChangeNotifier::NetworkChangeObserver,
       public KeyedService {
  public:
-  // Callback that is called when the Google URL is updated. The arguments are
-  // the old and new URLs.
+  // Callback that is called when the Google URL is updated.
   typedef base::Callback<void()> OnGoogleURLUpdatedCallback;
   typedef base::CallbackList<void()> CallbackList;
   typedef CallbackList::Subscription Subscription;

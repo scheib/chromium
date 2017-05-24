@@ -101,6 +101,8 @@ std::string GetNetworkTypeString() {
 
 std::string GetClockString() {
   switch (base::TimeTicks::GetClock()) {
+    case base::TimeTicks::Clock::FUCHSIA_MX_CLOCK_MONOTONIC:
+      return "FUCHSIA_MX_CLOCK_MONOTONIC";
     case base::TimeTicks::Clock::LINUX_CLOCK_MONOTONIC:
       return "LINUX_CLOCK_MONOTONIC";
     case base::TimeTicks::Clock::IOS_CF_ABSOLUTE_TIME_MINUS_KERN_BOOTTIME:

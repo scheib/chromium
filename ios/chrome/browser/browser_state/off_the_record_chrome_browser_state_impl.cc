@@ -6,12 +6,12 @@
 
 #include "base/logging.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
+#include "components/proxy_config/ios/proxy_service_factory.h"
 #include "components/proxy_config/pref_proxy_config_tracker.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/user_prefs/user_prefs.h"
 #include "ios/chrome/browser/application_context.h"
 #include "ios/chrome/browser/net/ios_chrome_url_request_context_getter.h"
-#include "ios/chrome/browser/net/proxy_service_factory.h"
 #include "ios/web/public/web_thread.h"
 
 OffTheRecordChromeBrowserStateImpl::OffTheRecordChromeBrowserStateImpl(
@@ -78,7 +78,7 @@ PrefProxyConfigTracker*
 OffTheRecordChromeBrowserStateImpl::GetProxyConfigTracker() {
   if (!pref_proxy_config_tracker_) {
     pref_proxy_config_tracker_ =
-        ios::ProxyServiceFactory::CreatePrefProxyConfigTrackerOfProfile(
+        ProxyServiceFactory::CreatePrefProxyConfigTrackerOfProfile(
             GetPrefs(), GetApplicationContext()->GetLocalState());
   }
   return pref_proxy_config_tracker_.get();

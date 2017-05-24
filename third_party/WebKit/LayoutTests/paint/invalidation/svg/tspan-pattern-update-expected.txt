@@ -16,10 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourcePattern pattern id='pat'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGTSpan tspan",
       "reason": "SVG resource change"
     },

@@ -10,6 +10,7 @@
 #include "core/dom/NodeList.h"
 #include "core/dom/Text.h"
 #include "core/editing/EditingTestBase.h"
+#include "core/editing/VisibleUnits.h"
 #include "core/frame/Settings.h"
 #include "core/html/HTMLBodyElement.h"
 #include "core/html/HTMLDivElement.h"
@@ -250,7 +251,7 @@ TEST_F(RangeTest, MultipleTextQuads) {
   Position end(GetDocument().getElementById("two")->firstChild(), 3);
   Range* range = Range::Create(GetDocument(), start, end);
   Vector<FloatQuad> quads;
-  range->TextQuads(quads);
+  quads.AppendVector(ComputeTextQuads(EphemeralRange(range)));
   EXPECT_EQ(2u, quads.size());
 }
 

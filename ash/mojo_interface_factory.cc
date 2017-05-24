@@ -8,6 +8,7 @@
 
 #include "ash/accelerators/accelerator_controller.h"
 #include "ash/cast_config_controller.h"
+#include "ash/login/lock_screen_controller.h"
 #include "ash/media_controller.h"
 #include "ash/new_window_controller.h"
 #include "ash/session/session_controller.h"
@@ -54,6 +55,12 @@ void BindLocaleNotificationControllerOnMainThread(
     mojom::LocaleNotificationControllerRequest request) {
   Shell::Get()->locale_notification_controller()->BindRequest(
       std::move(request));
+}
+
+void BindLockScreenRequestOnMainThread(
+    const service_manager::BindSourceInfo& source_info,
+    mojom::LockScreenRequest request) {
+  Shell::Get()->lock_screen_controller()->BindRequest(std::move(request));
 }
 
 void BindMediaControllerRequestOnMainThread(
@@ -133,6 +140,8 @@ void RegisterInterfaces(
   registry->AddInterface(
       base::Bind(&BindLocaleNotificationControllerOnMainThread),
       main_thread_task_runner);
+  registry->AddInterface(base::Bind(&BindLockScreenRequestOnMainThread),
+                         main_thread_task_runner);
   registry->AddInterface(base::Bind(&BindMediaControllerRequestOnMainThread),
                          main_thread_task_runner);
   registry->AddInterface(

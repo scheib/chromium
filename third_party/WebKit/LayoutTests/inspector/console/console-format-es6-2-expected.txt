@@ -55,8 +55,8 @@ console-format-es6-2.html:11 MapIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "keys"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:12 [MapIterator]
     0: MapIterator {41, {…}}
@@ -69,8 +69,8 @@ MapIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "keys"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:11 MapIterator {42, {…}}
     __proto__: Map Iterator
@@ -78,8 +78,8 @@ console-format-es6-2.html:11 MapIterator {42, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(2)
-        0: 42 {value: 42}
-        1: {value: {…}}
+        0: 42
+        1: Object
         length: 2
 console-format-es6-2.html:12 [MapIterator]
     0: MapIterator {42, {…}}
@@ -92,8 +92,8 @@ MapIterator {42, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(2)
-        0: 42 {value: 42}
-        1: {value: {…}}
+        0: 42
+        1: Object
         length: 2
 console-format-es6-2.html:11 MapIterator {41 => 42, {…} => {…}}
     __proto__: Map Iterator
@@ -101,8 +101,8 @@ console-format-es6-2.html:11 MapIterator {41 => 42, {…} => {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "entries"
     [[Entries]]: Array(2)
-        0: {41 => 42} {key: 41, value: 42}
-        1: {Object => Object} {key: {…}, value: {…}}
+        0: {41 => 42}
+        1: {Object => Object}
         length: 2
 console-format-es6-2.html:12 [MapIterator]
     0: MapIterator {41 => 42, {…} => {…}}
@@ -115,8 +115,8 @@ MapIterator {41 => 42, {…} => {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "entries"
     [[Entries]]: Array(2)
-        0: {41 => 42} {key: 41, value: 42}
-        1: {Object => Object} {key: {…}, value: {…}}
+        0: {41 => 42}
+        1: {Object => Object}
         length: 2
 console-format-es6-2.html:11 SetIterator {41, {…}}
     __proto__: Set Iterator
@@ -124,8 +124,8 @@ console-format-es6-2.html:11 SetIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:12 [SetIterator]
     0: SetIterator {41, {…}}
@@ -138,8 +138,8 @@ SetIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:11 SetIterator {41, {…}}
     __proto__: Set Iterator
@@ -147,8 +147,8 @@ console-format-es6-2.html:11 SetIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:12 [SetIterator]
     0: SetIterator {41, {…}}
@@ -161,8 +161,8 @@ SetIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:11 SetIterator {41, {…}}
     __proto__: Set Iterator
@@ -170,8 +170,8 @@ console-format-es6-2.html:11 SetIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "entries"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:12 [SetIterator]
     0: SetIterator {41, {…}}
@@ -184,8 +184,8 @@ SetIterator {41, {…}}
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "entries"
     [[Entries]]: Array(2)
-        0: 41 {value: 41}
-        1: {value: {…}}
+        0: 41
+        1: Object
         length: 2
 console-format-es6-2.html:11 MapIterator {{…}}
     __proto__: Map Iterator
@@ -193,7 +193,7 @@ console-format-es6-2.html:11 MapIterator {{…}}
     [[IteratorIndex]]: 1
     [[IteratorKind]]: "values"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-format-es6-2.html:12 [MapIterator]
     0: MapIterator {{…}}
@@ -206,7 +206,7 @@ MapIterator {{…}}
     [[IteratorIndex]]: 1
     [[IteratorKind]]: "values"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-format-es6-2.html:11 SetIterator {{…}}
     __proto__: Set Iterator
@@ -214,7 +214,7 @@ console-format-es6-2.html:11 SetIterator {{…}}
     [[IteratorIndex]]: 1
     [[IteratorKind]]: "values"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-format-es6-2.html:12 [SetIterator]
     0: SetIterator {{…}}
@@ -227,6 +227,6 @@ SetIterator {{…}}
     [[IteratorIndex]]: 1
     [[IteratorKind]]: "values"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 

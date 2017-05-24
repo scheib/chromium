@@ -33,6 +33,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/variations/variations_associated_data.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
 
@@ -288,10 +289,34 @@ void CachedImageFetcher::FetchImageFromNetwork(
     return;
   }
 
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("remote_suggestions_provider", R"(
+        semantics {
+          sender: "Content Suggestion Thumbnail Fetch"
+          description:
+            "Retrieves thumbnails for content suggestions, for display on the "
+            "New Tab page or Chrome Home."
+          trigger:
+            "Triggered when the user looks at a content suggestion (and its "
+            "thumbnail isn't cached yet)."
+          data: "None."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: false
+          setting: "Currently not available, but in progress: crbug.com/703684"
+        chrome_policy {
+          NTPContentSuggestionsEnabled {
+            policy_options {mode: MANDATORY}
+            NTPContentSuggestionsEnabled: false
+          }
+        }
+      })");
   image_fetcher_->StartOrQueueNetworkRequest(
       suggestion_id.id_within_category(), url,
       base::Bind(&CachedImageFetcher::OnImageDecodingDone,
-                 base::Unretained(this), callback));
+                 base::Unretained(this), callback),
+      traffic_annotation);
 }
 
 RemoteSuggestionsProviderImpl::RemoteSuggestionsProviderImpl(

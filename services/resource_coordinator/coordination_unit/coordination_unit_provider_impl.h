@@ -5,6 +5,8 @@
 #ifndef SERVICES_RESOURCE_COORDINATOR_COORDINATION_UNIT_COORDINATION_UNIT_PROVIDER_IMPL_H_
 #define SERVICES_RESOURCE_COORDINATOR_COORDINATION_UNIT_COORDINATION_UNIT_PROVIDER_IMPL_H_
 
+#include <memory>
+
 #include "mojo/public/cpp/bindings/interface_request.h"
 #include "mojo/public/cpp/bindings/strong_binding.h"
 #include "services/resource_coordinator/public/interfaces/coordination_unit_provider.mojom.h"

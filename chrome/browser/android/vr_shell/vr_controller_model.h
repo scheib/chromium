@@ -39,15 +39,15 @@ class VrControllerModel {
   const gltf::Accessor* PositionAccessor() const;
   const gltf::Accessor* TextureCoordinateAccessor() const;
   void SetBaseTexture(sk_sp<SkImage> image);
-  void SetTexturePatch(int state, sk_sp<SkImage> image);
+  void SetTexture(int state, sk_sp<SkImage> patch);
   sk_sp<SkImage> GetTexture(int state) const;
 
-  static std::unique_ptr<VrControllerModel> LoadFromComponent();
+  static std::unique_ptr<VrControllerModel> LoadFromResources();
 
  private:
   std::unique_ptr<gltf::Asset> gltf_asset_;
   sk_sp<SkImage> base_texture_;
-  sk_sp<SkImage> patches_[STATE_COUNT];
+  sk_sp<SkImage> textures_[STATE_COUNT];
   std::vector<std::unique_ptr<gltf::Buffer>> buffers_;
 
   const char* Buffer() const;

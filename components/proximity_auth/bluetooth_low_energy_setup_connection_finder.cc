@@ -25,7 +25,6 @@ BluetoothLowEnergySetupConnectionFinder::
     : BluetoothLowEnergyConnectionFinder(
           cryptauth::RemoteDevice(),
           remote_service_uuid,
-          std::vector<cryptauth::BeaconSeed>(),
           base::MakeUnique<cryptauth::BackgroundEidGenerator>(),
           bluetooth_throttler),
       remote_service_uuid_(device::BluetoothUUID(remote_service_uuid)) {}

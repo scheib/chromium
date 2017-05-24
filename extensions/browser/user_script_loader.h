@@ -42,8 +42,8 @@ namespace extensions {
 class UserScriptLoader : public content::NotificationObserver {
  public:
   using LoadScriptsCallback =
-      base::Callback<void(std::unique_ptr<UserScriptList>,
-                          std::unique_ptr<base::SharedMemory>)>;
+      base::OnceCallback<void(std::unique_ptr<UserScriptList>,
+                              std::unique_ptr<base::SharedMemory>)>;
   class Observer {
    public:
     virtual void OnScriptsLoaded(UserScriptLoader* loader) = 0;

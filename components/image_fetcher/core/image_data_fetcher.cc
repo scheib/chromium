@@ -60,19 +60,23 @@ void ImageDataFetcher::SetImageDownloadLimit(
 
 void ImageDataFetcher::FetchImageData(
     const GURL& image_url,
-    const ImageDataFetcherCallback& callback) {
+    const ImageDataFetcherCallback& callback,
+    const net::NetworkTrafficAnnotationTag& traffic_annotation) {
   FetchImageData(
       image_url, callback, /*referrer=*/std::string(),
-      net::URLRequest::CLEAR_REFERRER_ON_TRANSITION_FROM_SECURE_TO_INSECURE);
+      net::URLRequest::CLEAR_REFERRER_ON_TRANSITION_FROM_SECURE_TO_INSECURE,
+      traffic_annotation);
 }
 
 void ImageDataFetcher::FetchImageData(
     const GURL& image_url,
     const ImageDataFetcherCallback& callback,
     const std::string& referrer,
-    net::URLRequest::ReferrerPolicy referrer_policy) {
-  std::unique_ptr<net::URLFetcher> url_fetcher = net::URLFetcher::Create(
-      next_url_fetcher_id_++, image_url, net::URLFetcher::GET, this);
+    net::URLRequest::ReferrerPolicy referrer_policy,
+    const net::NetworkTrafficAnnotationTag& traffic_annotation) {
+  std::unique_ptr<net::URLFetcher> url_fetcher =
+      net::URLFetcher::Create(next_url_fetcher_id_++, image_url,
+                              net::URLFetcher::GET, this, traffic_annotation);
 
   DataUseUserData::AttachToFetcher(url_fetcher.get(), data_use_service_name_);
 

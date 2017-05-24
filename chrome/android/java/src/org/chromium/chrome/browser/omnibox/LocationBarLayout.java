@@ -1106,7 +1106,6 @@ public class LocationBarLayout extends FrameLayout
      * - Native is loaded.
      * - The URL bar has focus.
      * - The current tab is not incognito.
-     * - Chrome Home is disabled.
      */
     private void startZeroSuggest() {
         // Reset "edited" state in the omnibox if zero suggest is triggered -- new edits
@@ -1151,11 +1150,21 @@ public class LocationBarLayout extends FrameLayout
 
                     boolean preventAutocomplete = textDeleted || !mUrlBar.shouldAutocomplete();
                     mRequestSuggestions = null;
-                    if (getCurrentTab() == null) return;
-                    mAutocomplete.start(
-                            getCurrentTab().getProfile(),
-                            getCurrentTab().getUrl(),
-                            textWithoutAutocomplete, preventAutocomplete);
+
+                    if (getCurrentTab() == null
+                            && (mBottomSheet == null || mToolbarDataProvider.isIncognito())) {
+                        return;
+                    }
+
+                    // If the bottom sheet is not null, the current tab will be null when the
+                    // NTP UI is showing. Use the original profile rather than the tab profile
+                    // in that scenario.
+                    Profile profile = getCurrentTab() != null
+                            ? getCurrentTab().getProfile()
+                            : Profile.getLastUsedProfile().getOriginalProfile();
+                    String url = getCurrentTab() != null ? getCurrentTab().getUrl()
+                                                         : UrlConstants.NTP_URL;
+                    mAutocomplete.start(profile, url, textWithoutAutocomplete, preventAutocomplete);
                 }
             };
             if (mNativeInitialized) {
@@ -1874,6 +1883,9 @@ public class LocationBarLayout extends FrameLayout
         if (getCurrentTab() != null) {
             mAutocomplete.start(
                     getCurrentTab().getProfile(), getCurrentTab().getUrl(), query, false);
+        } else if (mBottomSheet != null && !mToolbarDataProvider.isIncognito()) {
+            mAutocomplete.start(Profile.getLastUsedProfile().getOriginalProfile(),
+                    UrlConstants.NTP_URL, query, false);
         }
         post(new Runnable() {
             @Override
@@ -2011,7 +2023,8 @@ public class LocationBarLayout extends FrameLayout
 
         if (mNativeInitialized
                 && !CommandLine.getInstance().hasSwitch(ChromeSwitches.DISABLE_INSTANT)
-                && PrivacyPreferencesManager.getInstance().shouldPrerender()) {
+                && PrivacyPreferencesManager.getInstance().shouldPrerender()
+                && getCurrentTab() != null) {
             mOmniboxPrerender.prerenderMaybe(
                     userText,
                     getOriginalUrl(),

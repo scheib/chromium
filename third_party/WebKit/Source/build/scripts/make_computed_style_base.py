@@ -25,7 +25,7 @@ from itertools import chain
 # TODO(shend): Put alignment sizes into code form, rather than linking to a CL which may disappear.
 ALIGNMENT_ORDER = [
     'double',
-    'Font', 'FillLayer', 'BorderData',  # Aligns like a void * (can be 32 or 64 bits)
+    'Font', 'FillLayer', 'NinePieceImage',  # Aligns like a void * (can be 32 or 64 bits)
     'LengthBox', 'LengthSize', 'Length', 'float',
     'StyleColor', 'Color', 'unsigned', 'int',
     'short',
@@ -148,7 +148,7 @@ class Field(object):
         # TODO(nainar): Method name generation is inconsistent. Fix.
         self.getter_method_name = getter_method_name
         self.setter_method_name = setter_method_name
-        self.internal_getter_method_name = method_name(join_name(getter_method_name, 'Internal'))
+        self.internal_getter_method_name = method_name(join_name(self.name, 'Internal'))
         self.internal_mutable_method_name = method_name(join_name('Mutable', name_for_methods, 'Internal'))
         self.internal_setter_method_name = method_name(join_name(setter_method_name, 'Internal'))
         self.initial_method_name = initial_method_name

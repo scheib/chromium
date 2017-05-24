@@ -202,6 +202,7 @@ TEST_F(DirectCompositorFrameSinkTest, AcknowledgesBeginFramesWithoutDamage) {
             observer.ack().sequence_number);
   compositor_frame_sink_client_.begin_frame_source()->DidFinishFrame(
       &observer, observer.ack());
+  compositor_frame_sink_->DidNotProduceFrame(observer.ack());
   compositor_frame_sink_client_.begin_frame_source()->RemoveObserver(&observer);
 
   // Verify that the frame sink acknowledged the last BeginFrame.

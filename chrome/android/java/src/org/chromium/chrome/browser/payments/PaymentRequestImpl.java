@@ -392,8 +392,6 @@ public class PaymentRequestImpl implements PaymentRequest, PaymentRequestUI.Clie
         if (sCanMakePaymentQueries == null) sCanMakePaymentQueries = new ArrayMap<>();
 
         mCurrencyFormatterMap = new HashMap<>();
-
-        recordSuccessFunnelHistograms("Initiated");
     }
 
     @Override
@@ -658,7 +656,6 @@ public class PaymentRequestImpl implements PaymentRequest, PaymentRequestUI.Clie
 
             mDidRecordShowEvent = true;
             mShouldRecordAbortReason = true;
-            recordSuccessFunnelHistograms("SkippedShow");
             mJourneyLogger.setEventOccurred(JourneyLogger.EVENT_SKIPPED_SHOW);
             mJourneyLogger.setShowCalled();
 
@@ -1010,7 +1007,7 @@ public class PaymentRequestImpl implements PaymentRequest, PaymentRequestUI.Clie
         if (!mDidRecordShowEvent) {
             mDidRecordShowEvent = true;
             mShouldRecordAbortReason = true;
-            recordSuccessFunnelHistograms("Shown");
+            mJourneyLogger.setEventOccurred(JourneyLogger.EVENT_SHOWN);
             mJourneyLogger.setShowCalled();
         }
     }
@@ -1310,7 +1307,6 @@ public class PaymentRequestImpl implements PaymentRequest, PaymentRequestUI.Clie
                 Collections.unmodifiableMap(methodData), mRawTotal, mRawLineItems,
                 Collections.unmodifiableMap(modifiers), this);
 
-        recordSuccessFunnelHistograms("PayClicked");
         mJourneyLogger.setEventOccurred(JourneyLogger.EVENT_PAY_CLICKED);
         return !(instrument instanceof AutofillPaymentInstrument);
     }
@@ -1665,7 +1661,6 @@ public class PaymentRequestImpl implements PaymentRequest, PaymentRequestUI.Clie
         // spinner shows up until the merchant notifies that payment was completed.
         if (mShouldSkipShowingPaymentRequestUi) mUI.showProcessingMessageAfterUiSkip();
 
-        recordSuccessFunnelHistograms("ReceivedInstrumentDetails");
         mJourneyLogger.setEventOccurred(JourneyLogger.EVENT_RECEIVED_INSTRUMENT_DETAILS);
 
         mPaymentResponseHelper.onInstrumentDetailsReceived(methodName, stringifiedDetails);

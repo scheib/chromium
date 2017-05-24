@@ -21,33 +21,38 @@ namespace resource_coordinator {
 
 ResourceCoordinatorInterface::ResourceCoordinatorInterface(
     service_manager::Connector* connector,
-    const CoordinationUnitType& type)
+    const CoordinationUnitType& type,
+    const std::string& id)
     : weak_ptr_factory_(this) {
-  ConnectToService(connector, type, std::string());
+  CoordinationUnitID new_cu_id(type, id);
+  ConnectToService(connector, new_cu_id);
 }
 
 ResourceCoordinatorInterface::ResourceCoordinatorInterface(
     service_manager::Connector* connector,
+    const CoordinationUnitType& type)
+    : ResourceCoordinatorInterface(connector, type, std::string()) {}
+
+ResourceCoordinatorInterface::ResourceCoordinatorInterface(
+    service_manager::Connector* connector,
     const CoordinationUnitType& type,
-    const std::string& id)
+    uint64_t id)
     : weak_ptr_factory_(this) {
-  ConnectToService(connector, type, id);
+  CoordinationUnitID new_cu_id(type, id);
+  ConnectToService(connector, new_cu_id);
 }
 
 ResourceCoordinatorInterface::~ResourceCoordinatorInterface() = default;
 
 void ResourceCoordinatorInterface::ConnectToService(
     service_manager::Connector* connector,
-    const CoordinationUnitType& type,
-    const std::string& id) {
+    const CoordinationUnitID& cu_id) {
   DCHECK(thread_checker_.CalledOnValidThread());
   DCHECK(connector);
   mojom::CoordinationUnitProviderPtr provider;
   connector->BindInterface(mojom::kServiceName, mojo::MakeRequest(&provider));
 
-  CoordinationUnitID new_cu_id(type, id);
-
-  provider->CreateCoordinationUnit(mojo::MakeRequest(&service_), new_cu_id);
+  provider->CreateCoordinationUnit(mojo::MakeRequest(&service_), cu_id);
 
   service_.set_connection_error_handler(base::Bind(&OnConnectionError));
 }

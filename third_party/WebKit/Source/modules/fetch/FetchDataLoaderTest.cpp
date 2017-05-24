@@ -4,11 +4,13 @@
 
 #include "modules/fetch/FetchDataLoader.h"
 
+#include <memory>
+#include "core/fileapi/Blob.h"
+#include "core/html/FormData.h"
 #include "modules/fetch/BytesConsumerForDataConsumerHandle.h"
 #include "modules/fetch/BytesConsumerTestUtil.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include <memory>
 
 namespace blink {
 
@@ -31,6 +33,29 @@ using Result = BytesConsumer::Result;
 constexpr char kQuickBrownFox[] = "Quick brown fox";
 constexpr size_t kQuickBrownFoxLength = 15;
 constexpr size_t kQuickBrownFoxLengthWithTerminatingNull = 16;
+constexpr char kQuickBrownFoxFormData[] =
+    "--boundary\r\n"
+    "Content-Disposition: form-data; name=blob; filename=blob\r\n"
+    "Content-Type: text/plain; charset=iso-8859-1\r\n"
+    "\r\n"
+    "Quick brown fox\r\n"
+    "--boundary\r\n"
+    "Content-Disposition: form-data; name=\"blob\xC2\xA0without\xC2\xA0type\"; "
+    "filename=\"blob\xC2\xA0without\xC2\xA0type.txt\"\r\n"
+    "\r\n"
+    "Quick brown fox\r\n"
+    "--boundary\r\n"
+    "Content-Disposition: form-data; name=string\r\n"
+    "\r\n"
+    "Quick brown fox\r\n"
+    "--boundary\r\n"
+    "Content-Disposition: form-data; name=string-with-type\r\n"
+    "Content-Type: text/plain; charset=invalid\r\n"
+    "\r\n"
+    "Quick brown fox\r\n"
+    "--boundary--\r\n";
+constexpr size_t kQuickBrownFoxFormDataLength =
+    WTF_ARRAY_LENGTH(kQuickBrownFoxFormData) - 1u;
 
 TEST(FetchDataLoaderTest, LoadAsBlob) {
   Checkpoint checkpoint;
@@ -331,6 +356,179 @@ TEST(FetchDataLoaderTest, LoadAsArrayBufferCancel) {
 
   FetchDataLoader* fetch_data_loader =
       FetchDataLoader::CreateLoaderAsArrayBuffer();
+  MockFetchDataLoaderClient* fetch_data_loader_client =
+      MockFetchDataLoaderClient::Create();
+
+  InSequence s;
+  EXPECT_CALL(checkpoint, Call(1));
+  EXPECT_CALL(*consumer, SetClient(_)).WillOnce(SaveArg<0>(&client));
+  EXPECT_CALL(*consumer, BeginRead(_, _))
+      .WillOnce(DoAll(SetArgPointee<0>(nullptr), SetArgPointee<1>(0),
+                      Return(Result::kShouldWait)));
+  EXPECT_CALL(checkpoint, Call(2));
+  EXPECT_CALL(*consumer, Cancel());
+  EXPECT_CALL(checkpoint, Call(3));
+
+  checkpoint.Call(1);
+  fetch_data_loader->Start(consumer, fetch_data_loader_client);
+  checkpoint.Call(2);
+  fetch_data_loader->Cancel();
+  checkpoint.Call(3);
+}
+
+TEST(FetchDataLoaderTest, LoadAsFormData) {
+  Checkpoint checkpoint;
+  BytesConsumer::Client* client = nullptr;
+  MockBytesConsumer* consumer = MockBytesConsumer::Create();
+
+  FetchDataLoader* fetch_data_loader =
+      FetchDataLoader::CreateLoaderAsFormData("boundary");
+  MockFetchDataLoaderClient* fetch_data_loader_client =
+      MockFetchDataLoaderClient::Create();
+  FormData* form_data = nullptr;
+
+  InSequence s;
+  EXPECT_CALL(checkpoint, Call(1));
+  EXPECT_CALL(*consumer, SetClient(_)).WillOnce(SaveArg<0>(&client));
+  EXPECT_CALL(*consumer, BeginRead(_, _))
+      .WillOnce(DoAll(SetArgPointee<0>(nullptr), SetArgPointee<1>(0),
+                      Return(Result::kShouldWait)));
+  EXPECT_CALL(checkpoint, Call(2));
+  EXPECT_CALL(*consumer, BeginRead(_, _))
+      .WillOnce(DoAll(SetArgPointee<0>(kQuickBrownFoxFormData),
+                      SetArgPointee<1>(kQuickBrownFoxFormDataLength),
+                      Return(Result::kOk)));
+  EXPECT_CALL(*consumer, EndRead(kQuickBrownFoxFormDataLength))
+      .WillOnce(Return(Result::kOk));
+  EXPECT_CALL(*consumer, BeginRead(_, _)).WillOnce(Return(Result::kDone));
+  EXPECT_CALL(*fetch_data_loader_client, DidFetchDataLoadedFormDataMock(_))
+      .WillOnce(SaveArg<0>(&form_data));
+  EXPECT_CALL(checkpoint, Call(3));
+  EXPECT_CALL(*consumer, Cancel());
+  EXPECT_CALL(checkpoint, Call(4));
+
+  checkpoint.Call(1);
+  fetch_data_loader->Start(consumer, fetch_data_loader_client);
+  checkpoint.Call(2);
+  ASSERT_TRUE(client);
+  client->OnStateChange();
+  checkpoint.Call(3);
+  fetch_data_loader->Cancel();
+  checkpoint.Call(4);
+
+  ASSERT_TRUE(form_data);
+  ASSERT_EQ(4u, form_data->Entries().size());
+
+  EXPECT_EQ("blob", form_data->Entries()[0]->name());
+  EXPECT_EQ("blob", form_data->Entries()[0]->Filename());
+  ASSERT_TRUE(form_data->Entries()[0]->isFile());
+  EXPECT_EQ(kQuickBrownFoxLength, form_data->Entries()[0]->GetBlob()->size());
+  EXPECT_EQ("text/plain; charset=iso-8859-1",
+            form_data->Entries()[0]->GetBlob()->type());
+
+  EXPECT_EQ("blob\xC2\xA0without\xC2\xA0type", form_data->Entries()[1]->name());
+  EXPECT_EQ("blob\xC2\xA0without\xC2\xA0type.txt",
+            form_data->Entries()[1]->Filename().Utf8());
+  ASSERT_TRUE(form_data->Entries()[1]->isFile());
+  EXPECT_EQ(kQuickBrownFoxLength, form_data->Entries()[1]->GetBlob()->size());
+  EXPECT_EQ("text/plain", form_data->Entries()[1]->GetBlob()->type());
+
+  EXPECT_EQ("string", form_data->Entries()[2]->name());
+  EXPECT_TRUE(form_data->Entries()[2]->Filename().IsNull());
+  ASSERT_TRUE(form_data->Entries()[2]->IsString());
+  EXPECT_EQ(kQuickBrownFox, form_data->Entries()[2]->Value());
+
+  EXPECT_EQ("string-with-type", form_data->Entries()[3]->name());
+  EXPECT_TRUE(form_data->Entries()[3]->Filename().IsNull());
+  ASSERT_TRUE(form_data->Entries()[3]->IsString());
+  EXPECT_EQ(kQuickBrownFox, form_data->Entries()[3]->Value());
+}
+
+TEST(FetchDataLoaderTest, LoadAsFormDataPartialInput) {
+  Checkpoint checkpoint;
+  BytesConsumer::Client* client = nullptr;
+  MockBytesConsumer* consumer = MockBytesConsumer::Create();
+
+  FetchDataLoader* fetch_data_loader =
+      FetchDataLoader::CreateLoaderAsFormData("boundary");
+  MockFetchDataLoaderClient* fetch_data_loader_client =
+      MockFetchDataLoaderClient::Create();
+
+  InSequence s;
+  EXPECT_CALL(checkpoint, Call(1));
+  EXPECT_CALL(*consumer, SetClient(_)).WillOnce(SaveArg<0>(&client));
+  EXPECT_CALL(*consumer, BeginRead(_, _))
+      .WillOnce(DoAll(SetArgPointee<0>(nullptr), SetArgPointee<1>(0),
+                      Return(Result::kShouldWait)));
+  EXPECT_CALL(checkpoint, Call(2));
+  EXPECT_CALL(*consumer, BeginRead(_, _))
+      .WillOnce(DoAll(SetArgPointee<0>(kQuickBrownFoxFormData),
+                      SetArgPointee<1>(kQuickBrownFoxFormDataLength - 3u),
+                      Return(Result::kOk)));
+  EXPECT_CALL(*consumer, EndRead(kQuickBrownFoxFormDataLength - 3u))
+      .WillOnce(Return(Result::kOk));
+  EXPECT_CALL(*consumer, BeginRead(_, _)).WillOnce(Return(Result::kDone));
+  EXPECT_CALL(*fetch_data_loader_client, DidFetchDataLoadFailed());
+  EXPECT_CALL(checkpoint, Call(3));
+  EXPECT_CALL(*consumer, Cancel());
+  EXPECT_CALL(checkpoint, Call(4));
+
+  checkpoint.Call(1);
+  fetch_data_loader->Start(consumer, fetch_data_loader_client);
+  checkpoint.Call(2);
+  ASSERT_TRUE(client);
+  client->OnStateChange();
+  checkpoint.Call(3);
+  fetch_data_loader->Cancel();
+  checkpoint.Call(4);
+}
+
+TEST(FetchDataLoaderTest, LoadAsFormDataFailed) {
+  Checkpoint checkpoint;
+  BytesConsumer::Client* client = nullptr;
+  MockBytesConsumer* consumer = MockBytesConsumer::Create();
+
+  FetchDataLoader* fetch_data_loader =
+      FetchDataLoader::CreateLoaderAsFormData("boundary");
+  MockFetchDataLoaderClient* fetch_data_loader_client =
+      MockFetchDataLoaderClient::Create();
+
+  InSequence s;
+  EXPECT_CALL(checkpoint, Call(1));
+  EXPECT_CALL(*consumer, SetClient(_)).WillOnce(SaveArg<0>(&client));
+  EXPECT_CALL(*consumer, BeginRead(_, _))
+      .WillOnce(DoAll(SetArgPointee<0>(nullptr), SetArgPointee<1>(0),
+                      Return(Result::kShouldWait)));
+  EXPECT_CALL(checkpoint, Call(2));
+  EXPECT_CALL(*consumer, BeginRead(_, _))
+      .WillOnce(DoAll(SetArgPointee<0>(kQuickBrownFoxFormData),
+                      SetArgPointee<1>(kQuickBrownFoxFormDataLength),
+                      Return(Result::kOk)));
+  EXPECT_CALL(*consumer, EndRead(kQuickBrownFoxFormDataLength))
+      .WillOnce(Return(Result::kOk));
+  EXPECT_CALL(*consumer, BeginRead(_, _)).WillOnce(Return(Result::kError));
+  EXPECT_CALL(*fetch_data_loader_client, DidFetchDataLoadFailed());
+  EXPECT_CALL(checkpoint, Call(3));
+  EXPECT_CALL(*consumer, Cancel());
+  EXPECT_CALL(checkpoint, Call(4));
+
+  checkpoint.Call(1);
+  fetch_data_loader->Start(consumer, fetch_data_loader_client);
+  checkpoint.Call(2);
+  ASSERT_TRUE(client);
+  client->OnStateChange();
+  checkpoint.Call(3);
+  fetch_data_loader->Cancel();
+  checkpoint.Call(4);
+}
+
+TEST(FetchDataLoaderTest, LoadAsFormDataCancel) {
+  Checkpoint checkpoint;
+  BytesConsumer::Client* client = nullptr;
+  MockBytesConsumer* consumer = MockBytesConsumer::Create();
+
+  FetchDataLoader* fetch_data_loader =
+      FetchDataLoader::CreateLoaderAsFormData("boundary");
   MockFetchDataLoaderClient* fetch_data_loader_client =
       MockFetchDataLoaderClient::Create();
 

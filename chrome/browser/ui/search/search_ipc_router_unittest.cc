@@ -601,8 +601,8 @@ TEST_F(SearchIPCRouterTest, SendSubmitMsg) {
   MockSearchIPCRouterPolicy* policy = GetSearchIPCRouterPolicy();
   EXPECT_CALL(*policy, ShouldSubmitQuery()).Times(1).WillOnce(Return(true));
 
-  EXPECT_CALL(*mock_search_box(), Submit(_, _));
-  GetSearchIPCRouter().Submit(base::string16(), EmbeddedSearchRequestParams());
+  EXPECT_CALL(*mock_search_box(), Submit(_));
+  GetSearchIPCRouter().Submit(EmbeddedSearchRequestParams());
 }
 
 TEST_F(SearchIPCRouterTest, DoNotSendSubmitMsg) {
@@ -611,6 +611,6 @@ TEST_F(SearchIPCRouterTest, DoNotSendSubmitMsg) {
   MockSearchIPCRouterPolicy* policy = GetSearchIPCRouterPolicy();
   EXPECT_CALL(*policy, ShouldSubmitQuery()).Times(1).WillOnce(Return(false));
 
-  EXPECT_CALL(*mock_search_box(), Submit(_, _)).Times(0);
-  GetSearchIPCRouter().Submit(base::string16(), EmbeddedSearchRequestParams());
+  EXPECT_CALL(*mock_search_box(), Submit(_)).Times(0);
+  GetSearchIPCRouter().Submit(EmbeddedSearchRequestParams());
 }

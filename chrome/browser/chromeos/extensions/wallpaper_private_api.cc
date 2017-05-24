@@ -12,11 +12,6 @@
 #include <vector>
 
 #include "ash/shell.h"
-#include "ash/wm/mru_window_tracker.h"
-#include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
-#include "ash/wm/window_util.h"
-#include "ash/wm_window.h"
 #include "base/command_line.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
@@ -31,6 +26,7 @@
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/login/users/wallpaper/wallpaper_manager.h"
+#include "chrome/browser/chromeos/login/users/wallpaper/wallpaper_window_state_manager.h"
 #include "chrome/browser/chromeos/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/profile_sync_service_factory.h"
@@ -121,168 +117,6 @@ const user_manager::User* GetUserFromBrowserContext(
       chromeos::ProfileHelper::Get()->GetUserByProfile(profile);
   DCHECK(user);
   return user;
-}
-
-// WindowStateManager remembers which windows have been minimized in order to
-// restore them when the wallpaper viewer is hidden.
-class WindowStateManager : public aura::WindowObserver {
- public:
-  typedef std::map<std::string, std::set<aura::Window*> >
-      UserIDHashWindowListMap;
-
-  // Minimizes all windows except the active window.
-  static void MinimizeInactiveWindows(const std::string& user_id_hash);
-
-  // Unminimizes all minimized windows restoring them to their previous state.
-  // This should only be called after calling MinimizeInactiveWindows.
-  static void RestoreWindows(const std::string& user_id_hash);
-
- private:
-  WindowStateManager();
-
-  ~WindowStateManager() override;
-
-  // Store all unminimized windows except |active_window| and minimize them.
-  // All the windows are saved in a map and the key value is |user_id_hash|.
-  void BuildWindowListAndMinimizeInactiveForUser(
-      const std::string& user_id_hash, aura::Window* active_window);
-
-  // Unminimize all the stored windows for |user_id_hash|.
-  void RestoreMinimizedWindows(const std::string& user_id_hash);
-
-  // Remove the observer from |window| if |window| is no longer referenced in
-  // user_id_hash_window_list_map_.
-  void RemoveObserverIfUnreferenced(aura::Window* window);
-
-  // aura::WindowObserver overrides.
-  void OnWindowDestroyed(aura::Window* window) override;
-
-  // aura::WindowObserver overrides.
-  void OnWindowStackingChanged(aura::Window* window) override;
-
-  // Map of user id hash and associated list of minimized windows.
-  UserIDHashWindowListMap user_id_hash_window_list_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(WindowStateManager);
-};
-
-// static
-WindowStateManager* g_window_state_manager = NULL;
-
-// static
-void WindowStateManager::MinimizeInactiveWindows(
-    const std::string& user_id_hash) {
-  if (ash_util::IsRunningInMash()) {
-    NOTIMPLEMENTED();
-    return;
-  }
-
-  if (!g_window_state_manager)
-    g_window_state_manager = new WindowStateManager();
-  g_window_state_manager->BuildWindowListAndMinimizeInactiveForUser(
-      user_id_hash, ash::wm::GetActiveWindow());
-}
-
-// static
-void WindowStateManager::RestoreWindows(const std::string& user_id_hash) {
-  if (ash_util::IsRunningInMash()) {
-    NOTIMPLEMENTED();
-    return;
-  }
-
-  if (!g_window_state_manager) {
-    DCHECK(false) << "This should only be called after calling "
-                  << "MinimizeInactiveWindows.";
-    return;
-  }
-
-  g_window_state_manager->RestoreMinimizedWindows(user_id_hash);
-  if (g_window_state_manager->user_id_hash_window_list_map_.empty()) {
-    delete g_window_state_manager;
-    g_window_state_manager = NULL;
-  }
-}
-
-WindowStateManager::WindowStateManager() {}
-
-WindowStateManager::~WindowStateManager() {}
-
-void WindowStateManager::BuildWindowListAndMinimizeInactiveForUser(
-    const std::string& user_id_hash, aura::Window* active_window) {
-  if (user_id_hash_window_list_map_.find(user_id_hash) ==
-      user_id_hash_window_list_map_.end()) {
-    user_id_hash_window_list_map_[user_id_hash] = std::set<aura::Window*>();
-  }
-  std::set<aura::Window*>* results =
-      &user_id_hash_window_list_map_[user_id_hash];
-
-  std::vector<aura::Window*> windows = ash::WmWindow::ToAuraWindows(
-      ash::Shell::Get()->mru_window_tracker()->BuildWindowListIgnoreModal());
-
-  for (std::vector<aura::Window*>::iterator iter = windows.begin();
-       iter != windows.end(); ++iter) {
-    // Ignore active window and minimized windows.
-    if (*iter == active_window || ash::wm::GetWindowState(*iter)->IsMinimized())
-      continue;
-
-    if (!(*iter)->HasObserver(this))
-      (*iter)->AddObserver(this);
-
-    results->insert(*iter);
-    ash::wm::GetWindowState(*iter)->Minimize();
-  }
-}
-
-void WindowStateManager::RestoreMinimizedWindows(
-    const std::string& user_id_hash) {
-  UserIDHashWindowListMap::iterator it =
-      user_id_hash_window_list_map_.find(user_id_hash);
-  if (it == user_id_hash_window_list_map_.end()) {
-    DCHECK(false) << "This should only be called after calling "
-                  << "MinimizeInactiveWindows.";
-    return;
-  }
-
-  std::set<aura::Window*> removed_windows;
-  removed_windows.swap(it->second);
-  user_id_hash_window_list_map_.erase(it);
-
-  for (std::set<aura::Window*>::iterator iter = removed_windows.begin();
-       iter != removed_windows.end(); ++iter) {
-    ash::wm::GetWindowState(*iter)->Unminimize();
-    RemoveObserverIfUnreferenced(*iter);
-  }
-}
-
-void WindowStateManager::RemoveObserverIfUnreferenced(aura::Window* window) {
-  for (UserIDHashWindowListMap::iterator iter =
-           user_id_hash_window_list_map_.begin();
-       iter != user_id_hash_window_list_map_.end();
-       ++iter) {
-    if (iter->second.find(window) != iter->second.end())
-      return;
-  }
-  // Remove observer if |window| is not observed by any users.
-  window->RemoveObserver(this);
-}
-
-void WindowStateManager::OnWindowDestroyed(aura::Window* window) {
-  for (UserIDHashWindowListMap::iterator iter =
-           user_id_hash_window_list_map_.begin();
-       iter != user_id_hash_window_list_map_.end();
-       ++iter) {
-    iter->second.erase(window);
-  }
-}
-
-void WindowStateManager::OnWindowStackingChanged(aura::Window* window) {
-  // If user interacted with the |window| while wallpaper picker is opening,
-  // removes the |window| from observed list.
-  for (auto iter = user_id_hash_window_list_map_.begin();
-       iter != user_id_hash_window_list_map_.end(); ++iter) {
-    iter->second.erase(window);
-  }
-  window->RemoveObserver(this);
 }
 
 user_manager::User::WallpaperType getWallpaperType(
@@ -747,7 +581,7 @@ WallpaperPrivateMinimizeInactiveWindowsFunction::
 
 ExtensionFunction::ResponseAction
 WallpaperPrivateMinimizeInactiveWindowsFunction::Run() {
-  WindowStateManager::MinimizeInactiveWindows(
+  chromeos::WallpaperWindowStateManager::MinimizeInactiveWindows(
       user_manager::UserManager::Get()->GetActiveUser()->username_hash());
   return RespondNow(NoArguments());
 }
@@ -762,7 +596,7 @@ WallpaperPrivateRestoreMinimizedWindowsFunction::
 
 ExtensionFunction::ResponseAction
 WallpaperPrivateRestoreMinimizedWindowsFunction::Run() {
-  WindowStateManager::RestoreWindows(
+  chromeos::WallpaperWindowStateManager::RestoreWindows(
       user_manager::UserManager::Get()->GetActiveUser()->username_hash());
   return RespondNow(NoArguments());
 }

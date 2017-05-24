@@ -12,10 +12,9 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
-#include "base/threading/sequenced_worker_pool.h"
+#include "base/task_scheduler/post_task.h"
 #import "ios/net/cookies/cookie_store_ios_persistent.h"
 #import "ios/web/public/web_client.h"
-#include "ios/web/public/web_thread.h"
 #include "ios/web/shell/shell_network_delegate.h"
 #include "net/base/cache_type.h"
 #include "net/cert/cert_verifier.h"
@@ -81,8 +80,8 @@ net::URLRequestContext* ShellURLRequestContextGetter::GetURLRequestContext() {
     scoped_refptr<net::CookieMonster::PersistentCookieStore> persistent_store =
         new net::SQLitePersistentCookieStore(
             cookie_path, network_task_runner_,
-            web::WebThread::GetBlockingPool()->GetSequencedTaskRunner(
-                web::WebThread::GetBlockingPool()->GetSequenceToken()),
+            base::CreateSequencedTaskRunnerWithTraits(
+                {base::MayBlock(), base::TaskPriority::BACKGROUND}),
             true, nullptr);
     std::unique_ptr<net::CookieStoreIOS> cookie_store(
         new net::CookieStoreIOSPersistent(persistent_store.get()));

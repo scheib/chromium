@@ -1417,8 +1417,8 @@ class LayerTreeHostScrollTestLayerStructureChange
 
   virtual void DidScroll(Layer* layer) {
     if (scroll_destroy_whole_tree_) {
-      layer_tree_host()->RegisterViewportLayers(NULL, NULL, NULL, NULL, NULL,
-                                                NULL);
+      layer_tree_host()->RegisterViewportLayers(
+          LayerTreeHost::ViewportLayers());
       layer_tree_host()->SetRootLayer(NULL);
       EndTest();
       return;

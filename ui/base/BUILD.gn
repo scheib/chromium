@@ -1004,3 +1004,15 @@ if (is_mac) {
     output_name = "ui_unittests Framework"
   }
 }
+
+if (is_win) {
+  # This source set is used by both //chrome/browser and
+  # //chrome/installer/setup.  It must have minimal dependencies for the latter
+  # (e.g., no skia).
+  source_set("fullscreen_win") {
+    sources = [
+      "fullscreen_win.cc",
+      "fullscreen_win.h",
+    ]
+  }
+}

@@ -79,6 +79,10 @@ OutputDeviceInfo AudioOutputStreamSink::GetOutputDeviceInfo() {
   return OutputDeviceInfo();
 }
 
+bool AudioOutputStreamSink::IsOptimizedForHardwareParameters() {
+  return true;
+}
+
 bool AudioOutputStreamSink::CurrentThreadIsRenderingThread() {
   NOTIMPLEMENTED();
   return false;

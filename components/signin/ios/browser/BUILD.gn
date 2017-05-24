@@ -33,6 +33,7 @@ source_set("browser") {
 }
 
 source_set("test_support") {
+  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "fake_profile_oauth2_token_service_ios_provider.h",

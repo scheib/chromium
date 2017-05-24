@@ -101,7 +101,6 @@ mojo::ScopedDataPipeConsumerHandle consumer = std::move(pipe.consumer);
 mojo::ScopedDataPipeProducerHandle producer;
 mojo::ScopedDataPipeConsumerHandle consumer;
 mojo::CreateDataPipe(null, &producer, &consumer);
-```
 
 // Reads from a data pipe. See |MojoReadData()| for complete documentation.
 inline MojoResult ReadDataRaw(DataPipeConsumerHandle data_pipe_consumer,
@@ -112,6 +111,8 @@ inline MojoResult ReadDataRaw(DataPipeConsumerHandle data_pipe_consumer,
 }
 
 // Begins a two-phase read
+```
+
 C++ helpers which correspond directly to the
 [Data Pipe C API](/mojo/public/c/system#Data-Pipes) for immediate and two-phase
 I/O are provided as well. For example:

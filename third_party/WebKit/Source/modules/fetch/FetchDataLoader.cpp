@@ -5,9 +5,14 @@
 #include "modules/fetch/FetchDataLoader.h"
 
 #include <memory>
+#include "core/fileapi/File.h"
+#include "core/html/FormData.h"
 #include "core/html/parser/TextResourceDecoder.h"
 #include "modules/fetch/BytesConsumer.h"
+#include "modules/fetch/MultipartParser.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
+#include "platform/HTTPNames.h"
+#include "platform/network/ParsedContentType.h"
 #include "platform/wtf/Functional.h"
 #include "platform/wtf/PtrUtil.h"
 #include "platform/wtf/text/StringBuilder.h"
@@ -168,6 +173,236 @@ class FetchDataLoaderAsArrayBuffer final : public FetchDataLoader,
   Member<FetchDataLoader::Client> client_;
 
   std::unique_ptr<ArrayBufferBuilder> raw_data_;
+};
+
+class FetchDataLoaderAsFailure final : public FetchDataLoader,
+                                       public BytesConsumer::Client {
+  USING_GARBAGE_COLLECTED_MIXIN(FetchDataLoaderAsFailure);
+
+ public:
+  void Start(BytesConsumer* consumer,
+             FetchDataLoader::Client* client) override {
+    DCHECK(!client_);
+    DCHECK(!consumer_);
+    client_ = client;
+    consumer_ = consumer;
+    consumer_->SetClient(this);
+    OnStateChange();
+  }
+
+  void OnStateChange() override {
+    while (true) {
+      const char* buffer;
+      size_t available;
+      auto result = consumer_->BeginRead(&buffer, &available);
+      if (result == BytesConsumer::Result::kShouldWait)
+        return;
+      if (result == BytesConsumer::Result::kOk)
+        result = consumer_->EndRead(available);
+      switch (result) {
+        case BytesConsumer::Result::kOk:
+          break;
+        case BytesConsumer::Result::kShouldWait:
+          NOTREACHED();
+          return;
+        case BytesConsumer::Result::kDone:
+        case BytesConsumer::Result::kError:
+          client_->DidFetchDataLoadFailed();
+          return;
+      }
+    }
+  }
+
+  void Cancel() override { consumer_->Cancel(); }
+
+  DEFINE_INLINE_TRACE() {
+    visitor->Trace(consumer_);
+    visitor->Trace(client_);
+    FetchDataLoader::Trace(visitor);
+    BytesConsumer::Client::Trace(visitor);
+  }
+
+ private:
+  Member<BytesConsumer> consumer_;
+  Member<FetchDataLoader::Client> client_;
+};
+
+class FetchDataLoaderAsFormData final : public FetchDataLoader,
+                                        public BytesConsumer::Client,
+                                        public MultipartParser::Client {
+  USING_GARBAGE_COLLECTED_MIXIN(FetchDataLoaderAsFormData);
+
+ public:
+  explicit FetchDataLoaderAsFormData(const String& multipart_boundary)
+      : multipart_boundary_(multipart_boundary) {}
+
+  void Start(BytesConsumer* consumer,
+             FetchDataLoader::Client* client) override {
+    DCHECK(!client_);
+    DCHECK(!consumer_);
+    DCHECK(!form_data_);
+    DCHECK(!multipart_parser_);
+
+    const CString multipart_boundary_utf8 = multipart_boundary_.Utf8();
+    Vector<char> multipart_boundary_vector;
+    multipart_boundary_vector.Append(multipart_boundary_utf8.data(),
+                                     multipart_boundary_utf8.length());
+
+    client_ = client;
+    form_data_ = FormData::Create();
+    multipart_parser_ =
+        new MultipartParser(std::move(multipart_boundary_vector), this);
+    consumer_ = consumer;
+    consumer_->SetClient(this);
+    OnStateChange();
+  }
+
+  void OnStateChange() override {
+    while (true) {
+      const char* buffer;
+      size_t available;
+      auto result = consumer_->BeginRead(&buffer, &available);
+      if (result == BytesConsumer::Result::kShouldWait)
+        return;
+      if (result == BytesConsumer::Result::kOk) {
+        const bool buffer_appended =
+            multipart_parser_->AppendData(buffer, available);
+        const bool multipart_receive_failed = multipart_parser_->IsCancelled();
+        result = consumer_->EndRead(available);
+        if (!buffer_appended || multipart_receive_failed)
+          result = BytesConsumer::Result::kError;
+      }
+      switch (result) {
+        case BytesConsumer::Result::kOk:
+          break;
+        case BytesConsumer::Result::kShouldWait:
+          NOTREACHED();
+          return;
+        case BytesConsumer::Result::kDone:
+          if (multipart_parser_->Finish()) {
+            DCHECK(!multipart_parser_->IsCancelled());
+            client_->DidFetchDataLoadedFormData(form_data_);
+          } else {
+            client_->DidFetchDataLoadFailed();
+          }
+          return;
+        case BytesConsumer::Result::kError:
+          client_->DidFetchDataLoadFailed();
+          return;
+      }
+    }
+  }
+
+  void Cancel() override {
+    consumer_->Cancel();
+    multipart_parser_->Cancel();
+  }
+
+  DEFINE_INLINE_TRACE() {
+    visitor->Trace(consumer_);
+    visitor->Trace(client_);
+    visitor->Trace(form_data_);
+    visitor->Trace(multipart_parser_);
+    FetchDataLoader::Trace(visitor);
+    BytesConsumer::Client::Trace(visitor);
+    MultipartParser::Client::Trace(visitor);
+  }
+
+ private:
+  void PartHeaderFieldsInMultipartReceived(
+      const HTTPHeaderMap& header_fields) override {
+    if (!current_entry_.Initialize(header_fields))
+      multipart_parser_->Cancel();
+  }
+
+  void PartDataInMultipartReceived(const char* bytes, size_t size) override {
+    if (!current_entry_.AppendBytes(bytes, size))
+      multipart_parser_->Cancel();
+  }
+
+  void PartDataInMultipartFullyReceived() override {
+    if (!current_entry_.Finish(form_data_))
+      multipart_parser_->Cancel();
+  }
+
+  class Entry {
+   public:
+    bool Initialize(const HTTPHeaderMap& header_fields) {
+      // TODO(e_hakkinen): Use a proper Content-Disposition parser instead of
+      // converting content disposition to a faked content type and parsing
+      // that.
+      const String fakePrefix = "x-fake/";
+      const ParsedContentType disposition(
+          fakePrefix + header_fields.Get(HTTPNames::Content_Disposition));
+      // The faked MIME type without the faked prefix is a proper disposition
+      // type.
+      const String disposition_type =
+          disposition.MimeType().Substring(fakePrefix.length());
+      filename_ = disposition.ParameterValueForName("filename");
+      name_ = disposition.ParameterValueForName("name");
+      blob_data_.reset();
+      string_builder_.reset();
+      if (disposition_type != "form-data" || name_.IsNull())
+        return false;
+      if (!filename_.IsNull()) {
+        blob_data_ = BlobData::Create();
+        const AtomicString& content_type =
+            header_fields.Get(HTTPNames::Content_Type);
+        blob_data_->SetContentType(content_type.IsNull() ? "text/plain"
+                                                         : content_type);
+      } else {
+        if (!string_decoder_)
+          string_decoder_ = TextResourceDecoder::CreateAlwaysUseUTF8ForText();
+        string_builder_.reset(new StringBuilder);
+      }
+      return true;
+    }
+
+    bool AppendBytes(const char* bytes, size_t size) {
+      if (blob_data_)
+        blob_data_->AppendBytes(bytes, size);
+      if (string_builder_) {
+        string_builder_->Append(string_decoder_->Decode(bytes, size));
+        if (string_decoder_->SawError())
+          return false;
+      }
+      return true;
+    }
+
+    bool Finish(FormData* form_data) {
+      if (blob_data_) {
+        DCHECK(!string_builder_);
+        const auto size = blob_data_->length();
+        File* file =
+            File::Create(filename_, InvalidFileTime(),
+                         BlobDataHandle::Create(std::move(blob_data_), size));
+        form_data->append(name_, file, filename_);
+        return true;
+      }
+      DCHECK(!blob_data_);
+      DCHECK(string_builder_);
+      string_builder_->Append(string_decoder_->Flush());
+      if (string_decoder_->SawError())
+        return false;
+      form_data->append(name_, string_builder_->ToString());
+      return true;
+    }
+
+   private:
+    std::unique_ptr<BlobData> blob_data_;
+    String filename_;
+    String name_;
+    std::unique_ptr<StringBuilder> string_builder_;
+    std::unique_ptr<TextResourceDecoder> string_decoder_;
+  };
+
+  Member<BytesConsumer> consumer_;
+  Member<FetchDataLoader::Client> client_;
+  Member<FormData> form_data_;
+  Member<MultipartParser> multipart_parser_;
+
+  Entry current_entry_;
+  String multipart_boundary_;
 };
 
 class FetchDataLoaderAsString final : public FetchDataLoader,
@@ -339,6 +574,15 @@ FetchDataLoader* FetchDataLoader::CreateLoaderAsBlobHandle(
 
 FetchDataLoader* FetchDataLoader::CreateLoaderAsArrayBuffer() {
   return new FetchDataLoaderAsArrayBuffer();
+}
+
+FetchDataLoader* FetchDataLoader::CreateLoaderAsFailure() {
+  return new FetchDataLoaderAsFailure();
+}
+
+FetchDataLoader* FetchDataLoader::CreateLoaderAsFormData(
+    const String& multipartBoundary) {
+  return new FetchDataLoaderAsFormData(multipartBoundary);
 }
 
 FetchDataLoader* FetchDataLoader::CreateLoaderAsString() {

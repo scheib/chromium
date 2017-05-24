@@ -54,7 +54,7 @@ std::unique_ptr<base::Value> ConvertValue(const base::Value& value,
         std::unique_ptr<base::Value> converted =
             ConvertValue(entry.value(), schema.GetProperty(entry.key()));
         if (converted)
-          result->SetWithoutPathExpansion(entry.key(), converted.release());
+          result->SetWithoutPathExpansion(entry.key(), std::move(converted));
       }
       return std::move(result);
     } else if (value.GetAsList(&list)) {
@@ -315,7 +315,7 @@ std::unique_ptr<base::Value> RegistryDict::ConvertToJSON(
         std::unique_ptr<base::Value> converted =
             ConvertValue(*entry->second, subschema);
         if (converted)
-          result->SetWithoutPathExpansion(entry->first, converted.release());
+          result->SetWithoutPathExpansion(entry->first, std::move(converted));
       }
       for (RegistryDict::KeyMap::const_iterator entry(keys_.begin());
            entry != keys_.end(); ++entry) {
@@ -324,7 +324,7 @@ std::unique_ptr<base::Value> RegistryDict::ConvertToJSON(
         std::unique_ptr<base::Value> converted =
             entry->second->ConvertToJSON(subschema);
         if (converted)
-          result->SetWithoutPathExpansion(entry->first, converted.release());
+          result->SetWithoutPathExpansion(entry->first, std::move(converted));
       }
       return std::move(result);
     }

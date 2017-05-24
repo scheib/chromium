@@ -15,6 +15,7 @@
 #include "gpu/command_buffer/service/context_group.h"
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
 #include "gpu/gles2_conform_support/egl/config.h"
 #include "gpu/gles2_conform_support/egl/display.h"
@@ -52,8 +53,8 @@ Context::Context(Display* display, const Config* config)
       config_(config),
       is_current_in_some_thread_(false),
       is_destroyed_(false),
-      gpu_driver_bug_workarounds_(base::CommandLine::ForCurrentProcess()) {
-}
+      discardable_manager_(new gpu::ServiceDiscardableManager()),
+      gpu_driver_bug_workarounds_(base::CommandLine::ForCurrentProcess()) {}
 
 Context::~Context() {
   // We might not have a surface, so we must lose the context.  Cleanup will
@@ -266,7 +267,7 @@ bool Context::CreateService(gl::GLSurface* gl_surface) {
       gpu_preferences_, nullptr, nullptr,
       new gpu::gles2::ShaderTranslatorCache(gpu_preferences_),
       new gpu::gles2::FramebufferCompletenessCache, feature_info, true, nullptr,
-      nullptr, gpu::GpuFeatureInfo()));
+      nullptr, gpu::GpuFeatureInfo(), discardable_manager_.get()));
 
   std::unique_ptr<gpu::gles2::GLES2Decoder> decoder(
       gpu::gles2::GLES2Decoder::Create(group.get()));

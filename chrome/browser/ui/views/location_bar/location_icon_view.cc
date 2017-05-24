@@ -21,10 +21,10 @@ using content::WebContents;
 LocationIconView::LocationIconView(const gfx::FontList& font_list,
                                    LocationBarView* location_bar)
     : IconLabelBubbleView(font_list, true),
-      suppress_mouse_released_action_(false),
       location_bar_(location_bar),
       animation_(this) {
   set_id(VIEW_ID_LOCATION_ICON);
+  SetInkDropMode(InkDropMode::ON);
 
 #if defined(OS_MACOSX)
   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
@@ -54,36 +54,13 @@ bool LocationIconView::OnMousePressed(const ui::MouseEvent& event) {
       model->PasteAndGo(text);
   }
 
-  suppress_mouse_released_action_ = PageInfoBubbleView::GetShownBubbleType() !=
-                                    PageInfoBubbleView::BUBBLE_NONE;
+  IconLabelBubbleView::OnMousePressed(event);
   return true;
 }
 
 bool LocationIconView::OnMouseDragged(const ui::MouseEvent& event) {
   location_bar_->GetOmniboxView()->CloseOmniboxPopup();
-  return false;
-}
-
-void LocationIconView::OnMouseReleased(const ui::MouseEvent& event) {
-  if (event.IsOnlyMiddleMouseButton())
-    return;
-
-  // If this is the second click on this view then the bubble was showing on
-  // the mouse pressed event and is hidden now. Prevent the bubble from
-  // reshowing by doing nothing here.
-  if (suppress_mouse_released_action_) {
-    suppress_mouse_released_action_ = false;
-    return;
-  }
-
-  OnClickOrTap(event);
-}
-
-void LocationIconView::OnGestureEvent(ui::GestureEvent* event) {
-  if (event->type() != ui::ET_GESTURE_TAP)
-    return;
-  OnClickOrTap(*event);
-  event->SetHandled();
+  return IconLabelBubbleView::OnMouseDragged(event);
 }
 
 bool LocationIconView::GetTooltipText(const gfx::Point& p,
@@ -97,7 +74,7 @@ SkColor LocationIconView::GetTextColor() const {
   return location_bar_->GetColor(LocationBarView::SECURITY_CHIP_TEXT);
 }
 
-bool LocationIconView::OnActivate(const ui::Event& event) {
+bool LocationIconView::ShowBubble(const ui::Event& event) {
   WebContents* contents = location_bar_->GetWebContents();
   if (!contents)
     return false;
@@ -108,6 +85,11 @@ bool LocationIconView::OnActivate(const ui::Event& event) {
 void LocationIconView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   IconLabelBubbleView::GetAccessibleNodeData(node_data);
   node_data->role = ui::AX_ROLE_POP_UP_BUTTON;
+}
+
+bool LocationIconView::IsBubbleShowing() const {
+  return PageInfoBubbleView::GetShownBubbleType() !=
+         PageInfoBubbleView::BUBBLE_NONE;
 }
 
 gfx::Size LocationIconView::GetMinimumSizeForLabelText(
@@ -130,6 +112,20 @@ void LocationIconView::SetTextVisibility(bool should_show,
   OnNativeThemeChanged(GetNativeTheme());
 }
 
+bool LocationIconView::IsTriggerableEvent(const ui::Event& event) {
+  if (location_bar_->GetOmniboxView()->IsEditingOrEmpty())
+    return false;
+
+  if (event.IsMouseEvent()) {
+    if (event.AsMouseEvent()->IsOnlyMiddleMouseButton())
+      return false;
+  } else if (event.IsGestureEvent() && event.type() != ui::ET_GESTURE_TAP) {
+    return false;
+  }
+
+  return IconLabelBubbleView::IsTriggerableEvent(event);
+}
+
 double LocationIconView::WidthMultiplier() const {
   return animation_.GetCurrentValue();
 }
@@ -139,23 +135,10 @@ void LocationIconView::AnimationProgressed(const gfx::Animation*) {
   location_bar_->SchedulePaint();
 }
 
-void LocationIconView::ProcessLocatedEvent(const ui::LocatedEvent& event) {
-  if (HitTestPoint(event.location()))
-    OnActivate(event);
-}
-
 gfx::Size LocationIconView::GetMinimumSizeForPreferredSize(
     gfx::Size size) const {
   const int kMinCharacters = 10;
   size.SetToMin(
       GetSizeForLabelWidth(font_list().GetExpectedTextWidth(kMinCharacters)));
   return size;
-}
-
-void LocationIconView::OnClickOrTap(const ui::LocatedEvent& event) {
-  // Do not show page info if the user has been editing the location bar or the
-  // location bar is at the NTP.
-  if (location_bar_->GetOmniboxView()->IsEditingOrEmpty())
-    return;
-  ProcessLocatedEvent(event);
 }

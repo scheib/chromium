@@ -46,7 +46,7 @@ shared_library("chrome_elf") {
     ":hook_util",
     ":nt_registry",
     ":security",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//chrome/install_static:install_static_util",
     "//chrome/install_static:primary_module",
   ]
@@ -110,7 +110,7 @@ executable("dll_hash_main") {
   ]
   deps = [
     ":dll_hash",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//build/win:default_exe_manifest",
   ]
 }
@@ -258,7 +258,7 @@ shared_library("blacklist_test_main_dll") {
     ":blacklist",
     ":nt_registry",
     "//base",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//chrome/install_static:install_static_util",
   ]
 }
@@ -270,7 +270,7 @@ loadable_module("blacklist_test_dll_1") {
     "blacklist/test/blacklist_test_dll_1.def",
   ]
   deps = [
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
 }
 
@@ -281,7 +281,7 @@ loadable_module("blacklist_test_dll_2") {
     "blacklist/test/blacklist_test_dll_2.def",
   ]
   deps = [
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
 }
 
@@ -296,7 +296,7 @@ loadable_module("blacklist_test_dll_3") {
     "blacklist/test/blacklist_test_dll_3.cc",
   ]
   deps = [
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
 }
 
@@ -307,6 +307,6 @@ shared_library("hook_util_test_dll") {
     "hook_util/test/hook_util_test_dll.h",
   ]
   deps = [
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
 }

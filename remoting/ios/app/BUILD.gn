@@ -42,6 +42,7 @@ source_set("main") {
     "//google_apis",
     "//remoting/base",
     "//remoting/client",
+    "//remoting/client/input",
     "//remoting/ios:ios_core",
     "//remoting/protocol",
     "//ui/base",

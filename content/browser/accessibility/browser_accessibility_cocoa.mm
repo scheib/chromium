@@ -2785,10 +2785,8 @@ NSString* const NSAccessibilityRequiredAttribute = @"AXRequired";
     return GetState(browserAccessibility_, ui::AX_STATE_FOCUSABLE);
   }
 
-  if ([attribute isEqualToString:NSAccessibilityValueAttribute]) {
-    return browserAccessibility_->GetBoolAttribute(
-        ui::AX_ATTR_CAN_SET_VALUE);
-  }
+  if ([attribute isEqualToString:NSAccessibilityValueAttribute])
+    return browserAccessibility_->HasAction(ui::AX_ACTION_SET_VALUE);
 
   if ([attribute isEqualToString:NSAccessibilitySelectedTextRangeAttribute] &&
       browserAccessibility_->HasState(ui::AX_STATE_EDITABLE)) {

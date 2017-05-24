@@ -29,8 +29,8 @@ class SystemMenuButton : public views::ImageButton {
   // to use for the button's accessible and tooltip text.
   SystemMenuButton(views::ButtonListener* listener,
                    TrayPopupInkDropStyle ink_drop_style,
-                   gfx::ImageSkia normal_icon,
-                   gfx::ImageSkia disabled_icon,
+                   const gfx::ImageSkia& normal_icon,
+                   const gfx::ImageSkia& disabled_icon,
                    int accessible_name_id);
 
   // Similar to the above constructor. Just gets a single vector icon and
@@ -41,6 +41,10 @@ class SystemMenuButton : public views::ImageButton {
                    const gfx::VectorIcon& icon,
                    int accessible_name_id);
   ~SystemMenuButton() override;
+
+  // Sets the normal and disabled icons based on that using default menu icon
+  // colors.
+  void SetVectorIcon(const gfx::VectorIcon& icon);
 
   // Explicity sets the ink drop color. Otherwise the default value will be used
   // by TrayPopupUtils::CreateInkDropRipple() and

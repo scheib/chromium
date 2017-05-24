@@ -9,17 +9,27 @@
 
 #include "base/files/file_path.h"
 #include "base/macros.h"
+#include "chrome/browser/ui/browser_list_observer.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
 namespace base {
 class ListValue;
 }
 
-class SigninErrorHandler : public content::WebUIMessageHandler {
+class SigninErrorHandler : public content::WebUIMessageHandler,
+                           public chrome::BrowserListObserver {
  public:
-  explicit SigninErrorHandler(bool is_system_profile);
+  // Constructor of a message handler that handles messages from the
+  // sign-in error WebUI.
+  // If |is_system_profile| is true, then the sign-in error dialog was
+  // presented from the user manager and |browser| is null. Otherwise, the
+  // sign-in error dialog was presented on a browser window and |browser| must
+  // not be null.
+  SigninErrorHandler(Browser* browser, bool is_system_profile);
+  ~SigninErrorHandler() override;
 
-  ~SigninErrorHandler() override {}
+  // chrome::BrowserListObserver:
+  void OnBrowserRemoved(Browser* browser) override;
 
   // content::WebUIMessageHandler:
   void RegisterMessages() override;
@@ -57,9 +67,15 @@ class SigninErrorHandler : public content::WebUIMessageHandler {
   void CloseDialog();
 
  private:
-  base::FilePath duplicate_profile_path_;
+  // Weak reference to the browser that showed the sign-in error dialog.
+  // This is null when this sign-in error dialog is presented from the user
+  // manager.
+  Browser* browser_;
 
+  // True when this sign-in error dialog is presented from the user manager.
   bool is_system_profile_;
+
+  base::FilePath duplicate_profile_path_;
 
   DISALLOW_COPY_AND_ASSIGN(SigninErrorHandler);
 };

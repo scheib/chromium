@@ -81,12 +81,13 @@ StyleRareInheritedData::StyleRareInheritedData()
       text_security_(
           static_cast<unsigned>(ComputedStyle::InitialTextSecurity())),
       user_modify_(static_cast<unsigned>(EUserModify::kReadOnly)),
-      word_break_(ComputedStyle::InitialWordBreak()),
-      overflow_wrap_(ComputedStyle::InitialOverflowWrap()),
+      word_break_(static_cast<unsigned>(ComputedStyle::InitialWordBreak())),
+      overflow_wrap_(
+          static_cast<unsigned>(ComputedStyle::InitialOverflowWrap())),
       line_break_(static_cast<unsigned>(LineBreak::kAuto)),
-      user_select_(ComputedStyle::InitialUserSelect()),
+      user_select_(static_cast<unsigned>(ComputedStyle::InitialUserSelect())),
       speak_(static_cast<unsigned>(ESpeak::kNormal)),
-      hyphens_(kHyphensManual),
+      hyphens_(static_cast<unsigned>(Hyphens::kManual)),
       text_emphasis_fill_(kTextEmphasisFillFilled),
       text_emphasis_mark_(kTextEmphasisMarkNone),
       text_emphasis_position_(kTextEmphasisPositionOver),

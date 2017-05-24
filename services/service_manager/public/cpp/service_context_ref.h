@@ -10,6 +10,7 @@
 #include "base/callback.h"
 #include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "services/service_manager/public/cpp/export.h"
 
 namespace service_manager {
 
@@ -23,14 +24,14 @@ class ServiceContextRefImpl;
 // threads. However, each instance should only be used on one thread at a time,
 // otherwise there'll be races between the AddRef resulting from cloning and
 // destruction.
-class ServiceContextRef {
+class SERVICE_MANAGER_PUBLIC_CPP_EXPORT ServiceContextRef {
  public:
   virtual ~ServiceContextRef() {}
 
   virtual std::unique_ptr<ServiceContextRef> Clone() = 0;
 };
 
-class ServiceContextRefFactory {
+class SERVICE_MANAGER_PUBLIC_CPP_EXPORT ServiceContextRefFactory {
  public:
   // |quit_closure| is called whenever the last ref is destroyed.
   explicit ServiceContextRefFactory(const base::Closure& quit_closure);

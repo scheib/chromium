@@ -90,8 +90,6 @@ class ArcCustomNotificationView
       const ViewHierarchyChangedDetails& details) override;
   void Layout() override;
   void OnPaint(gfx::Canvas* canvas) override;
-  void OnKeyEvent(ui::KeyEvent* event) override;
-  void OnGestureEvent(ui::GestureEvent* event) override;
   void OnMouseEntered(const ui::MouseEvent& event) override;
   void OnMouseExited(const ui::MouseEvent& event) override;
   void OnFocus() override;

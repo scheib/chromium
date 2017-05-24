@@ -228,38 +228,32 @@
             android:layout_weight="1"
             android:visibility="invisible"/>
 
-        <FrameLayout
+        <!--suppress ButtonStyle -->
+        <org.chromium.ui.widget.ButtonCompat
+            android:id="@+id/positive_button"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:measureAllChildren="true">
+            android:layout_height="36dp"
+            android:paddingStart="@dimen/fre_button_padding"
+            android:paddingEnd="@dimen/fre_button_padding"
+            android:text="@string/choose_account_sign_in"
+            android:textAllCaps="true"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            chrome:buttonColor="@color/light_active_color"
+            chrome:buttonRaised="false"/>
 
-            <!--suppress ButtonStyle -->
-            <org.chromium.ui.widget.ButtonCompat
-                android:id="@+id/positive_button"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:paddingStart="@dimen/fre_button_padding"
-                android:paddingEnd="@dimen/fre_button_padding"
-                android:text="@string/choose_account_sign_in"
-                android:textAllCaps="true"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                chrome:buttonColor="@color/light_active_color"
-                chrome:buttonRaised="false"/>
-
-            <Button
-                android:id="@+id/more_button"
-                style="@style/ButtonCompatBorderless"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:text="@string/more"
-                android:textAllCaps="true"
-                android:textColor="@color/light_active_color"
-                android:textSize="14sp"
-                android:drawableEnd="@drawable/down_arrow"
-                android:drawablePadding="8dp"
-                android:visibility="gone"/>
-        </FrameLayout>
+        <Button
+            android:id="@+id/more_button"
+            style="@style/ButtonCompatBorderless"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="@string/more"
+            android:textAllCaps="true"
+            android:textColor="@color/light_active_color"
+            android:textSize="14sp"
+            android:drawableEnd="@drawable/down_arrow"
+            android:drawablePadding="8dp"
+            android:visibility="gone"/>
 
         <View
             android:id="@+id/positive_button_end_padding"

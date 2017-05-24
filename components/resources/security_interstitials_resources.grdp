@@ -2,4 +2,5 @@
 <grit-part>
   <include name="IDR_SECURITY_INTERSTITIAL_UI_HTML" file="../security_interstitials/core/browser/resources/interstitial_ui.html" flattenhtml="true" type="BINDATA" />
   <include name="IDR_SECURITY_INTERSTITIAL_HTML" file="../security_interstitials/core/browser/resources/interstitial_v2.html" flattenhtml="true" type="BINDATA" />
+  <include name="IDR_SECURITY_INTERSTITIAL_QUIET_HTML" file="../security_interstitials/core/browser/resources/interstitial_webview_quiet.html" flattenhtml="true" type="BINDATA" />
 </grit-part>

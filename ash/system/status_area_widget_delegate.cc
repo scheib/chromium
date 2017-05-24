@@ -104,8 +104,7 @@ const views::Widget* StatusAreaWidgetDelegate::GetWidget() const {
 void StatusAreaWidgetDelegate::OnGestureEvent(ui::GestureEvent* event) {
   views::Widget* target_widget =
       static_cast<views::View*>(event->target())->GetWidget();
-  WmWindow* target_window = WmWindow::Get(target_widget->GetNativeWindow());
-  WmShelf* shelf = target_window->GetRootWindowController()->GetShelf();
+  WmShelf* shelf = WmShelf::ForWindow(target_widget->GetNativeWindow());
   if (shelf->ProcessGestureEvent(*event))
     event->StopPropagation();
   else

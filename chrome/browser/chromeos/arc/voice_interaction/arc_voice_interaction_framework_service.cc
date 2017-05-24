@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "ash/accelerators/accelerator_controller.h"
+#include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "base/bind.h"
 #include "base/command_line.h"
@@ -59,9 +60,20 @@ std::unique_ptr<ui::LayerTreeOwner> CreateLayerTreeForSnapshot(
       blocked_layers.insert(browser->window()->GetNativeWindow()->layer());
   }
 
+  LayerSet excluded_layers;
+  // For the best UX the metalayer has to be excluded from the snapshot.
+  // It is currently impossible to identify the metalayer among others layers
+  // under kShellWindowId_SystemModalContainer. Other layers in this container
+  // are not relevant for this kind of snapshot, so it is safe to exclude all
+  // of them.
+  aura::Window* modal_container = ash::Shell::GetContainer(
+      root_window, ash::kShellWindowId_SystemModalContainer);
+  if (modal_container != nullptr)
+    excluded_layers.insert(modal_container->layer());
+
   auto layer_tree_owner = ::wm::RecreateLayersWithClosure(
       root_window, base::BindRepeating(
-                       [](LayerSet blocked_layers,
+                       [](LayerSet blocked_layers, LayerSet excluded_layers,
                           ui::LayerOwner* owner) -> std::unique_ptr<ui::Layer> {
                          // Parent layer is excluded meaning that it's pointless
                          // to clone current child and all its descendants. This
@@ -75,9 +87,11 @@ std::unique_ptr<ui::LayerTreeOwner> CreateLayerTreeForSnapshot(
                            layer->SetColor(SK_ColorBLACK);
                            return layer;
                          }
+                         if (excluded_layers.count(owner->layer()))
+                           return nullptr;
                          return owner->RecreateLayer();
                        },
-                       std::move(blocked_layers)));
+                       std::move(blocked_layers), std::move(excluded_layers)));
 
   // layer_tree_owner cannot be null since we are starting off from the root
   // window, which could never be incognito.

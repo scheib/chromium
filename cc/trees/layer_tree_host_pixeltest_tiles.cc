@@ -113,7 +113,7 @@ class BlueYellowClient : public ContentLayerClient {
 
     PaintRecorder recorder;
     PaintCanvas* canvas =
-        recorder.beginRecording(gfx::RectToSkRect(PaintableRegion()));
+        recorder.beginRecording(gfx::RectToSkRect(gfx::Rect(size_)));
     gfx::Rect top(0, 0, size_.width(), size_.height() / 2);
     gfx::Rect bottom(0, size_.height() / 2, size_.width(), size_.height() / 2);
 
@@ -129,8 +129,7 @@ class BlueYellowClient : public ContentLayerClient {
     canvas->drawRect(gfx::RectToSkRect(yellow_rect), flags);
 
     display_list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-        PaintableRegion(), recorder.finishRecordingAsPicture(),
-        gfx::RectToSkRect(PaintableRegion()));
+        PaintableRegion(), recorder.finishRecordingAsPicture());
     display_list->Finalize();
     return display_list;
   }

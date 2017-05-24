@@ -79,6 +79,11 @@
         color: var(--google-blue-500);
       }
 
+      .primary-button[disabled] {
+        background: none;
+        color: var(--paper-grey-600);
+      }
+
       paper-toggle-button {
         @apply(--settings-actionable);
         height: var(--settings-row-min-height);
@@ -204,10 +209,6 @@
 
       .list-item > label span[disabled] {
         opacity: var(--settings-disabled-opacity);
-      }
-
-      .list-item > paper-icon-item {
-        padding: 0;
       }
 
       /* This button has no ink ripple. */

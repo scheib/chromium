@@ -703,8 +703,11 @@ TextFinder::~TextFinder() {}
 bool TextFinder::SetMarkerActive(Range* range, bool active) {
   if (!range || range->collapsed())
     return false;
-  return OwnerFrame().GetFrame()->GetDocument()->Markers().SetMarkersActive(
-      EphemeralRange(range), active);
+  return OwnerFrame()
+      .GetFrame()
+      ->GetDocument()
+      ->Markers()
+      .SetTextMatchMarkersActive(EphemeralRange(range), active);
 }
 
 void TextFinder::UnmarkAllTextMatches() {

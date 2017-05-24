@@ -27,9 +27,9 @@ test(function() {
 
     var selection = window.getSelection();
     var anchor = document.getElementById('anchor').firstChild;
-    assert_equals(selection.anchorNode, anchor, 'anchorNode');
+    assert_equals(selection.anchorNode, null, 'anchorNode');
     assert_equals(selection.anchorOffset, 0, 'anchorOffset');
-    assert_equals(selection.focusNode, anchor, 'focusNode');
-    assert_equals(selection.focusOffset, 2, 'focusOffset');
+    assert_equals(selection.focusNode, null, 'focusNode');
+    assert_equals(selection.focusOffset, 0, 'focusOffset');
 });
 </script>

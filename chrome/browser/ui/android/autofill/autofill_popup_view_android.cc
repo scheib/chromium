@@ -183,7 +183,9 @@ bool AutofillPopupViewAndroid::RegisterAutofillPopupViewAndroid(JNIEnv* env) {
 AutofillPopupView* AutofillPopupView::Create(
     AutofillPopupController* controller) {
   if (IsKeyboardAccessoryEnabled())
-    return new AutofillKeyboardAccessoryView(controller);
+    return new AutofillKeyboardAccessoryView(
+        controller, GetKeyboardAccessoryAnimationDuration(),
+        ShouldLimitKeyboardAccessorySuggestionLabelWidth());
 
   return new AutofillPopupViewAndroid(controller);
 }

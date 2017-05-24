@@ -119,6 +119,7 @@ class LinkHandlerModelFactory;
 class LocaleNotificationController;
 class LockStateController;
 class LogoutConfirmationController;
+class LockScreenController;
 class MagnificationController;
 class MaximizeModeController;
 class MediaController;
@@ -325,6 +326,9 @@ class ASH_EXPORT Shell : public SessionObserver,
   }
   LogoutConfirmationController* logout_confirmation_controller() {
     return logout_confirmation_controller_.get();
+  }
+  LockScreenController* lock_screen_controller() {
+    return lock_screen_controller_.get();
   }
   MaximizeModeController* maximize_mode_controller() {
     return maximize_mode_controller_.get();
@@ -691,6 +695,7 @@ class ASH_EXPORT Shell : public SessionObserver,
       keyboard_brightness_control_delegate_;
   std::unique_ptr<KeyboardUI> keyboard_ui_;
   std::unique_ptr<LocaleNotificationController> locale_notification_controller_;
+  std::unique_ptr<LockScreenController> lock_screen_controller_;
   std::unique_ptr<LogoutConfirmationController> logout_confirmation_controller_;
   std::unique_ptr<MaximizeModeController> maximize_mode_controller_;
   std::unique_ptr<MediaController> media_controller_;

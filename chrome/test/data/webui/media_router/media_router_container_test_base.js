@@ -85,9 +85,9 @@ cr.define('media_router_container_test_base', function() {
      * @type {!Array<!media_router.CastMode>}
      */
     var fakeCastModeList = [
-      new media_router.CastMode(0x1, 'Description 0', 'google.com'),
-      new media_router.CastMode(0x2, 'Description 1', null),
-      new media_router.CastMode(0x4, 'Description 2', null),
+      new media_router.CastMode(0x1, 'Cast google.com', 'google.com', false),
+      new media_router.CastMode(0x2, 'Description 1', null, false),
+      new media_router.CastMode(0x4, 'Description 2', null, false),
     ];
 
     /**
@@ -95,9 +95,19 @@ cr.define('media_router_container_test_base', function() {
      * @type {!Array<!media_router.CastMode>}
      */
     var fakeCastModeListWithNonDefaultModesOnly = [
-      new media_router.CastMode(0x2, 'Description 1', null),
-      new media_router.CastMode(0x4, 'Description 2', null),
-      new media_router.CastMode(0x8, 'Description 3', null),
+      new media_router.CastMode(0x2, 'Description 1', null, false),
+      new media_router.CastMode(0x4, 'Description 2', null, false),
+      new media_router.CastMode(0x8, 'Description 3', null, false),
+    ];
+
+    /**
+     * The list of CastModes to show with DEFAULT forced.
+     * @type {!Array<!media_router.CastMode>}
+     */
+    var fakeCastModeListWithDefaultModeForced = [
+      new media_router.CastMode(0x1, 'Cast google.com', 'google.com', true),
+      new media_router.CastMode(0x4, 'Description 2', null, false),
+      new media_router.CastMode(0x8, 'Description 3', null, false),
     ];
 
     /**
@@ -190,6 +200,8 @@ cr.define('media_router_container_test_base', function() {
       fakeCastModeList: fakeCastModeList,
       fakeCastModeListWithNonDefaultModesOnly:
           fakeCastModeListWithNonDefaultModesOnly,
+      fakeCastModeListWithDefaultModeForced:
+          fakeCastModeListWithDefaultModeForced,
       fakeNonBlockingIssue: fakeNonBlockingIssue,
       fakeRouteList: fakeRouteList,
       fakeRouteListWithLocalRoutesOnly: fakeRouteListWithLocalRoutesOnly,

@@ -1,5 +1,5 @@
 rootWebArea
-++div
+++genericContainer
 ++++textField errormessageId=paragraph
 ++paragraph
 ++++staticText name='Error'

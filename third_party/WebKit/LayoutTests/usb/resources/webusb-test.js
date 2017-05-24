@@ -505,8 +505,15 @@ class USBTest {
     if (!g_deviceManager || !g_chooserService)
       throw new Error('Call initialize() before reset().');
 
-    g_deviceManager.removeAllDevices();
-    g_chooserService.setChosenDevice(null);
+    // Reset the mocks in a setTimeout callback so that tests do not rely on
+    // the fact that this polyfill can do this synchronously.
+    return new Promise(resolve => {
+      setTimeout(() => {
+        g_deviceManager.removeAllDevices();
+        g_chooserService.setChosenDevice(null);
+        resolve();
+      }, 0);
+    });
   }
 }
 

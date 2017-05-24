@@ -6,6 +6,7 @@
 #define SERVICES_SERVICE_MANAGER_PUBLIC_CPP_INTERFACE_PROVIDER_H_
 
 #include "base/bind.h"
+#include "services/service_manager/public/cpp/export.h"
 #include "services/service_manager/public/interfaces/interface_provider.mojom.h"
 
 namespace service_manager {
@@ -19,7 +20,7 @@ struct BindSourceInfo;
 //   requests for remote interfaces.
 // An instance of this class is used by the GetInterface() methods on
 // Connection.
-class InterfaceProvider {
+class SERVICE_MANAGER_PUBLIC_CPP_EXPORT InterfaceProvider {
  public:
   using ForwardCallback = base::Callback<void(const std::string&,
                                               mojo::ScopedMessagePipeHandle)>;

@@ -16,7 +16,6 @@
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/overview/window_selector_controller.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/workspace_controller.h"
 #include "ash/wm_window.h"

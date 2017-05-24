@@ -35,6 +35,7 @@
 #include "net/base/net_errors.h"
 #include "net/base/request_priority.h"
 #include "net/http/http_response_headers.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/url_request_error_job.h"
 #include "net/url_request/url_request_job_factory_impl.h"
 #include "net/url_request/url_request_test_job.h"
@@ -1773,7 +1774,8 @@ class AppCacheStorageImplTest : public testing::Test {
       AppCacheHost* host2 = backend_->GetHost(2);
       GURL manifest_url = MockHttpServer::GetMockUrl("manifest");
       request_ = service()->request_context()->CreateRequest(
-          manifest_url, net::DEFAULT_PRIORITY, &request_delegate_);
+          manifest_url, net::DEFAULT_PRIORITY, &request_delegate_,
+          TRAFFIC_ANNOTATION_FOR_TESTS);
       AppCacheInterceptor::SetExtraRequestInfo(
           request_.get(), service_.get(), backend_->process_id(),
           host2->host_id(), RESOURCE_TYPE_MAIN_FRAME, false);

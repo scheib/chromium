@@ -364,10 +364,34 @@ void LargeIconService::
 
   image_fetcher_->SetDataUseServiceName(
       data_use_measurement::DataUseUserData::LARGE_ICON_SERVICE);
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("favicon_component", R"(
+        semantics {
+          sender: "Favicon Component"
+          description:
+            "Sends a request to a Google server to retrieve the favicon bitmap "
+            "for a page URL."
+          trigger:
+            "A request can be sent if Chrome does not have a favicon for a "
+            "particular page. This is done in two scenarios:\n"
+            " 1- For articles suggestions on the new tab page (URLs are public "
+            "    and provided by Google).\n"
+            " 2- For server-suggested most visited tiles on the new tab page "
+            "    (User gets these URLs from Google, only if history sync is "
+            "    enabled)."
+          data: "Page URL and desired icon size."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: false
+          setting: "This feature cannot be disabled by settings."
+          policy_exception_justification: "Not implemented."
+        })");
   image_fetcher_->StartOrQueueNetworkRequest(
       server_request_url.spec(), server_request_url,
       base::Bind(&OnFetchIconFromGoogleServerComplete, favicon_service_,
-                 page_url, callback));
+                 page_url, callback),
+      traffic_annotation);
 }
 
 base::CancelableTaskTracker::TaskId

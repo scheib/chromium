@@ -12,6 +12,7 @@
 #include "base/task_runner_util.h"
 #include "components/image_fetcher/core/image_fetcher.h"
 #include "components/suggestions/image_encoder.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "ui/gfx/image/image.h"
 
 using leveldb_proto::ProtoDatabase;
@@ -38,6 +39,39 @@ void WrapCallback(
     const image_fetcher::RequestMetadata& metadata) {
   wrapped_callback.Run(GURL(url), image);
 }
+
+constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
+    net::DefineNetworkTrafficAnnotation("suggestions_image_manager", R"(
+        semantics {
+          sender: "Suggestions Service Thumbnail Fetch"
+          description:
+            "Retrieves thumbnails for site suggestions based on the user's "
+            "synced browsing history, for use e.g. on the New Tab page."
+          trigger:
+            "Triggered when a thumbnail for a suggestion is required, and no "
+            "local thumbnail is available."
+          data: "The URL for which to retrieve a thumbnail."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: false
+          setting:
+            "Users can disable this feature by signing out of Chrome, or "
+            "disabling Sync or History Sync in Chrome settings under 'Advanced "
+            "sync settings...'. The feature is enabled by default."
+        chrome_policy {
+          SyncDisabled {
+            policy_options {mode: MANDATORY}
+            SyncDisabled: true
+          }
+        }
+        chrome_policy {
+          SigninAllowed {
+            policy_options {mode: MANDATORY}
+            SigninAllowed: false
+          }
+        }
+      })");
 
 }  // namespace
 
@@ -146,7 +180,8 @@ void ImageManager::OnCacheImageDecoded(
     callback.Run(url, gfx::Image::CreateFrom1xBitmap(*bitmap));
   } else {
     image_fetcher_->StartOrQueueNetworkRequest(
-        url.spec(), image_url, base::Bind(&WrapCallback, callback));
+        url.spec(), image_url, base::Bind(&WrapCallback, callback),
+        kTrafficAnnotation);
   }
 }
 
@@ -173,7 +208,8 @@ void ImageManager::ServeFromCacheOrNetwork(
                    weak_ptr_factory_.GetWeakPtr(), url, image_url, callback));
   } else {
     image_fetcher_->StartOrQueueNetworkRequest(
-        url.spec(), image_url, base::Bind(&WrapCallback, callback));
+        url.spec(), image_url, base::Bind(&WrapCallback, callback),
+        kTrafficAnnotation);
   }
 }
 

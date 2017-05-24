@@ -7,6 +7,9 @@
 
 #import <Foundation/Foundation.h>
 
+#import "ios/chrome/browser/ui/authentication/signin_promo_view.h"
+#import "ios/chrome/browser/ui/authentication/signin_promo_view_delegate.h"
+
 @class ChromeIdentity;
 @class SigninPromoViewConfigurator;
 @protocol SigninPromoViewConsumer;
@@ -15,7 +18,7 @@
 // SigninPromoViewConfigurator. This class makes the link between the model and
 // the view. The consumer will receive notification if default identity is
 // changed or updated.
-@interface SigninPromoViewMediator : NSObject
+@interface SigninPromoViewMediator : NSObject<SigninPromoViewDelegate>
 
 // Consumer to handle identity update notifications.
 @property(nonatomic, weak) id<SigninPromoViewConsumer> consumer;
@@ -23,6 +26,9 @@
 // Chrome identity used to configure the view in a warm state mode. Otherwise
 // contains nil.
 @property(nonatomic, readonly, strong) ChromeIdentity* defaultIdentity;
+
+// Access point used to send user action metrics.
+@property(nonatomic) signin_metrics::AccessPoint accessPoint;
 
 - (SigninPromoViewConfigurator*)createConfigurator;
 

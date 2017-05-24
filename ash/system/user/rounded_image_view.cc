@@ -43,7 +43,7 @@ void RoundedImageView::SetCornerRadii(int top_left,
   corner_radius_[3] = bottom_left;
 }
 
-gfx::Size RoundedImageView::GetPreferredSize() const {
+gfx::Size RoundedImageView::CalculatePreferredSize() const {
   return gfx::Size(image_size_.width() + GetInsets().width(),
                    image_size_.height() + GetInsets().height());
 }

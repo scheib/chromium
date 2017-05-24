@@ -11,25 +11,25 @@
   <body>
     <script>
 
-      var sampleRate = 48000;
+      let sampleRate = 48000;
       // Some short duration because we don't need to run the test for very long.
-      var testDurationSec = 0.125;
-      var testDurationFrames = testDurationSec * sampleRate;
+      let testDurationSec = 0.125;
+      let testDurationFrames = testDurationSec * sampleRate;
 
-      var audit = Audit.createTaskRunner();
+      let audit = Audit.createTaskRunner();
 
       audit.define("setValueCurve", (task, should) => {
-        var success = true;
-        var context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
-        var g = context.createGain();
-        var curve = new Float32Array(2);
+        let success = true;
+        let context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
+        let g = context.createGain();
+        let curve = new Float32Array(2);
 
         // Start time and duration for setValueCurveAtTime
-        var curveStartTime = 0.1 * testDurationSec;
-        var duration = 0.1 * testDurationSec;
+        let curveStartTime = 0.1 * testDurationSec;
+        let duration = 0.1 * testDurationSec;
 
         // Some time that is known to during the setValueCurveTime interval.
-        var automationTime = curveStartTime + duration / 2;
+        let automationTime = curveStartTime + duration / 2;
 
         should(() => {
               g.gain.setValueCurveAtTime(curve, curveStartTime, duration);
@@ -67,13 +67,14 @@
       });      
 
       audit.define("automations", (task, should) => {
-        var context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
-        var g = context.createGain();
+        let context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
+        let g = context.createGain();
 
-        var curve = new Float32Array(2);
+        let curve = new Float32Array(2);
         // Start time and duration for setValueCurveAtTime
-        var startTime = 0;
-        var timeInterval = testDurationSec / 10;
+        let startTime = 0;
+        let timeInterval = testDurationSec / 10;
+        let time;
 
         startTime += timeInterval;
         should(() => {
@@ -98,8 +99,8 @@
         // Now try to setValueCurve that overlaps each of the above automations
         startTime = timeInterval / 2;
 
-        for (var k = 0; k < 4; ++k) {
-          var time = startTime + timeInterval * k;
+        for (let k = 0; k < 4; ++k) {
+          time = startTime + timeInterval * k;
           should(() => {
                 g.gain.setValueCurveAtTime(curve, time, 0.01);
               },
@@ -122,7 +123,7 @@
             "setValueCurveAtTime([1, Infinity], " + time + ", 0.01)")
           .throw("TypeError");
 
-        var d = context.createDelay();
+        let d = context.createDelay();
         // Check that we get warnings for out-of-range values and also throw for
         // non-finite values.
         should(() => {
@@ -141,7 +142,7 @@
           .throw("TypeError");
 
         // One last test that prints out lots of digits for the time.
-        var time = Math.PI / 100;
+        time = Math.PI / 100;
         should(() => {
           g.gain.setValueCurveAtTime(curve, time, 0.01);
         }, "setValueCurveAtTime(curve, " + time + ", 0.01)").throw("NotSupportedError");
@@ -151,11 +152,11 @@
 
       audit.define("catch-exception", (task, should) => {
         // Verify that the curve isn't inserted into the time line even if we catch the exception.
-        var success = true;
-        var context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
-        var gain = context.createGain();
-        var source = context.createBufferSource();
-        var buffer = context.createBuffer(1, 1, context.sampleRate);
+        let success = true;
+        let context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
+        let gain = context.createGain();
+        let source = context.createBufferSource();
+        let buffer = context.createBuffer(1, 1, context.sampleRate);
         buffer.getChannelData(0)[0] = 1;
         source.buffer = buffer;
         source.loop = true;
@@ -183,13 +184,13 @@
       });
 
       audit.define("start-end", (task, should) => {
-        var context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
-        var g = context.createGain();
-        var curve = new Float32Array(2);
+        let context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
+        let g = context.createGain();
+        let curve = new Float32Array(2);
 
         // Verify that a setValueCurve can start at the end of an automation.
-        var time = 0;
-        var timeInterval = testDurationSec / 50;
+        let time = 0;
+        let timeInterval = testDurationSec / 50;
         should(() => {
           g.gain.setValueAtTime(1, time);
         }, "setValueAtTime(1, " + time + ")").notThrow();
@@ -250,9 +251,9 @@
       });
 
       audit.define("curve lengths", (task, should) => {
-        var context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
-        var g = context.createGain();
-        var time = 0;
+        let context = new OfflineAudioContext(1, testDurationFrames, sampleRate);
+        let g = context.createGain();
+        let time = 0;
 
         // Check for invalid curve lengths
         should(() => {

@@ -16,7 +16,6 @@
 #include "ash/shell.h"
 #include "ash/shell_port.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_window.h"
 #include "base/strings/string_number_conversions.h"

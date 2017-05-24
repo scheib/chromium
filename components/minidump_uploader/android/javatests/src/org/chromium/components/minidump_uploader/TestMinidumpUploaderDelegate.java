@@ -41,4 +41,7 @@ class TestMinidumpUploaderDelegate implements MinidumpUploaderDelegate {
 
     @Override
     public void recordUploadFailure(File minidump) {}
+
+    @Override
+    public void migrateMinidumpFilenamesIfNeeded(CrashFileManager crashFileManager) {}
 }

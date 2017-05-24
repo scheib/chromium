@@ -16,10 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourceFilter filter id='blur'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "full"
     }

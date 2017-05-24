@@ -36,18 +36,18 @@ BooleanOrStringOrUnrestrictedDouble BooleanOrStringOrUnrestrictedDouble::fromBoo
   return container;
 }
 
-String BooleanOrStringOrUnrestrictedDouble::getAsString() const {
+const String& BooleanOrStringOrUnrestrictedDouble::getAsString() const {
   DCHECK(isString());
   return m_string;
 }
 
-void BooleanOrStringOrUnrestrictedDouble::setString(String value) {
+void BooleanOrStringOrUnrestrictedDouble::setString(const String& value) {
   DCHECK(isNull());
   m_string = value;
   m_type = SpecificTypeString;
 }
 
-BooleanOrStringOrUnrestrictedDouble BooleanOrStringOrUnrestrictedDouble::fromString(String value) {
+BooleanOrStringOrUnrestrictedDouble BooleanOrStringOrUnrestrictedDouble::fromString(const String& value) {
   BooleanOrStringOrUnrestrictedDouble container;
   container.setString(value);
   return container;

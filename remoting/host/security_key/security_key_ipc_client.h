@@ -13,6 +13,7 @@
 #include "base/threading/thread_checker.h"
 #include "ipc/ipc_listener.h"
 #include "mojo/edk/embedder/named_platform_handle.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "mojo/edk/embedder/scoped_platform_handle.h"
 
 namespace IPC {
@@ -105,6 +106,7 @@ class SecurityKeyIpcClient : public IPC::Listener {
   ResponseCallback response_callback_;
 
   // Used for sending/receiving security key messages between processes.
+  mojo::edk::PeerConnection peer_connection_;
   std::unique_ptr<IPC::Channel> ipc_channel_;
 
   base::ThreadChecker thread_checker_;

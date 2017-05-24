@@ -10,6 +10,7 @@
 #include "core/layout/ng/ng_layout_result.h"
 #include "core/layout/ng/ng_length_utils.h"
 #include "core/layout/ng/ng_min_max_content_size.h"
+#include "core/layout/ng/ng_space_utils.h"
 
 namespace blink {
 namespace {
@@ -39,6 +40,11 @@ NGLayoutOpportunity FindLayoutOpportunityForFloat(
     LayoutUnit inline_size) {
   NGLogicalOffset adjusted_origin_point =
       AdjustToTopEdgeAlignmentRule(space, unpositioned_float.origin_offset);
+  WTF::Optional<LayoutUnit> clearance_offset =
+      GetClearanceOffset(space.Exclusions(), unpositioned_float.ClearType());
+
+  AdjustToClearance(clearance_offset, &adjusted_origin_point);
+
   return FindLayoutOpportunityForFragment(
       space.Exclusions().get(), unpositioned_float.available_size,
       adjusted_origin_point, unpositioned_float.margins,

@@ -99,13 +99,13 @@ TEST(IPCMessageUtilsTest, StackVector) {
 // Tests that PickleSizer and Pickle agree on the size of a complex base::Value.
 TEST(IPCMessageUtilsTest, ValueSize) {
   std::unique_ptr<base::DictionaryValue> value(new base::DictionaryValue);
-  value->SetWithoutPathExpansion("foo", new base::Value(42));
-  value->SetWithoutPathExpansion("bar", new base::Value(3.14));
-  value->SetWithoutPathExpansion("baz", new base::Value("hello"));
+  value->SetIntegerWithoutPathExpansion("foo", 42);
+  value->SetDoubleWithoutPathExpansion("bar", 3.14);
+  value->SetStringWithoutPathExpansion("baz", "hello");
   value->SetWithoutPathExpansion("qux", base::MakeUnique<base::Value>());
 
   std::unique_ptr<base::DictionaryValue> nested_dict(new base::DictionaryValue);
-  nested_dict->SetWithoutPathExpansion("foobar", new base::Value(5));
+  nested_dict->SetIntegerWithoutPathExpansion("foobar", 5);
   value->SetWithoutPathExpansion("nested", std::move(nested_dict));
 
   std::unique_ptr<base::ListValue> list_value(new base::ListValue);

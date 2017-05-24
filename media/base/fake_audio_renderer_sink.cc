@@ -69,6 +69,10 @@ OutputDeviceInfo FakeAudioRendererSink::GetOutputDeviceInfo() {
   return output_device_info_;
 }
 
+bool FakeAudioRendererSink::IsOptimizedForHardwareParameters() {
+  return true;
+}
+
 bool FakeAudioRendererSink::CurrentThreadIsRenderingThread() {
   NOTIMPLEMENTED();
   return false;

@@ -21,6 +21,7 @@
 #include "net/base/request_priority.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_response_headers.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/url_request/url_request_context.h"
 #include "url/origin.h"
 
@@ -69,6 +70,36 @@ bool IsEvictableError(AppCacheUpdateJob::ResultType result,
 
 void EmptyCompletionCallback(int result) {}
 
+constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
+    net::DefineNetworkTrafficAnnotation("appcache_update_job", R"(
+      semantics {
+        sender: "HTML5 AppCache System"
+        description:
+          "Web pages can include a link to a manifest file which lists "
+          "resources to be cached for offline access. The AppCache system"
+          "retrieves those resources in the background."
+        trigger:
+          "User visits a web page containing a <html manifest=manifestUrl> "
+          "tag, or navigates to a document retrieved from an existing appcache "
+          "and some resource should be updated."
+        data: "None"
+        destination: WEBSITE
+      }
+      policy {
+        cookies_allowed: true
+        cookies_store: "user"
+        setting:
+          "Users can control this feature via the 'Cookies' setting under "
+          "'Privacy, Content settings'. If cookies are disabled for a single "
+          "site, appcaches are disabled for the site only. If they are totally "
+          "disabled, all appcache requests will be stopped."
+        chrome_policy {
+            DefaultCookiesSetting {
+              policy_options {mode: MANDATORY}
+              DefaultCookiesSetting: 2
+            }
+          }
+      })");
 }  // namespace
 
 // Helper class for collecting hosts per frontend when sending notifications
@@ -158,8 +189,11 @@ AppCacheUpdateJob::URLFetcher::URLFetcher(const GURL& url,
       fetch_type_(fetch_type),
       retry_503_attempts_(0),
       buffer_(new net::IOBuffer(kBufferSize)),
-      request_(job->service_->request_context()
-                   ->CreateRequest(url, net::DEFAULT_PRIORITY, this)),
+      request_(
+          job->service_->request_context()->CreateRequest(url,
+                                                          net::DEFAULT_PRIORITY,
+                                                          this,
+                                                          kTrafficAnnotation)),
       result_(UPDATE_OK),
       redirect_response_code_(-1) {}
 
@@ -393,7 +427,7 @@ bool AppCacheUpdateJob::URLFetcher::MaybeRetryRequest() {
   ++retry_503_attempts_;
   result_ = UPDATE_OK;
   request_ = job_->service_->request_context()->CreateRequest(
-      url_, net::DEFAULT_PRIORITY, this);
+      url_, net::DEFAULT_PRIORITY, this, kTrafficAnnotation);
   Start();
   return true;
 }

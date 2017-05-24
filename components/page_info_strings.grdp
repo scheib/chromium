@@ -260,6 +260,10 @@
     <message name="IDS_PAGE_INFO_MENU_ITEM_DETECT_IMPORTANT_CONTENT" desc="The text of the menu item of a permissions menu on the Page Info UI that sets the setting to detect important content.">
       Always detect important content on this site
     </message>
+    <!-- IDS_PAGE_INFO_MENU_ITEM_SUBRESOURCE_FILTER_BLOCK is currently the same as IDS_PAGE_INFO_MENU_ITEM_BLOCK, but we use a different string identifier in the code for the flexibility to change it in the future. -->
+    <message name="IDS_PAGE_INFO_MENU_ITEM_SUBRESOURCE_FILTER_BLOCK" desc="The text of the menu item of a permissions menu on the Page Info UI for the subresource filter permission in Block mode">
+      Always block on this site
+    </message>
 
     <!-- UI for device access granted to the site using the device chooser (e.g. USB, Bluetooth) -->
     <message name="IDS_PAGE_INFO_USB_DEVICE_LABEL" desc="The label used to describe a USB device that the user has granted the site permission to access.">
@@ -306,6 +310,11 @@
         Reload
       </message>
     </if>
+
+    <!-- VR browser -->
+    <message name="IDS_PAGE_INFO_VR_BROWSER_UNSUPPORTED_MODE" desc="This text is displayed as a large toast to inform the user that they cannot currently browse in VR and they will soon exit VR mode.">
+      This page contains features not yet supported in VR. Exiting...
+    </message>
 
     <!-- WebVR -->
     <message name="IDS_PAGE_INFO_INSECURE_WEBVR_CONTENT_TRANSIENT" desc="Text that is displayed temporarily as a large toast on first entering a WebVR page over non-secure transport.">

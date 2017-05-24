@@ -13,7 +13,7 @@ namespace examples {
 
 class ExampleComboboxModel : public ui::ComboboxModel {
  public:
-  ExampleComboboxModel(const char** strings, int count);
+  ExampleComboboxModel(const char* const* strings, int count);
   ~ExampleComboboxModel() override;
 
   // ui::ComboboxModel:
@@ -21,8 +21,8 @@ class ExampleComboboxModel : public ui::ComboboxModel {
   base::string16 GetItemAt(int index) override;
 
  private:
-  const char** strings_;
-  int count_;
+  const char* const* const strings_;
+  const int count_;
 
   DISALLOW_COPY_AND_ASSIGN(ExampleComboboxModel);
 };

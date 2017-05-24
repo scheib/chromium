@@ -1,0 +1,10 @@
+include_rules = [
+  "+components/discardable_memory/client",
+  "+content/public/common",
+  "+content/public/utility",
+  "+mojo/public/cpp",
+  "+printing/common",
+  "+services/service_manager/public/cpp",
+  "+skia",
+  "+third_party/skia",
+]

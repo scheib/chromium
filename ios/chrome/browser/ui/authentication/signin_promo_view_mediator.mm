@@ -5,10 +5,14 @@
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_mediator.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/metrics/user_metrics.h"
+#include "base/metrics/user_metrics_action.h"
 #include "base/strings/sys_string_conversions.h"
 #include "ios/chrome/browser/signin/chrome_identity_service_observer_bridge.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_configurator.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_consumer.h"
+#import "ios/chrome/browser/ui/commands/UIKit+ChromeExecuteCommand.h"
+#import "ios/chrome/browser/ui/commands/show_signin_command.h"
 #include "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/chrome_browser_provider.h"
 #import "ios/public/provider/chrome/browser/signin/chrome_identity.h"
@@ -20,6 +24,80 @@
 #error "This file requires ARC support."
 #endif
 
+namespace {
+void RecordSigninUserActionForAccessPoint(
+    signin_metrics::AccessPoint access_point) {
+  switch (access_point) {
+    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
+      base::RecordAction(
+          base::UserMetricsAction("Signin_Signin_FromBookmarkManager"));
+      break;
+    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
+      base::RecordAction(
+          base::UserMetricsAction("Signin_Signin_FromRecentTabs"));
+      break;
+    default:
+      NOTREACHED() << "Unexpected value for access point "
+                   << static_cast<int>(access_point);
+      break;
+  }
+}
+
+void RecordSigninDefaultUserActionForAccessPoint(
+    signin_metrics::AccessPoint access_point) {
+  switch (access_point) {
+    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
+      base::RecordAction(base::UserMetricsAction(
+          "Signin_SigninWithDefault_FromBookmarkManager"));
+      break;
+    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
+      base::RecordAction(
+          base::UserMetricsAction("Signin_SigninWithDefault_FromRecentTabs"));
+      break;
+    default:
+      NOTREACHED() << "Unexpected value for access point "
+                   << static_cast<int>(access_point);
+      break;
+  }
+}
+
+void RecordSigninNotDefaultUserActionForAccessPoint(
+    signin_metrics::AccessPoint access_point) {
+  switch (access_point) {
+    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
+      base::RecordAction(base::UserMetricsAction(
+          "Signin_SigninNotDefault_FromBookmarkManager"));
+      break;
+    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
+      base::RecordAction(
+          base::UserMetricsAction("Signin_SigninNotDefault_FromRecentTabs"));
+      break;
+    default:
+      NOTREACHED() << "Unexpected value for access point "
+                   << static_cast<int>(access_point);
+      break;
+  }
+}
+
+void RecordSigninNewAccountUserActionForAccessPoint(
+    signin_metrics::AccessPoint access_point) {
+  switch (access_point) {
+    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
+      base::RecordAction(base::UserMetricsAction(
+          "Signin_SigninNewAccount_FromBookmarkManager"));
+      break;
+    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
+      base::RecordAction(
+          base::UserMetricsAction("Signin_SigninNewAccount_FromRecentTabs"));
+      break;
+    default:
+      NOTREACHED() << "Unexpected value for access point "
+                   << static_cast<int>(access_point);
+      break;
+  }
+}
+}  // namespace
+
 @interface SigninPromoViewMediator ()<ChromeIdentityServiceObserver>
 @end
 
@@ -30,6 +108,7 @@
 
 @synthesize consumer = _consumer;
 @synthesize defaultIdentity = _defaultIdentity;
+@synthesize accessPoint = _accessPoint;
 
 - (instancetype)init {
   self = [super init];
@@ -106,6 +185,46 @@
   if (identity == _defaultIdentity) {
     [self sendConsumerNotificationWithNewIdentity:NO];
   }
+}
+
+#pragma mark - SigninPromoViewDelegate
+
+- (void)signinPromoViewDidTapSigninWithNewAccount:
+    (SigninPromoView*)signinPromoView {
+  DCHECK(!_defaultIdentity);
+  RecordSigninUserActionForAccessPoint(_accessPoint);
+  RecordSigninNewAccountUserActionForAccessPoint(_accessPoint);
+  ShowSigninCommand* command = [[ShowSigninCommand alloc]
+      initWithOperation:AUTHENTICATION_OPERATION_SIGNIN
+            accessPoint:_accessPoint
+            promoAction:signin_metrics::PromoAction::PROMO_ACTION_NEW_ACCOUNT];
+  [signinPromoView chromeExecuteCommand:command];
+}
+
+- (void)signinPromoViewDidTapSigninWithDefaultAccount:
+    (SigninPromoView*)signinPromoView {
+  DCHECK(_defaultIdentity);
+  RecordSigninUserActionForAccessPoint(_accessPoint);
+  RecordSigninDefaultUserActionForAccessPoint(_accessPoint);
+  ShowSigninCommand* command = [[ShowSigninCommand alloc]
+      initWithOperation:AUTHENTICATION_OPERATION_SIGNIN
+               identity:_defaultIdentity
+            accessPoint:_accessPoint
+            promoAction:signin_metrics::PromoAction::PROMO_ACTION_WITH_DEFAULT
+               callback:nil];
+  [signinPromoView chromeExecuteCommand:command];
+}
+
+- (void)signinPromoViewDidTapSigninWithOtherAccount:
+    (SigninPromoView*)signinPromoView {
+  DCHECK(_defaultIdentity);
+  RecordSigninNotDefaultUserActionForAccessPoint(_accessPoint);
+  RecordSigninUserActionForAccessPoint(_accessPoint);
+  ShowSigninCommand* command = [[ShowSigninCommand alloc]
+      initWithOperation:AUTHENTICATION_OPERATION_SIGNIN
+            accessPoint:_accessPoint
+            promoAction:signin_metrics::PromoAction::PROMO_ACTION_NOT_DEFAULT];
+  [signinPromoView chromeExecuteCommand:command];
 }
 
 @end

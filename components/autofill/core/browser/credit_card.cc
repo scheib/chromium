@@ -185,7 +185,7 @@ const char* CreditCard::GetCardNetwork(const base::string16& number) {
   // Diners Club            300-305,3095,36,38-39           14
   // Discover Card          6011,644-649,65                 16
   // JCB                    3528-3589                       16
-  // MasterCard             51-55                           16
+  // Mastercard             51-55                           16
   // UnionPay               62                              16-19
 
   // Check for prefixes of length 1.

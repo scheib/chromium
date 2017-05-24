@@ -15,6 +15,7 @@
 #include "platform/heap/Handle.h"
 #include "platform/loader/fetch/ResourceLoaderOptions.h"
 #include "platform/weborigin/KURL.h"
+#include "platform/wtf/text/TextPosition.h"
 #include "public/platform/WebURLRequest.h"
 
 namespace blink {
@@ -31,13 +32,15 @@ enum class ModuleInstantiationState {
 class CORE_EXPORT ModuleScript final : public Script, public TraceWrapperBase {
  public:
   // https://html.spec.whatwg.org/#creating-a-module-script
-  static ModuleScript* Create(const String& source_text,
-                              Modulator*,
-                              const KURL& base_url,
-                              const String& nonce,
-                              ParserDisposition,
-                              WebURLRequest::FetchCredentialsMode,
-                              AccessControlStatus);
+  static ModuleScript* Create(
+      const String& source_text,
+      Modulator*,
+      const KURL& base_url,
+      const String& nonce,
+      ParserDisposition,
+      WebURLRequest::FetchCredentialsMode,
+      AccessControlStatus,
+      const TextPosition& start_position = TextPosition::MinimumPosition());
 
   // Mostly corresponds to Create() but accepts ScriptModule as the argument
   // and allows null ScriptModule.

@@ -7,7 +7,6 @@
 #include <stddef.h>
 #include <utility>
 
-#include "ash/wm/window_resizer.h"
 #include "base/compiler_specific.h"
 #include "base/macros.h"
 #include "build/build_config.h"

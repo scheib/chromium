@@ -28,6 +28,7 @@
 #include "mojo/edk/embedder/named_platform_handle.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
 #include "mojo/edk/embedder/outgoing_broker_client_invitation.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "mojo/edk/embedder/platform_channel_pair.h"
 #include "mojo/edk/embedder/test_embedder.h"
 #include "mojo/edk/system/test_utils.h"
@@ -510,9 +511,12 @@ void CreateClientHandleOnIoThread(const NamedPlatformHandle& named_handle,
 TEST_F(EmbedderTest, ClosePendingPeerConnection) {
   NamedPlatformHandle named_handle = GenerateChannelName();
   std::string peer_token = GenerateRandomToken();
+
+  auto peer_connection = base::MakeUnique<PeerConnection>();
   ScopedMessagePipeHandle server_pipe =
-      ConnectToPeerProcess(CreateServerHandle(named_handle), peer_token);
-  ClosePeerConnection(peer_token);
+      peer_connection->Connect(ConnectionParams(
+          TransportProtocol::kLegacy, CreateServerHandle(named_handle)));
+  peer_connection.reset();
   EXPECT_EQ(MOJO_RESULT_OK,
             Wait(server_pipe.get(), MOJO_HANDLE_SIGNAL_PEER_CLOSED));
   base::MessageLoop message_loop;

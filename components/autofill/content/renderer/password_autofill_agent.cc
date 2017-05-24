@@ -1368,6 +1368,9 @@ void PasswordAutofillAgent::DidStartProvisionalLoad(
             Logger::STRING_PROVISIONALLY_SAVED_FORM_FOR_FRAME,
             provisionally_saved_form_.password_form());
       }
+      provisionally_saved_form_.SetSubmissionIndicatorEvent(
+          PasswordForm::SubmissionIndicatorEvent::
+              PROVISIONALLY_SAVED_FORM_ON_START_PROVISIONAL_LOAD);
       GetPasswordManagerDriver()->PasswordFormSubmitted(
           provisionally_saved_form_.password_form());
       if (form_element_observer_) {
@@ -1389,15 +1392,24 @@ void PasswordAutofillAgent::DidStartProvisionalLoad(
           LogHTMLForm(logger.get(), Logger::STRING_FORM_FOUND_ON_PAGE,
                       form_element);
         }
-        possible_submitted_forms.push_back(CreatePasswordFormFromWebForm(
-            form_element, &field_value_and_properties_map_,
-            &form_predictions_));
+        std::unique_ptr<PasswordForm> form = CreatePasswordFormFromWebForm(
+            form_element, &field_value_and_properties_map_, &form_predictions_);
+        if (form) {
+          form->submission_event = PasswordForm::SubmissionIndicatorEvent::
+              FILLED_FORM_ON_START_PROVISIONAL_LOAD;
+          possible_submitted_forms.push_back(std::move(form));
+        }
       }
 
-      possible_submitted_forms.push_back(
+      std::unique_ptr<PasswordForm> form =
           CreatePasswordFormFromUnownedInputElements(
               *render_frame()->GetWebFrame(), &field_value_and_properties_map_,
-              &form_predictions_));
+              &form_predictions_);
+      if (form) {
+        form->submission_event = PasswordForm::SubmissionIndicatorEvent::
+            FILLED_INPUT_ELEMENTS_ON_START_PROVISIONAL_LOAD;
+        possible_submitted_forms.push_back(std::move(form));
+      }
 
       for (const auto& password_form : possible_submitted_forms) {
         if (password_form && !password_form->username_value.empty() &&

@@ -28,22 +28,6 @@
       "reason": "geometry"
     },
     {
-      "object": "LayoutSVGRect rect id='targetRect'",
-      "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGRect rect id='targetRect1'",
-      "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGContainer use id='targetUse'",
-      "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGRect rect id='targetRect1'",
-      "reason": "geometry"
-    },
-    {
       "object": "LayoutSVGContainer use",
       "reason": "geometry"
     },

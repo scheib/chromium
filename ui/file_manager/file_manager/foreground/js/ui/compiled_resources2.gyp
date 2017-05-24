@@ -110,7 +110,8 @@
     {
       'target_name': 'file_grid',
       'dependencies': [
-        '../../../background/js/compiled_resources2.gyp:import_history',
+        '../../../../externs/background/compiled_resources2.gyp:import_history',
+        '../../../../externs/background/compiled_resources2.gyp:import_history_enum',
         '../../../common/js/compiled_resources2.gyp:async_util',
         '../../../common/js/compiled_resources2.gyp:file_type',
         '../../../common/js/compiled_resources2.gyp:util',
@@ -188,7 +189,8 @@
     {
       'target_name': 'file_table',
       'dependencies': [
-        '../../../background/js/compiled_resources2.gyp:import_history',
+        '../../../../externs/background/compiled_resources2.gyp:import_history',
+        '../../../../externs/background/compiled_resources2.gyp:import_history_enum',
         '../compiled_resources2.gyp:file_list_model',
         '../compiled_resources2.gyp:list_thumbnail_loader',
         '<(DEPTH)/ui/webui/resources/js/compiled_resources2.gyp:cr',

@@ -447,8 +447,10 @@ void EncryptionMigrationScreenHandler::OnMigrationProgress(
 }
 
 void EncryptionMigrationScreenHandler::OnMigrationRequested(bool success) {
-  LOG_IF(ERROR, !success) << "Requesting MigrateToDircrypto failed.";
-  UpdateUIState(UIState::MIGRATION_FAILED);
+  if (!success) {
+    LOG(ERROR) << "Requesting MigrateToDircrypto failed.";
+    UpdateUIState(UIState::MIGRATION_FAILED);
+  }
 }
 
 }  // namespace chromeos

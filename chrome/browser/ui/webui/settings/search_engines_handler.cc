@@ -196,13 +196,11 @@ SearchEnginesHandler::GetSearchEnginesList() {
 
 void SearchEnginesHandler::OnModelChanged() {
   AllowJavascript();
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("search-engines-changed"),
-                         *GetSearchEnginesList());
+  FireWebUIListener("search-engines-changed", *GetSearchEnginesList());
+
   // Google Now availability may have changed.
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("google-now-availability-changed"),
-                         base::Value(IsGoogleNowAvailable(profile_)));
+  FireWebUIListener("google-now-availability-changed",
+                    base::Value(IsGoogleNowAvailable(profile_)));
 }
 
 void SearchEnginesHandler::OnItemsChanged(int start, int length) {
@@ -514,12 +512,10 @@ void SearchEnginesHandler::OnGetHotwordAudioHistoryEnabled(
 void SearchEnginesHandler::HotwordInfoComplete(
     const base::Value* callback_id,
     const base::DictionaryValue& status) {
-  if (callback_id) {
+  if (callback_id)
     ResolveJavascriptCallback(*callback_id, status);
-  } else {
-    CallJavascriptFunction("cr.webUIListenerCallback",
-                           base::Value("hotword-info-update"), status);
-  }
+  else
+    FireWebUIListener("hotword-info-update", status);
 }
 
 void SearchEnginesHandler::SendHotwordInfo() {

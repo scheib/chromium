@@ -13,6 +13,8 @@ shouldBe('typeof window.internals.observeGC', '"function"',
 shouldBeDefined("navigator.connection");
 shouldBeDefined("navigator.connection.type");
 shouldBeDefined("navigator.connection.downlinkMax");
+shouldBeDefined("navigator.connection.rtt");
+shouldBeDefined("navigator.connection.downlink");
 
 var typeChangeListener = function(e) {
     shouldBe("typeof connection.type", '"string"');

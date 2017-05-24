@@ -50,8 +50,6 @@ class ChromeRuntimeAPIDelegate : public extensions::RuntimeAPIDelegate,
   // extensions::RuntimeAPIDelegate implementation.
   void AddUpdateObserver(extensions::UpdateObserver* observer) override;
   void RemoveUpdateObserver(extensions::UpdateObserver* observer) override;
-  base::Version GetPreviousExtensionVersion(
-      const extensions::Extension* extension) override;
   void ReloadExtension(const std::string& extension_id) override;
   bool CheckForUpdates(const std::string& extension_id,
                        const UpdateCheckCallback& callback) override;

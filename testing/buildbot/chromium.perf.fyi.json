@@ -1266,7 +1266,7 @@
             }
           ],
           "expiration": 36000,
-          "hard_timeout": 14400,
+          "hard_timeout": 16200,
           "ignore_task_failure": false,
           "io_timeout": 3600
         }
@@ -1296,7 +1296,7 @@
             }
           ],
           "expiration": 36000,
-          "hard_timeout": 14400,
+          "hard_timeout": 16200,
           "ignore_task_failure": true,
           "io_timeout": 3600
         }
@@ -5391,6 +5391,124 @@
             {
               "android_devices": "1",
               "id": "build249-m4--device5",
+              "os": "Android",
+              "pool": "Chrome-perf-fyi"
+            }
+          ],
+          "expiration": 36000,
+          "hard_timeout": 9000,
+          "ignore_task_failure": true,
+          "io_timeout": 3600
+        }
+      },
+      {
+        "args": [
+          "v8.runtimestats.browsing_desktop",
+          "-v",
+          "--upload-results",
+          "--output-format=chartjson",
+          "--browser=android-chromium"
+        ],
+        "isolate_name": "telemetry_perf_tests",
+        "name": "v8.runtimestats.browsing_desktop",
+        "override_compile_targets": [
+          "telemetry_perf_tests"
+        ],
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "android_devices": "1",
+              "id": "build249-m4--device7",
+              "os": "Android",
+              "pool": "Chrome-perf-fyi"
+            }
+          ],
+          "expiration": 36000,
+          "hard_timeout": 9000,
+          "ignore_task_failure": false,
+          "io_timeout": 3600
+        }
+      },
+      {
+        "args": [
+          "v8.runtimestats.browsing_desktop",
+          "-v",
+          "--upload-results",
+          "--output-format=chartjson",
+          "--browser=reference",
+          "--output-trace-tag=_ref"
+        ],
+        "isolate_name": "telemetry_perf_tests",
+        "name": "v8.runtimestats.browsing_desktop.reference",
+        "override_compile_targets": [
+          "telemetry_perf_tests"
+        ],
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "android_devices": "1",
+              "id": "build249-m4--device7",
+              "os": "Android",
+              "pool": "Chrome-perf-fyi"
+            }
+          ],
+          "expiration": 36000,
+          "hard_timeout": 9000,
+          "ignore_task_failure": true,
+          "io_timeout": 3600
+        }
+      },
+      {
+        "args": [
+          "v8.runtimestats.browsing_desktop_classic",
+          "-v",
+          "--upload-results",
+          "--output-format=chartjson",
+          "--browser=android-chromium"
+        ],
+        "isolate_name": "telemetry_perf_tests",
+        "name": "v8.runtimestats.browsing_desktop_classic",
+        "override_compile_targets": [
+          "telemetry_perf_tests"
+        ],
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "android_devices": "1",
+              "id": "build249-m4--device7",
+              "os": "Android",
+              "pool": "Chrome-perf-fyi"
+            }
+          ],
+          "expiration": 36000,
+          "hard_timeout": 9000,
+          "ignore_task_failure": false,
+          "io_timeout": 3600
+        }
+      },
+      {
+        "args": [
+          "v8.runtimestats.browsing_desktop_classic",
+          "-v",
+          "--upload-results",
+          "--output-format=chartjson",
+          "--browser=reference",
+          "--output-trace-tag=_ref"
+        ],
+        "isolate_name": "telemetry_perf_tests",
+        "name": "v8.runtimestats.browsing_desktop_classic.reference",
+        "override_compile_targets": [
+          "telemetry_perf_tests"
+        ],
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "android_devices": "1",
+              "id": "build249-m4--device7",
               "os": "Android",
               "pool": "Chrome-perf-fyi"
             }

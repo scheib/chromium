@@ -8,7 +8,6 @@
 #include "base/feature_list.h"
 #include "base/values.h"
 #include "chrome/browser/android/search_geolocation/search_geolocation_disclosure_tab_helper.h"
-#include "chrome/browser/browser_process.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
@@ -24,7 +23,6 @@
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_service_observer.h"
-#include "components/web_resource/web_resource_pref_names.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 
@@ -159,15 +157,6 @@ bool SearchGeolocationService::UseDSEGeolocationSetting(
     const url::Origin& requesting_origin) {
   if (!UseConsistentSearchGeolocation())
     return false;
-
-  // Don't use the DSE setting until the EULA has been acceptd. This prevents
-  // the disclosure being shown on the privacy policy before accepting the UELA,
-  // and would also stop the privacy policy ever getting geolocation access by
-  // default.
-  if (g_browser_process && g_browser_process->local_state() &&
-      !g_browser_process->local_state()->GetBoolean(prefs::kEulaAccepted)) {
-    return false;
-  }
 
   if (requesting_origin.scheme() != url::kHttpsScheme)
     return false;

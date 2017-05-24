@@ -333,6 +333,33 @@ void InstallConstantInternal(
 }
 
 template <class Configuration>
+void AddMethodToTemplate(v8::Isolate* isolate,
+                         v8::Local<v8::Template> v8_template,
+                         v8::Local<v8::FunctionTemplate> function_template,
+                         const Configuration& method) {
+  v8_template->Set(method.MethodName(isolate), function_template,
+                   static_cast<v8::PropertyAttribute>(method.attribute));
+}
+
+template <>
+void AddMethodToTemplate(
+    v8::Isolate* isolate,
+    v8::Local<v8::Template> v8_template,
+    v8::Local<v8::FunctionTemplate> function_template,
+    const V8DOMConfiguration::SymbolKeyedMethodConfiguration& method) {
+  // The order matters here: if the Symbol is added first, the Function object
+  // will have no associated name. For example, WebIDL states, among other
+  // things, that a pair iterator's @@iterator Function object's name must be
+  // set to "entries".
+  if (method.symbol_alias) {
+    v8_template->Set(V8AtomicString(isolate, method.symbol_alias),
+                     function_template);
+  }
+  v8_template->Set(method.MethodName(isolate), function_template,
+                   static_cast<v8::PropertyAttribute>(method.attribute));
+}
+
+template <class Configuration>
 void InstallMethodInternal(v8::Isolate* isolate,
                            v8::Local<v8::ObjectTemplate> instance_template,
                            v8::Local<v8::ObjectTemplate> prototype_template,
@@ -343,7 +370,6 @@ void InstallMethodInternal(v8::Isolate* isolate,
   if (!WorldConfigurationApplies(method, world))
     return;
 
-  v8::Local<v8::Name> name = method.MethodName(isolate);
   v8::FunctionCallback callback = method.callback;
   // Promise-returning functions need to return a reject promise when
   // an exception occurs.  This includes a case that the receiver object is not
@@ -364,15 +390,15 @@ void InstallMethodInternal(v8::Isolate* isolate,
     if (method.access_check_configuration == V8DOMConfiguration::kCheckAccess)
       function_template->SetAcceptAnyReceiver(false);
     if (method.property_location_configuration &
-        V8DOMConfiguration::kOnInstance)
-      instance_template->Set(
-          name, function_template,
-          static_cast<v8::PropertyAttribute>(method.attribute));
+        V8DOMConfiguration::kOnInstance) {
+      AddMethodToTemplate(isolate, instance_template, function_template,
+                          method);
+    }
     if (method.property_location_configuration &
-        V8DOMConfiguration::kOnPrototype)
-      prototype_template->Set(
-          name, function_template,
-          static_cast<v8::PropertyAttribute>(method.attribute));
+        V8DOMConfiguration::kOnPrototype) {
+      AddMethodToTemplate(isolate, prototype_template, function_template,
+                          method);
+    }
   }
   if (method.property_location_configuration &
       V8DOMConfiguration::kOnInterface) {
@@ -385,9 +411,7 @@ void InstallMethodInternal(v8::Isolate* isolate,
     function_template->RemovePrototype();
     // Similarly, there is no need to do an access check for static methods, as
     // there is no holder to check against.
-    interface_template->Set(
-        name, function_template,
-        static_cast<v8::PropertyAttribute>(method.attribute));
+    AddMethodToTemplate(isolate, interface_template, function_template, method);
   }
 }
 

@@ -22,7 +22,6 @@
 #include "ash/test/test_shell_delegate.h"
 #include "ash/wm/window_cycle_list.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm_window.h"

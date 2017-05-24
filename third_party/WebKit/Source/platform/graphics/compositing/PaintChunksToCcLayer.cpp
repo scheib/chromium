@@ -183,20 +183,18 @@ static void AppendDisplayItemToCcDisplayItemList(
     cc::DisplayItemList* list) {
   DCHECK(DisplayItem::IsDrawingType(display_item.GetType()));
   if (DisplayItem::IsDrawingType(display_item.GetType())) {
-    const auto& drawing_display_item =
-        static_cast<const DrawingDisplayItem&>(display_item);
-    sk_sp<const PaintRecord> record = drawing_display_item.GetPaintRecord();
+    sk_sp<const PaintRecord> record =
+        static_cast<const DrawingDisplayItem&>(display_item).GetPaintRecord();
     if (!record)
       return;
-    SkRect record_bounds = drawing_display_item.GetPaintRecordBounds();
     // In theory we would pass the bounds of the record, previously done as:
     // gfx::Rect bounds = gfx::SkIRectToRect(record->cullRect().roundOut());
     // or use the visual rect directly. However, clip content layers attempt
     // to raster in a different space than that of the visual rects. We'll be
     // reworking visual rects further for SPv2, so for now we just pass a
     // visual rect large enough to make sure items raster.
-    list->CreateAndAppendDrawingItem<cc::DrawingDisplayItem>(
-        g_large_rect, std::move(record), record_bounds);
+    list->CreateAndAppendDrawingItem<cc::DrawingDisplayItem>(g_large_rect,
+                                                             std::move(record));
   }
 }
 

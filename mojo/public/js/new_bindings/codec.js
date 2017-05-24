@@ -26,8 +26,9 @@
 
   var kArrayHeaderSize = 8;
   var kStructHeaderSize = 8;
-  var kMessageHeaderSize = 24;
-  var kMessageWithRequestIDHeaderSize = 32;
+  var kMessageV0HeaderSize = 24;
+  var kMessageV1HeaderSize = 32;
+  var kMessageV2HeaderSize = 48;
   var kMapStructPayloadSize = 16;
 
   var kStructHeaderNumBytesOffset = 0;
@@ -37,9 +38,10 @@
 
   // Decoder ------------------------------------------------------------------
 
-  function Decoder(buffer, handles, base) {
+  function Decoder(buffer, handles, associatedEndpointHandles, base) {
     this.buffer = buffer;
     this.handles = handles;
+    this.associatedEndpointHandles = associatedEndpointHandles;
     this.base = base;
     this.next = base;
   }
@@ -123,11 +125,16 @@
   };
 
   Decoder.prototype.decodeAndCreateDecoder = function(pointer) {
-    return new Decoder(this.buffer, this.handles, pointer);
+    return new Decoder(this.buffer, this.handles,
+        this.associatedEndpointHandles, pointer);
   };
 
   Decoder.prototype.decodeHandle = function() {
     return this.handles[this.readUint32()] || null;
+  };
+
+  Decoder.prototype.decodeAssociatedEndpointHandle = function() {
+    return this.associatedEndpointHandles[this.readUint32()] || null;
   };
 
   Decoder.prototype.decodeString = function() {
@@ -208,9 +215,10 @@
 
   // Encoder ------------------------------------------------------------------
 
-  function Encoder(buffer, handles, base) {
+  function Encoder(buffer, handles, associatedEndpointHandles, base) {
     this.buffer = buffer;
     this.handles = handles;
+    this.associatedEndpointHandles = associatedEndpointHandles;
     this.base = base;
     this.next = base;
   }
@@ -297,13 +305,23 @@
   Encoder.prototype.createAndEncodeEncoder = function(size) {
     var pointer = this.buffer.alloc(align(size));
     this.encodePointer(pointer);
-    return new Encoder(this.buffer, this.handles, pointer);
+    return new Encoder(this.buffer, this.handles,
+        this.associatedEndpointHandles, pointer);
   };
 
   Encoder.prototype.encodeHandle = function(handle) {
     if (handle) {
       this.handles.push(handle);
       this.writeUint32(this.handles.length - 1);
+    } else {
+      this.writeUint32(kEncodedInvalidHandleValue);
+    }
+  };
+
+  Encoder.prototype.encodeAssociatedEndpointHandle = function(endpointHandle) {
+    if (endpointHandle) {
+      this.associatedEndpointHandles.push(endpointHandle);
+      this.writeUint32(this.associatedEndpointHandles.length - 1);
     } else {
       this.writeUint32(kEncodedInvalidHandleValue);
     }
@@ -425,13 +443,19 @@
   var kMessageNameOffset = kMessageInterfaceIdOffset + 4;
   var kMessageFlagsOffset = kMessageNameOffset + 4;
   var kMessageRequestIDOffset = kMessageFlagsOffset + 8;
+  var kMessagePayloadInterfaceIdsPointerOffset = kMessageV2HeaderSize - 8;
 
   var kMessageExpectsResponse = 1 << 0;
   var kMessageIsResponse      = 1 << 1;
 
-  function Message(buffer, handles) {
+  function Message(buffer, handles, associatedEndpointHandles) {
+    if (associatedEndpointHandles === undefined) {
+      associatedEndpointHandles = [];
+    }
+
     this.buffer = buffer;
     this.handles = handles;
+    this.associatedEndpointHandles = associatedEndpointHandles;
   }
 
   Message.prototype.getHeaderNumBytes = function() {
@@ -450,6 +474,22 @@
     return this.buffer.getUint32(kMessageFlagsOffset);
   };
 
+  Message.prototype.getInterfaceId = function() {
+    return this.buffer.getUint32(kMessageInterfaceIdOffset);
+  };
+
+  Message.prototype.getPayloadInterfaceIds = function() {
+    if (this.getHeaderVersion() < 2) {
+      return null;
+    }
+
+    var decoder = new Decoder(this.buffer, this.handles,
+        this.associatedEndpointHandles,
+        kMessagePayloadInterfaceIdsPointerOffset);
+    var payloadInterfaceIds = decoder.decodeArrayPointer(Uint32);
+    return payloadInterfaceIds;
+  };
+
   Message.prototype.isResponse = function() {
     return (this.getFlags() & kMessageIsResponse) != 0;
   };
@@ -463,17 +503,81 @@
     this.buffer.setUint64(kMessageRequestIDOffset, requestID);
   };
 
+  Message.prototype.setInterfaceId = function(interfaceId) {
+    this.buffer.setUint32(kMessageInterfaceIdOffset, interfaceId);
+  };
+
+  Message.prototype.setPayloadInterfaceIds_ = function(payloadInterfaceIds) {
+    if (this.getHeaderVersion() < 2) {
+      throw new Error(
+          "Version of message does not support payload interface ids");
+    }
+
+    var decoder = new Decoder(this.buffer, this.handles,
+        this.associatedEndpointHandles,
+        kMessagePayloadInterfaceIdsPointerOffset);
+    var payloadInterfaceIdsOffset = decoder.decodePointer();
+    var encoder = new Encoder(this.buffer, this.handles,
+        this.associatedEndpointHandles,
+        payloadInterfaceIdsOffset);
+    encoder.encodeArray(Uint32, payloadInterfaceIds);
+  };
+
+  Message.prototype.serializeAssociatedEndpointHandles = function(
+      associatedGroupController) {
+    if (this.associatedEndpointHandles.length > 0) {
+      if (this.getHeaderVersion() < 2) {
+        throw new Error(
+            "Version of message does not support associated endpoint handles");
+      }
+
+      var data = [];
+      for (var i = 0; i < this.associatedEndpointHandles.length; i++) {
+        var handle = this.associatedEndpointHandles[i];
+        data.push(associatedGroupController.associateInterface(handle));
+      }
+      this.associatedEndpointHandles = [];
+      this.setPayloadInterfaceIds_(data);
+    }
+  };
+
+  Message.prototype.deserializeAssociatedEndpointHandles = function(
+      associatedGroupController) {
+    if (this.getHeaderVersion() < 2) {
+      return true;
+    }
+
+    this.associatedEndpointHandles = [];
+    var ids = this.getPayloadInterfaceIds();
+
+    var result = true;
+    for (var i = 0; i < ids.length; i++) {
+      var handle = associatedGroupController.createLocalEndpointHandle(ids[i]);
+      if (internal.isValidInterfaceId(ids[i]) && !handle.isValid()) {
+        // |ids[i]| itself is valid but handle creation failed. In that case,
+        // mark deserialization as failed but continue to deserialize the
+        // rest of handles.
+        result = false;
+      }
+      this.associatedEndpointHandles.push(handle);
+      ids[i] = internal.kInvalidInterfaceId;
+    }
+
+    this.setPayloadInterfaceIds_(ids);
+    return result;
+  };
+
 
   // MessageV0Builder ---------------------------------------------------------
 
   function MessageV0Builder(messageName, payloadSize) {
     // Currently, we don't compute the payload size correctly ahead of time.
     // Instead, we resize the buffer at the end.
-    var numberOfBytes = kMessageHeaderSize + payloadSize;
+    var numberOfBytes = kMessageV0HeaderSize + payloadSize;
     this.buffer = new internal.Buffer(numberOfBytes);
     this.handles = [];
-    var encoder = this.createEncoder(kMessageHeaderSize);
-    encoder.writeUint32(kMessageHeaderSize);
+    var encoder = this.createEncoder(kMessageV0HeaderSize);
+    encoder.writeUint32(kMessageV0HeaderSize);
     encoder.writeUint32(0);  // version.
     encoder.writeUint32(0);  // interface ID.
     encoder.writeUint32(messageName);
@@ -483,7 +587,7 @@
 
   MessageV0Builder.prototype.createEncoder = function(size) {
     var pointer = this.buffer.alloc(size);
-    return new Encoder(this.buffer, this.handles, pointer);
+    return new Encoder(this.buffer, this.handles, [], pointer);
   };
 
   MessageV0Builder.prototype.encodeStruct = function(cls, val) {
@@ -507,11 +611,11 @@
                                        requestID) {
     // Currently, we don't compute the payload size correctly ahead of time.
     // Instead, we resize the buffer at the end.
-    var numberOfBytes = kMessageWithRequestIDHeaderSize + payloadSize;
+    var numberOfBytes = kMessageV1HeaderSize + payloadSize;
     this.buffer = new internal.Buffer(numberOfBytes);
     this.handles = [];
-    var encoder = this.createEncoder(kMessageWithRequestIDHeaderSize);
-    encoder.writeUint32(kMessageWithRequestIDHeaderSize);
+    var encoder = this.createEncoder(kMessageV1HeaderSize);
+    encoder.writeUint32(kMessageV1HeaderSize);
     encoder.writeUint32(1);  // version.
     encoder.writeUint32(0);  // interface ID.
     encoder.writeUint32(messageName);
@@ -526,18 +630,69 @@
   MessageV1Builder.prototype.constructor =
       MessageV1Builder;
 
+  // MessageV2 -----------------------------------------------
+
+  function MessageV2Builder(messageName, payloadSize, flags, requestID) {
+    // Currently, we don't compute the payload size correctly ahead of time.
+    // Instead, we resize the buffer at the end.
+    var numberOfBytes = kMessageV2HeaderSize + payloadSize;
+    this.buffer = new internal.Buffer(numberOfBytes);
+    this.handles = [];
+
+    this.payload = null;
+    this.associatedEndpointHandles = [];
+
+    this.encoder = this.createEncoder(kMessageV2HeaderSize);
+    this.encoder.writeUint32(kMessageV2HeaderSize);
+    this.encoder.writeUint32(2);  // version.
+    // Gets set to an appropriate interfaceId for the endpoint by the Router.
+    this.encoder.writeUint32(0);  // interface ID.
+    this.encoder.writeUint32(messageName);
+    this.encoder.writeUint32(flags);
+    this.encoder.writeUint32(0);  // padding.
+    this.encoder.writeUint64(requestID);
+  }
+
+  MessageV2Builder.prototype.createEncoder = function(size) {
+    var pointer = this.buffer.alloc(size);
+    return new Encoder(this.buffer, this.handles,
+        this.associatedEndpointHandles, pointer);
+  };
+
+  MessageV2Builder.prototype.setPayload = function(cls, val) {
+    this.payload = {cls: cls, val: val};
+  };
+
+  MessageV2Builder.prototype.finish = function() {
+    if (!this.payload) {
+      throw new Error("Payload needs to be set before calling finish");
+    }
+
+    this.encoder.encodeStructPointer(this.payload.cls, this.payload.val);
+    this.encoder.encodeArrayPointer(Uint32,
+        new Array(this.associatedEndpointHandles.length));
+
+    this.buffer.trim();
+    var message = new Message(this.buffer, this.handles,
+        this.associatedEndpointHandles);
+    this.buffer = null;
+    this.handles = null;
+    this.encoder = null;
+    this.payload = null;
+    this.associatedEndpointHandles = null;
+
+    return message;
+  };
+
   // MessageReader ------------------------------------------------------------
 
   function MessageReader(message) {
-    this.decoder = new Decoder(message.buffer, message.handles, 0);
+    this.decoder = new Decoder(message.buffer, message.handles,
+        message.associatedEndpointHandles, 0);
     var messageHeaderSize = this.decoder.readUint32();
     this.payloadSize = message.buffer.byteLength - messageHeaderSize;
     var version = this.decoder.readUint32();
     var interface_id = this.decoder.readUint32();
-    if (interface_id != 0) {
-      throw new Error("Receiving non-zero interface ID. Associated interfaces " +
-                      "are not yet supported.");
-    }
     this.messageName = this.decoder.readUint32();
     this.flags = this.decoder.readUint32();
     // Skip the padding.
@@ -831,6 +986,36 @@
 
   NullableInterface.prototype = Object.create(Interface.prototype);
 
+  function AssociatedInterfacePtrInfo() {
+  }
+
+  AssociatedInterfacePtrInfo.prototype.encodedSize = 8;
+
+  AssociatedInterfacePtrInfo.decode = function(decoder) {
+    return new mojo.AssociatedInterfacePtrInfo(
+      decoder.decodeAssociatedEndpointHandle(), decoder.readUint32());
+  };
+
+  AssociatedInterfacePtrInfo.encode = function(encoder, val) {
+    var associatedinterfacePtrInfo =
+        val ? val : new mojo.AssociatedInterfacePtrInfo(null, 0);
+    encoder.encodeAssociatedEndpointHandle(
+        associatedinterfacePtrInfo.interfaceEndpointHandle);
+    encoder.writeUint32(associatedinterfacePtrInfo.version);
+  };
+
+  function NullableAssociatedInterfacePtrInfo() {
+  }
+
+  NullableAssociatedInterfacePtrInfo.encodedSize =
+      AssociatedInterfacePtrInfo.encodedSize;
+
+  NullableAssociatedInterfacePtrInfo.decode =
+      AssociatedInterfacePtrInfo.decode;
+
+  NullableAssociatedInterfacePtrInfo.encode =
+      AssociatedInterfacePtrInfo.encode;
+
   function InterfaceRequest() {
   }
 
@@ -852,6 +1037,33 @@
   NullableInterfaceRequest.decode = InterfaceRequest.decode;
 
   NullableInterfaceRequest.encode = InterfaceRequest.encode;
+
+  function AssociatedInterfaceRequest() {
+  }
+
+  AssociatedInterfaceRequest.decode = function(decoder) {
+    var handle = decoder.decodeAssociatedEndpointHandle();
+    return new mojo.AssociatedInterfaceRequest(handle);
+  };
+
+  AssociatedInterfaceRequest.encode = function(encoder, val) {
+    encoder.encodeAssociatedEndpointHandle(
+        val ? val.interfaceEndpointHandle : null);
+  };
+
+  AssociatedInterfaceRequest.encodedSize = 4;
+
+  function NullableAssociatedInterfaceRequest() {
+  }
+
+  NullableAssociatedInterfaceRequest.encodedSize =
+      AssociatedInterfaceRequest.encodedSize;
+
+  NullableAssociatedInterfaceRequest.decode =
+      AssociatedInterfaceRequest.decode;
+
+  NullableAssociatedInterfaceRequest.encode =
+      AssociatedInterfaceRequest.encode;
 
   function MapOf(keyClass, valueClass) {
     this.keyClass = keyClass;
@@ -879,13 +1091,17 @@
   internal.Message = Message;
   internal.MessageV0Builder = MessageV0Builder;
   internal.MessageV1Builder = MessageV1Builder;
+  internal.MessageV2Builder = MessageV2Builder;
   internal.MessageReader = MessageReader;
   internal.kArrayHeaderSize = kArrayHeaderSize;
   internal.kMapStructPayloadSize = kMapStructPayloadSize;
   internal.kStructHeaderSize = kStructHeaderSize;
   internal.kEncodedInvalidHandleValue = kEncodedInvalidHandleValue;
-  internal.kMessageHeaderSize = kMessageHeaderSize;
-  internal.kMessageWithRequestIDHeaderSize = kMessageWithRequestIDHeaderSize;
+  internal.kMessageV0HeaderSize = kMessageV0HeaderSize;
+  internal.kMessageV1HeaderSize = kMessageV1HeaderSize;
+  internal.kMessageV2HeaderSize = kMessageV2HeaderSize;
+  internal.kMessagePayloadInterfaceIdsPointerOffset =
+      kMessagePayloadInterfaceIdsPointerOffset;
   internal.kMessageExpectsResponse = kMessageExpectsResponse;
   internal.kMessageIsResponse = kMessageIsResponse;
   internal.Int8 = Int8;
@@ -912,6 +1128,12 @@
   internal.NullableInterface = NullableInterface;
   internal.InterfaceRequest = InterfaceRequest;
   internal.NullableInterfaceRequest = NullableInterfaceRequest;
+  internal.AssociatedInterfacePtrInfo = AssociatedInterfacePtrInfo;
+  internal.NullableAssociatedInterfacePtrInfo =
+      NullableAssociatedInterfacePtrInfo;
+  internal.AssociatedInterfaceRequest = AssociatedInterfaceRequest;
+  internal.NullableAssociatedInterfaceRequest =
+      NullableAssociatedInterfaceRequest;
   internal.MapOf = MapOf;
   internal.NullableMapOf = NullableMapOf;
 })();

@@ -113,7 +113,7 @@ NSString* const kMailtoDefaultHandlerKey = @"MailtoHandlerDefault";
   NSString* value = [self defaultHandlerID];
   if ([value length]) {
     MailtoHandler* handler = _handlers[value];
-    if (handler) {
+    if ([handler isAvailable]) {
       return [handler rewriteMailtoURL:gURL];
     }
   }
@@ -129,8 +129,7 @@ NSString* const kMailtoDefaultHandlerKey = @"MailtoHandlerDefault";
 
 - (void)addMailtoApps:(NSArray<MailtoHandler*>*)handlerApps {
   for (MailtoHandler* app in handlerApps) {
-    if ([app isAvailable])
-      [_handlers setObject:app forKey:[app appStoreID]];
+    [_handlers setObject:app forKey:[app appStoreID]];
   }
   [self migrateLegacyOptions];
   [self autoDefaultToGmailIfInstalled];

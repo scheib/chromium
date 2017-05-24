@@ -496,7 +496,7 @@ void WebContentDecryptionModuleSessionImpl::OnSessionKeysChange(
   blink::WebVector<blink::WebEncryptedMediaKeyInformation> keys(
       keys_info.size());
   for (size_t i = 0; i < keys_info.size(); ++i) {
-    auto* key_info = keys_info[i];
+    auto& key_info = keys_info[i];
     keys[i].SetId(blink::WebData(reinterpret_cast<char*>(&key_info->key_id[0]),
                                  key_info->key_id.size()));
     keys[i].SetStatus(convertStatus(key_info->status));

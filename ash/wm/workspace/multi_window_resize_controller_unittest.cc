@@ -85,12 +85,12 @@ class MultiWindowResizeControllerTest : public test::AshTestBase {
   bool HasTarget(aura::Window* window) {
     if (!resize_controller_->windows_.is_valid())
       return false;
-    WmWindow* wm_window = WmWindow::Get(window);
-    if ((resize_controller_->windows_.window1 == wm_window ||
-         resize_controller_->windows_.window2 == wm_window))
+    if (resize_controller_->windows_.window1 == window ||
+        resize_controller_->windows_.window2 == window) {
       return true;
+    }
     return base::ContainsValue(resize_controller_->windows_.other_windows,
-                               wm_window);
+                               window);
   }
 
   bool IsOverWindows(const gfx::Point& loc) {

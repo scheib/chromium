@@ -1,4 +1,4 @@
- PASS successfullyParsed is true
+PASS successfullyParsed is true
 
 TEST COMPLETE
 PASS pixel[0] is within 1 of 255

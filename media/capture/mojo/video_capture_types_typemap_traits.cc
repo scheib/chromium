@@ -114,6 +114,8 @@ EnumTraits<media::mojom::VideoCaptureApi, media::VideoCaptureApi>::ToMojom(
       return media::mojom::VideoCaptureApi::MACOSX_AVFOUNDATION;
     case media::VideoCaptureApi::MACOSX_DECKLINK:
       return media::mojom::VideoCaptureApi::MACOSX_DECKLINK;
+    case media::VideoCaptureApi::MACOSX_SYPHON:
+      return media::mojom::VideoCaptureApi::MACOSX_SYPHON;
     case media::VideoCaptureApi::ANDROID_API1:
       return media::mojom::VideoCaptureApi::ANDROID_API1;
     case media::VideoCaptureApi::ANDROID_API2_LEGACY:
@@ -151,7 +153,10 @@ bool EnumTraits<media::mojom::VideoCaptureApi, media::VideoCaptureApi>::
     case media::mojom::VideoCaptureApi::MACOSX_DECKLINK:
       *output = media::VideoCaptureApi::MACOSX_DECKLINK;
       return true;
-    case media::mojom::VideoCaptureApi::ANDROID_API1:
+    case media::mojom::VideoCaptureApi::MACOSX_SYPHON:
+      *output = media::VideoCaptureApi::MACOSX_SYPHON;
+      return true;
+      case media::mojom::VideoCaptureApi::ANDROID_API1:
       *output = media::VideoCaptureApi::ANDROID_API1;
       return true;
     case media::mojom::VideoCaptureApi::ANDROID_API2_LEGACY:

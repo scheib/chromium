@@ -116,6 +116,9 @@ public class VrShellNavigationTest {
                 VrShellDelegate.getVrShellForTesting().getWebVrModeEnabled());
         Assert.assertEquals("Browser is in fullscreen",
                 fullscreenMode == FullscreenMode.FULLSCREENED, DOMUtils.isFullscreen(wc));
+        // Feedback infobar should never show up during navigations.
+        Assert.assertFalse(VrUtils.isInfoBarPresent(
+                mActivityTestRule.getActivity().getWindow().getDecorView()));
     }
 
     public int loadUrl(String url, long secondsToWait)

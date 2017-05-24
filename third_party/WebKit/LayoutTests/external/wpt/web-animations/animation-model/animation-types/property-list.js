@@ -379,7 +379,7 @@ var gCSSProperties = {
   'column-gap': {
     // https://drafts.csswg.org/css-multicol/#propdef-column-gap
     types: [ 'length',
-	     {  type: 'discrete', options: [ [ 'normal', '200px' ] ] }
+            {  type: 'discrete', options: [ [ 'normal', '200px' ] ] }
     ]
   },
   'column-rule-color': {
@@ -1235,8 +1235,7 @@ var gCSSProperties = {
   },
   'stroke-dasharray': {
     // https://svgwg.org/svg2-draft/painting.html#StrokeDasharrayProperty
-    types: [
-    ]
+    types: [ 'dasharray' ]
   },
   'stroke-dashoffset': {
     // https://svgwg.org/svg2-draft/painting.html#StrokeDashoffsetProperty
@@ -1260,13 +1259,11 @@ var gCSSProperties = {
   },
   'stroke-miterlimit': {
     // https://svgwg.org/svg2-draft/painting.html#StrokeMiterlimitProperty
-    types: [
-    ]
+    types: [ 'positiveNumber' ]
   },
   'stroke-opacity': {
     // https://svgwg.org/svg2-draft/painting.html#StrokeOpacityProperty
-    types: [
-    ]
+    types: [ 'opacity' ]
   },
   'stroke-width': {
     // https://svgwg.org/svg2-draft/painting.html#StrokeWidthProperty

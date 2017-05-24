@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//android_webview/webview_repack_locales_list.gni")
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
 import("//build/util/process_version.gni")
@@ -539,6 +540,7 @@ if (enable_vr) {
       "javatests/src/org/chromium/chrome/browser/vr_shell/EmulatedVrController.java",
       "javatests/src/org/chromium/chrome/browser/vr_shell/MockVrCoreVersionCheckerImpl.java",
       "javatests/src/org/chromium/chrome/browser/vr_shell/MockVrDaydreamApi.java",
+      "javatests/src/org/chromium/chrome/browser/vr_shell/VrFeedbackInfoBarTest.java",
       "javatests/src/org/chromium/chrome/browser/vr_shell/VrShellTest.java",
       "javatests/src/org/chromium/chrome/browser/vr_shell/VrShellNavigationTest.java",
       "javatests/src/org/chromium/chrome/browser/vr_shell/VrTestRule.java",
@@ -602,6 +604,9 @@ android_assets("chrome_public_pak_assets") {
   deps = [
     ":chrome_public_locale_pak_assets",
     "//chrome:packed_resources",
+    "//chrome/android/webapk/libs/runtime_library:runtime_library_assets",
+    "//third_party/icu:icu_assets",
+    "//v8:v8_external_startup_data_assets",
   ]
 }
 
@@ -646,7 +651,7 @@ shared_library("chrome") {
     "../browser/android/chrome_entry_point.cc",
   ]
   deps = [
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//chrome:chrome_android_core",
   ]
 
@@ -691,7 +696,6 @@ if (current_toolchain == default_toolchain) {
     }
   }
 
-  # This target does not output locale paks.
   chrome_paks("monochrome_paks") {
     output_dir = "$target_gen_dir/$target_name"
 
@@ -700,7 +704,8 @@ if (current_toolchain == default_toolchain) {
       "//android_webview:generate_aw_resources",
     ]
 
-    exclude_locale_paks = true
+    additional_locale_source_patterns = webview_repack_locales_source_patterns
+    deps += webview_repack_locales_deps
 
     if (enable_resource_whitelist_generation) {
       repack_whitelist = monochrome_resource_whitelist
@@ -708,18 +713,18 @@ if (current_toolchain == default_toolchain) {
     }
   }
 
-  # This target explicitly includes locale paks via deps.
   android_assets("monochrome_pak_assets") {
     sources = [
       "$target_gen_dir/monochrome_paks/chrome_100_percent.pak",
       "$target_gen_dir/monochrome_paks/resources.pak",
     ]
+    foreach(_locale, locales) {
+      sources += [ "$target_gen_dir/monochrome_paks/locales/$_locale.pak" ]
+    }
     disable_compression = true
 
     deps = [
-      ":chrome_public_locale_pak_assets",
       ":monochrome_paks",
-      "//android_webview:locale_pak_assets",
     ]
   }
 }  # current_toolchain == host_toolchain
@@ -773,7 +778,7 @@ shared_library("chrome_sync_shell") {
     "../browser/android/chrome_sync_shell_main_delegate_initializer.cc",
   ]
   deps = [
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//chrome:chrome_android_core",
     "//components/sync",
     "//components/sync:test_support_fake_server_android",

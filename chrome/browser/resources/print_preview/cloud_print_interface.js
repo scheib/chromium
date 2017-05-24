@@ -346,7 +346,7 @@ cr.define('cloudprint', function() {
      */
     addEventListeners_: function() {
       this.tracker_.add(
-          this.nativeLayer_,
+          this.nativeLayer_.getEventTarget(),
           print_preview.NativeLayer.EventType.ACCESS_TOKEN_READY,
           this.onAccessTokenReady_.bind(this));
     },

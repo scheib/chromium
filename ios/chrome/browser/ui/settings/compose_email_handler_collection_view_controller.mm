@@ -9,6 +9,7 @@
 #import "ios/chrome/browser/web/mailto_handler.h"
 #import "ios/chrome/browser/web/mailto_url_rewriter.h"
 #include "ios/chrome/grit/ios_strings.h"
+#import "ios/third_party/material_components_ios/src/components/Palettes/src/MDCPalettes.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 
@@ -31,6 +32,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
 @interface ComposeEmailHandlerCollectionViewController () {
   MailtoURLRewriter* _rewriter;
 }
+
+// Returns the MailtoHandler at |indexPath|.
+- (MailtoHandler*)handlerAtIndexPath:(NSIndexPath*)indexPath;
 @end
 
 @implementation ComposeEmailHandlerCollectionViewController
@@ -56,13 +60,18 @@ typedef NS_ENUM(NSInteger, ItemType) {
   // choice available to the user. If this UI is being presented when there is
   // only one choice, it is considered a software error.
   NSArray<MailtoHandler*>* handlers = [_rewriter defaultHandlers];
-  DCHECK([handlers count] > 1);
   NSString* currentHandlerID = [_rewriter defaultHandlerID];
   for (MailtoHandler* handler in handlers) {
     CollectionViewTextItem* item =
         [[CollectionViewTextItem alloc] initWithType:ItemTypeMailtoHandlers];
     [item setText:[handler appName]];
-    [item setAccessibilityTraits:UIAccessibilityTraitButton];
+    if ([handler isAvailable]) {
+      [item setTextColor:[[MDCPalette greyPalette] tint900]];
+      [item setAccessibilityTraits:UIAccessibilityTraitButton];
+    } else {
+      [item setTextColor:[[MDCPalette greyPalette] tint500]];
+      [item setAccessibilityTraits:UIAccessibilityTraitNotEnabled];
+    }
     if ([currentHandlerID isEqualToString:[handler appStoreID]])
       [item setAccessoryType:MDCCollectionViewCellAccessoryCheckmark];
     [model addItem:item
@@ -70,7 +79,24 @@ typedef NS_ENUM(NSInteger, ItemType) {
   }
 }
 
-#pragma mark UICollectionViewDelegate
+#pragma mark - UICollectionViewDelegate
+
+- (BOOL)collectionView:(UICollectionView*)collectionView
+    shouldSelectItemAtIndexPath:(NSIndexPath*)indexPath {
+  // Disallow selection if the handler for the tapped row is not available.
+  return [[self handlerAtIndexPath:indexPath] isAvailable] &&
+         [super collectionView:collectionView
+             shouldSelectItemAtIndexPath:indexPath];
+}
+
+- (BOOL)collectionView:(UICollectionView*)collectionView
+    shouldHighlightItemAtIndexPath:(NSIndexPath*)indexPath {
+  // Disallow highlight (ripple effect) if the handler for the tapped row is not
+  // available.
+  return [[self handlerAtIndexPath:indexPath] isAvailable] &&
+         [super collectionView:collectionView
+             shouldHighlightItemAtIndexPath:indexPath];
+}
 
 - (void)collectionView:(UICollectionView*)collectionView
     didSelectItemAtIndexPath:(NSIndexPath*)indexPath {
@@ -106,12 +132,20 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
   }
 
-  NSUInteger handlerIndex = [model indexInItemTypeForIndexPath:indexPath];
-  MailtoHandler* handler =
-      [[_rewriter defaultHandlers] objectAtIndex:handlerIndex];
+  // Sets the Mail client app that will handle mailto:// URLs.
+  MailtoHandler* handler = [self handlerAtIndexPath:indexPath];
+  DCHECK([handler isAvailable]);
   [_rewriter setDefaultHandlerID:[handler appStoreID]];
 
   [self reconfigureCellsForItems:modifiedItems];
+}
+
+#pragma mark - Private
+
+- (MailtoHandler*)handlerAtIndexPath:(NSIndexPath*)indexPath {
+  CollectionViewModel* model = self.collectionViewModel;
+  NSUInteger handlerIndex = [model indexInItemTypeForIndexPath:indexPath];
+  return [[_rewriter defaultHandlers] objectAtIndex:handlerIndex];
 }
 
 @end

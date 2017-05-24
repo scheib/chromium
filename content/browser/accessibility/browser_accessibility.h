@@ -355,8 +355,9 @@ class CONTENT_EXPORT BrowserAccessibility : public ui::AXPlatformNodeDelegate {
 
   virtual base::string16 GetText() const;
 
-  // Returns true if the bit corresponding to the given state enum is 1.
+  // Returns true if the bit corresponding to the given enum is 1.
   bool HasState(ui::AXState state_enum) const;
+  bool HasAction(ui::AXAction action_enum) const;
 
   // Returns true if this node is a cell or a table header.
   bool IsCellOrTableHeaderRole() const;
@@ -392,6 +393,8 @@ class CONTENT_EXPORT BrowserAccessibility : public ui::AXPlatformNodeDelegate {
 
   // Gets the text offsets where new lines start.
   std::vector<int> GetLineStartOffsets() const;
+
+  virtual gfx::NativeViewAccessible GetNativeViewAccessible();
 
   // AXPlatformNodeDelegate.
   const ui::AXNodeData& GetData() const override;

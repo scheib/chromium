@@ -20,11 +20,15 @@ PictureBuffer::PictureBuffer(int32_t id,
 PictureBuffer::PictureBuffer(int32_t id,
                              const gfx::Size& size,
                              const TextureIds& client_texture_ids,
-                             const TextureIds& service_texture_ids)
+                             const TextureIds& service_texture_ids,
+                             uint32_t texture_target,
+                             VideoPixelFormat pixel_format)
     : id_(id),
       size_(size),
       client_texture_ids_(client_texture_ids),
-      service_texture_ids_(service_texture_ids) {
+      service_texture_ids_(service_texture_ids),
+      texture_target_(texture_target),
+      pixel_format_(pixel_format) {
   DCHECK(!service_texture_ids_.empty());
   // We either not have client texture ids at all, or if we do, then their
   // number must be the same as the number of service texture ids.
@@ -35,11 +39,15 @@ PictureBuffer::PictureBuffer(int32_t id,
 PictureBuffer::PictureBuffer(int32_t id,
                              const gfx::Size& size,
                              const TextureIds& client_texture_ids,
-                             const std::vector<gpu::Mailbox>& texture_mailboxes)
+                             const std::vector<gpu::Mailbox>& texture_mailboxes,
+                             uint32_t texture_target,
+                             VideoPixelFormat pixel_format)
     : id_(id),
       size_(size),
       client_texture_ids_(client_texture_ids),
-      texture_mailboxes_(texture_mailboxes) {
+      texture_mailboxes_(texture_mailboxes),
+      texture_target_(texture_target),
+      pixel_format_(pixel_format) {
   DCHECK_EQ(client_texture_ids.size(), texture_mailboxes.size());
 }
 

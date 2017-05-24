@@ -409,9 +409,9 @@ void RenderWidgetHostViewChildFrame::SubmitCompositorFrame(
   ProcessCompositorFrame(local_surface_id, std::move(frame));
 }
 
-void RenderWidgetHostViewChildFrame::OnBeginFrameDidNotSwap(
+void RenderWidgetHostViewChildFrame::OnDidNotProduceFrame(
     const cc::BeginFrameAck& ack) {
-  support_->BeginFrameDidNotSwap(ack);
+  support_->DidNotProduceFrame(ack);
 }
 
 void RenderWidgetHostViewChildFrame::OnSurfaceChanged(

@@ -98,13 +98,14 @@
 #include "media/base/media.h"
 #include "media/base/user_input_monitor.h"
 #include "media/midi/midi_service.h"
+#include "media/mojo/features.h"
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/scoped_ipc_support.h"
 #include "net/base/network_change_notifier.h"
 #include "net/socket/client_socket_factory.h"
 #include "net/ssl/ssl_config_service.h"
 #include "ppapi/features/features.h"
-#include "services/resource_coordinator/memory/coordinator/coordinator_impl.h"
+#include "services/resource_coordinator/memory_instrumentation/coordinator_impl.h"
 #include "services/service_manager/runner/common/client_util.h"
 #include "skia/ext/event_tracer_impl.h"
 #include "skia/ext/skia_memory_dump_provider.h"
@@ -190,7 +191,7 @@
 #include "content/browser/plugin_service_impl.h"
 #endif
 
-#if defined(ENABLE_MOJO_CDM) && BUILDFLAG(ENABLE_PEPPER_CDMS)
+#if BUILDFLAG(ENABLE_MOJO_CDM) && BUILDFLAG(ENABLE_PEPPER_CDMS)
 #include "content/browser/media/cdm_registry_impl.h"
 #endif
 
@@ -224,10 +225,10 @@ void SetupSandbox(const base::CommandLine& parsed_command_line) {
   // zygote are both disabled. It initializes the renderer socket.
   RenderSandboxHostLinux::GetInstance()->Init();
 
-  if (parsed_command_line.HasSwitch(switches::kNoZygote)) {
-    CHECK(parsed_command_line.HasSwitch(switches::kNoSandbox))
-        << "--no-sandbox should be used together with --no--zygote";
-    return;
+  if (parsed_command_line.HasSwitch(switches::kNoZygote) &&
+      !parsed_command_line.HasSwitch(switches::kNoSandbox)) {
+    LOG(ERROR) << "--no-sandbox should be used together with --no--zygote";
+    exit(EXIT_FAILURE);
   }
 
   // Tickle the zygote host so it forks now.
@@ -863,7 +864,7 @@ int BrowserMainLoop::PreCreateThreads() {
   }
 #endif
 
-#if defined(ENABLE_MOJO_CDM) && BUILDFLAG(ENABLE_PEPPER_CDMS)
+#if BUILDFLAG(ENABLE_MOJO_CDM) && BUILDFLAG(ENABLE_PEPPER_CDMS)
   // Prior to any processing happening on the IO thread, we create the
   // CDM service as it is predominantly used from the IO thread. This must
   // be called on the main thread since it involves file path checks.
@@ -877,17 +878,20 @@ int BrowserMainLoop::PreCreateThreads() {
   ui::WindowResizeHelperMac::Get()->Init(base::ThreadTaskRunnerHandle::Get());
 #endif
 
+  GpuDataManagerImpl* gpu_data_manager = GpuDataManagerImpl::GetInstance();
+
+#if defined(USE_X11) && !defined(OS_CHROMEOS)
+  // GpuDataManagerVisualProxy() just adds itself as an observer of
+  // |gpu_data_manager|, which is safe to do before Initialize().
+  gpu_data_manager_visual_proxy_.reset(
+      new internal::GpuDataManagerVisualProxy(gpu_data_manager));
+#endif
+
   // 1) Need to initialize in-process GpuDataManager before creating threads.
   // It's unsafe to append the gpu command line switches to the global
   // CommandLine::ForCurrentProcess object after threads are created.
   // 2) Must be after parts_->PreCreateThreads to pick up chrome://flags.
-  GpuDataManagerImpl* gpu_data_manager = GpuDataManagerImpl::GetInstance();
   gpu_data_manager->Initialize();
-
-#if defined(USE_X11) && !defined(OS_CHROMEOS)
-  gpu_data_manager_visual_proxy_.reset(
-      new internal::GpuDataManagerVisualProxy(gpu_data_manager));
-#endif
 
 #if !defined(GOOGLE_CHROME_BUILD) || defined(OS_ANDROID)
   // Single-process is an unsupported and not fully tested mode, so
@@ -1773,7 +1777,6 @@ void BrowserMainLoop::CreateAudioManager() {
   if (!audio_manager_) {
     audio_manager_ = media::AudioManager::Create(
         base::MakeUnique<media::AudioThreadImpl>(),
-        BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE),
         MediaInternals::GetInstance());
   }
   CHECK(audio_manager_);

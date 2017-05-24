@@ -289,9 +289,7 @@ void CupsPrintersHandler::OnAddedPrinter(
 }
 
 void CupsPrintersHandler::OnAddPrinterError() {
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("on-add-cups-printer"), base::Value(false),
-                         base::Value(""));
+  FireWebUIListener("on-add-cups-printer", base::Value(false), base::Value(""));
 }
 
 void CupsPrintersHandler::HandleGetCupsPrinterManufacturers(
@@ -409,13 +407,11 @@ void CupsPrintersHandler::OnPrintersFound(
     printers_list->Append(GetPrinterInfo(printer));
   }
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("on-printer-discovered"), *printers_list);
+  FireWebUIListener("on-printer-discovered", *printers_list);
 }
 
 void CupsPrintersHandler::OnDiscoveryInitialScanDone() {
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("on-printer-discovery-done"));
+  FireWebUIListener("on-printer-discovery-done");
 }
 
 }  // namespace settings

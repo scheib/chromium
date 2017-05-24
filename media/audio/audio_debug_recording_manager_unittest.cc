@@ -58,11 +58,9 @@ class MockAudioDebugRecordingHelper : public AudioDebugRecordingHelper {
   MockAudioDebugRecordingHelper(
       const AudioParameters& params,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
       base::OnceClosure on_destruction_closure)
       : AudioDebugRecordingHelper(params,
                                   std::move(task_runner),
-                                  std::move(file_task_runner),
                                   base::OnceClosure()),
         on_destruction_closure_in_mock_(std::move(on_destruction_closure)) {
     if (g_expect_enable_after_create_helper)
@@ -90,21 +88,17 @@ class MockAudioDebugRecordingHelper : public AudioDebugRecordingHelper {
 class AudioDebugRecordingManagerUnderTest : public AudioDebugRecordingManager {
  public:
   AudioDebugRecordingManagerUnderTest(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner)
-      : AudioDebugRecordingManager(std::move(task_runner),
-                                   std::move(file_task_runner)) {}
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+      : AudioDebugRecordingManager(std::move(task_runner)) {}
   ~AudioDebugRecordingManagerUnderTest() override {}
 
  private:
   std::unique_ptr<AudioDebugRecordingHelper> CreateAudioDebugRecordingHelper(
       const AudioParameters& params,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
       base::OnceClosure on_destruction_closure) override {
     return base::MakeUnique<MockAudioDebugRecordingHelper>(
-        params, std::move(task_runner), std::move(file_task_runner),
-        std::move(on_destruction_closure));
+        params, std::move(task_runner), std::move(on_destruction_closure));
   }
 
   DISALLOW_COPY_AND_ASSIGN(AudioDebugRecordingManagerUnderTest);
@@ -114,7 +108,7 @@ class AudioDebugRecordingManagerUnderTest : public AudioDebugRecordingManager {
 class AudioDebugRecordingManagerTest : public ::testing::Test {
  public:
   AudioDebugRecordingManagerTest()
-      : manager_(message_loop_.task_runner(), message_loop_.task_runner()),
+      : manager_(message_loop_.task_runner()),
         base_file_path_(base::FilePath::FromUTF8Unsafe("base_path")) {}
 
   ~AudioDebugRecordingManagerTest() override {}

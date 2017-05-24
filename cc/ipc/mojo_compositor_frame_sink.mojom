@@ -37,7 +37,7 @@ interface MojoCompositorFrameSink {
 
   // Notifies the frame sink that a BeginFrame was completed, but that no
   // CompositorFrame was produced as a result of it.
-  BeginFrameDidNotSwap(cc.mojom.BeginFrameAck ack);
+  DidNotProduceFrame(cc.mojom.BeginFrameAck ack);
 
   // Notify that the surface is no longer in use (and is okay to be evicted) so
   // that its resources gets returned in time.

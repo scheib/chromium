@@ -269,9 +269,6 @@ void ShellBrowserMainParts::PostMainMessageLoopRun() {
 
   desktop_controller_.reset();
 
-  // ShellDeviceClient must be shutdown when the FILE thread is still alive.
-  device_client_->Shutdown();
-
   storage_monitor::StorageMonitor::Destroy();
 
 #if defined(OS_CHROMEOS)

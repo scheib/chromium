@@ -1,6 +1,6 @@
 Tests timeline support in WebInspector Extensions API
 
- Started extension.
+Started extension.
 Running tests...
 RUNNING TEST: extension_testTimeline
 TraceProvider:

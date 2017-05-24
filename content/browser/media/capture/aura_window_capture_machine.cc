@@ -15,11 +15,14 @@
 #include "content/browser/compositor/image_transport_factory.h"
 #include "content/browser/media/capture/desktop_capture_device_uma_types.h"
 #include "content/public/browser/browser_thread.h"
-#include "device/power_save_blocker/power_save_blocker.h"
+#include "content/public/common/service_manager_connection.h"
+#include "device/wake_lock/public/interfaces/wake_lock_provider.mojom.h"
 #include "media/base/video_util.h"
 #include "media/capture/content/thread_safe_capture_oracle.h"
 #include "media/capture/content/video_capture_oracle.h"
 #include "media/capture/video_capture_types.h"
+#include "services/device/public/interfaces/constants.mojom.h"
+#include "services/service_manager/public/cpp/connector.h"
 #include "skia/ext/image_operations.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/aura/client/screen_position_client.h"
@@ -86,11 +89,23 @@ bool AuraWindowCaptureMachine::InternalStart(
     return false;
   compositor->AddAnimationObserver(this);
 
-  power_save_blocker_.reset(new device::PowerSaveBlocker(
-      device::PowerSaveBlocker::kPowerSaveBlockPreventDisplaySleep,
-      device::PowerSaveBlocker::kReasonOther, "DesktopCaptureDevice is running",
-      BrowserThread::GetTaskRunnerForThread(BrowserThread::UI),
-      BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE)));
+  DCHECK(!wake_lock_);
+  // Request Wake Lock. In some testing contexts, the service manager
+  // connection isn't initialized.
+  if (ServiceManagerConnection::GetForProcess()) {
+    service_manager::Connector* connector =
+        ServiceManagerConnection::GetForProcess()->GetConnector();
+    DCHECK(connector);
+    device::mojom::WakeLockProviderPtr wake_lock_provider;
+    connector->BindInterface(device::mojom::kServiceName,
+                             mojo::MakeRequest(&wake_lock_provider));
+    wake_lock_provider->GetWakeLockWithoutContext(
+        device::mojom::WakeLockType::PreventDisplaySleep,
+        device::mojom::WakeLockReason::ReasonOther,
+        "Desktop capturer is running", mojo::MakeRequest(&wake_lock_));
+
+    wake_lock_->RequestWakeLock();
+  }
 
   return true;
 }
@@ -137,8 +152,8 @@ void AuraWindowCaptureMachine::InternalStop(const base::Closure& callback) {
   // Cancel any and all outstanding callbacks owned by external modules.
   weak_factory_.InvalidateWeakPtrs();
 
-  power_save_blocker_.reset();
-
+  if (wake_lock_)
+    wake_lock_->CancelWakeLock();
   // Stop observing compositor and window events.
   if (desktop_window_) {
     if (aura::WindowTreeHost* host = desktop_window_->GetHost()) {

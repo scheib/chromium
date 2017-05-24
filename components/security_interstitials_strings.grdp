@@ -120,13 +120,21 @@
     Back to safety
   </message>
 
-  <!-- Malware interstitial V3 -->
-  <message name="IDS_MALWARE_V3_HEADING" desc="The large heading at the top of the malware interstitial.">
-    The site ahead contains malware
-  </message>
+  <!-- Malware interstitial -->
+  <if expr="is_android">
+    <message name="IDS_MALWARE_V3_HEADING" desc="The large heading at the top of the malware interstitial.">
+      The site ahead contains dangerous apps
+    </message>
+  </if>
+  <if expr="not is_android">
+    <message name="IDS_MALWARE_V3_HEADING" desc="The large heading at the top of the malware interstitial.">
+      The site ahead contains malware
+    </message>
+  </if>
+
   <if expr="is_android">
     <message name="IDS_MALWARE_V3_PRIMARY_PARAGRAPH" desc="Mobile: The primary explanatory paragraph for the malware interstitial.">
-      Attackers currently on <ph name="BEGIN_BOLD">&lt;strong&gt;</ph><ph name="SITE">$1<ex>example.com</ex></ph><ph name="END_BOLD">&lt;/strong&gt;</ph> might attempt to install dangerous apps on your device that steal or delete your information (for example, photos, passwords, messages, and credit cards). <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+      Attackers currently on <ph name="BEGIN_BOLD">&lt;strong&gt;</ph><ph name="SITE">$1<ex>example.com</ex></ph><ph name="END_BOLD">&lt;/strong&gt;</ph> could install dangerous apps that damage your device, add hidden charges to your mobile bill, or steal your personal information. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
     </message>
   </if>
   <if expr="is_macosx">
@@ -158,19 +166,41 @@
     Automatically send some <ph name="BEGIN_WHITEPAPER_LINK">&lt;a href="#" id="whitepaper-link"&gt;</ph>system information and page content<ph name="END_WHITEPAPER_LINK">&lt;/a&gt;</ph> to Google to help detect dangerous apps and sites. <ph name="PRIVACY_PAGE_LINK">$1</ph>
   </message>
 
-  <!-- Harmful download interstitial V3 -->
-  <message name="IDS_HARMFUL_V3_HEADING" desc="The large heading at the top of the social engineering interstitial.">
-    The site ahead contains harmful programs
-  </message>
-  <message name="IDS_HARMFUL_V3_PRIMARY_PARAGRAPH" desc="Mobile: The primary explanatory paragraph for the social engineering interstitial.">
-    Attackers on <ph name="BEGIN_BOLD">&lt;strong&gt;</ph><ph name="SITE">$1<ex>example.com</ex></ph><ph name="END_BOLD">&lt;/strong&gt;</ph> might attempt to trick you into installing programs that harm your browsing experience (for example, by changing your homepage or showing extra ads on sites you visit). <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
-  </message>
-  <message name="IDS_HARMFUL_V3_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page.">
-    Google Safe Browsing recently <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>found harmful programs<ph name="END_LINK">&lt;/a&gt;</ph> on <ph name="SITE">$1<ex>example.com</ex></ph>.
-  </message>
-  <message name="IDS_HARMFUL_V3_PROCEED_PARAGRAPH" desc="The paragraph that lets the user skip the warning.">
-    If you understand the risks to your security, you may <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>visit this site<ph name="END_LINK">&lt;/a&gt;</ph> before the harmful programs have been removed.
-  </message>
+  <!-- Harmful download interstitial -->
+  <if expr="is_android">
+    <message name="IDS_HARMFUL_V3_HEADING" desc="The large heading at the top of the unwanted software interstitial.">
+      The site ahead contains harmful apps
+    </message>
+
+    <message name="IDS_HARMFUL_V3_PRIMARY_PARAGRAPH" desc="The primary explanatory paragraph for the unwanted software interstitial.">
+      Attackers on <ph name="BEGIN_BOLD">&lt;strong&gt;</ph><ph name="SITE">$1<ex>example.com</ex></ph><ph name="END_BOLD">&lt;/strong&gt;</ph> could install deceptive apps that pretend to be something else or collect data that may be used to track you. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+    </message>
+
+    <message name="IDS_HARMFUL_V3_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page.">
+      Google Safe Browsing recently <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>found harmful apps<ph name="END_LINK">&lt;/a&gt;</ph> on <ph name="SITE">$1<ex>example.com</ex></ph>.
+    </message>
+
+    <message name="IDS_HARMFUL_V3_PROCEED_PARAGRAPH" desc="The paragraph that lets the user skip the warning.">
+      If you understand the risks to your security, you may <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>visit this site<ph name="END_LINK">&lt;/a&gt;</ph> before the harmful apps have been removed.
+    </message>
+  </if>
+  <if expr="not is_android">
+    <message name="IDS_HARMFUL_V3_HEADING" desc="The large heading at the top of the unwanted software interstitial.">
+      The site ahead contains harmful programs
+    </message>
+
+    <message name="IDS_HARMFUL_V3_PRIMARY_PARAGRAPH" desc="The primary explanatory paragraph for the unwanted software interstitial.">
+      Attackers on <ph name="BEGIN_BOLD">&lt;strong&gt;</ph><ph name="SITE">$1<ex>example.com</ex></ph><ph name="END_BOLD">&lt;/strong&gt;</ph> might attempt to trick you into installing programs that harm your browsing experience (for example, by changing your homepage or showing extra ads on sites you visit). <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+    </message>
+
+    <message name="IDS_HARMFUL_V3_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page.">
+      Google Safe Browsing recently <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>found harmful programs<ph name="END_LINK">&lt;/a&gt;</ph> on <ph name="SITE">$1<ex>example.com</ex></ph>.
+    </message>
+
+    <message name="IDS_HARMFUL_V3_PROCEED_PARAGRAPH" desc="The paragraph that lets the user skip the warning.">
+      If you understand the risks to your security, you may <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>visit this site<ph name="END_LINK">&lt;/a&gt;</ph> before the harmful programs have been removed.
+    </message>
+  </if>
 
   <!-- Phishing interstitial -->
   <message name="IDS_PHISHING_V4_HEADING" desc="The large heading at the top of the phishing interstitial.">
@@ -184,6 +214,20 @@
   </message>
   <message name="IDS_PHISHING_V4_PROCEED_AND_REPORT_PARAGRAPH" desc="The paragraph that lets the user skip the warning.">
     You can <ph name="BEGIN_ERROR_LINK">&lt;a href="#" id="report-error-link"&gt;</ph>report a detection problem<ph name="END_ERROR_LINK">&lt;/a&gt;</ph> or, if you understand the risks to your security, <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>visit this unsafe site<ph name="END_LINK">&lt;/a&gt;</ph>.
+  </message>
+
+  <!-- WebView Safe Browsing quiet interstitals medium sized -->
+  <message name="IDS_MALWARE_WEBVIEW_HEADING" desc="The heading of the malware interstitial on medium sized Webview.">
+    Dangerous content blocked
+  </message>
+  <message name="IDS_MALWARE_WEBVIEW_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page. Allows the user to proceed using a link.">
+    This content might try to install dangerous software on your device that steals or deletes your information. <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>Show anyway<ph name="END_LINK">&lt;/a&gt;</ph>.
+  </message>
+  <message name="IDS_PHISHING_WEBVIEW_HEADING" desc="The heading of the phishing interstitial on medium sized Webview.">
+    Deceptive content blocked
+  </message>
+  <message name="IDS_PHISHING_WEBVIEW_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page. Allows the user to proceed using a link.">
+    This content might try to trick you into installing software or revealing personal information. <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>Show anyway<ph name="END_LINK">&lt;/a&gt;</ph>.
   </message>
 
 </grit-part>

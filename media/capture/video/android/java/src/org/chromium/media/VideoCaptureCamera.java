@@ -47,15 +47,15 @@ public class VideoCaptureCamera
         COLOR_TEMPERATURES_MAP.append(
                 2850, android.hardware.Camera.Parameters.WHITE_BALANCE_INCANDESCENT);
         COLOR_TEMPERATURES_MAP.append(
-                2940, android.hardware.Camera.Parameters.WHITE_BALANCE_WARM_FLUORESCENT);
+                2950, android.hardware.Camera.Parameters.WHITE_BALANCE_WARM_FLUORESCENT);
         COLOR_TEMPERATURES_MAP.append(
-                3000, android.hardware.Camera.Parameters.WHITE_BALANCE_TWILIGHT);
+                4250, android.hardware.Camera.Parameters.WHITE_BALANCE_FLUORESCENT);
         COLOR_TEMPERATURES_MAP.append(
-                4230, android.hardware.Camera.Parameters.WHITE_BALANCE_FLUORESCENT);
+                4600, android.hardware.Camera.Parameters.WHITE_BALANCE_TWILIGHT);
+        COLOR_TEMPERATURES_MAP.append(
+                5500, android.hardware.Camera.Parameters.WHITE_BALANCE_DAYLIGHT);
         COLOR_TEMPERATURES_MAP.append(
                 6000, android.hardware.Camera.Parameters.WHITE_BALANCE_CLOUDY_DAYLIGHT);
-        COLOR_TEMPERATURES_MAP.append(
-                6504, android.hardware.Camera.Parameters.WHITE_BALANCE_DAYLIGHT);
         COLOR_TEMPERATURES_MAP.append(7000, android.hardware.Camera.Parameters.WHITE_BALANCE_SHADE);
     };
 
@@ -124,11 +124,13 @@ public class VideoCaptureCamera
         return parameters;
     }
 
-    private String getClosestWhiteBalance(int colorTemperature) {
+    private String getClosestWhiteBalance(
+            int colorTemperature, List<String> supportedTemperatures) {
         int minDiff = Integer.MAX_VALUE;
         String matchedTemperature = null;
 
         for (int i = 0; i < COLOR_TEMPERATURES_MAP.size(); ++i) {
+            if (!supportedTemperatures.contains(COLOR_TEMPERATURES_MAP.valueAt(i))) continue;
             final int diff = Math.abs(colorTemperature - COLOR_TEMPERATURES_MAP.keyAt(i));
             if (diff >= minDiff) continue;
             minDiff = diff;
@@ -580,6 +582,7 @@ public class VideoCaptureCamera
             final int index = COLOR_TEMPERATURES_MAP.indexOfValue(parameters.getWhiteBalance());
             if (index >= 0) builder.setCurrentColorTemperature(COLOR_TEMPERATURES_MAP.keyAt(index));
         }
+        builder.setStepColorTemperature(50);
 
         final List<String> flashModes = parameters.getSupportedFlashModes();
         if (flashModes != null) {
@@ -701,10 +704,12 @@ public class VideoCaptureCamera
         } else if (whiteBalanceMode == AndroidMeteringMode.FIXED
                 && parameters.isAutoWhiteBalanceLockSupported()) {
             parameters.setAutoWhiteBalanceLock(true);
-            if (colorTemperature > 0.0) {
-                final String closestSetting = getClosestWhiteBalance((int) colorTemperature);
-                if (closestSetting != null) parameters.setWhiteBalance(closestSetting);
-            }
+        }
+        if (colorTemperature > 0.0) {
+            final String closestSetting = getClosestWhiteBalance(
+                    (int) colorTemperature, parameters.getSupportedWhiteBalance());
+            Log.d(TAG, " Color temperature (%f ==> %s)", colorTemperature, closestSetting);
+            if (closestSetting != null) parameters.setWhiteBalance(closestSetting);
         }
 
         if (parameters.getSupportedFlashModes() != null) {

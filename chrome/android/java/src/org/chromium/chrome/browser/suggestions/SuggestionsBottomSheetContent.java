@@ -12,13 +12,16 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import org.chromium.base.ApiCompatibilityUtils;
+import org.chromium.base.Callback;
 import org.chromium.base.DiscardableReferencePool;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeActivity;
+import org.chromium.chrome.browser.ChromeFeatureList;
 import org.chromium.chrome.browser.NativePageHost;
 import org.chromium.chrome.browser.ntp.ContextMenuManager;
 import org.chromium.chrome.browser.ntp.ContextMenuManager.TouchEnabledDelegate;
 import org.chromium.chrome.browser.ntp.cards.NewTabPageAdapter;
+import org.chromium.chrome.browser.ntp.snippets.SnippetArticle;
 import org.chromium.chrome.browser.ntp.snippets.SnippetsBridge;
 import org.chromium.chrome.browser.ntp.snippets.SuggestionsSource;
 import org.chromium.chrome.browser.offlinepages.OfflinePageBridge;
@@ -30,9 +33,11 @@ import org.chromium.chrome.browser.widget.FadingShadow;
 import org.chromium.chrome.browser.widget.FadingShadowView;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheet;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheetContentController;
-import org.chromium.chrome.browser.widget.bottomsheet.BottomSheetObserver;
-import org.chromium.chrome.browser.widget.bottomsheet.EmptyBottomSheetObserver;
 import org.chromium.chrome.browser.widget.displaystyle.UiConfig;
+import org.chromium.ui.widget.Toast;
+
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Provides content to be displayed inside of the Home tab of bottom sheet.
@@ -47,8 +52,7 @@ public class SuggestionsBottomSheetContent implements BottomSheet.BottomSheetCon
     private final ContextMenuManager mContextMenuManager;
     private final SuggestionsUiDelegateImpl mSuggestionsUiDelegate;
     private final TileGroup.Delegate mTileGroupDelegate;
-    private final BottomSheet mBottomSheet;
-    private final BottomSheetObserver mBottomSheetObserver;
+    private final SuggestionsSheetVisibilityChangeObserver mBottomSheetObserver;
 
     public SuggestionsBottomSheetContent(final ChromeActivity activity, final BottomSheet sheet,
             TabModelSelector tabModelSelector, SnackbarManager snackbarManager) {
@@ -87,25 +91,41 @@ public class SuggestionsBottomSheetContent implements BottomSheet.BottomSheetCon
                 mContextMenuManager, mTileGroupDelegate);
         mRecyclerView.init(uiConfig, mContextMenuManager, adapter);
 
-        mBottomSheetObserver = new EmptyBottomSheetObserver() {
+        mBottomSheetObserver = new SuggestionsSheetVisibilityChangeObserver(this, activity) {
             @Override
             public void onSheetOpened() {
                 mRecyclerView.scrollToPosition(0);
-                prepareSuggestionsForReveal(adapter);
-
+                adapter.refreshSuggestions();
+                mSuggestionsUiDelegate.getEventReporter().onSurfaceOpened();
                 mRecyclerView.getScrollEventReporter().reset();
+
+                if (ChromeFeatureList.isEnabled(
+                            ChromeFeatureList.CONTEXTUAL_SUGGESTIONS_CAROUSEL)) {
+                    updateContextualSuggestions(sheet.getActiveTab().getUrl());
+                }
+
+                super.onSheetOpened();
             }
 
             @Override
-            public void onSheetClosed() {
+            public void onContentShown() {
+                SuggestionsMetrics.recordSurfaceVisible();
+            }
+
+            @Override
+            public void onContentHidden() {
                 SuggestionsMetrics.recordSurfaceHidden();
             }
 
+            @Override
+            public void onContentStateChanged(@BottomSheet.SheetState int contentState) {
+                if (contentState == BottomSheet.SHEET_STATE_HALF) {
+                    SuggestionsMetrics.recordSurfaceHalfVisible();
+                } else if (contentState == BottomSheet.SHEET_STATE_FULL) {
+                    SuggestionsMetrics.recordSurfaceFullyVisible();
+                }
+            }
         };
-        mBottomSheet = activity.getBottomSheet();
-        mBottomSheet.addObserver(mBottomSheetObserver);
-
-        if (mBottomSheet.isSheetOpen()) prepareSuggestionsForReveal(adapter);
 
         mShadowView = (FadingShadowView) mView.findViewById(R.id.shadow);
         mShadowView.init(
@@ -157,7 +177,7 @@ public class SuggestionsBottomSheetContent implements BottomSheet.BottomSheetCon
 
     @Override
     public void destroy() {
-        mBottomSheet.removeObserver(mBottomSheetObserver);
+        mBottomSheetObserver.onDestroy();
         mSuggestionsUiDelegate.onDestroy();
         mTileGroupDelegate.destroy();
     }
@@ -167,11 +187,16 @@ public class SuggestionsBottomSheetContent implements BottomSheet.BottomSheetCon
         return BottomSheetContentController.TYPE_SUGGESTIONS;
     }
 
-    /** Called when the UI is revlealed, prepares the list of suggestions. */
-    private void prepareSuggestionsForReveal(NewTabPageAdapter adapter) {
-        adapter.refreshSuggestions();
-        mSuggestionsUiDelegate.getEventReporter().onSurfaceOpened();
-        SuggestionsMetrics.recordSurfaceVisible();
+    private void updateContextualSuggestions(String url) {
+        mSuggestionsUiDelegate.getSuggestionsSource().fetchContextualSuggestions(
+                url, new Callback<List<SnippetArticle>>() {
+                    @Override
+                    public void onResult(List<SnippetArticle> result) {
+                        String text = String.format(
+                                Locale.US, "Received %d contextual suggestions", result.size());
+                        Toast.makeText(mRecyclerView.getContext(), text, Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 
     public static void setSuggestionsSourceForTesting(SuggestionsSource suggestionsSource) {

@@ -28,11 +28,6 @@ const char kErrorParam[] = "error";
 const char kErrorCodeParam[] = "code";
 const char kErrorMessageParam[] = "message";
 
-// The max and min value should match the ones in scaling_settings.html.
-// Update both files at the same time.
-const double kScaleMaxVal = 200;
-const double kScaleMinVal = 10;
-
 // JSON RPC 2.0 spec: http://www.jsonrpc.org/specification#error_object
 enum Error {
   kErrorInvalidParam = -32602,
@@ -96,6 +91,13 @@ void PDFCreated(
 }  // namespace
 
 #if BUILDFLAG(ENABLE_BASIC_PRINTING)
+namespace {
+// The max and min value should match the ones in scaling_settings.html.
+// Update both files at the same time.
+const double kScaleMaxVal = 200;
+const double kScaleMinVal = 10;
+}
+
 std::unique_ptr<base::DictionaryValue> ParsePrintSettings(
     int command_id,
     const base::DictionaryValue* params,

@@ -19,12 +19,9 @@
 #include "base/values.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/render_process_host_observer.h"
+#include "device/wake_lock/public/interfaces/wake_lock_service.mojom.h"
 #include "media/media_features.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
-
-namespace device {
-class PowerSaveBlocker;
-}  // namespace device
 
 namespace content {
 
@@ -111,7 +108,6 @@ class CONTENT_EXPORT WebRTCInternals : public RenderProcessHostObserver,
   const base::FilePath& GetEventLogFilePath() const;
 
   int num_open_connections() const { return num_open_connections_; }
-  bool IsPowerSavingBlocked() const { return !!power_save_blocker_; }
 
  protected:
   // Constructor/Destructor are protected to allow tests to derive from the
@@ -121,6 +117,8 @@ class CONTENT_EXPORT WebRTCInternals : public RenderProcessHostObserver,
   WebRTCInternals();
   WebRTCInternals(int aggregate_updates_ms, bool should_block_power_saving);
   ~WebRTCInternals() override;
+
+  device::mojom::WakeLockServicePtr wake_lock_service_;
 
  private:
   friend struct base::LazyInstanceTraitsBase<WebRTCInternals>;
@@ -165,9 +163,11 @@ class CONTENT_EXPORT WebRTCInternals : public RenderProcessHostObserver,
   void MaybeClosePeerConnection(base::DictionaryValue* record);
 
   // Called whenever a PeerConnection is created or stopped in order to
-  // impose/release a block on suspending the current application for power
+  // request/cancel a wake lock on suspending the current application for power
   // saving.
-  void CreateOrReleasePowerSaveBlocker();
+  void UpdateWakeLock();
+
+  device::mojom::WakeLockService* GetWakeLockService();
 
   // Called on a timer to deliver updates to javascript.
   // We throttle and bulk together updates to avoid DOS like scenarios where
@@ -218,11 +218,9 @@ class CONTENT_EXPORT WebRTCInternals : public RenderProcessHostObserver,
   bool selecting_event_log_;
   base::FilePath event_log_recordings_file_path_;
 
-  // While |num_open_connections_| is greater than zero, hold an instance of
-  // PowerSaveBlocker.  This prevents the application from being suspended while
-  // remoting.
+  // While |num_open_connections_| is greater than zero, request a wake lock
+  // service. This prevents the application from being suspended while remoting.
   int num_open_connections_;
-  std::unique_ptr<device::PowerSaveBlocker> power_save_blocker_;
   const bool should_block_power_saving_;
 
   // Set of render process hosts that |this| is registered as an observer on.

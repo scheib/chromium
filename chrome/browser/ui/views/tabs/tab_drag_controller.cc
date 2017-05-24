@@ -44,7 +44,6 @@
 #include "ash/shell.h"                   // nogncheck
 #include "ash/wm/maximize_mode/maximize_mode_controller.h"  // nogncheck
 #include "ash/wm/window_state.h"  // nogncheck
-#include "ash/wm/window_state_aura.h"  // nogncheck
 #include "ui/wm/core/coordinate_conversion.h"  // nogncheck
 #endif
 
@@ -73,6 +72,19 @@ const int kMoveAttachedInitialDelay = 600;
 const int kMoveAttachedSubsequentDelay = 300;
 
 const int kHorizontalMoveThreshold = 16;  // DIPs.
+
+// The inset within the first dragged tab to use when calculating the "drag
+// insertion point".  If we simply used the x-coordinate of the tab, we'd be
+// calculating based on a point well before where the user considers the tab to
+// "be".  The value here is chosen to "feel good" based on the widths of the tab
+// images and the tab overlap.
+//
+// Note that this must return a value smaller than the midpoint of any tab's
+// width, or else the user won't be able to drag a tab to the left of the first
+// tab in the strip.
+//
+// TODO(pkasting): Maybe this should use Tab::GetOverlap() instead?
+const int kLeadingWidthForDrag = 16;
 
 // Distance from the next/previous stacked before before we consider the tab
 // close enough to trigger moving.
@@ -1116,7 +1128,7 @@ int TabDragController::GetInsertionIndexFrom(const gfx::Rect& dragged_bounds,
   // Make the actual "drag insertion point" be just after the leading edge of
   // the first dragged tab.  This is closer to where the user thinks of the tab
   // as "starting" than just dragged_bounds.x(), especially with narrow tabs.
-  const int dragged_x = dragged_bounds.x() + Tab::leading_width_for_drag();
+  const int dragged_x = dragged_bounds.x() + kLeadingWidthForDrag;
   if (start < 0 || start > last_tab ||
       dragged_x < attached_tabstrip_->ideal_bounds(start).x())
     return -1;
@@ -1137,7 +1149,7 @@ int TabDragController::GetInsertionIndexFromReversed(
   // Make the actual "drag insertion point" be just after the leading edge of
   // the first dragged tab.  This is closer to where the user thinks of the tab
   // as "starting" than just dragged_bounds.x(), especially with narrow tabs.
-  const int dragged_x = dragged_bounds.x() + Tab::leading_width_for_drag();
+  const int dragged_x = dragged_bounds.x() + kLeadingWidthForDrag;
   if (start < 0 || start >= attached_tabstrip_->tab_count() ||
       dragged_x >= attached_tabstrip_->ideal_bounds(start).right())
     return -1;
@@ -1208,7 +1220,7 @@ bool TabDragController::ShouldDragToNextStackedTab(
   int next_x = attached_tabstrip_->ideal_bounds(index + 1).x();
   int mid_x = std::min(next_x - kStackedDistance,
                        active_x + (next_x - active_x) / 4);
-  // TODO(pkasting): Should this add Tab::leading_width_for_drag() as
+  // TODO(pkasting): Should this add kLeadingWidthForDrag as
   // GetInsertionIndexFrom() does?
   return dragged_bounds.x() >= mid_x;
 }
@@ -1225,7 +1237,7 @@ bool TabDragController::ShouldDragToPreviousStackedTab(
   int previous_x = attached_tabstrip_->ideal_bounds(index - 1).x();
   int mid_x = std::max(previous_x + kStackedDistance,
                        active_x - (active_x - previous_x) / 4);
-  // TODO(pkasting): Should this add Tab::leading_width_for_drag() as
+  // TODO(pkasting): Should this add kLeadingWidthForDrag as
   // GetInsertionIndexFrom() does?
   return dragged_bounds.x() <= mid_x;
 }

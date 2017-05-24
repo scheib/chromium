@@ -93,9 +93,8 @@ void ImportDataHandler::StartImport(
   if (importer_host_)
     importer_host_->set_observer(NULL);
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("import-data-status-changed"),
-                         base::Value(kImportStatusInProgress));
+  FireWebUIListener("import-data-status-changed",
+                    base::Value(kImportStatusInProgress));
   import_did_succeed_ = false;
 
   importer_host_ = new ExternalProcessImporterHost();

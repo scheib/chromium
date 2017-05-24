@@ -93,8 +93,7 @@ std::unique_ptr<JSONArray> DisplayItemList::SubsequenceAsJSON(
         const DrawingDisplayItem& item =
             static_cast<const DrawingDisplayItem&>(display_item);
         if (const PaintRecord* record = item.GetPaintRecord().get()) {
-          json->SetString("record", RecordAsDebugString(
-                                        record, item.GetPaintRecordBounds()));
+          json->SetString("record", RecordAsDebugString(record));
         }
       }
 #endif

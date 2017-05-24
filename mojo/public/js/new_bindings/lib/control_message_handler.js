@@ -82,23 +82,22 @@
 
   function isInterfaceControlMessage(message) {
     return message.getName() == mojo.interfaceControl2.kRunMessageId ||
-           message.getName() ==
-               mojo.interfaceControl2.kRunOrClosePipeMessageId;
+           message.getName() == mojo.interfaceControl2.kRunOrClosePipeMessageId;
   }
 
   function ControlMessageHandler(interfaceVersion) {
-    this.interfaceVersion = interfaceVersion;
+    this.interfaceVersion_ = interfaceVersion;
   }
 
   ControlMessageHandler.prototype.accept = function(message) {
     validateControlRequestWithoutResponse(message);
-    return runOrClosePipe(message, this.interfaceVersion);
+    return runOrClosePipe(message, this.interfaceVersion_);
   };
 
   ControlMessageHandler.prototype.acceptWithResponder = function(message,
       responder) {
     validateControlRequestWithResponse(message);
-    return run(message, responder, this.interfaceVersion);
+    return run(message, responder, this.interfaceVersion_);
   };
 
   internal.ControlMessageHandler = ControlMessageHandler;

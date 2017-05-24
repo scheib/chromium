@@ -18,7 +18,6 @@ import org.chromium.base.library_loader.ProcessInitException;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.ChromeActivity;
-import org.chromium.chrome.browser.preferences.PrefServiceBridge;
 import org.chromium.chrome.browser.preferences.website.ContentSetting;
 import org.chromium.chrome.browser.preferences.website.GeolocationInfo;
 import org.chromium.chrome.browser.preferences.website.WebsitePreferenceBridge;
@@ -50,17 +49,6 @@ public class GeolocationHeaderTest extends ChromeActivityTestCaseBase<ChromeActi
 
     public GeolocationHeaderTest() {
         super(ChromeActivity.class);
-    }
-
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        ThreadUtils.runOnUiThreadBlocking(new Runnable() {
-            @Override
-            public void run() {
-                PrefServiceBridge.getInstance().setEulaAccepted();
-            }
-        });
     }
 
     @SmallTest

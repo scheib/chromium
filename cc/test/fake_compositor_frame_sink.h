@@ -63,6 +63,7 @@ class FakeCompositorFrameSink : public CompositorFrameSink {
 
   // CompositorFrameSink implementation.
   void SubmitCompositorFrame(CompositorFrame frame) override;
+  void DidNotProduceFrame(const BeginFrameAck& ack) override;
   bool BindToClient(CompositorFrameSinkClient* client) override;
   void DetachFromClient() override;
 

@@ -16,7 +16,7 @@ if (enable_me2me_host) {
 
     deps = [
       "//base",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
 
     libs = [ "pam" ]

@@ -191,7 +191,7 @@ sk_sp<SkImageFilter> FEImage::CreateImageFilterForLayoutObject(
   builder.EndRecording(*canvas);
 
   return SkPictureImageFilter::Make(
-      ToSkPicture(paint_recorder.finishRecordingAsPicture(), dst_rect));
+      ToSkPicture(paint_recorder.finishRecordingAsPicture()), dst_rect);
 }
 
 sk_sp<SkImageFilter> FEImage::CreateImageFilter() {

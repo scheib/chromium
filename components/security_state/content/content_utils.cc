@@ -306,8 +306,9 @@ blink::WebSecurityStyle GetSecurityStyle(
   if (security_info.pkp_bypassed) {
     security_style_explanations->info_explanations.push_back(
         content::SecurityStyleExplanation(
-            "Public-Key Pinning Bypassed",
-            "Public-key pinning was bypassed by a local root certificate."));
+            l10n_util::GetStringUTF8(IDS_PRIVATE_KEY_PINNING_BYPASSED),
+            l10n_util::GetStringUTF8(
+                IDS_PRIVATE_KEY_PINNING_BYPASSED_DESCRIPTION)));
   }
 
   return security_style;

@@ -338,10 +338,9 @@ TEST(ValuesUtilTest, PopDictionaryWithDottedStringKey) {
 
   // Create the expected value.
   base::DictionaryValue dictionary_value;
-  dictionary_value.SetWithoutPathExpansion(kKey1, new base::Value(kBoolValue));
-  dictionary_value.SetWithoutPathExpansion(kKey2, new base::Value(kInt32Value));
-  dictionary_value.SetWithoutPathExpansion(kKey3,
-                                           new base::Value(kDoubleValue));
+  dictionary_value.SetBooleanWithoutPathExpansion(kKey1, kBoolValue);
+  dictionary_value.SetIntegerWithoutPathExpansion(kKey2, kInt32Value);
+  dictionary_value.SetDoubleWithoutPathExpansion(kKey3, kDoubleValue);
 
   // Pop a dictinoary.
   MessageReader reader(response.get());

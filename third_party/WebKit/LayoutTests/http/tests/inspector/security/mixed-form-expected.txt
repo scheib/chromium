@@ -7,7 +7,7 @@ Security Explanations (Mixed Form Only) --------------
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Non-secure Form
+Non-secure form
         </DIV>
         <DIV >
 The page includes a form with a non-secure "action" attribute.
@@ -19,7 +19,7 @@ The page includes a form with a non-secure "action" attribute.
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Secure Resources
+Secure resources
         </DIV>
         <DIV >
 All resources on this page are served securely.
@@ -33,7 +33,7 @@ Security Explanations (Mixed Form + Mixed Passive) --------------
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Non-secure Form
+Non-secure form
         </DIV>
         <DIV >
 The page includes a form with a non-secure "action" attribute.
@@ -45,7 +45,7 @@ The page includes a form with a non-secure "action" attribute.
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Mixed Content
+Mixed content
         </DIV>
         <DIV >
 The site includes HTTP resources.

@@ -59,7 +59,7 @@ shared_library("chrome_watcher") {
     ":client",
     "//base",
     "//base:base_static",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//chrome/common",
     "//chrome/install_static:secondary_module",
     "//chrome_elf",

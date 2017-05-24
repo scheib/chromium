@@ -89,3 +89,34 @@ void DeleteDirectoryContentAndLogRuntime(const base::FilePath& path,
 
   DeleteDirectoryContent(path, kFileDeleteLimit);
 }
+
+bool FilesExceedLimitInDir(const base::FilePath& path, int max_files) {
+  int count = 0;
+  base::FileEnumerator file_iter(path, false, base::FileEnumerator::FILES);
+  while (!file_iter.Next().empty()) {
+    if (++count > max_files)
+      return true;
+  }
+  return false;
+}
+
+void DeleteNonCachedFiles(const base::FilePath& path,
+                          const base::flat_set<base::FilePath>& cached_files) {
+  base::FileEnumerator traversal(path, false, base::FileEnumerator::FILES);
+
+  for (base::FilePath current = traversal.Next(); !current.empty();
+       current = traversal.Next()) {
+    if (cached_files.find(current) != cached_files.end())
+      continue;
+
+    // Try to clear the read-only bit if we find it.
+    base::FileEnumerator::FileInfo info = traversal.GetInfo();
+    if (info.find_data().dwFileAttributes & FILE_ATTRIBUTE_READONLY) {
+      SetFileAttributes(
+          current.value().c_str(),
+          info.find_data().dwFileAttributes & ~FILE_ATTRIBUTE_READONLY);
+    }
+
+    ::DeleteFile(current.value().c_str());
+  }
+}

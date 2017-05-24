@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/macros.h"
+#include "chrome/browser/android/vr_shell/ui_elements/ui_element_debug_id.h"
 #include "device/vr/vr_types.h"
 
 namespace base {
@@ -145,6 +146,10 @@ class UiElement : public WorldRectangle {
   bool lock_to_fov() const { return lock_to_fov_; }
   void set_lock_to_fov(bool lock) { lock_to_fov_ = lock; }
 
+  // If true should be drawn in the world viewport, but over all other elements.
+  bool is_overlay() const { return is_overlay_; }
+  void set_is_overlay(bool is_overlay) { is_overlay_ = is_overlay; }
+
   // The computed lock to the FoV, incorporating lock of parent objects.
   bool computed_lock_to_fov() const { return computed_lock_to_fov_; }
   void set_computed_lock_to_fov(bool computed_lock) {
@@ -231,6 +236,10 @@ class UiElement : public WorldRectangle {
   bool dirty() const { return dirty_; }
   void set_dirty(bool dirty) { dirty_ = dirty; }
 
+  // A flag usable during transformation calculates to avoid duplicate work.
+  UiElementDebugId debug_id() const { return debug_id_; }
+  void set_debug_id(UiElementDebugId debug_id) { debug_id_ = debug_id; }
+
   // By default, sets an element to be visible or not. This may be overridden to
   // allow finer control of element visibility.
   virtual void SetEnabled(bool enabled);
@@ -244,7 +253,7 @@ class UiElement : public WorldRectangle {
   int parent_id_ = -1;
 
   // If true, this object will be visible.
-  bool visible_ = true;
+  bool visible_ = false;
 
   // If false, the reticle will not hit the element, even if visible.
   bool hit_testable_ = true;
@@ -255,6 +264,10 @@ class UiElement : public WorldRectangle {
 
   // The computed lock to the FoV, incorporating lock of parent objects.
   bool computed_lock_to_fov_ = false;
+
+  // If true, then this element will be drawn in the world viewport, but above
+  // all other elements.
+  bool is_overlay_ = false;
 
   // The size of the object.  This does not affect children.
   gfx::Vector3dF size_ = {1.0f, 1.0f, 1.0f};
@@ -298,6 +311,9 @@ class UiElement : public WorldRectangle {
 
   // A flag usable during transformation calculates to avoid duplicate work.
   bool dirty_ = false;
+
+  // An identifier used for testing and debugging, in lieu of a string.
+  UiElementDebugId debug_id_ = UiElementDebugId::kNone;
 
   Transform transform_;
 

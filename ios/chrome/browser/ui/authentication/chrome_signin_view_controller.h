@@ -75,6 +75,7 @@ class ChromeBrowserState;
 - (instancetype)initWithBrowserState:(ios::ChromeBrowserState*)browserState
                isPresentedOnSettings:(BOOL)isPresentedOnSettings
                          accessPoint:(signin_metrics::AccessPoint)accessPoint
+                         promoAction:(signin_metrics::PromoAction)promoAction
                       signInIdentity:(ChromeIdentity*)identity;
 
 // Cancels the on-going authentication operation (if any). |delegate| will be

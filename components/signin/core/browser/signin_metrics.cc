@@ -23,15 +23,71 @@ DifferentPrimaryAccounts ComparePrimaryAccounts(bool primary_accounts_same,
 }
 
 void LogSigninAccessPointStarted(AccessPoint access_point) {
-  UMA_HISTOGRAM_ENUMERATION("Signin.SigninStartedAccessPoint",
-                            static_cast<int>(access_point),
-                            static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+  LogSigninAccessPointStarted(
+      access_point, signin_metrics::PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO);
 }
 
 void LogSigninAccessPointCompleted(AccessPoint access_point) {
+  LogSigninAccessPointCompleted(
+      access_point, signin_metrics::PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO);
+}
+
+void LogSigninAccessPointStarted(AccessPoint access_point,
+                                 PromoAction promo_action) {
+  UMA_HISTOGRAM_ENUMERATION("Signin.SigninStartedAccessPoint",
+                            static_cast<int>(access_point),
+                            static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+  switch (promo_action) {
+    case PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO:
+      break;
+    case PromoAction::PROMO_ACTION_WITH_DEFAULT:
+      UMA_HISTOGRAM_ENUMERATION(
+          "Signin.SigninStartedAccessPoint.WithDefault",
+          static_cast<int>(access_point),
+          static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+      break;
+    case PromoAction::PROMO_ACTION_NOT_DEFAULT:
+      UMA_HISTOGRAM_ENUMERATION(
+          "Signin.SigninStartedAccessPoint.NotDefault",
+          static_cast<int>(access_point),
+          static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+      break;
+    case PromoAction::PROMO_ACTION_NEW_ACCOUNT:
+      UMA_HISTOGRAM_ENUMERATION(
+          "Signin.SigninStartedAccessPoint.NewAccount",
+          static_cast<int>(access_point),
+          static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+      break;
+  }
+}
+
+void LogSigninAccessPointCompleted(AccessPoint access_point,
+                                   PromoAction promo_action) {
   UMA_HISTOGRAM_ENUMERATION("Signin.SigninCompletedAccessPoint",
                             static_cast<int>(access_point),
                             static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+  switch (promo_action) {
+    case PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO:
+      break;
+    case PromoAction::PROMO_ACTION_WITH_DEFAULT:
+      UMA_HISTOGRAM_ENUMERATION(
+          "Signin.SigninCompletedAccessPoint.WithDefault",
+          static_cast<int>(access_point),
+          static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+      break;
+    case PromoAction::PROMO_ACTION_NOT_DEFAULT:
+      UMA_HISTOGRAM_ENUMERATION(
+          "Signin.SigninCompletedAccessPoint.NotDefault",
+          static_cast<int>(access_point),
+          static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+      break;
+    case PromoAction::PROMO_ACTION_NEW_ACCOUNT:
+      UMA_HISTOGRAM_ENUMERATION(
+          "Signin.SigninCompletedAccessPoint.NewAccount",
+          static_cast<int>(access_point),
+          static_cast<int>(AccessPoint::ACCESS_POINT_MAX));
+      break;
+  }
 }
 
 void LogSigninReason(Reason reason) {

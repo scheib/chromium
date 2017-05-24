@@ -84,9 +84,8 @@ void StylusHandler::UpdateNoteTakingApps() {
   }
 
   AllowJavascript();
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("onNoteTakingAppsUpdated"), apps_list,
-                         base::Value(waiting_for_android));
+  FireWebUIListener("onNoteTakingAppsUpdated", apps_list,
+                    base::Value(waiting_for_android));
 }
 
 void StylusHandler::RequestApps(const base::ListValue* unused_args) {
@@ -116,9 +115,8 @@ void StylusHandler::HandleInitialize(const base::ListValue* args) {
 void StylusHandler::SendHasStylus() {
   DCHECK(ui::InputDeviceManager::GetInstance()->AreDeviceListsComplete());
   AllowJavascript();
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("has-stylus-changed"),
-                         base::Value(ash::palette_utils::HasStylusInput()));
+  FireWebUIListener("has-stylus-changed",
+                    base::Value(ash::palette_utils::HasStylusInput()));
 }
 
 void StylusHandler::ShowPlayStoreApps(const base::ListValue* args) {

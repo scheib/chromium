@@ -28,15 +28,21 @@
 #include "ui/views/controls/separator.h"
 #include "ui/views/layout/box_layout.h"
 
+namespace ash {
+
 namespace {
 
 // The ISO-639 code for the Hebrew locale. The help icon asset is a '?' which is
 // not mirrored in this locale.
 const char kHebrewLocale[] = "he";
 
-}  // namespace
+const gfx::VectorIcon& GetNightLightButtonIcon() {
+  return Shell::Get()->night_light_controller()->GetEnabled()
+             ? kSystemMenuNightLightOnIcon
+             : kSystemMenuNightLightOffIcon;
+}
 
-namespace ash {
+}  // namespace
 
 TilesDefaultView::TilesDefaultView(SystemTrayItem* owner)
     : owner_(owner),
@@ -85,12 +91,9 @@ void TilesDefaultView::Init() {
   AddChildView(help_button_);
   AddChildView(TrayPopupUtils::CreateVerticalSeparator());
 
-  night_light_button_ =
-      new SystemMenuButton(this, TrayPopupInkDropStyle::HOST_CENTERED,
-                           Shell::Get()->night_light_controller()->GetEnabled()
-                               ? kSystemMenuNightLightOnIcon
-                               : kSystemMenuNightLightOffIcon,
-                           IDS_ASH_STATUS_TRAY_NIGHT_LIGHT);
+  night_light_button_ = new SystemMenuButton(
+      this, TrayPopupInkDropStyle::HOST_CENTERED, GetNightLightButtonIcon(),
+      IDS_ASH_STATUS_TRAY_NIGHT_LIGHT);
   night_light_button_->SetEnabled(can_show_web_ui);
   AddChildView(night_light_button_);
   AddChildView(TrayPopupUtils::CreateVerticalSeparator());
@@ -127,6 +130,7 @@ void TilesDefaultView::ButtonPressed(views::Button* sender,
   } else if (sender == night_light_button_) {
     ShellPort::Get()->RecordUserMetricsAction(UMA_TRAY_NIGHT_LIGHT);
     Shell::Get()->night_light_controller()->Toggle();
+    night_light_button_->SetVectorIcon(GetNightLightButtonIcon());
   } else if (sender == lock_button_) {
     ShellPort::Get()->RecordUserMetricsAction(UMA_TRAY_LOCK_SCREEN);
     chromeos::DBusThreadManager::Get()
@@ -136,8 +140,6 @@ void TilesDefaultView::ButtonPressed(views::Button* sender,
     ShellPort::Get()->RecordUserMetricsAction(UMA_TRAY_SHUT_DOWN);
     Shell::Get()->lock_state_controller()->RequestShutdown();
   }
-
-  owner_->system_tray()->CloseSystemBubble();
 }
 
 views::View* TilesDefaultView::GetHelpButtonView() const {

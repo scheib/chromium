@@ -1047,7 +1047,8 @@ bool Node::CanStartSelection() const {
     // We allow selections to begin within an element that has
     // -webkit-user-select: none set, but if the element is draggable then
     // dragging should take priority over selection.
-    if (style.UserDrag() == DRAG_ELEMENT && style.UserSelect() == SELECT_NONE)
+    if (style.UserDrag() == DRAG_ELEMENT &&
+        style.UserSelect() == EUserSelect::kNone)
       return false;
   }
   ContainerNode* parent = FlatTreeTraversal::Parent(*this);

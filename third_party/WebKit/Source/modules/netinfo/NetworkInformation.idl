@@ -16,6 +16,7 @@ enum ConnectionType {
 };
 
 typedef unrestricted double Megabit;
+typedef unsigned long long Milliseconds;
 
 [
     ActiveScriptWrappable,
@@ -27,4 +28,6 @@ typedef unrestricted double Megabit;
     [RuntimeEnabled=NetInfoDownlinkMax, MeasureAs=NetInfoDownlinkMax] readonly attribute Megabit downlinkMax;
     [RuntimeEnabled=NetInfoDownlinkMax, MeasureAs=NetInfoOnChange] attribute EventHandler onchange;
     [MeasureAs=NetInfoOnTypeChange] attribute EventHandler ontypechange;
+    [RuntimeEnabled=NetInfoRtt, MeasureAs=NetInfoRtt] readonly attribute Milliseconds rtt;  
+    [RuntimeEnabled=NetInfoDownlink, MeasureAs=NetInfoDownlink] readonly attribute Megabit downlink;
 };

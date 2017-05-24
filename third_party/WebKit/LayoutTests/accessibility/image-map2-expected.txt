@@ -3,7 +3,7 @@ Image map - test 2 - 2 Links (alt tags)
 
 ------------
 
-AXRole: AXDiv
+AXRole: AXGenericContainer
 ------------
 Link1
 AXRole: AXLink

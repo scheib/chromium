@@ -4,6 +4,7 @@
 
 #include "chrome/browser/experiments/memory_ablation_experiment.h"
 
+#include <algorithm>
 #include <limits>
 
 #include "base/bind.h"
@@ -21,7 +22,17 @@ const char kMemoryAblationFeatureSizeParam[] = "Size";
 const char kMemoryAblationFeatureMinRAMParam[] = "MinRAM";
 const char kMemoryAblationFeatureMaxRAMParam[] = "MaxRAM";
 
-constexpr size_t kMemoryAblationDelaySeconds = 5;
+// Since MaybeStart() is called during startup, we delay the allocation
+// to avoid slowing things down.
+constexpr size_t kAllocationDelaySeconds = 5;
+
+// We need to touch allocated memory to "dirty" it. However, touching
+// large chunks of memory (even a single byte per page) can be costly
+// (~60ms per 10MiB on Nexus 5). So we touch in chunks to allow other
+// things to happen in between. With the following values we'll touch
+// 2MiB per second, spending ~10% of 250ms time slice per chunk.
+constexpr size_t kTouchDelayMilliseconds = 250;
+constexpr size_t kTouchChunkSize = 512 * 1024;
 
 MemoryAblationExperiment::MemoryAblationExperiment() {}
 
@@ -56,26 +67,42 @@ void MemoryAblationExperiment::MaybeStart(
 void MemoryAblationExperiment::Start(
     scoped_refptr<base::SequencedTaskRunner> task_runner,
     size_t memory_size) {
-  task_runner->PostDelayedTask(
+  DCHECK(task_runner_ == nullptr) << "Already started";
+  task_runner_ = task_runner;
+  // This class is a singleton, so "Unretained(this)" below is fine.
+  task_runner_->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&MemoryAblationExperiment::AllocateMemory,
                      base::Unretained(this), memory_size),
-      base::TimeDelta::FromSeconds(kMemoryAblationDelaySeconds));
+      base::TimeDelta::FromSeconds(kAllocationDelaySeconds));
 }
 
 void MemoryAblationExperiment::AllocateMemory(size_t size) {
   memory_size_ = size;
   memory_.reset(new uint8_t[size]);
-  TouchMemory();
+  ScheduleTouchMemory(0);
 }
 
-void MemoryAblationExperiment::TouchMemory() {
+void MemoryAblationExperiment::TouchMemory(size_t offset) {
   if (memory_) {
     size_t page_size = base::GetPageSize();
     auto* memory = static_cast<volatile uint8_t*>(memory_.get());
-    for (size_t i = 0; i < memory_size_; i += page_size) {
-      memory[i] = i;
+    size_t max_offset = std::min(offset + kTouchChunkSize, memory_size_);
+    for (; offset < max_offset; offset += page_size) {
+      memory[offset] = static_cast<uint8_t>(offset);
     }
     base::debug::Alias(memory_.get());
+    if (offset < memory_size_) {
+      ScheduleTouchMemory(offset);
+    }
   }
+}
+
+void MemoryAblationExperiment::ScheduleTouchMemory(size_t offset) {
+  // This class is a singleton, so "Unretained(this)" below is fine.
+  task_runner_->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&MemoryAblationExperiment::TouchMemory,
+                     base::Unretained(this), offset),
+      base::TimeDelta::FromMilliseconds(kTouchDelayMilliseconds));
 }

@@ -77,6 +77,11 @@ class DataReductionProxyService
   // final step in initialization.
   bool Initialized() const;
 
+  // Records data usage per host.
+  void UpdateDataUseForHost(int64_t network_bytes,
+                            int64_t original_bytes,
+                            const std::string& host);
+
   // Records daily data savings statistics in |compression_stats_|.
   void UpdateContentLengths(int64_t data_used,
                             int64_t original_size,

@@ -100,9 +100,9 @@ WmToplevelWindowEventHandler::ScopedWindowResizer::ScopedWindowResizer(
     WmToplevelWindowEventHandler* handler,
     std::unique_ptr<WindowResizer> resizer)
     : handler_(handler), resizer_(std::move(resizer)), grabbed_capture_(false) {
-  WmWindow* target = resizer_->GetTarget();
-  target->aura_window()->AddObserver(this);
-  target->GetWindowState()->AddObserver(this);
+  aura::Window* target = resizer_->GetTarget();
+  target->AddObserver(this);
+  GetWindowState(target)->AddObserver(this);
 
   if (!target->HasCapture()) {
     grabbed_capture_ = true;
@@ -111,9 +111,9 @@ WmToplevelWindowEventHandler::ScopedWindowResizer::ScopedWindowResizer(
 }
 
 WmToplevelWindowEventHandler::ScopedWindowResizer::~ScopedWindowResizer() {
-  WmWindow* target = resizer_->GetTarget();
-  target->aura_window()->RemoveObserver(this);
-  target->GetWindowState()->RemoveObserver(this);
+  aura::Window* target = resizer_->GetTarget();
+  target->RemoveObserver(this);
+  GetWindowState(target)->RemoveObserver(this);
   if (grabbed_capture_)
     target->ReleaseCapture();
 }
@@ -131,7 +131,7 @@ void WmToplevelWindowEventHandler::ScopedWindowResizer::
 
 void WmToplevelWindowEventHandler::ScopedWindowResizer::OnWindowDestroying(
     aura::Window* window) {
-  DCHECK_EQ(resizer_->GetTarget(), WmWindow::Get(window));
+  DCHECK_EQ(resizer_->GetTarget(), window);
   handler_->ResizerWindowDestroyed();
 }
 
@@ -204,7 +204,7 @@ void WmToplevelWindowEventHandler::OnGestureEvent(ui::GestureEvent* event,
     return;
 
   if (window_resizer_.get() &&
-      window_resizer_->resizer()->GetTarget() != target) {
+      window_resizer_->resizer()->GetTarget() != target->aura_window()) {
     return;
   }
 
@@ -362,8 +362,8 @@ bool WmToplevelWindowEventHandler::AttemptToStartDrag(
     const EndClosure& end_closure) {
   if (window_resizer_.get())
     return false;
-  std::unique_ptr<WindowResizer> resizer(
-      CreateWindowResizer(window, point_in_parent, window_component, source));
+  std::unique_ptr<WindowResizer> resizer(CreateWindowResizer(
+      window->aura_window(), point_in_parent, window_component, source));
   if (!resizer)
     return false;
 

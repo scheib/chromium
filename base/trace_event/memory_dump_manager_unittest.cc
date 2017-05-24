@@ -247,14 +247,12 @@ class MemoryDumpManagerTest : public testing::Test {
   void SetUp() override {
     last_callback_success_ = false;
     message_loop_.reset(new MessageLoop());
-    mdm_.reset(new MemoryDumpManager());
-    results_.clear();
-    MemoryDumpManager::SetInstanceForTesting(mdm_.get());
+    mdm_ = MemoryDumpManager::CreateInstanceForTesting();
     ASSERT_EQ(mdm_.get(), MemoryDumpManager::GetInstance());
+    results_.clear();
   }
 
   void TearDown() override {
-    MemoryDumpManager::SetInstanceForTesting(nullptr);
     mdm_.reset();
     message_loop_.reset();
     TraceLog::DeleteForTesting();

@@ -488,6 +488,22 @@ void ProfileImplIOData::InitializeInternal(
 
   main_context->set_proxy_service(proxy_service());
 
+  // Create a single task runner to use with the CookieStore and ChannelIDStore.
+  scoped_refptr<base::SequencedTaskRunner> cookie_background_task_runner =
+      base::CreateSequencedTaskRunnerWithTraits(
+          {base::MayBlock(), base::TaskPriority::BACKGROUND,
+           base::TaskShutdownBehavior::BLOCK_SHUTDOWN});
+
+  // Set up server bound cert service.
+  DCHECK(!lazy_params_->channel_id_path.empty());
+  scoped_refptr<QuotaPolicyChannelIDStore> channel_id_db =
+      new QuotaPolicyChannelIDStore(lazy_params_->channel_id_path,
+                                    cookie_background_task_runner,
+                                    lazy_params_->special_storage_policy.get());
+  main_context_storage->set_channel_id_service(
+      base::MakeUnique<net::ChannelIDService>(
+          new net::DefaultChannelIDStore(channel_id_db.get())));
+
   // Set up cookie store.
   DCHECK(!lazy_params_->cookie_path.empty());
 
@@ -496,20 +512,10 @@ void ProfileImplIOData::InitializeInternal(
       lazy_params_->special_storage_policy.get(),
       profile_params->cookie_monster_delegate.get());
   cookie_config.crypto_delegate = cookie_config::GetCookieCryptoDelegate();
+  cookie_config.channel_id_service = main_context->channel_id_service();
+  cookie_config.background_task_runner = cookie_background_task_runner;
   main_context_storage->set_cookie_store(
       content::CreateCookieStore(cookie_config));
-
-  // Set up server bound cert service.
-  DCHECK(!lazy_params_->channel_id_path.empty());
-  scoped_refptr<QuotaPolicyChannelIDStore> channel_id_db =
-      new QuotaPolicyChannelIDStore(
-          lazy_params_->channel_id_path,
-          base::CreateSequencedTaskRunnerWithTraits(
-              {base::MayBlock(), base::TaskPriority::BACKGROUND}),
-          lazy_params_->special_storage_policy.get());
-  main_context_storage->set_channel_id_service(
-      base::MakeUnique<net::ChannelIDService>(
-          new net::DefaultChannelIDStore(channel_id_db.get())));
 
   main_context->cookie_store()->SetChannelIDServiceID(
       main_context->channel_id_service()->GetUniqueID());
@@ -576,6 +582,7 @@ void ProfileImplIOData::
   cookie_config.crypto_delegate = cookie_config::GetCookieCryptoDelegate();
   // Enable cookies for chrome-extension URLs.
   cookie_config.cookieable_schemes.push_back(extensions::kExtensionScheme);
+  cookie_config.channel_id_service = extensions_context->channel_id_service();
   extensions_cookie_store_ = content::CreateCookieStore(cookie_config);
   extensions_context->set_cookie_store(extensions_cookie_store_.get());
 }
@@ -611,28 +618,34 @@ net::URLRequestContext* ProfileImplIOData::InitializeAppRequestContext(
 
   std::unique_ptr<net::CookieStore> cookie_store;
   scoped_refptr<net::SQLiteChannelIDStore> channel_id_db;
+  // Create a single task runner to use with the CookieStore and ChannelIDStore.
+  scoped_refptr<base::SequencedTaskRunner> cookie_background_task_runner =
+      base::CreateSequencedTaskRunnerWithTraits(
+          {base::MayBlock(), base::TaskPriority::BACKGROUND,
+           base::TaskShutdownBehavior::BLOCK_SHUTDOWN});
   if (partition_descriptor.in_memory) {
-    cookie_store = content::CreateCookieStore(content::CookieStoreConfig());
-  } else {
+    cookie_path = base::FilePath();
+  }
+  content::CookieStoreConfig cookie_config(
+      cookie_path, content::CookieStoreConfig::EPHEMERAL_SESSION_COOKIES,
+      nullptr, nullptr);
+  if (!partition_descriptor.in_memory) {
     // Use an app-specific cookie store.
     DCHECK(!cookie_path.empty());
 
     // TODO(creis): We should have a cookie delegate for notifying the cookie
     // extensions API, but we need to update it to understand isolated apps
     // first.
-    content::CookieStoreConfig cookie_config(
-        cookie_path, content::CookieStoreConfig::EPHEMERAL_SESSION_COOKIES,
-        nullptr, nullptr);
     cookie_config.crypto_delegate = cookie_config::GetCookieCryptoDelegate();
-    cookie_store = content::CreateCookieStore(cookie_config);
     channel_id_db = new net::SQLiteChannelIDStore(
-        channel_id_path,
-        base::CreateSequencedTaskRunnerWithTraits(
-            {base::MayBlock(), base::TaskPriority::BACKGROUND}));
+        channel_id_path, cookie_background_task_runner);
   }
   std::unique_ptr<net::ChannelIDService> channel_id_service(
       new net::ChannelIDService(
           new net::DefaultChannelIDStore(channel_id_db.get())));
+  cookie_config.channel_id_service = channel_id_service.get();
+  cookie_config.background_task_runner = cookie_background_task_runner;
+  cookie_store = content::CreateCookieStore(cookie_config);
   cookie_store->SetChannelIDServiceID(channel_id_service->GetUniqueID());
 
   // Build a new HttpNetworkSession that uses the new ChannelIDService.

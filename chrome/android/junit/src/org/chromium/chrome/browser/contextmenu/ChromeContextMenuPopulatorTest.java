@@ -79,20 +79,20 @@ public class ChromeContextMenuPopulatorTest {
 
         List<ContextMenuItem> enabledItems = getEnabledItems(contextMenuParams);
         Assert.assertThat(enabledItems,
-                Matchers.containsInAnyOrder(
-                        ContextMenuItem.COPY_LINK_ADDRESS, ContextMenuItem.COPY_LINK_TEXT));
+                Matchers.containsInAnyOrder(ChromeContextMenuItem.COPY_LINK_ADDRESS,
+                        ChromeContextMenuItem.COPY_LINK_TEXT));
 
         initializePopulator(ChromeContextMenuPopulator.CUSTOM_TAB_MODE);
         enabledItems = getEnabledItems(contextMenuParams);
         Assert.assertThat(enabledItems,
-                Matchers.containsInAnyOrder(
-                        ContextMenuItem.COPY_LINK_ADDRESS, ContextMenuItem.COPY_LINK_TEXT));
+                Matchers.containsInAnyOrder(ChromeContextMenuItem.COPY_LINK_ADDRESS,
+                        ChromeContextMenuItem.COPY_LINK_TEXT));
 
         initializePopulator(ChromeContextMenuPopulator.FULLSCREEN_TAB_MODE);
         enabledItems = getEnabledItems(contextMenuParams);
         Assert.assertThat(enabledItems,
-                Matchers.containsInAnyOrder(
-                        ContextMenuItem.COPY_LINK_ADDRESS, ContextMenuItem.COPY_LINK_TEXT));
+                Matchers.containsInAnyOrder(ChromeContextMenuItem.COPY_LINK_ADDRESS,
+                        ChromeContextMenuItem.COPY_LINK_TEXT));
     }
 
     @Test
@@ -121,17 +121,17 @@ public class ChromeContextMenuPopulatorTest {
 
         List<ContextMenuItem> enabledItems = getEnabledItems(contextMenuParams);
         Assert.assertThat(
-                enabledItems, Matchers.containsInAnyOrder(ContextMenuItem.COPY_LINK_ADDRESS));
+                enabledItems, Matchers.containsInAnyOrder(ChromeContextMenuItem.COPY_LINK_ADDRESS));
 
         initializePopulator(ChromeContextMenuPopulator.CUSTOM_TAB_MODE);
         enabledItems = getEnabledItems(contextMenuParams);
         Assert.assertThat(
-                enabledItems, Matchers.containsInAnyOrder(ContextMenuItem.COPY_LINK_ADDRESS));
+                enabledItems, Matchers.containsInAnyOrder(ChromeContextMenuItem.COPY_LINK_ADDRESS));
 
         initializePopulator(ChromeContextMenuPopulator.FULLSCREEN_TAB_MODE);
         enabledItems = getEnabledItems(contextMenuParams);
         Assert.assertThat(
-                enabledItems, Matchers.containsInAnyOrder(ContextMenuItem.COPY_LINK_ADDRESS));
+                enabledItems, Matchers.containsInAnyOrder(ChromeContextMenuItem.COPY_LINK_ADDRESS));
     }
 
     private List<ContextMenuItem> getEnabledItems(ContextMenuParams params) {

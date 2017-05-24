@@ -361,8 +361,7 @@
 	"messages": [28650],
   },
 
-  # TODO(crbug.com/672458): Move this out of src/chrome/.
-  "chrome/app/address_input_strings.grd": {
+  "third_party/libaddressinput/chromium/address_input_strings.grd": {
     "messages": [28700],
   },
   # END "everything else" section.

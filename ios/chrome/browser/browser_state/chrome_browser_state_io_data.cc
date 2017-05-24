@@ -32,6 +32,7 @@
 #include "components/metrics/metrics_pref_names.h"
 #include "components/net_log/chrome_net_log.h"
 #include "components/prefs/pref_service.h"
+#include "components/proxy_config/ios/proxy_service_factory.h"
 #include "components/signin/core/common/signin_pref_names.h"
 #include "components/sync/base/pref_names.h"
 #include "ios/chrome/browser/application_context.h"
@@ -43,7 +44,6 @@
 #include "ios/chrome/browser/net/ios_chrome_http_user_agent_settings.h"
 #include "ios/chrome/browser/net/ios_chrome_network_delegate.h"
 #include "ios/chrome/browser/net/ios_chrome_url_request_context_getter.h"
-#include "ios/chrome/browser/net/proxy_service_factory.h"
 #include "ios/web/public/web_thread.h"
 #include "net/cert/cert_verifier.h"
 #include "net/cert/multi_log_ct_verifier.h"
@@ -100,9 +100,8 @@ void ChromeBrowserStateIOData::InitializeOnUIThread(
       ios::HostContentSettingsMapFactory::GetForBrowserState(browser_state);
   params->ssl_config_service = browser_state->GetSSLConfigService();
 
-  params->proxy_config_service =
-      ios::ProxyServiceFactory::CreateProxyConfigService(
-          browser_state->GetProxyConfigTracker());
+  params->proxy_config_service = ProxyServiceFactory::CreateProxyConfigService(
+      browser_state->GetProxyConfigTracker());
 
   params->browser_state = browser_state;
   profile_params_.reset(params.release());
@@ -352,7 +351,7 @@ void ChromeBrowserStateIOData::Init(
 
   // NOTE: Proxy service uses the default io thread network delegate, not the
   // delegate just created.
-  proxy_service_ = ios::ProxyServiceFactory::CreateProxyService(
+  proxy_service_ = ProxyServiceFactory::CreateProxyService(
       io_thread->net_log(), nullptr,
       io_thread_globals->system_network_delegate.get(),
       std::move(profile_params_->proxy_config_service),

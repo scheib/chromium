@@ -4,7 +4,11 @@
 
 #include "media/blink/webmediacapabilitiesclient_impl.h"
 
+#include "media/base/audio_codecs.h"
+#include "media/base/decode_capabilities.h"
 #include "media/base/mime_util.h"
+#include "media/base/video_codecs.h"
+#include "media/base/video_color_space.h"
 #include "third_party/WebKit/public/platform/modules/media_capabilities/WebAudioConfiguration.h"
 #include "third_party/WebKit/public/platform/modules/media_capabilities/WebMediaCapabilitiesInfo.h"
 #include "third_party/WebKit/public/platform/modules/media_capabilities/WebMediaConfiguration.h"
@@ -22,46 +26,61 @@ void WebMediaCapabilitiesClientImpl::DecodingInfo(
   std::unique_ptr<blink::WebMediaCapabilitiesInfo> info(
       new blink::WebMediaCapabilitiesInfo());
 
-  SupportsType audio_support = IsSupported;
-  SupportsType video_support = IsSupported;
+  bool audio_supported = true;
+  bool video_supported = true;
 
   if (configuration.audio_configuration) {
     const blink::WebAudioConfiguration& audio_config =
         configuration.audio_configuration.value();
-    std::vector<std::string> codec_vector;
-    SplitCodecsToVector(audio_config.codec.Ascii(), &codec_vector, false);
+    AudioCodec audio_codec;
+    bool is_audio_codec_ambiguous;
 
-    // TODO(chcunningham): Update to throw exception pending outcome of
-    // https://github.com/WICG/media-capabilities/issues/32
-    DCHECK_LE(codec_vector.size(), 1U);
-
-    audio_support =
-        IsSupportedMediaFormat(audio_config.mime_type.Ascii(), codec_vector);
+    if (!ParseAudioCodecString(audio_config.mime_type.Ascii(),
+                               audio_config.codec.Ascii(),
+                               &is_audio_codec_ambiguous, &audio_codec)) {
+      // TODO(chcunningham): Replace this and other DVLOGs here with MEDIA_LOG.
+      // MediaCapabilities may need its own tab in chrome://media-internals.
+      DVLOG(2) << __func__ << " Failed to parse audio codec string:"
+               << audio_config.codec.Ascii();
+      audio_supported = false;
+    } else if (is_audio_codec_ambiguous) {
+      DVLOG(2) << __func__ << " Invalid (ambiguous) audio codec string:"
+               << audio_config.codec.Ascii();
+      audio_supported = false;
+    } else {
+      AudioConfig audio_config = {audio_codec};
+      audio_supported = IsSupportedAudioConfig(audio_config);
+    }
   }
 
   if (configuration.video_configuration) {
     const blink::WebVideoConfiguration& video_config =
         configuration.video_configuration.value();
-    std::vector<std::string> codec_vector;
-    SplitCodecsToVector(video_config.codec.Ascii(), &codec_vector, false);
+    VideoCodec video_codec;
+    VideoCodecProfile video_profile;
+    uint8_t video_level;
+    VideoColorSpace video_color_space;
+    bool is_video_codec_ambiguous;
 
-    // TODO(chcunningham): Update to throw exception pending outcome of
-    // https://github.com/WICG/media-capabilities/issues/32
-    DCHECK_LE(codec_vector.size(), 1U);
-
-    video_support =
-        IsSupportedMediaFormat(video_config.mime_type.Ascii(), codec_vector);
+    if (!ParseVideoCodecString(
+            video_config.mime_type.Ascii(), video_config.codec.Ascii(),
+            &is_video_codec_ambiguous, &video_codec, &video_profile,
+            &video_level, &video_color_space)) {
+      DVLOG(2) << __func__ << " Failed to parse video codec string:"
+               << video_config.codec.Ascii();
+      video_supported = false;
+    } else if (is_video_codec_ambiguous) {
+      DVLOG(2) << __func__ << " Invalid (ambiguous) video codec string:"
+               << video_config.codec.Ascii();
+      video_supported = false;
+    } else {
+      VideoConfig video_config = {video_codec, video_profile, video_level,
+                                  video_color_space};
+      video_supported = IsSupportedVideoConfig(video_config);
+    }
   }
 
-  // TODO(chcunningham): API should never have to mask uncertainty. Log a metric
-  // for any content type that is "maybe" supported.
-  if (video_support == MayBeSupported)
-    video_support = IsSupported;
-  if (audio_support == MayBeSupported)
-    audio_support = IsSupported;
-
-  info->supported =
-      audio_support == IsSupported && video_support == IsSupported;
+  info->supported = audio_supported && video_supported;
 
   // TODO(chcunningham, mlamouri): real implementation for these.
   info->smooth = info->power_efficient = info->supported;

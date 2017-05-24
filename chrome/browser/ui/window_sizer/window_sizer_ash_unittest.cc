@@ -8,7 +8,6 @@
 #include "ash/wm/window_positioner.h"
 #include "ash/wm/window_resizer.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm_window.h"
 #include "base/memory/ptr_util.h"
 #include "build/build_config.h"

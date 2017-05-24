@@ -315,6 +315,13 @@ bool NGInlineLayoutAlgorithm::PlaceItems(
   DCHECK_EQ(line_left_position, LogicalLeftOffset());
   LayoutUnit inline_size = position - line_left_position;
   line_box.SetInlineSize(inline_size);
+
+  // Account for text align property.
+  if (Node()->Style().GetTextAlign() == ETextAlign::kRight) {
+    line_box.MoveChildrenInInlineDirection(
+        current_opportunity_.size.inline_size - inline_size);
+  }
+
   container_builder_.AddChild(
       line_box.ToLineBoxFragment(),
       {LayoutUnit(), baseline - box_states_.LineBoxState().metrics.ascent});

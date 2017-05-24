@@ -963,12 +963,9 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterBrowserTest,
   EXPECT_FALSE(WasParsedScriptElementLoaded(web_contents()->GetMainFrame()));
 
   // Whitelist via a reload.
-  ContentSubresourceFilterDriverFactory* driver_factory =
-      ContentSubresourceFilterDriverFactory::FromWebContents(web_contents());
-  ASSERT_TRUE(driver_factory);
-
   content::TestNavigationObserver navigation_observer(web_contents(), 1);
-  driver_factory->OnReloadRequested();
+  ChromeSubresourceFilterClient::FromWebContents(web_contents())
+      ->OnReloadRequested();
   navigation_observer.Wait();
 
   EXPECT_TRUE(WasParsedScriptElementLoaded(web_contents()->GetMainFrame()));
@@ -985,12 +982,9 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterBrowserTest,
   EXPECT_FALSE(WasParsedScriptElementLoaded(web_contents()->GetMainFrame()));
 
   // Whitelist via a reload.
-  ContentSubresourceFilterDriverFactory* driver_factory =
-      ContentSubresourceFilterDriverFactory::FromWebContents(web_contents());
-  ASSERT_TRUE(driver_factory);
-
   content::TestNavigationObserver navigation_observer(web_contents(), 1);
-  driver_factory->OnReloadRequested();
+  ChromeSubresourceFilterClient::FromWebContents(web_contents())
+      ->OnReloadRequested();
   navigation_observer.Wait();
 
   EXPECT_TRUE(WasParsedScriptElementLoaded(web_contents()->GetMainFrame()));
@@ -1024,11 +1018,8 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterBrowserTest,
   // TODO(csharrison): Add support for more than one URL.
   ConfigureAsPhishingURL(a_url);
 
-  // Cast is safe because this is the only type of client in non-unittest code.
   ChromeSubresourceFilterClient* client =
-      static_cast<ChromeSubresourceFilterClient*>(
-          ContentSubresourceFilterDriverFactory::FromWebContents(web_contents())
-              ->client());
+      ChromeSubresourceFilterClient::FromWebContents(web_contents());
   auto test_clock = base::MakeUnique<base::SimpleTestClock>();
   base::SimpleTestClock* raw_clock = test_clock.get();
   settings_manager()->set_clock_for_testing(std::move(test_clock));

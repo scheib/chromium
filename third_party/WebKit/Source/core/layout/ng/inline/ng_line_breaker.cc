@@ -69,10 +69,10 @@ std::pair<unsigned, LayoutUnit> ShapeLineMock(
 
 LineBreakType GetLineBreakType(const ComputedStyle& style) {
   if (style.AutoWrap()) {
-    if (style.WordBreak() == kBreakAllWordBreak ||
-        style.WordBreak() == kBreakWordBreak)
+    if (style.WordBreak() == EWordBreak::kBreakAll ||
+        style.WordBreak() == EWordBreak::kBreakWord)
       return LineBreakType::kBreakAll;
-    if (style.WordBreak() == kKeepAllWordBreak)
+    if (style.WordBreak() == EWordBreak::kKeepAll)
       return LineBreakType::kKeepAll;
   }
   return LineBreakType::kNormal;

@@ -24,7 +24,7 @@
           source.onended = function () {
             should(true, "source.onended called").beTrue();
             task.done();
-          }
+          };
           source.start(0);
           context.startRendering();
         });

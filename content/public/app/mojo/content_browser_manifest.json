@@ -48,6 +48,10 @@
         ],
         "service_manager:service_factory": [
           "service_manager::mojom::ServiceFactory"
+        ],
+        "utility": [
+          "discardable_memory::mojom::DiscardableSharedMemoryManager",
+          "memory_instrumentation::mojom::Coordinator"
         ]
       },
       "requires": {

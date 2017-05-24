@@ -13,6 +13,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
+import org.chromium.base.annotations.UsedByReflection;
+
 /**
  * Manage multiple SurfaceViews for the compositor, so that transitions between
  * surfaces with and without an alpha channel can be visually smooth.
@@ -33,7 +35,14 @@ import android.widget.FrameLayout;
  *
  * The full design doc is at https://goo.gl/aAmQzR .
  */
-class CompositorSurfaceManager implements SurfaceHolder.Callback {
+class CompositorSurfaceManager implements SurfaceHolder.Callback2 {
+    public interface SurfaceHolderCallbackTarget {
+        public void surfaceRedrawNeededAsync(SurfaceHolder holder, Runnable drawingFinished);
+        public void surfaceChanged(SurfaceHolder holder, int format, int width, int height);
+        public void surfaceCreated(SurfaceHolder holder);
+        public void surfaceDestroyed(SurfaceHolder holder);
+    }
+
     private static class SurfaceState {
         public SurfaceView surfaceView;
 
@@ -53,7 +62,7 @@ class CompositorSurfaceManager implements SurfaceHolder.Callback {
         // Parent ViewGroup, or null.
         private ViewGroup mParent;
 
-        public SurfaceState(Context context, int format, SurfaceHolder.Callback callback) {
+        public SurfaceState(Context context, int format, SurfaceHolder.Callback2 callback) {
             surfaceView = new SurfaceView(context);
             surfaceView.setZOrderMediaOverlay(true);
             surfaceView.setVisibility(View.VISIBLE);
@@ -109,12 +118,12 @@ class CompositorSurfaceManager implements SurfaceHolder.Callback {
     private SurfaceState mRequestedByClient;
 
     // Client that we notify about surface change events.
-    private SurfaceHolder.Callback mClient;
+    private SurfaceHolderCallbackTarget mClient;
 
     // View to which we'll attach the SurfaceView.
     private final ViewGroup mParentView;
 
-    public CompositorSurfaceManager(ViewGroup parentView, SurfaceHolder.Callback client) {
+    public CompositorSurfaceManager(ViewGroup parentView, SurfaceHolderCallbackTarget client) {
         mParentView = parentView;
         mClient = client;
 
@@ -251,6 +260,17 @@ class CompositorSurfaceManager implements SurfaceHolder.Callback {
             state.format = format;
             mClient.surfaceChanged(holder, format, width, height);
         }
+    }
+
+    @Override
+    public void surfaceRedrawNeeded(SurfaceHolder holder) {
+        // Intentionally not implemented.
+    }
+
+    // TODO(boliu): Mark this override instead.
+    @UsedByReflection("Android")
+    public void surfaceRedrawNeededAsync(SurfaceHolder holder, Runnable drawingFinished) {
+        mClient.surfaceRedrawNeededAsync(holder, drawingFinished);
     }
 
     @Override

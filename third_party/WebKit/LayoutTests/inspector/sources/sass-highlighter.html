@@ -13,7 +13,7 @@ function test()
     function onSourceShown(uiSourceCodeFrame)
     {
         var uiSourceCode = uiSourceCodeFrame.uiSourceCode();
-        InspectorTest.addResult(Bindings.NetworkProject.uiSourceCodeMimeType(uiSourceCode));
+        InspectorTest.addResult(uiSourceCode.mimeType());
         InspectorTest.completeTest();
     }
 }

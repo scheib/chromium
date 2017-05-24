@@ -253,20 +253,6 @@ static void keysMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
   V8SetReturnValue(info, result);
 }
 
-static void valuesMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestInterface2", "values");
-
-  TestInterface2* impl = V8TestInterface2::toImpl(info.Holder());
-
-  ScriptState* scriptState = ScriptState::ForReceiverObject(info);
-
-  Iterator* result = impl->valuesForBinding(scriptState, exceptionState);
-  if (exceptionState.HadException()) {
-    return;
-  }
-  V8SetReturnValue(info, result);
-}
-
 static void entriesMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
   ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestInterface2", "entries");
 
@@ -521,10 +507,6 @@ void V8TestInterface2::keysMethodCallback(const v8::FunctionCallbackInfo<v8::Val
   TestInterface2V8Internal::keysMethod(info);
 }
 
-void V8TestInterface2::valuesMethodCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  TestInterface2V8Internal::valuesMethod(info);
-}
-
 void V8TestInterface2::entriesMethodCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
   TestInterface2V8Internal::entriesMethod(info);
 }
@@ -608,7 +590,6 @@ static const V8DOMConfiguration::MethodConfiguration V8TestInterface2Methods[] =
     {"deleteNamedItem", V8TestInterface2::deleteNamedItemMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"stringifierMethod", V8TestInterface2::stringifierMethodMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"keys", V8TestInterface2::keysMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
-    {"values", V8TestInterface2::valuesMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"entries", V8TestInterface2::entriesMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"forEach", V8TestInterface2::forEachMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"has", V8TestInterface2::hasMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
@@ -659,7 +640,7 @@ void V8TestInterface2::installV8TestInterface2Template(v8::Isolate* isolate, con
   instanceTemplate->SetHandler(namedPropertyHandlerConfig);
 
   // Iterator (@@iterator)
-  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, V8TestInterface2::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
+  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, "values", V8TestInterface2::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
   V8DOMConfiguration::InstallMethod(isolate, world, prototypeTemplate, signature, symbolKeyedIteratorConfiguration);
 
   instanceTemplate->SetCallAsFunctionHandler(TestInterface2V8Internal::legacyCallerMethodCallback);

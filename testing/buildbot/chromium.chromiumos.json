@@ -45,9 +45,9 @@
       {
         "args": [
           "--mus",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/ash_mus_unittests.filter"
+          "--test-launcher-filter-file=../../testing/buildbot/filters/ash_unittests_mus.filter"
         ],
-        "name": "ash_mus_unittests",
+        "name": "ash_unittests --mus",
         "override_isolate_target": "ash_unittests",
         "swarming": {
           "can_use_on_swarming_builders": true
@@ -216,12 +216,6 @@
       },
       {
         "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "input_device_unittests"
-      },
-      {
-        "swarming": {
           "can_use_on_swarming_builders": true,
           "shards": 3
         },
@@ -297,19 +291,7 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
-        "test": "mus_demo_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
         "test": "mus_gpu_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "mus_ws_unittests"
       },
       {
         "swarming": {
@@ -432,7 +414,7 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
-        "test": "ui_struct_traits_unittests"
+        "test": "ui_service_unittests"
       },
       {
         "swarming": {
@@ -668,12 +650,6 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
-        "test": "input_device_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
         "test": "interactive_ui_tests"
       },
       {
@@ -816,12 +792,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "ui_chromeos_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "ui_struct_traits_unittests"
       },
       {
         "swarming": {

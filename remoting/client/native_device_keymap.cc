@@ -4,10 +4,13 @@
 
 #include "remoting/client/native_device_keymap.h"
 
+#include "base/logging.h"
+
 namespace remoting {
 
 // Default implementation.
 uint32_t NativeDeviceKeycodeToUsbKeycode(size_t device_keycode) {
+  NOTIMPLEMENTED();
   return device_keycode;
 }
 

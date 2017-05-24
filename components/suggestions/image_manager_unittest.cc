@@ -18,6 +18,7 @@
 #include "components/leveldb_proto/testing/fake_db.h"
 #include "components/suggestions/image_encoder.h"
 #include "components/suggestions/proto/suggestions.pb.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/size.h"
@@ -49,10 +50,11 @@ class MockImageFetcher : public ImageFetcher {
  public:
   MockImageFetcher() {}
   virtual ~MockImageFetcher() {}
-  MOCK_METHOD3(StartOrQueueNetworkRequest,
+  MOCK_METHOD4(StartOrQueueNetworkRequest,
                void(const std::string&,
                     const GURL&,
-                    const ImageFetcherCallback&));
+                    const ImageFetcherCallback&,
+                    const net::NetworkTrafficAnnotationTag&));
   MOCK_METHOD1(SetImageFetcherDelegate, void(ImageFetcherDelegate*));
   MOCK_METHOD1(SetDataUseServiceName, void(DataUseServiceName));
   MOCK_METHOD1(SetImageDownloadLimit,
@@ -178,7 +180,7 @@ TEST_F(ImageManagerTest, GetImageForURLNetwork) {
   InitializeDefaultImageMapAndDatabase(image_manager_.get(), fake_db_);
 
   // We expect the fetcher to go to network and call the callback.
-  EXPECT_CALL(*mock_image_fetcher_, StartOrQueueNetworkRequest(_, _, _));
+  EXPECT_CALL(*mock_image_fetcher_, StartOrQueueNetworkRequest(_, _, _, _));
 
   // Fetch existing URL.
   base::RunLoop run_loop;

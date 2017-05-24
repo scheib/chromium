@@ -415,7 +415,6 @@ class AutofillMetricsTest : public testing::Test {
 
  protected:
   void EnableWalletSync();
-  void EnableUkmLogging();
 
   base::test::ScopedTaskEnvironment scoped_task_environment_;
   TestAutofillClient autofill_client_;
@@ -482,10 +481,6 @@ void AutofillMetricsTest::TearDown() {
 
 void AutofillMetricsTest::EnableWalletSync() {
   signin_manager_->SetAuthenticatedAccountInfo("12345", "syncuser@example.com");
-}
-
-void AutofillMetricsTest::EnableUkmLogging() {
-  scoped_feature_list_.InitAndEnableFeature(kAutofillUkmLogging);
 }
 
 // Test that we log quality metrics appropriately.
@@ -1629,11 +1624,6 @@ TEST_F(AutofillMetricsTest, NumberOfEditedAutofilledFields) {
   // fields is logged.
   histogram_tester.ExpectUniqueSample(
       "Autofill.NumberOfEditedAutofilledFieldsAtSubmission", 2, 1);
-
-  // UKM must not be logged unless enabled.
-  ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
-  EXPECT_EQ(0U, ukm_service->sources_count());
-  EXPECT_EQ(0U, ukm_service->entries_count());
 }
 
 // Verify that when resetting the autofill manager (such as during a
@@ -1688,8 +1678,6 @@ TEST_F(AutofillMetricsTest, NumberOfEditedAutofilledFields_NoSubmission) {
 
 // Verify that we correctly log metrics regarding developer engagement.
 TEST_F(AutofillMetricsTest, DeveloperEngagement) {
-  ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
-
   // Start with a non-fillable form.
   FormData form;
   form.name = ASCIIToUTF16("TestForm");
@@ -1710,10 +1698,6 @@ TEST_F(AutofillMetricsTest, DeveloperEngagement) {
     autofill_manager_->OnFormsSeen(forms, TimeTicks());
     autofill_manager_->Reset();
     histogram_tester.ExpectTotalCount("Autofill.DeveloperEngagement", 0);
-
-    // UKM must not be logged unless enabled.
-    EXPECT_EQ(0U, ukm_service->sources_count());
-    EXPECT_EQ(0U, ukm_service->entries_count());
   }
 
   // Add another field to the form, so that it becomes fillable.
@@ -1728,10 +1712,6 @@ TEST_F(AutofillMetricsTest, DeveloperEngagement) {
     histogram_tester.ExpectUniqueSample(
         "Autofill.DeveloperEngagement",
         AutofillMetrics::FILLABLE_FORM_PARSED_WITHOUT_TYPE_HINTS, 1);
-
-    // UKM must not be logged unless enabled.
-    EXPECT_EQ(0U, ukm_service->sources_count());
-    EXPECT_EQ(0U, ukm_service->entries_count());
   }
 
   // Add some fields with an author-specified field type to the form.
@@ -1757,10 +1737,6 @@ TEST_F(AutofillMetricsTest, DeveloperEngagement) {
     histogram_tester.ExpectBucketCount(
         "Autofill.DeveloperEngagement",
         AutofillMetrics::FILLABLE_FORM_PARSED_WITH_TYPE_HINTS, 1);
-
-    // UKM must not be logged unless enabled.
-    EXPECT_EQ(0U, ukm_service->sources_count());
-    EXPECT_EQ(0U, ukm_service->entries_count());
 
     histogram_tester.ExpectBucketCount(
         "Autofill.DeveloperEngagement",
@@ -1791,7 +1767,6 @@ TEST_F(AutofillMetricsTest, DeveloperEngagement) {
 // developer engagement.
 TEST_F(AutofillMetricsTest,
        UkmDeveloperEngagement_LogFillableFormParsedWithoutTypeHints) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   // Start with a non-fillable form.
@@ -1839,7 +1814,6 @@ TEST_F(AutofillMetricsTest,
 // developer engagement.
 TEST_F(AutofillMetricsTest,
        UkmDeveloperEngagement_LogFillableFormParsedWithTypeHints) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   FormData form;
@@ -1891,7 +1865,6 @@ TEST_F(AutofillMetricsTest,
 // Verify that we correctly log UKM for form parsed with type hints regarding
 // developer engagement.
 TEST_F(AutofillMetricsTest, UkmDeveloperEngagement_LogUpiVpaTypeHint) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   FormData form;
@@ -2118,7 +2091,6 @@ TEST_F(AutofillMetricsTest, AddressSuggestionsCount) {
 
 // Test that the credit card checkout flow user actions are correctly logged.
 TEST_F(AutofillMetricsTest, CreditCardCheckoutFlowUserActions) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   personal_data_->RecreateCreditCards(
@@ -2217,7 +2189,6 @@ TEST_F(AutofillMetricsTest, CreditCardCheckoutFlowUserActions) {
 
 // Test that the profile checkout flow user actions are correctly logged.
 TEST_F(AutofillMetricsTest, ProfileCheckoutFlowUserActions) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   // Create a profile.
@@ -2599,11 +2570,6 @@ TEST_F(AutofillMetricsTest, CreditCardShownFormEvents) {
         "Autofill.FormEvents.CreditCard",
         AutofillMetrics::FORM_EVENT_SUGGESTIONS_SHOWN_ONCE, 0);
   }
-
-  // UKM must not be logged unless enabled.
-  ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
-  EXPECT_EQ(0U, ukm_service->sources_count());
-  EXPECT_EQ(0U, ukm_service->entries_count());
 }
 
 // Test that we log selected form event for credit cards.
@@ -2870,7 +2836,6 @@ TEST_F(AutofillMetricsTest, CreditCardGetRealPanDuration) {
 
 // Test that we log submitted form events for credit cards.
 TEST_F(AutofillMetricsTest, CreditCardSubmittedFormEvents) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   EnableWalletSync();
@@ -3587,7 +3552,6 @@ TEST_F(AutofillMetricsTest, AddressFilledFormEvents) {
 
 // Test that we log submitted form events for address.
 TEST_F(AutofillMetricsTest, AddressSubmittedFormEvents) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   EnableWalletSync();
@@ -4128,7 +4092,6 @@ TEST_F(AutofillMetricsTest, DaysSinceLastUse_Profile) {
 
 // Verify that we correctly log the submitted form's state.
 TEST_F(AutofillMetricsTest, AutofillFormSubmittedState) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   // Start with a form with insufficiently many fields.
@@ -4335,7 +4298,6 @@ TEST_F(AutofillMetricsTest, AutofillFormSubmittedState) {
 // Verify that we correctly log user happiness metrics dealing with form
 // interaction.
 TEST_F(AutofillMetricsTest, UserHappinessFormInteraction) {
-  EnableUkmLogging();
   ukm::TestUkmService* ukm_service = autofill_client_.GetTestUkmService();
 
   // Load a fillable form.
@@ -5054,7 +5016,6 @@ TEST_F(AutofillMetricsTest,
 
 // Tests that logging CardUploadDecision UKM works as expected.
 TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric) {
-  EnableUkmLogging();
   ukm::UkmServiceTestingHarness ukm_service_test_harness;
   GURL url("https://www.google.com");
   int upload_decision = 1;
@@ -5095,7 +5056,6 @@ TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric) {
 
 // Tests that logging DeveloperEngagement UKM works as expected.
 TEST_F(AutofillMetricsTest, RecordDeveloperEngagementMetric) {
-  EnableUkmLogging();
   ukm::UkmServiceTestingHarness ukm_service_test_harness;
   GURL url("https://www.google.com");
   int form_structure_metric = 1;
@@ -5136,7 +5096,6 @@ TEST_F(AutofillMetricsTest, RecordDeveloperEngagementMetric) {
 
 // Tests that no UKM is logged when the URL is not valid.
 TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric_InvalidUrl) {
-  EnableUkmLogging();
   ukm::UkmServiceTestingHarness ukm_service_test_harness;
   GURL url("");
   std::vector<std::pair<const char*, int>> metrics = {{"metric", 1}};
@@ -5148,7 +5107,6 @@ TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric_InvalidUrl) {
 
 // Tests that no UKM is logged when the metrics map is empty.
 TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric_NoMetrics) {
-  EnableUkmLogging();
   ukm::UkmServiceTestingHarness ukm_service_test_harness;
   GURL url("https://www.google.com");
   std::vector<std::pair<const char*, int>> metrics;
@@ -5160,24 +5118,12 @@ TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric_NoMetrics) {
 
 // Tests that no UKM is logged when the ukm service is null.
 TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric_NoUkmService) {
-  EnableUkmLogging();
   ukm::UkmServiceTestingHarness ukm_service_test_harness;
   GURL url("https://www.google.com");
   std::vector<std::pair<const char*, int>> metrics = {{"metric", 1}};
 
   EXPECT_FALSE(AutofillMetrics::LogUkm(nullptr, url, "test_ukm", metrics));
   ASSERT_EQ(0U, ukm_service_test_harness.test_ukm_service()->sources_count());
-}
-
-// Tests that no UKM is logged when the ukm logging feature is disabled.
-TEST_F(AutofillMetricsTest, RecordCardUploadDecisionMetric_FeatureDisabled) {
-  ukm::UkmServiceTestingHarness ukm_service_test_harness;
-  GURL url("https://www.google.com");
-  std::vector<std::pair<const char*, int>> metrics = {{"metric", 1}};
-
-  EXPECT_FALSE(AutofillMetrics::LogUkm(
-      ukm_service_test_harness.test_ukm_service(), url, "test_ukm", metrics));
-  EXPECT_EQ(0U, ukm_service_test_harness.test_ukm_service()->sources_count());
 }
 
 }  // namespace autofill

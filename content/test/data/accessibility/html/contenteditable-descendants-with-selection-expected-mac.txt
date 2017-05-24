@@ -18,6 +18,6 @@ Editable list item.'
 ++++++AXColumn
 ++++++AXGroup
 ++++AXList
-++++++AXGroup AXTitle='Editable list item.'
+++++++AXGroup
 ++++++++AXListMarker AXValue='1'
 ++++++++AXStaticText AXValue='Editable list item.'

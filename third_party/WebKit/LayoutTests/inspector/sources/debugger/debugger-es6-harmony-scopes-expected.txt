@@ -11,7 +11,7 @@ Block
 Catch
     e: Error: An exception
     at innerFunction (...)
-    at testFunction (...) {stack: "Error: An exception↵    at innerFunction (...)", message: "An exception"}
+    at testFunction (...)
 Block
     block1: "block {...}"
     const1: 1
@@ -24,14 +24,17 @@ Local
     x: 2014
 Block
     makeClosureDeeperBlockVar: "block.deep.TextParam"
-Closure (makeClosure)
+Closure (window.makeClosure)
     makeClosureBlockVar: "block.TextParam"
     makeClosureDeeperLocalVar: "local.deep.TextParam"
     makeClosureLocalVar: "local.TextParam"
     n: "TextParam"
-Script
+Module
     globalConst: 42
     globalLet: 41
+Script
+    globalScriptConst: 42
+    globalScriptLet: 41
 WindowGlobal
     <section collapsed>
 Script execution resumed.

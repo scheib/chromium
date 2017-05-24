@@ -46,13 +46,13 @@ MessageLoop::MessagePumpFactory* message_pump_for_ui_factory_ = NULL;
 
 #if defined(OS_IOS)
 typedef MessagePumpIOSForIO MessagePumpForIO;
-#elif defined(OS_NACL_SFI)
+#elif defined(OS_NACL_SFI) || defined(OS_FUCHSIA)
 typedef MessagePumpDefault MessagePumpForIO;
 #elif defined(OS_POSIX)
 typedef MessagePumpLibevent MessagePumpForIO;
 #endif
 
-#if !defined(OS_NACL_SFI)
+#if !defined(OS_NACL_SFI) && !defined(OS_FUCHSIA)
 MessagePumpForIO* ToPumpIO(MessagePump* pump) {
   return static_cast<MessagePumpForIO*>(pump);
 }
@@ -170,9 +170,11 @@ std::unique_ptr<MessagePump> MessageLoop::CreateMessagePumpForType(Type type) {
 
 #if defined(OS_IOS) || defined(OS_MACOSX)
 #define MESSAGE_PUMP_UI std::unique_ptr<MessagePump>(MessagePumpMac::Create())
-#elif defined(OS_NACL) || defined(OS_AIX)
-// Currently NaCl doesn't have a UI MessageLoop.
+#elif defined(OS_NACL) || defined(OS_AIX) || defined(OS_FUCHSIA)
+// Currently NaCl and AIX don't have a UI MessageLoop.
 // TODO(abarth): Figure out if we need this.
+// TODO(fuchsia): Fuchsia may require one once more UI-level things have been
+// ported. See https://crbug.com/706592.
 #define MESSAGE_PUMP_UI std::unique_ptr<MessagePump>()
 #else
 #define MESSAGE_PUMP_UI std::unique_ptr<MessagePump>(new MessagePumpForUI())
@@ -634,7 +636,7 @@ bool MessageLoopForIO::RegisterJobObject(HANDLE job, IOHandler* handler) {
 bool MessageLoopForIO::WaitForIOCompletion(DWORD timeout, IOHandler* filter) {
   return ToPumpIO(pump_.get())->WaitForIOCompletion(timeout, filter);
 }
-#elif defined(OS_POSIX)
+#elif defined(OS_POSIX) && !defined(OS_FUCHSIA)
 bool MessageLoopForIO::WatchFileDescriptor(int fd,
                                            bool persistent,
                                            Mode mode,

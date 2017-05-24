@@ -94,6 +94,7 @@ class MODULES_EXPORT Request final : public Body {
                                                    RequestInit&,
                                                    ExceptionState&);
 
+  String ContentType() const override;
   String MimeType() const override;
   void RefreshBody(ScriptState*);
 

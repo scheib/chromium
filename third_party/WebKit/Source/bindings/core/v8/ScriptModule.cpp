@@ -38,7 +38,8 @@ ScriptModule::~ScriptModule() {}
 ScriptModule ScriptModule::Compile(v8::Isolate* isolate,
                                    const String& source,
                                    const String& file_name,
-                                   AccessControlStatus access_control_status) {
+                                   AccessControlStatus access_control_status,
+                                   const TextPosition& start_position) {
   // We ensure module-related code is not executed without the flag.
   // https://crbug.com/715376
   CHECK(RuntimeEnabledFeatures::moduleScriptsEnabled());
@@ -47,7 +48,7 @@ ScriptModule ScriptModule::Compile(v8::Isolate* isolate,
   try_catch.SetVerbose(true);
   v8::Local<v8::Module> module;
   if (!V8ScriptRunner::CompileModule(isolate, source, file_name,
-                                     access_control_status)
+                                     access_control_status, start_position)
            .ToLocal(&module)) {
     // Compilation error is not used in Blink implementaion logic.
     // Note: Error message is delivered to user (e.g. console) by message

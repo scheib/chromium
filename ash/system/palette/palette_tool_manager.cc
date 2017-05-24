@@ -128,7 +128,7 @@ void PaletteToolManager::HidePaletteImmediately() {
   delegate_->HidePaletteImmediately();
 }
 
-WmWindow* PaletteToolManager::GetWindow() {
+aura::Window* PaletteToolManager::GetWindow() {
   return delegate_->GetWindow();
 }
 

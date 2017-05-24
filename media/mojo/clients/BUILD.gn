@@ -50,11 +50,10 @@ source_set("clients") {
     ]
   }
 
-  public_configs = [ "//media/mojo/services:mojo_media_config" ]
-
   public_deps = [
     "//base",
     "//media",
+    "//media/mojo:features",
     "//media/mojo/interfaces",
     "//mojo/public/cpp/bindings",
     "//mojo/public/cpp/system",

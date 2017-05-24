@@ -443,21 +443,18 @@ std::unique_ptr<AudioLog> AudioManagerBase::CreateAudioLog(
   return audio_log_factory_->CreateAudioLog(component);
 }
 
-void AudioManagerBase::InitializeOutputDebugRecording(
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner) {
+void AudioManagerBase::InitializeOutputDebugRecording() {
   if (!GetTaskRunner()->BelongsToCurrentThread()) {
     // AudioManager is deleted on the audio thread, so it's safe to post
     // unretained.
     GetTaskRunner()->PostTask(
-        FROM_HERE,
-        base::Bind(&AudioManagerBase::InitializeOutputDebugRecording,
-                   base::Unretained(this), std::move(file_task_runner)));
+        FROM_HERE, base::Bind(&AudioManagerBase::InitializeOutputDebugRecording,
+                              base::Unretained(this)));
     return;
   }
 
   DCHECK(!debug_recording_manager_);
-  debug_recording_manager_ = CreateAudioDebugRecordingManager(
-      GetTaskRunner(), std::move(file_task_runner));
+  debug_recording_manager_ = CreateAudioDebugRecordingManager(GetTaskRunner());
 }
 
 void AudioManagerBase::EnableOutputDebugRecording(
@@ -476,10 +473,8 @@ void AudioManagerBase::DisableOutputDebugRecording() {
 
 std::unique_ptr<AudioDebugRecordingManager>
 AudioManagerBase::CreateAudioDebugRecordingManager(
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner) {
-  return base::MakeUnique<AudioDebugRecordingManager>(
-      std::move(task_runner), std::move(file_task_runner));
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
+  return base::MakeUnique<AudioDebugRecordingManager>(std::move(task_runner));
 }
 
 void AudioManagerBase::SetMaxStreamCountForTesting(int max_input,

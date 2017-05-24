@@ -47,7 +47,6 @@
 #include "components/rappor/public/rappor_utils.h"
 #include "components/rappor/rappor_service_impl.h"
 #include "components/strings/grit/components_strings.h"
-#include "components/subresource_filter/content/browser/content_subresource_filter_driver_factory.h"
 #include "components/url_formatter/elide_url.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_frame_host.h"
@@ -1267,9 +1266,8 @@ void ContentSettingSubresourceFilterBubbleModel::OnManageCheckboxChecked(
 
 void ContentSettingSubresourceFilterBubbleModel::OnDoneClicked() {
   if (is_checked_) {
-    auto* driver_factory = subresource_filter::
-        ContentSubresourceFilterDriverFactory::FromWebContents(web_contents());
-    driver_factory->OnReloadRequested();
+    ChromeSubresourceFilterClient::FromWebContents(web_contents())
+        ->OnReloadRequested();
   }
 }
 

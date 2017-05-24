@@ -12,8 +12,6 @@
 
 #include "base/macros.h"
 
-class GURL;
-
 namespace web {
 
 struct FaviconURL;
@@ -32,9 +30,6 @@ class WebStateObserver {
   // Returns the web state associated with this observer.
   WebState* web_state() const { return web_state_; }
 
-  // This method is invoked when a load request is registered.
-  virtual void ProvisionalNavigationStarted(const GURL& url) {}
-
   // This method is invoked when committed navigation items have been pruned.
   virtual void NavigationItemsPruned(size_t pruned_item_count) {}
 
@@ -52,10 +47,28 @@ class WebStateObserver {
   virtual void NavigationItemCommitted(
       const LoadCommittedDetails& load_details) {}
 
-  // Called when a navigation finished in the WebState. This happens when a
-  // navigation is committed, aborted or replaced by a new one. To know if the
-  // navigation has resulted in an error page, use
-  // NavigationContext::IsErrorPage().
+  // Called when a navigation started in the WebState for the main frame.
+  // |navigation_context| is unique to a specific navigation. The same
+  // NavigationContext will be provided on subsequent call to
+  // DidFinishNavigation() when related to this navigation. Observers should
+  // clear any references to |navigation_context| in DidFinishNavigation(), just
+  // before it is destroyed.
+  //
+  // This is also fired by same-document navigations, such as fragment
+  // navigations or pushState/replaceState, which will not result in a document
+  // change. To filter these out, use NavigationContext::IsSameDocument().
+  //
+  // More than one navigation can be ongoing in the same frame at the same
+  // time. Each will get its own NavigationHandle.
+  //
+  // There is no guarantee that DidFinishNavigation() will be called for any
+  // particular navigation before DidStartNavigation is called on the next.
+  virtual void DidStartNavigation(NavigationContext* navigation_context) {}
+
+  // Called when a navigation finished in the WebState for the main frame. This
+  // happens when a navigation is committed, aborted or replaced by a new one.
+  // To know if the navigation has resulted in an error page, use
+  // NavigationContext::GetError().
   //
   // If this is called because the navigation committed, then the document load
   // will still be ongoing in the WebState returned by |navigation_context|.

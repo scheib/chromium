@@ -2,7 +2,7 @@ This page tests that the SVG tabbing order is respected properly.
 
 To test, put focus in "a". Pressing Tab should focus "a" through "k" in order, and pressing Shift-Tab should reverse the order.
 
- Tabbing forward....
+Tabbing forward....
 
 <rect id="h" tabindex="6"> focused
 <rect id="i" tabindex="0"> focused

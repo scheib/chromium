@@ -27,6 +27,10 @@ class FrameCaretTest : public EditingTestBase {
     LayoutTestSupport::SetIsRunningLayoutTest(was_running_layout_test_);
   }
 
+  static bool ShouldBlinkCaret(const FrameCaret& caret) {
+    return caret.ShouldBlinkCaret();
+  }
+
  private:
   const bool was_running_layout_test_;
 };
@@ -69,6 +73,25 @@ TEST_F(FrameCaretTest, BlinkAfterTyping) {
   GetDocument().View()->UpdateAllLifecyclePhases();
   EXPECT_FALSE(caret.ShouldPaintCaretForTesting())
       << "The caret should blink after the typing command.";
+}
+
+TEST_F(FrameCaretTest, ShouldNotBlinkWhenSelectionLooseFocus) {
+  FrameCaret& caret = Selection().FrameCaretForTesting();
+  GetDocument().GetPage()->GetFocusController().SetActive(true);
+  GetDocument().GetPage()->GetFocusController().SetFocused(true);
+  GetDocument().body()->setInnerHTML(
+      "<div id='outer' tabindex='-1'>"
+      "<div id='input' contenteditable>foo</div>"
+      "</div>");
+  Element* input = GetDocument().QuerySelector("#input");
+  input->focus();
+  Element* outer = GetDocument().QuerySelector("#outer");
+  outer->focus();
+  GetDocument().View()->UpdateAllLifecyclePhases();
+  const SelectionInDOMTree& selection = Selection().GetSelectionInDOMTree();
+  EXPECT_EQ(selection.Base(),
+            Position(input, PositionAnchorType::kBeforeChildren));
+  EXPECT_FALSE(ShouldBlinkCaret(caret));
 }
 
 }  // namespace blink

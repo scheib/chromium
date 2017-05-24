@@ -53,8 +53,8 @@ class Tab : public gfx::AnimationDelegate,
   // The Tab's class name.
   static const char kViewClassName[];
 
-  // The amount of overlap between two adjacent tabs.
-  static constexpr int kOverlap = 16;
+  // The combined width of the curves at the top and bottom of the endcap.
+  static constexpr float kMinimumEndcapWidth = 4;
 
   Tab(TabController* controller, gfx::AnimationContainer* container);
   ~Tab() override;
@@ -131,17 +131,6 @@ class Tab : public gfx::AnimationDelegate,
   // be updated.
   void HideCloseButtonForInactiveTabsChanged() { Layout(); }
 
-  // Returns the inset within the first dragged tab to use when calculating the
-  // "drag insertion point".  If we simply used the x-coordinate of the tab,
-  // we'd be calculating based on a point well before where the user considers
-  // the tab to "be".  The value here is chosen to "feel good" based on the
-  // widths of the tab images and the tab overlap.
-  //
-  // Note that this must return a value smaller than the midpoint of any tab's
-  // width, or else the user won't be able to drag a tab to the left of the
-  // first tab in the strip.
-  static int leading_width_for_drag() { return 16; }
-
   // Returns the minimum possible size of a single unselected Tab.
   static gfx::Size GetMinimumInactiveSize();
 
@@ -167,6 +156,9 @@ class Tab : public gfx::AnimationDelegate,
   // values for the vertical distances between points and then compute the
   // horizontal deltas from those.
   static float GetInverseDiagonalSlope();
+
+  // Returns the overlap between adjacent tabs.
+  static int GetOverlap();
 
  private:
   friend class AlertIndicatorButtonTest;

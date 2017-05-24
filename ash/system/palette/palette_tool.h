@@ -15,6 +15,10 @@
 #include "base/macros.h"
 #include "ui/gfx/vector_icon_types.h"
 
+namespace aura {
+class Window;
+}
+
 namespace gfx {
 struct VectorIcon;
 }
@@ -24,8 +28,6 @@ class View;
 }
 
 namespace ash {
-
-class WmWindow;
 
 enum class PaletteGroup;
 enum class PaletteToolId;
@@ -40,9 +42,6 @@ class ASH_EXPORT PaletteTool {
  public:
   class Delegate {
    public:
-    Delegate() {}
-    virtual ~Delegate() {}
-
     // Enable or disable a specific tool.
     virtual void EnableTool(PaletteToolId tool_id) = 0;
     virtual void DisableTool(PaletteToolId tool_id) = 0;
@@ -54,7 +53,7 @@ class ASH_EXPORT PaletteTool {
     virtual void HidePaletteImmediately() = 0;
 
     // Returns the root window.
-    virtual WmWindow* GetWindow() = 0;
+    virtual aura::Window* GetWindow() = 0;
 
     // Record usage of each pen palette option.
     virtual void RecordPaletteOptionsUsage(PaletteTrayOptions option) = 0;
@@ -62,8 +61,8 @@ class ASH_EXPORT PaletteTool {
     // Record mode cancellation of pen palette.
     virtual void RecordPaletteModeCancellation(PaletteModeCancelType type) = 0;
 
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Delegate);
+   protected:
+    virtual ~Delegate() {}
   };
 
   // Adds all available PaletteTool instances to the tool_manager.

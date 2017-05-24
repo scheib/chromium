@@ -242,6 +242,7 @@ void UpdateScreen::UpdateStatusChanged(
           HostPairingController::UPDATE_STATUS_UPDATING);
       break;
     case UpdateEngineClient::UPDATE_STATUS_UPDATE_AVAILABLE:
+      ClearUpdateCheckNoUpdateTime();
       MakeSureScreenIsShown();
       GetContextEditor()
           .SetInteger(kContextKeyProgress, kBeforeDownloadProgress)
@@ -554,11 +555,19 @@ void UpdateScreen::StartUpdateCheck() {
   connect_request_subscription_.reset();
   if (state_ == State::STATE_ERROR)
     HideErrorMessage();
-  state_ = State::STATE_UPDATE;
-  DBusThreadManager::Get()->GetUpdateEngineClient()->AddObserver(this);
-  VLOG(1) << "Initiate update check";
-  DBusThreadManager::Get()->GetUpdateEngineClient()->RequestUpdateCheck(
-      base::Bind(StartUpdateCallback, this));
+
+  if (ShouldCheckForUpdate()) {
+    state_ = State::STATE_UPDATE;
+    DBusThreadManager::Get()->GetUpdateEngineClient()->AddObserver(this);
+    VLOG(1) << "Initiate update check";
+    RecordUpdateCheckWithNoUpdateYet();
+    DBusThreadManager::Get()->GetUpdateEngineClient()->RequestUpdateCheck(
+        base::Bind(StartUpdateCallback, this));
+  } else {
+    LOG(WARNING) << "Skipping update check since one was done recently "
+                    "which did not result in an update.";
+    CancelUpdate();
+  }
 }
 
 void UpdateScreen::ShowErrorMessage() {
@@ -627,6 +636,36 @@ void UpdateScreen::OnConnectRequested() {
     LOG(WARNING) << "Hiding error message since AP was reselected";
     StartUpdateCheck();
   }
+}
+
+void UpdateScreen::RecordUpdateCheckWithNoUpdateYet() {
+  StartupUtils::SaveTimeOfLastUpdateCheckWithoutUpdate(base::Time::Now());
+}
+
+void UpdateScreen::ClearUpdateCheckNoUpdateTime() {
+  StartupUtils::ClearTimeOfLastUpdateCheckWithoutUpdate();
+}
+
+bool UpdateScreen::ShouldCheckForUpdate() {
+  // Always run update check for non hands-off enrollment.
+  if (!WizardController::UsingHandsOffEnrollment())
+    return true;
+
+  // If we check for an update and there is no need to perform an update,
+  // this is the time in hours we should wait before checking again.
+  const base::TimeDelta kUpdateCheckRecencyThreshold =
+      base::TimeDelta::FromHours(1);
+
+  base::Time now = base::Time::Now();
+  base::Time last = StartupUtils::GetTimeOfLastUpdateCheckWithoutUpdate();
+
+  // Return false if enough time has not passed since the last update check.
+  // Otherwise, return true.
+  if (now > last) {
+    return (now - last) > kUpdateCheckRecencyThreshold;
+  }
+
+  return true;
 }
 
 }  // namespace chromeos

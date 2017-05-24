@@ -51,6 +51,36 @@ void LaunchDialogForProfile(Profile* profile) {
   profile->GetPrefs()->SetBoolean(prefs::kFirstRunTutorialShown, true);
 }
 
+void TryLaunchFirstRunDialog(Profile* profile) {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+
+  if (command_line->HasSwitch(switches::kOobeSkipPostLogin))
+    return;
+
+  if (command_line->HasSwitch(switches::kForceFirstRunUI)) {
+    LaunchDialogForProfile(profile);
+    return;
+  }
+
+  if (command_line->HasSwitch(::switches::kTestType))
+    return;
+
+  if (!user_manager::UserManager::Get()->IsCurrentUserNew())
+    return;
+
+  if (profile->GetPrefs()->GetBoolean(prefs::kFirstRunTutorialShown))
+    return;
+
+  bool is_pref_synced =
+      PrefServiceSyncableFromProfile(profile)->IsPrioritySyncing();
+  bool is_user_ephemeral = user_manager::UserManager::Get()
+                               ->IsCurrentUserNonCryptohomeDataEphemeral();
+  if (!is_pref_synced && is_user_ephemeral)
+    return;
+
+  LaunchDialogForProfile(profile);
+}
+
 // Object of this class waits for session start. Then it launches or not
 // launches first-run dialog depending on user prefs and flags. Than object
 // deletes itself.
@@ -72,24 +102,7 @@ class DialogLauncher : public content::NotificationObserver {
     DCHECK(type == chrome::NOTIFICATION_SESSION_STARTED);
     DCHECK(content::Details<const user_manager::User>(details).ptr() ==
            ProfileHelper::Get()->GetUserByProfile(profile_));
-    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-    bool launched_in_test = command_line->HasSwitch(::switches::kTestType);
-    bool launched_in_telemetry =
-        command_line->HasSwitch(switches::kOobeSkipPostLogin);
-    bool is_user_new = user_manager::UserManager::Get()->IsCurrentUserNew();
-    bool first_run_forced = command_line->HasSwitch(switches::kForceFirstRunUI);
-    bool first_run_seen =
-        profile_->GetPrefs()->GetBoolean(prefs::kFirstRunTutorialShown);
-    bool is_pref_synced =
-        PrefServiceSyncableFromProfile(profile_)->IsPrioritySyncing();
-    bool is_user_ephemeral = user_manager::UserManager::Get()
-                                 ->IsCurrentUserNonCryptohomeDataEphemeral();
-    if (!launched_in_telemetry &&
-        ((is_user_new && !first_run_seen &&
-          (is_pref_synced || !is_user_ephemeral) && !launched_in_test) ||
-         first_run_forced)) {
-      LaunchDialogForProfile(profile_);
-    }
+    TryLaunchFirstRunDialog(profile_);
     delete this;
   }
 
@@ -111,6 +124,11 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
 
 void MaybeLaunchDialogAfterSessionStart() {
   new DialogLauncher(ProfileHelper::Get()->GetProfileByUserUnsafe(
+      user_manager::UserManager::Get()->GetActiveUser()));
+}
+
+void MaybeLaunchDialogImmediately() {
+  TryLaunchFirstRunDialog(ProfileHelper::Get()->GetProfileByUser(
       user_manager::UserManager::Get()->GetActiveUser()));
 }
 

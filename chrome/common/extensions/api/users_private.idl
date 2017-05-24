@@ -11,6 +11,9 @@ namespace usersPrivate {
     // Email for the user.
     DOMString email;
 
+    // Display email for the user.
+    DOMString displayEmail;
+
     // Display name for the user.
     DOMString name;
 

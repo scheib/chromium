@@ -41,9 +41,15 @@ void ValidatingTextfield::OnContentsChanged() {
   Validate();
 }
 
+bool ValidatingTextfield::IsValid() {
+  bool valid = delegate_->IsValidTextfield(this);
+  SetInvalid(!valid);
+  return valid;
+}
+
 void ValidatingTextfield::Validate() {
-  // ValidateTextfield may have side-effects, such as displaying errors.
-  SetInvalid(!delegate_->ValidateTextfield(this));
+  // TextfieldValueChanged may have side-effects, such as displaying errors.
+  SetInvalid(!delegate_->TextfieldValueChanged(this));
 }
 
 }  // namespace payments

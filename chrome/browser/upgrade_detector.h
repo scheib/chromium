@@ -7,12 +7,15 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/macros.h"
+#include "base/observer_list.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/chrome_notification_types.h"
+#include "chrome/browser/upgrade_observer.h"
 #include "ui/base/idle/idle.h"
 #include "ui/gfx/image/image.h"
 
 class PrefRegistrySimple;
+class UpgradeObserver;
 
 ///////////////////////////////////////////////////////////////////////////////
 // UpgradeDetector
@@ -79,6 +82,10 @@ class UpgradeDetector {
     return upgrade_notification_stage_;
   }
 
+  void AddObserver(UpgradeObserver* observer);
+
+  void RemoveObserver(UpgradeObserver* observer);
+
  protected:
   enum UpgradeAvailable {
     // If no update is available and current install is recent enough.
@@ -100,6 +107,11 @@ class UpgradeDetector {
 
   // Sends out UPGRADE_RECOMMENDED notification and set notify_upgrade_.
   void NotifyUpgradeRecommended();
+
+  // The function that sends out a notification that lets the rest of the UI
+  // know we should notify the user that a new update is available to download
+  // over cellular connection.
+  void NotifyUpdateOverCellularAvailable();
 
   // Triggers a critical update, which starts a timer that checks the machine
   // idle state. Protected and virtual so that it could be overridden by tests.
@@ -174,6 +186,8 @@ class UpgradeDetector {
   // Whether we have waited long enough after detecting an upgrade (to see
   // is we should start nagging about upgrading).
   bool notify_upgrade_;
+
+  base::ObserverList<UpgradeObserver> observer_list_;
 
   DISALLOW_COPY_AND_ASSIGN(UpgradeDetector);
 };

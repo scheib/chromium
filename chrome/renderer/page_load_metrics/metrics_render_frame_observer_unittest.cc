@@ -11,7 +11,7 @@
 #include "base/time/time.h"
 #include "base/timer/mock_timer.h"
 #include "chrome/common/page_load_metrics/page_load_timing.h"
-#include "chrome/renderer/page_load_metrics/fake_page_timing_metrics_ipc_sender.h"
+#include "chrome/renderer/page_load_metrics/fake_page_timing_sender.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace page_load_metrics {
@@ -29,11 +29,9 @@ class TestMetricsRenderFrameObserver : public MetricsRenderFrameObserver {
     return std::move(mock_timer_);
   }
 
-  // We intercept sent messages and dispatch them to our
-  // FakePageTimingMetricsIPCSender, which we use to verify that the expected
-  // IPC messages get sent.
-  bool Send(IPC::Message* message) override {
-    return fake_timing_ipc_sender_.Send(message);
+  std::unique_ptr<PageTimingSender> CreatePageTimingSender() override {
+    return base::WrapUnique<PageTimingSender>(
+        new FakePageTimingSender(&validator_));
   }
 
   void set_mock_timer(std::unique_ptr<base::Timer> timer) {
@@ -43,7 +41,7 @@ class TestMetricsRenderFrameObserver : public MetricsRenderFrameObserver {
 
   void ExpectPageLoadTiming(const mojom::PageLoadTiming& timing) {
     SetFakePageLoadTiming(timing);
-    fake_timing_ipc_sender_.ExpectPageLoadTiming(timing);
+    validator_.ExpectPageLoadTiming(timing);
   }
 
   void SetFakePageLoadTiming(const mojom::PageLoadTiming& timing) {
@@ -58,14 +56,14 @@ class TestMetricsRenderFrameObserver : public MetricsRenderFrameObserver {
 
   void VerifyExpectedTimings() const {
     EXPECT_EQ(nullptr, fake_timing_.get());
-    fake_timing_ipc_sender_.VerifyExpectedTimings();
+    validator_.VerifyExpectedTimings();
   }
 
   bool ShouldSendMetrics() const override { return true; }
   bool HasNoRenderFrame() const override { return false; }
 
  private:
-  FakePageTimingMetricsIPCSender fake_timing_ipc_sender_;
+  FakePageTimingSender::PageTimingValidator validator_;
   mutable mojom::PageLoadTimingPtr fake_timing_;
   mutable std::unique_ptr<base::Timer> mock_timer_;
 };

@@ -81,7 +81,7 @@
 #import "ios/web/web_state/js/crw_js_plugin_placeholder_manager.h"
 #import "ios/web/web_state/js/crw_js_post_request_loader.h"
 #import "ios/web/web_state/js/crw_js_window_id_manager.h"
-#include "ios/web/web_state/navigation_context_impl.h"
+#import "ios/web/web_state/navigation_context_impl.h"
 #import "ios/web/web_state/page_viewport_state.h"
 #import "ios/web/web_state/ui/crw_context_menu_controller.h"
 #import "ios/web/web_state/ui/crw_swipe_recognizer_provider.h"
@@ -1862,6 +1862,18 @@ registerLoadRequestForURL:(const GURL&)requestURL
       params.url, params.referrer, params.transition_type,
       navigationInitiationType, params.user_agent_override_option);
 
+  // Mark pending item as created from hash change if necessary. This is needed
+  // because window.hashchange message may not arrive on time.
+  web::NavigationItemImpl* pendingItem = self.sessionController.pendingItem;
+  if (pendingItem) {
+    GURL lastCommittedURL = _webStateImpl->GetLastCommittedURL();
+    GURL pendingURL = pendingItem->GetURL();
+    if (lastCommittedURL != pendingURL &&
+        lastCommittedURL.EqualsIgnoringRef(pendingURL)) {
+      pendingItem->SetIsCreatedFromHashChange(true);
+    }
+  }
+
   web::NavigationItemImpl* addedItem = self.currentNavItem;
   DCHECK(addedItem);
   if (params.extra_headers)
@@ -3102,7 +3114,7 @@ registerLoadRequestForURL:(const GURL&)requestURL
 
   web::NavigationContextImpl* navigationContext =
       [_navigationStates contextForNavigation:navigation];
-  navigationContext->SetIsErrorPage(true);
+  navigationContext->SetError(error);
 
   // Handles Frame Load Interrupted errors from WebView.
   if ([error.domain isEqual:base::SysUTF8ToNSString(web::kWebKitErrorDomain)] &&

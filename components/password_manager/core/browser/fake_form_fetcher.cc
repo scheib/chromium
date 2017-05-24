@@ -37,6 +37,15 @@ FakeFormFetcher::GetFederatedMatches() const {
   return federated_;
 }
 
+const std::vector<const PasswordForm*>&
+FakeFormFetcher::GetSuppressedHTTPSForms() const {
+  return suppressed_https_forms_;
+}
+
+bool FakeFormFetcher::DidCompleteQueryingSuppressedHTTPSForms() const {
+  return did_complete_querying_suppressed_https_forms_;
+}
+
 void FakeFormFetcher::SetNonFederated(
     const std::vector<const autofill::PasswordForm*>& non_federated,
     size_t filtered_count) {

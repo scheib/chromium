@@ -52,7 +52,7 @@ include_rules = [
   "+services/preferences/public/cpp",
   "+services/preferences/public/interfaces",
   "+services/resource_coordinator/public/cpp",
-  "+services/resource_coordinator/public/interfaces/memory",
+  "+services/resource_coordinator/public/interfaces/memory_instrumentation",
   "+services/service_manager",
   "+services/shape_detection/public/interfaces",
   "+services/ui/public",

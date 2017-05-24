@@ -14,6 +14,8 @@
 #include "bindings/modules/v8/V8PasswordCredential.h"
 #include "core/dom/URLSearchParams.h"
 #include "core/fileapi/Blob.h"
+#include "core/frame/Deprecation.h"
+#include "core/frame/UseCounter.h"
 #include "core/html/FormData.h"
 #include "modules/fetch/BlobBytesConsumer.h"
 #include "modules/fetch/FormDataBytesConsumer.h"
@@ -115,6 +117,8 @@ RequestInit::RequestInit(ExecutionContext* context,
 
   if (is_credential_set) {
     if (V8PasswordCredential::hasInstance(v8_credential, isolate)) {
+      Deprecation::CountDeprecation(context,
+                                    UseCounter::kCredentialManagerCustomFetch);
       // TODO(mkwst): According to the spec, we'd serialize this once we touch
       // the network. We're serializing it here, ahead of time, because lifetime
       // issues around ResourceRequest make it pretty difficult to pass a

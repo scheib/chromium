@@ -16,9 +16,9 @@ ScrollNode::ScrollNode()
     : id(ScrollTree::kInvalidNodeId),
       parent_id(ScrollTree::kInvalidNodeId),
       owning_layer_id(Layer::INVALID_ID),
-      scrollable(false),
       main_thread_scrolling_reasons(
           MainThreadScrollingReason::kNotScrollingOnMain),
+      scrollable(false),
       max_scroll_offset_affected_by_page_scale(false),
       scrolls_inner_viewport(false),
       scrolls_outer_viewport(false),

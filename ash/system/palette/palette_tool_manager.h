@@ -15,6 +15,10 @@
 #include "base/callback.h"
 #include "base/macros.h"
 
+namespace aura {
+class Window;
+}
+
 namespace views {
 class View;
 }
@@ -24,7 +28,6 @@ namespace ash {
 class PaletteTool;
 enum class PaletteGroup;
 enum class PaletteToolId;
-class WmWindow;
 
 struct ASH_EXPORT PaletteToolView {
   PaletteGroup group;
@@ -36,9 +39,6 @@ class ASH_EXPORT PaletteToolManager : public PaletteTool::Delegate {
  public:
   class Delegate {
    public:
-    Delegate() {}
-    virtual ~Delegate() {}
-
     // Hide the palette (if shown).
     virtual void HidePalette() = 0;
 
@@ -49,16 +49,16 @@ class ASH_EXPORT PaletteToolManager : public PaletteTool::Delegate {
     virtual void OnActiveToolChanged() = 0;
 
     // Return the window associated with this palette.
-    virtual WmWindow* GetWindow() = 0;
+    virtual aura::Window* GetWindow() = 0;
 
     // Record usage of each pen palette option.
-    virtual void RecordPaletteOptionsUsage(ash::PaletteTrayOptions option) = 0;
+    virtual void RecordPaletteOptionsUsage(PaletteTrayOptions option) = 0;
 
     // Record mode cancellation of pen palette.
     virtual void RecordPaletteModeCancellation(PaletteModeCancelType type) = 0;
 
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Delegate);
+   protected:
+    virtual ~Delegate() {}
   };
 
   // Creates the tool manager.
@@ -102,7 +102,7 @@ class ASH_EXPORT PaletteToolManager : public PaletteTool::Delegate {
   void DisableTool(PaletteToolId tool_id) override;
   void HidePalette() override;
   void HidePaletteImmediately() override;
-  WmWindow* GetWindow() override;
+  aura::Window* GetWindow() override;
   void RecordPaletteOptionsUsage(ash::PaletteTrayOptions option) override;
   void RecordPaletteModeCancellation(PaletteModeCancelType type) override;
 

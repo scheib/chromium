@@ -46,14 +46,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGEllipse circle id='t4'",
-      "reason": "style change"
-    },
-    {
-      "object": "LayoutSVGPath polygon",
-      "reason": "style change"
-    },
-    {
       "object": "LayoutSVGContainer use id='t1'",
       "reason": "style change"
     },

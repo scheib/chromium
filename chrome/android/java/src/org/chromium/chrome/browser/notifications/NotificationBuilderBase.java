@@ -21,6 +21,7 @@ import android.graphics.drawable.Icon;
 import android.os.Build;
 
 import org.chromium.base.VisibleForTesting;
+import org.chromium.chrome.browser.notifications.channels.ChannelDefinitions;
 import org.chromium.chrome.browser.widget.RoundedIconGenerator;
 
 import java.util.ArrayList;
@@ -358,9 +359,11 @@ public abstract class NotificationBuilderBase {
      */
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     protected Notification createPublicNotification(Context context) {
-        // Use Android's Notification.Builder because we want the default small icon behaviour.
-        Notification.Builder builder =
-                new Notification.Builder(context)
+        // Use a non-compat builder because we want the default small icon behaviour.
+        ChromeNotificationBuilder builder =
+                NotificationBuilderFactory
+                        .createChromeNotificationBuilder(
+                                false /* preferCompat */, ChannelDefinitions.CHANNEL_ID_SITES)
                         .setContentText(context.getString(
                                 org.chromium.chrome.R.string.notification_hidden_text))
                         .setSmallIcon(org.chromium.chrome.R.drawable.ic_chrome);

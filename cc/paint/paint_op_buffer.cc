@@ -582,7 +582,9 @@ DrawTextBlobOp::DrawTextBlobOp(sk_sp<SkTextBlob> blob,
 
 DrawTextBlobOp::~DrawTextBlobOp() = default;
 
-PaintOpBuffer::PaintOpBuffer() = default;
+PaintOpBuffer::PaintOpBuffer() : cull_rect_(SkRect::MakeEmpty()) {}
+
+PaintOpBuffer::PaintOpBuffer(const SkRect& cull_rect) : cull_rect_(cull_rect) {}
 
 PaintOpBuffer::~PaintOpBuffer() {
   Reset();

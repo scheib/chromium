@@ -668,8 +668,8 @@ class DataReductionProxyNetworkDelegateTest : public testing::Test {
     mock_socket_factory_.AddSocketDataProvider(socket.get());
 
     net::TestDelegate delegate;
-    std::unique_ptr<net::URLRequest> request =
-        context_.CreateRequest(url, net::IDLE, &delegate);
+    std::unique_ptr<net::URLRequest> request = context_.CreateRequest(
+        url, net::IDLE, &delegate, TRAFFIC_ANNOTATION_FOR_TESTS);
     if (!page_id_value.empty()) {
       request->SetLoadFlags(request->load_flags() |
                             net::LOAD_MAIN_FRAME_DEPRECATED);
@@ -691,8 +691,8 @@ class DataReductionProxyNetworkDelegateTest : public testing::Test {
         effective_connection_type);
 
     net::TestDelegate delegate;
-    std::unique_ptr<net::URLRequest> request =
-        context_.CreateRequest(GURL(kTestURL), net::IDLE, &delegate);
+    std::unique_ptr<net::URLRequest> request = context_.CreateRequest(
+        GURL(kTestURL), net::IDLE, &delegate, TRAFFIC_ANNOTATION_FOR_TESTS);
 
     request->Start();
     base::RunLoop().RunUntilIdle();
@@ -1561,8 +1561,9 @@ TEST_F(DataReductionProxyNetworkDelegateTest,
   base::TrimString(params()->DefaultOrigin(), "/", &data_reduction_proxy);
   data_reduction_proxy_info.UseNamedProxy(data_reduction_proxy);
 
-  std::unique_ptr<net::URLRequest> request = context()->CreateRequest(
-      GURL(kTestURL), net::RequestPriority::IDLE, nullptr);
+  std::unique_ptr<net::URLRequest> request =
+      context()->CreateRequest(GURL(kTestURL), net::RequestPriority::IDLE,
+                               nullptr, TRAFFIC_ANNOTATION_FOR_TESTS);
   request->SetLoadFlags(net::LOAD_MAIN_FRAME_DEPRECATED);
   io_data()->request_options()->SetSecureSession("fake-session");
 
@@ -1584,7 +1585,7 @@ TEST_F(DataReductionProxyNetworkDelegateTest,
 
   // Send a second request and verify the page ID incremements.
   request = context()->CreateRequest(GURL(kTestURL), net::RequestPriority::IDLE,
-                                     nullptr);
+                                     nullptr, TRAFFIC_ANNOTATION_FOR_TESTS);
   request->SetLoadFlags(net::LOAD_MAIN_FRAME_DEPRECATED);
 
   network_delegate()->NotifyBeforeStartTransaction(
@@ -1832,7 +1833,8 @@ TEST_F(DataReductionProxyNetworkDelegateClientLoFiTest, DataSavingsNonDRP) {
 
     net::TestDelegate test_delegate;
     std::unique_ptr<net::URLRequest> request = context()->CreateRequest(
-        GURL("http://example.com"), net::RequestPriority::IDLE, &test_delegate);
+        GURL("http://example.com"), net::RequestPriority::IDLE, &test_delegate,
+        TRAFFIC_ANNOTATION_FOR_TESTS);
 
     request->Start();
     base::RunLoop().RunUntilIdle();
@@ -1862,7 +1864,8 @@ TEST_F(DataReductionProxyNetworkDelegateClientLoFiTest, DataSavingsThroughDRP) {
 
   net::TestDelegate test_delegate;
   std::unique_ptr<net::URLRequest> request = context()->CreateRequest(
-      GURL("http://example.com"), net::RequestPriority::IDLE, &test_delegate);
+      GURL("http://example.com"), net::RequestPriority::IDLE, &test_delegate,
+      TRAFFIC_ANNOTATION_FOR_TESTS);
 
   request->Start();
   base::RunLoop().RunUntilIdle();

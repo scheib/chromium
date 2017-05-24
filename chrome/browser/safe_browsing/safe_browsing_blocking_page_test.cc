@@ -160,9 +160,13 @@ class FakeSafeBrowsingDatabaseManager : public TestSafeBrowsingDatabaseManager {
 class FakeSafeBrowsingUIManager : public TestSafeBrowsingUIManager {
  public:
   FakeSafeBrowsingUIManager()
-      : TestSafeBrowsingUIManager(), threat_details_done_(false) {}
+      : TestSafeBrowsingUIManager(),
+        threat_details_done_(false),
+        hit_report_sent_(false) {}
   explicit FakeSafeBrowsingUIManager(SafeBrowsingService* service)
-      : TestSafeBrowsingUIManager(service), threat_details_done_(false) {}
+      : TestSafeBrowsingUIManager(service),
+        threat_details_done_(false),
+        hit_report_sent_(false) {}
 
   // Overrides SafeBrowsingUIManager
   void SendSerializedThreatDetails(const std::string& serialized) override {
@@ -188,6 +192,15 @@ class FakeSafeBrowsingUIManager : public TestSafeBrowsingUIManager {
     threat_details_done_ = true;
   }
 
+  void MaybeReportSafeBrowsingHit(const HitReport& hit_report,
+                                  const WebContents* web_contents) override {
+    if (SafeBrowsingUIManager::ShouldSendHitReport(hit_report, web_contents)) {
+      hit_report_sent_ = true;
+    }
+  }
+
+  bool hit_report_sent() { return hit_report_sent_; }
+
   void set_threat_details_done_callback(const base::Closure& callback) {
     EXPECT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::UI));
     EXPECT_TRUE(threat_details_done_callback_.is_null());
@@ -206,6 +219,7 @@ class FakeSafeBrowsingUIManager : public TestSafeBrowsingUIManager {
   std::string report_;
   base::Closure threat_details_done_callback_;
   bool threat_details_done_;
+  bool hit_report_sent_;
 
   DISALLOW_COPY_AND_ASSIGN(FakeSafeBrowsingUIManager);
 };
@@ -303,7 +317,8 @@ class TestSafeBrowsingBlockingPageFactory
         web_contents->GetBrowserContext()->IsOffTheRecord(),
         IsExtendedReportingEnabled(*prefs), IsScout(*prefs),
         is_proceed_anyway_disabled,
-        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources));
+        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
+        "cpn_safe_browsing" /* help_center_article_link */);
     return new TestSafeBrowsingBlockingPage(delegate, web_contents,
                                             main_frame_url, unsafe_resources,
                                             display_options);
@@ -379,10 +394,10 @@ class SafeBrowsingBlockingPageBrowserTest
         ->ClearBadURL(url);
   }
 
-  // The basic version of this method, which uses a HTTP test URL.
-  GURL SetupWarningAndNavigate() {
+  // The basic version of this method, which uses an HTTP test URL.
+  GURL SetupWarningAndNavigate(Browser* browser) {
     return SetupWarningAndNavigateToURL(
-        net::URLRequestMockHTTPJob::GetMockUrl(kEmptyPage));
+        net::URLRequestMockHTTPJob::GetMockUrl(kEmptyPage), browser);
   }
 
   // Navigates to a warning on a valid HTTPS website.
@@ -395,7 +410,7 @@ class SafeBrowsingBlockingPageBrowserTest
     verify_result.cert_status = 0;
     mock_cert_verifier()->AddResultForCert(cert.get(), verify_result, net::OK);
     GURL url = https_server_.GetURL(kHTTPSPage);
-    return SetupWarningAndNavigateToURL(url);
+    return SetupWarningAndNavigateToURL(url, browser());
   }
 
   // Navigates through an HTTPS interstitial, then opens up a SB warning on that
@@ -407,7 +422,7 @@ class SafeBrowsingBlockingPageBrowserTest
 
     // Proceed through the HTTPS interstitial.
     ui_test_utils::NavigateToURL(browser(), url);
-    EXPECT_TRUE(WaitForReady());
+    EXPECT_TRUE(WaitForReady(browser()));
     InterstitialPage* https_warning = browser()
                                           ->tab_strip_model()
                                           ->GetActiveWebContents()
@@ -418,7 +433,7 @@ class SafeBrowsingBlockingPageBrowserTest
     content::WaitForInterstitialDetach(
         browser()->tab_strip_model()->GetActiveWebContents());
 
-    return SetupWarningAndNavigateToURL(url);
+    return SetupWarningAndNavigateToURL(url, browser());
   }
 
   // Adds a safebrowsing threat results to the fake safebrowsing service,
@@ -430,7 +445,7 @@ class SafeBrowsingBlockingPageBrowserTest
     SetURLThreatType(iframe_url, testing::get<0>(GetParam()));
 
     ui_test_utils::NavigateToURL(browser(), url);
-    EXPECT_TRUE(WaitForReady());
+    EXPECT_TRUE(WaitForReady(browser()));
     return url;
   }
 
@@ -451,7 +466,7 @@ class SafeBrowsingBlockingPageBrowserTest
     SetURLThreatType(*iframe_url, testing::get<0>(GetParam()));
 
     ui_test_utils::NavigateToURL(browser(), url);
-    EXPECT_TRUE(WaitForReady());
+    EXPECT_TRUE(WaitForReady(browser()));
     return url;
   }
 
@@ -550,9 +565,9 @@ class SafeBrowsingBlockingPageBrowserTest
     return interstitial->GetMainFrame();
   }
 
-  bool WaitForReady() {
+  bool WaitForReady(Browser* browser) {
     InterstitialPage* interstitial = InterstitialPage::GetInterstitialPage(
-        browser()->tab_strip_model()->GetActiveWebContents());
+        browser->tab_strip_model()->GetActiveWebContents());
     if (!interstitial)
       return false;
     return content::WaitForRenderFrameReady(interstitial->GetMainFrame());
@@ -619,7 +634,7 @@ class SafeBrowsingBlockingPageBrowserTest
   void TestReportingDisabledAndDontProceed(const GURL& url) {
     SetURLThreatType(url, testing::get<0>(GetParam()));
     ui_test_utils::NavigateToURL(browser(), url);
-    ASSERT_TRUE(WaitForReady());
+    ASSERT_TRUE(WaitForReady(browser()));
 
     EXPECT_EQ(HIDDEN, GetVisibility("extended-reporting-opt-in"));
     EXPECT_EQ(HIDDEN, GetVisibility("opt-in-checkbox"));
@@ -698,6 +713,12 @@ class SafeBrowsingBlockingPageBrowserTest
               security_info.malicious_content_status);
   }
 
+  bool hit_report_sent() {
+    return static_cast<FakeSafeBrowsingUIManager*>(
+               factory_.test_safe_browsing_service()->ui_manager().get())
+        ->hit_report_sent();
+  }
+
  protected:
   TestThreatDetailsFactory details_factory_;
 
@@ -705,10 +726,10 @@ class SafeBrowsingBlockingPageBrowserTest
   // Adds a safebrowsing result of the current test threat to the fake
   // safebrowsing service, navigates to that page, and returns the url.
   // The various wrappers supply different URLs.
-  GURL SetupWarningAndNavigateToURL(GURL url) {
+  GURL SetupWarningAndNavigateToURL(GURL url, Browser* browser) {
     SetURLThreatType(url, testing::get<0>(GetParam()));
-    ui_test_utils::NavigateToURL(browser(), url);
-    EXPECT_TRUE(WaitForReady());
+    ui_test_utils::NavigateToURL(browser, url);
+    EXPECT_TRUE(WaitForReady(browser));
     return url;
   }
 
@@ -744,7 +765,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, RedirectCanceled) {
 }
 
 IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, DontProceed) {
-  SetupWarningAndNavigate();
+  SetupWarningAndNavigate(browser());
 
   EXPECT_EQ(VISIBLE, GetVisibility("primary-button"));
   EXPECT_EQ(HIDDEN, GetVisibility("details"));
@@ -762,7 +783,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, DontProceed) {
 }
 
 IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, Proceed) {
-  GURL url = SetupWarningAndNavigate();
+  GURL url = SetupWarningAndNavigate(browser());
 
   EXPECT_TRUE(ClickAndWaitForDetach("proceed-link"));
   AssertNoInterstitial(true);  // Assert the interstitial is gone.
@@ -908,7 +929,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
 
   // Start navigation to bad page (kEmptyPage), which will be blocked before it
   // is committed.
-  GURL url = SetupWarningAndNavigate();
+  GURL url = SetupWarningAndNavigate(browser());
 
   ThreatDetails* threat_details = details_factory_.get_details();
   EXPECT_EQ(expect_threat_details, threat_details != nullptr);
@@ -959,7 +980,7 @@ IN_PROC_BROWSER_TEST_P(
 
   // Start navigation to bad page (kEmptyPage), which will be blocked before it
   // is committed.
-  GURL url = SetupWarningAndNavigate();
+  GURL url = SetupWarningAndNavigate(browser());
 
   ThreatDetails* threat_details = details_factory_.get_details();
   EXPECT_EQ(expect_threat_details, threat_details != nullptr);
@@ -996,7 +1017,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, ProceedDisabled) {
   browser()->profile()->GetPrefs()->SetBoolean(
       prefs::kSafeBrowsingProceedAnywayDisabled, true);
 
-  SetupWarningAndNavigate();
+  SetupWarningAndNavigate(browser());
 
   EXPECT_EQ(VISIBLE, GetVisibility("primary-button"));
   EXPECT_EQ(HIDDEN, GetVisibility("details"));
@@ -1031,7 +1052,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
                        ReloadWhileInterstitialShowing) {
   // Start navigation to bad page (kEmptyPage), which will be blocked before it
   // is committed.
-  const GURL url = SetupWarningAndNavigate();
+  const GURL url = SetupWarningAndNavigate(browser());
 
   // Checkbox should be showing.
   EXPECT_EQ(VISIBLE, GetVisibility("extended-reporting-opt-in"));
@@ -1049,7 +1070,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
   EXPECT_EQ(url, controller.GetPendingEntry()->GetURL());
 
   // "Reload" the tab.
-  SetupWarningAndNavigate();
+  SetupWarningAndNavigate(browser());
 
   // Checkbox should be showing.
   EXPECT_EQ(VISIBLE, GetVisibility("extended-reporting-opt-in"));
@@ -1066,7 +1087,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, LearnMore) {
-  SetupWarningAndNavigate();
+  SetupWarningAndNavigate(browser());
   EXPECT_TRUE(ClickAndWaitForDetach("learn-more-link"));
   AssertNoInterstitial(false);  // Assert the interstitial is gone
 
@@ -1104,7 +1125,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
   histograms.ExpectTotalCount(interaction_histogram, 0);
 
   // After navigating to the page, the totals should be set.
-  SetupWarningAndNavigate();
+  SetupWarningAndNavigate(browser());
   histograms.ExpectTotalCount(decision_histogram, 1);
   histograms.ExpectBucketCount(decision_histogram,
                                security_interstitials::MetricsHelper::SHOW, 1);
@@ -1148,7 +1169,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
   histograms.ExpectTotalCount(interaction_histogram, 0);
 
   // After navigating to the page, the totals should be set.
-  GURL url = SetupWarningAndNavigate();
+  GURL url = SetupWarningAndNavigate(browser());
   histograms.ExpectTotalCount(decision_histogram, 1);
   histograms.ExpectBucketCount(decision_histogram,
                                security_interstitials::MetricsHelper::SHOW, 1);
@@ -1170,7 +1191,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, WhitelistRevisit) {
-  GURL url = SetupWarningAndNavigate();
+  GURL url = SetupWarningAndNavigate(browser());
 
   EXPECT_TRUE(ClickAndWaitForDetach("proceed-link"));
   AssertNoInterstitial(true);  // Assert the interstitial is gone.
@@ -1205,7 +1226,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, WhitelistUnsaved) {
-  GURL url = SetupWarningAndNavigate();
+  GURL url = SetupWarningAndNavigate(browser());
 
   // Navigate without making a decision.
   ui_test_utils::NavigateToURL(browser(), GURL(kUnrelatedUrl));
@@ -1213,9 +1234,67 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest, WhitelistUnsaved) {
 
   // The non-whitelisted page should now show an interstitial.
   ui_test_utils::NavigateToURL(browser(), url);
-  EXPECT_TRUE(WaitForReady());
+  EXPECT_TRUE(WaitForReady(browser()));
   EXPECT_TRUE(ClickAndWaitForDetach("proceed-link"));
   AssertNoInterstitial(true);
+}
+
+IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
+                       VerifyHitReportSentOnSBERAndNotIncognito) {
+  // The extended reporting opt-in is presented in the interstitial for malware,
+  // phishing, and UwS threats.
+  const bool expect_threat_details =
+      SafeBrowsingBlockingPage::ShouldReportThreatDetails(
+          testing::get<0>(GetParam()));
+
+  scoped_refptr<content::MessageLoopRunner> threat_report_sent_runner(
+      new content::MessageLoopRunner);
+  if (expect_threat_details)
+    SetReportSentCallback(threat_report_sent_runner->QuitClosure());
+
+  browser()->profile()->GetPrefs()->SetBoolean(
+      prefs::kSafeBrowsingExtendedReportingEnabled, true);  // set up SBER
+  GURL url = SetupWarningAndNavigate(browser());            // not incognito
+  EXPECT_TRUE(hit_report_sent());
+}
+
+IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
+                       VerifyHitReportNotSentOnIncognito) {
+  // The extended reporting opt-in is presented in the interstitial for malware,
+  // phishing, and UwS threats.
+  const bool expect_threat_details =
+      SafeBrowsingBlockingPage::ShouldReportThreatDetails(
+          testing::get<0>(GetParam()));
+
+  scoped_refptr<content::MessageLoopRunner> threat_report_sent_runner(
+      new content::MessageLoopRunner);
+  if (expect_threat_details)
+    SetReportSentCallback(threat_report_sent_runner->QuitClosure());
+
+  Browser* incognito_browser = CreateIncognitoBrowser();
+  incognito_browser->profile()->GetPrefs()->SetBoolean(
+      prefs::kSafeBrowsingExtendedReportingEnabled, true);  // set up SBER
+  GURL url = SetupWarningAndNavigate(incognito_browser);    // incognito
+  EXPECT_FALSE(hit_report_sent());
+}
+
+IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
+                       VerifyHitReportNotSentWithoutSBER) {
+  // The extended reporting opt-in is presented in the interstitial for malware,
+  // phishing, and UwS threats.
+  const bool expect_threat_details =
+      SafeBrowsingBlockingPage::ShouldReportThreatDetails(
+          testing::get<0>(GetParam()));
+
+  scoped_refptr<content::MessageLoopRunner> threat_report_sent_runner(
+      new content::MessageLoopRunner);
+  if (expect_threat_details)
+    SetReportSentCallback(threat_report_sent_runner->QuitClosure());
+
+  browser()->profile()->GetPrefs()->SetBoolean(
+      prefs::kSafeBrowsingExtendedReportingEnabled, false);  // set up SBER
+  GURL url = SetupWarningAndNavigate(browser());             // not incognito
+  EXPECT_FALSE(hit_report_sent());
 }
 
 namespace {
@@ -1286,7 +1365,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
 
   // The security indicator should be downgraded while the interstitial shows.
   GURL bad_url = net::URLRequestMockHTTPJob::GetMockUrl(kEmptyPage);
-  SetupWarningAndNavigate();
+  SetupWarningAndNavigate(browser());
   WebContents* error_tab = browser()->tab_strip_model()->GetActiveWebContents();
   ASSERT_TRUE(error_tab);
   ExpectSecurityIndicatorDowngrade(error_tab, 0u);
@@ -1377,7 +1456,7 @@ IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
 IN_PROC_BROWSER_TEST_P(SafeBrowsingBlockingPageBrowserTest,
                        SecurityState_HTTP) {
   // The security indicator should be downgraded while the interstitial shows.
-  SetupWarningAndNavigate();
+  SetupWarningAndNavigate(browser());
   WebContents* error_tab = browser()->tab_strip_model()->GetActiveWebContents();
   ASSERT_TRUE(error_tab);
   ExpectSecurityIndicatorDowngrade(error_tab, 0u);

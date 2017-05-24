@@ -1,0 +1,42 @@
+<html>
+<head>
+<script src="../inspector-test.js"></script>
+<script src="../debugger-test.js"></script>
+<script src="../isolated-filesystem-test.js"></script>
+<script src="./automapping-test.js"></script>
+<script>
+
+async function test()
+{
+    var foo_js = {
+        content: "console.log('foo.js!');",
+        time: null
+    };
+
+    var fs = new InspectorTest.TestFileSystem("file:///var/www");
+    InspectorTest.addFiles(fs, {
+        "scripts/foo.js": foo_js,
+    });
+    await new Promise(fulfill => fs.reportCreated(fulfill));
+    InspectorTest.markStep('Open foo.js editor');
+    var fileUISourceCode = await InspectorTest.waitForUISourceCode('foo.js', Workspace.projectTypes.FileSystem);
+    await dumpEditorMimeType();
+
+    InspectorTest.markStep('Rename foo.js => foo.css');
+    await fileUISourceCode.rename('foo.css');
+    await dumpEditorMimeType();
+
+    InspectorTest.completeTest();
+
+    async function dumpEditorMimeType() {
+        var sourceFrame = await InspectorTest.showUISourceCodePromise(fileUISourceCode);
+        var textEditor = sourceFrame.textEditor;
+        InspectorTest.addResult('Text editor mimeType: ' + textEditor.mimeType());
+    }
+}
+</script>
+</head>
+<body onload="runTest()">
+<p>Verify that text editor's mimeType gets changed as UISourceCode gets renamed.</p>
+</body>
+</html>

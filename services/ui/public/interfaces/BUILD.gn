@@ -55,7 +55,7 @@ mojom("constants") {
   ]
 }
 
-test("ui_struct_traits_unittests") {
+source_set("tests") {
   testonly = true
 
   sources = [
@@ -66,7 +66,6 @@ test("ui_struct_traits_unittests") {
   deps = [
     "//base",
     "//base/test:test_support",
-    "//mojo/edk/test:run_all_unittests",
     "//services/ui/public/interfaces/cursor",
     "//services/ui/public/interfaces/ime:test_interfaces",
     "//skia/public/interfaces",

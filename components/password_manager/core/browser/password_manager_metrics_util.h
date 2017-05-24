@@ -10,6 +10,7 @@
 #include <string>
 
 #include "components/autofill/core/common/password_form.h"
+#include "components/password_manager/core/common/credential_manager_types.h"
 
 namespace password_manager {
 
@@ -170,11 +171,6 @@ enum CredentialManagerGetResult {
   CREDENTIAL_MANAGER_GET_COUNT
 };
 
-enum CredentialManagerGetMediation {
-  CREDENTIAL_MANAGER_GET_MEDIATED,
-  CREDENTIAL_MANAGER_GET_UNMEDIATED
-};
-
 // Metrics: "PasswordManager.HttpPasswordMigrationMode"
 enum HttpPasswordMigrationMode {
   HTTP_PASSWORD_MIGRATION_MODE_MOVE,
@@ -247,10 +243,9 @@ void LogAccountChooserUsability(AccountChooserUsabilityMetric usability,
                                 int count_empty_icons,
                                 int count_accounts);
 
-// Log the result of navigator.credentials.get. |status| specifies the
-// "unmediated" parameter of the API method.
+// Log the result of navigator.credentials.get.
 void LogCredentialManagerGetResult(CredentialManagerGetResult result,
-                                   CredentialManagerGetMediation status);
+                                   CredentialMediationRequirement mediation);
 
 // Log the password reuse.
 void LogPasswordReuse(int password_length,
@@ -268,6 +263,11 @@ void LogShowedFormNotSecureWarningOnCurrentNavigation();
 
 // Log a password successful submission event.
 void LogPasswordSuccessfulSubmissionIndicatorEvent(
+    autofill::PasswordForm::SubmissionIndicatorEvent event);
+
+// Log a password successful submission event for accepted by user password save
+// or update.
+void LogPasswordAcceptedSaveUpdateSubmissionIndicatorEvent(
     autofill::PasswordForm::SubmissionIndicatorEvent event);
 
 }  // namespace metrics_util

@@ -17,6 +17,7 @@
 // 'icu' does not work. Use U_ICU_NAMESPACE.
 namespace U_ICU_NAMESPACE {
 
+class Transliterator;
 class UnicodeString;
 
 }  // namespace U_ICU_NAMESPACE
@@ -40,9 +41,20 @@ class IDNSpoofChecker {
   // See the function body for details on the specific safety checks performed.
   bool SafeToDisplayAsUnicode(base::StringPiece16 label, bool is_tld_ascii);
 
+  // Returns true if |hostname| or the last few components of |hostname| looks
+  // similar to one of top domains listed in top_domains/alexa_domains.list. Two
+  // checks are done:
+  //   1. Calculate the skeleton of |hostname| based on the Unicode confusable
+  //   character list and look it up in the pre-calculated skeleton list of
+  //   top domains.
+  //   2. Look up the diacritic-free version of |hostname| in the list of
+  //   top domains. Note that non-IDN hostnames will not get here.
+  bool SimilarToTopDomains(base::StringPiece16 hostname);
+
  private:
   // Sets allowed characters in IDN labels and turns on USPOOF_CHAR_LIMIT.
   void SetAllowedUnicodeSet(UErrorCode* status);
+
   // Returns true if all the Cyrillic letters in |label| belong to a set of
   // Cyrillic letters that look like ASCII Latin letters.
   bool IsMadeOfLatinAlikeCyrillic(const icu::UnicodeString& label);
@@ -51,8 +63,11 @@ class IDNSpoofChecker {
   icu::UnicodeSet deviation_characters_;
   icu::UnicodeSet non_ascii_latin_letters_;
   icu::UnicodeSet kana_letters_exceptions_;
+  icu::UnicodeSet combining_diacritics_exceptions_;
   icu::UnicodeSet cyrillic_letters_;
   icu::UnicodeSet cyrillic_letters_latin_alike_;
+  icu::UnicodeSet lgc_letters_n_ascii_;
+  std::unique_ptr<icu::Transliterator> transliterator_;
 
   IDNSpoofChecker(const IDNSpoofChecker&) = delete;
   void operator=(const IDNSpoofChecker&) = delete;

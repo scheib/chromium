@@ -9,6 +9,7 @@ namespace proximity_auth {
 namespace switches {
 
 extern const char kEnableBluetoothLowEnergyDiscovery[];
+extern const char kEnableChromeOSLogin[];
 extern const char kEnableProximityDetection[];
 extern const char kForceLoadEasyUnlockAppInTests[];
 

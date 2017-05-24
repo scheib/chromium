@@ -18,16 +18,16 @@ bool TextMatchMarkerListImpl::IsEmpty() const {
 }
 
 void TextMatchMarkerListImpl::Add(DocumentMarker* marker) {
-  DocumentMarkerListEditor::AddMarkerWithoutMergingOverlapping(&markers_,
-                                                               marker);
+  DocumentMarkerListEditor::AddMarkerWithoutMergingOverlapping(
+      &markers_, RenderedDocumentMarker::Create(*marker));
 }
 
 void TextMatchMarkerListImpl::Clear() {
   markers_.clear();
 }
 
-const HeapVector<Member<RenderedDocumentMarker>>&
-TextMatchMarkerListImpl::GetMarkers() const {
+const HeapVector<Member<DocumentMarker>>& TextMatchMarkerListImpl::GetMarkers()
+    const {
   return markers_;
 }
 

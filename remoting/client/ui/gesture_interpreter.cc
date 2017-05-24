@@ -9,11 +9,12 @@
 #include "remoting/client/chromoting_session.h"
 #include "remoting/client/ui/direct_input_strategy.h"
 #include "remoting/client/ui/renderer_proxy.h"
+#include "remoting/client/ui/trackpad_input_strategy.h"
 
 namespace {
 
 const float kOneFingerFlingTimeConstant = 325.f;
-const float kScrollFlingTimeConstant = 120.f;
+const float kScrollFlingTimeConstant = 250.f;
 
 }  // namespace
 
@@ -33,18 +34,38 @@ GestureInterpreter::GestureInterpreter(RendererProxy* renderer,
       base::Bind(&RendererProxy::SetTransformation,
                  base::Unretained(renderer_)),
       true);
-
-  // TODO(yuweih): This should be configurable.
-  input_strategy_.reset(new DirectInputStrategy());
-  renderer_->SetCursorVisibility(input_strategy_->IsCursorVisible());
-  SetCursorPositionOnRenderer();
 }
 
 GestureInterpreter::~GestureInterpreter() {}
 
-void GestureInterpreter::Pinch(float pivot_x, float pivot_y, float scale) {
+void GestureInterpreter::SetInputMode(InputMode mode) {
+  switch (mode) {
+    case DIRECT_INPUT_MODE:
+      input_strategy_.reset(new DirectInputStrategy());
+      break;
+    case TRACKPAD_INPUT_MODE:
+      input_strategy_.reset(new TrackpadInputStrategy(viewport_));
+      break;
+    default:
+      NOTREACHED();
+  }
+  input_mode_ = mode;
+  renderer_->SetCursorVisibility(input_strategy_->IsCursorVisible());
+  ViewMatrix::Point cursor_position = input_strategy_->GetCursorPosition();
+  renderer_->SetCursorPosition(cursor_position.x, cursor_position.y);
+}
+
+GestureInterpreter::InputMode GestureInterpreter::GetInputMode() const {
+  return input_mode_;
+}
+
+void GestureInterpreter::Zoom(float pivot_x,
+                              float pivot_y,
+                              float scale,
+                              GestureState state) {
   AbortAnimations();
-  input_strategy_->HandlePinch({pivot_x, pivot_y}, scale, &viewport_);
+  SetGestureInProgress(InputStrategy::ZOOM, state != GESTURE_ENDED);
+  input_strategy_->HandleZoom({pivot_x, pivot_y}, scale, &viewport_);
 }
 
 void GestureInterpreter::Pan(float translation_x, float translation_y) {
@@ -70,20 +91,21 @@ void GestureInterpreter::TwoFingerTap(float x, float y) {
                    protocol::MouseEvent_MouseButton_BUTTON_RIGHT);
 }
 
-void GestureInterpreter::LongPress(float x, float y, GestureState state) {
+void GestureInterpreter::Drag(float x, float y, GestureState state) {
   AbortAnimations();
 
   ViewMatrix::Point cursor_position = TrackAndGetPosition(x, y);
 
   if (state == GESTURE_BEGAN) {
     StartInputFeedback(cursor_position.x, cursor_position.y,
-                       InputStrategy::LONG_PRESS_FEEDBACK);
+                       InputStrategy::DRAG_FEEDBACK);
   }
 
-  is_dragging_mode_ = state != GESTURE_ENDED;
+  bool is_dragging_mode = state != GESTURE_ENDED;
+  SetGestureInProgress(InputStrategy::DRAG, is_dragging_mode);
   input_stub_->SendMouseEvent(cursor_position.x, cursor_position.y,
                               protocol::MouseEvent_MouseButton_BUTTON_LEFT,
-                              is_dragging_mode_);
+                              is_dragging_mode);
 }
 
 void GestureInterpreter::OneFingerFling(float velocity_x, float velocity_y) {
@@ -99,9 +121,7 @@ void GestureInterpreter::Scroll(float x, float y, float dx, float dy) {
 
   // Inject the cursor position to the host so that scrolling can happen on the
   // right place.
-  input_stub_->SendMouseEvent(cursor_position.x, cursor_position.y,
-                              protocol::MouseEvent_MouseButton_BUTTON_UNDEFINED,
-                              false);
+  InjectCursorPosition(cursor_position.x, cursor_position.y);
 
   ScrollWithoutAbortAnimations(dx, dy);
 }
@@ -116,6 +136,9 @@ void GestureInterpreter::ScrollWithVelocity(float velocity_x,
 
 void GestureInterpreter::ProcessAnimations() {
   pan_animation_.Tick();
+
+  // TODO(yuweih): It's probably not right to handle host side virtual scroll
+  // momentum in the renderer's callback.
   scroll_animation_.Tick();
 }
 
@@ -129,9 +152,21 @@ void GestureInterpreter::OnDesktopSizeChanged(int width, int height) {
 
 void GestureInterpreter::PanWithoutAbortAnimations(float translation_x,
                                                    float translation_y) {
-  input_strategy_->HandlePan({translation_x, translation_y}, is_dragging_mode_,
-                             &viewport_);
-  SetCursorPositionOnRenderer();
+  if (input_strategy_->HandlePan({translation_x, translation_y},
+                                 gesture_in_progress_, &viewport_)) {
+    // Cursor position changed.
+    ViewMatrix::Point cursor_position = input_strategy_->GetCursorPosition();
+    if (gesture_in_progress_ != InputStrategy::DRAG) {
+      // Drag() will inject the position so don't need to do that in that case.
+      InjectCursorPosition(cursor_position.x, cursor_position.y);
+    }
+    renderer_->SetCursorPosition(cursor_position.x, cursor_position.y);
+  }
+}
+
+void GestureInterpreter::InjectCursorPosition(float x, float y) {
+  input_stub_->SendMouseEvent(
+      x, y, protocol::MouseEvent_MouseButton_BUTTON_UNDEFINED, false);
 }
 
 void GestureInterpreter::ScrollWithoutAbortAnimations(float dx, float dy) {
@@ -142,6 +177,7 @@ void GestureInterpreter::ScrollWithoutAbortAnimations(float dx, float dy) {
 
 void GestureInterpreter::AbortAnimations() {
   pan_animation_.Abort();
+  scroll_animation_.Abort();
 }
 
 void GestureInterpreter::InjectMouseClick(
@@ -152,17 +188,19 @@ void GestureInterpreter::InjectMouseClick(
   input_stub_->SendMouseEvent(x, y, button, false);
 }
 
+void GestureInterpreter::SetGestureInProgress(InputStrategy::Gesture gesture,
+                                              bool is_in_progress) {
+  if (!is_in_progress && gesture_in_progress_ == gesture) {
+    gesture_in_progress_ = InputStrategy::NONE;
+    return;
+  }
+  gesture_in_progress_ = gesture;
+}
+
 ViewMatrix::Point GestureInterpreter::TrackAndGetPosition(float touch_x,
                                                           float touch_y) {
   input_strategy_->TrackTouchInput({touch_x, touch_y}, viewport_);
   return input_strategy_->GetCursorPosition();
-}
-
-void GestureInterpreter::SetCursorPositionOnRenderer() {
-  if (input_strategy_->IsCursorVisible()) {
-    ViewMatrix::Point cursor_position = input_strategy_->GetCursorPosition();
-    renderer_->SetCursorPosition(cursor_position.x, cursor_position.y);
-  }
 }
 
 void GestureInterpreter::StartInputFeedback(

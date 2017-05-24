@@ -28,6 +28,7 @@
 #include "crypto/secure_hash.h"
 #include "crypto/sha2.h"
 #include "net/base/load_flags.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/url_request/url_fetcher.h"
 #include "net/url_request/url_request_context_getter.h"
 #include "net/url_request/url_request_status.h"
@@ -64,8 +65,36 @@ std::unique_ptr<net::URLFetcher> SendProtocolRequest(
     const std::string& protocol_request,
     net::URLFetcherDelegate* url_fetcher_delegate,
     net::URLRequestContextGetter* url_request_context_getter) {
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("component_updater_utils", R"(
+        semantics {
+          sender: "Component Updater"
+          description:
+            "The component updater in Chrome is responsible for updating code "
+            "and data modules such as Flash, CrlSet, Origin Trials, etc. These "
+            "modules are updated on cycles independent of the Chrome release "
+            "tracks. It runs in the browser process and communicates with a "
+            "set of servers using the Omaha protocol to find the latest "
+            "versions of components, download them, and register them with the "
+            "rest of Chrome."
+          trigger: "Manual or automatic software updates."
+          data:
+            "Various OS and Chrome parameters such as version, bitness, "
+            "release tracks, etc."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: false
+          setting: "This feature cannot be disabled."
+          chrome_policy {
+            ComponentUpdatesEnabled {
+              policy_options {mode: MANDATORY}
+              ComponentUpdatesEnabled: false
+            }
+          }
+        })");
   std::unique_ptr<net::URLFetcher> url_fetcher = net::URLFetcher::Create(
-      0, url, net::URLFetcher::POST, url_fetcher_delegate);
+      0, url, net::URLFetcher::POST, url_fetcher_delegate, traffic_annotation);
   if (!url_fetcher.get())
     return url_fetcher;
 

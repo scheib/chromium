@@ -17,6 +17,7 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/image_fetcher/core/image_fetcher_delegate.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/image/image.h"
 #include "url/gurl.h"
@@ -76,9 +77,8 @@ class ImageFetcherImplBrowserTest : public InProcessBrowserTest {
 
   ImageFetcherImpl* CreateImageFetcher() {
     ImageFetcherImpl* fetcher =
-        new ImageFetcherImpl(
-            base::MakeUnique<suggestions::ImageDecoderImpl>(),
-            browser()->profile()->GetRequestContext());
+        new ImageFetcherImpl(base::MakeUnique<suggestions::ImageDecoderImpl>(),
+                             browser()->profile()->GetRequestContext());
     fetcher->SetImageFetcherDelegate(&delegate_);
     return fetcher;
   }
@@ -100,10 +100,10 @@ class ImageFetcherImplBrowserTest : public InProcessBrowserTest {
 
     base::RunLoop run_loop;
     image_fetcher_->StartOrQueueNetworkRequest(
-        kTestUrl,
-        image_url,
+        kTestUrl, image_url,
         base::Bind(&ImageFetcherImplBrowserTest::OnImageAvailable,
-                   base::Unretained(this), &run_loop));
+                   base::Unretained(this), &run_loop),
+        TRAFFIC_ANNOTATION_FOR_TESTS);
     run_loop.Run();
   }
 

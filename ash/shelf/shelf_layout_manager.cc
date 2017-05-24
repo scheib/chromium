@@ -25,7 +25,6 @@
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/screen_pinning_controller.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm_window.h"
 #include "base/auto_reset.h"
 #include "base/command_line.h"

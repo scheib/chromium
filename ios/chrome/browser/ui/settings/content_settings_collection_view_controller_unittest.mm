@@ -44,14 +44,9 @@ TEST_F(ContentSettingsCollectionViewControllerTest, TestModel) {
   CheckTitleWithId(IDS_IOS_CONTENT_SETTINGS_TITLE);
 
   ASSERT_EQ(1, NumberOfSections());
-  // Compose Email section is shown only if experiment is turned on and
-  // there are enough number of available mailto: URL handlers.
-  int number_of_handlers =
-      [[[[MailtoURLRewriter alloc] initWithStandardHandlers] defaultHandlers]
-          count];
+  // Compose Email section is shown only if experiment is turned on.
   bool show_compose_email_section =
-      experimental_flags::IsNativeAppLauncherEnabled() &&
-      number_of_handlers > 1;
+      !experimental_flags::IsNativeAppLauncherEnabled();
   int expectedNumberOfItems = show_compose_email_section ? 3 : 2;
   EXPECT_EQ(expectedNumberOfItems, NumberOfItemsInSection(0));
   CheckDetailItemTextWithIds(IDS_IOS_BLOCK_POPUPS, IDS_IOS_SETTING_ON, 0, 0);

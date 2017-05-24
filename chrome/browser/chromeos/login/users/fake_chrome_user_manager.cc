@@ -19,6 +19,7 @@
 #include "chrome/grit/theme_resources.h"
 #include "chromeos/chromeos_switches.h"
 #include "chromeos/login/login_state.h"
+#include "components/user_manager/known_user.h"
 #include "components/user_manager/user_image/user_image.h"
 #include "components/user_manager/user_names.h"
 #include "components/user_manager/user_type.h"
@@ -472,7 +473,7 @@ void FakeChromeUserManager::SaveUserDisplayEmail(
 
 std::string FakeChromeUserManager::GetUserDisplayEmail(
     const AccountId& account_id) const {
-  return std::string();
+  return account_id.GetUserEmail();
 }
 
 void FakeChromeUserManager::SaveUserType(
@@ -560,8 +561,13 @@ bool FakeChromeUserManager::AreSupervisedUsersAllowed() const {
   return true;
 }
 
+void FakeChromeUserManager::CreateLocalState() {
+  local_state_ = base::MakeUnique<TestingPrefServiceSimple>();
+  user_manager::known_user::RegisterPrefs(local_state_->registry());
+}
+
 PrefService* FakeChromeUserManager::GetLocalState() const {
-  return nullptr;
+  return local_state_.get();
 }
 
 void FakeChromeUserManager::SetIsCurrentUserNew(bool is_new) {

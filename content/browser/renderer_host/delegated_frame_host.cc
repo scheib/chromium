@@ -219,7 +219,7 @@ void DelegatedFrameHost::SetNeedsBeginFrames(bool needs_begin_frames) {
   support_->SetNeedsBeginFrame(needs_begin_frames);
 }
 
-void DelegatedFrameHost::BeginFrameDidNotSwap(const cc::BeginFrameAck& ack) {
+void DelegatedFrameHost::DidNotProduceFrame(const cc::BeginFrameAck& ack) {
   DidFinishFrame(ack);
 
   cc::BeginFrameAck modified_ack = ack;
@@ -232,7 +232,7 @@ void DelegatedFrameHost::BeginFrameDidNotSwap(const cc::BeginFrameAck& ack) {
         latest_confirmed_begin_frame_sequence_number_;
   }
 
-  support_->BeginFrameDidNotSwap(modified_ack);
+  support_->DidNotProduceFrame(modified_ack);
 }
 
 bool DelegatedFrameHost::ShouldSkipFrame(const gfx::Size& size_in_dip) {
@@ -421,7 +421,7 @@ void DelegatedFrameHost::SubmitCompositorFrame(
     renderer_compositor_frame_sink_->DidReceiveCompositorFrameAck(resources);
 
     skipped_frames_ = true;
-    BeginFrameDidNotSwap(ack);
+    DidNotProduceFrame(ack);
     return;
   }
 

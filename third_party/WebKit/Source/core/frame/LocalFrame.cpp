@@ -289,8 +289,8 @@ void LocalFrame::Init() {
 }
 
 void LocalFrame::SetView(FrameView* view) {
-  ASSERT(!view_ || view_ != view);
-  ASSERT(!GetDocument() || !GetDocument()->IsActive());
+  DCHECK(!view_ || view_ != view);
+  DCHECK(!GetDocument() || !GetDocument()->IsActive());
 
   GetEventHandler().Clear();
 
@@ -637,25 +637,24 @@ bool LocalFrame::ShouldUsePrintingLayout() const {
 
 FloatSize LocalFrame::ResizePageRectsKeepingRatio(
     const FloatSize& original_size,
-    const FloatSize& expected_size) {
-  FloatSize result_size;
+    const FloatSize& expected_size) const {
   if (ContentLayoutItem().IsNull())
     return FloatSize();
 
-  if (ContentLayoutItem().Style()->IsHorizontalWritingMode()) {
-    DCHECK_GT(fabs(original_size.Width()),
-              std::numeric_limits<float>::epsilon());
-    float ratio = original_size.Height() / original_size.Width();
-    result_size.SetWidth(floorf(expected_size.Width()));
-    result_size.SetHeight(floorf(result_size.Width() * ratio));
-  } else {
-    ASSERT(fabs(original_size.Height()) >
-           std::numeric_limits<float>::epsilon());
-    float ratio = original_size.Width() / original_size.Height();
-    result_size.SetHeight(floorf(expected_size.Height()));
-    result_size.SetWidth(floorf(result_size.Height() * ratio));
-  }
-  return result_size;
+  bool is_horizontal = ContentLayoutItem().Style()->IsHorizontalWritingMode();
+  float width = original_size.Width();
+  float height = original_size.Height();
+  if (!is_horizontal)
+    std::swap(width, height);
+  DCHECK_GT(fabs(width), std::numeric_limits<float>::epsilon());
+  float ratio = height / width;
+
+  float result_width =
+      floorf(is_horizontal ? expected_size.Width() : expected_size.Height());
+  float result_height = floorf(result_width * ratio);
+  if (!is_horizontal)
+    std::swap(result_width, result_height);
+  return FloatSize(result_width, result_height);
 }
 
 void LocalFrame::SetPageZoomFactor(float factor) {

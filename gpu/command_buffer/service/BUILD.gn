@@ -125,6 +125,8 @@ target(link_target_type, "service_sources") {
     "scheduler.cc",
     "scheduler.h",
     "sequence_id.h",
+    "service_discardable_manager.cc",
+    "service_discardable_manager.h",
     "service_utils.cc",
     "service_utils.h",
     "shader_manager.cc",

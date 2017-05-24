@@ -22,6 +22,12 @@ class Channel;
 class Message;
 }  // IPC
 
+namespace mojo {
+namespace edk {
+class PeerConnection;
+}
+}
+
 namespace remoting {
 
 // Used to send/receive security key messages for testing.  It provides a
@@ -95,6 +101,7 @@ class FakeSecurityKeyIpcServer : public SecurityKeyIpcServer,
   base::Closure send_response_callback_;
 
   // Used for sending/receiving security key messages between processes.
+  std::unique_ptr<mojo::edk::PeerConnection> peer_connection_;
   std::unique_ptr<IPC::Channel> ipc_channel_;
 
   // NOTE: Weak pointers must be invalidated before all other member variables.

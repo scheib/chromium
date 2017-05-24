@@ -5,6 +5,7 @@
 #include "services/resource_coordinator/coordination_unit/coordination_unit_impl.h"
 
 #include <memory>
+#include <unordered_map>
 #include <utility>
 
 #include "base/logging.h"
@@ -215,6 +216,10 @@ void CoordinationUnitImpl::SetCoordinationPolicyCallback(
 void CoordinationUnitImpl::UnregisterCoordinationPolicyCallback() {
   policy_callback_.reset();
   current_policy_.reset();
+}
+
+double CoordinationUnitImpl::GetCPUUsageForTesting() {
+  return -1.0;
 }
 
 }  // namespace resource_coordinator

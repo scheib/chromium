@@ -8,9 +8,7 @@
 
 #include "android_webview/browser/aw_content_browser_client.h"
 #include "android_webview/browser/aw_media_url_interceptor.h"
-#include "android_webview/browser/aw_quota_manager_bridge_impl.h"
 #include "android_webview/browser/aw_safe_browsing_config_helper.h"
-#include "android_webview/browser/aw_web_contents_view_delegate.h"
 #include "android_webview/browser/browser_view_renderer.h"
 #include "android_webview/browser/command_line_helper.h"
 #include "android_webview/browser/deferred_gpu_command_service.h"
@@ -243,7 +241,7 @@ void AwMainDelegate::ProcessExiting(const std::string& process_type) {
 
 content::ContentBrowserClient*
     AwMainDelegate::CreateContentBrowserClient() {
-  content_browser_client_.reset(new AwContentBrowserClient(this));
+  content_browser_client_.reset(new AwContentBrowserClient());
   return content_browser_client_.get();
 }
 
@@ -264,16 +262,6 @@ content::ContentRendererClient*
     AwMainDelegate::CreateContentRendererClient() {
   content_renderer_client_.reset(new AwContentRendererClient());
   return content_renderer_client_.get();
-}
-
-scoped_refptr<AwQuotaManagerBridge> AwMainDelegate::CreateAwQuotaManagerBridge(
-    AwBrowserContext* browser_context) {
-  return AwQuotaManagerBridgeImpl::Create(browser_context);
-}
-
-content::WebContentsViewDelegate* AwMainDelegate::CreateViewDelegate(
-    content::WebContents* web_contents) {
-  return AwWebContentsViewDelegate::Create(web_contents);
 }
 
 }  // namespace android_webview

@@ -21,13 +21,18 @@
 @synthesize keyboardType = _keyboardType;
 @synthesize spellCheckingType = _spellCheckingType;
 
+@synthesize delegate = _delegate;
+
+// TODO(nicholss): For physical keyboard, look at UIKeyCommand
+// https://developer.apple.com/reference/uikit/uikeycommand?language=objc
+
 - (instancetype)init {
   self = [super init];
   if (self) {
     _autocapitalizationType = UITextAutocapitalizationTypeNone;
     _autocorrectionType = UITextAutocorrectionTypeNo;
     _autocorrectionType = UITextAutocorrectionTypeNo;
-    _keyboardType = UIKeyboardTypeASCIICapable;
+    _keyboardType = UIKeyboardTypeDefault;
     _spellCheckingType = UITextSpellCheckingTypeNo;
   }
   return self;
@@ -36,15 +41,15 @@
 #pragma mark - UIKeyInput
 
 - (void)insertText:(NSString*)text {
-  NSLog(@"insertText: %@", text);
+  [_delegate clientKeyboardShouldSend:text];
 }
 
 - (void)deleteBackward {
-  NSLog(@"deleteBackward");
+  [_delegate clientKeyboardShouldDelete];
 }
 
 - (BOOL)hasText {
-  return NO;  // not sure if this enables the back button.
+  return NO;
 }
 
 #pragma mark - UIResponder

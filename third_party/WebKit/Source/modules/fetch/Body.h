@@ -40,7 +40,7 @@ class MODULES_EXPORT Body : public GarbageCollected<Body>,
 
   ScriptPromise arrayBuffer(ScriptState*);
   ScriptPromise blob(ScriptState*);
-  ScriptPromise FormData(ScriptState*);
+  ScriptPromise formData(ScriptState*);
   ScriptPromise json(ScriptState*);
   ScriptPromise text(ScriptState*);
   ScriptValue body(ScriptState*);
@@ -56,6 +56,9 @@ class MODULES_EXPORT Body : public GarbageCollected<Body>,
   DEFINE_INLINE_VIRTUAL_TRACE() { ContextClient::Trace(visitor); }
 
  private:
+  // TODO(e_hakkinen): Fix |MimeType()| to always contain parameters and
+  // remove |ContentType()|.
+  virtual String ContentType() const = 0;
   virtual String MimeType() const = 0;
 
   // Body consumption algorithms will reject with a TypeError in a number of

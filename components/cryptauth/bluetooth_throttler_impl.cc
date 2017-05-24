@@ -16,7 +16,7 @@ namespace cryptauth {
 namespace {
 
 // Time to wait after disconnect before reconnecting.
-const int kCooldownTimeSecs = 7;
+const int kCooldownTimeSecs = 1;
 
 }  // namespace
 

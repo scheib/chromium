@@ -17,9 +17,9 @@
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/task_scheduler/post_task.h"
 #include "ios/chrome/browser/chrome_paths.h"
 #import "ios/chrome/browser/crash_report/crash_report_user_application_state.h"
-#include "ios/web/public/web_thread.h"
 
 // TODO(stuartmorgan): Move this up where it belongs once
 // http://code.google.com/p/google-breakpad/issues/detail?id=487
@@ -179,8 +179,9 @@ bool IsUploadingEnabled() {
 void CleanupCrashReports() {
   base::FilePath crash_directory;
   PathService::Get(ios::DIR_CRASH_DUMPS, &crash_directory);
-  web::WebThread::PostBlockingPoolTask(
-      FROM_HERE, base::Bind(&DeleteAllReportsInDirectory, crash_directory));
+  base::PostTaskWithTraits(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
+      base::BindOnce(&DeleteAllReportsInDirectory, crash_directory));
 }
 
 void AddReportParameter(NSString* key, NSString* value, bool async) {

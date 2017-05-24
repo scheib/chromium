@@ -197,14 +197,6 @@ void LabelFields(const FieldTypeMap& field_types,
   }
 }
 
-// Check whether |form_data| corresponds to a 2 field form with 1 text field and
-// 1 password field. Such form is likely sign-in form.
-bool IsSignInSubmission(const FormData& form_data) {
-  return form_data.fields.size() == 2 &&
-         form_data.fields[0].form_control_type == "text" &&
-         form_data.fields[1].form_control_type == "password";
-}
-
 }  // namespace
 
 PasswordFormManager::PasswordFormManager(
@@ -239,12 +231,13 @@ PasswordFormManager::PasswordFormManager(
       submit_result_(kSubmitResultNotSubmitted),
       form_type_(kFormTypeUnspecified),
       form_saver_(std::move(form_saver)),
-      owned_form_fetcher_(form_fetcher
-                              ? nullptr
-                              : base::MakeUnique<FormFetcherImpl>(
-                                    PasswordStore::FormDigest(observed_form),
-                                    client,
-                                    /* should_migrate_http_passwords */ true)),
+      owned_form_fetcher_(
+          form_fetcher ? nullptr
+                       : base::MakeUnique<FormFetcherImpl>(
+                             PasswordStore::FormDigest(observed_form),
+                             client,
+                             true /* should_migrate_http_passwords */,
+                             false /* should_query_suppressed_https_forms */)),
       form_fetcher_(form_fetcher ? form_fetcher : owned_form_fetcher_.get()),
       is_main_frame_secure_(client->IsMainFrameSecure()) {
   if (owned_form_fetcher_)
@@ -419,6 +412,9 @@ void PasswordFormManager::Save() {
   DCHECK_EQ(FormFetcher::State::NOT_WAITING, form_fetcher_->GetState());
   DCHECK(!client_->IsIncognito());
 
+  metrics_util::LogPasswordAcceptedSaveUpdateSubmissionIndicatorEvent(
+      submitted_form_->submission_event);
+
   if ((user_action_ == kUserActionNone) &&
       DidPreferenceChange(best_matches_, pending_credentials_.username_value)) {
     SetUserAction(kUserActionChoose);
@@ -451,6 +447,8 @@ void PasswordFormManager::Save() {
 
 void PasswordFormManager::Update(
     const autofill::PasswordForm& credentials_to_update) {
+  metrics_util::LogPasswordAcceptedSaveUpdateSubmissionIndicatorEvent(
+      submitted_form_->submission_event);
   if (observed_form_.IsPossibleChangePasswordForm()) {
     FormStructure form_structure(credentials_to_update.form_data);
     UploadPasswordVote(observed_form_, autofill::NEW_PASSWORD,
@@ -1298,8 +1296,16 @@ void PasswordFormManager::SendVotesOnSave() {
   if (observed_form_.IsPossibleChangePasswordFormWithoutUsername())
     return;
 
-  if (IsSignInSubmission(pending_credentials_.form_data)) {
-    SendSignInVote(pending_credentials_.form_data);
+  // Send votes for sign-in form.
+  autofill::FormData& form_data = pending_credentials_.form_data;
+  if (form_data.fields.size() == 2 &&
+      form_data.fields[0].form_control_type == "text" &&
+      form_data.fields[1].form_control_type == "password") {
+    // |form_data| is received from the renderer and does not contain field
+    // values. Fill username field value with username to allow AutofillManager
+    // to detect username autofill type.
+    form_data.fields[0].value = pending_credentials_.username_value;
+    SendSignInVote(form_data);
     return;
   }
 

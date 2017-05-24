@@ -10,6 +10,8 @@
 #include "components/signin/core/browser/signin_metrics.h"
 #include "ios/chrome/browser/ui/commands/generic_chrome_command.h"
 
+@class ChromeIdentity;
+
 typedef void (^ShowSigninCommandCompletionCallback)(BOOL succeeded);
 
 enum AuthenticationOperation {
@@ -24,10 +26,6 @@ enum AuthenticationOperation {
   // Operation to start a sign-in operation. The user is presented with the
   // SSOAuth sign in page (SSOAuth account picker or SSOAuth sign-in web page).
   AUTHENTICATION_OPERATION_SIGNIN,
-
-  // Operation to start a sign-in operation based on the first known identity.
-  // The users are presented with the sync confirmation screen.
-  AUTHENTICATION_OPERATION_SIGNIN_PROMO_CONTINUE_AS,
 };
 
 // A command to perform a sign in operation.
@@ -39,11 +37,19 @@ enum AuthenticationOperation {
 // Initializes a command to perform the specified operation with a
 // SigninInteractionController and invoke a possibly-nil callback when finished.
 - (instancetype)initWithOperation:(AuthenticationOperation)operation
+                         identity:(ChromeIdentity*)identity
                       accessPoint:(signin_metrics::AccessPoint)accessPoint
+                      promoAction:(signin_metrics::PromoAction)promoAction
                          callback:(ShowSigninCommandCompletionCallback)callback
     NS_DESIGNATED_INITIALIZER;
 
-// Initializes a ShowSigninCommand with a nil callback.
+// Initializes a ShowSigninCommand with |identity| and |callback| set to nil.
+- (instancetype)initWithOperation:(AuthenticationOperation)operation
+                      accessPoint:(signin_metrics::AccessPoint)accessPoint
+                      promoAction:(signin_metrics::PromoAction)promoAction;
+
+// Initializes a ShowSigninCommand with PROMO_ACTION_NO_SIGNIN_PROMO and a nil
+// callback.
 - (instancetype)initWithOperation:(AuthenticationOperation)operation
                       accessPoint:(signin_metrics::AccessPoint)accessPoint;
 
@@ -54,8 +60,18 @@ enum AuthenticationOperation {
 // The operation to perform during the sign-in flow.
 @property(nonatomic, readonly) AuthenticationOperation operation;
 
+// Chrome identity is only used for the AUTHENTICATION_OPERATION_SIGNIN
+// operation (should be nil otherwise). If the identity is non-nil, the
+// interaction view controller logins using this identity. If the identity is
+// nil, the interaction view controller asks the user to choose an identity or
+// to add a new one.
+@property(nonatomic, readonly) ChromeIdentity* identity;
+
 // The access point of this authentication operation.
 @property(nonatomic, readonly) signin_metrics::AccessPoint accessPoint;
+
+// The user action from the sign-in promo to trigger the sign-in operation.
+@property(nonatomic, readonly) signin_metrics::PromoAction promoAction;
 
 @end
 

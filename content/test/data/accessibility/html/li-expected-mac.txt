@@ -1,11 +1,11 @@
 AXWebArea
 ++AXList AXSubrole=AXContentList
-++++AXGroup AXTitle='Item 1'
+++++AXGroup
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='Item 1'
-++++AXGroup AXTitle='Item 2'
+++++AXGroup
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='Item 2'
-++++AXGroup AXTitle='Item 3'
+++++AXGroup
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='Item 3'

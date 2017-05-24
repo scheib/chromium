@@ -15,11 +15,14 @@ FrameLoadWaiter::FrameLoadWaiter(RenderFrame* frame)
 }
 
 void FrameLoadWaiter::Wait() {
-  // Pump messages until Blink's threaded HTML parser finishes.
+  if (did_load_)
+    return;
+
   run_loop_.Run();
 }
 
 void FrameLoadWaiter::DidFinishLoad() {
+  did_load_ = true;
   // Post a task to quit instead of quitting directly, since the load completion
   // may trigger other IPCs that tests are expecting.
   base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,

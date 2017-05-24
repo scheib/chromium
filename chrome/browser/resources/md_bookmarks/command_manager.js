@@ -57,6 +57,7 @@ cr.define('bookmarks', function() {
       this.shortcuts_[Command.OPEN_NEW_TAB] =
           cr.isMac ? 'meta+enter' : 'ctrl+enter';
       this.shortcuts_[Command.OPEN_NEW_WINDOW] = 'shift+enter';
+      this.shortcuts_[Command.OPEN] = cr.isMac ? 'meta+down' : 'enter';
     },
 
     detached: function() {
@@ -103,8 +104,13 @@ cr.define('bookmarks', function() {
      * @return {boolean}
      */
     canExecute: function(command, itemIds) {
-      return this.isCommandVisible_(command, itemIds) &&
-          this.isCommandEnabled_(command, itemIds);
+      switch (command) {
+        case Command.OPEN:
+          return itemIds.size > 0;
+        default:
+          return this.isCommandVisible_(command, itemIds) &&
+              this.isCommandEnabled_(command, itemIds);
+      }
     },
 
     /**
@@ -177,6 +183,21 @@ cr.define('bookmarks', function() {
         case Command.OPEN_INCOGNITO:
           this.openUrls_(this.expandUrls_(itemIds), command);
           break;
+        case Command.OPEN:
+          var isFolder = itemIds.size == 1 &&
+              this.containsMatchingNode_(itemIds, function(node) {
+                return !node.url;
+              });
+          if (isFolder) {
+            var folderId = Array.from(itemIds)[0];
+            this.dispatch(bookmarks.actions.selectFolder(
+                folderId, this.getState().nodes));
+          } else {
+            this.openUrls_(this.expandUrls_(itemIds), command);
+          }
+          break;
+        default:
+          assert(false);
       }
     },
 
@@ -214,7 +235,7 @@ cr.define('bookmarks', function() {
      */
     openUrls_: function(urls, command) {
       assert(
-          command == Command.OPEN_NEW_TAB ||
+          command == Command.OPEN || command == Command.OPEN_NEW_TAB ||
           command == Command.OPEN_NEW_WINDOW ||
           command == Command.OPEN_INCOGNITO);
 
@@ -225,6 +246,8 @@ cr.define('bookmarks', function() {
       if (command == Command.OPEN_NEW_WINDOW || incognito) {
         chrome.windows.create({url: urls, incognito: incognito});
       } else {
+        if (command == Command.OPEN)
+          chrome.tabs.create({url: urls.shift(), active: true});
         urls.forEach(function(url) {
           chrome.tabs.create({url: url, active: false});
         });

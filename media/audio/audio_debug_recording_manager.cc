@@ -36,11 +36,8 @@ base::FilePath GetOutputDebugRecordingFileNameWithExtensions(
 }  // namespace
 
 AudioDebugRecordingManager::AudioDebugRecordingManager(
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner)
-    : task_runner_(std::move(task_runner)),
-      file_task_runner_(std::move(file_task_runner)),
-      weak_factory_(this) {}
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+    : task_runner_(std::move(task_runner)), weak_factory_(this) {}
 
 AudioDebugRecordingManager::~AudioDebugRecordingManager() {}
 
@@ -76,7 +73,7 @@ AudioDebugRecordingManager::RegisterDebugRecordingSource(
   // returned recorder. But to not require this we use a weak pointer.
   std::unique_ptr<AudioDebugRecordingHelper> recording_helper =
       CreateAudioDebugRecordingHelper(
-          params, task_runner_, file_task_runner_,
+          params, task_runner_,
           base::BindOnce(
               &AudioDebugRecordingManager::UnregisterDebugRecordingSource,
               weak_factory_.GetWeakPtr(), id));
@@ -104,10 +101,9 @@ std::unique_ptr<AudioDebugRecordingHelper>
 AudioDebugRecordingManager::CreateAudioDebugRecordingHelper(
     const AudioParameters& params,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     base::OnceClosure on_destruction_closure) {
   return base::MakeUnique<AudioDebugRecordingHelper>(
-      params, task_runner, file_task_runner, std::move(on_destruction_closure));
+      params, task_runner, std::move(on_destruction_closure));
 }
 
 bool AudioDebugRecordingManager::IsDebugRecordingEnabled() {

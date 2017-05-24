@@ -25,6 +25,7 @@
 #include "chrome/browser/permissions/permission_decision_auto_blocker.h"
 #include "chrome/browser/permissions/permission_queue_controller.h"
 #include "chrome/browser/permissions/permission_request_id.h"
+#include "chrome/browser/permissions/permission_request_manager.h"
 #include "chrome/browser/permissions/permission_uma_util.h"
 #include "chrome/browser/permissions/permission_util.h"
 #include "chrome/browser/ui/permission_bubble/mock_permission_prompt_factory.h"
@@ -43,10 +44,6 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(OS_ANDROID)
-#include "chrome/browser/permissions/permission_request_manager.h"
-#endif
 
 const char* const kPermissionsKillSwitchFieldStudy =
     PermissionContextBase::kPermissionsKillSwitchFieldStudy;
@@ -222,7 +219,14 @@ class TestKillSwitchPermissionContext : public TestPermissionContext {
   DISALLOW_COPY_AND_ASSIGN(TestKillSwitchPermissionContext);
 };
 
-class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
+enum class TestType {
+  PERMISSION_REQUEST_MANAGER,
+  PERMISSION_QUEUE_CONTROLLER,
+};
+
+class PermissionContextBaseTests
+    : public ChromeRenderViewHostTestHarness,
+      public ::testing::WithParamInterface<TestType> {
  protected:
   PermissionContextBaseTests() {}
   ~PermissionContextBaseTests() override {}
@@ -236,26 +240,28 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
     DCHECK(response == CONTENT_SETTING_ALLOW ||
            response == CONTENT_SETTING_BLOCK ||
            response == CONTENT_SETTING_ASK);
+    if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+      PermissionRequestManager* manager =
+          PermissionRequestManager::FromWebContents(web_contents());
+      manager->TogglePersist(persist);
+      using AutoResponseType = PermissionRequestManager::AutoResponseType;
+      AutoResponseType decision = AutoResponseType::DISMISS;
+      if (response == CONTENT_SETTING_ALLOW)
+        decision = AutoResponseType::ACCEPT_ALL;
+      else if (response == CONTENT_SETTING_BLOCK)
+        decision = AutoResponseType::DENY_ALL;
+      prompt_factory_->set_response_type(decision);
+    } else {
 #if defined(OS_ANDROID)
-    PermissionAction decision = PermissionAction::DISMISSED;
-    if (response == CONTENT_SETTING_ALLOW)
-      decision = PermissionAction::GRANTED;
-    else if (response == CONTENT_SETTING_BLOCK)
-      decision = PermissionAction::DENIED;
-    context->GetInfoBarController()->OnPermissionSet(
-        id, url, url, false /* user_gesture */, persist, decision);
-#else
-    PermissionRequestManager* manager =
-        PermissionRequestManager::FromWebContents(web_contents());
-    manager->TogglePersist(persist);
-    using AutoResponseType = PermissionRequestManager::AutoResponseType;
-    AutoResponseType decision = AutoResponseType::DISMISS;
-    if (response == CONTENT_SETTING_ALLOW)
-      decision = AutoResponseType::ACCEPT_ALL;
-    else if (response == CONTENT_SETTING_BLOCK)
-      decision = AutoResponseType::DENY_ALL;
-    prompt_factory_->set_response_type(decision);
+      PermissionAction decision = PermissionAction::DISMISSED;
+      if (response == CONTENT_SETTING_ALLOW)
+        decision = PermissionAction::GRANTED;
+      else if (response == CONTENT_SETTING_BLOCK)
+        decision = PermissionAction::DENIED;
+      context->GetInfoBarController()->OnPermissionSet(
+          id, url, url, false /* user_gesture */, persist, decision);
 #endif
+    }
   }
 
   void TestAskAndDecide_TestContent(ContentSettingsType content_settings_type,
@@ -349,16 +355,17 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
               PermissionUtil::GetPermissionString(content_settings_type),
           i, 1);
 
-// On Android, repeatedly requesting and deciding permissions has the side
-// effect of overcounting any metrics recorded in the PermissionInfoBarDelegate
-// destructor. This is because we directly call
-// PermissionQueueController::OnPermissionSet without setting the action_taken
-// bit in PermissionInfoBarDelegate. When PermissionQueueController is deleted
-// all OS_ANDROID ifdefs in this test can be removed.
-#if !defined(OS_ANDROID)
-      histograms.ExpectTotalCount("Permissions.AutoBlocker.EmbargoStatus",
-                                  i + 1);
-#endif
+      // On Android, repeatedly requesting and deciding permissions has the side
+      // effect of overcounting any metrics recorded in the
+      // PermissionInfoBarDelegate destructor. This is because we directly call
+      // PermissionQueueController::OnPermissionSet without setting the
+      // action_taken bit in PermissionInfoBarDelegate. When
+      // PermissionQueueController is deleted these expectations can be made
+      // unconditional.
+      if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+        histograms.ExpectTotalCount("Permissions.AutoBlocker.EmbargoStatus",
+                                    i + 1);
+      }
 
       PermissionResult result = permission_context.GetPermissionStatus(
           nullptr /* render_frame_host */, url, url);
@@ -369,19 +376,20 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
       if (i < 2) {
         EXPECT_EQ(PermissionStatusSource::UNSPECIFIED, result.source);
         EXPECT_EQ(CONTENT_SETTING_ASK, result.content_setting);
-#if !defined(OS_ANDROID)
-        histograms.ExpectUniqueSample(
-            "Permissions.AutoBlocker.EmbargoStatus",
-            static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
-#endif
+        if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+          histograms.ExpectUniqueSample(
+              "Permissions.AutoBlocker.EmbargoStatus",
+              static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
+        }
       } else {
         EXPECT_EQ(PermissionStatusSource::MULTIPLE_DISMISSALS, result.source);
         EXPECT_EQ(CONTENT_SETTING_BLOCK, result.content_setting);
-#if !defined(OS_ANDROID)
-        histograms.ExpectBucketCount(
-            "Permissions.AutoBlocker.EmbargoStatus",
-            static_cast<int>(PermissionEmbargoStatus::REPEATED_DISMISSALS), 1);
-#endif
+        if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+          histograms.ExpectBucketCount(
+              "Permissions.AutoBlocker.EmbargoStatus",
+              static_cast<int>(PermissionEmbargoStatus::REPEATED_DISMISSALS),
+              1);
+        }
       }
 
       ASSERT_EQ(1u, permission_context.decisions().size());
@@ -422,8 +430,15 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
       // Ensure that > 3 dismissals behaves correctly when the
       // BlockPromptsIfDismissedOften feature is off.
       base::test::ScopedFeatureList feature_list;
-      feature_list.InitAndDisableFeature(
-          features::kBlockPromptsIfDismissedOften);
+      if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+        feature_list.InitWithFeatures(
+            {features::kUseGroupedPermissionInfobars},
+            {features::kBlockPromptsIfDismissedOften});
+      } else {
+        feature_list.InitWithFeatures(
+            {}, {features::kUseGroupedPermissionInfobars,
+                 features::kBlockPromptsIfDismissedOften});
+      }
 
       for (uint32_t i = 0; i < 4; ++i) {
         TestPermissionContext permission_context(
@@ -450,17 +465,18 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
             "Permissions.AutoBlocker.EmbargoPromptSuppression",
             static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
 
-// On Android, repeatedly requesting and deciding permissions has the side
-// effect of overcounting any metrics recorded in the
-// PermissionInfoBarDelegate destructor. This is because we directly call
-// PermissionQueueController::OnPermissionSet without setting the action_taken
-// bit in PermissionInfoBarDelegate. When PermissionQueueController is deleted
-// all OS_ANDROID ifdefs in this test can be removed.
-#if !defined(OS_ANDROID)
-        histograms.ExpectUniqueSample(
-            "Permissions.AutoBlocker.EmbargoStatus",
-            static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
-#endif
+        // On Android, repeatedly requesting and deciding permissions has the
+        // side effect of overcounting any metrics recorded in the
+        // PermissionInfoBarDelegate destructor. This is because we directly
+        // call PermissionQueueController::OnPermissionSet without setting the
+        // action_taken bit in PermissionInfoBarDelegate. When
+        // PermissionQueueController is deleted this expectation can be made
+        // unconditional.
+        if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+          histograms.ExpectUniqueSample(
+              "Permissions.AutoBlocker.EmbargoStatus",
+              static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
+        }
 
         ASSERT_EQ(1u, permission_context.decisions().size());
         EXPECT_EQ(CONTENT_SETTING_ASK, permission_context.decisions()[0]);
@@ -501,6 +517,13 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
 
     std::unique_ptr<base::FeatureList> feature_list =
         base::MakeUnique<base::FeatureList>();
+    if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+      feature_list->InitializeFromCommandLine(
+          features::kUseGroupedPermissionInfobars.name, "");
+    } else {
+      feature_list->InitializeFromCommandLine(
+          "", features::kUseGroupedPermissionInfobars.name);
+    }
     feature_list->RegisterFieldTrialOverride(
         features::kBlockPromptsIfDismissedOften.name,
         base::FeatureList::OVERRIDE_ENABLE_FEATURE, trial);
@@ -549,32 +572,34 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
           "Permissions.AutoBlocker.EmbargoPromptSuppression",
           static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
 
-// On Android, repeatedly requesting and deciding permissions has the side
-// effect of overcounting any metrics recorded in the PermissionInfoBarDelegate
-// destructor. This is because we directly call
-// PermissionQueueController::OnPermissionSet without setting the action_taken
-// bit in PermissionInfoBarDelegate. When PermissionQueueController is deleted
-// all OS_ANDROID ifdefs in this test can be removed.
-#if !defined(OS_ANDROID)
-      histograms.ExpectTotalCount("Permissions.AutoBlocker.EmbargoStatus",
-                                  i + 1);
-#endif
+      // On Android, repeatedly requesting and deciding permissions has the side
+      // effect of overcounting any metrics recorded in the
+      // PermissionInfoBarDelegate destructor. This is because we directly call
+      // PermissionQueueController::OnPermissionSet without setting the
+      // action_taken bit in PermissionInfoBarDelegate. When
+      // PermissionQueueController is deleted these expectations can be made
+      // unconditional.
+      if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+        histograms.ExpectTotalCount("Permissions.AutoBlocker.EmbargoStatus",
+                                    i + 1);
+      }
       if (i < 4) {
         EXPECT_EQ(CONTENT_SETTING_ASK, result.content_setting);
         EXPECT_EQ(PermissionStatusSource::UNSPECIFIED, result.source);
-#if !defined(OS_ANDROID)
-        histograms.ExpectUniqueSample(
-            "Permissions.AutoBlocker.EmbargoStatus",
-            static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
-#endif
+        if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+          histograms.ExpectUniqueSample(
+              "Permissions.AutoBlocker.EmbargoStatus",
+              static_cast<int>(PermissionEmbargoStatus::NOT_EMBARGOED), i + 1);
+        }
       } else {
         EXPECT_EQ(CONTENT_SETTING_BLOCK, result.content_setting);
         EXPECT_EQ(PermissionStatusSource::MULTIPLE_DISMISSALS, result.source);
-#if !defined(OS_ANDROID)
-        histograms.ExpectBucketCount(
-            "Permissions.AutoBlocker.EmbargoStatus",
-            static_cast<int>(PermissionEmbargoStatus::REPEATED_DISMISSALS), 1);
-#endif
+        if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+          histograms.ExpectBucketCount(
+              "Permissions.AutoBlocker.EmbargoStatus",
+              static_cast<int>(PermissionEmbargoStatus::REPEATED_DISMISSALS),
+              1);
+        }
       }
     }
 
@@ -720,7 +745,16 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
     SetUpUrl(url);
     base::HistogramTester histograms;
     base::test::ScopedFeatureList scoped_feature_list;
-    scoped_feature_list.InitAndEnableFeature(features::kPermissionsBlacklist);
+    if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER) {
+      scoped_feature_list.InitWithFeatures(
+          {features::kUseGroupedPermissionInfobars,
+           features::kPermissionsBlacklist},
+          {});
+    } else {
+      scoped_feature_list.InitWithFeatures(
+          {features::kPermissionsBlacklist},
+          {features::kUseGroupedPermissionInfobars});
+    }
     TestPermissionContext permission_context(profile(), content_settings_type);
     PermissionDecisionAutoBlocker::GetForProfile(profile())
         ->SetSafeBrowsingDatabaseManagerAndTimeoutForTesting(db_manager,
@@ -762,24 +796,27 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
 
   void SetUpUrl(const GURL& url) {
     NavigateAndCommit(url);
-#if !defined(OS_ANDROID)
-    prompt_factory_->DocumentOnLoadCompletedInMainFrame();
-#endif
+    if (GetParam() == TestType::PERMISSION_REQUEST_MANAGER)
+      prompt_factory_->DocumentOnLoadCompletedInMainFrame();
   }
 
  private:
   // ChromeRenderViewHostTestHarness:
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
-#if defined(OS_ANDROID)
-    InfoBarService::CreateForWebContents(web_contents());
-#else
-    PermissionRequestManager::CreateForWebContents(web_contents());
-    PermissionRequestManager* manager =
-        PermissionRequestManager::FromWebContents(web_contents());
-    prompt_factory_.reset(new MockPermissionPromptFactory(manager));
-    manager->DisplayPendingRequests();
-#endif
+    if (GetParam() == TestType::PERMISSION_QUEUE_CONTROLLER) {
+      scoped_feature_list_.InitAndDisableFeature(
+          features::kUseGroupedPermissionInfobars);
+      InfoBarService::CreateForWebContents(web_contents());
+    } else {
+      scoped_feature_list_.InitAndEnableFeature(
+          features::kUseGroupedPermissionInfobars);
+      PermissionRequestManager::CreateForWebContents(web_contents());
+      PermissionRequestManager* manager =
+          PermissionRequestManager::FromWebContents(web_contents());
+      prompt_factory_.reset(new MockPermissionPromptFactory(manager));
+      manager->DisplayPendingRequests();
+    }
   }
 
   void TearDown() override {
@@ -789,39 +826,42 @@ class PermissionContextBaseTests : public ChromeRenderViewHostTestHarness {
 
   std::unique_ptr<MockPermissionPromptFactory> prompt_factory_;
 
+  // For testing the PermissionRequestManager on Android
+  base::test::ScopedFeatureList scoped_feature_list_;
+
   DISALLOW_COPY_AND_ASSIGN(PermissionContextBaseTests);
 };
 
 // Simulates clicking Accept. The permission should be granted and
 // saved for future use.
-TEST_F(PermissionContextBaseTests, TestAskAndGrantPersist) {
+TEST_P(PermissionContextBaseTests, TestAskAndGrantPersist) {
   TestAskAndDecide_TestContent(CONTENT_SETTINGS_TYPE_NOTIFICATIONS,
                                CONTENT_SETTING_ALLOW, true);
 }
 
 // Simulates clicking Accept. The permission should be granted, but not
 // persisted.
-TEST_F(PermissionContextBaseTests, TestAskAndGrantNoPersist) {
+TEST_P(PermissionContextBaseTests, TestAskAndGrantNoPersist) {
   TestAskAndDecide_TestContent(CONTENT_SETTINGS_TYPE_NOTIFICATIONS,
                                CONTENT_SETTING_ALLOW, false);
 }
 
 // Simulates clicking Block. The permission should be denied and
 // saved for future use.
-TEST_F(PermissionContextBaseTests, TestAskAndBlockPersist) {
+TEST_P(PermissionContextBaseTests, TestAskAndBlockPersist) {
   TestAskAndDecide_TestContent(CONTENT_SETTINGS_TYPE_GEOLOCATION,
                                CONTENT_SETTING_BLOCK, true);
 }
 
 // Simulates clicking Block. The permission should be denied, but not persisted.
-TEST_F(PermissionContextBaseTests, TestAskAndBlockNoPersist) {
+TEST_P(PermissionContextBaseTests, TestAskAndBlockNoPersist) {
   TestAskAndDecide_TestContent(CONTENT_SETTINGS_TYPE_GEOLOCATION,
                                CONTENT_SETTING_BLOCK, false);
 }
 
 // Simulates clicking Dismiss (X) in the infobar/bubble.
 // The permission should be denied but not saved for future use.
-TEST_F(PermissionContextBaseTests, TestAskAndDismiss) {
+TEST_P(PermissionContextBaseTests, TestAskAndDismiss) {
   TestAskAndDecide_TestContent(CONTENT_SETTINGS_TYPE_MIDI_SYSEX,
                                CONTENT_SETTING_ASK, false);
 }
@@ -829,18 +869,18 @@ TEST_F(PermissionContextBaseTests, TestAskAndDismiss) {
 // Simulates clicking Dismiss (X) in the infobar/bubble with the block on too
 // many dismissals feature active. The permission should be blocked after
 // several dismissals.
-TEST_F(PermissionContextBaseTests, TestDismissUntilBlocked) {
+TEST_P(PermissionContextBaseTests, TestDismissUntilBlocked) {
   TestBlockOnSeveralDismissals_TestContent();
 }
 
 // Test setting a custom number of dismissals before block via variations.
-TEST_F(PermissionContextBaseTests, TestDismissVariations) {
+TEST_P(PermissionContextBaseTests, TestDismissVariations) {
   TestVariationBlockOnSeveralDismissals_TestContent();
 }
 
 // Simulates non-valid requesting URL.
 // The permission should be denied but not saved for future use.
-TEST_F(PermissionContextBaseTests, TestNonValidRequestingUrl) {
+TEST_P(PermissionContextBaseTests, TestNonValidRequestingUrl) {
   TestRequestPermissionInvalidUrl(CONTENT_SETTINGS_TYPE_GEOLOCATION);
   TestRequestPermissionInvalidUrl(CONTENT_SETTINGS_TYPE_NOTIFICATIONS);
   TestRequestPermissionInvalidUrl(CONTENT_SETTINGS_TYPE_MIDI_SYSEX);
@@ -851,36 +891,26 @@ TEST_F(PermissionContextBaseTests, TestNonValidRequestingUrl) {
 #endif
 }
 
-#if defined(OS_ANDROID)
-// This test is specific to Android because other platforms use bubbles.
-TEST_F(PermissionContextBaseTests, TestGrantAndRevokeWithInfobars) {
+// Simulates granting and revoking of permissions.
+TEST_P(PermissionContextBaseTests, TestGrantAndRevoke) {
   TestGrantAndRevoke_TestContent(CONTENT_SETTINGS_TYPE_GEOLOCATION,
                                  CONTENT_SETTING_ASK);
   TestGrantAndRevoke_TestContent(CONTENT_SETTINGS_TYPE_MIDI_SYSEX,
                                  CONTENT_SETTING_ASK);
+#if defined(OS_ANDROID)
   TestGrantAndRevoke_TestContent(
       CONTENT_SETTINGS_TYPE_PROTECTED_MEDIA_IDENTIFIER, CONTENT_SETTING_ASK);
   // TODO(timvolodine): currently no test for
   // CONTENT_SETTINGS_TYPE_NOTIFICATIONS because notification permissions work
   // differently with infobars as compared to bubbles (crbug.com/453784).
-}
-#endif
-
-#if !defined(OS_ANDROID)
-// Simulates granting and revoking of permissions using permission bubbles.
-// This test shouldn't run on mobile because mobile platforms use infobars.
-TEST_F(PermissionContextBaseTests, TestGrantAndRevokeWithBubbles) {
-  TestGrantAndRevoke_TestContent(CONTENT_SETTINGS_TYPE_GEOLOCATION,
-                                 CONTENT_SETTING_ASK);
+#else
   TestGrantAndRevoke_TestContent(CONTENT_SETTINGS_TYPE_NOTIFICATIONS,
                                  CONTENT_SETTING_ASK);
-  TestGrantAndRevoke_TestContent(CONTENT_SETTINGS_TYPE_MIDI_SYSEX,
-                                 CONTENT_SETTING_ASK);
-}
 #endif
+}
 
 // Tests the global kill switch by enabling/disabling the Field Trials.
-TEST_F(PermissionContextBaseTests, TestGlobalKillSwitch) {
+TEST_P(PermissionContextBaseTests, TestGlobalKillSwitch) {
   TestGlobalPermissionsKillSwitch(CONTENT_SETTINGS_TYPE_GEOLOCATION);
   TestGlobalPermissionsKillSwitch(CONTENT_SETTINGS_TYPE_NOTIFICATIONS);
   TestGlobalPermissionsKillSwitch(CONTENT_SETTINGS_TYPE_MIDI_SYSEX);
@@ -894,21 +924,21 @@ TEST_F(PermissionContextBaseTests, TestGlobalKillSwitch) {
   TestGlobalPermissionsKillSwitch(CONTENT_SETTINGS_TYPE_MEDIASTREAM_CAMERA);
 }
 
-TEST_F(PermissionContextBaseTests, TestParallelRequestsAllowed) {
+TEST_P(PermissionContextBaseTests, TestParallelRequestsAllowed) {
   TestParallelRequests(CONTENT_SETTING_ALLOW);
 }
 
-TEST_F(PermissionContextBaseTests, TestParallelRequestsBlocked) {
+TEST_P(PermissionContextBaseTests, TestParallelRequestsBlocked) {
   TestParallelRequests(CONTENT_SETTING_BLOCK);
 }
 
-TEST_F(PermissionContextBaseTests, TestParallelRequestsDismissed) {
+TEST_P(PermissionContextBaseTests, TestParallelRequestsDismissed) {
   TestParallelRequests(CONTENT_SETTING_ASK);
 }
 
 // Tests a blacklisted (URL, permission) pair has had its permission request
 // blocked.
-TEST_F(PermissionContextBaseTests, TestPermissionsBlacklistingBlocked) {
+TEST_P(PermissionContextBaseTests, TestPermissionsBlacklistingBlocked) {
   scoped_refptr<MockSafeBrowsingDatabaseManager> db_manager =
       new MockSafeBrowsingDatabaseManager(true /* perform_callback */);
   const GURL url("https://www.example.com");
@@ -921,7 +951,7 @@ TEST_F(PermissionContextBaseTests, TestPermissionsBlacklistingBlocked) {
 
 // Tests that a URL that is blacklisted for one permission can still request
 // another and grant another.
-TEST_F(PermissionContextBaseTests, TestPermissionsBlacklistingAllowed) {
+TEST_P(PermissionContextBaseTests, TestPermissionsBlacklistingAllowed) {
   scoped_refptr<MockSafeBrowsingDatabaseManager> db_manager =
       new MockSafeBrowsingDatabaseManager(true /* perform_callback */);
   const GURL url("https://www.example.com");
@@ -931,3 +961,16 @@ TEST_F(PermissionContextBaseTests, TestPermissionsBlacklistingAllowed) {
                               url, 2000 /* timeout */, CONTENT_SETTING_ALLOW,
                               PermissionEmbargoStatus::NOT_EMBARGOED);
 }
+
+#if defined(OS_ANDROID)
+INSTANTIATE_TEST_CASE_P(
+    PermissionContextBaseTestsInstance,
+    PermissionContextBaseTests,
+    ::testing::Values(TestType::PERMISSION_REQUEST_MANAGER,
+                      TestType::PERMISSION_QUEUE_CONTROLLER));
+#else
+INSTANTIATE_TEST_CASE_P(
+    PermissionContextBaseTestsInstance,
+    PermissionContextBaseTests,
+    ::testing::Values(TestType::PERMISSION_REQUEST_MANAGER));
+#endif

@@ -28,8 +28,7 @@ class ShippingOptionItem : public PaymentRequestItemList::Item {
                                      parent_list,
                                      selected,
                                      /*show_edit_button=*/false),
-        shipping_option_(shipping_option),
-        dialog_(dialog) {}
+        shipping_option_(shipping_option) {}
   ~ShippingOptionItem() override {}
 
  private:
@@ -44,7 +43,6 @@ class ShippingOptionItem : public PaymentRequestItemList::Item {
   void SelectedStateChanged() override {
     if (selected()) {
       state()->SetSelectedShippingOption(shipping_option_->id);
-      dialog_->GoBack();
     }
   }
 
@@ -69,7 +67,6 @@ class ShippingOptionItem : public PaymentRequestItemList::Item {
   }
 
   mojom::PaymentShippingOption* shipping_option_;
-  PaymentRequestDialogView* dialog_;
 
   DISALLOW_COPY_AND_ASSIGN(ShippingOptionItem);
 };
@@ -94,7 +91,12 @@ ShippingOptionViewController::~ShippingOptionViewController() {
 }
 
 void ShippingOptionViewController::OnSpecUpdated() {
-  UpdateContentView();
+  if (spec()->current_update_reason() ==
+      PaymentRequestSpec::UpdateReason::SHIPPING_OPTION) {
+    dialog()->GoBack();
+  } else {
+    UpdateContentView();
+  }
 }
 
 base::string16 ShippingOptionViewController::GetSheetTitle() {

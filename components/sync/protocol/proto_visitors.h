@@ -540,6 +540,16 @@ VISIT_PROTO_FIELDS(const sync_pb::KeystoreEncryptionFlags& proto) {
   VISIT(enabled);
 }
 
+VISIT_PROTO_FIELDS(const sync_pb::LanguageDetection::Language& proto) {
+  VISIT(language_code);
+  VISIT(is_reliable);
+}
+
+VISIT_PROTO_FIELDS(const sync_pb::LanguageDetection& proto) {
+  VISIT_REP(detected_languages);
+  VISIT(adopted_language);
+}
+
 VISIT_PROTO_FIELDS(const sync_pb::LinkedAppIconInfo& proto) {
   VISIT(url);
   VISIT(size);
@@ -861,6 +871,7 @@ VISIT_PROTO_FIELDS(const sync_pb::UserEventSpecifics& proto) {
   VISIT(navigation_id);
   VISIT(session_id);
   VISIT(field_trial_event);
+  VISIT(language_detection);
 }
 
 VISIT_PROTO_FIELDS(const sync_pb::WalletMaskedCreditCard& proto) {

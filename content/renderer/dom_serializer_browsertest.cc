@@ -11,6 +11,7 @@
 #include "base/containers/hash_tables.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/message_loop/message_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_restrictions.h"
@@ -18,10 +19,11 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
+#include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_view.h"
-#include "content/public/renderer/render_view_observer.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/frame_load_waiter.h"
 #include "content/public/test/test_utils.h"
 #include "content/renderer/savable_resources.h"
 #include "content/shell/browser/shell.h"
@@ -64,24 +66,6 @@ bool HasDocType(const WebDocument& doc) {
   return doc.FirstChild().IsDocumentTypeNode();
 }
 
-class LoadObserver : public RenderViewObserver {
- public:
-  LoadObserver(RenderView* render_view, const base::Closure& quit_closure)
-      : RenderViewObserver(render_view),
-        quit_closure_(quit_closure) {}
-
-  void DidFinishLoad(blink::WebLocalFrame* frame) override {
-    if (frame == render_view()->GetWebView()->MainFrame())
-      quit_closure_.Run();
-  }
-
- private:
-  // RenderViewObserver implementation.
-  void OnDestruct() override { delete this; }
-
-  base::Closure quit_closure_;
-};
-
 class DomSerializerTests : public ContentBrowserTest,
                            public WebFrameSerializerClient {
  public:
@@ -122,7 +106,9 @@ class DomSerializerTests : public ContentBrowserTest,
     return GetRenderView()->GetWebView();
   }
 
-  WebFrame* GetMainFrame() { return GetWebView()->MainFrame(); }
+  WebLocalFrame* GetMainFrame() {
+    return GetRenderView()->GetMainRenderFrame()->GetWebFrame();
+  }
 
   WebFrame* FindSubFrameByURL(const GURL& url) {
     for (WebFrame* frame = GetWebView()->MainFrame(); frame;
@@ -138,27 +124,19 @@ class DomSerializerTests : public ContentBrowserTest,
   void LoadContents(const std::string& contents,
                     const GURL& base_url,
                     const WebString encoding_info) {
-    scoped_refptr<MessageLoopRunner> runner = new MessageLoopRunner;
-    LoadObserver observer(GetRenderView(), runner->QuitClosure());
-
+    FrameLoadWaiter waiter(GetRenderView()->GetMainRenderFrame());
     // If input encoding is empty, use UTF-8 as default encoding.
     if (encoding_info.IsEmpty()) {
       GetMainFrame()->LoadHTMLString(contents, base_url);
     } else {
-      WebData data(contents.data(), contents.length());
-
       // Do not use WebFrame.LoadHTMLString because it assumes that input
       // html contents use UTF-8 encoding.
-      // TODO(darin): This should use WebFrame::loadData.
-      WebFrame* web_frame = GetMainFrame();
-
-      ASSERT_TRUE(web_frame != NULL);
-
-      web_frame->ToWebLocalFrame()->LoadData(data, "text/html", encoding_info,
-                                             base_url);
+      WebData data(contents.data(), contents.length());
+      GetMainFrame()->LoadData(data, "text/html", encoding_info, base_url);
     }
-
-    runner->Run();
+    base::MessageLoop::ScopedNestableTaskAllower allow(
+        base::MessageLoop::current());
+    waiter.Wait();
   }
 
   class SingleLinkRewritingDelegate

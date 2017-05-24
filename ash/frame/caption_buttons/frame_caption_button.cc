@@ -97,10 +97,6 @@ void FrameCaptionButton::SetAlpha(int alpha) {
   }
 }
 
-gfx::Size FrameCaptionButton::GetPreferredSize() const {
-  return size_;
-}
-
 const char* FrameCaptionButton::GetClassName() const {
   return kViewClassName;
 }

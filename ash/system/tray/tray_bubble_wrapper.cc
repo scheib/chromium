@@ -6,7 +6,7 @@
 
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/system/tray/tray_event_filter.h"
-#include "ash/wm_window.h"
+#include "ui/aura/window.h"
 #include "ui/views/bubble/tray_bubble_view.h"
 #include "ui/views/widget/widget.h"
 
@@ -42,7 +42,7 @@ void TrayBubbleWrapper::OnWidgetDestroying(views::Widget* widget) {
   // will invoke PerformAction which reopens the bubble again. To prevent the
   // reopen, the mouse capture of |tray_| has to be released.
   // See crbug.com/177075
-  WmWindow::Get(tray_->GetWidget()->GetNativeWindow())->ReleaseCapture();
+  tray_->GetWidget()->GetNativeWindow()->ReleaseCapture();
 
   tray_->HideBubbleWithView(bubble_view_);  // May destroy |bubble_view_|
 }

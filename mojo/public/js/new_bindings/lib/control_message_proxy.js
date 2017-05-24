@@ -5,7 +5,11 @@
 (function() {
   var internal = mojo.internal;
 
-  function sendRunOrClosePipeMessage(receiver, runOrClosePipeMessageParams) {
+  function constructRunOrClosePipeMessage(runOrClosePipeInput) {
+    var runOrClosePipeMessageParams = new
+        mojo.interfaceControl2.RunOrClosePipeMessageParams();
+    runOrClosePipeMessageParams.input = runOrClosePipeInput;
+
     var messageName = mojo.interfaceControl2.kRunOrClosePipeMessageId;
     var payloadSize =
         mojo.interfaceControl2.RunOrClosePipeMessageParams.encodedSize;
@@ -13,7 +17,7 @@
     builder.encodeStruct(mojo.interfaceControl2.RunOrClosePipeMessageParams,
                          runOrClosePipeMessageParams);
     var message = builder.finish();
-    receiver.accept(message);
+    return message;
   }
 
   function validateControlResponse(message) {
@@ -68,7 +72,7 @@
   }
 
   function ControlMessageProxy(receiver) {
-    this.receiver = receiver;
+    this.receiver_ = receiver;
   }
 
   ControlMessageProxy.prototype.queryVersion = function() {
@@ -77,20 +81,18 @@
     runMessageParams.input.queryVersion =
         new mojo.interfaceControl2.QueryVersion();
 
-    return sendRunMessage(this.receiver, runMessageParams).then(function(
+    return sendRunMessage(this.receiver_, runMessageParams).then(function(
         runResponseMessageParams) {
       return runResponseMessageParams.output.queryVersionResult.version;
     });
   };
 
   ControlMessageProxy.prototype.requireVersion = function(version) {
-    var runOrClosePipeMessageParams = new
-        mojo.interfaceControl2.RunOrClosePipeMessageParams();
-    runOrClosePipeMessageParams.input = new
-        mojo.interfaceControl2.RunOrClosePipeInput();
-    runOrClosePipeMessageParams.input.requireVersion = new
-        mojo.interfaceControl2.RequireVersion({'version': version});
-    sendRunOrClosePipeMessage(this.receiver, runOrClosePipeMessageParams);
+    var runOrClosePipeInput = new mojo.interfaceControl2.RunOrClosePipeInput();
+    runOrClosePipeInput.requireVersion =
+        new mojo.interfaceControl2.RequireVersion({'version': version});
+    var message = constructRunOrClosePipeMessage(runOrClosePipeInput);
+    this.receiver_.accept(message);
   };
 
   internal.ControlMessageProxy = ControlMessageProxy;

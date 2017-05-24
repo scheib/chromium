@@ -1035,6 +1035,7 @@ interface Credential
 interface CredentialsContainer
     attribute @@toStringTag
     method constructor
+    method create
     method get
     method requireUserMediation
     method store
@@ -3640,7 +3641,6 @@ interface IDBFactory
     method constructor
     method deleteDatabase
     method open
-    method webkitGetDatabaseNames
 interface IDBIndex
     attribute @@toStringTag
     getter keyPath
@@ -4417,9 +4417,11 @@ interface Navigator
     method webkitGetUserMedia
 interface NetworkInformation : EventTarget
     attribute @@toStringTag
+    getter downlink
     getter downlinkMax
     getter onchange
     getter ontypechange
+    getter rtt
     getter type
     method constructor
     setter onchange
@@ -4688,6 +4690,7 @@ interface PasswordCredential : Credential
     getter iconURL
     getter idName
     getter name
+    getter password
     getter passwordName
     method constructor
     setter additionalData
@@ -5249,6 +5252,7 @@ interface Request
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface ResizeObserver
@@ -5279,6 +5283,7 @@ interface Response
     method blob
     method clone
     method constructor
+    method formData
     method json
     method text
 interface SVGAElement : SVGGraphicsElement

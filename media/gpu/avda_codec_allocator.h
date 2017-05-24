@@ -117,8 +117,8 @@ class MEDIA_GPU_EXPORT AVDACodecAllocator {
 
   // Make sure the construction threads are started for |client|. Returns true
   // on success.
-  bool StartThread(AVDACodecAllocatorClient* client);
-  void StopThread(AVDACodecAllocatorClient* client);
+  virtual bool StartThread(AVDACodecAllocatorClient* client);
+  virtual void StopThread(AVDACodecAllocatorClient* client);
 
   // Create and configure a MediaCodec synchronously.
   virtual std::unique_ptr<MediaCodecBridge> CreateMediaCodecSync(

@@ -77,10 +77,6 @@
       'includes': ['../../../third_party/closure_compiler/include_js.gypi'],
     },
     {
-      'target_name': 'file_browser_background',
-      'includes': ['../../../third_party/closure_compiler/include_js.gypi'],
-    },
-    {
       'target_name': 'file_operation_progress_event',
       'includes': ['../../../third_party/closure_compiler/include_js.gypi'],
     },

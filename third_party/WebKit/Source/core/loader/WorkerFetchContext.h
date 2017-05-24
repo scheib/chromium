@@ -63,6 +63,12 @@ class WorkerFetchContext final : public BaseFetchContext {
 
   void AddAdditionalRequestHeaders(ResourceRequest&,
                                    FetchResourceType) override;
+  void DispatchDidReceiveResponse(unsigned long identifier,
+                                  const ResourceResponse&,
+                                  WebURLRequest::FrameType,
+                                  WebURLRequest::RequestContext,
+                                  Resource*,
+                                  ResourceResponseType) override;
   void AddResourceTiming(const ResourceTimingInfo&) override;
   void PopulateResourceRequest(const KURL&,
                                Resource::Type,

@@ -1939,6 +1939,11 @@ void LayerTreeHostImpl::DidFinishImplFrame() {
   decoded_image_tracker_.NotifyFrameFinished();
 }
 
+void LayerTreeHostImpl::DidNotProduceFrame(const BeginFrameAck& ack) {
+  if (compositor_frame_sink_)
+    compositor_frame_sink_->DidNotProduceFrame(ack);
+}
+
 void LayerTreeHostImpl::UpdateViewportContainerSizes() {
   LayerImpl* inner_container = active_tree_->InnerViewportContainerLayer();
   LayerImpl* outer_container = active_tree_->OuterViewportContainerLayer();

@@ -49,10 +49,19 @@ class MockMediaRouterWebUIMessageHandler
   ~MockMediaRouterWebUIMessageHandler() override {}
 
   MOCK_METHOD1(UpdateMediaRouteStatus, void(const MediaStatus& status));
+  MOCK_METHOD3(UpdateCastModes,
+               void(const CastModeSet& cast_modes,
+                    const std::string& source_host,
+                    base::Optional<MediaCastMode> forced_cast_mode));
 };
 
 class PresentationRequestCallbacks {
  public:
+  PresentationRequestCallbacks()
+      : expected_error_(content::PresentationError(
+            content::PresentationErrorType::PRESENTATION_ERROR_UNKNOWN,
+            "")) {}
+
   explicit PresentationRequestCallbacks(
       const content::PresentationError& expected_error)
       : expected_error_(expected_error) {}
@@ -503,8 +512,9 @@ TEST_F(MediaRouterUITest, NotFoundErrorOnCloseWithNoSinks) {
       "No screens found.");
   PresentationRequestCallbacks request_callbacks(expected_error);
   create_session_request_.reset(new CreatePresentationConnectionRequest(
-      RenderFrameHostId(0, 0), {GURL("http://google.com/presentation"),
-                                GURL("http://google.com/presentation2")},
+      RenderFrameHostId(0, 0),
+      {GURL("http://google.com/presentation"),
+       GURL("http://google.com/presentation2")},
       url::Origin(GURL("http://google.com")),
       base::Bind(&PresentationRequestCallbacks::Success,
                  base::Unretained(&request_callbacks)),
@@ -681,6 +691,58 @@ TEST_F(MediaRouterUITest, SendInitialMediaStatusUpdate) {
       .WillOnce(Return(controller));
   EXPECT_CALL(*message_handler_, UpdateMediaRouteStatus(status));
   media_router_ui_->OnMediaControllerUIAvailable(route_id);
+}
+
+TEST_F(MediaRouterUITest, SetsForcedCastModeWithPresentationURLs) {
+  content::PresentationError expected_error(
+      content::PresentationErrorType::PRESENTATION_ERROR_NO_AVAILABLE_SCREENS,
+      "No screens found.");
+  PresentationRequestCallbacks request_callbacks(expected_error);
+  create_session_request_.reset(new CreatePresentationConnectionRequest(
+      RenderFrameHostId(0, 0),
+      {GURL("http://google.com/presentation"),
+       GURL("http://google.com/presentation2")},
+      url::Origin(GURL("http://google.com")),
+      base::Bind(&PresentationRequestCallbacks::Success,
+                 base::Unretained(&request_callbacks)),
+      base::Bind(&PresentationRequestCallbacks::Error,
+                 base::Unretained(&request_callbacks))));
+
+  SessionTabHelper::CreateForWebContents(web_contents());
+  web_ui_contents_.reset(
+      WebContents::Create(WebContents::CreateParams(profile())));
+  web_ui_.set_web_contents(web_ui_contents_.get());
+  media_router_ui_ = base::MakeUnique<MediaRouterUI>(&web_ui_);
+  message_handler_ = base::MakeUnique<MockMediaRouterWebUIMessageHandler>(
+      media_router_ui_.get());
+  message_handler_->SetWebUIForTest(&web_ui_);
+  EXPECT_CALL(mock_router_, RegisterMediaSinksObserver(_))
+      .WillRepeatedly(Invoke([this](MediaSinksObserver* observer) {
+        this->media_sinks_observers_.push_back(observer);
+        return true;
+      }));
+  EXPECT_CALL(mock_router_, RegisterMediaRoutesObserver(_)).Times(AnyNumber());
+  // For some reason we push two sets of cast modes to the dialog, even when
+  // initializing the dialog with a presentation request.  The WebUI can handle
+  // the forced mode that is not in the initial cast mode set, but is this a
+  // bug?
+  CastModeSet expected_modes(
+      {MediaCastMode::TAB_MIRROR, MediaCastMode::DESKTOP_MIRROR});
+  EXPECT_CALL(
+      *message_handler_,
+      UpdateCastModes(expected_modes, "",
+                      base::Optional<MediaCastMode>(MediaCastMode::DEFAULT)));
+  expected_modes.insert(MediaCastMode::DEFAULT);
+  EXPECT_CALL(
+      *message_handler_,
+      UpdateCastModes(expected_modes, "google.com",
+                      base::Optional<MediaCastMode>(MediaCastMode::DEFAULT)));
+  media_router_ui_->UIInitialized();
+  media_router_ui_->InitForTest(&mock_router_, web_contents(),
+                                message_handler_.get(),
+                                std::move(create_session_request_));
+  // |media_router_ui_| takes ownership of |request_callbacks|.
+  media_router_ui_.reset();
 }
 
 }  // namespace media_router

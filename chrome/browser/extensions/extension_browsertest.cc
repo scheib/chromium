@@ -48,6 +48,7 @@
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/notification_service.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
@@ -540,26 +541,20 @@ void ExtensionBrowserTest::OpenWindow(content::WebContents* contents,
                                       const GURL& url,
                                       bool newtab_process_should_equal_opener,
                                       content::WebContents** newtab_result) {
-  content::WindowedNotificationObserver windowed_observer(
-      content::NOTIFICATION_LOAD_STOP,
-      content::NotificationService::AllSources());
+  content::WebContentsAddedObserver tab_added_observer;
   ASSERT_TRUE(content::ExecuteScript(contents,
                                      "window.open('" + url.spec() + "');"));
-
-  // The above window.open call is not user-initiated, so it will create
-  // a popup window instead of a new tab in current window.
-  // The stop notification will come from the new tab.
-  windowed_observer.Wait();
-  content::NavigationController* controller =
-      content::Source<content::NavigationController>(
-          windowed_observer.source()).ptr();
-  content::WebContents* newtab = controller->GetWebContents();
+  content::WebContents* newtab = tab_added_observer.GetWebContents();
   ASSERT_TRUE(newtab);
-  EXPECT_EQ(url, controller->GetLastCommittedEntry()->GetURL());
-  if (newtab_process_should_equal_opener)
-    EXPECT_EQ(contents->GetRenderProcessHost(), newtab->GetRenderProcessHost());
-  else
-    EXPECT_NE(contents->GetRenderProcessHost(), newtab->GetRenderProcessHost());
+  WaitForLoadStop(newtab);
+  EXPECT_EQ(url, newtab->GetLastCommittedURL());
+  if (newtab_process_should_equal_opener) {
+    EXPECT_EQ(contents->GetMainFrame()->GetSiteInstance(),
+              newtab->GetMainFrame()->GetSiteInstance());
+  } else {
+    EXPECT_NE(contents->GetMainFrame()->GetSiteInstance(),
+              newtab->GetMainFrame()->GetSiteInstance());
+  }
 
   if (newtab_result)
     *newtab_result = newtab;

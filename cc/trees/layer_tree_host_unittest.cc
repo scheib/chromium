@@ -4721,10 +4721,12 @@ class LayerTreeHostTestElasticOverscroll : public LayerTreeHostTest {
     inner_viewport_scroll_layer->AddChild(content_layer);
 
     layer_tree_host()->SetRootLayer(root_layer_);
-    layer_tree_host()->RegisterViewportLayers(
-        overscroll_elasticity_layer, page_scale_layer,
-        inner_viewport_container_layer, nullptr, inner_viewport_scroll_layer,
-        nullptr);
+    LayerTreeHost::ViewportLayers viewport_layers;
+    viewport_layers.overscroll_elasticity = overscroll_elasticity_layer;
+    viewport_layers.page_scale = page_scale_layer;
+    viewport_layers.inner_viewport_container = inner_viewport_container_layer;
+    viewport_layers.inner_viewport_scroll = inner_viewport_scroll_layer;
+    layer_tree_host()->RegisterViewportLayers(viewport_layers);
     LayerTreeHostTest::SetupTree();
     client_.set_bounds(content_layer->bounds());
   }
@@ -6128,8 +6130,11 @@ class LayerTreeHostTestCrispUpAfterPinchEnds : public LayerTreeHostTest {
     // pinch.
     pinch->AddChild(layer);
 
-    layer_tree_host()->RegisterViewportLayers(NULL, page_scale_layer, root_clip,
-                                              nullptr, pinch, nullptr);
+    LayerTreeHost::ViewportLayers viewport_layers;
+    viewport_layers.page_scale = page_scale_layer;
+    viewport_layers.inner_viewport_container = root_clip;
+    viewport_layers.inner_viewport_scroll = pinch;
+    layer_tree_host()->RegisterViewportLayers(viewport_layers);
     layer_tree_host()->SetPageScaleFactorAndLimits(1.f, 1.f, 4.f);
     layer_tree_host()->SetRootLayer(root_clip);
     LayerTreeHostTest::SetupTree();
@@ -6432,8 +6437,11 @@ class LayerTreeHostTestContinuousDrawWhenCreatingVisibleTiles
     // pinch.
     pinch->AddChild(layer);
 
-    layer_tree_host()->RegisterViewportLayers(NULL, page_scale_layer, root_clip,
-                                              nullptr, pinch, nullptr);
+    LayerTreeHost::ViewportLayers viewport_layers;
+    viewport_layers.page_scale = page_scale_layer;
+    viewport_layers.inner_viewport_container = root_clip;
+    viewport_layers.inner_viewport_scroll = pinch;
+    layer_tree_host()->RegisterViewportLayers(viewport_layers);
     layer_tree_host()->SetPageScaleFactorAndLimits(1.f, 1.f, 4.f);
     layer_tree_host()->SetRootLayer(root_clip);
     LayerTreeHostTest::SetupTree();
@@ -7392,15 +7400,9 @@ class LayerTreeTestPageScaleFlags : public LayerTreeTest {
     layer_tree_host()->SetRootLayer(root);
     LayerTreeTest::SetupTree();
 
-    scoped_refptr<Layer> overscroll_elasticity_layer = nullptr;
-    scoped_refptr<Layer> inner_viewport_container_layer = nullptr;
-    scoped_refptr<Layer> outer_viewport_container_layer = nullptr;
-    scoped_refptr<Layer> inner_viewport_scroll_layer = nullptr;
-    scoped_refptr<Layer> outer_viewport_scroll_layer = nullptr;
-    layer_tree_host()->RegisterViewportLayers(
-        overscroll_elasticity_layer, page_scale, inner_viewport_container_layer,
-        outer_viewport_container_layer, inner_viewport_scroll_layer,
-        outer_viewport_scroll_layer);
+    LayerTreeHost::ViewportLayers viewport_layers;
+    viewport_layers.page_scale = page_scale;
+    layer_tree_host()->RegisterViewportLayers(viewport_layers);
 
     affected_by_page_scale_.push_back(page_scale->id());
     affected_by_page_scale_.push_back(page_scale_child1->id());

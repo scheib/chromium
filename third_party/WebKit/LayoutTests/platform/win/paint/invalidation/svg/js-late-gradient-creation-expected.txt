@@ -30,18 +30,6 @@
     {
       "object": "InlineTextBox 'Gradient on fill'",
       "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGResourceLinearGradient linearGradient id='dynGrad'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop",
-      "reason": "appeared"
     }
   ]
 }

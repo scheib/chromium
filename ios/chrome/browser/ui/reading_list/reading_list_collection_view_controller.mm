@@ -601,17 +601,16 @@ using ItemsMapByDate = std::multimap<int64_t, ReadingListCollectionViewItem*>;
       distillationState:reading_list::UIStatusFromModelStatus(
                             entry.DistilledState())];
 
-  const GURL& realURL =
-      entry.DistilledURL().is_valid() ? entry.DistilledURL() : url;
-  [self setItem:item faviconURL:realURL];
+  [self setItem:item
+      faviconURL:entry.DistilledURL().is_valid() ? entry.DistilledURL() : url];
 
   BOOL has_distillation_details =
       entry.DistilledState() == ReadingListEntry::PROCESSED &&
       entry.DistillationSize() != 0 && entry.DistillationTime() != 0;
   NSString* fullUrlString =
-      base::SysUTF16ToNSString(url_formatter::FormatUrl(realURL));
+      base::SysUTF16ToNSString(url_formatter::FormatUrl(url));
   NSString* urlString =
-      base::SysUTF16ToNSString(url_formatter::FormatUrl(realURL.GetOrigin()));
+      base::SysUTF16ToNSString(url_formatter::FormatUrl(url.GetOrigin()));
   NSString* title = base::SysUTF8ToNSString(entry.Title());
   item.title = [title length] ? title : fullUrlString;
   item.subtitle = urlString;

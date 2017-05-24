@@ -75,6 +75,12 @@ class NTPSnippetsBridge
       jint j_category_id,
       const base::android::JavaParamRef<jobjectArray>& j_displayed_suggestions);
 
+  void FetchContextualSuggestions(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& obj,
+      const base::android::JavaParamRef<jstring>& j_url,
+      const base::android::JavaParamRef<jobject>& j_callback);
+
   void ReloadSuggestions(JNIEnv* env,
                          const base::android::JavaParamRef<jobject>& obj);
 

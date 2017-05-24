@@ -47,7 +47,7 @@ class ASH_EXPORT OverflowBubbleView : public views::BubbleDialogDelegateView,
   void ScrollByYOffset(int y_offset);
 
   // views::View overrides:
-  gfx::Size GetPreferredSize() const override;
+  gfx::Size CalculatePreferredSize() const override;
   void Layout() override;
   void ChildPreferredSizeChanged(views::View* child) override;
   bool OnMouseWheel(const ui::MouseWheelEvent& event) override;

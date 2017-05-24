@@ -447,6 +447,10 @@ bool CustomButton::IsTriggerableEvent(const ui::Event& event) {
              (triggerable_event_flags_ & event.flags()) != 0);
 }
 
+bool CustomButton::ShouldUpdateInkDropOnClickCanceled() const {
+  return true;
+}
+
 bool CustomButton::ShouldEnterPushedState(const ui::Event& event) {
   return IsTriggerableEvent(event);
 }
@@ -487,12 +491,14 @@ void CustomButton::NotifyClick(const ui::Event& event) {
 }
 
 void CustomButton::OnClickCanceled(const ui::Event& event) {
-  if (GetInkDrop()->GetTargetInkDropState() ==
-          views::InkDropState::ACTION_PENDING ||
-      GetInkDrop()->GetTargetInkDropState() ==
-          views::InkDropState::ALTERNATE_ACTION_PENDING) {
-    AnimateInkDrop(views::InkDropState::HIDDEN,
-                   ui::LocatedEvent::FromIfValid(&event));
+  if (ShouldUpdateInkDropOnClickCanceled()) {
+    if (GetInkDrop()->GetTargetInkDropState() ==
+            views::InkDropState::ACTION_PENDING ||
+        GetInkDrop()->GetTargetInkDropState() ==
+            views::InkDropState::ALTERNATE_ACTION_PENDING) {
+      AnimateInkDrop(views::InkDropState::HIDDEN,
+                     ui::LocatedEvent::FromIfValid(&event));
+    }
   }
   Button::OnClickCanceled(event);
 }

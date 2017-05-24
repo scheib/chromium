@@ -130,20 +130,6 @@ static void keysMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
   V8SetReturnValue(info, result);
 }
 
-static void valuesMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestInterfaceGarbageCollected", "values");
-
-  TestInterfaceGarbageCollected* impl = V8TestInterfaceGarbageCollected::toImpl(info.Holder());
-
-  ScriptState* scriptState = ScriptState::ForReceiverObject(info);
-
-  Iterator* result = impl->valuesForBinding(scriptState, exceptionState);
-  if (exceptionState.HadException()) {
-    return;
-  }
-  V8SetReturnValue(info, result);
-}
-
 static void entriesMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
   ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestInterfaceGarbageCollected", "entries");
 
@@ -327,10 +313,6 @@ void V8TestInterfaceGarbageCollected::keysMethodCallback(const v8::FunctionCallb
   TestInterfaceGarbageCollectedV8Internal::keysMethod(info);
 }
 
-void V8TestInterfaceGarbageCollected::valuesMethodCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  TestInterfaceGarbageCollectedV8Internal::valuesMethod(info);
-}
-
 void V8TestInterfaceGarbageCollected::entriesMethodCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
   TestInterfaceGarbageCollectedV8Internal::entriesMethod(info);
 }
@@ -370,7 +352,6 @@ static const V8DOMConfiguration::AccessorConfiguration V8TestInterfaceGarbageCol
 static const V8DOMConfiguration::MethodConfiguration V8TestInterfaceGarbageCollectedMethods[] = {
     {"func", V8TestInterfaceGarbageCollected::funcMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"keys", V8TestInterfaceGarbageCollected::keysMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
-    {"values", V8TestInterfaceGarbageCollected::valuesMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"entries", V8TestInterfaceGarbageCollected::entriesMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"forEach", V8TestInterfaceGarbageCollected::forEachMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"has", V8TestInterfaceGarbageCollected::hasMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
@@ -411,7 +392,7 @@ static void installV8TestInterfaceGarbageCollectedTemplate(v8::Isolate* isolate,
   V8DOMConfiguration::InstallMethods(isolate, world, instanceTemplate, prototypeTemplate, interfaceTemplate, signature, V8TestInterfaceGarbageCollectedMethods, WTF_ARRAY_LENGTH(V8TestInterfaceGarbageCollectedMethods));
 
   // Iterator (@@iterator)
-  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, V8TestInterfaceGarbageCollected::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
+  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, "values", V8TestInterfaceGarbageCollected::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
   V8DOMConfiguration::InstallMethod(isolate, world, prototypeTemplate, signature, symbolKeyedIteratorConfiguration);
 }
 

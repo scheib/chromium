@@ -314,7 +314,6 @@ bool {{class_name}}StubDispatch::Accept(
           indent(4)}}
       // A null |impl| means no implementation was bound.
       assert(impl);
-      TRACE_EVENT0("mojom", "{{class_name}}::{{method.name}}");
       mojo::internal::MessageDispatchContext context(message);
       impl->{{method.name}}({{pass_params(method.parameters)}});
       return true;
@@ -352,7 +351,6 @@ bool {{class_name}}StubDispatch::AcceptWithResponder(
               std::move(responder));
       // A null |impl| means no implementation was bound.
       assert(impl);
-      TRACE_EVENT0("mojom", "{{class_name}}::{{method.name}}");
       mojo::internal::MessageDispatchContext context(message);
       impl->{{method.name}}(
 {%- if method.parameters -%}{{pass_params(method.parameters)}}, {% endif -%}std::move(callback));

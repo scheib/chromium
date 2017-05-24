@@ -10,7 +10,7 @@
 #include "services/shape_detection/public/interfaces/constants.mojom.h"
 #include "services/shape_detection/shape_detection_service.h"
 
-#if defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
 #include "base/bind.h"
 #include "media/mojo/services/media_service_factory.h"  // nogncheck
 #endif
@@ -19,7 +19,7 @@ namespace content {
 
 GpuServiceFactory::GpuServiceFactory(
     base::WeakPtr<media::MediaGpuChannelManager> media_gpu_channel_manager) {
-#if defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
   task_runner_ = base::ThreadTaskRunnerHandle::Get();
   media_gpu_channel_manager_ = std::move(media_gpu_channel_manager);
 #endif
@@ -28,7 +28,7 @@ GpuServiceFactory::GpuServiceFactory(
 GpuServiceFactory::~GpuServiceFactory() {}
 
 void GpuServiceFactory::RegisterServices(ServiceMap* services) {
-#if defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
   ServiceInfo info;
   info.factory = base::Bind(&media::CreateGpuMediaService, task_runner_,
                             media_gpu_channel_manager_);

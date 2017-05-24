@@ -30,9 +30,6 @@ source_set("ios_core") {
     "host_preferences.h",
     "host_preferences.mm",
     "host_preferences_persistence.h",
-    "key_input.h",
-    "key_input.mm",
-    "key_map_us.h",
     "keychain_wrapper.h",
     "keychain_wrapper.mm",
   ]
@@ -76,9 +73,7 @@ source_set("ios_core_unit_tests") {
     "//third_party/protobuf/src",
   ]
 
-  sources = [
-    "key_input_unittest.mm",
-  ]
+  sources = []
 
   deps = [
     ":ios_core",

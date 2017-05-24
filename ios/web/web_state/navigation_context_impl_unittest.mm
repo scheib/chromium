@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/web/web_state/navigation_context_impl.h"
+#import "ios/web/web_state/navigation_context_impl.h"
 
 #import "ios/web/public/test/fakes/test_web_state.h"
 #include "net/http/http_response_headers.h"
@@ -39,7 +39,7 @@ TEST_F(NavigationContextImplTest, NavigationContext) {
   EXPECT_EQ(&web_state_, context->GetWebState());
   EXPECT_EQ(url_, context->GetUrl());
   EXPECT_FALSE(context->IsSameDocument());
-  EXPECT_FALSE(context->IsErrorPage());
+  EXPECT_FALSE(context->GetError());
   EXPECT_FALSE(context->GetResponseHeaders());
 }
 
@@ -50,25 +50,26 @@ TEST_F(NavigationContextImplTest, Setters) {
   ASSERT_TRUE(context);
 
   ASSERT_FALSE(context->IsSameDocument());
-  ASSERT_FALSE(context->IsErrorPage());
+  ASSERT_FALSE(context->GetError());
   ASSERT_NE(response_headers_.get(), context->GetResponseHeaders());
 
   // SetSameDocument
   context->SetIsSameDocument(true);
   EXPECT_TRUE(context->IsSameDocument());
-  EXPECT_FALSE(context->IsErrorPage());
+  EXPECT_FALSE(context->GetError());
   EXPECT_NE(response_headers_.get(), context->GetResponseHeaders());
 
   // SetErrorPage
-  context->SetIsErrorPage(true);
+  NSError* error = [[[NSError alloc] init] autorelease];
+  context->SetError(error);
   EXPECT_TRUE(context->IsSameDocument());
-  EXPECT_TRUE(context->IsErrorPage());
+  EXPECT_EQ(error, context->GetError());
   EXPECT_NE(response_headers_.get(), context->GetResponseHeaders());
 
   // SetResponseHeaders
   context->SetResponseHeaders(response_headers_);
   EXPECT_TRUE(context->IsSameDocument());
-  EXPECT_TRUE(context->IsErrorPage());
+  EXPECT_EQ(error, context->GetError());
   EXPECT_EQ(response_headers_.get(), context->GetResponseHeaders());
 }
 

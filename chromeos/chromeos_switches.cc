@@ -73,8 +73,6 @@ const char kArcAlwaysStart[] = "arc-always-start";
 //   Users can enable ARC only when Finch experiment is turned on.
 // - officially-supported: ARC is installed and supported on this device. So
 //   users can enable ARC via settings etc.
-// - officially-supported-with-active-directory: ARC is supported and also
-//   allowed to use with Active Directory management.
 const char kArcAvailability[] = "arc-availability";
 
 // DEPRECATED: Please use --arc-availability=installed.

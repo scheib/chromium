@@ -4,6 +4,6 @@ This test checks that a block inside a link does not unduly disturb the render t
 
 
 
- PASS: accessibility trees were identical other than size.
+PASS: accessibility trees were identical other than size.
 
 

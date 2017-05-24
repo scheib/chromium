@@ -8,6 +8,7 @@
 #include "base/single_thread_task_runner.h"
 #include "media/mojo/clients/mojo_audio_decoder.h"
 #include "media/mojo/clients/mojo_video_decoder.h"
+#include "media/mojo/features.h"
 #include "media/mojo/interfaces/audio_decoder.mojom.h"
 #include "services/service_manager/public/cpp/connect.h"
 
@@ -24,7 +25,7 @@ MojoDecoderFactory::~MojoDecoderFactory() {}
 void MojoDecoderFactory::CreateAudioDecoders(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     std::vector<std::unique_ptr<AudioDecoder>>* audio_decoders) {
-#if defined(ENABLE_MOJO_AUDIO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
   mojom::AudioDecoderPtr audio_decoder_ptr;
   service_manager::GetInterface<mojom::AudioDecoder>(interface_provider_,
                                                      &audio_decoder_ptr);
@@ -38,7 +39,7 @@ void MojoDecoderFactory::CreateVideoDecoders(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     GpuVideoAcceleratorFactories* gpu_factories,
     std::vector<std::unique_ptr<VideoDecoder>>* video_decoders) {
-#if defined(ENABLE_MOJO_VIDEO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
   mojom::VideoDecoderPtr remote_decoder;
   service_manager::GetInterface<mojom::VideoDecoder>(interface_provider_,
                                                      &remote_decoder);

@@ -103,11 +103,10 @@ void InstantSearchPrerenderer::Prerender(const InstantSuggestion& suggestion) {
 }
 
 void InstantSearchPrerenderer::Commit(
-    const base::string16& query,
     const EmbeddedSearchRequestParams& params) {
   DCHECK(prerender_handle_);
   DCHECK(prerender_contents());
-  SearchTabHelper::FromWebContents(prerender_contents())->Submit(query, params);
+  SearchTabHelper::FromWebContents(prerender_contents())->Submit(params);
 }
 
 bool InstantSearchPrerenderer::CanCommitQuery(

@@ -35,7 +35,6 @@ class PaymentSheetViewController : public PaymentRequestSheetController,
   ~PaymentSheetViewController() override;
 
   // PaymentRequestSpec::Observer:
-  void OnStartUpdating(PaymentRequestSpec::UpdateReason reason) override;
   void OnSpecUpdated() override;
 
   // PaymentRequestState::Observer:
@@ -66,11 +65,6 @@ class PaymentSheetViewController : public PaymentRequestSheetController,
   std::unique_ptr<views::Button> CreateContactInfoRow();
   std::unique_ptr<views::Button> CreateShippingOptionRow();
   std::unique_ptr<views::View> CreateDataSourceRow();
-
-  views::Button* pay_button_;
-
-  const int widest_name_column_view_width_;
-  PaymentRequestSpec::UpdateReason current_update_reason_;
 
   DISALLOW_COPY_AND_ASSIGN(PaymentSheetViewController);
 };

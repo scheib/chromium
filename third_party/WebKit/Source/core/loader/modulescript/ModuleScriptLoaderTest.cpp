@@ -64,10 +64,10 @@ class ModuleScriptLoaderTestModulator final : public DummyModulator {
     return security_origin_.Get();
   }
 
-  ScriptModule CompileModule(
-      const String& script,
-      const String& url_str,
-      AccessControlStatus access_control_status) override {
+  ScriptModule CompileModule(const String& script,
+                             const String& url_str,
+                             AccessControlStatus access_control_status,
+                             const TextPosition& position) override {
     ScriptState::Scope scope(script_state_.Get());
     return ScriptModule::Compile(script_state_->GetIsolate(),
                                  "export default 'foo';", "",

@@ -9,6 +9,7 @@
 
 #include "base/logging.h"
 #include "mojo/public/cpp/bindings/strong_binding.h"
+#include "services/resource_coordinator/coordination_unit/coordination_unit_factory.h"
 #include "services/resource_coordinator/coordination_unit/coordination_unit_impl.h"
 #include "services/service_manager/public/cpp/service_context_ref.h"
 
@@ -26,20 +27,12 @@ CoordinationUnitProviderImpl::~CoordinationUnitProviderImpl() = default;
 void CoordinationUnitProviderImpl::CreateCoordinationUnit(
     mojom::CoordinationUnitRequest request,
     const CoordinationUnitID& id) {
-  // TODO(oysteine): A strong binding here means the first binding set up
-  // to a CoordinationUnit via CoordinationUnitProvider, i.e. the authoritative
-  // one in terms of setting the context, has to outlive all of the other
-  // connections (as the rest are just duplicated and held within
-  // CoordinationUnit). Make sure this assumption is correct, or refactor into
-  // some kind of refcounted thing.
+  std::unique_ptr<CoordinationUnitImpl> coordination_unit =
+      coordination_unit_factory::CreateCoordinationUnit(
+          id, service_ref_factory_->CreateRef());
 
-  // Once there's a need for custom code for various types of CUs (tabs,
-  // processes, etc) then this could become a factory function and instantiate
-  // different subclasses of CoordinationUnitImpl based on the id.type.
-  mojo::MakeStrongBinding(base::MakeUnique<CoordinationUnitImpl>(
-                              id, service_ref_factory_->CreateRef()),
-                          std::move(request));
-};
+  mojo::MakeStrongBinding(std::move(coordination_unit), std::move(request));
+}
 
 // static
 void CoordinationUnitProviderImpl::Create(

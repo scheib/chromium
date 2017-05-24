@@ -35,7 +35,7 @@ sk_sp<SkImage> PlaceholderImage::ImageForCurrentFrame() {
        dest_rect, kDoNotRespectImageOrientation, kClampImageToSourceRect);
 
   image_for_current_frame_ = SkImage::MakeFromPicture(
-      ToSkPicture(paint_recorder.finishRecordingAsPicture(), dest_rect),
+      ToSkPicture(paint_recorder.finishRecordingAsPicture()),
       SkISize::Make(size_.Width(), size_.Height()), nullptr, nullptr,
       SkImage::BitDepth::kU8, SkColorSpace::MakeSRGB());
 

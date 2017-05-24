@@ -18,7 +18,7 @@
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/macros.h"
-#include "base/memory/scoped_vector.h"
+#include "base/memory/ptr_util.h"
 #include "base/path_service.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
@@ -324,7 +324,7 @@ class JpegDecodeAcceleratorTestEnvironment : public ::testing::Environment {
   // Parsed data of failure image.
   std::unique_ptr<TestImageFile> image_data_invalid_;
   // Parsed data from command line.
-  ScopedVector<TestImageFile> image_data_user_;
+  std::vector<std::unique_ptr<TestImageFile>> image_data_user_;
 
  private:
   const base::FilePath::CharType* user_jpeg_filenames_;
@@ -376,9 +376,9 @@ void JpegDecodeAcceleratorTestEnvironment::SetUp() {
       base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
   for (const auto& filename : filenames) {
     base::FilePath input_file = GetTestDataFilePath(filename);
-    TestImageFile* image_data = new TestImageFile(filename);
-    ASSERT_NO_FATAL_FAILURE(ReadTestJpegImage(input_file, image_data));
-    image_data_user_.push_back(image_data);
+    auto image_data = base::MakeUnique<TestImageFile>(filename);
+    ASSERT_NO_FATAL_FAILURE(ReadTestJpegImage(input_file, image_data.get()));
+    image_data_user_.push_back(std::move(image_data));
   }
 }
 
@@ -443,15 +443,16 @@ void JpegDecodeAcceleratorTest::TestDecode(size_t num_concurrent_decoders) {
   base::Thread decoder_thread("DecoderThread");
   ASSERT_TRUE(decoder_thread.Start());
 
-  ScopedVector<ClientStateNotification<ClientState>> notes;
-  ScopedVector<JpegClient> clients;
+  std::vector<std::unique_ptr<ClientStateNotification<ClientState>>> notes;
+  std::vector<std::unique_ptr<JpegClient>> clients;
 
   for (size_t i = 0; i < num_concurrent_decoders; i++) {
-    notes.push_back(new ClientStateNotification<ClientState>());
-    clients.push_back(new JpegClient(test_image_files_, notes.back()));
+    notes.push_back(base::MakeUnique<ClientStateNotification<ClientState>>());
+    clients.push_back(
+        base::MakeUnique<JpegClient>(test_image_files_, notes.back().get()));
     decoder_thread.task_runner()->PostTask(
         FROM_HERE, base::Bind(&JpegClient::CreateJpegDecoder,
-                              base::Unretained(clients.back())));
+                              base::Unretained(clients.back().get())));
     ASSERT_EQ(notes[i]->Wait(), CS_INITIALIZED);
   }
 
@@ -459,7 +460,7 @@ void JpegDecodeAcceleratorTest::TestDecode(size_t num_concurrent_decoders) {
     for (size_t i = 0; i < num_concurrent_decoders; i++) {
       decoder_thread.task_runner()->PostTask(
           FROM_HERE, base::Bind(&JpegClient::StartDecode,
-                                base::Unretained(clients[i]), index));
+                                base::Unretained(clients[i].get()), index));
     }
     if (index < expected_status_.size()) {
       for (size_t i = 0; i < num_concurrent_decoders; i++) {
@@ -471,22 +472,22 @@ void JpegDecodeAcceleratorTest::TestDecode(size_t num_concurrent_decoders) {
   for (size_t i = 0; i < num_concurrent_decoders; i++) {
     decoder_thread.task_runner()->PostTask(
         FROM_HERE, base::Bind(&JpegClient::DestroyJpegDecoder,
-                              base::Unretained(clients[i])));
+                              base::Unretained(clients[i].get())));
   }
   decoder_thread.Stop();
 }
 
 TEST_F(JpegDecodeAcceleratorTest, SimpleDecode) {
-  for (auto* image : g_env->image_data_user_) {
-    test_image_files_.push_back(image);
+  for (auto& image : g_env->image_data_user_) {
+    test_image_files_.push_back(image.get());
     expected_status_.push_back(CS_DECODE_PASS);
   }
   TestDecode(1);
 }
 
 TEST_F(JpegDecodeAcceleratorTest, MultipleDecoders) {
-  for (auto* image : g_env->image_data_user_) {
-    test_image_files_.push_back(image);
+  for (auto& image : g_env->image_data_user_) {
+    test_image_files_.push_back(image.get());
     expected_status_.push_back(CS_DECODE_PASS);
   }
   TestDecode(3);

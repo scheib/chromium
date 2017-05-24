@@ -1359,40 +1359,41 @@ cr.define('print_preview', function() {
      * @private
      */
     addEventListeners_: function() {
+      var nativeLayerEventTarget = this.nativeLayer_.getEventTarget();
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.LOCAL_DESTINATIONS_SET,
           this.onLocalDestinationsSet_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.CAPABILITIES_SET,
           this.onLocalDestinationCapabilitiesSet_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.GET_CAPABILITIES_FAIL,
           this.onGetCapabilitiesFail_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.DESTINATIONS_RELOAD,
           this.onDestinationsReload_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PRIVET_PRINTER_CHANGED,
           this.onPrivetPrinterAdded_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PRIVET_CAPABILITIES_SET,
           this.onPrivetCapabilitiesSet_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.EXTENSION_PRINTERS_ADDED,
           this.onExtensionPrintersAdded_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.EXTENSION_CAPABILITIES_SET,
           this.onExtensionCapabilitiesSet_.bind(this));
       this.tracker_.add(
-          this.nativeLayer_,
+          nativeLayerEventTarget,
           print_preview.NativeLayer.EventType.PROVISIONAL_DESTINATION_RESOLVED,
           this.handleProvisionalDestinationResolved_.bind(this));
     },

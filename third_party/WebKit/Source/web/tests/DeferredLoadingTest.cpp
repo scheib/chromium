@@ -18,7 +18,12 @@ static const char kHistogramName[] =
 
 class DeferredLoadingTest : public SimTest {
  protected:
-  DeferredLoadingTest() { WebView().Resize(WebSize(640, 480)); }
+  DeferredLoadingTest() {}
+
+  void SetUp() override {
+    SimTest::SetUp();
+    WebView().Resize(WebSize(640, 480));
+  }
   void CompositeFrame() {
     while (Compositor().NeedsBeginFrame()) {
       Compositor().BeginFrame();

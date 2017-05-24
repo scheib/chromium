@@ -35,7 +35,7 @@ class SafeBrowsingLoudErrorUI
   ~SafeBrowsingLoudErrorUI() override;
 
   // Implement BaseSafeBrowsingErrorUI.
-  void PopulateStringsForHTML(base::DictionaryValue* load_time_data) override;
+  void PopulateStringsForHtml(base::DictionaryValue* load_time_data) override;
   void HandleCommand(SecurityInterstitialCommands command) override;
 
  private:

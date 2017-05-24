@@ -21,6 +21,7 @@
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/named_platform_handle.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/chromoting_messages.h"
 #include "remoting/host/client_session_details.h"
@@ -90,11 +91,12 @@ bool SecurityKeyIpcServerImpl::CreateChannel(
       "O:%sG:%sD:(A;;GA;;;AU)", user_sid_utf8.c_str(), user_sid_utf8.c_str()));
 
 #endif  // defined(OS_WIN)
-  mojo_peer_token_ = mojo::edk::GenerateRandomToken();
+  peer_connection_ = base::MakeUnique<mojo::edk::PeerConnection>();
   ipc_channel_ = IPC::Channel::CreateServer(
-      mojo::edk::ConnectToPeerProcess(
-          mojo::edk::CreateServerHandle(channel_handle, options),
-          mojo_peer_token_)
+      peer_connection_
+          ->Connect(mojo::edk::ConnectionParams(
+              mojo::edk::TransportProtocol::kLegacy,
+              mojo::edk::CreateServerHandle(channel_handle, options)))
           .release(),
       this);
 
@@ -213,11 +215,7 @@ void SecurityKeyIpcServerImpl::CloseChannel() {
     ipc_channel_->Close();
     connection_close_pending_ = false;
   }
-  // Close the underlying mojo connection.
-  if (!mojo_peer_token_.empty()) {
-    mojo::edk::ClosePeerConnection(mojo_peer_token_);
-    mojo_peer_token_.clear();
-  }
+  peer_connection_.reset();
 }
 
 }  // namespace remoting

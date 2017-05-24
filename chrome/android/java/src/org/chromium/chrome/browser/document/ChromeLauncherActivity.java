@@ -111,7 +111,6 @@ public class ChromeLauncherActivity extends Activity
     public void onCreate(Bundle savedInstanceState) {
         // Third-party code adds disk access to Activity.onCreate. http://crbug.com/619824
         StrictMode.ThreadPolicy oldPolicy = StrictMode.allowThreadDiskReads();
-        TraceEvent.begin("ChromeLauncherActivity");
         TraceEvent.begin("ChromeLauncherActivity.onCreate");
         try {
             super.onCreate(savedInstanceState);
@@ -221,12 +220,6 @@ public class ChromeLauncherActivity extends Activity
         Log.e(TAG, "User wasn't sent to another Activity.");
         assert false;
         ApiCompatibilityUtils.finishAndRemoveTask(this);
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-        TraceEvent.end("ChromeLauncherActivity");
     }
 
     @Override

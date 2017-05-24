@@ -12,14 +12,18 @@ import("//services/service_manager/public/tools/test/service_test.gni")
 
 source_set("lib") {
   sources = [
+    "coordination_unit/coordination_unit_factory.cc",
+    "coordination_unit/coordination_unit_factory.h",
     "coordination_unit/coordination_unit_impl.cc",
     "coordination_unit/coordination_unit_impl.h",
     "coordination_unit/coordination_unit_provider_impl.cc",
     "coordination_unit/coordination_unit_provider_impl.h",
-    "memory/coordinator/coordinator_impl.cc",
-    "memory/coordinator/coordinator_impl.h",
-    "memory/coordinator/process_map.cc",
-    "memory/coordinator/process_map.h",
+    "coordination_unit/process_coordination_unit_impl.cc",
+    "coordination_unit/process_coordination_unit_impl.h",
+    "memory_instrumentation/coordinator_impl.cc",
+    "memory_instrumentation/coordinator_impl.h",
+    "memory_instrumentation/process_map.cc",
+    "memory_instrumentation/process_map.h",
     "resource_coordinator_service.cc",
     "resource_coordinator_service.h",
   ]
@@ -28,6 +32,7 @@ source_set("lib") {
     "//base",
     "//mojo/public/cpp/bindings",
     "//services/resource_coordinator/public/cpp:resource_coordinator_cpp",
+    "//services/service_manager/public/cpp/standalone_service:standalone_service",
   ]
 }
 
@@ -52,14 +57,19 @@ source_set("tests") {
 
   sources = [
     "coordination_unit/coordination_unit_impl_unittest.cc",
-    "memory/coordinator/coordinator_impl_unittest.cc",
-    "memory/coordinator/process_map_unittest.cc",
-    "public/cpp/memory/process_local_dump_manager_impl_unittest.cc",
+    "coordination_unit/coordination_unit_impl_unittest_util.cc",
+    "coordination_unit/coordination_unit_impl_unittest_util.h",
+    "coordination_unit/process_coordination_unit_impl_unittest.cc",
+    "memory_instrumentation/coordinator_impl_unittest.cc",
+    "memory_instrumentation/process_map_unittest.cc",
+    "public/cpp/memory_instrumentation/client_process_impl_unittest.cc",
+    "public/cpp/tracing/chrome_trace_event_agent_unittest.cc",
   ]
 
   deps = [
     ":lib",
     "//base",
+    "//base/test:test_support",
     "//mojo/public/cpp/bindings",
     "//services/resource_coordinator/public/cpp:resource_coordinator_cpp",
     "//testing/gtest",

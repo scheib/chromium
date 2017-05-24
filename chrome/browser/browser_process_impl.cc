@@ -325,9 +325,6 @@ void BrowserProcessImpl::StartTearDown() {
   remote_debugging_server_.reset();
   devtools_auto_opener_.reset();
 
-  // ChromeDeviceClient must be shutdown when the FILE thread is still alive.
-  device_client_->Shutdown();
-
   // Need to clear profiles (download managers) before the io_thread_.
   {
     TRACE_EVENT0("shutdown",

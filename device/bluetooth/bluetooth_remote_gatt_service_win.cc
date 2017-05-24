@@ -33,7 +33,7 @@ BluetoothRemoteGattServiceWin::BluetoothRemoteGattServiceWin(
       discovery_complete_notified_(false),
       included_characteristics_discovered_(false),
       weak_ptr_factory_(this) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(!service_path_.empty());
   DCHECK(service_uuid_.IsValid());
   DCHECK(service_attribute_handle_);
@@ -51,7 +51,7 @@ BluetoothRemoteGattServiceWin::BluetoothRemoteGattServiceWin(
 }
 
 BluetoothRemoteGattServiceWin::~BluetoothRemoteGattServiceWin() {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
 
   ClearIncludedCharacteristics();
 
@@ -101,7 +101,7 @@ BluetoothRemoteGattServiceWin::GetCharacteristic(
 
 void BluetoothRemoteGattServiceWin::GattCharacteristicDiscoveryComplete(
     BluetoothRemoteGattCharacteristicWin* characteristic) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(included_characteristics_.find(characteristic->GetIdentifier()) !=
          included_characteristics_.end());
 
@@ -112,7 +112,7 @@ void BluetoothRemoteGattServiceWin::GattCharacteristicDiscoveryComplete(
 }
 
 void BluetoothRemoteGattServiceWin::Update() {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
 
   task_manager_->PostGetGattIncludedCharacteristics(
       service_path_, service_uuid_, service_attribute_handle_,
@@ -124,7 +124,7 @@ void BluetoothRemoteGattServiceWin::OnGetIncludedCharacteristics(
     std::unique_ptr<BTH_LE_GATT_CHARACTERISTIC> characteristics,
     uint16_t num,
     HRESULT hr) {
-  DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
 
   UpdateIncludedCharacteristics(characteristics.get(), num);
   included_characteristics_discovered_ = true;

@@ -27,7 +27,7 @@ if (current_toolchain == host_toolchain) {
     }
     ldflags = [ "-lz" ]
     deps = [
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
   }
 }

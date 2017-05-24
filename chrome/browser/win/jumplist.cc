@@ -8,6 +8,7 @@
 #include "base/bind.h"
 #include "base/bind_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
@@ -300,6 +301,7 @@ void JumpList::OnMostVisitedURLsAvailable(
       link->GetCommandLine()->AppendSwitchASCII(
           switches::kWinJumplistAction, jumplist::kMostVisitedCategory);
       link->set_title(!url.title.empty() ? url.title : url_string_wide);
+      link->set_url(url_string);
       data->most_visited_pages_.push_back(link);
       data->icon_urls_.push_back(std::make_pair(url_string, link));
     }
@@ -352,6 +354,7 @@ bool JumpList::AddTab(const sessions::TabRestoreService::Tab& tab,
   link->GetCommandLine()->AppendSwitchASCII(switches::kWinJumplistAction,
                                             jumplist::kRecentlyClosedCategory);
   link->set_title(current_navigation.title());
+  link->set_url(url);
   data->recently_closed_pages_.push_back(link);
   data->icon_urls_.push_back(std::make_pair(std::move(url), std::move(link)));
 
@@ -589,28 +592,96 @@ void JumpList::DeferredTabRestoreServiceChanged() {
   StartLoadingFavicon();
 }
 
+void JumpList::DeleteIconFiles(const base::FilePath& icon_dir,
+                               JumpListCategory category) {
+  base::flat_map<std::string, base::FilePath>* source_map = nullptr;
+  switch (category) {
+    case JumpListCategory::kMostVisited:
+      source_map = &most_visited_icons_;
+      break;
+    case JumpListCategory::kRecentlyClosed:
+      source_map = &recently_closed_icons_;
+      break;
+  }
+
+  // Put all cached icon file paths into a set.
+  base::flat_set<base::FilePath> cached_files;
+  cached_files.reserve(source_map->size());
+
+  for (const auto& url_path_pair : *source_map)
+    cached_files.insert(url_path_pair.second);
+
+  DeleteNonCachedFiles(icon_dir, cached_files);
+}
+
 void JumpList::CreateIconFiles(const base::FilePath& icon_dir,
                                const ShellLinkItemList& item_list,
-                               size_t max_items) {
+                               size_t max_items,
+                               JumpListCategory category) {
   // TODO(chengx): Remove the UMA histogram after fixing http://crbug.com/40407.
   SCOPED_UMA_HISTOGRAM_TIMER("WinJumplist.CreateIconFilesDuration");
 
-  for (ShellLinkItemList::const_iterator item = item_list.begin();
-       item != item_list.end() && max_items > 0; ++item, --max_items) {
-    base::FilePath icon_path;
-    if (CreateIconFile((*item)->icon_image(), icon_dir, &icon_path))
-      (*item)->set_icon(icon_path.value(), 0);
+  // Reuse icons for urls that were already present in the jumplist for this
+  // category.
+
+  base::flat_map<std::string, base::FilePath>* source_map = nullptr;
+  switch (category) {
+    case JumpListCategory::kMostVisited:
+      source_map = &most_visited_icons_;
+      break;
+    case JumpListCategory::kRecentlyClosed:
+      source_map = &recently_closed_icons_;
+      break;
   }
+
+  base::flat_map<std::string, base::FilePath> updated_map;
+
+  for (ShellLinkItemList::const_iterator iter = item_list.begin();
+       iter != item_list.end() && max_items > 0; ++iter, --max_items) {
+    ShellLinkItem* item = iter->get();
+    auto cache_iter = source_map->find(item->url());
+    if (cache_iter != source_map->end()) {
+      item->set_icon(cache_iter->second.value(), 0);
+      updated_map[item->url()] = cache_iter->second;
+    } else {
+      base::FilePath icon_path;
+      if (CreateIconFile(item->icon_image(), icon_dir, &icon_path)) {
+        item->set_icon(icon_path.value(), 0);
+        updated_map[item->url()] = icon_path;
+      }
+    }
+  }
+  source_map->swap(updated_map);
 }
 
 void JumpList::UpdateIconFiles(const base::FilePath& icon_dir,
                                const ShellLinkItemList& page_list,
-                               size_t slot_limit) {
-  DeleteDirectoryContentAndLogRuntime(icon_dir, kFileDeleteLimit);
+                               size_t slot_limit,
+                               JumpListCategory category) {
+  // Maximum number of icon files that each JumpList icon folder may hold.
+  size_t icon_limit = (category == JumpListCategory::kMostVisited) ? 10 : 6;
 
-  // Create new icons only when the directory exists and is empty.
-  if (base::CreateDirectory(icon_dir) && base::IsDirectoryEmpty(icon_dir))
-    CreateIconFiles(icon_dir, page_list, slot_limit);
+  // Clear the JumpList icon folder at |icon_dir| and the cache when
+  // 1) "Most visited" category updates for the 1st time after Chrome is
+  //     launched. This actually happens right after Chrome is launched.
+  // 2) "Recently closed" category updates for the 1st time after Chrome is
+  //     launched.
+  // 3) The number of icons in |icon_dir| has exceeded the limit.
+  if ((category == JumpListCategory::kMostVisited &&
+       most_visited_icons_.empty()) ||
+      (category == JumpListCategory::kRecentlyClosed &&
+       recently_closed_icons_.empty()) ||
+      FilesExceedLimitInDir(icon_dir, icon_limit)) {
+    DeleteDirectoryContentAndLogRuntime(icon_dir, kFileDeleteLimit);
+    most_visited_icons_.clear();
+    recently_closed_icons_.clear();
+    // Create new icons only when the directory exists and is empty.
+    if (base::CreateDirectory(icon_dir) && base::IsDirectoryEmpty(icon_dir))
+      CreateIconFiles(icon_dir, page_list, slot_limit, category);
+  } else if (base::CreateDirectory(icon_dir)) {
+    CreateIconFiles(icon_dir, page_list, slot_limit, category);
+    DeleteIconFiles(icon_dir, category);
+  }
 }
 
 bool JumpList::UpdateJumpList(
@@ -680,7 +751,7 @@ bool JumpList::UpdateJumpList(
         profile_dir, FILE_PATH_LITERAL("MostVisited"));
 
     UpdateIconFiles(icon_dir_most_visited, most_visited_pages,
-                    most_visited_items);
+                    most_visited_items, JumpListCategory::kMostVisited);
 
     icons_to_create += std::min(most_visited_pages.size(), most_visited_items);
   }
@@ -691,7 +762,7 @@ bool JumpList::UpdateJumpList(
         profile_dir, FILE_PATH_LITERAL("RecentClosed"));
 
     UpdateIconFiles(icon_dir_recent_closed, recently_closed_pages,
-                    recently_closed_items);
+                    recently_closed_items, JumpListCategory::kRecentlyClosed);
 
     icons_to_create +=
         std::min(recently_closed_pages.size(), recently_closed_items);

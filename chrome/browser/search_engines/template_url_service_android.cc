@@ -133,12 +133,12 @@ TemplateUrlServiceAndroid::GetTemplateUrlAt(JNIEnv* env,
 void TemplateUrlServiceAndroid::OnTemplateURLServiceLoaded() {
   template_url_subscription_.reset();
   JNIEnv* env = base::android::AttachCurrentThread();
-  if (weak_java_obj_.get(env).is_null())
+  auto java_obj = weak_java_obj_.get(env);
+  if (java_obj.is_null())
     return;
   LoadTemplateURLs();
 
-  Java_TemplateUrlService_templateUrlServiceLoaded(env,
-                                                   weak_java_obj_.get(env));
+  Java_TemplateUrlService_templateUrlServiceLoaded(env, java_obj);
 }
 
 void TemplateUrlServiceAndroid::LoadTemplateURLs() {
@@ -183,12 +183,12 @@ void TemplateUrlServiceAndroid::LoadTemplateURLs() {
 
 void TemplateUrlServiceAndroid::OnTemplateURLServiceChanged() {
   JNIEnv* env = base::android::AttachCurrentThread();
-  if (weak_java_obj_.get(env).is_null())
+  auto java_obj = weak_java_obj_.get(env);
+  if (java_obj.is_null())
     return;
   LoadTemplateURLs();
 
-  Java_TemplateUrlService_onTemplateURLServiceChanged(env,
-                                                      weak_java_obj_.get(env));
+  Java_TemplateUrlService_onTemplateURLServiceChanged(env, java_obj);
 }
 
 base::android::ScopedJavaLocalRef<jstring>

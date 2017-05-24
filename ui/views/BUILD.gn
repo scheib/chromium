@@ -54,6 +54,7 @@ component("views") {
     "animation/ink_drop_impl.h",
     "animation/ink_drop_mask.cc",
     "animation/ink_drop_mask.h",
+    "animation/ink_drop_observer.h",
     "animation/ink_drop_painted_layer_delegates.cc",
     "animation/ink_drop_painted_layer_delegates.h",
     "animation/ink_drop_ripple.cc",

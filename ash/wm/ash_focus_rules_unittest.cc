@@ -10,7 +10,6 @@
 #include "ash/test/test_session_controller_client.h"
 #include "ash/wm/lock_state_controller.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "base/memory/ptr_util.h"
 #include "services/ui/public/interfaces/window_manager_constants.mojom.h"

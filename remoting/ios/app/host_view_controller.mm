@@ -17,12 +17,14 @@
 #import "remoting/ios/client_keyboard.h"
 #import "remoting/ios/session/remoting_client.h"
 
+#include "base/strings/sys_string_conversions.h"
+#include "remoting/client/input/keyboard_interpreter.h"
 #include "remoting/client/ui/gesture_interpreter.h"
 
 static const CGFloat kFabInset = 15.f;
 static const CGFloat kKeyboardAnimationTime = 0.3;
 
-@interface HostViewController () {
+@interface HostViewController ()<ClientKeyboardDelegate> {
   RemotingClient* _client;
   MDCFloatingButton* _floatingButton;
   ClientGestures* _clientGestures;
@@ -82,6 +84,10 @@ static const CGFloat kKeyboardAnimationTime = 0.3;
   // the surface is not ready to handle the transformation matrix.
   // Call onSurfaceChanged here to cover that case.
   [_client surfaceChanged:self.view.frame];
+
+  // TODO(yuweih): This should be loaded from and stored into user defaults.
+  _client.gestureInterpreter->SetInputMode(
+      remoting::GestureInterpreter::DIRECT_INPUT_MODE);
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
@@ -111,6 +117,7 @@ static const CGFloat kKeyboardAnimationTime = 0.3;
   [super viewWillDisappear:animated];
 
   _clientGestures = nil;
+  _client = nil;
   [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -142,6 +149,7 @@ static const CGFloat kKeyboardAnimationTime = 0.3;
 - (void)showKeyboard {
   if (!_clientKeyboard) {
     _clientKeyboard = [[ClientKeyboard alloc] init];
+    _clientKeyboard.delegate = self;
     [self.view addSubview:_clientKeyboard];
     // TODO(nicholss): need to pass some keyboard injection interface here.
   }
@@ -156,15 +164,15 @@ static const CGFloat kKeyboardAnimationTime = 0.3;
 
 - (void)keyboardWillShow:(NSNotification*)notification {
   CGSize keyboardSize =
-      [[[notification userInfo] objectForKey:UIKeyboardFrameBeginUserInfoKey]
+      [[[notification userInfo] objectForKey:UIKeyboardFrameEndUserInfoKey]
           CGRectValue]
           .size;
   if (_keyboardSize.height != keyboardSize.height) {
     CGFloat deltaHeight = keyboardSize.height - _keyboardSize.height;
-    [UIView animateWithDuration:0.3
+    [UIView animateWithDuration:kKeyboardAnimationTime
                      animations:^{
                        CGRect f = self.view.frame;
-                       f.size.height += deltaHeight;
+                       f.size.height -= deltaHeight;
                        self.view.frame = f;
                      }];
     _keyboardSize = keyboardSize;
@@ -181,6 +189,17 @@ static const CGFloat kKeyboardAnimationTime = 0.3;
   _keyboardSize = CGSizeZero;
 }
 
+#pragma mark - ClientKeyboardDelegate
+
+- (void)clientKeyboardShouldSend:(NSString*)text {
+  _client.keyboardInterpreter->HandleTextEvent(base::SysNSStringToUTF8(text),
+                                               0);
+}
+
+- (void)clientKeyboardShouldDelete {
+  _client.keyboardInterpreter->HandleDeleteEvent(0);
+}
+
 #pragma mark - Private
 
 - (void)didTap:(id)sender {
@@ -188,14 +207,13 @@ static const CGFloat kKeyboardAnimationTime = 0.3;
   // more options. This is not ideal but it gets us an easy way to make a
   // modal window option selector. Replace this with a real menu later.
 
-  UIAlertController* alert =
-      [UIAlertController alertControllerWithTitle:@"Remote Settings"
-                                          message:nil
-                                   preferredStyle:UIAlertControllerStyleAlert];
+  UIAlertController* alert = [UIAlertController
+      alertControllerWithTitle:@"Remote Settings"
+                       message:nil
+                preferredStyle:UIAlertControllerStyleActionSheet];
 
   if ([self isKeyboardActive]) {
     void (^hideKeyboardHandler)(UIAlertAction*) = ^(UIAlertAction*) {
-      NSLog(@"Will hide keyboard.");
       [self hideKeyboard];
     };
     [alert addAction:[UIAlertAction actionWithTitle:@"Hide Keyboard"
@@ -203,21 +221,51 @@ static const CGFloat kKeyboardAnimationTime = 0.3;
                                             handler:hideKeyboardHandler]];
   } else {
     void (^showKeyboardHandler)(UIAlertAction*) = ^(UIAlertAction*) {
-      NSLog(@"Will show keyboard.");
       [self showKeyboard];
     };
     [alert addAction:[UIAlertAction actionWithTitle:@"Show Keyboard"
                                               style:UIAlertActionStyleDefault
                                             handler:showKeyboardHandler]];
   }
+
+  remoting::GestureInterpreter::InputMode currentInputMode =
+      _client.gestureInterpreter->GetInputMode();
+  NSString* switchInputModeTitle =
+      currentInputMode == remoting::GestureInterpreter::DIRECT_INPUT_MODE
+          ? @"Trackpad Mode"
+          : @"Touch Mode";
+  void (^switchInputModeHandler)(UIAlertAction*) = ^(UIAlertAction*) {
+    _client.gestureInterpreter->SetInputMode(
+        currentInputMode == remoting::GestureInterpreter::DIRECT_INPUT_MODE
+            ? remoting::GestureInterpreter::TRACKPAD_INPUT_MODE
+            : remoting::GestureInterpreter::DIRECT_INPUT_MODE);
+  };
+  [alert addAction:[UIAlertAction actionWithTitle:switchInputModeTitle
+                                            style:UIAlertActionStyleDefault
+                                          handler:switchInputModeHandler]];
+
   void (^disconnectHandler)(UIAlertAction*) = ^(UIAlertAction*) {
     [_client disconnectFromHost];
     [self dismissViewControllerAnimated:YES completion:nil];
   };
   [alert addAction:[UIAlertAction actionWithTitle:@"Disconnect"
-                                            style:UIAlertActionStyleCancel
+                                            style:UIAlertActionStyleDefault
                                           handler:disconnectHandler]];
 
+  void (^cancelHandler)(UIAlertAction*) = ^(UIAlertAction*) {
+    [alert dismissViewControllerAnimated:YES completion:nil];
+  };
+  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                            style:UIAlertActionStyleCancel
+                                          handler:cancelHandler]];
+
+  alert.popoverPresentationController.sourceView = self.view;
+  // Target the alert menu at the top middle of the FAB.
+  alert.popoverPresentationController.sourceRect = CGRectMake(
+      _floatingButton.center.x, _floatingButton.frame.origin.y, 1.0, 1.0);
+
+  alert.popoverPresentationController.permittedArrowDirections =
+      UIPopoverArrowDirectionDown;
   [self presentViewController:alert animated:YES completion:nil];
 }
 

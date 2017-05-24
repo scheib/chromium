@@ -10,6 +10,7 @@
 #include "base/gtest_prod_util.h"
 #include "base/logging.h"
 #include "base/strings/string16.h"
+#include "base/values.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/web_ui.h"
 
@@ -17,7 +18,6 @@ class WebUIBrowserTest;
 
 namespace base {
 class ListValue;
-class Value;
 }
 
 namespace content {
@@ -90,6 +90,16 @@ class CONTENT_EXPORT WebUIMessageHandler {
   // promise should be rejected (request failed).
   void RejectJavascriptCallback(const base::Value& callback_id,
                                 const base::Value& response);
+
+  // Helper method for notifying Javascript listeners added with
+  // cr.addWebUIListener() (defined in cr.js).
+  template <typename... Values>
+  void FireWebUIListener(const std::string& event_name,
+                         const Values&... values) {
+    // cr.webUIListenerCallback is a global JS function exposed from cr.js.
+    CallJavascriptFunction("cr.webUIListenerCallback", base::Value(event_name),
+                           values...);
+  }
 
   // Call a Javascript function by sending its name and arguments down to
   // the renderer.  This is asynchronous; there's no way to get the result

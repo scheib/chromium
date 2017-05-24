@@ -55,11 +55,18 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingOptionViewControllerTest,
   // selected yet.
   EXPECT_EQ(nullptr, dialog_view()->GetViewByID(static_cast<int>(
                          DialogViewID::SHIPPING_ADDRESS_OPTION_ERROR)));
+
   ResetEventObserverForSequence(std::list<DialogEvent>{
-      DialogEvent::BACK_NAVIGATION, DialogEvent::SPEC_DONE_UPDATING});
+      DialogEvent::SPEC_DONE_UPDATING, DialogEvent::BACK_NAVIGATION});
   ClickOnChildInListViewAndWait(
       /* child_index=*/0, /*total_num_children=*/2,
-      DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
+      DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW,
+      /*wait_for_animation=*/false);
+  // Wait for the animation here explicitly, otherwise
+  // ClickOnChildInListViewAndWait tries to install an AnimationDelegate before
+  // the animation is kicked off (since that's triggered off of the spec being
+  // updated) and this hits a DCHECK.
+  WaitForAnimation();
 
   // Michigan address is selected and has standard shipping.
   std::vector<base::string16> shipping_address_labels = GetProfileLabelValues(
@@ -80,11 +87,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingOptionViewControllerTest,
 
   // Go to the shipping address screen and select the second address (Canada).
   OpenShippingAddressSectionScreen();
-  ResetEventObserverForSequence(std::list<DialogEvent>{
-      DialogEvent::BACK_NAVIGATION, DialogEvent::SPEC_DONE_UPDATING});
+  ResetEventObserver(DialogEvent::SPEC_DONE_UPDATING);
   ClickOnChildInListViewAndWait(
       /* child_index=*/1, /*total_num_children=*/2,
-      DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
+      DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW, false);
 
   // There is no a longer shipping option section, because no shipping options
   // are available for Canada.
@@ -102,7 +108,6 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingOptionViewControllerTest,
                 .back());
 
   // Go to the address selector and see this error as well.
-  OpenShippingAddressSectionScreen();
   EXPECT_EQ(base::ASCIIToUTF16("We do not ship to this address"),
             GetLabelText(DialogViewID::SHIPPING_ADDRESS_OPTION_ERROR));
 }

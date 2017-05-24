@@ -57,11 +57,6 @@
           "reason": "appeared"
         },
         {
-          "object": "LayoutSVGRect rect",
-          "rect": [30, 188, 240, 12],
-          "reason": "disappeared"
-        },
-        {
           "object": "LayoutSVGPath path",
           "rect": [506, 233, 238, 159],
           "reason": "appeared"
@@ -110,36 +105,6 @@
           "object": "LayoutSVGContainer g id='tabgroupTriangle'",
           "rect": [7, 257, 236, 158],
           "reason": "appeared"
-        },
-        {
-          "object": "LayoutSVGRect rect",
-          "rect": [39, 189, 222, 122],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGRect rect",
-          "rect": [40, 188, 220, 122],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGInlineText #text",
-          "rect": [10, 43, 191, 31],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGInlineText #text",
-          "rect": [10, 43, 191, 31],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGTSpan tspan",
-          "rect": [10, 43, 191, 31],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGText text",
-          "rect": [10, 43, 191, 31],
-          "reason": "disappeared"
         },
         {
           "object": "LayoutSVGPath path",
@@ -860,58 +825,6 @@
       "reason": "subtree"
     },
     {
-      "object": "LayoutSVGHiddenContainer g id='tabgroupTriangle__1_content'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGHiddenContainer g id='oversizeContent'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGText text",
-      "reason": "appeared"
-    },
-    {
-      "object": "RootInlineBox",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGInlineText #text",
-      "reason": "appeared"
-    },
-    {
-      "object": "InlineTextBox 'This is oversize content that can be'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGTSpan tspan",
-      "reason": "appeared"
-    },
-    {
-      "object": "InlineFlowBox",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGInlineText #text",
-      "reason": "appeared"
-    },
-    {
-      "object": "InlineTextBox 'hidden on tab-change'",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGContainer g",
       "reason": "appeared"
     },
@@ -964,10 +877,6 @@
       "reason": "subtree"
     },
     {
-      "object": "LayoutSVGHiddenContainer g id='tabgroupTriangle__2_content'",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGContainer g",
       "reason": "appeared"
     },
@@ -1018,10 +927,6 @@
     {
       "object": "InlineTextBox '& Info'",
       "reason": "subtree"
-    },
-    {
-      "object": "LayoutSVGHiddenContainer g id='tabgroupTriangle__3_content'",
-      "reason": "appeared"
     },
     {
       "object": "LayoutSVGContainer g",

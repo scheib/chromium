@@ -61,7 +61,7 @@ bool ResourceMessageFilter::HandleMessage(const IPC::Message& msg,
                                           HostMessageContext* context) {
   scoped_refptr<base::TaskRunner> runner = OverrideTaskRunnerForMessage(msg);
   if (runner.get()) {
-    if (runner->RunsTasksOnCurrentThread()) {
+    if (runner->RunsTasksInCurrentSequence()) {
       DispatchMessage(msg, *context);
     } else {
       // TODO(raymes): We need to make a copy so the context can be used on

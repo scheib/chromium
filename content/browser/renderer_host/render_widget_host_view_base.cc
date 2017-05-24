@@ -16,6 +16,7 @@
 #include "content/browser/renderer_host/render_widget_host_view_frame_subscriber.h"
 #include "content/browser/renderer_host/text_input_manager.h"
 #include "content/common/content_switches_internal.h"
+#include "content/public/common/content_features.h"
 #include "media/base/video_frame.h"
 #include "ui/base/layout.h"
 #include "ui/display/screen.h"
@@ -37,6 +38,8 @@ RenderWidgetHostViewBase::RenderWidgetHostViewBase()
       current_device_scale_factor_(0),
       current_display_rotation_(display::Display::ROTATE_0),
       text_input_manager_(nullptr),
+      wheel_scroll_latching_enabled_(base::FeatureList::IsEnabled(
+          features::kTouchpadAndWheelScrollLatching)),
       renderer_frame_number_(0),
       weak_factory_(this) {}
 

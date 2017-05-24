@@ -11,6 +11,7 @@
 
 #include "gpu/command_buffer/common/mailbox.h"
 #include "media/base/media_export.h"
+#include "media/base/video_types.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
@@ -30,11 +31,15 @@ class MEDIA_EXPORT PictureBuffer {
   PictureBuffer(int32_t id,
                 const gfx::Size& size,
                 const TextureIds& client_texture_ids,
-                const TextureIds& service_texture_ids);
+                const TextureIds& service_texture_ids,
+                uint32_t texture_target,
+                VideoPixelFormat pixel_format);
   PictureBuffer(int32_t id,
                 const gfx::Size& size,
                 const TextureIds& client_texture_ids,
-                const std::vector<gpu::Mailbox>& texture_mailboxes);
+                const std::vector<gpu::Mailbox>& texture_mailboxes,
+                uint32_t texture_target,
+                VideoPixelFormat pixel_format);
   PictureBuffer(const PictureBuffer& other);
   ~PictureBuffer();
 
@@ -53,6 +58,10 @@ class MEDIA_EXPORT PictureBuffer {
   // |client_texture_ids|.
   const TextureIds& service_texture_ids() const { return service_texture_ids_; }
 
+  uint32_t texture_target() const { return texture_target_; }
+
+  VideoPixelFormat pixel_format() const { return pixel_format_; }
+
   gpu::Mailbox texture_mailbox(size_t plane) const;
 
  private:
@@ -61,6 +70,8 @@ class MEDIA_EXPORT PictureBuffer {
   TextureIds client_texture_ids_;
   TextureIds service_texture_ids_;
   std::vector<gpu::Mailbox> texture_mailboxes_;
+  uint32_t texture_target_ = 0;
+  VideoPixelFormat pixel_format_ = PIXEL_FORMAT_UNKNOWN;
 };
 
 // A decoded picture frame.

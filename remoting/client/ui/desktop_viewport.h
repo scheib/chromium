@@ -54,6 +54,14 @@ class DesktopViewport {
   // Sets the viewport center to (x, y) on the desktop's coordinate.
   void SetViewportCenter(float x, float y);
 
+  // Returns the current center of the viewport on the desktop's coordinate.
+  ViewMatrix::Point GetViewportCenter() const;
+
+  // Constrains |point| within the bounds of the desktop. Do nothing if the
+  // desktop size is not set.
+  ViewMatrix::Point ConstrainPointToDesktop(
+      const ViewMatrix::Point& point) const;
+
   // Registers the callback to be called once the transformation has changed.
   // run_immediately: If true and the viewport is ready to be used, the callback
   //     will be called immedately with the transformation matrix.
@@ -87,9 +95,6 @@ class DesktopViewport {
   // Gets a rectangle of all possible positions where the viewport's center can
   // locate.
   Bounds GetViewportCenterBounds() const;
-
-  // Returns the current center of the viewport on the desktop's coordinate.
-  ViewMatrix::Point GetViewportCenter() const;
 
   // Translates the viewport on the desktop's reference frame by <dx, dy>,
   // without calling UpdateViewport().

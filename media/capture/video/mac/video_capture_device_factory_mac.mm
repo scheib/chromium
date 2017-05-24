@@ -18,6 +18,7 @@
 #include "base/task_runner_util.h"
 #import "media/capture/video/mac/video_capture_device_avfoundation_mac.h"
 #import "media/capture/video/mac/video_capture_device_decklink_mac.h"
+#import "media/capture/video/mac/video_capture_device_syphon_mac.h"
 #include "media/capture/video/mac/video_capture_device_mac.h"
 
 namespace media {
@@ -57,6 +58,8 @@ std::unique_ptr<VideoCaptureDevice> VideoCaptureDeviceFactoryMac::CreateDevice(
   std::unique_ptr<VideoCaptureDevice> capture_device;
   if (descriptor.capture_api == VideoCaptureApi::MACOSX_DECKLINK) {
     capture_device.reset(new VideoCaptureDeviceDeckLinkMac(descriptor));
+  } else if (descriptor.capture_api == VideoCaptureApi::MACOSX_SYPHON) {
+      capture_device.reset(new VideoCaptureDeviceSyphonMac(descriptor));
   } else {
     VideoCaptureDeviceMac* device = new VideoCaptureDeviceMac(descriptor);
     capture_device.reset(device);
@@ -85,7 +88,7 @@ void VideoCaptureDeviceFactoryMac::GetDeviceDescriptors(
   for (NSString* key in capture_devices) {
     const std::string device_id = [key UTF8String];
     const VideoCaptureApi capture_api = VideoCaptureApi::MACOSX_AVFOUNDATION;
-    int transport_type = [[capture_devices valueForKey:key] transportType];
+    int transport_type = [(AVCaptureDevice*)[capture_devices valueForKey:key] transportType];
     // Transport types are defined for Audio devices and reused for video.
     VideoCaptureTransportType device_transport_type =
         (transport_type == kIOAudioDeviceTransportTypeBuiltIn ||
@@ -103,6 +106,8 @@ void VideoCaptureDeviceFactoryMac::GetDeviceDescriptors(
   }
   // Also retrieve Blackmagic devices, if present, via DeckLink SDK API.
   VideoCaptureDeviceDeckLinkMac::EnumerateDevices(device_descriptors);
+  // Also retrieve Syphon Servers, if present, via Syphon SDK API.
+  VideoCaptureDeviceSyphonMac::EnumerateDevices(device_descriptors);
 }
 
 void VideoCaptureDeviceFactoryMac::GetSupportedFormats(
@@ -116,12 +121,20 @@ void VideoCaptureDeviceFactoryMac::GetSupportedFormats(
                                supportedFormats:supported_formats];
       break;
     case VideoCaptureApi::MACOSX_DECKLINK:
-      DVLOG(1) << "Enumerating video capture capabilities "
+      DVLOG(1) << "Enumerating video capture capabilities, Decklink "
                << device.display_name;
       VideoCaptureDeviceDeckLinkMac::EnumerateDeviceCapabilities(
           device, supported_formats);
       break;
-    default:
+
+    case VideoCaptureApi::MACOSX_SYPHON:
+      DVLOG(1) << "Enumerating video capture capabilities, Syphon "
+          << device.display_name;
+      VideoCaptureDeviceSyphonMac::EnumerateDeviceCapabilities(
+          device, supported_formats);
+      break;
+
+      default:
       NOTREACHED();
   }
 }

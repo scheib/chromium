@@ -24,6 +24,10 @@
 #import "ios/chrome/browser/web/chrome_web_client.h"
 #include "ios/public/provider/chrome/browser/chrome_browser_provider.h"
 
+#if !defined(__has_feature) || !__has_feature(objc_arc)
+#error "This file requires ARC support."
+#endif
+
 // Subclass of PrerenderController so it isn't actually used. Using a mock for
 // this makes cleanup on shutdown simpler, by minimizing the number of profile
 // observers registered with the profiles.  The profile observers have to be

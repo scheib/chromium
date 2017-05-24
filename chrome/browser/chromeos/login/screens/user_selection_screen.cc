@@ -159,8 +159,7 @@ bool IsUserAllowedForARC(const AccountId& account_id) {
   if (!user)
     return false;
 
-  return user->HasGaiaAccount() || (user->IsActiveDirectoryUser() &&
-                                    arc::IsArcAllowedForActiveDirectoryUsers());
+  return user->HasGaiaAccount() || user->IsActiveDirectoryUser();
 }
 
 }  // namespace

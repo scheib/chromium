@@ -378,10 +378,6 @@ String Deprecation::DeprecationMessage(UseCounter::Feature feature) {
           "for more details.",
           milestoneString(M62));
 
-    case UseCounter::kV8IDBFactory_WebkitGetDatabaseNames_Method:
-      return willBeRemoved("indexedDB.webkitGetDatabaseNames()", M60,
-                           "5725741740195840");
-
     case UseCounter::kVibrateWithoutUserGesture:
       return willBeRemoved(
           "A call to navigator.vibrate without user tap on the frame or any "
@@ -410,6 +406,24 @@ String Deprecation::DeprecationMessage(UseCounter::Feature feature) {
     case UseCounter::kV8SVGPathElement_GetPathSegAtLength_Method:
       return willBeRemoved("SVGPathElement.getPathSegAtLength", M62,
                            "5638783282184192");
+
+    case UseCounter::kCredentialManagerCredentialRequestOptionsUnmediated:
+      return replacedWillBeRemoved(
+          "The boolean flag CredentialRequestOptions.unmediated",
+          "the CredentialRequestOptions.mediation enum", M62,
+          "6076479909658624");
+
+    case UseCounter::kCredentialManagerIdName:
+    case UseCounter::kCredentialManagerPasswordName:
+    case UseCounter::kCredentialManagerAdditionalData:
+    case UseCounter::kCredentialManagerCustomFetch:
+      return String::Format(
+          "Passing 'PasswordCredential' objects into 'fetch(..., { "
+          "credentials: ... })' is deprecated, and will be removed in %s. See "
+          "https://www.chromestatus.com/features/5689327799500800 for more "
+          "details and https://www.chromium.org/developers/"
+          "recent-changes-credential-management-api for migration suggestions.",
+          milestoneString(M62));
 
     // Features that aren't deprecated don't have a deprecation message.
     default:

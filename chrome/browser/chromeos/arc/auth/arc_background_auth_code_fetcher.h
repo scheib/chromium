@@ -26,6 +26,9 @@ class URLRequestContextGetter;
 
 namespace arc {
 
+// Exposed for testing.
+extern const char kAuthTokenExchangeEndPoint[];
+
 // The instance is not reusable, so for each Fetch(), the instance must be
 // re-created. Deleting the instance cancels inflight operation.
 class ArcBackgroundAuthCodeFetcher : public ArcAuthCodeFetcher,

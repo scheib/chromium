@@ -51,6 +51,7 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_delegate.h"
 #include "ui/aura/window_event_dispatcher.h"
+#include "ui/aura/window_port_for_shutdown.h"
 #include "ui/aura/window_tracker.h"
 #include "ui/base/layout.h"
 #include "ui/base/ui_base_types.h"
@@ -261,9 +262,6 @@ WindowTreeClient::~WindowTreeClient() {
   for (WindowTreeClientObserver& observer : observers_)
     observer.OnWillDestroyClient(this);
 
-  // Clients should properly delete all of their windows before shutdown.
-  CHECK(windows_.empty());
-
   capture_synchronizer_.reset();
 
   client::GetTransientWindowClient()->RemoveObserver(this);
@@ -273,6 +271,18 @@ WindowTreeClient::~WindowTreeClient() {
       env->context_factory() == compositor_context_factory_.get()) {
     env->set_context_factory(initial_context_factory_);
   }
+
+  // Allow for windows to exist (and be created) after we are destroyed. This
+  // is necessary because of shutdown ordering (WindowTreeClient is destroyed
+  // before windows).
+  in_shutdown_ = true;
+  IdToWindowMap windows;
+  std::swap(windows, windows_);
+  for (auto& pair : windows)
+    WindowPortForShutdown::Install(pair.second->GetWindow());
+
+  env->WindowTreeClientDestroyed(this);
+  CHECK(windows_.empty());
 }
 
 void WindowTreeClient::ConnectViaWindowTreeFactory() {
@@ -744,8 +754,11 @@ void WindowTreeClient::OnWindowMusDestroyed(WindowMus* window, Origin origin) {
   if (focus_synchronizer_->focused_window() == window)
     focus_synchronizer_->OnFocusedWindowDestroyed();
 
+  // If we're |in_shutdown_| there is no point in telling the server about the
+  // deletion. The connection to the server is about to be dropped and the
+  // server will take appropriate action.
   // TODO: decide how to deal with windows not owned by this client.
-  if (origin == Origin::CLIENT &&
+  if (!in_shutdown_ && origin == Origin::CLIENT &&
       (WasCreatedByThisClient(window) || IsRoot(window))) {
     const uint32_t change_id =
         ScheduleInFlightChange(base::MakeUnique<CrashInFlightChange>(

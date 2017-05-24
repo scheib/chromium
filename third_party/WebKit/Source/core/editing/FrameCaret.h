@@ -91,6 +91,7 @@ class CORE_EXPORT FrameCaret final
   DECLARE_TRACE();
 
  private:
+  friend class FrameCaretTest;
   friend class FrameSelectionTest;
 
   const PositionWithAffinity CaretPosition() const;

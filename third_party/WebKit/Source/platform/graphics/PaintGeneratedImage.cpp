@@ -23,7 +23,7 @@ void PaintGeneratedImage::Draw(PaintCanvas* canvas,
     canvas->scale(dest_rect.Width() / src_rect.Width(),
                   dest_rect.Height() / src_rect.Height());
   canvas->translate(-src_rect.X(), -src_rect.Y());
-  SkRect bounds = dest_rect;
+  SkRect bounds = record_->cullRect();
   canvas->saveLayer(&bounds, &flags);
   canvas->drawPicture(record_);
 }

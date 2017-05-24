@@ -65,56 +65,6 @@
           "object": "LayoutSVGEllipse circle id='use_circle'",
           "rect": [218, 94, 28, 28],
           "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGContainer use",
-          "rect": [41, 19, 18, 16],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGContainer use",
-          "rect": [41, 19, 18, 16],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGInlineText #text",
-          "rect": [41, 19, 18, 16],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGInlineText #text",
-          "rect": [41, 19, 18, 16],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGText text id='use_text'",
-          "rect": [41, 19, 18, 16],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGText text id='use_text'",
-          "rect": [41, 19, 18, 16],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGContainer use",
-          "rect": [44, 34, 12, 12],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGContainer use",
-          "rect": [44, 34, 12, 12],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGEllipse circle id='use_circle'",
-          "rect": [44, 34, 12, 12],
-          "reason": "disappeared"
-        },
-        {
-          "object": "LayoutSVGEllipse circle id='use_circle'",
-          "rect": [44, 34, 12, 12],
-          "reason": "disappeared"
         }
       ]
     }
@@ -199,38 +149,6 @@
     {
       "object": "LayoutSVGContainer g id='use'",
       "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGHiddenContainer g id='use'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGContainer use",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGText text id='use_text'",
-      "reason": "appeared"
-    },
-    {
-      "object": "RootInlineBox",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGInlineText #text",
-      "reason": "appeared"
-    },
-    {
-      "object": "InlineTextBox 'use'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGContainer use",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGEllipse circle id='use_circle'",
-      "reason": "appeared"
     },
     {
       "object": "LayoutSVGInlineText #text",

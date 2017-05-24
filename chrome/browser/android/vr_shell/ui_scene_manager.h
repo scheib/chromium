@@ -38,6 +38,8 @@ class UiSceneManager {
   void SetSecurityLevel(int level);
   void SetLoading(bool loading);
   void SetLoadProgress(float progress);
+  void SetIsExiting();
+  // These methods are currently stubbed.
   void SetHistoryButtonsEnabled(bool can_go_back, bool can_go_forward);
   void SetVideoCapturingIndicator(bool enabled);
   void SetScreenCapturingIndicator(bool enabled);
@@ -47,12 +49,14 @@ class UiSceneManager {
   void OnAppButtonGesturePerformed(UiInterface::Direction direction);
 
  private:
+  void CreateScreenDimmer();
   void CreateSecurityWarnings();
   void CreateSystemIndicators();
   void CreateContentQuad();
   void CreateBackground();
   void CreateUrlBar();
   void CreateCloseButton();
+  void CreateExitWarning();
 
   void ConfigureScene();
   void ConfigureSecurityWarnings();
@@ -67,9 +71,12 @@ class UiSceneManager {
   // UI element pointers (not owned by the scene manager).
   UiElement* permanent_security_warning_ = nullptr;
   UiElement* transient_security_warning_ = nullptr;
+  UiElement* exit_warning_ = nullptr;
   UiElement* main_content_ = nullptr;
   UiElement* audio_capture_indicator_ = nullptr;
   UiElement* video_capture_indicator_ = nullptr;
+  UiElement* screen_capture_indicator_ = nullptr;
+  UiElement* screen_dimmer_ = nullptr;
   UrlBar* url_bar_ = nullptr;
   LoadingIndicator* loading_indicator_ = nullptr;
 
@@ -77,6 +84,7 @@ class UiSceneManager {
   bool web_vr_mode_;
   bool secure_origin_ = false;
   bool fullscreen_ = false;
+  bool is_exiting_ = false;
 
   int next_available_id_ = 1;
 

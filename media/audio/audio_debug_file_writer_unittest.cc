@@ -10,6 +10,7 @@
 #include "base/message_loop/message_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/sys_byteorder.h"
+#include "base/test/scoped_task_environment.h"
 #include "base/threading/thread.h"
 #include "media/audio/audio_debug_file_writer.h"
 #include "media/base/audio_bus.h"
@@ -156,12 +157,6 @@ class AudioDebugFileWriterTest
     }
   }
 
-  void TestDoneOnFileThread(const base::Closure& callback) {
-    DCHECK(file_thread_.task_runner()->BelongsToCurrentThread());
-
-    callback.Run();
-  }
-
   void DoDebugRecording() {
     // Write tasks are posted to |file_thread_|.
     for (int i = 0; i < writes_; ++i) {
@@ -177,19 +172,6 @@ class AudioDebugFileWriterTest
     }
   }
 
-  void WaitForRecordingCompletion() {
-    WaitableMessageLoopEvent event;
-
-    // Post a task to the file thread indicating that all the writes are done.
-    file_thread_.task_runner()->PostTask(
-        FROM_HERE,
-        base::Bind(&AudioDebugFileWriterTest::TestDoneOnFileThread,
-                   base::Unretained(this), event.GetClosure()));
-
-    // Wait for TestDoneOnFileThread() to call event's closure.
-    event.RunAndWait();
-  }
-
   void RecordAndVerifyOnce() {
     base::FilePath file_path;
     EXPECT_TRUE(base::CreateTemporaryFile(&file_path));
@@ -200,7 +182,7 @@ class AudioDebugFileWriterTest
 
     debug_writer_->Stop();
 
-    WaitForRecordingCompletion();
+    scoped_task_environment_.RunUntilIdle();
 
     VerifyRecording(file_path);
 
@@ -218,8 +200,8 @@ class AudioDebugFileWriterTest
   // file thread are run before exiting the test.
   base::Thread file_thread_;
 
-  // Message loop for the test main thread.
-  base::MessageLoop message_loop_;
+  // The test task environment.
+  base::test::ScopedTaskEnvironment scoped_task_environment_;
 
   // Writer under test.
   std::unique_ptr<AudioDebugFileWriter> debug_writer_;
@@ -243,22 +225,19 @@ class AudioDebugFileWriterTest
 class AudioDebugFileWriterBehavioralTest : public AudioDebugFileWriterTest {};
 
 TEST_P(AudioDebugFileWriterTest, WaveRecordingTest) {
-  debug_writer_.reset(
-      new AudioDebugFileWriter(params_, file_thread_.task_runner()));
+  debug_writer_.reset(new AudioDebugFileWriter(params_));
   RecordAndVerifyOnce();
 }
 
 TEST_P(AudioDebugFileWriterTest, GetFileNameExtension) {
-  debug_writer_.reset(
-      new AudioDebugFileWriter(params_, file_thread_.task_runner()));
+  debug_writer_.reset(new AudioDebugFileWriter(params_));
   EXPECT_EQ(FILE_PATH_LITERAL("wav"),
             base::FilePath::StringType(debug_writer_->GetFileNameExtension()));
 }
 
 TEST_P(AudioDebugFileWriterBehavioralTest,
        DeletedBeforeRecordingFinishedOnFileThread) {
-  debug_writer_.reset(
-      new AudioDebugFileWriter(params_, file_thread_.task_runner()));
+  debug_writer_.reset(new AudioDebugFileWriter(params_));
 
   base::FilePath file_path;
   EXPECT_TRUE(base::CreateTemporaryFile(&file_path));
@@ -278,7 +257,7 @@ TEST_P(AudioDebugFileWriterBehavioralTest,
   debug_writer_.reset();
   wait_for_deletion->Signal();
 
-  WaitForRecordingCompletion();
+  scoped_task_environment_.RunUntilIdle();
 
   VerifyRecording(file_path);
 
@@ -291,29 +270,25 @@ TEST_P(AudioDebugFileWriterBehavioralTest,
 }
 
 TEST_P(AudioDebugFileWriterBehavioralTest, FileCreationError) {
-  debug_writer_.reset(
-      new AudioDebugFileWriter(params_, file_thread_.task_runner()));
+  debug_writer_.reset(new AudioDebugFileWriter(params_));
   base::FilePath file_path;  // Empty file name.
   debug_writer_->Start(file_path);
   DoDebugRecording();
 }
 
 TEST_P(AudioDebugFileWriterBehavioralTest, StartStopStartStop) {
-  debug_writer_.reset(
-      new AudioDebugFileWriter(params_, file_thread_.task_runner()));
+  debug_writer_.reset(new AudioDebugFileWriter(params_));
   RecordAndVerifyOnce();
   RecordAndVerifyOnce();
 }
 
 TEST_P(AudioDebugFileWriterBehavioralTest, DestroyNotStarted) {
-  debug_writer_.reset(
-      new AudioDebugFileWriter(params_, file_thread_.task_runner()));
+  debug_writer_.reset(new AudioDebugFileWriter(params_));
   debug_writer_.reset();
 }
 
 TEST_P(AudioDebugFileWriterBehavioralTest, DestroyStarted) {
-  debug_writer_.reset(
-      new AudioDebugFileWriter(params_, file_thread_.task_runner()));
+  debug_writer_.reset(new AudioDebugFileWriter(params_));
   base::FilePath file_path;
   EXPECT_TRUE(base::CreateTemporaryFile(&file_path));
   debug_writer_->Start(file_path);

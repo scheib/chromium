@@ -25,6 +25,7 @@
 #include "public/platform/WebCoalescedInputEvent.h"
 #include "public/platform/WebURLLoaderMockFactory.h"
 #include "public/web/WebConsoleMessage.h"
+#include "public/web/WebHitTestResult.h"
 #include "public/web/WebRemoteFrame.h"
 #include "public/web/WebScriptSource.h"
 #include "public/web/WebSettings.h"
@@ -999,6 +1000,143 @@ TEST_F(RootScrollerTest, ImmediateUpdateOfLayoutViewport) {
 
   EXPECT_EQ(MainFrameView()->LayoutViewportScrollableArea(),
             &MainFrameView()->GetRootFrameViewport()->LayoutViewport());
+}
+
+class RootScrollerHitTest : public RootScrollerTest {
+ public:
+  void CheckHitTestAtBottomOfScreen() {
+    HideTopControlsWithMaximalScroll();
+
+    // Do a hit test at the very bottom of the screen. This should be outside
+    // the root scroller's LayoutBox since inert top controls won't resize the
+    // ICB but, since we expaned the clip, we should still be able to hit the
+    // target.
+    WebPoint point(200, 445);
+    WebSize tap_area(20, 20);
+    WebHitTestResult result =
+        GetWebView()->HitTestResultForTap(point, tap_area);
+
+    Node* hit_node = result.GetNode().Unwrap<Node>();
+    Element* target = MainFrame()->GetDocument()->getElementById("target");
+    ASSERT_TRUE(target);
+    EXPECT_EQ(target, hit_node);
+  }
+
+ private:
+  void HideTopControlsWithMaximalScroll() {
+    // Do a scroll gesture that hides the top controls and scrolls all the way
+    // to the bottom.
+    GetWebView()->HandleInputEvent(
+        GenerateTouchGestureEvent(WebInputEvent::kGestureScrollBegin));
+    ASSERT_EQ(1, GetBrowserControls().ShownRatio());
+    GetWebView()->HandleInputEvent(
+        GenerateTouchGestureEvent(WebInputEvent::kGestureScrollUpdate, 0,
+                                  -GetBrowserControls().Height()));
+    ASSERT_EQ(0, GetBrowserControls().ShownRatio());
+    GetWebView()->HandleInputEvent(GenerateTouchGestureEvent(
+        WebInputEvent::kGestureScrollUpdate, 0, -100000));
+    GetWebView()->HandleInputEvent(
+        GenerateTouchGestureEvent(WebInputEvent::kGestureScrollEnd));
+    GetWebView()->ResizeWithBrowserControls(IntSize(400, 450), 50, false);
+  }
+};
+
+// Test that hit testing in the area revealed at the bottom of the screen
+// revealed by hiding the URL bar works properly when using a root scroller
+// when the target and scroller are in the same PaintLayer.
+TEST_F(RootScrollerHitTest, HitTestInAreaRevealedByURLBarSameLayer) {
+  // Add a target at the bottom of the root scroller that's the size of the url
+  // bar. We'll test that hiding the URL bar appropriately adjusts clipping so
+  // that we can hit this target.
+  Initialize();
+  WebURL baseURL = URLTestHelpers::ToKURL("http://www.test.com/");
+  FrameTestHelpers::LoadHTMLString(GetWebView()->MainFrame(),
+                                   "<!DOCTYPE html>"
+                                   "<style>"
+                                   "  body, html {"
+                                   "    height: 100%;"
+                                   "    margin: 0px;"
+                                   "  }"
+                                   "  #spacer {"
+                                   "    height: 1000px;"
+                                   "  }"
+                                   "  #container {"
+                                   "    position: absolute;"
+                                   "    width: 100%;"
+                                   "    height: 100%;"
+                                   "    overflow: auto;"
+                                   "  }"
+                                   "  #target {"
+                                   "    width: 100%;"
+                                   "    height: 50px;"
+                                   "  }"
+                                   "</style>"
+                                   "<div id='container'>"
+                                   "  <div id='spacer'></div>"
+                                   "  <div id='target'></div>"
+                                   "</div>",
+                                   baseURL);
+
+  Document* document = MainFrame()->GetDocument();
+  Element* container = document->getElementById("container");
+  Element* target = document->getElementById("target");
+  document->setRootScroller(container);
+
+  // This test checks hit testing while the target is in the same PaintLayer as
+  // the root scroller.
+  ASSERT_EQ(ToLayoutBox(target->GetLayoutObject())->EnclosingLayer(),
+            ToLayoutBox(container->GetLayoutObject())->Layer());
+
+  CheckHitTestAtBottomOfScreen();
+}
+
+// Test that hit testing in the area revealed at the bottom of the screen
+// revealed by hiding the URL bar works properly when using a root scroller
+// when the target and scroller are in different PaintLayers.
+TEST_F(RootScrollerHitTest, HitTestInAreaRevealedByURLBarDifferentLayer) {
+  // Add a target at the bottom of the root scroller that's the size of the url
+  // bar. We'll test that hiding the URL bar appropriately adjusts clipping so
+  // that we can hit this target.
+  Initialize();
+  WebURL baseURL = URLTestHelpers::ToKURL("http://www.test.com/");
+  FrameTestHelpers::LoadHTMLString(GetWebView()->MainFrame(),
+                                   "<!DOCTYPE html>"
+                                   "<style>"
+                                   "  body, html {"
+                                   "    height: 100%;"
+                                   "    margin: 0px;"
+                                   "  }"
+                                   "  #spacer {"
+                                   "    height: 1000px;"
+                                   "  }"
+                                   "  #container {"
+                                   "    position: absolute;"
+                                   "    width: 100%;"
+                                   "    height: 100%;"
+                                   "    overflow: auto;"
+                                   "  }"
+                                   "  #target {"
+                                   "    width: 100%;"
+                                   "    height: 50px;"
+                                   "    will-change: transform;"
+                                   "  }"
+                                   "</style>"
+                                   "<div id='container'>"
+                                   "  <div id='spacer'></div>"
+                                   "  <div id='target'></div>"
+                                   "</div>",
+                                   baseURL);
+
+  Document* document = MainFrame()->GetDocument();
+  Element* container = document->getElementById("container");
+  Element* target = document->getElementById("target");
+  document->setRootScroller(container);
+
+  // Ensure the target and container weren't put into the same layer.
+  ASSERT_NE(ToLayoutBox(target->GetLayoutObject())->EnclosingLayer(),
+            ToLayoutBox(container->GetLayoutObject())->Layer());
+
+  CheckHitTestAtBottomOfScreen();
 }
 
 }  // namespace

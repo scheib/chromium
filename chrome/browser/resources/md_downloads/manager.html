@@ -1,8 +1,9 @@
+<link rel="import" href="chrome://resources/html/polymer.html">
+
 <link rel="import" href="chrome://resources/cr_elements/hidden_style_css.html">
 <link rel="import" href="chrome://resources/html/cr.html">
 <link rel="import" href="chrome://resources/html/cr/ui.html">
 <link rel="import" href="chrome://resources/html/cr/ui/command.html">
-<link rel="import" href="chrome://resources/html/polymer.html">
 <link rel="import" href="chrome://resources/html/util.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-a11y-announcer/iron-a11y-announcer.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-list/iron-list.html">
@@ -93,7 +94,7 @@
     <downloads-toolbar id="toolbar" spinner-active="{{spinnerActive_}}"
         role="none">
     </downloads-toolbar>
-    <iron-list id="downloads-list" items="{{items_}}"
+    <iron-list id="downloads-list" items="[[items_]]"
         hidden="[[!hasDownloads_]]">
       <template>
         <downloads-item data="[[item]]"></downloads-item>

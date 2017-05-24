@@ -35,6 +35,7 @@
 #include "net/http/http_content_disposition.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/http_util.h"
+#include "platform/HTTPNames.h"
 #include "platform/json/JSONParser.h"
 #include "platform/loader/fetch/ResourceResponse.h"
 #include "platform/weborigin/Suborigin.h"
@@ -825,6 +826,46 @@ bool ParseMultipartHeadersFromBody(const char* bytes,
       response->AddHTTPHeaderField(header, WebString::FromLatin1(value));
     }
   }
+  return true;
+}
+
+bool ParseMultipartFormHeadersFromBody(const char* bytes,
+                                       size_t size,
+                                       HTTPHeaderMap* header_fields,
+                                       size_t* end) {
+  DCHECK_EQ(0u, header_fields->size());
+
+  int headersEndPos =
+      net::HttpUtil::LocateEndOfAdditionalHeaders(bytes, size, 0);
+
+  if (headersEndPos < 0)
+    return false;
+
+  *end = headersEndPos;
+
+  // Eat headers and prepend a status line as is required by
+  // HttpResponseHeaders.
+  std::string headers("HTTP/1.1 200 OK\r\n");
+  headers.append(bytes, headersEndPos);
+
+  scoped_refptr<net::HttpResponseHeaders> responseHeaders =
+      new net::HttpResponseHeaders(
+          net::HttpUtil::AssembleRawHeaders(headers.data(), headers.length()));
+
+  // Copy selected header fields.
+  const AtomicString* const headerNamePointers[] = {
+      &HTTPNames::Content_Disposition, &HTTPNames::Content_Type};
+  for (const AtomicString* headerNamePointer : headerNamePointers) {
+    StringUTF8Adaptor adaptor(*headerNamePointer);
+    size_t iterator = 0;
+    base::StringPiece headerNameStringPiece = adaptor.AsStringPiece();
+    std::string value;
+    while (responseHeaders->EnumerateHeader(&iterator, headerNameStringPiece,
+                                            &value)) {
+      header_fields->Add(*headerNamePointer, WebString::FromUTF8(value));
+    }
+  }
+
   return true;
 }
 

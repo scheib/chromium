@@ -27,19 +27,27 @@
 #include "ui/gfx/text_elider.h"
 
 SigninErrorUI::SigninErrorUI(content::WebUI* web_ui)
-    : SigninErrorUI(
-          web_ui,
-          base::MakeUnique<SigninErrorHandler>(Profile::FromWebUI(web_ui)
-                                                   ->GetOriginalProfile()
-                                                   ->IsSystemProfile())) {}
-
-SigninErrorUI::SigninErrorUI(content::WebUI* web_ui,
-                             std::unique_ptr<SigninErrorHandler> handler)
-    : WebDialogUI(web_ui) {
+    : SigninWebDialogUI(web_ui) {
   Profile* webui_profile = Profile::FromWebUI(web_ui);
+  if (webui_profile->GetOriginalProfile()->IsSystemProfile()) {
+    InitializeMessageHandlerForUserManager();
+  }
+}
+
+void SigninErrorUI::InitializeMessageHandlerWithBrowser(Browser* browser) {
+  DCHECK(browser);
+  Initialize(browser, false /* is_system_profile */);
+}
+
+void SigninErrorUI::InitializeMessageHandlerForUserManager() {
+  Initialize(nullptr, true /* is_system_profile */);
+}
+
+void SigninErrorUI::Initialize(Browser* browser, bool is_system_profile) {
+  Profile* webui_profile = Profile::FromWebUI(web_ui());
   Profile* signin_profile;
-  bool is_system_profile =
-      webui_profile->GetOriginalProfile()->IsSystemProfile();
+  std::unique_ptr<SigninErrorHandler> handler =
+      base::MakeUnique<SigninErrorHandler>(browser, is_system_profile);
 
   if (is_system_profile) {
     signin_profile = g_browser_process->profile_manager()->GetProfileByPath(
@@ -122,5 +130,5 @@ SigninErrorUI::SigninErrorUI(content::WebUI* web_ui,
   source->AddLocalizedStrings(strings);
 
   content::WebUIDataSource::Add(webui_profile, source);
-  web_ui->AddMessageHandler(std::move(handler));
+  web_ui()->AddMessageHandler(std::move(handler));
 }

@@ -67,10 +67,15 @@ class CallbackBinder : public InterfaceBinder {
 
 class GenericCallbackBinder : public InterfaceBinder {
  public:
-  using BindCallback = base::Callback<void(mojo::ScopedMessagePipeHandle)>;
+  using BindCallback = base::Callback<void(const BindSourceInfo&,
+                                           const std::string&,
+                                           mojo::ScopedMessagePipeHandle)>;
 
   GenericCallbackBinder(
       const BindCallback& callback,
+      const scoped_refptr<base::SingleThreadTaskRunner>& task_runner);
+  GenericCallbackBinder(
+      const base::Callback<void(mojo::ScopedMessagePipeHandle)>& callback,
       const scoped_refptr<base::SingleThreadTaskRunner>& task_runner);
   ~GenericCallbackBinder() override;
 
@@ -81,6 +86,8 @@ class GenericCallbackBinder : public InterfaceBinder {
                      mojo::ScopedMessagePipeHandle handle) override;
 
   static void RunCallback(const BindCallback& callback,
+                          const BindSourceInfo& source_info,
+                          const std::string& interface_name,
                           mojo::ScopedMessagePipeHandle client_handle);
 
   const BindCallback callback_;

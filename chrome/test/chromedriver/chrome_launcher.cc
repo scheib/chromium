@@ -84,6 +84,7 @@ const char* const kDesktopSwitches[] = {
     "password-store=basic",
     "use-mock-keychain",
     "test-type=webdriver",
+    "force-fieldtrials=SiteIsolationExtensions/Control",
 };
 
 const char* const kAndroidSwitches[] = {

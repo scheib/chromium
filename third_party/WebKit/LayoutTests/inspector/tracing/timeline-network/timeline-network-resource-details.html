@@ -18,36 +18,34 @@ function performActions()
     return Promise.all([imagePromise, scriptPromise]);
 }
 
-function test()
+async function test()
 {
-    InspectorTest.invokeAsyncWithTimeline("performActions", finish);
+    await new Promise(fulfill => InspectorTest.invokeAsyncWithTimeline("performActions", fulfill));
 
-    function finish()
+    var model = InspectorTest.timelineModel();
+    var linkifier = new Components.Linkifier();
+    var badgePool = new ProductRegistry.BadgePool();
+
+    for (var request of model.networkRequests()) {
+        var element = await Timeline.TimelineUIUtils.buildNetworkRequestDetails(request, model, linkifier, badgePool);
+        printElement(element);
+    }
+    InspectorTest.completeTest();
+
+    function printElement(element)
     {
-        var model = InspectorTest.timelineModel();
-        var linkifier = new Components.Linkifier();
-        function printRequestDetails(request)
-        {
-            return Timeline.TimelineUIUtils.buildNetworkRequestDetails(request, model, linkifier).then(printElement);
+        var rows = element.querySelectorAll(".timeline-details-view-row");
+        for (var i = 0; i < rows.length; ++i) {
+            var title = InspectorTest.deepTextContent(rows[i].firstChild);
+            var value = InspectorTest.deepTextContent(rows[i].lastChild);
+            if (title === "Duration" || title === "Mime Type")
+                value = typeof value;
+            if (/^file:\/\//.test(value))
+                value = /[^/]*$/.exec(value)[0];
+            if (!title && !value)
+                continue;
+            InspectorTest.addResult(title + ": " + value);
         }
-        function printElement(element)
-        {
-            var rows = element.querySelectorAll(".timeline-details-view-row");
-            for (var i = 0; i < rows.length; ++i) {
-                var title = rows[i].firstChild.firstChild.textContent;
-                var value = rows[i].lastChild.firstChild;
-                if (value.children && value.children.length)
-                  value = Array.from(value.children, element => element.textContent).slice(1).join('');
-                else
-                  value = value.textContent;
-                if (title === "Duration" || title === "Mime Type")
-                    value = typeof value;
-                if (/^file:\/\//.test(value))
-                    value = /[^/]*$/.exec(value)[0];
-                InspectorTest.addResult(title + ": " + value);
-            }
-        }
-        Promise.all(model.networkRequests().map(printRequestDetails)).then(InspectorTest.completeTest);
     }
 }
 

@@ -113,8 +113,7 @@ std::unique_ptr<AudioLog> MockAudioManager::CreateAudioLog(
   return nullptr;
 }
 
-void MockAudioManager::InitializeOutputDebugRecording(
-    scoped_refptr<base::SingleThreadTaskRunner> file_task_runner) {}
+void MockAudioManager::InitializeOutputDebugRecording() {}
 
 void MockAudioManager::EnableOutputDebugRecording(
     const base::FilePath& base_file_name) {}

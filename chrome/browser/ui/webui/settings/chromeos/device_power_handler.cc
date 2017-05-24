@@ -115,8 +115,7 @@ void PowerHandler::SendBatteryStatus() {
   battery_dict.SetInteger("percent", percent);
   battery_dict.SetString("statusText", status_text);
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("battery-status-changed"), battery_dict);
+  FireWebUIListener("battery-status-changed", battery_dict);
 }
 
 void PowerHandler::SendPowerSources() {
@@ -130,10 +129,9 @@ void PowerHandler::SendPowerSources() {
     sources_list.Append(std::move(dict));
   }
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("power-sources-changed"), sources_list,
-                         base::Value(power_status_->GetCurrentPowerSourceID()),
-                         base::Value(power_status_->IsUsbChargerConnected()));
+  FireWebUIListener("power-sources-changed", sources_list,
+                    base::Value(power_status_->GetCurrentPowerSourceID()),
+                    base::Value(power_status_->IsUsbChargerConnected()));
 }
 
 }  // namespace settings

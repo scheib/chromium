@@ -1140,6 +1140,10 @@ void Editor::Cut(EditorCommandSource source) {
   // need clean layout to obtain the selected content.
   GetFrame().GetDocument()->UpdateStyleAndLayoutIgnorePendingStylesheets();
 
+  if (source == kCommandFromMenuOrKeyBinding &&
+      !GetFrame().Selection().SelectionHasFocus())
+    return;
+
   // TODO(yosin) We should use early return style here.
   if (CanDeleteRange(SelectedRange())) {
     GetSpellChecker().UpdateMarkersForWordsAffectedByEditing(true);
@@ -1171,7 +1175,7 @@ void Editor::Cut(EditorCommandSource source) {
   }
 }
 
-void Editor::Copy() {
+void Editor::Copy(EditorCommandSource source) {
   if (TryDHTMLCopy())
     return;  // DHTML did the whole operation
   if (!CanCopy())
@@ -1182,6 +1186,10 @@ void Editor::Copy() {
   // |tryDHTMLCopy| dispatches copy event, which may make layout dirty, but
   // we need clean layout to obtain the selected content.
   GetFrame().GetDocument()->UpdateStyleAndLayoutIgnorePendingStylesheets();
+
+  if (source == kCommandFromMenuOrKeyBinding &&
+      !GetFrame().Selection().SelectionHasFocus())
+    return;
 
   if (EnclosingTextControl(
           GetFrame().Selection().ComputeVisibleSelectionInDOMTree().Start())) {
@@ -1206,6 +1214,17 @@ void Editor::Paste(EditorCommandSource source) {
     return;  // DHTML did the whole operation
   if (!CanPaste())
     return;
+
+  // TODO(editing-dev): The use of updateStyleAndLayoutIgnorePendingStylesheets
+  // needs to be audited.  See http://crbug.com/590369 for more details.
+  // |tryDHTMLPaste| dispatches copy event, which may make layout dirty, but
+  // we need clean layout to obtain the selected content.
+  GetFrame().GetDocument()->UpdateStyleAndLayoutIgnorePendingStylesheets();
+
+  if (source == kCommandFromMenuOrKeyBinding &&
+      !GetFrame().Selection().SelectionHasFocus())
+    return;
+
   GetSpellChecker().UpdateMarkersForWordsAffectedByEditing(false);
   ResourceFetcher* loader = GetFrame().GetDocument()->Fetcher();
   ResourceCacheValidationSuppressor validation_suppressor(loader);
@@ -1243,6 +1262,17 @@ void Editor::PasteAsPlainText(EditorCommandSource source) {
     return;
   if (!CanPaste())
     return;
+
+  // TODO(editing-dev): The use of updateStyleAndLayoutIgnorePendingStylesheets
+  // needs to be audited.  See http://crbug.com/590369 for more details.
+  // |tryDHTMLPaste| dispatches copy event, which may make layout dirty, but
+  // we need clean layout to obtain the selected content.
+  GetFrame().GetDocument()->UpdateStyleAndLayoutIgnorePendingStylesheets();
+
+  if (source == kCommandFromMenuOrKeyBinding &&
+      !GetFrame().Selection().SelectionHasFocus())
+    return;
+
   GetSpellChecker().UpdateMarkersForWordsAffectedByEditing(false);
   PasteAsPlainTextWithPasteboard(Pasteboard::GeneralPasteboard());
 }

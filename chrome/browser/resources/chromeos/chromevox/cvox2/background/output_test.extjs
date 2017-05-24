@@ -354,24 +354,26 @@ TEST_F('OutputE2ETest', 'Input', function() {
 
 TEST_F('OutputE2ETest', 'List', function() {
   this.runWithLoadedTree(
-      '<ul><li>a<li>b<li>c</ul>',
+      '<ul><li aria-label="a">a<li>b<li>c</ul>',
     function(root) {
       var el = root.firstChild.firstChild;
       var range = cursors.Range.fromNode(el);
       var o = new Output().withSpeechAndBraille(range, null, 'navigate');
-      checkSpeechOutput('a|List item|list|with 3 items',
+      checkSpeechOutput('a||List item|list|with 3 items',
           [
-            {value: 'name', start: 0, end: 1},
-            {value: new Output.EarconAction('LIST_ITEM'), start: 0, end: 1},
-            {value: 'role', start: 12, end: 16}
+            { value: 'nameOrDescendants', start: 0, end: 1 },
+            { value: { earconId: 'LIST_ITEM' }, start: 2, end: 2 },
+            { value: 'role', start: 13, end: 17 }
           ],
           o);
       // TODO(plundblad): This output is wrong.  Add special handling for
       // braille here.
       checkBrailleOutput(
           'a lstitm list +3',
-          [{value: new Output.NodeSpan(el), start: 0, end: 8},
-           {value: new Output.NodeSpan(el.parent), start: 9, end: 16}],
+          [
+            {value: new Output.NodeSpan(el), start: 0, end: 8},
+            {value: new Output.NodeSpan(el.parent), start: 9, end: 16}
+          ],
           o);
   });
 });
@@ -649,7 +651,7 @@ TEST_F('OutputE2ETest', 'ComplexDiv', function() {
       <div><button>ok</button></div>
     */},
     function(root) {
-      var div = root.find({role: 'div'});
+      var div = root.find({role: 'genericContainer'});
       var o = new Output().withSpeech(cursors.Range.fromNode(div));
       assertEquals('ok', o.speechOutputForTest.string_);
   });

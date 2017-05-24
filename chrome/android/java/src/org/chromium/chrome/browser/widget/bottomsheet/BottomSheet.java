@@ -89,7 +89,7 @@ public class BottomSheet
      * The base duration of the settling animation of the sheet. 218 ms is a spec for material
      * design (this is the minimum time a user is guaranteed to pay attention to something).
      */
-    private static final long BASE_ANIMATION_DURATION_MS = 218;
+    public static final long BASE_ANIMATION_DURATION_MS = 218;
 
     /** The amount of time it takes to transition sheet content in or out. */
     private static final long TRANSITION_DURATION_MS = 150;
@@ -356,6 +356,26 @@ public class BottomSheet
             }
 
             return true;
+        }
+    }
+
+    /**
+     * Returns whether the provided bottom sheet state is in one of the stable open or closed
+     * states: {@link #SHEET_STATE_FULL}, {@link #SHEET_STATE_PEEK} or {@link #SHEET_STATE_HALF}
+     * @param sheetState A {@link SheetState} to test.
+     */
+    public static boolean isStateStable(@SheetState int sheetState) {
+        switch (sheetState) {
+            case SHEET_STATE_PEEK:
+            case SHEET_STATE_HALF:
+            case SHEET_STATE_FULL:
+                return true;
+            case SHEET_STATE_SCROLLING:
+                return false;
+            case SHEET_STATE_NONE: // Should never be tested, internal only value.
+            default:
+                assert false;
+                return false;
         }
     }
 
@@ -1013,6 +1033,8 @@ public class BottomSheet
     public void setSheetState(@SheetState int state, boolean animate) {
         assert state != SHEET_STATE_SCROLLING && state != SHEET_STATE_NONE;
         mTargetState = state;
+
+        cancelAnimation();
 
         if (animate) {
             createSettleAnimation(state);

@@ -264,8 +264,7 @@ void FetchManifest(blink::WebView* view, const GURL& url,
 }
 
 void SetMockGamepadProvider(std::unique_ptr<RendererGamepadProvider> provider) {
-  RenderThreadImpl::current()
-      ->blink_platform_impl()
+  RenderThreadImpl::current_blink_platform_impl()
       ->SetPlatformEventObserverForTesting(blink::kWebPlatformEventTypeGamepad,
                                            std::move(provider));
 }

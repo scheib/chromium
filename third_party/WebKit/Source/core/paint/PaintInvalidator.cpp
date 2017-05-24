@@ -68,8 +68,8 @@ LayoutRect PaintInvalidator::MapLocalRectToVisualRectInBacking(
   if (!is_svg_child) {
     if (object.IsBox()) {
       ToLayoutBox(object).FlipForWritingMode(rect);
-    } else if (!(context.forced_subtree_invalidation_flags &
-                 PaintInvalidatorContext::kForcedSubtreeSlowPathRect)) {
+    } else if (!(context.subtree_flags &
+                 PaintInvalidatorContext::kSubtreeSlowPathRect)) {
       // For SPv2 and the GeometryMapper path, we also need to convert the rect
       // for non-boxes into physical coordinates before applying paint offset.
       // (Otherwise we'll call mapToVisualrectInAncestorSpace() which requires
@@ -92,20 +92,11 @@ LayoutRect PaintInvalidator::MapLocalRectToVisualRectInBacking(
     return LayoutRect(EnclosingIntRect(rect));
   }
 
-  // If kForcedSubtreeNoRasterInvalidation is set, we map the rect to the
-  // temporary root paint property state instead of the paint invalidation
-  // backing.
-  bool map_to_backing =
-      !(context.forced_subtree_invalidation_flags &
-        PaintInvalidatorContext::kForcedSubtreeNoRasterInvalidation);
-
   LayoutRect result;
-  if (context.forced_subtree_invalidation_flags &
-      PaintInvalidatorContext::kForcedSubtreeSlowPathRect) {
+  if (context.subtree_flags & PaintInvalidatorContext::kSubtreeSlowPathRect) {
     result = SlowMapToVisualRectInAncestorSpace(
         object, *context.paint_invalidation_container, rect);
   } else if (object == context.paint_invalidation_container) {
-    DCHECK(map_to_backing);
     result = LayoutRect(rect);
   } else {
     // For non-root SVG, the input rect is in local SVG coordinates in which
@@ -114,9 +105,7 @@ LayoutRect PaintInvalidator::MapLocalRectToVisualRectInBacking(
       rect.MoveBy(Point(object.PaintOffset()));
 
     auto container_contents_properties =
-        map_to_backing
-            ? context.paint_invalidation_container->ContentsProperties()
-            : PropertyTreeState::Root();
+        context.paint_invalidation_container->ContentsProperties();
     if (context.tree_builder_context_->current.transform ==
             container_contents_properties.Transform() &&
         context.tree_builder_context_->current.clip ==
@@ -143,13 +132,10 @@ LayoutRect PaintInvalidator::MapLocalRectToVisualRectInBacking(
     }
 
     // Convert the result to the container's contents space.
-    if (map_to_backing)
-      result.MoveBy(-context.paint_invalidation_container->PaintOffset());
+    result.MoveBy(-context.paint_invalidation_container->PaintOffset());
   }
 
   object.AdjustVisualRectForRasterEffects(result);
-  if (!map_to_backing)
-    return result;
 
   PaintLayer::MapRectInPaintInvalidationContainerToBacking(
       *context.paint_invalidation_container, result);
@@ -341,11 +327,11 @@ void PaintInvalidator::UpdatePaintInvalidationContainer(
     // container on which the current object is painted.
     context.paint_invalidation_container =
         context.paint_invalidation_container_for_stacked_contents;
-    if (context.forced_subtree_invalidation_flags &
-        PaintInvalidatorContext::
-            kForcedSubtreeFullInvalidationForStackedContents)
-      context.forced_subtree_invalidation_flags |=
-          PaintInvalidatorContext::kForcedSubtreeFullInvalidation;
+    if (context.subtree_flags &
+        PaintInvalidatorContext::kSubtreeFullInvalidationForStackedContents) {
+      context.subtree_flags |=
+          PaintInvalidatorContext::kSubtreeFullInvalidation;
+    }
   }
 
   if (object == context.paint_invalidation_container) {
@@ -354,15 +340,14 @@ void PaintInvalidator::UpdatePaintInvalidationContainer(
     // descending into a different invalidation container. (For instance if
     // our parents were moved, the entire container will just move.)
     if (object != context.paint_invalidation_container_for_stacked_contents) {
-      // However, we need to keep kForcedSubtreeVisualRectUpdate and
-      // kForcedSubtreeFullInvalidationForStackedContents flags if the current
+      // However, we need to keep kSubtreeVisualRectUpdate and
+      // kSubtreeFullInvalidationForStackedContents flags if the current
       // object isn't the paint invalidation container of stacked contents.
-      context.forced_subtree_invalidation_flags &=
-          (PaintInvalidatorContext::kForcedSubtreeVisualRectUpdate |
-           PaintInvalidatorContext::
-               kForcedSubtreeFullInvalidationForStackedContents);
+      context.subtree_flags &=
+          (PaintInvalidatorContext::kSubtreeVisualRectUpdate |
+           PaintInvalidatorContext::kSubtreeFullInvalidationForStackedContents);
     } else {
-      context.forced_subtree_invalidation_flags = 0;
+      context.subtree_flags = 0;
     }
   }
 
@@ -469,6 +454,12 @@ void PaintInvalidator::InvalidatePaint(
                "PaintInvalidator::invalidatePaintIfNeeded()", "object",
                object.DebugName().Ascii());
 
+  if (object.IsSVGHiddenContainer()) {
+    context.subtree_flags |= PaintInvalidatorContext::kSubtreeNoInvalidation;
+  }
+  if (context.subtree_flags & PaintInvalidatorContext::kSubtreeNoInvalidation)
+    return;
+
   object.GetMutableForPainting().EnsureIsReadyForPaintInvalidation();
 
   UpdatePaintingLayer(object, context);
@@ -481,24 +472,18 @@ void PaintInvalidator::InvalidatePaint(
   // geometry effects, after skia optimizes filter's mapRect operation.
   // TODO(crbug.com/648274): This is a workaround for multi-column contents.
   if (object.HasFilterInducingProperty() || object.IsLayoutFlowThread()) {
-    context.forced_subtree_invalidation_flags |=
-        PaintInvalidatorContext::kForcedSubtreeSlowPathRect;
+    context.subtree_flags |= PaintInvalidatorContext::kSubtreeSlowPathRect;
   }
 
   UpdatePaintInvalidationContainer(object, context);
   UpdateVisualRectIfNeeded(object, tree_builder_context, context);
 
   if (!object.ShouldCheckForPaintInvalidation() &&
-      !(context.forced_subtree_invalidation_flags &
-        ~PaintInvalidatorContext::kForcedSubtreeVisualRectUpdate)) {
+      !(context.subtree_flags &
+        ~PaintInvalidatorContext::kSubtreeVisualRectUpdate)) {
     // We are done updating anything needed. No other paint invalidation work to
     // do for this object.
     return;
-  }
-
-  if (object.IsSVGHiddenContainer()) {
-    context.forced_subtree_invalidation_flags |=
-        PaintInvalidatorContext::kForcedSubtreeNoRasterInvalidation;
   }
 
   PaintInvalidationReason reason = object.InvalidatePaint(context);
@@ -507,36 +492,33 @@ void PaintInvalidator::InvalidatePaint(
       pending_delayed_paint_invalidations_.push_back(&object);
       break;
     case PaintInvalidationReason::kSubtree:
-      context.forced_subtree_invalidation_flags |=
-          (PaintInvalidatorContext::kForcedSubtreeFullInvalidation |
-           PaintInvalidatorContext::
-               kForcedSubtreeFullInvalidationForStackedContents);
+      context.subtree_flags |=
+          (PaintInvalidatorContext::kSubtreeFullInvalidation |
+           PaintInvalidatorContext::kSubtreeFullInvalidationForStackedContents);
       break;
     case PaintInvalidationReason::kSVGResource:
-      context.forced_subtree_invalidation_flags |=
-          PaintInvalidatorContext::kForcedSubtreeSVGResourceChange;
+      context.subtree_flags |=
+          PaintInvalidatorContext::kSubtreeSVGResourceChange;
       break;
     default:
       break;
   }
 
   if (object.MayNeedPaintInvalidationSubtree()) {
-    context.forced_subtree_invalidation_flags |=
-        PaintInvalidatorContext::kForcedSubtreeInvalidationChecking;
+    context.subtree_flags |=
+        PaintInvalidatorContext::kSubtreeInvalidationChecking;
   }
 
   if (context.old_location != context.new_location &&
       !context.painting_layer->SubtreeIsInvisible()) {
-    context.forced_subtree_invalidation_flags |=
-        PaintInvalidatorContext::kForcedSubtreeInvalidationChecking;
+    context.subtree_flags |=
+        PaintInvalidatorContext::kSubtreeInvalidationChecking;
   }
 
-  if (context.forced_subtree_invalidation_flags &&
-      context.NeedsVisualRectUpdate(object)) {
+  if (context.subtree_flags && context.NeedsVisualRectUpdate(object)) {
     // If any subtree flag is set, we also need to pass needsVisualRectUpdate
     // requirement to the subtree.
-    context.forced_subtree_invalidation_flags |=
-        PaintInvalidatorContext::kForcedSubtreeVisualRectUpdate;
+    context.subtree_flags |= PaintInvalidatorContext::kSubtreeVisualRectUpdate;
   }
 }
 

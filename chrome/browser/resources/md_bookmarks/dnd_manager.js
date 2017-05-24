@@ -415,8 +415,11 @@ cr.define('bookmarks', function() {
           draggedNodes.indexOf(dragId) == -1) {
         store.dispatch(bookmarks.actions.deselectItems());
         if (!isBookmarkFolderNode(dragElement)) {
-          store.dispatch(
-              bookmarks.actions.selectItem(dragId, true, false, state));
+          store.dispatch(bookmarks.actions.selectItem(dragId, state, {
+            clear: false,
+            range: false,
+            toggle: false,
+          }));
         }
         draggedNodes = [dragId];
       }
@@ -477,8 +480,10 @@ cr.define('bookmarks', function() {
       // below based on mouse position etc.
       this.dropDestination_ =
           this.calculateDropDestination_(e.clientY, overElement);
-      if (!this.dropDestination_)
+      if (!this.dropDestination_) {
+        this.dropIndicator_.finish();
         return;
+      }
 
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect =

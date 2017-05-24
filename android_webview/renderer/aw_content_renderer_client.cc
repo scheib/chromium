@@ -6,7 +6,6 @@
 
 #include <vector>
 
-#include "android_webview/common/aw_resource.h"
 #include "android_webview/common/aw_switches.h"
 #include "android_webview/common/render_view_messages.h"
 #include "android_webview/common/url_constants.h"

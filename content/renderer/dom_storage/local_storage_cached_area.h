@@ -10,6 +10,7 @@
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/nullable_string16.h"
+#include "content/common/content_export.h"
 #include "content/common/leveldb_wrapper.mojom.h"
 #include "mojo/public/cpp/bindings/associated_binding.h"
 #include "url/gurl.h"
@@ -32,8 +33,9 @@ class StoragePartitionService;
 // callbacks.
 // There is one LocalStorageCachedArea for potentially many LocalStorageArea
 // objects.
-class LocalStorageCachedArea : public mojom::LevelDBObserver,
-                               public base::RefCounted<LocalStorageCachedArea> {
+class CONTENT_EXPORT LocalStorageCachedArea
+    : public mojom::LevelDBObserver,
+      public base::RefCounted<LocalStorageCachedArea> {
  public:
   LocalStorageCachedArea(
       const url::Origin& origin,
@@ -63,6 +65,13 @@ class LocalStorageCachedArea : public mojom::LevelDBObserver,
  private:
   friend class base::RefCounted<LocalStorageCachedArea>;
   ~LocalStorageCachedArea() override;
+
+  friend class LocalStorageCachedAreaTest;
+
+  static base::string16 Uint8VectorToString16(
+      const std::vector<uint8_t>& input);
+  static std::vector<uint8_t> String16ToUint8Vector(
+      const base::string16& input);
 
   // LevelDBObserver:
   void KeyAdded(const std::vector<uint8_t>& key,

@@ -86,9 +86,8 @@ void EasyUnlockSettingsHandler::OnJavascriptDisallowed() {
 }
 
 void EasyUnlockSettingsHandler::OnTurnOffOperationStatusChanged() {
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("easy-unlock-turn-off-flow-status"),
-                         base::Value(GetTurnOffFlowStatus()));
+  FireWebUIListener("easy-unlock-turn-off-flow-status",
+                    base::Value(GetTurnOffFlowStatus()));
 }
 
 void EasyUnlockSettingsHandler::SendEnabledStatus() {

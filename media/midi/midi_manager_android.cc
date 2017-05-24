@@ -153,16 +153,18 @@ void MidiManagerAndroid::OnAttached(JNIEnv* env,
 void MidiManagerAndroid::OnDetached(JNIEnv* env,
                                     const JavaParamRef<jobject>& caller,
                                     const JavaParamRef<jobject>& raw_device) {
-  for (auto* device : devices_) {
+  for (auto& device : devices_) {
     if (device->HasRawDevice(env, raw_device)) {
-      for (auto* port : device->input_ports()) {
-        DCHECK(input_port_to_index_.end() != input_port_to_index_.find(port));
-        size_t index = input_port_to_index_[port];
+      for (auto& port : device->input_ports()) {
+        DCHECK(input_port_to_index_.end() !=
+               input_port_to_index_.find(port.get()));
+        size_t index = input_port_to_index_[port.get()];
         SetInputPortState(index, PortState::DISCONNECTED);
       }
-      for (auto* port : device->output_ports()) {
-        DCHECK(output_port_to_index_.end() != output_port_to_index_.find(port));
-        size_t index = output_port_to_index_[port];
+      for (auto& port : device->output_ports()) {
+        DCHECK(output_port_to_index_.end() !=
+               output_port_to_index_.find(port.get()));
+        size_t index = output_port_to_index_[port.get()];
         SetOutputPortState(index, PortState::DISCONNECTED);
       }
     }
@@ -170,28 +172,28 @@ void MidiManagerAndroid::OnDetached(JNIEnv* env,
 }
 
 void MidiManagerAndroid::AddDevice(std::unique_ptr<MidiDeviceAndroid> device) {
-  for (auto* port : device->input_ports()) {
+  for (auto& port : device->input_ports()) {
     // We implicitly open input ports here, because there are no signal
     // from the renderer when to open.
     // TODO(yhirano): Implement open operation in Blink.
     PortState state = port->Open() ? PortState::OPENED : PortState::CONNECTED;
 
     const size_t index = all_input_ports_.size();
-    all_input_ports_.push_back(port);
+    all_input_ports_.push_back(port.get());
     // Port ID must be unique in a MIDI manager. This ID setting is
     // sufficiently unique although there is no user-friendly meaning.
     // TODO(yhirano): Use a hashed string as ID.
     const std::string id(
         base::StringPrintf("native:port-in-%ld", static_cast<long>(index)));
 
-    input_port_to_index_.insert(std::make_pair(port, index));
+    input_port_to_index_.insert(std::make_pair(port.get(), index));
     AddInputPort(MidiPortInfo(id, device->GetManufacturer(),
                               device->GetProductName(),
                               device->GetDeviceVersion(), state));
   }
-  for (auto* port : device->output_ports()) {
+  for (auto& port : device->output_ports()) {
     const size_t index = all_output_ports_.size();
-    all_output_ports_.push_back(port);
+    all_output_ports_.push_back(port.get());
 
     // Port ID must be unique in a MIDI manager. This ID setting is
     // sufficiently unique although there is no user-friendly meaning.
@@ -199,12 +201,12 @@ void MidiManagerAndroid::AddDevice(std::unique_ptr<MidiDeviceAndroid> device) {
     const std::string id(
         base::StringPrintf("native:port-out-%ld", static_cast<long>(index)));
 
-    output_port_to_index_.insert(std::make_pair(port, index));
+    output_port_to_index_.insert(std::make_pair(port.get(), index));
     AddOutputPort(
         MidiPortInfo(id, device->GetManufacturer(), device->GetProductName(),
                      device->GetDeviceVersion(), PortState::CONNECTED));
   }
-  devices_.push_back(device.release());
+  devices_.push_back(std::move(device));
 }
 
 bool MidiManagerAndroid::Register(JNIEnv* env) {

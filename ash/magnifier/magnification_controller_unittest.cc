@@ -41,7 +41,7 @@ class TextInputView : public views::WidgetDelegateView {
 
   ~TextInputView() override {}
 
-  gfx::Size GetPreferredSize() const override {
+  gfx::Size CalculatePreferredSize() const override {
     return gfx::Size(kTextInputWindowWidth, kTextInputWindowHeight);
   }
 

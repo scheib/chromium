@@ -21,14 +21,16 @@ VrGLThread::VrGLThread(
     gvr_context* gvr_api,
     bool initially_web_vr,
     bool in_cct,
-    bool reprojected_rendering)
+    bool reprojected_rendering,
+    bool daydream_support)
     : base::Thread("VrShellGL"),
       weak_vr_shell_(weak_vr_shell),
       main_thread_task_runner_(std::move(main_thread_task_runner)),
       gvr_api_(gvr_api),
       initially_web_vr_(initially_web_vr),
       in_cct_(in_cct),
-      reprojected_rendering_(reprojected_rendering) {}
+      reprojected_rendering_(reprojected_rendering),
+      daydream_support_(daydream_support) {}
 
 VrGLThread::~VrGLThread() {
   Stop();
@@ -36,8 +38,9 @@ VrGLThread::~VrGLThread() {
 
 void VrGLThread::Init() {
   scene_ = base::MakeUnique<UiScene>();
-  vr_shell_gl_ = base::MakeUnique<VrShellGl>(
-      this, gvr_api_, initially_web_vr_, reprojected_rendering_, scene_.get());
+  vr_shell_gl_ = base::MakeUnique<VrShellGl>(this, gvr_api_, initially_web_vr_,
+                                             reprojected_rendering_,
+                                             daydream_support_, scene_.get());
   scene_manager_ = base::MakeUnique<UiSceneManager>(this, scene_.get(), in_cct_,
                                                     initially_web_vr_);
 
@@ -114,6 +117,11 @@ void VrGLThread::NavigateBack() {
       FROM_HERE, base::Bind(&VrShell::NavigateBack, weak_vr_shell_));
 }
 
+void VrGLThread::ExitCct() {
+  main_thread_task_runner_->PostTask(
+      FROM_HERE, base::Bind(&VrShell::ExitCct, weak_vr_shell_));
+}
+
 void VrGLThread::SetFullscreen(bool enabled) {
   WaitUntilThreadStarted();
   task_runner()->PostTask(FROM_HERE, base::Bind(&UiSceneManager::SetFullscreen,
@@ -183,6 +191,12 @@ void VrGLThread::SetScreenCapturingIndicator(bool enabled) {
   task_runner()->PostTask(
       FROM_HERE, base::Bind(&UiSceneManager::SetScreenCapturingIndicator,
                             weak_scene_manager_, enabled));
+}
+
+void VrGLThread::SetIsExiting() {
+  WaitUntilThreadStarted();
+  task_runner()->PostTask(FROM_HERE, base::Bind(&UiSceneManager::SetIsExiting,
+                                                weak_scene_manager_));
 }
 
 void VrGLThread::CleanUp() {

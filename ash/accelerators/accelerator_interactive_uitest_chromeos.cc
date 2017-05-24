@@ -12,7 +12,6 @@
 #include "ash/test/ash_interactive_ui_test_base.h"
 #include "ash/test/test_screenshot_delegate.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "base/run_loop.h"
 #include "base/test/user_action_tester.h"

@@ -262,11 +262,6 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
             return TranslateMenu.MENU_ITEM_TYPE_COUNT;
         }
 
-        @Override
-        public boolean isEnabled(int position) {
-            return getItem(position).mId != TranslateMenu.ID_UNDEFINED;
-        }
-
         private View getItemView(
                 View menuItemView, int position, ViewGroup parent, int resourceId) {
             if (menuItemView == null) {
@@ -281,15 +276,10 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
         public View getView(int position, View convertView, ViewGroup parent) {
             View menuItemView = convertView;
             switch (getItemViewType(position)) {
-                case TranslateMenu.ITEM_DIVIDER:
-                    if (menuItemView == null) {
-                        menuItemView =
-                                mInflater.inflate(R.layout.translate_menu_divider, parent, false);
-                    }
-                    break;
                 case TranslateMenu.ITEM_CHECKBOX_OPTION:
                     menuItemView = getItemView(
                             menuItemView, position, parent, R.layout.translate_menu_item_checked);
+
                     TintedImageView checkboxIcon =
                             (TintedImageView) menuItemView.findViewById(R.id.menu_item_icon);
                     if (getItem(position).mId == TranslateMenu.ID_OVERFLOW_ALWAYS_TRANSLATE
@@ -297,6 +287,11 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
                         checkboxIcon.setVisibility(View.VISIBLE);
                     } else {
                         checkboxIcon.setVisibility(View.INVISIBLE);
+                    }
+
+                    View divider = (View) menuItemView.findViewById(R.id.menu_item_divider);
+                    if (getItem(position).mWithDivider) {
+                        divider.setVisibility(View.VISIBLE);
                     }
                     break;
                 case TranslateMenu.ITEM_LANGUAGE:

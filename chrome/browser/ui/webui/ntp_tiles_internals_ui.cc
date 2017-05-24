@@ -72,6 +72,7 @@ bool ChromeNTPTilesInternalsMessageHandlerClient::DoesSourceExist(
     case ntp_tiles::TileSource::TOP_SITES:
     case ntp_tiles::TileSource::SUGGESTIONS_SERVICE:
     case ntp_tiles::TileSource::WHITELIST:
+    case ntp_tiles::TileSource::HOMEPAGE:
       return true;
     case ntp_tiles::TileSource::POPULAR:
 #if defined(OS_ANDROID)

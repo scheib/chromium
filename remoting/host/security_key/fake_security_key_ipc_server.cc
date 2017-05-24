@@ -17,6 +17,7 @@
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/named_platform_handle.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "remoting/host/chromoting_messages.h"
 #include "remoting/host/security_key/security_key_auth_handler.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -44,6 +45,7 @@ void FakeSecurityKeyIpcServer::SendRequest(const std::string& message_data) {
 
 void FakeSecurityKeyIpcServer::CloseChannel() {
   ipc_channel_.reset();
+  peer_connection_.reset();
   channel_closed_callback_.Run();
 }
 
@@ -74,9 +76,12 @@ bool FakeSecurityKeyIpcServer::CreateChannel(
 #if defined(OS_WIN)
   options.enforce_uniqueness = false;
 #endif
+  peer_connection_ = base::MakeUnique<mojo::edk::PeerConnection>();
   ipc_channel_ = IPC::Channel::CreateServer(
-      mojo::edk::ConnectToPeerProcess(
-          mojo::edk::CreateServerHandle(channel_handle, options))
+      peer_connection_
+          ->Connect(mojo::edk::ConnectionParams(
+              mojo::edk::TransportProtocol::kLegacy,
+              mojo::edk::CreateServerHandle(channel_handle, options)))
           .release(),
       this);
   EXPECT_NE(nullptr, ipc_channel_);

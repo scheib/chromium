@@ -1,3 +1,5 @@
+'use strict';
+
 onfetch = function(e) {
   var headers = {};
   for (var header of e.request.headers) {

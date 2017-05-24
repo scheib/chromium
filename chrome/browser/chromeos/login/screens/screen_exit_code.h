@@ -25,6 +25,9 @@ enum class ScreenExitCode {
   // Connection failed while trying to load a WebPageScreen.
   CONNECTION_FAILED = 2,
   UPDATE_INSTALLED = 3,
+  // This exit code means EITHER that there was no update, OR that there
+  // was an update, but that it was not a "critical" update. "Critical" updates
+  // are those that have a deadline and require the device to reboot.
   UPDATE_NOUPDATE = 4,
   UPDATE_ERROR_CHECKING_FOR_UPDATE = 5,
   UPDATE_ERROR_UPDATING = 6,

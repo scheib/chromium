@@ -76,7 +76,7 @@ class NetworkStateListDetailedView::InfoBubble
 
  private:
   // View:
-  gfx::Size GetPreferredSize() const override {
+  gfx::Size CalculatePreferredSize() const override {
     // This bubble should be inset by kBubbleMargin on both left and right
     // relative to the parent bubble.
     const gfx::Size anchor_size = GetAnchorView()->size();

@@ -57,7 +57,6 @@ class AXARIAGrid final : public AXTable {
  private:
   // ARIA treegrids and grids support selected rows.
   bool SupportsSelectedRows() override { return true; }
-  bool IsMultiSelectable() const override { return true; }
   bool IsTableExposableThroughAccessibility() const override { return true; }
 
   bool AddTableRowChild(AXObjectImpl*,

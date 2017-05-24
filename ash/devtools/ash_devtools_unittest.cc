@@ -4,6 +4,8 @@
 
 #include "ash/devtools/ash_devtools_css_agent.h"
 #include "ash/devtools/ash_devtools_dom_agent.h"
+#include "ash/devtools/ui_element.h"
+#include "ash/devtools/window_element.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
@@ -18,7 +20,9 @@
 
 namespace ash {
 namespace {
+
 using namespace ui::devtools::protocol;
+
 const int kDefaultChildNodeCount = -1;
 const SkColor kBackgroundColor = SK_ColorRED;
 const SkColor kBorderColor = SK_ColorBLUE;
@@ -528,9 +532,12 @@ TEST_F(AshDevToolsTest, ViewRearranged) {
   views::View* parent_view = new views::View;
   views::View* target_view = new views::View;
   views::View* child_view = new views::View;
+  views::View* child_view_1 = new views::View;
+
   root_view->AddChildView(parent_view);
   root_view->AddChildView(target_view);
   parent_view->AddChildView(child_view);
+  parent_view->AddChildView(child_view_1);
 
   // Initialize DOMAgent
   std::unique_ptr<ui::devtools::protocol::DOM::Node> root;
@@ -547,10 +554,22 @@ TEST_F(AshDevToolsTest, ViewRearranged) {
   DOM::Node* parent_view_node = root_view_children->get(root_children_size - 2);
   DOM::Node* target_view_node = root_view_children->get(root_children_size - 1);
   DOM::Node* child_view_node = parent_view_node->getChildren(nullptr)->get(0);
+  DOM::Node* child_view_node_1 = parent_view_node->getChildren(nullptr)->get(1);
 
   Compare(parent_view, parent_view_node);
   Compare(target_view, target_view_node);
   Compare(child_view, child_view_node);
+  Compare(child_view_1, child_view_node_1);
+
+  ASSERT_NE(child_view_node->getNodeId(), child_view_node_1->getNodeId());
+
+  // Reorder child_view_1 from index 1 to 0 in view::Views tree. This makes DOM
+  // tree remove view node at position 1 and insert it at position 0.
+  parent_view->ReorderChildView(child_view_1, 0);
+  ExpectChildNodeRemoved(parent_view_node->getNodeId(),
+                         child_view_node_1->getNodeId());
+  ExpectChildNodeInserted(parent_view_node->getNodeId(), 0);
+
   target_view->AddChildView(child_view);
   ExpectChildNodeRemoved(parent_view_node->getNodeId(),
                          child_view_node->getNodeId());
@@ -634,6 +653,23 @@ TEST_F(AshDevToolsTest, WindowWidgetViewHighlight) {
   EXPECT_FALSE(GetHighlightingWindow(0)->IsVisible());
 }
 
+int GetNodeIdFromWindow(devtools::UIElement* ui_element, aura::Window* window) {
+  for (auto* child : ui_element->children()) {
+    if (child->type() == devtools::UIElementType::WINDOW &&
+        static_cast<devtools::WindowElement*>(child)->window() == window) {
+      return child->node_id();
+    }
+  }
+  for (auto* child : ui_element->children()) {
+    if (child->type() == devtools::UIElementType::WINDOW) {
+      int node_id = GetNodeIdFromWindow(child, window);
+      if (node_id > 0)
+        return node_id;
+    }
+  }
+  return 0;
+}
+
 TEST_F(AshDevToolsTest, MultipleDisplayHighlight) {
   UpdateDisplay("300x400,500x500");
 
@@ -645,12 +681,14 @@ TEST_F(AshDevToolsTest, MultipleDisplayHighlight) {
   dom_agent()->getDocument(&root);
 
   EXPECT_EQ(root_windows[0], window->GetRootWindow());
-  HighlightNode(dom_agent()->GetNodeIdFromWindow(window.get()));
+  HighlightNode(
+      GetNodeIdFromWindow(dom_agent()->window_element_root(), window.get()));
   ExpectHighlighted(window->GetBoundsInScreen(), 0);
 
   window->SetBoundsInScreen(gfx::Rect(500, 0, 50, 50), GetSecondaryDisplay());
   EXPECT_EQ(root_windows[1], window->GetRootWindow());
-  HighlightNode(dom_agent()->GetNodeIdFromWindow(window.get()));
+  HighlightNode(
+      GetNodeIdFromWindow(dom_agent()->window_element_root(), window.get()));
   ExpectHighlighted(window->GetBoundsInScreen(), 1);
 }
 

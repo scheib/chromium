@@ -24,6 +24,7 @@
 #include <EGL/egl.h>
 
 namespace gpu {
+class ServiceDiscardableManager;
 class TransferBuffer;
 
 namespace gles2 {
@@ -105,6 +106,7 @@ class Context : public base::RefCountedThreadSafe<Context>,
   bool is_current_in_some_thread_;
   bool is_destroyed_;
   gpu::GpuPreferences gpu_preferences_;
+  std::unique_ptr<gpu::ServiceDiscardableManager> discardable_manager_;
   const gpu::GpuDriverBugWorkarounds gpu_driver_bug_workarounds_;
   std::unique_ptr<gpu::TransferBufferManager> transfer_buffer_manager_;
   std::unique_ptr<gpu::CommandBufferService> command_buffer_;

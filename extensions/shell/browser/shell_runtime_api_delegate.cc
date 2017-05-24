@@ -28,11 +28,6 @@ void ShellRuntimeAPIDelegate::AddUpdateObserver(UpdateObserver* observer) {
 void ShellRuntimeAPIDelegate::RemoveUpdateObserver(UpdateObserver* observer) {
 }
 
-base::Version ShellRuntimeAPIDelegate::GetPreviousExtensionVersion(
-    const Extension* extension) {
-  return base::Version();
-}
-
 void ShellRuntimeAPIDelegate::ReloadExtension(const std::string& extension_id) {
 }
 

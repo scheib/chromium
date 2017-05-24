@@ -61,6 +61,9 @@ void CompositorFrameSinkLocal::SubmitCompositorFrame(
     cc::CompositorFrame frame) {
   DCHECK(thread_checker_);
   DCHECK(thread_checker_->CalledOnValidThread());
+  DCHECK(frame.metadata.begin_frame_ack.has_damage);
+  DCHECK_LE(cc::BeginFrameArgs::kStartingFrameNumber,
+            frame.metadata.begin_frame_ack.sequence_number);
 
   cc::LocalSurfaceId old_local_surface_id = local_surface_id_;
   if (!frame.render_pass_list.empty()) {
@@ -78,6 +81,15 @@ void CompositorFrameSinkLocal::SubmitCompositorFrame(
         cc::SurfaceId(frame_sink_id_, local_surface_id_),
         last_submitted_frame_size_);
   }
+}
+
+void CompositorFrameSinkLocal::DidNotProduceFrame(
+    const cc::BeginFrameAck& ack) {
+  DCHECK(thread_checker_);
+  DCHECK(thread_checker_->CalledOnValidThread());
+  DCHECK(!ack.has_damage);
+  DCHECK_LE(cc::BeginFrameArgs::kStartingFrameNumber, ack.sequence_number);
+  support_->DidNotProduceFrame(ack);
 }
 
 void CompositorFrameSinkLocal::DidReceiveCompositorFrameAck(
@@ -110,14 +122,6 @@ void CompositorFrameSinkLocal::OnNeedsBeginFrames(bool needs_begin_frames) {
   DCHECK(thread_checker_);
   DCHECK(thread_checker_->CalledOnValidThread());
   support_->SetNeedsBeginFrame(needs_begin_frames);
-}
-
-void CompositorFrameSinkLocal::OnDidFinishFrame(const cc::BeginFrameAck& ack) {
-  DCHECK(thread_checker_);
-  DCHECK(thread_checker_->CalledOnValidThread());
-  // If there was damage, the submitted CompositorFrame includes the ack.
-  if (!ack.has_damage)
-    support_->BeginFrameDidNotSwap(ack);
 }
 
 }  // namespace aura

@@ -173,8 +173,36 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGGradientStop stop id='offset'",
+      "object": "LayoutSVGContainer g id='inneruse'",
       "reason": "full"
+    },
+    {
+      "object": "LayoutSVGPath path id='hp'",
+      "reason": "SVG resource change"
+    },
+    {
+      "object": "LayoutSVGContainer g id='inneruse'",
+      "reason": "appeared"
+    },
+    {
+      "object": "LayoutSVGContainer g",
+      "reason": "appeared"
+    },
+    {
+      "object": "LayoutSVGPath path id='hp'",
+      "reason": "appeared"
+    },
+    {
+      "object": "LayoutSVGPath path id='hp'",
+      "reason": "disappeared"
+    },
+    {
+      "object": "LayoutSVGContainer g",
+      "reason": "disappeared"
+    },
+    {
+      "object": "LayoutSVGContainer g id='inneruse'",
+      "reason": "disappeared"
     },
     {
       "object": "LayoutSVGContainer g id='inneruse'",
@@ -209,10 +237,6 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGGradientStop stop id='offset'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGContainer g id='inneruse'",
       "reason": "full"
     },
@@ -245,10 +269,6 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGGradientStop stop id='offset'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGContainer g id='inneruse'",
       "reason": "full"
     },
@@ -279,46 +299,6 @@
     {
       "object": "LayoutSVGContainer g id='inneruse'",
       "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop id='offset'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGContainer g id='inneruse'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGPath path id='hp'",
-      "reason": "SVG resource change"
-    },
-    {
-      "object": "LayoutSVGContainer g id='inneruse'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGContainer g",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGPath path id='hp'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGPath path id='hp'",
-      "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGContainer g",
-      "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGContainer g id='inneruse'",
-      "reason": "disappeared"
-    },
-    {
-      "object": "LayoutSVGGradientStop stop id='offset'",
-      "reason": "full"
     },
     {
       "object": "LayoutSVGContainer g id='inneruse'",

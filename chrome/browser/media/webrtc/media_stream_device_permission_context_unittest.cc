@@ -6,6 +6,7 @@
 
 #include "base/bind.h"
 #include "base/macros.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/infobars/infobar_service.h"
@@ -16,6 +17,7 @@
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/content_features.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -76,6 +78,22 @@ class MediaStreamDevicePermissionContextTests
                   .GetPermissionStatus(nullptr /* render_frame_host */,
                                        insecure_url, secure_url)
                   .content_setting);
+
+    base::test::ScopedFeatureList scoped_feature_list;
+    scoped_feature_list.InitAndEnableFeature(
+        features::kRequireSecureOriginsForPepperMediaRequests);
+
+    EXPECT_EQ(CONTENT_SETTING_BLOCK,
+              permission_context
+                  .GetPermissionStatus(nullptr /* render_frame_host */,
+                                       insecure_url, insecure_url)
+                  .content_setting);
+
+    EXPECT_EQ(CONTENT_SETTING_BLOCK,
+              permission_context
+                  .GetPermissionStatus(nullptr /* render_frame_host */,
+                                       insecure_url, secure_url)
+                  .content_setting);
   }
 
   void TestSecureQueryingUrl(ContentSettingsType content_settings_type) {
@@ -90,6 +108,15 @@ class MediaStreamDevicePermissionContextTests
                                       content_settings_type,
                                       std::string()));
 
+    EXPECT_EQ(CONTENT_SETTING_ASK,
+              permission_context
+                  .GetPermissionStatus(nullptr /* render_frame_host */,
+                                       secure_url, secure_url)
+                  .content_setting);
+
+    base::test::ScopedFeatureList scoped_feature_list;
+    scoped_feature_list.InitAndEnableFeature(
+        features::kRequireSecureOriginsForPepperMediaRequests);
     EXPECT_EQ(CONTENT_SETTING_ASK,
               permission_context
                   .GetPermissionStatus(nullptr /* render_frame_host */,

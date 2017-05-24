@@ -18,16 +18,6 @@ if (widevine_arch == "x86") {
 widevine_cdm_binary_files = []
 widevine_cdm_manifest_file = []
 
-# Due to crbug.com/707488, in linux and chromeos chrome, we temporarily use
-# stub cdm for building cdm adapter and copy the real cdm after that.
-# The stub libwidevinecdm.so is in the sub-directory "./stub_cdm" to avoid
-# GN's complaint about generating the same output in two targets.
-# TODO(hmchen): Revert this change after crbug.com/707488 fixed.
-use_stub_cdm_for_chrome = false
-if (is_chrome_branded && is_linux) {
-  use_stub_cdm_for_chrome = true
-}
-
 if (is_android) {
   # Always available on Android regardless of branding.
   widevine_cdm_version_h_file = "android/widevine_cdm_version.h"
@@ -92,40 +82,7 @@ source_set("headers") {
   ]
 }
 
-if (use_stub_cdm_for_chrome) {
-  widevine_cdm_binary_files = []
-  copy("copy_widevinecdm") {
-    if (is_chromeos) {
-      widevine_cdm = [ "chromeos/$widevine_arch/libwidevinecdm.so" ]
-    } else if (is_linux) {
-      widevine_cdm = [ "linux/$widevine_arch/libwidevinecdm.so" ]
-    }
-    sources = widevine_cdm
-    outputs = [
-      "$root_out_dir/$widevine_cdm_path/{{source_file_part}}",
-    ]
-  }
-
-  shared_library("widevinecdm") {
-    output_dir = "$root_out_dir/$widevine_cdm_path/stub_cdm"
-    sources = [
-      "//media/cdm/stub/stub_cdm.cc",
-      "//media/cdm/stub/stub_cdm.h",
-    ]
-
-    defines = [ "CDM_IMPLEMENTATION" ]
-
-    deps = [
-      ":version_h",
-      ":copy_widevinecdm",
-      "//base",
-      "//build/config/sanitizers:deps",
-    ]
-
-    public_deps = [ ":copy_widevinecdm" ]
-    cflags = [ "-fvisibility=hidden" ]
-  }
-} else if (widevine_cdm_binary_files != []) {
+if (widevine_cdm_binary_files != []) {
   copy("widevinecdm") {
     sources = widevine_cdm_binary_files
     outputs = [
@@ -150,7 +107,7 @@ if (use_stub_cdm_for_chrome) {
     deps = [
       ":version_h",
       "//base",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
 
     if (is_mac) {
@@ -208,7 +165,7 @@ if ((is_chrome_branded || enable_widevine) && enable_pepper_cdms) {
       ":widevinecdm",
     ]
 
-    if (is_linux && !use_stub_cdm_for_chrome) {
+    if (is_linux) {
       ldflags =
           [ rebase_path("$root_out_dir/$widevine_cdm_path/libwidevinecdm.so",
                         root_build_dir) ]

@@ -258,6 +258,11 @@ OutputDeviceInfo WebAudioSourceProviderImpl::GetOutputDeviceInfo() {
                : OutputDeviceInfo(OUTPUT_DEVICE_STATUS_ERROR_NOT_FOUND);
 }
 
+bool WebAudioSourceProviderImpl::IsOptimizedForHardwareParameters() {
+  base::AutoLock auto_lock(sink_lock_);
+  return client_ ? false : true;
+}
+
 bool WebAudioSourceProviderImpl::CurrentThreadIsRenderingThread() {
   NOTIMPLEMENTED();
   return false;

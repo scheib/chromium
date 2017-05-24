@@ -40,7 +40,6 @@
 
 #if defined(OS_MACOSX)
 #include "base/mac/mac_util.h"
-#include "ui/base/test/scoped_fake_nswindow_fullscreen.h"
 #endif
 
 using extensions::AppWindow;
@@ -245,6 +244,8 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestCSP) {
   ASSERT_TRUE(RunExtensionTest("notifications/api/csp")) << message_;
 }
 
+// Native notifications don't support (nor use) observers.
+#if !defined(OS_MACOSX)
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestByUser) {
   const extensions::Extension* extension =
       LoadExtensionAndWait("notifications/api/by_user");
@@ -281,6 +282,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestByUser) {
     EXPECT_TRUE(catcher.GetNextResult()) << catcher.message();
   }
 }
+#endif  // !defined(OS_MACOSX)
 
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestPartialUpdate) {
   ASSERT_TRUE(RunExtensionTest("notifications/api/partial_update")) << message_;
@@ -380,6 +382,8 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestOnPermissionLevelChanged) {
   }
 }
 
+// Native notifications don't support (nor use) observers.
+#if !defined(OS_MACOSX)
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestUserGesture) {
   const extensions::Extension* extension =
       LoadExtensionAndWait("notifications/api/user_gesture");
@@ -402,6 +406,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestUserGesture) {
 
   ASSERT_FALSE(GetNotificationForExtension(extension));
 }
+#endif  // !defined(OS_MACOSX)
 
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestRequireInteraction) {
   const extensions::Extension* extension =
@@ -434,10 +439,10 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestShouldDisplayNormal) {
   ASSERT_FALSE(notification->delegate()->ShouldDisplayOverFullscreen());
 }
 
+// Full screen related tests don't run on Mac as native notifications full
+// screen decisions are done by the OS directly.
+#if !defined(OS_MACOSX)
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestShouldDisplayFullscreen) {
-#if defined(OS_MACOSX)
-  ui::test::ScopedFakeNSWindowFullscreen fake_fullscreen;
-#endif
   EnableFullscreenNotifications();
   ExtensionTestMessageListener notification_created_listener("created", false);
   const Extension* extension = LoadAppWithWindowState(
@@ -463,9 +468,6 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestShouldDisplayFullscreen) {
 }
 
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestShouldDisplayFullscreenOff) {
-#if defined(OS_MACOSX)
-  ui::test::ScopedFakeNSWindowFullscreen fake_fullscreen;
-#endif
   DisableFullscreenNotifications();
   ExtensionTestMessageListener notification_created_listener("created", false);
   const Extension* extension = LoadAppWithWindowState(
@@ -492,7 +494,6 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestShouldDisplayFullscreenOff) {
 
 // The Fake OSX fullscreen window doesn't like drawing a second fullscreen
 // window when another is visible.
-#if !defined(OS_MACOSX)
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestShouldDisplayMultiFullscreen) {
   // Start a fullscreen app, and then start another fullscreen app on top of the
   // first. Notifications from the first should not be displayed because it is
@@ -522,15 +523,11 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestShouldDisplayMultiFullscreen) {
   // notification shouldn't be displayed.
   ASSERT_FALSE(notification->delegate()->ShouldDisplayOverFullscreen());
 }
-#endif
 
 // Verify that a notification is actually displayed when the app window that
 // creates it is fullscreen with the fullscreen notification flag turned on.
 IN_PROC_BROWSER_TEST_F(NotificationsApiTest,
                        TestShouldDisplayPopupNotification) {
-#if defined(OS_MACOSX)
-  ui::test::ScopedFakeNSWindowFullscreen fake_fullscreen;
-#endif
   EnableFullscreenNotifications();
   ExtensionTestMessageListener notification_created_listener("created", false);
   const Extension* extension = LoadAppWithWindowState(
@@ -554,3 +551,4 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest,
   // the notification displays on top of it.
   ASSERT_TRUE(notification->delegate()->ShouldDisplayOverFullscreen());
 }
+#endif  // !defined(OS_MACOSX)

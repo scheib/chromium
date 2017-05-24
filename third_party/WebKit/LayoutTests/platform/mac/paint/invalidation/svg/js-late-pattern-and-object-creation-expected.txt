@@ -16,30 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourcePattern pattern id='fillPattern'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGResourcePattern pattern id='strokePattern'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "appeared"
-    },
-    {
       "object": "LayoutSVGContainer g id='content'",
       "reason": "appeared"
     },

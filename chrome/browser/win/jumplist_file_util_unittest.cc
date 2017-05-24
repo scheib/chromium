@@ -100,3 +100,47 @@ TEST_F(JumpListFileUtilTest, DeleteMaxFilesAllowed) {
   EXPECT_TRUE(base::IsDirectoryEmpty(dir_path));
   EXPECT_TRUE(DirectoryExists(dir_path));
 }
+
+TEST_F(JumpListFileUtilTest, FilesExceedLimitInDir) {
+  base::FilePath dir_path = temp_dir_path();
+
+  // Create 2 files.
+  base::FilePath file_name =
+      dir_path.Append(FILE_PATH_LITERAL("TestFile1.txt"));
+  ASSERT_NO_FATAL_FAILURE(CreateTextFile(file_name, kFileContent));
+
+  file_name = dir_path.Append(FILE_PATH_LITERAL("TestFile2.txt"));
+  ASSERT_NO_FATAL_FAILURE(CreateTextFile(file_name, kFileContent));
+
+  EXPECT_TRUE(FilesExceedLimitInDir(dir_path, 1));
+  EXPECT_FALSE(FilesExceedLimitInDir(dir_path, 2));
+
+  DeleteDirectory(dir_path, kFileDeleteLimit);
+}
+
+TEST_F(JumpListFileUtilTest, DeleteNonCachedFiles) {
+  base::FilePath dir_path = temp_dir_path();
+
+  base::flat_set<base::FilePath> cached_files;
+
+  // Create 1 file and cache its filename.
+  base::FilePath file_name =
+      dir_path.Append(FILE_PATH_LITERAL("TestFile1.txt"));
+  ASSERT_NO_FATAL_FAILURE(CreateTextFile(file_name, kFileContent));
+
+  cached_files.insert(file_name);
+
+  // Create another file but not cache its filename.
+  file_name = dir_path.Append(FILE_PATH_LITERAL("TestFile2.txt"));
+  ASSERT_NO_FATAL_FAILURE(CreateTextFile(file_name, kFileContent));
+
+  // The second file created will be deleted as its filename is not in the
+  // cache, while the first file remains.
+  DeleteNonCachedFiles(dir_path, cached_files);
+  EXPECT_FALSE(base::IsDirectoryEmpty(dir_path));
+
+  // Clear the set and delete again, and now the first file should be gone.
+  cached_files.clear();
+  DeleteNonCachedFiles(dir_path, cached_files);
+  EXPECT_TRUE(base::IsDirectoryEmpty(dir_path));
+}

@@ -7,4 +7,5 @@ include_rules = [
     "+platform",
     "+public/platform",
     "-web",
+    "+web/tests",
 ]

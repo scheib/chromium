@@ -37,7 +37,6 @@
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/grid_layout.h"
-#include "ui/views/layout/layout_constants.h"
 #include "ui/views/widget/widget.h"
 
 #if defined(OS_WIN)
@@ -187,17 +186,22 @@ void BookmarkBubbleView::Init() {
   // buttons at the bottom.
   const int cs_id = 0;
   ColumnSet* cs = layout->AddColumnSet(cs_id);
-  cs->AddColumn(ChromeLayoutProvider::Get()->GetControlLabelGridAlignment(),
-                GridLayout::CENTER, 0, GridLayout::USE_PREF, 0, 0);
-  cs->AddPaddingColumn(0, views::kUnrelatedControlHorizontalSpacing);
+  ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
+
+  cs->AddColumn(provider->GetControlLabelGridAlignment(), GridLayout::CENTER, 0,
+                GridLayout::USE_PREF, 0, 0);
+  cs->AddPaddingColumn(
+      0, provider->GetDistanceMetric(DISTANCE_UNRELATED_CONTROL_HORIZONTAL));
 
   cs->AddColumn(GridLayout::FILL, GridLayout::CENTER, 0,
                 GridLayout::USE_PREF, 0, 0);
-  cs->AddPaddingColumn(1, views::kUnrelatedControlLargeHorizontalSpacing);
+  cs->AddPaddingColumn(1, provider->GetDistanceMetric(
+                              DISTANCE_UNRELATED_CONTROL_HORIZONTAL_LARGE));
 
   cs->AddColumn(GridLayout::LEADING, GridLayout::TRAILING, 0,
                 GridLayout::USE_PREF, 0, 0);
-  cs->AddPaddingColumn(0, views::kRelatedButtonHSpacing);
+  cs->AddPaddingColumn(0, provider->GetDistanceMetric(
+                              views::DISTANCE_RELATED_BUTTON_HORIZONTAL));
   cs->AddColumn(GridLayout::LEADING, GridLayout::TRAILING, 0,
                 GridLayout::USE_PREF, 0, 0);
 
@@ -212,13 +216,15 @@ void BookmarkBubbleView::Init() {
 
   layout->AddView(title_tf_, 5, 1);
 
-  layout->AddPaddingRow(0, views::kUnrelatedControlHorizontalSpacing);
+  layout->AddPaddingRow(0,
+                        provider->GetInsetsMetric(views::INSETS_PANEL).top());
 
   layout->StartRow(0, cs_id);
   layout->AddView(combobox_label);
   layout->AddView(parent_combobox_, 5, 1);
 
-  layout->AddPaddingRow(0, views::kRelatedControlVerticalSpacing);
+  layout->AddPaddingRow(
+      0, provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL));
 
   layout->StartRow(0, cs_id);
   layout->SkipColumns(2);

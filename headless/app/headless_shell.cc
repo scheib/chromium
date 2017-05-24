@@ -71,10 +71,8 @@ HeadlessShell::HeadlessShell()
 
 HeadlessShell::~HeadlessShell() {}
 
-void HeadlessShell::OnStart(HeadlessBrowser* browser) {
-// TODO(dvallet): Consider making a Windows specific class to make specific
-// child builds clearer.
 #if !defined(CHROME_MULTIPLE_DLL_CHILD)
+void HeadlessShell::OnStart(HeadlessBrowser* browser) {
   browser_ = browser;
 
   HeadlessBrowserContext::Builder context_builder =
@@ -138,11 +136,9 @@ void HeadlessShell::OnStart(HeadlessBrowser* browser) {
       web_contents_->AddObserver(this);
     }
   }
-#endif  // !defined(CHROME_MULTIPLE_DLL_CHILD)
 }
 
 void HeadlessShell::Shutdown() {
-#if !defined(CHROME_MULTIPLE_DLL_CHILD)
   if (!web_contents_)
     return;
   if (!RemoteDebuggingEnabled()) {
@@ -157,11 +153,9 @@ void HeadlessShell::Shutdown() {
   web_contents_ = nullptr;
   browser_context_->Close();
   browser_->Shutdown();
-#endif  // !defined(CHROME_MULTIPLE_DLL_CHILD)
 }
 
 void HeadlessShell::DevToolsTargetReady() {
-#if !defined(CHROME_MULTIPLE_DLL_CHILD)
   web_contents_->GetDevToolsTarget()->AttachClient(devtools_client_.get());
   devtools_client_->GetInspector()->GetExperimental()->AddObserver(this);
   devtools_client_->GetPage()->GetExperimental()->AddObserver(this);
@@ -233,8 +227,8 @@ void HeadlessShell::DevToolsTargetReady() {
   }
 
   // TODO(skyostil): Implement more features to demonstrate the devtools API.
-#endif  // !defined(CHROME_MULTIPLE_DLL_CHILD)
 }
+#endif  // !defined(CHROME_MULTIPLE_DLL_CHILD)
 
 void HeadlessShell::FetchTimeout() {
   LOG(INFO) << "Timeout.";
@@ -661,8 +655,10 @@ int HeadlessShellMain(int argc, const char** argv) {
   }
 
   if (command_line.HasSwitch(switches::kHideScrollbars)) {
-    builder.SetOverrideWebPreferencesCallback(base::Bind([](
-        WebPreferences* preferences) { preferences->hide_scrollbars = true; }));
+    builder.SetOverrideWebPreferencesCallback(
+        base::Bind([](WebPreferences* preferences) {
+          preferences->hide_scrollbars = true;
+        }));
   }
 
   if (command_line.HasSwitch(switches::kUserAgent)) {

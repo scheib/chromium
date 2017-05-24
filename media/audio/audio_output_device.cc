@@ -165,6 +165,10 @@ OutputDeviceInfo AudioOutputDevice::GetOutputDeviceInfo() {
                           device_status_, output_params_);
 }
 
+bool AudioOutputDevice::IsOptimizedForHardwareParameters() {
+  return true;
+}
+
 bool AudioOutputDevice::CurrentThreadIsRenderingThread() {
   // Since this function is supposed to be called on the rendering thread,
   // it's safe to access |audio_callback_| here. It will always be valid when

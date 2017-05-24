@@ -49,7 +49,7 @@ class SigninViewControllerDelegateMac : public ConstrainedWindowMacDelegate,
   CreateSyncConfirmationWebContents(Browser* browser);
 
   static std::unique_ptr<content::WebContents> CreateSigninErrorWebContents(
-      Profile* profile);
+      Browser* browser);
 
  private:
   friend SigninViewControllerDelegate;
@@ -78,6 +78,12 @@ class SigninViewControllerDelegateMac : public ConstrainedWindowMacDelegate,
 
   // Cleans up and deletes this object.
   void CleanupAndDeleteThis();
+
+  // Creates a WebContents for a dialog with the specified URL.
+  static std::unique_ptr<content::WebContents> CreateDialogWebContents(
+      Browser* browser,
+      const std::string& url,
+      int dialog_height);
 
   // The constrained window opened by this delegate to display signin flow
   // content.

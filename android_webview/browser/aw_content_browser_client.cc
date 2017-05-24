@@ -16,9 +16,8 @@
 #include "android_webview/browser/aw_printing_message_filter.h"
 #include "android_webview/browser/aw_quota_permission_context.h"
 #include "android_webview/browser/aw_settings.h"
-#include "android_webview/browser/jni_dependency_factory.h"
+#include "android_webview/browser/aw_web_contents_view_delegate.h"
 #include "android_webview/browser/net/aw_url_request_context_getter.h"
-#include "android_webview/browser/net_disk_cache_remover.h"
 #include "android_webview/browser/renderer_host/aw_resource_dispatcher_host_delegate.h"
 #include "android_webview/browser/tracing/aw_tracing_delegate.h"
 #include "android_webview/common/aw_descriptors.h"
@@ -190,10 +189,7 @@ AwBrowserContext* AwContentBrowserClient::GetAwBrowserContext() {
   return AwBrowserContext::GetDefault();
 }
 
-AwContentBrowserClient::AwContentBrowserClient(
-    JniDependencyFactory* native_factory)
-    : native_factory_(native_factory) {
-}
+AwContentBrowserClient::AwContentBrowserClient() {}
 
 AwContentBrowserClient::~AwContentBrowserClient() {}
 
@@ -202,8 +198,7 @@ AwBrowserContext* AwContentBrowserClient::InitBrowserContext() {
   if (!PathService::Get(base::DIR_ANDROID_APP_DATA, &user_data_dir)) {
     NOTREACHED() << "Failed to get app data directory for Android WebView";
   }
-  browser_context_.reset(
-      new AwBrowserContext(user_data_dir, native_factory_));
+  browser_context_.reset(new AwBrowserContext(user_data_dir));
   return browser_context_.get();
 }
 
@@ -215,7 +210,7 @@ content::BrowserMainParts* AwContentBrowserClient::CreateBrowserMainParts(
 content::WebContentsViewDelegate*
 AwContentBrowserClient::GetWebContentsViewDelegate(
     content::WebContents* web_contents) {
-  return native_factory_->CreateViewDelegate(web_contents);
+  return AwWebContentsViewDelegate::Create(web_contents);
 }
 
 void AwContentBrowserClient::RenderProcessWillLaunch(
@@ -436,15 +431,6 @@ void AwContentBrowserClient::ResourceDispatcherHostCreated() {
 
 net::NetLog* AwContentBrowserClient::GetNetLog() {
   return browser_context_->GetAwURLRequestContext()->GetNetLog();
-}
-
-void AwContentBrowserClient::ClearCache(content::RenderFrameHost* rfh) {
-  RemoveHttpDiskCache(rfh->GetProcess());
-}
-
-void AwContentBrowserClient::ClearCookies(content::RenderFrameHost* rfh) {
-  // TODO(boliu): Implement.
-  NOTIMPLEMENTED();
 }
 
 base::FilePath AwContentBrowserClient::GetDefaultDownloadDirectory() {

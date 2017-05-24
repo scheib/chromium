@@ -64,7 +64,6 @@
 #include "public/platform/Platform.h"
 #include "public/platform/WebData.h"
 #include "v8/include/v8.h"
-#include "web/ChromeClientImpl.h"
 #include "web/PageOverlay.h"
 #include "web/WebLocalFrameImpl.h"
 
@@ -181,10 +180,9 @@ class InspectorOverlayAgent::InspectorOverlayChromeClient final
   }
 
   void SetCursor(const Cursor& cursor, LocalFrame* local_root) override {
-    ToChromeClientImpl(client_)->SetCursorOverridden(false);
-    ToChromeClientImpl(client_)->SetCursor(cursor,
-                                           overlay_->frame_impl_->GetFrame());
-    ToChromeClientImpl(client_)->SetCursorOverridden(false);
+    client_->SetCursorOverridden(false);
+    client_->SetCursor(cursor, overlay_->frame_impl_->GetFrame());
+    client_->SetCursorOverridden(false);
   }
 
   void SetToolTip(LocalFrame& frame,

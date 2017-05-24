@@ -26,7 +26,7 @@ void CompositionMarkerListImpl::Clear() {
   markers_.clear();
 }
 
-const HeapVector<Member<RenderedDocumentMarker>>&
+const HeapVector<Member<DocumentMarker>>&
 CompositionMarkerListImpl::GetMarkers() const {
   return markers_;
 }

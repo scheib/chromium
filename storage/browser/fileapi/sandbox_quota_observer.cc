@@ -30,7 +30,7 @@ SandboxQuotaObserver::SandboxQuotaObserver(
 SandboxQuotaObserver::~SandboxQuotaObserver() {}
 
 void SandboxQuotaObserver::OnStartUpdate(const FileSystemURL& url) {
-  DCHECK(update_notify_runner_->RunsTasksOnCurrentThread());
+  DCHECK(update_notify_runner_->RunsTasksInCurrentSequence());
   base::FilePath usage_file_path = GetUsageCachePath(url);
   if (usage_file_path.empty())
     return;
@@ -38,7 +38,7 @@ void SandboxQuotaObserver::OnStartUpdate(const FileSystemURL& url) {
 }
 
 void SandboxQuotaObserver::OnUpdate(const FileSystemURL& url, int64_t delta) {
-  DCHECK(update_notify_runner_->RunsTasksOnCurrentThread());
+  DCHECK(update_notify_runner_->RunsTasksInCurrentSequence());
 
   if (quota_manager_proxy_.get()) {
     quota_manager_proxy_->NotifyStorageModified(
@@ -65,7 +65,7 @@ void SandboxQuotaObserver::OnUpdate(const FileSystemURL& url, int64_t delta) {
 }
 
 void SandboxQuotaObserver::OnEndUpdate(const FileSystemURL& url) {
-  DCHECK(update_notify_runner_->RunsTasksOnCurrentThread());
+  DCHECK(update_notify_runner_->RunsTasksInCurrentSequence());
 
   base::FilePath usage_file_path = GetUsageCachePath(url);
   if (usage_file_path.empty())

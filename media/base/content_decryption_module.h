@@ -14,7 +14,6 @@
 #include "base/callback.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/scoped_vector.h"
 #include "media/base/eme_constants.h"
 #include "media/base/media_export.h"
 #include "url/gurl.h"
@@ -34,7 +33,7 @@ class CdmPromiseTemplate;
 
 typedef CdmPromiseTemplate<std::string> NewSessionCdmPromise;
 typedef CdmPromiseTemplate<> SimpleCdmPromise;
-typedef ScopedVector<CdmKeyInformation> CdmKeysInfo;
+typedef std::vector<std::unique_ptr<CdmKeyInformation>> CdmKeysInfo;
 
 // Type of license required when creating/loading a session.
 // Must be consistent with the values specified in the spec:

@@ -88,7 +88,7 @@ UdpTransport::~UdpTransport() {}
 
 void UdpTransport::StartReceiving(
     const PacketReceiverCallbackWithStatus& packet_receiver) {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
 
   if (!udp_socket_) {
     status_callback_.Run(TRANSPORT_SOCKET_ERROR);
@@ -129,19 +129,19 @@ void UdpTransport::StartReceiving(
 }
 
 void UdpTransport::StopReceiving() {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
   packet_receiver_ = PacketReceiverCallbackWithStatus();
 }
 
 
 void UdpTransport::SetDscp(net::DiffServCodePoint dscp) {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
   next_dscp_value_ = dscp;
 }
 
 #if defined(OS_WIN)
 void UdpTransport::UseNonBlockingIO() {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
   if (!udp_socket_)
     return;
   udp_socket_->UseNonBlockingIO();
@@ -149,7 +149,7 @@ void UdpTransport::UseNonBlockingIO() {
 #endif
 
 void UdpTransport::ScheduleReceiveNextPacket() {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
   if (!packet_receiver_.is_null() && !receive_pending_) {
     receive_pending_ = true;
     io_thread_proxy_->PostTask(FROM_HERE,
@@ -160,7 +160,7 @@ void UdpTransport::ScheduleReceiveNextPacket() {
 }
 
 void UdpTransport::ReceiveNextPacket(int length_or_status) {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
 
   if (packet_receiver_.is_null())
     return;
@@ -219,7 +219,7 @@ void UdpTransport::ReceiveNextPacket(int length_or_status) {
 }
 
 bool UdpTransport::SendPacket(PacketRef packet, const base::Closure& cb) {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
   if (!udp_socket_)
     return true;
 
@@ -287,7 +287,7 @@ void UdpTransport::OnSent(const scoped_refptr<net::IOBuffer>& buf,
                           PacketRef packet,
                           const base::Closure& cb,
                           int result) {
-  DCHECK(io_thread_proxy_->RunsTasksOnCurrentThread());
+  DCHECK(io_thread_proxy_->RunsTasksInCurrentSequence());
 
   send_pending_ = false;
   if (result < 0) {

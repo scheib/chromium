@@ -28,6 +28,7 @@
 #include "cc/surfaces/local_surface_id_allocator.h"
 #include "cc/surfaces/surface_manager.h"
 #include "content/common/android/sync_compositor_messages.h"
+#include "content/common/view_messages.h"
 #include "content/renderer/android/synchronous_compositor_filter.h"
 #include "content/renderer/android/synchronous_compositor_registry.h"
 #include "content/renderer/gpu/frame_swap_message_queue.h"
@@ -311,6 +312,13 @@ void SynchronousCompositorFrameSink::SubmitCompositorFrame(
                                       std::move(submit_frame));
   DeliverMessages();
   did_submit_frame_ = true;
+}
+
+void SynchronousCompositorFrameSink::DidNotProduceFrame(
+    const cc::BeginFrameAck& ack) {
+  DCHECK(!ack.has_damage);
+  DCHECK_LE(cc::BeginFrameArgs::kStartingFrameNumber, ack.sequence_number);
+  Send(new ViewHostMsg_DidNotProduceFrame(routing_id_, ack));
 }
 
 void SynchronousCompositorFrameSink::CancelFallbackTick() {

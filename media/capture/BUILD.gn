@@ -71,6 +71,8 @@ component("capture_lib") {
     "video/mac/video_capture_device_avfoundation_mac.mm",
     "video/mac/video_capture_device_decklink_mac.h",
     "video/mac/video_capture_device_decklink_mac.mm",
+    "video/mac/video_capture_device_syphon_mac.h",
+    "video/mac/video_capture_device_syphon_mac.mm",
     "video/mac/video_capture_device_factory_mac.h",
     "video/mac/video_capture_device_factory_mac.mm",
     "video/mac/video_capture_device_mac.h",
@@ -151,7 +153,15 @@ component("capture_lib") {
   }
 
   if (is_mac) {
-    deps += [ "//third_party/decklink" ]
+    sources+= [
+    "//ui/gl/init/gl_initializer.h",
+    "//ui/gl/init/gl_initializer_mac.cc",
+    ]
+    deps += [
+      "//third_party/decklink",
+      "//third_party/Syphon"
+    ]
+    ldflags = ["-F"+"../../third_party/Syphon/mac/"]
     libs = [
       "AVFoundation.framework",
       "CoreFoundation.framework",
@@ -159,6 +169,9 @@ component("capture_lib") {
       "CoreMedia.framework",
       "CoreVideo.framework",
       "Foundation.framework",
+      "AppKit.framework",
+      "OpenGL.framework",
+      "Syphon.framework",
     ]
   }
 

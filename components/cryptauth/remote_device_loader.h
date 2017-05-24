@@ -62,15 +62,21 @@ class RemoteDeviceLoader {
   virtual ~RemoteDeviceLoader();
 
   // Loads the RemoteDevice objects. |callback| will be invoked upon completion.
+  // For space considerations, BeaconSeeds will only be loaded if
+  // |should_load_beacon_seeds| is true.
   typedef base::Callback<void(const cryptauth::RemoteDeviceList&)>
       RemoteDeviceCallback;
-  virtual void Load(const RemoteDeviceCallback& callback);
+  virtual void Load(bool should_load_beacon_seeds,
+                    const RemoteDeviceCallback& callback);
 
  private:
   // Called when the PSK is derived for each device. If the PSKs for all devices
   // have been derived, then we can invoke |callback_|.
   void OnPSKDerived(const cryptauth::ExternalDeviceInfo& device,
                     const std::string& psk);
+
+  // True if the loader should include BeaconSeeds in the loaded RemoteDevices.
+  bool should_load_beacon_seeds_;
 
   // The remaining devices whose PSK we're waiting on.
   std::vector<cryptauth::ExternalDeviceInfo> remaining_devices_;

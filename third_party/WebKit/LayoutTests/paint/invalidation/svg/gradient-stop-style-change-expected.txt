@@ -16,10 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGGradientStop stop id='stop'",
-      "reason": "style change"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "SVG resource change"
     }

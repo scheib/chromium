@@ -16,6 +16,7 @@
 #include "ipc/ipc_channel.h"
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "remoting/host/client_session_details.h"
 #include "remoting/host/security_key/fake_security_key_ipc_client.h"
 #include "remoting/host/security_key/security_key_ipc_constants.h"
@@ -328,8 +329,11 @@ TEST_F(SecurityKeyIpcServerTest,
       channel_handle,
       /*request_timeout=*/base::TimeDelta::FromMilliseconds(500)));
   base::Time start_time(base::Time::NowFromSystemTime());
-  mojo::ScopedMessagePipeHandle client_pipe = mojo::edk::ConnectToPeerProcess(
-      mojo::edk::CreateClientHandle(channel_handle));
+  mojo::edk::PeerConnection peer_connection;
+  mojo::ScopedMessagePipeHandle client_pipe =
+      peer_connection.Connect(mojo::edk::ConnectionParams(
+          mojo::edk::TransportProtocol::kLegacy,
+          mojo::edk::CreateClientHandle(channel_handle)));
   WaitForOperationComplete();
   base::TimeDelta elapsed_time = base::Time::NowFromSystemTime() - start_time;
 

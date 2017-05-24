@@ -73,7 +73,6 @@ class CONTENT_EXPORT InputRouterImpl
   void SendTouchEvent(const TouchEventWithLatencyInfo& touch_event) override;
   const NativeWebKeyboardEvent* GetLastKeyboardEvent() const override;
   void NotifySiteIsMobileOptimized(bool is_mobile_optimized) override;
-  void RequestNotificationWhenFlushed() override;
   bool HasPendingEvents() const override;
   void SetDeviceScaleFactor(float device_scale_factor) override;
 
@@ -202,10 +201,6 @@ class CONTENT_EXPORT InputRouterImpl
   // non-zero touch timeout configuration.
   void UpdateTouchAckTimeoutEnabled();
 
-  // If a flush has been requested, signals a completed flush to the client if
-  // all events have been dispatched (i.e., |HasPendingEvents()| is false).
-  void SignalFlushedIfNecessary();
-
   int routing_id() const { return routing_id_; }
 
   IPC::Sender* sender_;
@@ -230,8 +225,8 @@ class CONTENT_EXPORT InputRouterImpl
 
   // A queue of the mouse move events sent to the renderer. Similar
   // to |key_queue_|.
-  typedef std::deque<MouseEventWithLatencyInfo> MouseMoveQueue;
-  MouseMoveQueue mouse_move_queue_;
+  typedef std::deque<MouseEventWithLatencyInfo> MouseEventQueue;
+  MouseEventQueue mouse_event_queue_;
 
   // A queue of keyboard events. We can't trust data from the renderer so we
   // stuff key events into a queue and pop them out on ACK, feeding our copy
@@ -242,10 +237,6 @@ class CONTENT_EXPORT InputRouterImpl
   // The source of the ack within the scope of |ProcessInputEventAck()|.
   // Defaults to ACK_SOURCE_NONE.
   AckSource current_ack_source_;
-
-  // Whether a call to |Flush()| has yet been accompanied by a |DidFlush()| call
-  // to the client_ after all events have been dispatched/acked.
-  bool flush_requested_;
 
   // Whether there are any active flings in the renderer. As the fling
   // end notification is asynchronous, we use a count rather than a boolean

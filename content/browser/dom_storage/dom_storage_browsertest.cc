@@ -54,22 +54,20 @@ class MojoDOMStorageBrowserTest : public DOMStorageBrowserTest {
                BrowserContext::GetDefaultStoragePartition(
                    shell()->web_contents()->GetBrowserContext())
                    ->GetDOMStorageContext())
-        ->mojo_state_.get();
+        ->mojo_state_;
   }
 
   void EnsureConnected() {
     base::RunLoop run_loop;
-    context()->RunWhenConnected(run_loop.QuitClosure());
+    BrowserThread::PostTask(
+        BrowserThread::IO, FROM_HERE,
+        base::BindOnce(
+            &LocalStorageContextMojo::RunWhenConnected,
+            base::Unretained(context()),
+            base::BindOnce(base::IgnoreResult(&base::TaskRunner::PostTask),
+                           base::ThreadTaskRunnerHandle::Get(), FROM_HERE,
+                           run_loop.QuitClosure())));
     run_loop.Run();
-  }
-
-  void Flush() {
-    // Process any tasks that are currently queued, to ensure
-    // LevelDBWrapperImpl methods get called.
-    base::RunLoop().RunUntilIdle();
-    // And finally flush all the now queued up changes to leveldb.
-    context()->Flush();
-    base::RunLoop().RunUntilIdle();
   }
 };
 
@@ -109,7 +107,6 @@ IN_PROC_BROWSER_TEST_F(MojoDOMStorageBrowserTest, SanityCheckIncognito) {
 IN_PROC_BROWSER_TEST_F(MojoDOMStorageBrowserTest, PRE_DataPersists) {
   EnsureConnected();
   SimpleTest(GetTestUrl("dom_storage", "store_data.html"), kNotIncognito);
-  Flush();
 }
 
 IN_PROC_BROWSER_TEST_F(MojoDOMStorageBrowserTest, MAYBE_DataPersists) {

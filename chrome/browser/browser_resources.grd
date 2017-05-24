@@ -143,6 +143,7 @@
       </if>
       <if expr="enable_printing">
         <include name="IDR_CLOUDPRINT_MANIFEST" file="resources\cloud_print_app\manifest.json" type="BINDATA" />
+        <include name="IDR_PDF_COMPOSITOR_MANIFEST" file="..\..\components\printing\service\pdf_compositor_manifest.json" type="BINDATA" />
       </if>
       <if expr="not is_ios">
         <include name="IDR_DEVTOOLS_DISCOVERY_PAGE_HTML" file="devtools\frontend\devtools_discovery_page.html" type="BINDATA"/>

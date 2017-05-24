@@ -15,6 +15,7 @@
 #include "components/autofill/core/browser/payments/full_card_request.h"
 #include "components/autofill/core/browser/payments/payments_client.h"
 #include "components/autofill/core/browser/risk_data_loader.h"
+#include "ui/views/controls/textfield/textfield_controller.h"
 
 namespace autofill {
 class AutofillClient;
@@ -38,7 +39,8 @@ class CvcUnmaskViewController
     : public PaymentRequestSheetController,
       public autofill::RiskDataLoader,
       public autofill::payments::PaymentsClientDelegate,
-      public autofill::payments::FullCardRequest::UIDelegate {
+      public autofill::payments::FullCardRequest::UIDelegate,
+      public views::TextfieldController {
  public:
   CvcUnmaskViewController(
       PaymentRequestSpec* spec,
@@ -90,6 +92,10 @@ class CvcUnmaskViewController
 
   bool GetSheetId(DialogViewID* sheet_id) override;
   views::View* GetFirstFocusedView() override;
+
+  // views::TextfieldController
+  void ContentsChanged(views::Textfield* sender,
+                       const base::string16& new_contents) override;
 
   views::Textfield* cvc_field_;  // owned by the view hierarchy, outlives this.
   autofill::CreditCard credit_card_;

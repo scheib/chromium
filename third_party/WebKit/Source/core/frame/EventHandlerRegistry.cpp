@@ -95,8 +95,8 @@ bool EventHandlerRegistry::UpdateEventHandlerTargets(
       return false;
     }
   } else {
-    ASSERT(op == kRemove || op == kRemoveAll);
-    ASSERT(op == kRemoveAll || targets->Contains(target));
+    DCHECK(op == kRemove || op == kRemoveAll);
+    DCHECK(op == kRemoveAll || targets->Contains(target));
 
     if (op == kRemoveAll) {
       if (!targets->Contains(target))

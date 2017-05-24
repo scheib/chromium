@@ -7,11 +7,11 @@
 #include <memory>
 #include <utility>
 
+#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/values.h"
 #include "components/autofill/core/browser/autofill_country.h"
 #include "components/autofill/core/browser/country_combobox_model.h"
-#include "components/autofill/core/browser/field_types.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_ui.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_ui_component.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/localization.h"
@@ -42,6 +42,29 @@ const char kCountryField[] = "country";
 // Address field length values.
 const char kShortField[] = "short";
 const char kLongField[] = "long";
+
+ServerFieldType GetFieldTypeFromString(const std::string& type) {
+  if (type == kFullNameField)
+    return NAME_FULL;
+  if (type == kCompanyNameField)
+    return COMPANY_NAME;
+  if (type == kAddressLineField)
+    return ADDRESS_HOME_STREET_ADDRESS;
+  if (type == kDependentLocalityField)
+    return ADDRESS_HOME_DEPENDENT_LOCALITY;
+  if (type == kCityField)
+    return ADDRESS_HOME_CITY;
+  if (type == kStateField)
+    return ADDRESS_HOME_STATE;
+  if (type == kPostalCodeField)
+    return ADDRESS_HOME_ZIP;
+  if (type == kSortingCodeField)
+    return ADDRESS_HOME_SORTING_CODE;
+  if (type == kCountryField)
+    return ADDRESS_HOME_COUNTRY;
+  NOTREACHED();
+  return UNKNOWN_TYPE;
+}
 
 // Fills |components| with the address UI components that should be used to
 // input an address for |country_code| when UI BCP 47 language code is

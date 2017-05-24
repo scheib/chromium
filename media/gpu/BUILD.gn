@@ -137,6 +137,8 @@ component("gpu") {
     "gpu_video_decode_accelerator_factory.cc",
     "gpu_video_decode_accelerator_factory.h",
     "gpu_video_decode_accelerator_helpers.h",
+    "gpu_video_encode_accelerator_factory.cc",
+    "gpu_video_encode_accelerator_factory.h",
     "shared_memory_region.cc",
     "shared_memory_region.h",
   ]
@@ -202,6 +204,8 @@ component("gpu") {
       "surface_texture_gl_owner.h",
     ]
 
+    deps += [ "//media/mojo:features" ]
+
     if (enable_webrtc) {
       deps += [ "//third_party/libyuv" ]
       sources += [
@@ -211,6 +215,7 @@ component("gpu") {
     }
 
     if (enable_media_codec_video_decoder) {
+      assert(mojo_media_host == "gpu", "MCVD requires the CDM")
       sources += [
         "android/media_codec_video_decoder.cc",
         "android/media_codec_video_decoder.h",
@@ -222,7 +227,6 @@ component("gpu") {
     # media service. See http://crbug.com/522298
     if (mojo_media_host == "gpu") {
       deps += [ "//media:cdm_manager" ]
-      configs += [ "//media/mojo/services:mojo_media_config" ]
     }
   }
 
@@ -447,6 +451,8 @@ source_set("android_video_decode_accelerator_unittests") {
   if (is_android) {
     testonly = true
     sources = [
+      "android/fake_codec_allocator.cc",
+      "android/fake_codec_allocator.h",
       "android_video_decode_accelerator_unittest.cc",
       "android_video_surface_chooser_impl_unittest.cc",
       "avda_codec_allocator_unittest.cc",

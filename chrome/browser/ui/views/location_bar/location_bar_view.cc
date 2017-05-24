@@ -680,6 +680,7 @@ void LocationBarView::RefreshLocationIcon() {
                            : GetSecureTextColor(security_level);
   location_icon_view_->SetImage(gfx::CreateVectorIcon(
       omnibox_view_->GetVectorIcon(), kIconWidth, icon_color));
+  location_icon_view_->SetEnabled(!omnibox_view_->IsEditingOrEmpty());
 }
 
 bool LocationBarView::RefreshContentSettingViews() {
@@ -923,9 +924,10 @@ bool LocationBarView::TestContentSettingImagePressed(size_t index) {
   if (index >= content_setting_views_.size())
     return false;
 
-  // This up-cast is necessary since the descendant class moved OnKeyPressed
-  // to the protected section.
   views::View* image_view = content_setting_views_[index];
+  image_view->SetSize(gfx::Size(24, 24));
+  image_view->OnKeyPressed(
+      ui::KeyEvent(ui::ET_KEY_PRESSED, ui::VKEY_SPACE, ui::EF_NONE));
   image_view->OnKeyReleased(
       ui::KeyEvent(ui::ET_KEY_RELEASED, ui::VKEY_SPACE, ui::EF_NONE));
   return true;

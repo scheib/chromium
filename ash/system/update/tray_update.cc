@@ -59,6 +59,9 @@ bool TrayUpdate::update_required_ = false;
 mojom::UpdateSeverity TrayUpdate::severity_ = mojom::UpdateSeverity::NONE;
 // static
 bool TrayUpdate::factory_reset_required_ = false;
+// static
+bool TrayUpdate::update_over_cellular_available_ = false;
+
 mojom::UpdateType TrayUpdate::update_type_ = mojom::UpdateType::SYSTEM;
 
 // The "restart to update" item in the system tray menu.
@@ -84,6 +87,10 @@ class TrayUpdate::UpdateView : public ActionableView {
           IDS_ASH_STATUS_TRAY_RESTART_AND_POWERWASH_TO_UPDATE);
     } else if (owner->update_type_ == mojom::UpdateType::FLASH) {
       label_text = bundle.GetLocalizedString(IDS_ASH_STATUS_TRAY_UPDATE_FLASH);
+    } else if (!owner->update_required_ &&
+               owner->update_over_cellular_available_) {
+      label_text = bundle.GetLocalizedString(
+          IDS_ASH_STATUS_TRAY_UPDATE_OVER_CELLULAR_AVAILABLE);
     } else {
       label_text = bundle.GetLocalizedString(IDS_ASH_STATUS_TRAY_UPDATE);
     }
@@ -105,10 +112,17 @@ class TrayUpdate::UpdateView : public ActionableView {
 
  private:
   // Overridden from ActionableView.
-  bool PerformAction(const ui::Event& event) override {
-    Shell::Get()->system_tray_controller()->RequestRestartForUpdate();
-    ShellPort::Get()->RecordUserMetricsAction(
-        UMA_STATUS_AREA_OS_UPDATE_DEFAULT_SELECTED);
+  bool PerformAction(const ui::Event& /* event */) override {
+    DCHECK(update_required_ || update_over_cellular_available_);
+    if (update_required_) {
+      Shell::Get()->system_tray_controller()->RequestRestartForUpdate();
+      ShellPort::Get()->RecordUserMetricsAction(
+          UMA_STATUS_AREA_OS_UPDATE_DEFAULT_SELECTED);
+    } else {
+      // Shows the about chrome OS page and checks for update after the page is
+      // loaded.
+      Shell::Get()->system_tray_controller()->ShowAboutChromeOS();
+    }
     CloseSystemBubble();
     return true;
   }
@@ -124,11 +138,11 @@ TrayUpdate::~TrayUpdate() {}
 bool TrayUpdate::GetInitialVisibility() {
   // If chrome tells ash there is an update available before this item's system
   // tray is constructed then show the icon.
-  return update_required_;
+  return update_required_ || update_over_cellular_available_;
 }
 
 views::View* TrayUpdate::CreateDefaultView(LoginStatus status) {
-  if (update_required_) {
+  if (update_required_ || update_over_cellular_available_) {
     update_view_ = new UpdateView(this);
     return update_view_;
   }
@@ -155,6 +169,16 @@ void TrayUpdate::ShowUpdateIcon(mojom::UpdateSeverity severity,
 
 views::Label* TrayUpdate::GetLabelForTesting() {
   return update_view_ ? update_view_->update_label_ : nullptr;
+}
+
+void TrayUpdate::ShowUpdateOverCellularAvailableIcon() {
+  update_over_cellular_available_ = true;
+
+  // TODO(weidongg/691108): adjust severity according the amount of time passing
+  // after update is available over cellular connection.
+  // Use low severity for update available over cellular connection.
+  SetIconColor(IconColorForUpdateSeverity(mojom::UpdateSeverity::LOW, false));
+  tray_view()->SetVisible(true);
 }
 
 }  // namespace ash

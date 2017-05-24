@@ -6,13 +6,16 @@
 
 #include <memory>
 
-#import "base/mac/scoped_nsobject.h"
 #import "base/test/ios/wait_util.h"
 #include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #include "ios/web/public/test/web_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
+
+#if !defined(__has_feature) || !__has_feature(objc_arc)
+#error "This file requires ARC support."
+#endif
 
 typedef web::WebTest BrowsingDataRemovalControllerTest;
 
@@ -22,8 +25,8 @@ TEST_F(BrowsingDataRemovalControllerTest, PerformAfterBrowserStateDestruction) {
   __block BOOL block_was_called = NO;
   id mock_delegate = [OCMockObject
       mockForProtocol:@protocol(BrowsingDataRemovalControllerDelegate)];
-  base::scoped_nsobject<BrowsingDataRemovalController> removal_controller(
-      [[BrowsingDataRemovalController alloc] initWithDelegate:mock_delegate]);
+  BrowsingDataRemovalController* removal_controller =
+      [[BrowsingDataRemovalController alloc] initWithDelegate:mock_delegate];
 
   TestChromeBrowserState::Builder builder;
   std::unique_ptr<TestChromeBrowserState> browser_state = builder.Build();

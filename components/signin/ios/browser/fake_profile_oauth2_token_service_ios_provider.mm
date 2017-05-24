@@ -9,6 +9,10 @@
 #include "base/logging.h"
 #include "base/strings/sys_string_conversions.h"
 
+#if !defined(__has_feature) || !__has_feature(objc_arc)
+#error "This file requires ARC support."
+#endif
+
 FakeProfileOAuth2TokenServiceIOSProvider::
     FakeProfileOAuth2TokenServiceIOSProvider() {
 }
@@ -63,9 +67,9 @@ void FakeProfileOAuth2TokenServiceIOSProvider::
   for (auto i = requests_.begin(); i != requests_.end(); ++i) {
     std::string account_id = i->first;
     AccessTokenCallback callback = i->second;
-    NSError* error = [[[NSError alloc] initWithDomain:@"fake_access_token_error"
-                                                 code:-1
-                                             userInfo:nil] autorelease];
+    NSError* error = [[NSError alloc] initWithDomain:@"fake_access_token_error"
+                                                code:-1
+                                            userInfo:nil];
     callback.Run(nil, nil, error);
   }
   requests_.clear();

@@ -90,7 +90,7 @@ source_set("unit_tests") {
     "//components/variations",
     "//net:test_support",
     "//testing/gtest",
-    "//third_party/zlib:compression_utils",
+    "//third_party/zlib/google:compression_utils",
     "//url",
   ]
 }

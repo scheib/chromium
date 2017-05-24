@@ -732,7 +732,8 @@ void GLRenderingVDAClient::ProvidePictureBuffers(
 
     PictureBuffer::TextureIds texture_ids(1, texture_id);
     buffers.push_back(PictureBuffer(picture_buffer_id, dimensions,
-                                    PictureBuffer::TextureIds(), texture_ids));
+                                    PictureBuffer::TextureIds(), texture_ids,
+                                    texture_target, pixel_format));
   }
   decoder_->AssignPictureBuffers(buffers);
 

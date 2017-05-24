@@ -27,11 +27,11 @@ EffectNode::EffectNode()
       is_currently_animating_filter(false),
       is_currently_animating_opacity(false),
       effect_changed(false),
-      subtree_has_copy_request(0),
+      subtree_has_copy_request(false),
       transform_id(0),
       clip_id(0),
       target_id(1),
-      mask_layer_id(-1),
+      mask_layer_id(Layer::INVALID_ID),
       closest_ancestor_with_copy_request_id(-1) {}
 
 EffectNode::EffectNode(const EffectNode& other) = default;

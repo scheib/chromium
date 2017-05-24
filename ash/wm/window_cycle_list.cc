@@ -13,7 +13,6 @@
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/window_mirror_view.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_window.h"
 #include "base/command_line.h"
@@ -102,7 +101,7 @@ class WindowPreviewView : public views::View, public aura::WindowObserver {
   ~WindowPreviewView() override {}
 
   // views::View:
-  gfx::Size GetPreferredSize() const override {
+  gfx::Size CalculatePreferredSize() const override {
     gfx::Size size = GetSizeForPreviewArea();
     size.Enlarge(0, window_title_->GetPreferredSize().height());
     return size;
@@ -292,7 +291,7 @@ class WindowCycleView : public views::WidgetDelegateView {
   }
 
   // views::WidgetDelegateView overrides:
-  gfx::Size GetPreferredSize() const override {
+  gfx::Size CalculatePreferredSize() const override {
     return mirror_container_->GetPreferredSize();
   }
 

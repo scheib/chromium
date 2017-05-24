@@ -7,7 +7,6 @@ Frame: '<!--framePath //<!--frame0-->-->'
 --------
 Successfully called window.indexedDB.deleteDatabase().
 Successfully called window.indexedDB.open().
-Successfully called window.indexedDB.webkitGetDatabaseNames().
 
 
 --------
@@ -15,5 +14,4 @@ Frame: '<!--framePath //<!--frame1-->-->'
 --------
 Successfully called window.indexedDB.deleteDatabase().
 Successfully called window.indexedDB.open().
-Successfully called window.indexedDB.webkitGetDatabaseNames().
 

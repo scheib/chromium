@@ -467,9 +467,9 @@ void IndexedDBContextImpl::DatabaseDeleted(const Origin& origin) {
 
 IndexedDBContextImpl::~IndexedDBContextImpl() {
   if (factory_.get()) {
-    TaskRunner()->PostTask(
-        FROM_HERE, base::Bind(&IndexedDBFactory::ContextDestroyed, factory_));
-    factory_ = NULL;
+    TaskRunner()->PostTask(FROM_HERE,
+                           base::Bind(&IndexedDBFactory::ContextDestroyed,
+                                      base::Passed(&factory_)));
   }
 
   if (data_path_.empty())

@@ -163,7 +163,7 @@
 // omnibox are caught below and used to drive updates to the UI.
 
 - (void)webState:(web::WebState*)webState
-    didStartProvisionalNavigationForURL:(const GURL&)URL {
+    didStartNavigation:(web::NavigationContext*)navigation {
   _locationBar->OnToolbarUpdated();
 }
 

@@ -132,8 +132,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       toSectionWithIdentifier:SectionIdentifierSettings];
   [model addItem:[self translateItem]
       toSectionWithIdentifier:SectionIdentifierSettings];
-  if (!experimental_flags::IsNativeAppLauncherEnabled() &&
-      [[_mailtoURLRewriter defaultHandlers] count] > 1) {
+  if (!experimental_flags::IsNativeAppLauncherEnabled()) {
     [model addItem:[self composeEmailItem]
         toSectionWithIdentifier:SectionIdentifierSettings];
   }

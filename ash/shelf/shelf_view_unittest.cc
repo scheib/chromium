@@ -1996,6 +1996,18 @@ class InkDropSpy : public views::InkDrop {
     ink_drop_->SetFocused(is_focused);
   }
 
+  bool IsHighlightFadingInOrVisible() const override {
+    return ink_drop_->IsHighlightFadingInOrVisible();
+  }
+
+  void SetShowHighlightOnHover(bool show_highlight_on_hover) override {
+    ink_drop_->SetShowHighlightOnHover(show_highlight_on_hover);
+  }
+
+  void SetShowHighlightOnFocus(bool show_highlight_on_focus) override {
+    ink_drop_->SetShowHighlightOnFocus(show_highlight_on_focus);
+  }
+
   std::unique_ptr<views::InkDrop> ink_drop_;
   std::vector<views::InkDropState> requested_states_;
 

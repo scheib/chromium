@@ -6,7 +6,6 @@ import logging
 import os
 import posixpath
 import re
-import sys
 import tempfile
 import time
 
@@ -29,9 +28,10 @@ from py_utils import contextlib_ext
 from py_utils import tempfile_ext
 import tombstones
 
-sys.path.append(os.path.join(host_paths.DIR_SOURCE_ROOT, 'third_party'))
-import jinja2  # pylint: disable=import-error
-import markupsafe  # pylint: disable=import-error,unused-import
+with host_paths.SysPath(
+    os.path.join(host_paths.DIR_SOURCE_ROOT, 'third_party'), 0):
+  import jinja2  # pylint: disable=import-error
+  import markupsafe  # pylint: disable=import-error,unused-import
 
 
 _JINJA_TEMPLATE_DIR = os.path.join(

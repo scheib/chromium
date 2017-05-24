@@ -637,8 +637,7 @@ SpeechRecognizerImpl::StartRecording(const FSMEventArgs&) {
 
   audio_controller_ = AudioInputController::Create(
       GetAudioManager(), this, this, nullptr, input_parameters, device_id_,
-      /*agc_is_enabled*/ false,
-      BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE));
+      /*agc_is_enabled*/ false);
 
   if (!audio_controller_.get()) {
     return Abort(

@@ -60,6 +60,7 @@
 #include "gpu/command_buffer/service/query_manager.h"
 #include "gpu/command_buffer/service/renderbuffer_manager.h"
 #include "gpu/command_buffer/service/sampler_manager.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/shader_manager.h"
 #include "gpu/command_buffer/service/shader_translator.h"
 #include "gpu/command_buffer/service/texture_manager.h"
@@ -2216,6 +2217,10 @@ class GLES2DecoderImpl : public GLES2Decoder, public ErrorStateClient {
   bool InitializeCopyTexImageBlitter(const char* function_name);
   bool InitializeCopyTextureCHROMIUM(const char* function_name);
   bool InitializeSRGBConverter(const char* function_name);
+
+  void UnbindTexture(TextureRef* texture_ref,
+                     bool supports_separate_framebuffer_binds);
+
   // Generate a member function prototype for each command in an automated and
   // typesafe way.
 #define GLES2_CMD_OP(name) \
@@ -4204,29 +4209,7 @@ void GLES2DecoderImpl::DeleteTexturesHelper(GLsizei n,
     GLuint client_id = client_ids[ii];
     TextureRef* texture_ref = GetTexture(client_id);
     if (texture_ref) {
-      Texture* texture = texture_ref->texture();
-      if (texture->IsAttachedToFramebuffer()) {
-        framebuffer_state_.clear_state_dirty = true;
-      }
-      // Unbind texture_ref from texture_ref units.
-      state_.UnbindTexture(texture_ref);
-
-      // Unbind from current framebuffers.
-      if (supports_separate_framebuffer_binds) {
-        if (framebuffer_state_.bound_read_framebuffer.get()) {
-          framebuffer_state_.bound_read_framebuffer
-              ->UnbindTexture(GL_READ_FRAMEBUFFER_EXT, texture_ref);
-        }
-        if (framebuffer_state_.bound_draw_framebuffer.get()) {
-          framebuffer_state_.bound_draw_framebuffer
-              ->UnbindTexture(GL_DRAW_FRAMEBUFFER_EXT, texture_ref);
-        }
-      } else {
-        if (framebuffer_state_.bound_draw_framebuffer.get()) {
-          framebuffer_state_.bound_draw_framebuffer
-              ->UnbindTexture(GL_FRAMEBUFFER, texture_ref);
-        }
-      }
+      UnbindTexture(texture_ref, supports_separate_framebuffer_binds);
       RemoveTexture(client_id);
     }
   }
@@ -8371,6 +8354,33 @@ bool GLES2DecoderImpl::InitializeSRGBConverter(
     }
   }
   return true;
+}
+
+void GLES2DecoderImpl::UnbindTexture(TextureRef* texture_ref,
+                                     bool supports_separate_framebuffer_binds) {
+  Texture* texture = texture_ref->texture();
+  if (texture->IsAttachedToFramebuffer()) {
+    framebuffer_state_.clear_state_dirty = true;
+  }
+  // Unbind texture_ref from texture_ref units.
+  state_.UnbindTexture(texture_ref);
+
+  // Unbind from current framebuffers.
+  if (supports_separate_framebuffer_binds) {
+    if (framebuffer_state_.bound_read_framebuffer.get()) {
+      framebuffer_state_.bound_read_framebuffer->UnbindTexture(
+          GL_READ_FRAMEBUFFER_EXT, texture_ref);
+    }
+    if (framebuffer_state_.bound_draw_framebuffer.get()) {
+      framebuffer_state_.bound_draw_framebuffer->UnbindTexture(
+          GL_DRAW_FRAMEBUFFER_EXT, texture_ref);
+    }
+  } else {
+    if (framebuffer_state_.bound_draw_framebuffer.get()) {
+      framebuffer_state_.bound_draw_framebuffer->UnbindTexture(GL_FRAMEBUFFER,
+                                                               texture_ref);
+    }
+  }
 }
 
 void GLES2DecoderImpl::EnsureRenderbufferBound() {
@@ -19655,6 +19665,63 @@ void GLES2DecoderImpl::RestoreAllExternalTextureBindingsIfNeeded() {
 
   texture_manager_service_id_generation_ =
       texture_manager()->GetServiceIdGeneration();
+}
+
+error::Error GLES2DecoderImpl::HandleInitializeDiscardableTextureCHROMIUM(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  const volatile gles2::cmds::InitializeDiscardableTextureCHROMIUM& c =
+      *static_cast<
+          const volatile gles2::cmds::InitializeDiscardableTextureCHROMIUM*>(
+          cmd_data);
+  TextureRef* texture = texture_manager()->GetTexture(c.texture_id);
+  if (!texture) {
+    LOCAL_SET_GL_ERROR(GL_INVALID_VALUE,
+                       "glInitializeDiscardableTextureCHROMIUM",
+                       "Invalid texture ID");
+    return error::kNoError;
+  }
+  size_t size = texture->texture()->estimated_size();
+  ServiceDiscardableHandle handle(GetSharedMemoryBuffer(c.shm_id), c.shm_offset,
+                                  c.shm_id);
+  GetContextGroup()->discardable_manager()->InsertLockedTexture(
+      c.texture_id, size, group_->texture_manager(), std::move(handle));
+  return error::kNoError;
+}
+
+error::Error GLES2DecoderImpl::HandleUnlockDiscardableTextureCHROMIUM(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  const volatile gles2::cmds::UnlockDiscardableTextureCHROMIUM& c =
+      *static_cast<
+          const volatile gles2::cmds::UnlockDiscardableTextureCHROMIUM*>(
+          cmd_data);
+  ServiceDiscardableManager* discardable_manager =
+      GetContextGroup()->discardable_manager();
+  TextureRef* texture_to_unbind;
+  if (!discardable_manager->UnlockTexture(
+          c.texture_id, group_->texture_manager(), &texture_to_unbind)) {
+    LOCAL_SET_GL_ERROR(GL_INVALID_VALUE, "glUnlockDiscardableTextureCHROMIUM",
+                       "Texture ID not initialized");
+  }
+  if (texture_to_unbind)
+    UnbindTexture(texture_to_unbind, SupportsSeparateFramebufferBinds());
+
+  return error::kNoError;
+}
+
+error::Error GLES2DecoderImpl::HandleLockDiscardableTextureCHROMIUM(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  const volatile gles2::cmds::LockDiscardableTextureCHROMIUM& c =
+      *static_cast<const volatile gles2::cmds::LockDiscardableTextureCHROMIUM*>(
+          cmd_data);
+  if (!GetContextGroup()->discardable_manager()->LockTexture(
+          c.texture_id, group_->texture_manager())) {
+    LOCAL_SET_GL_ERROR(GL_INVALID_VALUE, "glLockDiscardableTextureCHROMIUM",
+                       "Texture ID not initialized");
+  }
+  return error::kNoError;
 }
 
 // Include the auto-generated part of this file. We split this because it means

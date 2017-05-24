@@ -48,8 +48,6 @@ public abstract class AwBrowserProcess {
     private static RandomAccessFile sLockFile;
     private static FileLock sExclusiveFileLock;
 
-    private static final int MAX_MINIDUMP_UPLOAD_TRIES = 3;
-
     /**
      * Loads the native library, and performs basic static construction of objects needed
      * to run webview in this process. Does not create threads; safe to call from zygote.
@@ -165,8 +163,11 @@ public abstract class AwBrowserProcess {
                 final File crashSpoolDir = new File(appContext.getCacheDir().getPath(), "WebView");
                 if (!crashSpoolDir.isDirectory()) return null;
                 final CrashFileManager crashFileManager = new CrashFileManager(crashSpoolDir);
-                final File[] minidumpFiles =
-                        crashFileManager.getAllMinidumpFiles(MAX_MINIDUMP_UPLOAD_TRIES);
+
+                // The lifecycle of a minidump in the app directory is very simple: foo.dmpNNNNN --
+                // where NNNNN is a Process ID (PID) -- gets created, and is either deleted or
+                // copied over to the shared crash directory for all WebView-using apps.
+                final File[] minidumpFiles = crashFileManager.getMinidumpsSansLogcat();
                 if (minidumpFiles.length == 0) return null;
 
                 // Delete the minidumps if the user doesn't allow crash data uploading.

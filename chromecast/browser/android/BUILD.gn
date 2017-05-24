@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//chromecast/chromecast.gni")
 import("//build/config/android/rules.gni")
 
 assert(is_android)
@@ -12,6 +13,18 @@ cast_shell_android_manifest =
 jinja_template("cast_shell_manifest") {
   input = "apk/AndroidManifest.xml.jinja2"
   output = cast_shell_android_manifest
+}
+
+java_cpp_template("cast_shell_build_config_gen") {
+  sources = [
+    "apk/templates/BuildConfig.template",
+  ]
+  package_path = "org/chromium/chromecast/shell"
+
+  defines = []
+  if (display_web_contents_in_service) {
+    defines += [ "_DISPLAY_WEB_CONTENTS_IN_SERVICE" ]
+  }
 }
 
 android_resources("cast_shell_android_resources") {
@@ -32,10 +45,14 @@ android_library("cast_shell_java") {
     "$java_src_dir/org/chromium/chromecast/shell/CastMetricsHelper.java",
     "$java_src_dir/org/chromium/chromecast/shell/CastSysInfoAndroid.java",
     "$java_src_dir/org/chromium/chromecast/shell/CastWebContentsActivity.java",
+    "$java_src_dir/org/chromium/chromecast/shell/CastWebContentsService.java",
+    "$java_src_dir/org/chromium/chromecast/shell/CastWebContentsComponent.java",
     "$java_src_dir/org/chromium/chromecast/shell/LogcatExtractor.java",
   ]
 
   android_manifest = cast_shell_android_manifest
+
+  srcjar_deps = [ ":cast_shell_build_config_gen" ]
 
   deps = [
     ":cast_shell_android_resources",
@@ -50,5 +67,18 @@ android_library("cast_shell_java") {
     # TODO(slan): We may need to pass this in as a parameter.
     "//third_party/android_tools:android_support_core_utils_java",
     "//ui/android:ui_java",
+  ]
+}
+
+junit_binary("cast_shell_junit_tests") {
+  java_files = [ "junit/src/org/chromium/chromecast/shell/CastWebContentsComponentTest.java" ]
+
+  srcjar_deps = [ ":cast_shell_build_config_gen" ]
+
+  deps = [
+    ":cast_shell_java",
+    "//base:base_java_test_support",
+    "//content/public/android:content_java",
+    "//third_party/android_tools:android_support_core_utils_java",
   ]
 }

@@ -4,11 +4,13 @@
 
 #import "ios/chrome/browser/ui/settings/compose_email_handler_collection_view_controller.h"
 
+#import "ios/chrome/browser/ui/collection_view/cells/collection_view_text_item.h"
 #import "ios/chrome/browser/ui/collection_view/collection_view_controller_test.h"
 #import "ios/chrome/browser/web/fake_mailto_handler_helpers.h"
 #import "ios/chrome/browser/web/mailto_handler_system_mail.h"
 #import "ios/chrome/browser/web/mailto_url_rewriter.h"
 #include "ios/chrome/grit/ios_strings.h"
+#import "ios/third_party/material_components_ios/src/components/Palettes/src/MDCPalettes.h"
 #include "testing/gtest_mac.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -49,7 +51,8 @@ class ComposeEmailHandlerCollectionViewControllerTest
 TEST_F(ComposeEmailHandlerCollectionViewControllerTest, TestConstructor) {
   handlers_ = @[
     [[MailtoHandlerSystemMail alloc] init],
-    [[FakeMailtoHandlerGmailInstalled alloc] init]
+    [[FakeMailtoHandlerGmailInstalled alloc] init],
+    [[FakeMailtoHandlerForTesting alloc] init]
   ];
   CreateController();
   CheckController();
@@ -65,7 +68,20 @@ TEST_F(ComposeEmailHandlerCollectionViewControllerTest, TestConstructor) {
   EXPECT_EQ(number_of_handlers, NumberOfItemsInSection(0));
   for (int index = 0; index < number_of_handlers; ++index) {
     MailtoHandler* handler = handlers[index];
-    CheckTextCellTitle([handler appName], 0, index);
+    CollectionViewTextItem* item = GetCollectionViewItem(0, index);
+    // Checks that the title displayed is the name of the MailtoHandler.
+    EXPECT_NSEQ([handler appName], item.text);
+    EXPECT_FALSE(item.detailText);
+    // Checks that text cells are displayed differently depending on the
+    // availability of the handlers.
+    UIColor* darkestTint = [[MDCPalette greyPalette] tint900];
+    if ([handler isAvailable]) {
+      EXPECT_EQ(darkestTint, item.textColor);
+      EXPECT_NE(UIAccessibilityTraitNotEnabled, item.accessibilityTraits);
+    } else {
+      EXPECT_NE(darkestTint, item.textColor);
+      EXPECT_EQ(UIAccessibilityTraitNotEnabled, item.accessibilityTraits);
+    }
   }
 }
 

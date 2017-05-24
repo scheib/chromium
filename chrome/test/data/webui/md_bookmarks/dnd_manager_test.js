@@ -149,7 +149,6 @@ suite('drag and drop', function() {
     assertEquals(
         DropPosition.NONE,
         dndManager.calculateValidDropPositions_(dragElement));
-    dispatchDragEvent('dragleave', dragTarget);
     dispatchDragEvent('dragover', dragElement);
 
     assertDragStyle(dragTarget, DRAG_STYLE.NONE);

@@ -301,8 +301,8 @@ void IDBCursor::Continue(IDBKey* key,
   // on. Is this right?
   request_->SetPendingCursor(this);
   got_value_ = false;
-  backend_->ContinueFunction(key, primary_key,
-                             request_->CreateWebCallbacks().release());
+  backend_->Continue(key, primary_key,
+                     request_->CreateWebCallbacks().release());
 }
 
 IDBRequest* IDBCursor::deleteFunction(ScriptState* script_state,

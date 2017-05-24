@@ -1,5 +1,5 @@
 rootWebArea
-++group
+++genericContainer
 ++++link name='unread '
 ++++++staticText name='unread '
 ++++++++inlineTextBox name='unread '

@@ -118,24 +118,6 @@ Polymer({
 
     /** @private */
     proxyExpanded_: Boolean,
-
-    /**
-     * Object providing network type values for data binding.
-     * @const
-     * @private
-     */
-    NetworkType_: {
-      type: Object,
-      value: {
-        CELLULAR: CrOnc.Type.CELLULAR,
-        ETHERNET: CrOnc.Type.ETHERNET,
-        TETHER: CrOnc.Type.TETHER,
-        VPN: CrOnc.Type.VPN,
-        WIFI: CrOnc.Type.WI_FI,
-        WIMAX: CrOnc.Type.WI_MAX,
-      },
-      readOnly: true
-    },
   },
 
   /**
@@ -217,10 +199,9 @@ Polymer({
 
   /** @private */
   close_: function() {
-    // Delay navigating until the next render frame to allow other subpages to
-    // load first.
-    setTimeout(function() {
-      settings.navigateTo(settings.Route.INTERNET);
+    // Delay navigating to allow other subpages to load first.
+    requestAnimationFrame(function() {
+      settings.navigateToPreviousRoute();
     });
   },
 
@@ -312,7 +293,7 @@ Polymer({
 
   /**
    * networkingPrivate.getProperties callback.
-   * @param {CrOnc.NetworkProperties} properties The network properties.
+   * @param {!CrOnc.NetworkProperties} properties The network properties.
    * @private
    */
   getPropertiesCallback_: function(properties) {
@@ -982,16 +963,6 @@ Polymer({
     if (networkProperties.Type == CrOnc.Type.CELLULAR)
       return true;
     return this.isRememberedOrConnected_(networkProperties);
-  },
-
-  /**
-   * @param {string} type The network type.
-   * @param {!CrOnc.NetworkProperties} networkProperties
-   * @return {boolean} True if the network type matches 'type'.
-   * @private
-   */
-  isType_: function(type, networkProperties) {
-    return networkProperties.Type == type;
   },
 
   /**

@@ -25,7 +25,9 @@
 #include "chrome/browser/notifications/notifier_state_tracker.h"
 #include "chrome/browser/notifications/notifier_state_tracker_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/extensions/api/notifications/notification_style.h"
+#include "chrome/common/features.h"
 #include "components/keyed_service/content/browser_context_keyed_service_shutdown_notifier_factory.h"
 #include "components/keyed_service/core/keyed_service_shutdown_notifier.h"
 #include "content/public/browser/render_process_host.h"
@@ -204,12 +206,38 @@ class ShutdownNotifierFactory
   DISALLOW_COPY_AND_ASSIGN(ShutdownNotifierFactory);
 };
 
-class NotificationsApiDelegate : public NotificationDelegate {
+// Temporary native notification api delagate, it is only used
+// to extract the delegate id.
+// This is an interim state until the work in
+// https://bugs.chromium.org/p/chromium/issues/detail?id=720345
+// is completed. We need a small delegate shim since the
+// Notification object has a non virtual method (delegate_id) that is
+// used all over the place whose implementation returns delegate->id()
+#if BUILDFLAG(ENABLE_NATIVE_NOTIFICATIONS)
+class NativeNotificationApiDelegate : public NotificationDelegate {
  public:
-  NotificationsApiDelegate(ChromeAsyncExtensionFunction* api_function,
-                           Profile* profile,
-                           const std::string& extension_id,
-                           const std::string& id)
+  NativeNotificationApiDelegate(const std::string& extension_id,
+                                const std::string& notification_id)
+      : scoped_notification_id_(
+            CreateScopedIdentifier(extension_id, notification_id)) {}
+
+  std::string id() const override { return scoped_notification_id_; }
+
+ private:
+  ~NativeNotificationApiDelegate() override = default;
+  const std::string scoped_notification_id_;
+
+  DISALLOW_COPY_AND_ASSIGN(NativeNotificationApiDelegate);
+};
+#endif  // BUILDFLAG(ENABLE_NATIVE_NOTIFICATIONS)
+
+// Message center based notification delegate with all the functionality.
+class NotificationApiDelegate : public NotificationDelegate {
+ public:
+  NotificationApiDelegate(ChromeAsyncExtensionFunction* api_function,
+                          Profile* profile,
+                          const std::string& extension_id,
+                          const std::string& id)
       : api_function_(api_function),
         event_router_(EventRouter::Get(profile)),
         display_helper_(
@@ -221,7 +249,7 @@ class NotificationsApiDelegate : public NotificationDelegate {
 
     shutdown_notifier_subscription_ =
         ShutdownNotifierFactory::GetInstance()->Get(profile)->Subscribe(
-            base::Bind(&NotificationsApiDelegate::Shutdown,
+            base::Bind(&NotificationApiDelegate::Shutdown,
                        base::Unretained(this)));
   }
 
@@ -292,7 +320,7 @@ class NotificationsApiDelegate : public NotificationDelegate {
   }
 
  private:
-  ~NotificationsApiDelegate() override {}
+  ~NotificationApiDelegate() override {}
 
   void SendEvent(events::HistogramValue histogram_value,
                  const std::string& name,
@@ -333,7 +361,7 @@ class NotificationsApiDelegate : public NotificationDelegate {
   std::unique_ptr<KeyedServiceShutdownNotifier::Subscription>
       shutdown_notifier_subscription_;
 
-  DISALLOW_COPY_AND_ASSIGN(NotificationsApiDelegate);
+  DISALLOW_COPY_AND_ASSIGN(NotificationApiDelegate);
 };
 
 }  // namespace
@@ -489,9 +517,20 @@ bool NotificationsApiFunction::CreateNotification(
   if (options->is_clickable.get())
     optional_fields.clickable = *options->is_clickable;
 
-  NotificationsApiDelegate* api_delegate(new NotificationsApiDelegate(
-      this, GetProfile(), extension_->id(), id));  // ownership is passed to
-                                                   // Notification
+  // Create the notification api delegate. Ownership passed to the notification.
+  NotificationDelegate* api_delegate;
+#if BUILDFLAG(ENABLE_NATIVE_NOTIFICATIONS)
+  if (base::FeatureList::IsEnabled(features::kNativeNotifications)) {
+    api_delegate = new NativeNotificationApiDelegate(extension_->id(), id);
+  } else {
+    api_delegate =
+        new NotificationApiDelegate(this, GetProfile(), extension_->id(), id);
+  }
+#else
+  api_delegate =
+      new NotificationApiDelegate(this, GetProfile(), extension_->id(), id);
+#endif  // BUILDFLAG(ENABLE_NATIVE_NOTIFICATIONS)
+
   Notification notification(
       type, title, message, icon,
       message_center::NotifierId(message_center::NotifierId::APPLICATION,

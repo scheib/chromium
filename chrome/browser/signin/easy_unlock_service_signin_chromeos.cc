@@ -9,6 +9,7 @@
 #include "base/base64url.h"
 #include "base/bind.h"
 #include "base/command_line.h"
+#include "base/json/json_string_value_serializer.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -91,6 +92,60 @@ void LoadDataForUser(
   key_manager->GetDeviceDataList(
       chromeos::UserContext(account_id),
       base::Bind(&RetryDataLoadOnError, account_id, backoff_ms, callback));
+}
+
+// Deserializes a vector of BeaconSeeds. If an error occurs, an empty vector
+// will be returned. Note: The logic to serialize BeaconSeeds lives in
+// EasyUnlockServiceRegular.
+// Note: The serialization of device data inside a user session is different
+// than outside the user session (sign-in). RemoteDevices are serialized as
+// protocol buffers inside the user session, but we have a custom serialization
+// scheme for sign-in due to slightly different data requirements.
+std::vector<cryptauth::BeaconSeed> DeserializeBeaconSeeds(
+    const std::string& serialized_beacon_seeds) {
+  std::vector<cryptauth::BeaconSeed> beacon_seeds;
+
+  JSONStringValueDeserializer deserializer(serialized_beacon_seeds);
+  std::string error;
+  std::unique_ptr<base::Value> deserialized_value =
+      deserializer.Deserialize(nullptr, &error);
+  if (!deserialized_value) {
+    PA_LOG(ERROR) << "Unable to deserialize BeaconSeeds: " << error;
+    return beacon_seeds;
+  }
+
+  base::ListValue* beacon_seed_list;
+  if (!deserialized_value->GetAsList(&beacon_seed_list)) {
+    PA_LOG(ERROR) << "Deserialized BeaconSeeds value is not list.";
+    return beacon_seeds;
+  }
+
+  for (size_t i = 0; i < beacon_seed_list->GetSize(); ++i) {
+    std::string b64_beacon_seed;
+    if (!beacon_seed_list->GetString(i, &b64_beacon_seed)) {
+      PA_LOG(ERROR) << "Expected Base64 BeaconSeed.";
+      continue;
+    }
+
+    std::string proto_serialized_beacon_seed;
+    if (!base::Base64UrlDecode(b64_beacon_seed,
+                               base::Base64UrlDecodePolicy::REQUIRE_PADDING,
+                               &proto_serialized_beacon_seed)) {
+      PA_LOG(ERROR) << "Unable to decode BeaconSeed.";
+      continue;
+    }
+
+    cryptauth::BeaconSeed beacon_seed;
+    if (!beacon_seed.ParseFromString(proto_serialized_beacon_seed)) {
+      PA_LOG(ERROR) << "Unable to parse BeaconSeed proto.";
+      continue;
+    }
+
+    beacon_seeds.push_back(beacon_seed);
+  }
+
+  PA_LOG(INFO) << "Deserialized " << beacon_seeds.size() << " BeaconSeeds.";
+  return beacon_seeds;
 }
 
 }  // namespace
@@ -266,6 +321,13 @@ void EasyUnlockServiceSignin::InitializeInternal() {
   if (chromeos::LoginState::Get()->IsUserLoggedIn())
     return;
 
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          proximity_auth::switches::kEnableBluetoothLowEnergyDiscovery) &&
+      !base::CommandLine::ForCurrentProcess()->HasSwitch(
+          proximity_auth::switches::kEnableChromeOSLogin)) {
+    return;
+  }
+
   service_active_ = true;
 
   chromeos::LoginState::Get()->AddObserver(this);
@@ -436,17 +498,25 @@ void EasyUnlockServiceSignin::OnUserDataLoaded(
                                &decoded_public_key) ||
         !base::Base64UrlDecode(device.psk,
                                base::Base64UrlDecodePolicy::REQUIRE_PADDING,
-                               &decoded_psk) ||
-        !base::Base64UrlDecode(device.challenge,
-                               base::Base64UrlDecodePolicy::REQUIRE_PADDING,
-                               &decoded_challenge)) {
-      PA_LOG(ERROR) << "Unable base64url decode stored remote device: "
-                    << device.public_key;
+                               &decoded_psk)) {
+      PA_LOG(ERROR) << "Unable to decode stored remote device:\n"
+                    << "  public_key: " << device.public_key << "\n"
+                    << "  psk: " << device.psk;
       continue;
     }
     cryptauth::RemoteDevice remote_device(
         account_id.GetUserEmail(), std::string(), decoded_public_key,
         device.bluetooth_address, decoded_psk, decoded_challenge);
+
+    if (!device.serialized_beacon_seeds.empty()) {
+      PA_LOG(INFO) << "Deserializing BeaconSeeds: "
+                   << device.serialized_beacon_seeds;
+      // TODO(tengs): Assign deserialized BeaconSeeds to the RemoteDevice.
+      DeserializeBeaconSeeds(device.serialized_beacon_seeds);
+    } else {
+      PA_LOG(WARNING) << "No BeaconSeeds were loaded.";
+    }
+
     remote_devices.push_back(remote_device);
     PA_LOG(INFO) << "Loaded Remote Device:\n"
                  << "  user id: " << remote_device.user_id << "\n"

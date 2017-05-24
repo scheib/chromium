@@ -369,7 +369,7 @@ public class PersonalDataManagerTest {
                 "American Express", "1234123412341234", "", "8", "2020");
 
         CreditCard card3 = new CreditCard("" /* guid */, "http://www.example.com" /* origin */,
-                "Master Card", "1234123412341234", "", "11", "2020");
+                "Mastercard", "1234123412341234", "", "11", "2020");
 
         String guid1 = mHelper.setCreditCard(card1);
         String guid2 = mHelper.setCreditCard(card2);

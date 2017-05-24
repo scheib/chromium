@@ -33,9 +33,6 @@ class DownloadController : public DownloadControllerBase {
 
   static bool RegisterDownloadController(JNIEnv* env);
 
-  // Called when DownloadController Java object is instantiated.
-  void Init(JNIEnv* env, jobject obj);
-
   // DownloadControllerBase implementation.
   void AcquireFileAccessPermission(
       const content::ResourceRequestInfo::WebContentsGetter& wc_getter,
@@ -67,7 +64,6 @@ class DownloadController : public DownloadControllerBase {
       AcquirePermissionCallback;
 
  private:
-  struct JavaObject;
   friend struct base::DefaultSingletonTraits<DownloadController>;
   DownloadController();
   ~DownloadController() override;
@@ -98,11 +94,6 @@ class DownloadController : public DownloadControllerBase {
   void StartAndroidDownloadInternal(
       const content::ResourceRequestInfo::WebContentsGetter& wc_getter,
       const DownloadInfo& info, bool allowed);
-
-  // Creates Java object if it is not created already and returns it.
-  JavaObject* GetJavaObject();
-
-  JavaObject* java_object_;
 
   std::string default_file_name_;
 

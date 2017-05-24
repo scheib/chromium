@@ -19,18 +19,18 @@ namespace blink {
 
 UnrestrictedDoubleOrString::UnrestrictedDoubleOrString() : m_type(SpecificTypeNone) {}
 
-String UnrestrictedDoubleOrString::getAsString() const {
+const String& UnrestrictedDoubleOrString::getAsString() const {
   DCHECK(isString());
   return m_string;
 }
 
-void UnrestrictedDoubleOrString::setString(String value) {
+void UnrestrictedDoubleOrString::setString(const String& value) {
   DCHECK(isNull());
   m_string = value;
   m_type = SpecificTypeString;
 }
 
-UnrestrictedDoubleOrString UnrestrictedDoubleOrString::fromString(String value) {
+UnrestrictedDoubleOrString UnrestrictedDoubleOrString::fromString(const String& value) {
   UnrestrictedDoubleOrString container;
   container.setString(value);
   return container;

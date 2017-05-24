@@ -9249,20 +9249,6 @@ static void valuesMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
   V8SetReturnValue(info, result);
 }
 
-static void entriesMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestObject", "entries");
-
-  TestObject* impl = V8TestObject::toImpl(info.Holder());
-
-  ScriptState* scriptState = ScriptState::ForReceiverObject(info);
-
-  Iterator* result = impl->entriesForBinding(scriptState, exceptionState);
-  if (exceptionState.HadException()) {
-    return;
-  }
-  V8SetReturnValue(info, result);
-}
-
 static void forEachMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
   ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestObject", "forEach");
 
@@ -12128,10 +12114,6 @@ void V8TestObject::valuesMethodCallback(const v8::FunctionCallbackInfo<v8::Value
   TestObjectV8Internal::valuesMethod(info);
 }
 
-void V8TestObject::entriesMethodCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  TestObjectV8Internal::entriesMethod(info);
-}
-
 void V8TestObject::forEachMethodCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
   TestObjectV8Internal::forEachMethod(info);
 }
@@ -12928,7 +12910,6 @@ static const V8DOMConfiguration::MethodConfiguration V8TestObjectMethods[] = {
     {"serializerMethod", V8TestObject::serializerMethodMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"keys", V8TestObject::keysMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"values", V8TestObject::valuesMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
-    {"entries", V8TestObject::entriesMethodCallback, 0, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"forEach", V8TestObject::forEachMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"has", V8TestObject::hasMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
     {"get", V8TestObject::getMethodCallback, 1, v8::None, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess, V8DOMConfiguration::kAllWorlds},
@@ -12976,7 +12957,7 @@ static void installV8TestObjectTemplate(v8::Isolate* isolate, const DOMWrapperWo
   instanceTemplate->SetHandler(namedPropertyHandlerConfig);
 
   // Iterator (@@iterator)
-  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, V8TestObject::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
+  static const V8DOMConfiguration::SymbolKeyedMethodConfiguration symbolKeyedIteratorConfiguration = { v8::Symbol::GetIterator, "entries", V8TestObject::iteratorMethodCallback, 0, v8::DontEnum, V8DOMConfiguration::kOnPrototype, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kDoNotCheckAccess };
   V8DOMConfiguration::InstallMethod(isolate, world, prototypeTemplate, signature, symbolKeyedIteratorConfiguration);
 
   if (RuntimeEnabledFeatures::featureNameEnabled()) {

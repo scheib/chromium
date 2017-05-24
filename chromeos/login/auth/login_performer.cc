@@ -53,7 +53,7 @@ LoginPerformer::~LoginPerformer() {
 // LoginPerformer, AuthStatusConsumer implementation:
 
 void LoginPerformer::OnAuthFailure(const AuthFailure& failure) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   base::RecordAction(UserMetricsAction("Login_Failure"));
 
   UMA_HISTOGRAM_ENUMERATION("Login.FailureReason",
@@ -77,7 +77,7 @@ void LoginPerformer::OnAuthFailure(const AuthFailure& failure) {
 }
 
 void LoginPerformer::OnAuthSuccess(const UserContext& user_context) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   base::RecordAction(UserMetricsAction("Login_Success"));
 
   // Do not distinguish between offline and online success.
@@ -93,7 +93,7 @@ void LoginPerformer::OnAuthSuccess(const UserContext& user_context) {
 }
 
 void LoginPerformer::OnOffTheRecordAuthSuccess() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   base::RecordAction(UserMetricsAction("Login_GuestLoginSuccess"));
 
   if (delegate_)
@@ -114,7 +114,7 @@ void LoginPerformer::OnPasswordChangeDetected() {
 
 void LoginPerformer::OnOldEncryptionDetected(const UserContext& user_context,
                                              bool has_incomplete_migration) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
   if (delegate_)
     delegate_->OnOldEncryptionDetected(user_context, has_incomplete_migration);

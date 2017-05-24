@@ -5,92 +5,11 @@
 // Namespace
 var importer = importer || {};
 
-/**
- * A persistent data store for Cloud Import history information.
- *
- * @interface
- */
-importer.ImportHistory = function() {};
-
-/**
- * @return {!Promise<!importer.ImportHistory>} Resolves when history
- *     has been fully loaded.
- */
-importer.ImportHistory.prototype.whenReady;
-
-/**
- * @param {!FileEntry} entry
- * @param {!importer.Destination} destination
- * @return {!Promise<boolean>} Resolves with true if the FileEntry
- *     was previously copied to the device.
- */
-importer.ImportHistory.prototype.wasCopied;
-
-/**
- * @param {!FileEntry} entry
- * @param {!importer.Destination} destination
- * @return {!Promise<boolean>} Resolves with true if the FileEntry
- *     was previously imported to the specified destination.
- */
-importer.ImportHistory.prototype.wasImported;
-
-/**
- * @param {!FileEntry} entry
- * @param {!importer.Destination} destination
- * @param {string} destinationUrl
- */
-importer.ImportHistory.prototype.markCopied;
-
-/**
- * List urls of all files that are marked as copied, but not marked as synced.
- * @param {!importer.Destination} destination
- * @return {!Promise<!Array<string>>}
- */
-importer.ImportHistory.prototype.listUnimportedUrls;
-
-/**
- * @param {!FileEntry} entry
- * @param {!importer.Destination} destination
- * @return {!Promise<?>} Resolves when the operation is completed.
- */
-importer.ImportHistory.prototype.markImported;
-
-/**
- * @param {string} destinationUrl
- * @return {!Promise<?>} Resolves when the operation is completed.
- */
-importer.ImportHistory.prototype.markImportedByUrl;
-
-/**
- * Adds an observer, which will be notified when cloud import history changes.
- *
- * @param {!importer.ImportHistory.Observer} observer
- */
-importer.ImportHistory.prototype.addObserver;
-
-/**
- * Remove a previously registered observer.
- *
- * @param {!importer.ImportHistory.Observer} observer
- */
-importer.ImportHistory.prototype.removeObserver;
-
 /** @enum {string} */
-importer.ImportHistory.State = {
+importer.ImportHistoryState = {
   'COPIED': 'copied',
   'IMPORTED': 'imported'
 };
-
-/**
- * @typedef {{
- *   state: !importer.ImportHistory.State,
- *   entry: !FileEntry
- * }}
- */
-importer.ImportHistory.ChangedEvent;
-
-/** @typedef {function(!importer.ImportHistory.ChangedEvent)} */
-importer.ImportHistory.Observer;
 
 /**
  * An dummy {@code ImportHistory} implementation. This class can conveniently
@@ -383,10 +302,9 @@ importer.PersistentImportHistory.prototype.wasImported =
 };
 
 /** @override */
-importer.PersistentImportHistory.prototype.markCopied =
-    function(entry, destination, destinationUrl) {
-  return this.whenReady_
-      .then(this.createKey_.bind(this, entry))
+importer.PersistentImportHistory.prototype.markCopied = function(
+    entry, destination, destinationUrl) {
+  return this.whenReady_.then(this.createKey_.bind(this, entry))
       .then(
           /**
            * @param {string} key
@@ -402,10 +320,7 @@ importer.PersistentImportHistory.prototype.markCopied =
                 importer.deflateAppUrl(destinationUrl)]);
           }.bind(this))
       .then(this.notifyObservers_.bind(
-          this,
-          importer.ImportHistory.State.COPIED,
-          entry,
-          destination,
+          this, importer.ImportHistoryState.COPIED, entry, destination,
           destinationUrl))
       .catch(importer.getLogger().catcher('import-history-mark-copied'));
 };
@@ -435,10 +350,9 @@ importer.PersistentImportHistory.prototype.listUnimportedUrls =
 };
 
 /** @override */
-importer.PersistentImportHistory.prototype.markImported =
-    function(entry, destination) {
-  return this.whenReady_
-      .then(this.createKey_.bind(this, entry))
+importer.PersistentImportHistory.prototype.markImported = function(
+    entry, destination) {
+  return this.whenReady_.then(this.createKey_.bind(this, entry))
       .then(
           /**
            * @param {string} key
@@ -452,10 +366,7 @@ importer.PersistentImportHistory.prototype.markImported =
                 destination]);
           }.bind(this))
       .then(this.notifyObservers_.bind(
-          this,
-          importer.ImportHistory.State.IMPORTED,
-          entry,
-          destination))
+          this, importer.ImportHistoryState.IMPORTED, entry, destination))
       .catch(importer.getLogger().catcher('import-history-mark-imported'));
 };
 
@@ -492,9 +403,8 @@ importer.PersistentImportHistory.prototype.markImportedByUrl =
                       function(entry) {
                         if (entry.isFile) {
                           this.notifyObservers_(
-                                importer.ImportHistory.State.IMPORTED,
-                                /** @type {!FileEntry} */ (entry),
-                                destination);
+                              importer.ImportHistoryState.IMPORTED,
+                              /** @type {!FileEntry} */ (entry), destination);
                         }
                       }.bind(this),
                       function() {
@@ -532,7 +442,7 @@ importer.PersistentImportHistory.prototype.removeObserver =
 };
 
 /**
- * @param {!importer.ImportHistory.State} state
+ * @param {!importer.ImportHistoryState} state
  * @param {!FileEntry} entry
  * @param {!importer.Destination} destination
  * @param {string=} opt_destinationUrl
@@ -575,34 +485,6 @@ importer.PersistentImportHistory.prototype.storeRecord_ = function(record) {
 importer.PersistentImportHistory.prototype.getDestinations_ = function(key) {
   return key in this.importedEntries_ ? this.importedEntries_[key] : [];
 };
-
-/**
- * Provider of lazy loaded importer.ImportHistory. This is the main
- * access point for a fully prepared {@code importer.ImportHistory} object.
- *
- * @interface
- */
-importer.HistoryLoader = function() {};
-
-/**
- * Instantiates an {@code importer.ImportHistory} object and manages any
- * necessary ongoing maintenance of the object with respect to
- * its external dependencies.
- *
- * @see importer.SynchronizedHistoryLoader for an example.
- *
- * @return {!Promise<!importer.ImportHistory>} Resolves when history instance
- *     is ready.
- */
-importer.HistoryLoader.prototype.getHistory;
-
-/**
- * Adds a listener to be notified when history is fully loaded for the first
- * time. If history is already loaded...will be called immediately.
- *
- * @param {function(!importer.ImportHistory)} listener
- */
-importer.HistoryLoader.prototype.addHistoryLoadedListener;
 
 /**
  * Class responsible for lazy loading of {@code importer.ImportHistory},
@@ -978,9 +860,8 @@ importer.DriveSyncWatcher.prototype.onFileTransfersUpdated_ =
  * @param {!importer.ImportHistory.ChangedEvent} event
  * @private
  */
-importer.DriveSyncWatcher.prototype.onHistoryChanged_ =
-    function(event) {
-  if (event.state === importer.ImportHistory.State.COPIED) {
+importer.DriveSyncWatcher.prototype.onHistoryChanged_ = function(event) {
+  if (event.state === importer.ImportHistoryState.COPIED) {
     // Check sync status incase the file synced *before* it was able
     // to mark be marked as copied.
     this.checkSyncStatus_(

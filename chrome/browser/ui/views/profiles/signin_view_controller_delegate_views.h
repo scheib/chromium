@@ -74,6 +74,12 @@ class SigninViewControllerDelegateViews : public views::DialogDelegateView,
 
   void DisplayModal();
 
+  // Creates a WebView for a dialog with the specified URL.
+  static std::unique_ptr<views::WebView> CreateDialogWebView(
+      Browser* browser,
+      const std::string& url,
+      int dialog_height);
+
   views::WebView* content_view_;
   views::Widget* modal_signin_widget_;  // Not owned.
   ui::ModalType dialog_modal_type_;

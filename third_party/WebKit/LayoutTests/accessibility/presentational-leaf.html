@@ -29,7 +29,7 @@ test(function(t) {
     var axImg2 = accessibilityController.accessibleElementById("img2");
     assert_equals(axImg2, undefined);
     var axContainer2 = accessibilityController.accessibleElementById("container2");
-    assert_equals(axContainer2.role, "AXRole: AXDiv");
+    assert_equals(axContainer2.role, "AXRole: AXGenericContainer");
     assert_equals(axContainer2.childrenCount, 0);
 }, "A presentational image is missing from the accessibility tree entirely.");
 </script>

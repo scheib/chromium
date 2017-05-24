@@ -24,6 +24,11 @@ declare_args() {
   # doing engineering builds.
   cast_is_debug = is_debug
 
+  if (is_android) {
+    # If true, run receiver apps in an Android service instead of an activity.
+    display_web_contents_in_service = is_cast_audio_only
+  }
+
   # If true, Chromecast WebUI resources are included in a build.
   # TODO(antz): default to false for audio-only builds, might need further
   # clean up (b/27119303)

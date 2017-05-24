@@ -126,6 +126,12 @@ void ArcAuthContext::OnRefreshTokenTimeout() {
 void ArcAuthContext::StartFetchers() {
   DCHECK(!refresh_token_timeout_.IsRunning());
   ResetFetchers();
+
+  if (skip_merge_session_for_testing_) {
+    OnMergeSessionSuccess("");
+    return;
+  }
+
   ubertoken_fetcher_.reset(
       new UbertokenFetcher(token_service_, this, GaiaConstants::kChromeOSSource,
                            storage_partition_->GetURLRequestContext()));

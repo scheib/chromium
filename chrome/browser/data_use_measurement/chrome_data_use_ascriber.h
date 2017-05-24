@@ -142,7 +142,7 @@ class ChromeDataUseAscriber : public DataUseAscriber {
   DataUseRecorderEntry GetOrCreateDataUseRecorderEntry(
       net::URLRequest* request);
 
-  void OnDataUseCompleted(DataUseRecorderEntry entry);
+  void NotifyDataUseCompleted(DataUseRecorderEntry entry);
 
   DataUseRecorderEntry CreateNewDataUseRecorder(
       net::URLRequest* request,

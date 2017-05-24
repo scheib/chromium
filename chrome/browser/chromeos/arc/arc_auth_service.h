@@ -29,9 +29,8 @@ class ArcAuthService : public ArcService,
   explicit ArcAuthService(ArcBridgeService* bridge_service);
   ~ArcAuthService() override;
 
-  // This is introduced to work with existing tests.
-  // TODO(crbug.com/664095): Clean up the test and remove this method.
-  static ArcAuthService* GetForTest();
+  // For supporting ArcServiceManager::GetService<T>().
+  static const char kArcServiceName[];
 
   // InstanceHolder<mojom::AuthInstance>::Observer:
   void OnInstanceReady() override;

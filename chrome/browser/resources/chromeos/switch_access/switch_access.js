@@ -53,7 +53,10 @@ SwitchAccess.prototype = {
     this.switchAccessPrefs = new SwitchAccessPrefs();
     this.autoScanManager_ = new AutoScanManager(this);
     this.keyboardHandler_ = new KeyboardHandler(this);
-    this.automationManager_ = new AutomationManager();
+
+    chrome.automation.getDesktop(function(desktop) {
+      this.automationManager_ = new AutomationManager(desktop);
+    }.bind(this));
 
     document.addEventListener(
         'prefsUpdate', this.handlePrefsUpdate_.bind(this));
@@ -67,7 +70,8 @@ SwitchAccess.prototype = {
    * @override
    */
   moveToNode: function(doNext) {
-    this.automationManager_.moveToNode(doNext);
+    if (this.automationManager_)
+      this.automationManager_.moveToNode(doNext);
   },
 
   /**
@@ -76,7 +80,8 @@ SwitchAccess.prototype = {
    * @override
    */
   selectCurrentNode: function() {
-    this.automationManager_.selectCurrentNode();
+    if (this.automationManager_)
+      this.automationManager_.selectCurrentNode();
   },
 
   /**
@@ -125,7 +130,8 @@ SwitchAccess.prototype = {
    * @override
    */
   debugMoveToNext: function() {
-    this.automationManager_.debugMoveToNext();
+    if (this.automationManager_)
+      this.automationManager_.debugMoveToNext();
   },
 
   /**
@@ -134,7 +140,8 @@ SwitchAccess.prototype = {
    * @override
    */
   debugMoveToPrevious: function() {
-    this.automationManager_.debugMoveToPrevious();
+    if (this.automationManager_)
+      this.automationManager_.debugMoveToPrevious();
   },
 
   /**
@@ -143,7 +150,8 @@ SwitchAccess.prototype = {
    * @override
    */
   debugMoveToFirstChild: function() {
-    this.automationManager_.debugMoveToFirstChild();
+    if (this.automationManager_)
+      this.automationManager_.debugMoveToFirstChild();
   },
 
   /**
@@ -152,6 +160,7 @@ SwitchAccess.prototype = {
    * @override
    */
   debugMoveToParent: function() {
-    this.automationManager_.debugMoveToParent();
+    if (this.automationManager_)
+      this.automationManager_.debugMoveToParent();
   }
 };

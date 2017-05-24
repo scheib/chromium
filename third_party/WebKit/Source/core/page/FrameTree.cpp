@@ -217,7 +217,7 @@ DISABLE_CFI_PERF
 Frame* FrameTree::TraverseNext(const Frame* stay_within) const {
   Frame* child = FirstChild();
   if (child) {
-    ASSERT(!stay_within || child->Tree().IsDescendantOf(stay_within));
+    DCHECK(!stay_within || child->Tree().IsDescendantOf(stay_within));
     return child;
   }
 
@@ -226,7 +226,7 @@ Frame* FrameTree::TraverseNext(const Frame* stay_within) const {
 
   Frame* sibling = NextSibling();
   if (sibling) {
-    ASSERT(!stay_within || sibling->Tree().IsDescendantOf(stay_within));
+    DCHECK(!stay_within || sibling->Tree().IsDescendantOf(stay_within));
     return sibling;
   }
 
@@ -239,7 +239,7 @@ Frame* FrameTree::TraverseNext(const Frame* stay_within) const {
   }
 
   if (frame) {
-    ASSERT(!stay_within || !sibling ||
+    DCHECK(!stay_within || !sibling ||
            sibling->Tree().IsDescendantOf(stay_within));
     return sibling;
   }

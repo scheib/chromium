@@ -33,9 +33,9 @@ class CORE_EXPORT TestEnumOrDouble final {
   static TestEnumOrDouble fromDouble(double);
 
   bool isTestEnum() const { return m_type == SpecificTypeTestEnum; }
-  String getAsTestEnum() const;
-  void setTestEnum(String);
-  static TestEnumOrDouble fromTestEnum(String);
+  const String& getAsTestEnum() const;
+  void setTestEnum(const String&);
+  static TestEnumOrDouble fromTestEnum(const String&);
 
   TestEnumOrDouble(const TestEnumOrDouble&);
   ~TestEnumOrDouble();

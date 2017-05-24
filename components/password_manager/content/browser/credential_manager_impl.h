@@ -15,6 +15,7 @@
 #include "components/password_manager/core/browser/credential_manager_pending_request_task.h"
 #include "components/password_manager/core/browser/credential_manager_pending_require_user_mediation_task.h"
 #include "components/password_manager/core/browser/password_store_consumer.h"
+#include "components/password_manager/core/common/credential_manager_types.h"
 #include "components/prefs/pref_member.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "mojo/public/cpp/bindings/binding_set.h"
@@ -52,7 +53,7 @@ class CredentialManagerImpl
   // mojom::CredentialManager methods:
   void Store(const CredentialInfo& credential, StoreCallback callback) override;
   void RequireUserMediation(RequireUserMediationCallback callback) override;
-  void Get(bool zero_click_only,
+  void Get(CredentialMediationRequirement mediation,
            bool include_passwords,
            const std::vector<GURL>& federations,
            GetCallback callback) override;
@@ -63,6 +64,7 @@ class CredentialManagerImpl
   void SendCredential(const SendCredentialCallback& send_callback,
                       const CredentialInfo& info) override;
   void SendPasswordForm(const SendCredentialCallback& send_callback,
+                        CredentialMediationRequirement mediation,
                         const autofill::PasswordForm* form) override;
   PasswordManagerClient* client() const override;
 

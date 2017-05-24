@@ -28,6 +28,8 @@ class HistogramTester {
                          base::HistogramBase::Count) const;
   void ExpectTotalCount(const std::string& name,
                         base::HistogramBase::Count) const;
+  base::HistogramBase::Count GetBucketCount(const std::string& name,
+                                            base::HistogramBase::Sample) const;
 
  private:
   std::unique_ptr<base::HistogramTester> histogram_tester_;

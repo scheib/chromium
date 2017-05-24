@@ -9,8 +9,6 @@
 #include "base/memory/ptr_util.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/appcache/appcache_navigation_handle.h"
-#include "content/browser/appcache/appcache_navigation_handle_core.h"
-#include "content/browser/appcache/appcache_request_handler.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/browser/frame_host/frame_tree_node.h"
 #include "content/browser/frame_host/navigation_request_info.h"
@@ -41,6 +39,10 @@
 namespace content {
 
 namespace {
+
+// Request ID for browser initiated requests. We start at -2 on the same lines
+// as ResourceDispatcherHostImpl.
+int g_next_request_id = -2;
 
 WebContents* GetWebContentsFromFrameTreeNodeID(int frame_tree_node_id) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -93,20 +95,6 @@ void PrepareNavigationStartOnIO(
             request_info->common_params.post_data, web_contents_getter);
   }
 
-  // TODO(scottmg): We need to rework AppCache to have it return a
-  // URLLoaderFactoryPtr[Info] here. We should also try to have it return
-  // synchronously in as many cases as possible (especially when there's no
-  // AppCache) to simplify and speed the common case.
-  if (false /*appcache_handle_core*/) {
-    AppCacheRequestHandler::InitializeForNavigationNetworkService(
-        std::move(resource_request), resource_context, appcache_handle_core,
-        resource_type,
-        base::Callback<void(
-            mojom::URLLoaderFactoryPtrInfo,
-            std::unique_ptr<ResourceRequest>)>() /* TODO(ananta) */);
-    return;
-  }
-
   // If we haven't gotten one from the above, then use the one the UI thread
   // gave us, or otherwise fallback to the default.
   mojom::URLLoaderFactory* factory;
@@ -117,7 +105,11 @@ void PrepareNavigationStartOnIO(
       url_loader_factory_ptr.Bind(std::move(factory_from_ui));
       factory = url_loader_factory_ptr.get();
     } else {
-      factory = url_loader_factory_getter->GetNetworkFactory()->get();
+      if (appcache_handle_core) {
+        factory = url_loader_factory_getter->GetAppCacheFactory()->get();
+      } else {
+        factory = url_loader_factory_getter->GetNetworkFactory()->get();
+      }
     }
   }
 
@@ -192,6 +184,8 @@ NavigationURLLoaderNetworkService::NavigationURLLoaderNetworkService(
         FrameTreeNode::GloballyFindByID(request_info_->frame_tree_node_id);
     factory_ptr_info = GetWebUIURLLoader(frame_tree_node).PassInterface();
   }
+
+  g_next_request_id--;
 
   BrowserThread::PostTask(
       BrowserThread::IO, FROM_HERE,
@@ -271,7 +265,7 @@ void NavigationURLLoaderNetworkService::OnStartLoadingResponseBody(
   // switching to the data pipe.
   delegate_->OnResponseStarted(response_, nullptr, std::move(body), ssl_status_,
                                std::unique_ptr<NavigationData>(),
-                               GlobalRequestID() /* request_id? */,
+                               GlobalRequestID(-1, g_next_request_id),
                                false /* is_download? */, false /* is_stream */);
 }
 

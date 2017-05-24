@@ -8,19 +8,13 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "mojo/edk/embedder/embedder_internal.h"
 #include "mojo/edk/embedder/entrypoints.h"
-#include "mojo/edk/embedder/incoming_broker_client_invitation.h"
-#include "mojo/edk/embedder/outgoing_broker_client_invitation.h"
-#include "mojo/edk/embedder/platform_channel_pair.h"
-#include "mojo/edk/embedder/transport_protocol.h"
 #include "mojo/edk/system/configuration.h"
 #include "mojo/edk/system/core.h"
 #include "mojo/edk/system/node_controller.h"
@@ -42,8 +36,6 @@ Core* g_core;
 Core* GetCore() { return g_core; }
 
 }  // namespace internal
-
-// Basic configuration/initialization ------------------------------------------
 
 void Init(const Configuration& configuration) {
   MojoSystemThunks thunks = MakeSystemThunks();
@@ -72,8 +64,6 @@ std::string GenerateRandomToken() {
 #endif
   return base::HexEncode(random_bytes, 16);
 }
-
-// Basic functions -------------------------------------------------------------
 
 MojoResult CreatePlatformHandleWrapper(
     ScopedPlatformHandle platform_handle,
@@ -111,20 +101,8 @@ MojoResult SetProperty(MojoPropertyType type, const void* value) {
   return internal::g_core->SetProperty(type, value);
 }
 
-// Initialialization/shutdown for interprocess communication (IPC) -------------
-
-void InitIPCSupport(scoped_refptr<base::TaskRunner> io_thread_task_runner) {
-  CHECK(internal::g_core);
-  internal::g_core->SetIOTaskRunner(io_thread_task_runner);
-}
-
 scoped_refptr<base::TaskRunner> GetIOTaskRunner() {
   return internal::g_core->GetNodeController()->io_task_runner();
-}
-
-void ShutdownIPCSupport(const base::Closure& callback) {
-  CHECK(internal::g_core);
-  internal::g_core->RequestShutdown(callback);
 }
 
 #if defined(OS_MACOSX) && !defined(OS_IOS)
@@ -133,23 +111,6 @@ void SetMachPortProvider(base::PortProvider* port_provider) {
   internal::g_core->SetMachPortProvider(port_provider);
 }
 #endif
-
-// Legacy IPC Helpers ----------------------------------------------------------
-
-ScopedMessagePipeHandle ConnectToPeerProcess(ScopedPlatformHandle pipe) {
-  return ConnectToPeerProcess(std::move(pipe), GenerateRandomToken());
-}
-
-ScopedMessagePipeHandle ConnectToPeerProcess(ScopedPlatformHandle pipe,
-                                             const std::string& peer_token) {
-  DCHECK(pipe.is_valid());
-  DCHECK(!peer_token.empty());
-  return internal::g_core->ConnectToPeerProcess(std::move(pipe), peer_token);
-}
-
-void ClosePeerConnection(const std::string& peer_token) {
-  return internal::g_core->ClosePeerConnection(peer_token);
-}
 
 }  // namespace edk
 }  // namespace mojo

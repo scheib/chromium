@@ -35,6 +35,7 @@
 #include "chrome/browser/android/compositor/tab_content_manager.h"
 #include "chrome/browser/android/contextualsearch/contextual_search_context.h"
 #include "chrome/browser/android/contextualsearch/contextual_search_manager.h"
+#include "chrome/browser/android/contextualsearch/contextual_search_ranker_logger_impl.h"
 #include "chrome/browser/android/contextualsearch/contextual_search_tab_helper.h"
 #include "chrome/browser/android/contextualsearch/ctr_suppression.h"
 #include "chrome/browser/android/cookies/cookies_fetcher.h"
@@ -44,7 +45,6 @@
 #include "chrome/browser/android/devtools_server.h"
 #include "chrome/browser/android/document/document_web_contents_delegate.h"
 #include "chrome/browser/android/dom_distiller/distiller_ui_handle_android.h"
-#include "chrome/browser/android/download/chrome_download_delegate.h"
 #include "chrome/browser/android/download/download_controller.h"
 #include "chrome/browser/android/download/download_manager_service.h"
 #include "chrome/browser/android/download/items/offline_content_aggregator_factory_android.h"
@@ -223,7 +223,6 @@ static base::android::RegistrationMethod kChromeRegisteredMethods[] = {
     {"DomDistillerContent",
      dom_distiller::content::android::RegisterDomDistiller},
     {"DomDistillerCore", dom_distiller::core::android::RegisterDomDistiller},
-    {"ChromeDownloadDelegate", RegisterChromeDownloadDelegate},
     {"GCMDriver", gcm::android::RegisterGCMDriverJni},
     {"InstanceID", instance_id::android::RegisterInstanceIDJni},
     {"Invalidation", invalidation::android::RegisterInvalidationJni},
@@ -291,6 +290,8 @@ static base::android::RegistrationMethod kChromeRegisteredMethods[] = {
     {"ContextMenuHelper", RegisterContextMenuHelper},
     {"ContextualSearchContext", RegisterContextualSearchContext},
     {"ContextualSearchManager", RegisterContextualSearchManager},
+    {"ContextualSearchRankerLoggerImpl",
+     RegisterContextualSearchRankerLoggerImpl},
     {"ContextualSearchSceneLayer", RegisterContextualSearchSceneLayer},
     {"ContextualSearchTabHelper", RegisterContextualSearchTabHelper},
     {"CookiesFetcher", RegisterCookiesFetcher},

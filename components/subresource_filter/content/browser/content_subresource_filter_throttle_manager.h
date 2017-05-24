@@ -52,10 +52,6 @@ class ContentSubresourceFilterThrottleManager
     // The embedder may be interested in displaying UI to the user when the
     // first load is disallowed for a given page load.
     virtual void OnFirstSubresourceLoadDisallowed() {}
-
-    // Temporary method to help the delegate compute the activation decision.
-    virtual void WillProcessResponse(
-        content::NavigationHandle* navigation_handle) {}
   };
 
   ContentSubresourceFilterThrottleManager(

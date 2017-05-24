@@ -74,7 +74,6 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
   // views::View:
   void OnPaint(gfx::Canvas* canvas) override;
   void Layout() override;
-  void ChildPreferredSizeChanged(views::View* child) override;
 
   // BrowserNonClientFrameView:
   void UpdateProfileIcons() override;

@@ -31,29 +31,29 @@ console-dir-es6.html:22 Map(1)
     size: (...)
     __proto__: Map
     [[Entries]]: Array(1)
-        0: {Object => Object} {key: {…}, value: {…}}
+        0: {Object => Object}
         length: 1
 console-dir-es6.html:22 WeakMap
     __proto__: WeakMap
     [[Entries]]: Array(1)
-        0: {Object => Object} {key: {…}, value: {…}}
+        0: {Object => Object}
         length: 1
 console-dir-es6.html:26 Set(1)
     size: (...)
     __proto__: Set
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-dir-es6.html:26 WeakSet
     __proto__: WeakSet
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-dir-es6.html:34 Set(1)
     size: (...)
     __proto__: Set
     [[Entries]]: Array(1)
-        0: Set(1) {value: Set(1)}
+        0: Set(1)
         length: 1
 console-dir-es6.html:37 WeakMap
     __proto__: WeakMap
@@ -65,7 +65,7 @@ console-dir-es6.html:45 MapIterator
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "keys"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-dir-es6.html:46 MapIterator
     __proto__: Map Iterator
@@ -73,7 +73,7 @@ console-dir-es6.html:46 MapIterator
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-dir-es6.html:47 MapIterator
     __proto__: Map Iterator
@@ -81,7 +81,7 @@ console-dir-es6.html:47 MapIterator
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "entries"
     [[Entries]]: Array(1)
-        0: {Object => Object} {key: {…}, value: {…}}
+        0: {Object => Object}
         length: 1
 console-dir-es6.html:45 SetIterator
     __proto__: Set Iterator
@@ -89,7 +89,7 @@ console-dir-es6.html:45 SetIterator
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-dir-es6.html:46 SetIterator
     __proto__: Set Iterator
@@ -97,7 +97,7 @@ console-dir-es6.html:46 SetIterator
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "values"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-dir-es6.html:47 SetIterator
     __proto__: Set Iterator
@@ -105,7 +105,7 @@ console-dir-es6.html:47 SetIterator
     [[IteratorIndex]]: 0
     [[IteratorKind]]: "entries"
     [[Entries]]: Array(1)
-        0: {value: {…}}
+        0: Object
         length: 1
 console-dir-es6.html:85 Array(27)
     0: class 

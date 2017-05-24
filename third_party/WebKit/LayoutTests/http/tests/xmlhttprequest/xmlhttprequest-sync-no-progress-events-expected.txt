@@ -4,7 +4,7 @@ Test for:
 
 bug 40996: Progress event should not be fired during synchronous XMLHttpRequest;
 bug 17502: Assertion failure when trying to restart a sync XMLHttpRequest as an async one from onreadystatechange.
- Step 1: Same origin request
+Step 1: Same origin request
 readystatechange 4
 load
 loadend

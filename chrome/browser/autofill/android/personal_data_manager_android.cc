@@ -634,10 +634,11 @@ void PersonalDataManagerAndroid::GetFullCardForPaymentRequest(
 
 void PersonalDataManagerAndroid::OnPersonalDataChanged() {
   JNIEnv* env = base::android::AttachCurrentThread();
-  if (weak_java_obj_.get(env).is_null())
+  auto java_obj = weak_java_obj_.get(env);
+  if (java_obj.is_null())
     return;
 
-  Java_PersonalDataManager_personalDataChanged(env, weak_java_obj_.get(env));
+  Java_PersonalDataManager_personalDataChanged(env, java_obj);
 }
 
 // static

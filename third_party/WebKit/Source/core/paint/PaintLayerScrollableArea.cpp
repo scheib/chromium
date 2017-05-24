@@ -666,18 +666,13 @@ bool PaintLayerScrollableArea::UserInputScrollable(
     return true;
 
   if (Box().IsLayoutView()) {
-    if (LocalFrame* frame = Box().GetFrame()) {
-      if (FrameView* frame_view = frame->View()) {
-        ScrollbarMode h_mode;
-        ScrollbarMode v_mode;
-        frame_view->CalculateScrollbarModes(h_mode, v_mode);
-        if (orientation == kHorizontalScrollbar &&
-            h_mode == kScrollbarAlwaysOff)
-          return false;
-        if (orientation == kVerticalScrollbar && v_mode == kScrollbarAlwaysOff)
-          return false;
-      }
-    }
+    ScrollbarMode h_mode;
+    ScrollbarMode v_mode;
+    ToLayoutView(Box()).CalculateScrollbarModes(h_mode, v_mode);
+    if (orientation == kHorizontalScrollbar && h_mode == kScrollbarAlwaysOff)
+      return false;
+    if (orientation == kVerticalScrollbar && v_mode == kScrollbarAlwaysOff)
+      return false;
   }
 
   EOverflow overflow_style = (orientation == kHorizontalScrollbar)
@@ -912,20 +907,28 @@ void PaintLayerScrollableArea::ClampScrollOffsetAfterOverflowChange() {
 }
 
 void PaintLayerScrollableArea::DidChangeGlobalRootScroller() {
-  // On Android, where the VisualViewport supplies scrollbars, we need to
-  // remove the PLSA's scrollbars. In general, this would be problematic as
-  // that can cause layout but this should only ever apply with overlay
-  // scrollbars.
-  if (!Box().GetFrame()->GetSettings() ||
-      !Box().GetFrame()->GetSettings()->GetViewportEnabled())
-    return;
+  // Being the global root scroller will affect clipping size due to browser
+  // controls behavior so we need to update compositing based on updated clip
+  // geometry.
+  if (Box().GetNode()->IsElementNode()) {
+    ToElement(Box().GetNode())->SetNeedsCompositingUpdate();
+    if (RuntimeEnabledFeatures::slimmingPaintInvalidationEnabled())
+      Box().SetNeedsPaintPropertyUpdate();
+  }
 
-  bool needs_horizontal_scrollbar;
-  bool needs_vertical_scrollbar;
-  ComputeScrollbarExistence(needs_horizontal_scrollbar,
-                            needs_vertical_scrollbar);
-  SetHasHorizontalScrollbar(needs_horizontal_scrollbar);
-  SetHasVerticalScrollbar(needs_vertical_scrollbar);
+  // On Android, where the VisualViewport supplies scrollbars, we need to
+  // remove the PLSA's scrollbars if we become the global root scroller.
+  // In general, this would be problematic as that can cause layout but this
+  // should only ever apply with overlay scrollbars.
+  if (Box().GetFrame()->GetSettings() &&
+      Box().GetFrame()->GetSettings()->GetViewportEnabled()) {
+    bool needs_horizontal_scrollbar;
+    bool needs_vertical_scrollbar;
+    ComputeScrollbarExistence(needs_horizontal_scrollbar,
+                              needs_vertical_scrollbar);
+    SetHasHorizontalScrollbar(needs_horizontal_scrollbar);
+    SetHasVerticalScrollbar(needs_vertical_scrollbar);
+  }
 }
 
 bool PaintLayerScrollableArea::ShouldPerformScrollAnchoring() const {
@@ -1283,21 +1286,17 @@ void PaintLayerScrollableArea::ComputeScrollbarExistence(
   // values, due to which we are destroying the scrollbars that were already
   // present.
   if (Box().IsLayoutView()) {
-    if (LocalFrame* frame = Box().GetFrame()) {
-      if (FrameView* frame_view = frame->View()) {
-        ScrollbarMode h_mode;
-        ScrollbarMode v_mode;
-        frame_view->CalculateScrollbarModes(h_mode, v_mode);
-        if (h_mode == kScrollbarAlwaysOn)
-          needs_horizontal_scrollbar = true;
-        else if (h_mode == kScrollbarAlwaysOff)
-          needs_horizontal_scrollbar = false;
-        if (v_mode == kScrollbarAlwaysOn)
-          needs_vertical_scrollbar = true;
-        else if (v_mode == kScrollbarAlwaysOff)
-          needs_vertical_scrollbar = false;
-      }
-    }
+    ScrollbarMode h_mode;
+    ScrollbarMode v_mode;
+    ToLayoutView(Box()).CalculateScrollbarModes(h_mode, v_mode);
+    if (h_mode == kScrollbarAlwaysOn)
+      needs_horizontal_scrollbar = true;
+    else if (h_mode == kScrollbarAlwaysOff)
+      needs_horizontal_scrollbar = false;
+    if (v_mode == kScrollbarAlwaysOn)
+      needs_vertical_scrollbar = true;
+    else if (v_mode == kScrollbarAlwaysOff)
+      needs_vertical_scrollbar = false;
   }
 }
 
@@ -1772,7 +1771,7 @@ void PaintLayerScrollableArea::UpdateScrollableAreaSet(bool has_overflow) {
   if (Box().IsLayoutView()) {
     ScrollbarMode h_mode;
     ScrollbarMode v_mode;
-    frame_view->CalculateScrollbarModes(h_mode, v_mode);
+    ToLayoutView(Box()).CalculateScrollbarModes(h_mode, v_mode);
     if (h_mode == kScrollbarAlwaysOff && v_mode == kScrollbarAlwaysOff)
       has_overflow = false;
   }

@@ -4,28 +4,42 @@
      found in the LICENSE file. -->
 
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:chrome="http://schemas.android.com/apk/res-auto"
-    style="@style/AppMenuItem"
-    android:layout_width="match_parent"
-    android:layout_height="?android:attr/listPreferredItemHeightSmall" >
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
 
-    <org.chromium.chrome.browser.widget.TintedImageView
-        android:id="@+id/menu_item_icon"
-        android:src="@drawable/ic_check_googblue_24dp"
-        android:layout_width="24dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="end"
-        android:gravity="center_vertical"
-        chrome:tint="@color/dark_mode_tint" />
-    <TextView
-        android:id="@+id/menu_item_text"
-        android:textAppearance="?android:attr/textAppearanceLargePopupMenu"
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:layout_gravity="start"
-        android:gravity="center_vertical"
-        android:singleLine="true"
-        android:paddingStart="16dp" />
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:chrome="http://schemas.android.com/apk/res-auto"
+        style="@style/AppMenuItem"
+        android:layout_width="match_parent"
+        android:layout_height="?android:attr/listPreferredItemHeightSmall" >
+
+        <org.chromium.chrome.browser.widget.TintedImageView
+            android:id="@+id/menu_item_icon"
+            android:src="@drawable/ic_check_googblue_24dp"
+            android:layout_width="24dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:gravity="center_vertical"
+            chrome:tint="@color/dark_mode_tint" />
+        <TextView
+            android:id="@+id/menu_item_text"
+            android:textAppearance="?android:attr/textAppearanceLargePopupMenu"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="start"
+            android:gravity="center_vertical"
+            android:singleLine="true"
+            android:paddingStart="16dp" />
+
+    </LinearLayout>
+
+    <View
+        android:id="@+id/menu_item_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/translate_overflow_menu_divider_color"
+        android:visibility="gone" />
 
 </LinearLayout>
 

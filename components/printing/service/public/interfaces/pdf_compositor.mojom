@@ -1,0 +1,16 @@
+// Copyright 2017 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+module printing.mojom;
+
+const string kServiceName = "pdf_compositor";
+
+// TODO(weili): Add support for printing frames from different processes.
+interface PdfCompositor {
+  // Currently directly convert passed in page data to a PDF file.
+  // |sk_handle| points to a buffer of a Skia MultiPictureDocument.
+  // |pdf_handle| points to the generated PDF file buffer.
+  CompositePdf(handle<shared_buffer> sk_handle)
+      => (handle<shared_buffer> pdf_handle);
+};

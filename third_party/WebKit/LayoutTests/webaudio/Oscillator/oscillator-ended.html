@@ -26,7 +26,7 @@
                 should(true, "osc.onended was called")
                   .beTrue();
                 task.done();
-            }
+            };
             osc.start(0);
             osc.stop(0.1);
             context.startRendering();

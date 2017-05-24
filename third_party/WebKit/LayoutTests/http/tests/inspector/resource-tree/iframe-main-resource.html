@@ -1,0 +1,39 @@
+<html>
+<head>
+<script src="../../inspector/inspector-test.js"></script>
+<script src="../../inspector/resources-test.js"></script>
+<script src="../../inspector/resource-tree/resource-tree-test.js"></script>
+<script>
+function createIframe() {
+    var iframe = document.createElement('iframe');
+    iframe.setAttribute('src', 'resources/dummy-iframe.html');
+    document.body.appendChild(iframe);
+    return new Promise(x => iframe.onload = x);
+}
+
+async function test()
+{
+    await InspectorTest.evaluateInPageAsync('createIframe()');
+
+    var resourceTreeModel = new SDK.ResourceTreeModel(InspectorTest.mainTarget);
+    var resources = [];
+    resourceTreeModel.addEventListener(SDK.ResourceTreeModel.Events.ResourceAdded, event => resources.push(event.data));
+    resourceTreeModel.addEventListener(SDK.ResourceTreeModel.Events.CachedResourcesLoaded, function() {
+        resources.sort((a, b) => {
+            if (a.url === b.url)
+                return 0;
+            return a.url < b.url ? -1 : 1;
+        });
+        InspectorTest.addResult('Reported resources:');
+        InspectorTest.addResult(resources.map(r => '  ' + r.url).join('\n'));
+        InspectorTest.completeTest();
+    });
+}
+</script>
+</head>
+<body onload="runTest()">
+<p>
+Verify that iframe's main resource is reported only once.
+</p>
+</body>
+</html>

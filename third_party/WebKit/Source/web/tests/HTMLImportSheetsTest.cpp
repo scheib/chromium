@@ -12,7 +12,12 @@ namespace blink {
 
 class HTMLImportSheetsTest : public SimTest {
  protected:
-  HTMLImportSheetsTest() { WebView().Resize(WebSize(640, 480)); }
+  HTMLImportSheetsTest() {}
+
+  void SetUp() override {
+    SimTest::SetUp();
+    WebView().Resize(WebSize(640, 480));
+  }
 };
 
 TEST_F(HTMLImportSheetsTest, NeedsActiveStyleUpdate) {

@@ -32,6 +32,8 @@ blink_modules_sources("fetch") {
     "GlobalFetch.h",
     "Headers.cpp",
     "Headers.h",
+    "MultipartParser.cpp",
+    "MultipartParser.h",
     "ReadableStreamBytesConsumer.cpp",
     "ReadableStreamBytesConsumer.h",
     "Request.cpp",

@@ -1397,7 +1397,7 @@ int ShelfView::CancelDrag(int modified_index) {
   return modified_view ? view_model_->GetIndexOfView(modified_view) : -1;
 }
 
-gfx::Size ShelfView::GetPreferredSize() const {
+gfx::Size ShelfView::CalculatePreferredSize() const {
   gfx::Rect overflow_bounds;
   CalculateIdealBounds(&overflow_bounds);
 

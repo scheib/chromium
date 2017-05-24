@@ -17,15 +17,17 @@ async function test()
     var node = InspectorTest.findCoverageNodeForURL("long-mangled.css");
     var coverageListView = self.runtime.sharedInstance(Coverage.CoverageView)._listView;
     var decoratePromise = InspectorTest.addSnifferPromise(Coverage.CoverageView.LineDecorator.prototype, "_innerDecorate");
-    coverageListView._revealSourceForNode(node);
+    node.select();
+    coverageListView._revealSourceForSelectedNode();
     await decoratePromise;
     InspectorTest.addResult("The below should be formatted");
     InspectorTest.dumpDecorationsInSourceFrame(UI.panels.sources.visibleView);
 
 
     node = InspectorTest.findCoverageNodeForURL("decorations-after-inplace-formatter.css");
+    node.select();
     decoratePromise = InspectorTest.addSnifferPromise(Coverage.CoverageView.LineDecorator.prototype, "_innerDecorate");
-    coverageListView._revealSourceForNode(node);
+    coverageListView._revealSourceForSelectedNode();
     await decoratePromise;
     InspectorTest.addResult("The below should NOT be formatted");
     InspectorTest.dumpDecorationsInSourceFrame(UI.panels.sources.visibleView);

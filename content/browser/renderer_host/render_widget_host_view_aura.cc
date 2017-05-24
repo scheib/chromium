@@ -944,9 +944,10 @@ void RenderWidgetHostViewAura::SubmitCompositorFrame(
                                                   selection.end);
 }
 
-void RenderWidgetHostViewAura::OnBeginFrameDidNotSwap(
+void RenderWidgetHostViewAura::OnDidNotProduceFrame(
     const cc::BeginFrameAck& ack) {
-  delegated_frame_host_->BeginFrameDidNotSwap(ack);
+  if (delegated_frame_host_)
+    delegated_frame_host_->DidNotProduceFrame(ack);
 }
 
 void RenderWidgetHostViewAura::ClearCompositorFrame() {

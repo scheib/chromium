@@ -33,6 +33,7 @@
 @property(nonatomic, readonly) CGRect frame;
 @property(nonatomic, getter=isScrollEnabled) BOOL scrollEnabled;
 @property(nonatomic, assign) BOOL bounces;
+@property(nonatomic, assign) BOOL scrollsToTop;
 @property(weak, nonatomic, readonly)
     UIPanGestureRecognizer* panGestureRecognizer;
 // Returns the scrollview's gesture recognizers.

@@ -313,12 +313,6 @@ class HomePrefNotificationBridge {
     [touchBarItem setView:[self searchTouchBarView]];
     [touchBarItem setCustomizationLabel:l10n_util::GetNSString(
                                             IDS_TOUCH_BAR_GOOGLE_SEARCH)];
-  } else if ([identifier hasSuffix:kExitFullscreenTouchId]) {
-    NSButton* button = [NSButton
-        buttonWithTitle:l10n_util::GetNSString(IDS_TOUCH_BAR_EXIT_FULLSCREEN)
-                 target:self
-                 action:@selector(exitFullscreenForTab:)];
-    [touchBarItem setView:button];
   } else if ([identifier hasSuffix:kFullscreenOriginLabelTouchId]) {
     content::WebContents* contents =
         browser_->tab_strip_model()->GetActiveWebContents();
@@ -336,6 +330,8 @@ class HomePrefNotificationBridge {
                                  [attributedString length] - hostLength)];
     [touchBarItem
         setView:[NSTextField labelWithAttributedString:attributedString.get()]];
+  } else if ([identifier hasSuffix:kExitFullscreenTouchId]) {
+    return nil;
   }
 
   return touchBarItem.autorelease();
@@ -346,17 +342,29 @@ class HomePrefNotificationBridge {
       [[NSClassFromString(@"NSTouchBar") alloc] init]);
   [touchBar setDelegate:self];
 
-  if ([touchBar respondsToSelector:@selector
-                (setEscapeKeyReplacementItemIdentifier:)]) {
-    [touchBar setEscapeKeyReplacementItemIdentifier:
-                  [BrowserWindowTouchBar
-                      identifierForTouchBarId:kTabFullscreenTouchBarId
-                                       itemId:kExitFullscreenTouchId]];
+  if ([touchBar respondsToSelector:
+      @selector(setEscapeKeyReplacementItemIdentifier:)]) {
+    NSString* exitIdentifier =
+        [BrowserWindowTouchBar identifierForTouchBarId:kTabFullscreenTouchBarId
+                                                itemId:kExitFullscreenTouchId];
+    [touchBar setEscapeKeyReplacementItemIdentifier:exitIdentifier];
     [touchBar setDefaultItemIdentifiers:@[
       [BrowserWindowTouchBar
           identifierForTouchBarId:kTabFullscreenTouchBarId
                            itemId:kFullscreenOriginLabelTouchId]
     ]];
+
+    base::scoped_nsobject<NSCustomTouchBarItem> touchBarItem(
+        [[NSClassFromString(@"NSCustomTouchBarItem") alloc]
+            initWithIdentifier:exitIdentifier]);
+
+    [touchBarItem
+        setView:[NSButton buttonWithTitle:l10n_util::GetNSString(
+                                              IDS_TOUCH_BAR_EXIT_FULLSCREEN)
+                                   target:self
+                                   action:@selector(exitFullscreenForTab:)]];
+    [touchBar
+        setTemplateItems:[NSSet setWithObject:touchBarItem.autorelease()]];
   }
 
   return touchBar.autorelease();

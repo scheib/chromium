@@ -33,9 +33,9 @@ class CORE_EXPORT StringOrDouble final {
   static StringOrDouble fromDouble(double);
 
   bool isString() const { return m_type == SpecificTypeString; }
-  String getAsString() const;
-  void setString(String);
-  static StringOrDouble fromString(String);
+  const String& getAsString() const;
+  void setString(const String&);
+  static StringOrDouble fromString(const String&);
 
   StringOrDouble(const StringOrDouble&);
   ~StringOrDouble();

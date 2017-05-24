@@ -19,6 +19,11 @@ import threading
 import traceback
 import unittest
 
+# Import _strptime before threaded code. datetime.datetime.strptime is
+# threadsafe except for the initial import of the _strptime module.
+# See http://crbug.com/724524 and https://bugs.python.org/issue7980.
+import _strptime  # pylint: disable=unused-import
+
 from pylib.constants import host_paths
 
 if host_paths.DEVIL_PATH not in sys.path:

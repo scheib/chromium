@@ -39,7 +39,7 @@ static_library("feedback") {
     "//content/public/common",
     "//net",
     "//third_party/re2",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:zip",
   ]
 }
 

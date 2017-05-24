@@ -634,6 +634,8 @@ class AURA_EXPORT WindowTreeClient
 
   gfx::Insets normal_client_area_insets_;
 
+  bool in_shutdown_ = false;
+
   base::WeakPtrFactory<WindowTreeClient> weak_factory_;
 
   DISALLOW_COPY_AND_ASSIGN(WindowTreeClient);

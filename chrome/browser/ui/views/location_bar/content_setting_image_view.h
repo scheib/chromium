@@ -15,7 +15,6 @@
 #include "ui/gfx/animation/slide_animation.h"
 #include "ui/views/painter.h"
 #include "ui/views/view.h"
-#include "ui/views/widget/widget_observer.h"
 
 class ContentSettingImageModel;
 class LocationBarView;
@@ -35,9 +34,7 @@ class BubbleDialogDelegateView;
 // The ContentSettingImageView displays an icon and optional text label for
 // various content settings affordances in the location bar (i.e. plugin
 // blocking, geolocation).
-class ContentSettingImageView : public IconLabelBubbleView,
-                                public gfx::AnimationDelegate,
-                                public views::WidgetObserver {
+class ContentSettingImageView : public IconLabelBubbleView {
  public:
   ContentSettingImageView(std::unique_ptr<ContentSettingImageModel> image_model,
                           LocationBarView* parent,
@@ -55,18 +52,15 @@ class ContentSettingImageView : public IconLabelBubbleView,
   // IconLabelBubbleView:
   const char* GetClassName() const override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
-  bool OnMousePressed(const ui::MouseEvent& event) override;
-  void OnMouseReleased(const ui::MouseEvent& event) override;
-  void OnGestureEvent(ui::GestureEvent* event) override;
   bool GetTooltipText(const gfx::Point& p,
                       base::string16* tooltip) const override;
   void OnNativeThemeChanged(const ui::NativeTheme* native_theme) override;
-  std::unique_ptr<views::InkDrop> CreateInkDrop() override;
   SkColor GetTextColor() const override;
   bool ShouldShowLabel() const override;
   double WidthMultiplier() const override;
   bool IsShrinking() const override;
-  bool OnActivate(const ui::Event& event) override;
+  bool ShowBubble(const ui::Event& event) override;
+  bool IsBubbleShowing() const override;
 
   // gfx::AnimationDelegate:
   void AnimationEnded(const gfx::Animation* animation) override;
@@ -80,17 +74,18 @@ class ContentSettingImageView : public IconLabelBubbleView,
   // Updates the image and tooltip to match the current model state.
   void UpdateImage();
 
+  // Animates the view in and disables highlighting for hover and focus.
+  // TODO(bruthig): See crbug.com/669253. Since the ink drop highlight currently
+  // cannot handle host resizes, the highlight needs to be disabled when the
+  // animation is running.
+  void AnimateIn();
+
   LocationBarView* parent_;  // Weak, owns us.
   std::unique_ptr<ContentSettingImageModel> content_setting_image_model_;
   gfx::SlideAnimation slide_animator_;
   bool pause_animation_;
   double pause_animation_state_;
   views::BubbleDialogDelegateView* bubble_view_;
-
-  // This is used to check if the bubble was showing during the mouse pressed
-  // event. If this is true then the mouse released event is ignored to prevent
-  // the bubble from reshowing.
-  bool suppress_mouse_released_action_;
 
   DISALLOW_COPY_AND_ASSIGN(ContentSettingImageView);
 };

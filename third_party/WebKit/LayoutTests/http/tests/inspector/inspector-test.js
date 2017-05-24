@@ -247,6 +247,21 @@ InspectorTest.dumpDeepInnerHTML = function(element)
     innerHTML("", element)
 }
 
+InspectorTest.deepTextContent = function(element)
+{
+    if (!element)
+        return "";
+    if (element.nodeType === Node.TEXT_NODE && element.nodeValue)
+        return !element.parentElement || element.parentElement.nodeName !== "STYLE" ? element.nodeValue : "";
+    var res = "";
+    var children = element.childNodes;
+    for (var i = 0; i < children.length; ++i)
+        res += InspectorTest.deepTextContent(children[i]);
+    if (element.shadowRoot)
+        res += InspectorTest.deepTextContent(element.shadowRoot);
+    return res;
+}
+
 InspectorTest.dump = function(value, customFormatters, prefix, prefixWithName)
 {
     prefixWithName = prefixWithName || prefix;

@@ -48,6 +48,7 @@ static_library("common") {
   deps = [
     "//base",
     "//base:i18n",
+    "//components/variations",
     "//third_party/re2",
     "//url",
   ]

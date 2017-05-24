@@ -10,7 +10,7 @@ namespace remoting {
 namespace {
 
 const float kTapFeedbackRadius = 25.f;
-const float kLongPressFeedbackRadius = 55.f;
+const float kDragFeedbackRadius = 55.f;
 
 }  // namespace
 
@@ -18,26 +18,27 @@ DirectInputStrategy::DirectInputStrategy() {}
 
 DirectInputStrategy::~DirectInputStrategy() {}
 
-void DirectInputStrategy::HandlePinch(const ViewMatrix::Point& pivot,
-                                      float scale,
-                                      DesktopViewport* viewport) {
+void DirectInputStrategy::HandleZoom(const ViewMatrix::Point& pivot,
+                                     float scale,
+                                     DesktopViewport* viewport) {
   viewport->ScaleDesktop(pivot.x, pivot.y, scale);
 }
 
-void DirectInputStrategy::HandlePan(const ViewMatrix::Vector2D& translation,
-                                    bool is_dragging_mode,
+bool DirectInputStrategy::HandlePan(const ViewMatrix::Vector2D& translation,
+                                    Gesture simultaneous_gesture,
                                     DesktopViewport* viewport) {
-  if (is_dragging_mode) {
+  if (simultaneous_gesture == DRAG) {
     // If the user is dragging something, we should synchronize the movement
     // with the object that the user is trying to move on the desktop, rather
     // than moving the desktop around.
     ViewMatrix::Vector2D viewport_movement =
         viewport->GetTransformation().Invert().MapVector(translation);
     viewport->MoveViewport(viewport_movement.x, viewport_movement.y);
-    return;
+    return false;
   }
 
   viewport->MoveDesktop(translation.x, translation.y);
+  return false;
 }
 
 void DirectInputStrategy::TrackTouchInput(const ViewMatrix::Point& touch_point,
@@ -60,8 +61,8 @@ float DirectInputStrategy::GetFeedbackRadius(InputFeedbackType type) const {
   switch (type) {
     case InputFeedbackType::TAP_FEEDBACK:
       return kTapFeedbackRadius;
-    case InputFeedbackType::LONG_PRESS_FEEDBACK:
-      return kLongPressFeedbackRadius;
+    case InputFeedbackType::DRAG_FEEDBACK:
+      return kDragFeedbackRadius;
   }
   NOTREACHED();
   return 0.f;

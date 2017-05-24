@@ -1,3 +1,5 @@
+<link rel="import" href="chrome://resources/html/polymer.html">
+
 <link rel="import" href="chrome://resources/cr_elements/cr_dialog/cr_dialog.html">
 <link rel="import" href="chrome://resources/cr_elements/hidden_style_css.html">
 <link rel="import" href="chrome://resources/cr_elements/network/cr_onc_types.html">
@@ -7,7 +9,6 @@
 <link rel="import" href="chrome://resources/html/cr/ui/focus_without_ink.html">
 <link rel="import" href="chrome://resources/html/i18n_behavior.html">
 <link rel="import" href="chrome://resources/html/md_select_css.html">
-<link rel="import" href="chrome://resources/html/polymer.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-a11y-keys/iron-a11y-keys.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-flex-layout/iron-flex-layout-classes.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-button/paper-button.html">
@@ -25,7 +26,7 @@
 
 <dom-module id="network-proxy">
   <template>
-    <style include="internet-shared md-select cr-hidden-style iron-flex">
+    <style include="internet-shared md-select cr-hidden-style iron-flex iron-flex-alignment">
       cr-policy-network-indicator {
         -webkit-margin-end: 10px;
       }
@@ -39,12 +40,12 @@
         margin-bottom: 10px;
       }
 
-      #exceptionsDiv {
-        padding: 10px 0;
-      }
-
       network-proxy-exclusions {
         margin: 10px 0;
+      }
+
+      #manualProxy {
+        @apply(--settings-list-frame-padding);
       }
     </style>
 
@@ -132,7 +133,7 @@
       </paper-toggle-button>
     </div>
 
-    <div class="list-frame"
+    <div id="manualProxy" class="layout vertical start"
         hidden$="[[!matches_(proxy_.Type, ProxySettingsType_.MANUAL)]]">
       <div hidden$="[[!useSameProxy_]]" class="layout vertical">
         <network-proxy-input
@@ -174,9 +175,8 @@
         </network-proxy-input>
       </div>
 
-      <div id="exceptionsDiv"
-          hidden="[[!isEditable_('Type', networkProperties, editable,
-              useSharedProxies_)]]">
+      <div hidden="[[!isEditable_('Type', networkProperties, editable,
+          useSharedProxies_)]]">
         <div>$i18n{networkProxyExceptionList}</div>
         <network-proxy-exclusions on-proxy-change="onProxyExclusionsChange_"
             exclusions="{{proxy_.ExcludeDomains}}">

@@ -19,9 +19,8 @@ class CSSAnimationData final : public CSSTimingData {
     return WTF::WrapUnique(new CSSAnimationData);
   }
 
-  static std::unique_ptr<CSSAnimationData> Create(
-      const CSSAnimationData& animation_data) {
-    return WTF::WrapUnique(new CSSAnimationData(animation_data));
+  std::unique_ptr<CSSAnimationData> Clone() const {
+    return WTF::WrapUnique(new CSSAnimationData(*this));
   }
 
   bool AnimationsMatchForStyleRecalc(const CSSAnimationData& other) const;

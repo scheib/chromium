@@ -45,6 +45,7 @@ class PageInfoBubbleViewTestApi;
 namespace views {
 class Link;
 class Widget;
+class WidgetObserver;
 }
 
 enum : int {
@@ -77,6 +78,7 @@ class PageInfoBubbleView : public content::WebContentsObserver,
 
   // If |anchor_view| is null, |anchor_rect| is used to anchor the bubble.
   static void ShowBubble(views::View* anchor_view,
+                         views::WidgetObserver* widget_observer,
                          const gfx::Rect& anchor_rect,
                          Profile* profile,
                          content::WebContents* web_contents,

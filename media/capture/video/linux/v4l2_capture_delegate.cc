@@ -595,6 +595,9 @@ void V4L2CaptureDelegate::GetPhotoCapabilities(
             : MeteringMode::CONTINUOUS;
   }
 
+  photo_capabilities->exposure_compensation =
+      RetrieveUserControlRange(device_fd_.get(), V4L2_CID_EXPOSURE_ABSOLUTE);
+
   photo_capabilities->color_temperature = RetrieveUserControlRange(
       device_fd_.get(), V4L2_CID_WHITE_BALANCE_TEMPERATURE);
   if (photo_capabilities->color_temperature) {
@@ -626,7 +629,6 @@ void V4L2CaptureDelegate::GetPhotoCapabilities(
   photo_capabilities->width = mojom::Range::New(
       capture_format_.frame_size.width(), capture_format_.frame_size.width(),
       capture_format_.frame_size.width(), 0 /* step */);
-  photo_capabilities->exposure_compensation = mojom::Range::New();
   photo_capabilities->red_eye_reduction = mojom::RedEyeReduction::NEVER;
   photo_capabilities->torch = false;
 
@@ -667,17 +669,43 @@ void V4L2CaptureDelegate::SetPhotoOptions(
     HANDLE_EINTR(ioctl(device_fd_.get(), VIDIOC_S_CTRL, &white_balance_set));
   }
 
-  // Color temperature can only be applied if Auto White Balance is off.
   if (settings->has_color_temperature) {
     v4l2_control auto_white_balance_current = {};
     auto_white_balance_current.id = V4L2_CID_AUTO_WHITE_BALANCE;
     const int result = HANDLE_EINTR(
         ioctl(device_fd_.get(), VIDIOC_G_CTRL, &auto_white_balance_current));
+    // Color temperature can only be applied if Auto White Balance is off.
     if (result >= 0 && !auto_white_balance_current.value) {
       v4l2_control set_temperature = {};
       set_temperature.id = V4L2_CID_WHITE_BALANCE_TEMPERATURE;
       set_temperature.value = settings->color_temperature;
       HANDLE_EINTR(ioctl(device_fd_.get(), VIDIOC_S_CTRL, &set_temperature));
+    }
+  }
+
+  if (settings->has_exposure_mode &&
+      (settings->exposure_mode == mojom::MeteringMode::CONTINUOUS ||
+       settings->exposure_mode == mojom::MeteringMode::MANUAL)) {
+    v4l2_control exposure_mode_set = {};
+    exposure_mode_set.id = V4L2_CID_EXPOSURE_AUTO;
+    exposure_mode_set.value =
+        settings->exposure_mode == mojom::MeteringMode::CONTINUOUS
+            ? V4L2_EXPOSURE_APERTURE_PRIORITY
+            : V4L2_EXPOSURE_MANUAL;
+    HANDLE_EINTR(ioctl(device_fd_.get(), VIDIOC_S_CTRL, &exposure_mode_set));
+  }
+
+  if (settings->has_exposure_compensation) {
+    v4l2_control auto_exposure_current = {};
+    auto_exposure_current.id = V4L2_CID_EXPOSURE_AUTO;
+    const int result = HANDLE_EINTR(
+        ioctl(device_fd_.get(), VIDIOC_G_CTRL, &auto_exposure_current));
+    // Exposure Compensation can only be applied if Auto Exposure is off.
+    if (result >= 0 && auto_exposure_current.value == V4L2_EXPOSURE_MANUAL) {
+      v4l2_control set_exposure = {};
+      set_exposure.id = V4L2_CID_EXPOSURE_ABSOLUTE;
+      set_exposure.value = settings->exposure_compensation;
+      HANDLE_EINTR(ioctl(device_fd_.get(), VIDIOC_S_CTRL, &set_exposure));
     }
   }
 

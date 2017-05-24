@@ -530,6 +530,11 @@ Polymer({
     if (!this.castModeList.length)
       return;
 
+    // If there is a forced mode make sure it is shown.
+    if (this.findForcedCastMode_()) {
+      this.rebuildSinksToShow_();
+    }
+
     // If we are currently showing auto mode, then nothing needs to be done.
     // Otherwise, if the cast mode currently shown no longer exists (regardless
     // of whether it was selected by user), then switch back to auto cast mode.
@@ -611,13 +616,18 @@ Polymer({
   },
 
   /**
-   * If |allSinks| supports only a single cast mode, returns that cast mode.
-   * Otherwise, returns AUTO_MODE. Only called if |userHasSelectedCastMode_| is
-   * |false|.
+   * If there is a forced cast mode, returns that cast mode.  If |allSinks|
+   * supports only a single cast mode, returns that cast mode.  Otherwise,
+   * returns AUTO_MODE. Only called if |userHasSelectedCastMode_| is |false|.
+   *
    * @return {!media_router.CastMode} The single cast mode supported by
    *                                  |allSinks|, or AUTO_MODE.
    */
   computeCastMode_: function() {
+    /** @const */ var forcedMode = this.findForcedCastMode_();
+    if (forcedMode)
+      return forcedMode;
+
     var allCastModes = this.allSinks.reduce(function(castModesSoFar, sink) {
       return castModesSoFar | sink.castModes;
     }, 0);
@@ -1146,6 +1156,17 @@ Polymer({
     return this.castModeList.find(function(element, index, array) {
       return element.type == castModeType;
     });
+  },
+
+  /**
+   * Helper function to return a forced CastMode, if any.
+   *
+   * @return {media_router.CastMode|undefined} CastMode object with
+   *     isForced = true, or undefined if not found.
+   */
+  findForcedCastMode_: function() {
+    return this.castModeList &&
+        this.castModeList.find(element => element.isForced);
   },
 
   /**
@@ -1978,20 +1999,21 @@ Polymer({
         updatedSinkList.unshift(pendingPseudoSink);
       }
     }
-    if (this.userHasSelectedCastMode_) {
-      // If user explicitly selected a cast mode, then we show only sinks that
-      // are compatible with current cast mode or sinks that are active.
+    // If user did not select a cast mode, then:
+    // - If there is a forced cast mode, it is shown.
+    // - If all sinks support only a single cast mode, then the cast mode is
+    //   switched to that mode.
+    // - Otherwise, the cast mode becomes AUTO mode.
+    if (!this.userHasSelectedCastMode_)
+      this.setShownCastMode_(this.computeCastMode_());
+
+    // Non-AUTO modes may show a subset of sinks based on compatibility with the
+    // shown value.
+    if (this.shownCastModeValue_ != media_router.CastModeType.AUTO) {
       updatedSinkList = updatedSinkList.filter(function(element) {
         return (element.castModes & this.shownCastModeValue_) ||
-               this.sinkToRouteMap_[element.id];
+              this.sinkToRouteMap_[element.id];
       }, this);
-    } else {
-      // If user did not select a cast mode, then:
-      // - If all sinks support only a single cast mode, then the cast mode is
-      //   switched to that mode.
-      // - Otherwise, the cast mode becomes auto mode.
-      // Either way, all sinks will be shown.
-      this.setShownCastMode_(this.computeCastMode_());
     }
 
     // When there's an updated list of sinks, append any new sinks to the end

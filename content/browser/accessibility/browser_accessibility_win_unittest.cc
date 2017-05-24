@@ -740,7 +740,7 @@ TEST_F(BrowserAccessibilityTest, EmptyDocHasUniqueIdWin) {
 TEST_F(BrowserAccessibilityTest, TestIA2Attributes) {
   ui::AXNodeData pseudo_before;
   pseudo_before.id = 2;
-  pseudo_before.role = ui::AX_ROLE_DIV;
+  pseudo_before.role = ui::AX_ROLE_GENERIC_CONTAINER;
   pseudo_before.AddStringAttribute(ui::AX_ATTR_HTML_TAG, "<pseudo:before>");
   pseudo_before.AddStringAttribute(ui::AX_ATTR_DISPLAY, "none");
 
@@ -973,7 +973,7 @@ TEST_F(BrowserAccessibilityTest, TestWordBoundariesInTextControls) {
   textarea_div.id = 3;
   textarea_text.id = 4;
   textarea.role = ui::AX_ROLE_TEXT_FIELD;
-  textarea_div.role = ui::AX_ROLE_DIV;
+  textarea_div.role = ui::AX_ROLE_GENERIC_CONTAINER;
   textarea_text.role = ui::AX_ROLE_STATIC_TEXT;
   textarea.AddState(ui::AX_STATE_EDITABLE);
   textarea.AddState(ui::AX_STATE_FOCUSABLE);
@@ -1007,7 +1007,7 @@ TEST_F(BrowserAccessibilityTest, TestWordBoundariesInTextControls) {
   text_field_div.id = 8;
   text_field_text.id = 9;
   text_field.role = ui::AX_ROLE_TEXT_FIELD;
-  text_field_div.role = ui::AX_ROLE_DIV;
+  text_field_div.role = ui::AX_ROLE_GENERIC_CONTAINER;
   text_field_text.role = ui::AX_ROLE_STATIC_TEXT;
   text_field.AddState(ui::AX_STATE_EDITABLE);
   text_field.AddState(ui::AX_STATE_FOCUSABLE);
@@ -1207,7 +1207,7 @@ TEST_F(BrowserAccessibilityTest, TestCaretInContentEditables) {
 
   ui::AXNodeData div_editable;
   div_editable.id = 2;
-  div_editable.role = ui::AX_ROLE_DIV;
+  div_editable.role = ui::AX_ROLE_GENERIC_CONTAINER;
   div_editable.AddState(ui::AX_STATE_EDITABLE);
   div_editable.AddState(ui::AX_STATE_FOCUSABLE);
 
@@ -1329,7 +1329,7 @@ TEST_F(BrowserAccessibilityTest, TestSelectionInContentEditables) {
 
   ui::AXNodeData div_editable;
   div_editable.id = 2;
-  div_editable.role = ui::AX_ROLE_DIV;
+  div_editable.role = ui::AX_ROLE_GENERIC_CONTAINER;
   div_editable.AddState(ui::AX_STATE_FOCUSABLE);
   div_editable.AddState(ui::AX_STATE_EDITABLE);
 
@@ -1486,7 +1486,7 @@ TEST_F(BrowserAccessibilityTest, TestIAccessibleHyperlink) {
 
   ui::AXNodeData div;
   div.id = 2;
-  div.role = ui::AX_ROLE_DIV;
+  div.role = ui::AX_ROLE_GENERIC_CONTAINER;
   div.AddState(ui::AX_STATE_FOCUSABLE);
 
   ui::AXNodeData text;
@@ -1648,7 +1648,7 @@ TEST_F(BrowserAccessibilityTest, TestTextAttributesInContentEditables) {
 
   ui::AXNodeData div_editable;
   div_editable.id = 2;
-  div_editable.role = ui::AX_ROLE_DIV;
+  div_editable.role = ui::AX_ROLE_GENERIC_CONTAINER;
   div_editable.AddState(ui::AX_STATE_EDITABLE);
   div_editable.AddState(ui::AX_STATE_FOCUSABLE);
   div_editable.AddStringAttribute(ui::AX_ATTR_FONT_FAMILY, "Helvetica");
@@ -1895,7 +1895,7 @@ TEST_F(BrowserAccessibilityTest, TestMisspellingsInSimpleTextFields) {
 
   ui::AXNodeData combo_box_div;
   combo_box_div.id = 3;
-  combo_box_div.role = ui::AX_ROLE_DIV;
+  combo_box_div.role = ui::AX_ROLE_GENERIC_CONTAINER;
   combo_box_div.AddState(ui::AX_STATE_EDITABLE);
 
   ui::AXNodeData static_text1;

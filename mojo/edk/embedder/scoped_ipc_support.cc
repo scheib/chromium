@@ -9,14 +9,26 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread_restrictions.h"
 #include "mojo/edk/embedder/embedder.h"
+#include "mojo/edk/embedder/embedder_internal.h"
+#include "mojo/edk/system/core.h"
 
 namespace mojo {
 namespace edk {
 
+namespace {
+
+void ShutdownIPCSupport(const base::Closure& callback) {
+  DCHECK(internal::g_core);
+  internal::g_core->RequestShutdown(callback);
+}
+
+}  // namespace
+
 ScopedIPCSupport::ScopedIPCSupport(
     scoped_refptr<base::TaskRunner> io_thread_task_runner,
     ShutdownPolicy shutdown_policy) : shutdown_policy_(shutdown_policy) {
-  InitIPCSupport(io_thread_task_runner);
+  DCHECK(internal::g_core);
+  internal::g_core->SetIOTaskRunner(io_thread_task_runner);
 }
 
 ScopedIPCSupport::~ScopedIPCSupport() {

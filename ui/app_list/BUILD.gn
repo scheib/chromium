@@ -205,7 +205,7 @@ if (toolkit_views) {
       ":app_list",
       ":test_support",
       "//base",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
       "//content",
       "//content/public/browser",

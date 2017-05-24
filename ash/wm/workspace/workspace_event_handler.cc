@@ -31,7 +31,7 @@ void WorkspaceEventHandler::OnMouseEvent(ui::MouseEvent* event,
   switch (event->type()) {
     case ui::ET_MOUSE_MOVED: {
       int component = target->GetNonClientComponent(event->location());
-      multi_window_resize_controller_.Show(target, component,
+      multi_window_resize_controller_.Show(target->aura_window(), component,
                                            event->location());
       break;
     }

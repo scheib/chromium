@@ -59,10 +59,8 @@ class InstantSearchPrerenderer {
   // Tells the Instant search base page to prerender |suggestion|.
   void Prerender(const InstantSuggestion& suggestion);
 
-  // Tells the Instant search base page to render the search results for the
-  // given |query|.
-  void Commit(const base::string16& query,
-              const EmbeddedSearchRequestParams& params);
+  // Tells the Instant search base page to render the search results.
+  void Commit(const EmbeddedSearchRequestParams& params);
 
   // Returns true if the prerendered page can be used to process the search for
   // the given |source|.

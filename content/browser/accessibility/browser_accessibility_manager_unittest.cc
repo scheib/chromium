@@ -902,7 +902,7 @@ TEST(BrowserAccessibilityManagerTest, BoundsForRangeOnParentElement) {
 
   ui::AXNodeData div;
   div.id = 2;
-  div.role = ui::AX_ROLE_DIV;
+  div.role = ui::AX_ROLE_GENERIC_CONTAINER;
   div.location = gfx::RectF(100, 100, 100, 20);
   div.child_ids.push_back(3);
   div.child_ids.push_back(4);
@@ -1177,7 +1177,7 @@ TEST(BrowserAccessibilityManagerTest, TestFindIndicesInCommonParent) {
 
   ui::AXNodeData div;
   div.id = 2;
-  div.role = ui::AX_ROLE_DIV;
+  div.role = ui::AX_ROLE_GENERIC_CONTAINER;
   root.child_ids.push_back(div.id);
 
   ui::AXNodeData button;
@@ -1320,7 +1320,7 @@ TEST(BrowserAccessibilityManagerTest, TestGetTextForRange) {
 
   ui::AXNodeData div;
   div.id = 2;
-  div.role = ui::AX_ROLE_DIV;
+  div.role = ui::AX_ROLE_GENERIC_CONTAINER;
   root.child_ids.push_back(div.id);
 
   ui::AXNodeData button;

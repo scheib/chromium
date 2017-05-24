@@ -19,8 +19,8 @@
 #include "base/files/file_util.h"
 #include "base/macros.h"
 #include "base/memory/aligned_memory.h"
+#include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/scoped_vector.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_loop.h"
 #include "base/numerics/safe_conversions.h"
@@ -48,28 +48,16 @@
 #include "media/filters/ffmpeg_video_decoder.h"
 #include "media/filters/h264_parser.h"
 #include "media/filters/ivf_parser.h"
+#include "media/gpu/gpu_video_encode_accelerator_factory.h"
 #include "media/gpu/video_accelerator_unittest_helpers.h"
 #include "media/video/fake_video_encode_accelerator.h"
 #include "media/video/video_encode_accelerator.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if defined(OS_CHROMEOS)
-#if defined(USE_V4L2_CODEC)
-#include "base/threading/thread_task_runner_handle.h"
-#include "media/gpu/v4l2_video_encode_accelerator.h"
-#endif
-#if defined(ARCH_CPU_X86_FAMILY)
-#include "media/gpu/vaapi_video_encode_accelerator.h"
+#if defined(OS_CHROMEOS) && defined(ARCH_CPU_X86_FAMILY)
 #include "media/gpu/vaapi_wrapper.h"
-// Status has been defined as int in Xlib.h.
-#undef Status
-#endif  // defined(ARCH_CPU_X86_FAMILY)
-#elif defined(OS_MACOSX)
-#include "media/gpu/vt_video_encode_accelerator_mac.h"
 #elif defined(OS_WIN)
 #include "media/gpu/media_foundation_video_encode_accelerator_win.h"
-#else
-#error The VideoEncodeAcceleratorUnittest is not supported on this platform.
 #endif
 
 namespace media {
@@ -380,8 +368,9 @@ static void CreateAlignedInputStreamFile(const gfx::Size& coded_size,
 
 // Parse |data| into its constituent parts, set the various output fields
 // accordingly, read in video stream, and store them to |test_streams|.
-static void ParseAndReadTestStreamData(const base::FilePath::StringType& data,
-                                       ScopedVector<TestStream>* test_streams) {
+static void ParseAndReadTestStreamData(
+    const base::FilePath::StringType& data,
+    std::vector<std::unique_ptr<TestStream>>* test_streams) {
   // Split the string to individual test stream data.
   std::vector<base::FilePath::StringType> test_streams_data =
       base::SplitString(data, base::FilePath::StringType(1, ';'),
@@ -401,7 +390,7 @@ static void ParseAndReadTestStreamData(const base::FilePath::StringType& data,
     }
     LOG_ASSERT(fields.size() >= 4U) << data;
     LOG_ASSERT(fields.size() <= 9U) << data;
-    TestStream* test_stream = new TestStream();
+    auto test_stream = base::MakeUnique<TestStream>();
 
     test_stream->in_filename = FilePathStringTypeToString(fields[0]);
     int width, height;
@@ -438,53 +427,8 @@ static void ParseAndReadTestStreamData(const base::FilePath::StringType& data,
       LOG_ASSERT(base::StringToUint(
           fields[8], &test_stream->requested_subsequent_framerate));
     }
-    test_streams->push_back(test_stream);
+    test_streams->push_back(std::move(test_stream));
   }
-}
-
-static std::unique_ptr<VideoEncodeAccelerator> CreateFakeVEA() {
-  std::unique_ptr<VideoEncodeAccelerator> encoder;
-  if (g_fake_encoder) {
-    encoder.reset(new FakeVideoEncodeAccelerator(
-        scoped_refptr<base::SingleThreadTaskRunner>(
-            base::ThreadTaskRunnerHandle::Get())));
-  }
-  return encoder;
-}
-
-static std::unique_ptr<VideoEncodeAccelerator> CreateV4L2VEA() {
-  std::unique_ptr<VideoEncodeAccelerator> encoder;
-#if defined(OS_CHROMEOS) && defined(USE_V4L2_CODEC)
-  scoped_refptr<V4L2Device> device = V4L2Device::Create();
-  if (device)
-    encoder.reset(new V4L2VideoEncodeAccelerator(device));
-#endif
-  return encoder;
-}
-
-static std::unique_ptr<VideoEncodeAccelerator> CreateVaapiVEA() {
-  std::unique_ptr<VideoEncodeAccelerator> encoder;
-#if defined(OS_CHROMEOS) && defined(ARCH_CPU_X86_FAMILY)
-  encoder.reset(new VaapiVideoEncodeAccelerator());
-#endif
-  return encoder;
-}
-
-static std::unique_ptr<VideoEncodeAccelerator> CreateVTVEA() {
-  std::unique_ptr<VideoEncodeAccelerator> encoder;
-#if defined(OS_MACOSX)
-  encoder.reset(new VTVideoEncodeAccelerator());
-#endif
-  return encoder;
-}
-
-static std::unique_ptr<VideoEncodeAccelerator> CreateMFVEA() {
-  std::unique_ptr<VideoEncodeAccelerator> encoder;
-#if defined(OS_WIN)
-  MediaFoundationVideoEncodeAccelerator::PreSandboxInitialization();
-  encoder.reset(new MediaFoundationVideoEncodeAccelerator());
-#endif
-  return encoder;
 }
 
 // Basic test environment shared across multiple test cases. We only need to
@@ -545,7 +489,7 @@ class VideoEncodeAcceleratorTestEnvironment : public ::testing::Environment {
   // switch "--verify_all_output".
   bool verify_all_output() const { return verify_all_output_; }
 
-  ScopedVector<TestStream> test_streams_;
+  std::vector<std::unique_ptr<TestStream>> test_streams_;
 
  private:
   std::unique_ptr<base::FilePath::StringType> test_stream_data_;
@@ -923,7 +867,7 @@ class VEAClientBase : public VideoEncodeAccelerator::Client {
   // All methods of this class should be run on the same thread.
   base::ThreadChecker thread_checker_;
 
-  ScopedVector<base::SharedMemory> output_shms_;
+  std::vector<std::unique_ptr<base::SharedMemory>> output_shms_;
   int32_t next_output_buffer_id_;
 };
 
@@ -1227,6 +1171,30 @@ VEAClient::VEAClient(TestStream* test_stream,
   thread_checker_.DetachFromThread();
 }
 
+// Helper function to create VEA.
+static std::unique_ptr<VideoEncodeAccelerator> CreateVideoEncodeAccelerator(
+    VideoPixelFormat input_format,
+    const gfx::Size& input_visible_size,
+    VideoCodecProfile output_profile,
+    uint32_t initial_bitrate,
+    VideoEncodeAccelerator::Client* client,
+    const gpu::GpuPreferences& gpu_preferences) {
+  if (g_fake_encoder) {
+    std::unique_ptr<VideoEncodeAccelerator> encoder(
+        new FakeVideoEncodeAccelerator(
+            scoped_refptr<base::SingleThreadTaskRunner>(
+                base::ThreadTaskRunnerHandle::Get())));
+    if (encoder->Initialize(input_format, input_visible_size, output_profile,
+                            initial_bitrate, client))
+      return encoder;
+    return nullptr;
+  } else {
+    return GpuVideoEncodeAcceleratorFactory::CreateVEA(
+        input_format, input_visible_size, output_profile, initial_bitrate,
+        client, gpu_preferences);
+  }
+}
+
 void VEAClient::CreateEncoder() {
   DCHECK(thread_checker_.CalledOnValidThread());
   LOG_ASSERT(!has_encoder());
@@ -1234,31 +1202,22 @@ void VEAClient::CreateEncoder() {
   vea_client_task_runner_ = base::ThreadTaskRunnerHandle::Get();
   encode_task_runner_ = vea_client_task_runner_;
 
-  std::unique_ptr<VideoEncodeAccelerator> encoders[] = {
-      CreateFakeVEA(), CreateV4L2VEA(), CreateVaapiVEA(), CreateVTVEA(),
-      CreateMFVEA()};
-
   DVLOG(1) << "Profile: " << test_stream_->requested_profile
            << ", initial bitrate: " << requested_bitrate_;
 
-  for (size_t i = 0; i < arraysize(encoders); ++i) {
-    if (!encoders[i])
-      continue;
-    encoder_ = std::move(encoders[i]);
-    if (encoder_->Initialize(kInputFormat, test_stream_->visible_size,
-                             test_stream_->requested_profile,
-                             requested_bitrate_, this)) {
-      encoder_weak_factory_.reset(
-          new base::WeakPtrFactory<VideoEncodeAccelerator>(encoder_.get()));
-      TryToSetupEncodeOnSeparateThread();
-      SetStreamParameters(requested_bitrate_, requested_framerate_);
-      SetState(CS_INITIALIZED);
-      return;
-    }
+  encoder_ = CreateVideoEncodeAccelerator(
+      kInputFormat, test_stream_->visible_size, test_stream_->requested_profile,
+      requested_bitrate_, this, gpu::GpuPreferences());
+  if (!encoder_) {
+    LOG(ERROR) << "Failed creating a VideoEncodeAccelerator.";
+    SetState(CS_ERROR);
+    return;
   }
-  encoder_.reset();
-  LOG(ERROR) << "VideoEncodeAccelerator::Initialize() failed";
-  SetState(CS_ERROR);
+  encoder_weak_factory_.reset(
+      new base::WeakPtrFactory<VideoEncodeAccelerator>(encoder_.get()));
+  TryToSetupEncodeOnSeparateThread();
+  SetStreamParameters(requested_bitrate_, requested_framerate_);
+  SetState(CS_INITIALIZED);
 }
 
 void VEAClient::DecodeCompleted() {
@@ -1405,10 +1364,10 @@ void VEAClient::RequireBitstreamBuffers(unsigned int input_count,
   ASSERT_GT(output_buffer_size_, 0UL);
 
   for (unsigned int i = 0; i < kNumOutputBuffers; ++i) {
-    base::SharedMemory* shm = new base::SharedMemory();
+    auto shm = base::MakeUnique<base::SharedMemory>();
     LOG_ASSERT(shm->CreateAndMapAnonymous(output_buffer_size_));
-    output_shms_.push_back(shm);
-    FeedEncoderWithOutput(shm);
+    FeedEncoderWithOutput(shm.get());
+    output_shms_.push_back(std::move(shm));
   }
 
   if (g_env->run_at_fps()) {
@@ -1857,26 +1816,17 @@ void SimpleVEAClientBase::CreateEncoder() {
   LOG_ASSERT(!has_encoder());
   LOG_ASSERT(g_env->test_streams_.size());
 
-  std::unique_ptr<VideoEncodeAccelerator> encoders[] = {
-      CreateFakeVEA(), CreateV4L2VEA(), CreateVaapiVEA(), CreateVTVEA(),
-      CreateMFVEA()};
-
   gfx::Size visible_size(width_, height_);
-  for (auto& encoder : encoders) {
-    if (!encoder)
-      continue;
-    encoder_ = std::move(encoder);
-    if (encoder_->Initialize(kInputFormat, visible_size,
-                             g_env->test_streams_[0]->requested_profile,
-                             bitrate_, this)) {
-      encoder_->RequestEncodingParametersChange(bitrate_, fps_);
-      SetState(CS_INITIALIZED);
-      return;
-    }
+  encoder_ = CreateVideoEncodeAccelerator(
+      kInputFormat, visible_size, g_env->test_streams_[0]->requested_profile,
+      bitrate_, this, gpu::GpuPreferences());
+  if (!encoder_) {
+    LOG(ERROR) << "Failed creating a VideoEncodeAccelerator.";
+    SetState(CS_ERROR);
+    return;
   }
-  encoder_.reset();
-  LOG(ERROR) << "VideoEncodeAccelerator::Initialize() failed";
-  SetState(CS_ERROR);
+  encoder_->RequestEncodingParametersChange(bitrate_, fps_);
+  SetState(CS_INITIALIZED);
 }
 
 void SimpleVEAClientBase::DestroyEncoder() {
@@ -1901,10 +1851,10 @@ void SimpleVEAClientBase::RequireBitstreamBuffers(
   ASSERT_GT(output_size, 0UL);
 
   for (unsigned int i = 0; i < kNumOutputBuffers; ++i) {
-    base::SharedMemory* shm = new base::SharedMemory();
+    auto shm = base::MakeUnique<base::SharedMemory>();
     LOG_ASSERT(shm->CreateAndMapAnonymous(output_size));
-    output_shms_.push_back(shm);
-    FeedEncoderWithOutput(shm, output_size);
+    FeedEncoderWithOutput(shm.get(), output_size);
+    output_shms_.push_back(std::move(shm));
   }
 }
 
@@ -2084,8 +2034,8 @@ TEST_P(VideoEncodeAcceleratorTest, TestSimpleEncode) {
       std::get<7>(GetParam()) || g_env->verify_all_output();
   const bool verify_output_timestamp = std::get<8>(GetParam());
 
-  ScopedVector<ClientStateNotification<ClientState>> notes;
-  ScopedVector<VEAClient> clients;
+  std::vector<std::unique_ptr<ClientStateNotification<ClientState>>> notes;
+  std::vector<std::unique_ptr<VEAClient>> clients;
   base::Thread vea_client_thread("EncoderClientThread");
   ASSERT_TRUE(vea_client_thread.Start());
 
@@ -2100,16 +2050,16 @@ TEST_P(VideoEncodeAcceleratorTest, TestSimpleEncode) {
         (save_to_file &&
          !g_env->test_streams_[test_stream_index]->out_filename.empty());
 
-    notes.push_back(new ClientStateNotification<ClientState>());
-    clients.push_back(new VEAClient(
-        g_env->test_streams_[test_stream_index], notes.back(),
+    notes.push_back(base::MakeUnique<ClientStateNotification<ClientState>>());
+    clients.push_back(base::MakeUnique<VEAClient>(
+        g_env->test_streams_[test_stream_index].get(), notes.back().get(),
         encoder_save_to_file, keyframe_period, force_bitrate, test_perf,
         mid_stream_bitrate_switch, mid_stream_framerate_switch, verify_output,
         verify_output_timestamp));
 
     vea_client_thread.task_runner()->PostTask(
         FROM_HERE, base::Bind(&VEAClient::CreateEncoder,
-                              base::Unretained(clients.back())));
+                              base::Unretained(clients.back().get())));
   }
 
   // All encoders must pass through states in this order.
@@ -2134,8 +2084,8 @@ TEST_P(VideoEncodeAcceleratorTest, TestSimpleEncode) {
 
   for (size_t i = 0; i < num_concurrent_encoders; ++i) {
     vea_client_thread.task_runner()->PostTask(
-        FROM_HERE,
-        base::Bind(&VEAClient::DestroyEncoder, base::Unretained(clients[i])));
+        FROM_HERE, base::Bind(&VEAClient::DestroyEncoder,
+                              base::Unretained(clients[i].get())));
   }
 
   // This ensures all tasks have finished.
@@ -2375,6 +2325,8 @@ int main(int argc, char** argv) {
 
 #if defined(OS_CHROMEOS) && defined(ARCH_CPU_X86_FAMILY)
   media::VaapiWrapper::PreSandboxInitialization();
+#elif defined(OS_WIN)
+  media::MediaFoundationVideoEncodeAccelerator::PreSandboxInitialization();
 #endif
 
   media::g_env =

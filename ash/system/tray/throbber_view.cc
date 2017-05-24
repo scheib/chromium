@@ -47,7 +47,7 @@ ThrobberView::ThrobberView() {
 
 ThrobberView::~ThrobberView() {}
 
-gfx::Size ThrobberView::GetPreferredSize() const {
+gfx::Size ThrobberView::CalculatePreferredSize() const {
   return gfx::Size(kTrayPopupItemMinHeight, kTrayPopupItemMinHeight);
 }
 

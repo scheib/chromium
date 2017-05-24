@@ -99,6 +99,11 @@ const static int kPixelDelta = 4;
         << ", expected: " << expected.Height();                             \
   } while (false)
 
+static IntRect CullRectFromDrawing(
+    const DrawingDisplayItem& drawing_display_item) {
+  return IntRect(drawing_display_item.GetPaintRecord()->cullRect());
+}
+
 TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_DefaultWritingMode) {
   SetBodyInnerHTML(
       "<svg width='400px' height='400px' font-family='Arial' font-size='30'>"
@@ -110,7 +115,7 @@ TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_DefaultWritingMode) {
       GetDrawingForSVGTextById("target");
   AssertTextDrawingEquals(drawing_display_item, "x");
   EXPECT_RECT_EQ(IntRect(50, 3, 15, 33),
-                 drawing_display_item->GetPaintRecordBounds());
+                 CullRectFromDrawing(*drawing_display_item));
 
   SelectAllText();
   GetDocument().View()->UpdateAllLifecyclePhases();
@@ -118,7 +123,7 @@ TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_DefaultWritingMode) {
   drawing_display_item = GetDrawingForSVGTextById("target");
   AssertTextDrawingEquals(drawing_display_item, "x");
   EXPECT_RECT_EQ(IntRect(50, 3, 15, 33),
-                 drawing_display_item->GetPaintRecordBounds());
+                 CullRectFromDrawing(*drawing_display_item));
 }
 
 TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_WritingModeTopToBottom) {
@@ -132,7 +137,7 @@ TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_WritingModeTopToBottom) {
       GetDrawingForSVGTextById("target");
   AssertTextDrawingEquals(drawing_display_item, "x");
   EXPECT_RECT_EQ(IntRect(33, 30, 34, 15),
-                 drawing_display_item->GetPaintRecordBounds());
+                 CullRectFromDrawing(*drawing_display_item));
 
   SelectAllText();
   GetDocument().View()->UpdateAllLifecyclePhases();
@@ -143,7 +148,7 @@ TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_WritingModeTopToBottom) {
   drawing_display_item = GetDrawingForSVGTextById("target");
   AssertTextDrawingEquals(drawing_display_item, "x");
   EXPECT_RECT_EQ(IntRect(33, 30, 34, 16),
-                 drawing_display_item->GetPaintRecordBounds());
+                 CullRectFromDrawing(*drawing_display_item));
 }
 
 TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_TextShadow) {
@@ -158,7 +163,7 @@ TEST_F(SVGInlineTextBoxPainterTest, TextCullRect_TextShadow) {
       GetDrawingForSVGTextById("target");
   AssertTextDrawingEquals(drawing_display_item, "x");
   EXPECT_RECT_EQ(IntRect(50, 3, 220, 238),
-                 drawing_display_item->GetPaintRecordBounds());
+                 CullRectFromDrawing(*drawing_display_item));
 }
 
 }  // namespace

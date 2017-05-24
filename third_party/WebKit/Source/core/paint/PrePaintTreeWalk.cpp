@@ -176,8 +176,8 @@ void PrePaintTreeWalk::InvalidatePaintLayerOptimizationsIfNeeded(
     if (InvalidatePaintLayerOptimizationsForFragment(
             object, context.ancestor_transformed_or_root_paint_layer, fragment,
             *fragment_data)) {
-      context.paint_invalidator_context->forced_subtree_invalidation_flags |=
-          PaintInvalidatorContext::kForcedSubtreeVisualRectUpdate;
+      context.paint_invalidator_context->subtree_flags |=
+          PaintInvalidatorContext::kSubtreeVisualRectUpdate;
     }
     fragment_data = fragment_data->NextFragment();
   }

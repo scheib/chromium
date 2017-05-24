@@ -81,8 +81,8 @@ class NetworkQualityObserverImpl::UiThreadObserver
     for (RenderProcessHost::iterator it(RenderProcessHost::AllHostsIterator());
          !it.IsAtEnd(); it.Advance()) {
       it.GetCurrentValue()->GetRendererInterface()->OnNetworkQualityChanged(
-          last_notified_network_quality_.http_rtt().InMilliseconds(),
-          last_notified_network_quality_.transport_rtt().InMilliseconds(),
+          last_notified_network_quality_.http_rtt(),
+          last_notified_network_quality_.transport_rtt(),
           last_notified_network_quality_.downstream_throughput_kbps());
     }
   }
@@ -99,8 +99,8 @@ class NetworkQualityObserverImpl::UiThreadObserver
 
     // Notify the newly created renderer of the current network quality.
     rph->GetRendererInterface()->OnNetworkQualityChanged(
-        last_notified_network_quality_.http_rtt().InMilliseconds(),
-        last_notified_network_quality_.transport_rtt().InMilliseconds(),
+        last_notified_network_quality_.http_rtt(),
+        last_notified_network_quality_.transport_rtt(),
         last_notified_network_quality_.downstream_throughput_kbps());
   }
 

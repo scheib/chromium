@@ -839,34 +839,18 @@ IN_PROC_BROWSER_TEST_F(ProcessManagerBrowserTest,
   }
 
   // Navigate second subframe to each nested URL from the main frame (i.e.,
-  // from non-extension process).  This should be blocked.
-  //
-  // TODO(alexmos): This is also temporarily allowed under PlzNavigate, because
-  // currently this particular blocking happens in
-  // ChromeContentBrowserClientExtensionsPart::ShouldAllowOpenURL, which isn't
-  // triggered below under PlzNavigate (since there'll be no transfer).  Once
-  // the blob/filesystem URL checks in ExtensionNavigationThrottle are updated
-  // to apply to all frames and not just main frames, the PlzNavigate exception
-  // below can be removed.  See https://crbug.com/661324.
+  // from non-extension process).  These should be canceled.
   for (size_t i = 0; i < arraysize(nested_urls); i++) {
     EXPECT_TRUE(content::NavigateIframeToURL(tab, "frame2", nested_urls[i]));
     content::RenderFrameHost* second_frame = ChildFrameAt(main_frame, 1);
-    if (!content::IsBrowserSideNavigationEnabled()) {
-      EXPECT_NE(nested_urls[i], second_frame->GetLastCommittedURL());
-      EXPECT_FALSE(extension_origin.IsSameOriginWith(
-          second_frame->GetLastCommittedOrigin()));
-      EXPECT_NE("foo", GetTextContent(second_frame));
-      EXPECT_EQ(1u,
-                pm->GetRenderFrameHostsForExtension(extension->id()).size());
-      EXPECT_EQ(1u, pm->GetAllFrames().size());
-    } else {
-      EXPECT_EQ(nested_urls[i], second_frame->GetLastCommittedURL());
-      EXPECT_EQ(extension_origin, second_frame->GetLastCommittedOrigin());
-      EXPECT_EQ("foo", GetTextContent(second_frame));
-      EXPECT_EQ(2u,
-                pm->GetRenderFrameHostsForExtension(extension->id()).size());
-      EXPECT_EQ(2u, pm->GetAllFrames().size());
-    }
+
+    EXPECT_NE(nested_urls[i], second_frame->GetLastCommittedURL());
+    EXPECT_FALSE(extension_origin.IsSameOriginWith(
+        second_frame->GetLastCommittedOrigin()));
+    EXPECT_NE("foo", GetTextContent(second_frame));
+    EXPECT_EQ(1u, pm->GetRenderFrameHostsForExtension(extension->id()).size());
+    EXPECT_EQ(1u, pm->GetAllFrames().size());
+
     EXPECT_TRUE(
         content::NavigateIframeToURL(tab, "frame2", GURL(url::kAboutBlankURL)));
   }

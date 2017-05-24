@@ -70,6 +70,8 @@ class CORE_EXPORT TopDocumentRootScrollerController
   // Called when the root scroller in any frames on the page has changed.
   void DidChangeRootScroller();
 
+  void DidResizeViewport();
+
   // Returns the ScrollableArea associated with the globalRootScroller(). Note,
   // this isn't necessarily the PLSA belonging to the root scroller Element's
   // LayoutBox.  If the root scroller is the documentElement then we use the

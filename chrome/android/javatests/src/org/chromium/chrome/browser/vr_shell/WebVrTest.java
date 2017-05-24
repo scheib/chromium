@@ -57,6 +57,7 @@ public class WebVrTest {
         mActivityTestRule.startMainActivityOnBlankPage();
         mFirstTabCvc = mActivityTestRule.getActivity().getActivityTab().getContentViewCore();
         mFirstTabWebContents = mActivityTestRule.getActivity().getActivityTab().getWebContents();
+        Assert.assertFalse("VrShellDelegate is in VR", VrShellDelegate.isInVr());
     }
 
     /**
@@ -198,7 +199,7 @@ public class WebVrTest {
         if (checkerReturnValue == VrCoreVersionChecker.VR_READY) {
             Assert.assertTrue(displayFound, mVrTestRule.vrDisplayFound(mFirstTabWebContents));
             Assert.assertFalse(barPresent,
-                    VrUtils.isUpdateInstallInfoBarPresent(
+                    VrUtils.isInfoBarPresent(
                             mActivityTestRule.getActivity().getWindow().getDecorView()));
         } else if (checkerReturnValue == VrCoreVersionChecker.VR_OUT_OF_DATE
                 || checkerReturnValue == VrCoreVersionChecker.VR_NOT_AVAILABLE) {
@@ -217,7 +218,7 @@ public class WebVrTest {
             }
             Assert.assertFalse(displayFound, mVrTestRule.vrDisplayFound(mFirstTabWebContents));
             Assert.assertTrue(barPresent,
-                    VrUtils.isUpdateInstallInfoBarPresent(
+                    VrUtils.isInfoBarPresent(
                             mActivityTestRule.getActivity().getWindow().getDecorView()));
             TextView tempView = (TextView) mActivityTestRule.getActivity()
                                         .getWindow()
@@ -232,7 +233,7 @@ public class WebVrTest {
         } else if (checkerReturnValue == VrCoreVersionChecker.VR_NOT_SUPPORTED) {
             Assert.assertFalse(displayFound, mVrTestRule.vrDisplayFound(mFirstTabWebContents));
             Assert.assertFalse(barPresent,
-                    VrUtils.isUpdateInstallInfoBarPresent(
+                    VrUtils.isInfoBarPresent(
                             mActivityTestRule.getActivity().getWindow().getDecorView()));
         } else {
             Assert.fail(

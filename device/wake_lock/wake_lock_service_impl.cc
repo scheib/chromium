@@ -76,7 +76,7 @@ void WakeLockServiceImpl::AddClient(mojom::WakeLockServiceRequest request) {
 }
 
 void WakeLockServiceImpl::RequestWakeLock() {
-  DCHECK(main_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(binding_set_.dispatch_context());
 
   // Uses the Context to get the outstanding status of current binding.
@@ -91,7 +91,7 @@ void WakeLockServiceImpl::RequestWakeLock() {
 }
 
 void WakeLockServiceImpl::CancelWakeLock() {
-  DCHECK(main_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(binding_set_.dispatch_context());
 
   if (!(*binding_set_.dispatch_context()))

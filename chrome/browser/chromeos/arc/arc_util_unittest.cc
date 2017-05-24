@@ -114,7 +114,6 @@ class ChromeArcUtilTest : public testing::Test {
 
   void SetUp() override {
     command_line_ = base::MakeUnique<base::test::ScopedCommandLine>();
-    command_line_->GetProcessCommandLine()->InitFromArgv({"", "--enable-arc"});
 
     user_manager_enabler_ =
         base::MakeUnique<chromeos::ScopedUserManagerEnabler>(
@@ -155,6 +154,31 @@ class ChromeArcUtilTest : public testing::Test {
 };
 
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
+  ScopedLogIn login(GetFakeUserManager(),
+                    AccountId::FromUserEmailGaiaId(
+                        profile()->GetProfileUserName(), kTestGaiaId));
+  EXPECT_TRUE(IsArcAllowedForProfile(profile()));
+  EXPECT_TRUE(IsArcAllowedInAppListForProfile(profile()));
+
+  // false for nullptr.
+  EXPECT_FALSE(IsArcAllowedForProfile(nullptr));
+  EXPECT_FALSE(IsArcAllowedInAppListForProfile(nullptr));
+
+  // false for incognito mode profile.
+  EXPECT_FALSE(IsArcAllowedForProfile(profile()->GetOffTheRecordProfile()));
+  EXPECT_FALSE(
+      IsArcAllowedInAppListForProfile(profile()->GetOffTheRecordProfile()));
+
+  // false for Legacy supervised user.
+  profile()->SetSupervisedUserId("foo");
+  EXPECT_FALSE(IsArcAllowedForProfile(profile()));
+  EXPECT_FALSE(IsArcAllowedInAppListForProfile(profile()));
+}
+
+TEST_F(ChromeArcUtilTest, IsArcAllowedForProfileLegacy) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv({"", "--enable-arc"});
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmailGaiaId(
                         profile()->GetProfileUserName(), kTestGaiaId));
@@ -186,6 +210,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_DisableArc) {
 }
 
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_NonPrimaryProfile) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   ScopedLogIn login2(
       GetFakeUserManager(),
       AccountId::FromUserEmailGaiaId("user2@gmail.com", "0123456789"));
@@ -198,6 +224,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_NonPrimaryProfile) {
 
 // User without GAIA account.
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_PublicAccount) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmail("public_user@gmail.com"),
                     user_manager::USER_TYPE_PUBLIC_ACCOUNT);
@@ -207,7 +235,7 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_PublicAccount) {
 
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_ActiveDirectoryEnabled) {
   base::CommandLine::ForCurrentProcess()->InitFromArgv(
-      {"", "--arc-availability=officially-supported-with-active-directory"});
+      {"", "--arc-availability=officially-supported"});
   ScopedLogIn login(
       GetFakeUserManager(),
       AccountId::AdFromObjGuid("f04557de-5da2-40ce-ae9d-b8874d8da96e"),
@@ -220,6 +248,7 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_ActiveDirectoryEnabled) {
 }
 
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_ActiveDirectoryDisabled) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv({""});
   ScopedLogIn login(
       GetFakeUserManager(),
       AccountId::AdFromObjGuid("f04557de-5da2-40ce-ae9d-b8874d8da96e"),
@@ -270,6 +299,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_KioskArcSupported) {
 }
 
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_SupervisedUserFlow) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   auto manager_id = AccountId::FromUserEmailGaiaId(
       profile()->GetProfileUserName(), kTestGaiaId);
   ScopedLogIn login(GetFakeUserManager(), manager_id);
@@ -281,6 +312,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_SupervisedUserFlow) {
 
 // Guest account is interpreted as EphemeralDataUser.
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_GuestAccount) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   ScopedLogIn login(GetFakeUserManager(),
                     GetFakeUserManager()->GetGuestAccountId());
   EXPECT_FALSE(IsArcAllowedForProfile(profile()));
@@ -289,12 +322,16 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_GuestAccount) {
 
 // Demo account is interpreted as EphemeralDataUser.
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_DemoAccount) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   ScopedLogIn login(GetFakeUserManager(), user_manager::DemoAccountId());
   EXPECT_FALSE(IsArcAllowedForProfile(profile()));
   EXPECT_FALSE(IsArcAllowedInAppListForProfile(profile()));
 }
 
 TEST_F(ChromeArcUtilTest, IsArcCompatibleFileSystemUsedForProfile) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   // TODO(kinaba): Come up with some way to test the conditions below
   // causes differences in the return values of IsArcAllowedForProfile()
   // and IsArcAllowedInAppListForProfile().
@@ -351,6 +388,8 @@ TEST_F(ChromeArcUtilTest, IsArcCompatibleFileSystemUsedForProfile) {
 }
 
 TEST_F(ChromeArcUtilTest, ArcPlayStoreEnabledForProfile) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   // Ensure IsAllowedForProfile() true.
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmailGaiaId(
@@ -370,6 +409,8 @@ TEST_F(ChromeArcUtilTest, ArcPlayStoreEnabledForProfile) {
 }
 
 TEST_F(ChromeArcUtilTest, ArcPlayStoreEnabledForProfile_NotAllowed) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   ASSERT_FALSE(IsArcAllowedForProfile(profile()));
 
   // If ARC is not allowed for the profile, always return false.
@@ -382,6 +423,8 @@ TEST_F(ChromeArcUtilTest, ArcPlayStoreEnabledForProfile_NotAllowed) {
 }
 
 TEST_F(ChromeArcUtilTest, ArcPlayStoreEnabledForProfile_Managed) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   // Ensure IsAllowedForProfile() true.
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmailGaiaId(
@@ -423,6 +466,8 @@ TEST_F(ChromeArcUtilTest, ArcPlayStoreEnabledForProfile_Managed) {
 
 // Test the AreArcAllOptInPreferencesManagedForProfile() function.
 TEST_F(ChromeArcUtilTest, AreArcAllOptInPreferencesManagedForProfile) {
+  base::CommandLine::ForCurrentProcess()->InitFromArgv(
+      {"", "--arc-availability=officially-supported"});
   // OptIn prefs are unset, the function returns false.
   EXPECT_FALSE(AreArcAllOptInPreferencesManagedForProfile(profile()));
 

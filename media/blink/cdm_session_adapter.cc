@@ -198,8 +198,8 @@ void CdmSessionAdapter::OnSessionKeysChange(const std::string& session_id,
   if (session) {
     DVLOG(2) << __func__ << ": session_id = " << session_id;
     DVLOG(2) << "  - has_additional_usable_key = " << has_additional_usable_key;
-    for (const CdmKeyInformation* info : keys_info)
-      DVLOG(2) << "  - " << *info;
+    for (const auto& info : keys_info)
+      DVLOG(2) << "  - " << *(info.get());
 
     session->OnSessionKeysChange(has_additional_usable_key,
                                  std::move(keys_info));

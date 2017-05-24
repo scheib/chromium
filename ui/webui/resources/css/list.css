@@ -113,9 +113,9 @@ grid > [hidden] {
 }
 
 list > .drag-selection-border {
-  border-radius: 0;
   background-color: rgba(255, 255, 255, 0.3);
   border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 0;
   outline: 1px solid rgba(0, 0, 0, 0.1);
   position: absolute;
   z-index: 2;

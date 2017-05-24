@@ -5,6 +5,7 @@
 #include "chrome/browser/android/vr_shell/vr_controller_model.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/android/vr_shell/gltf_parser.h"
 #include "chrome/grit/browser_resources.h"
 #include "third_party/skia/include/core/SkCanvas.h"
@@ -107,23 +108,26 @@ void VrControllerModel::SetBaseTexture(sk_sp<SkImage> image) {
   base_texture_ = image;
 }
 
-void VrControllerModel::SetTexturePatch(int state, sk_sp<SkImage> image) {
+void VrControllerModel::SetTexture(int state, sk_sp<SkImage> patch) {
   DCHECK(state >= 0 && state < STATE_COUNT);
-  patches_[state] = image;
-}
-
-sk_sp<SkImage> VrControllerModel::GetTexture(int state) const {
-  if (!patches_[state])
-    return base_texture_;
+  if (!patch) {
+    textures_[state] = base_texture_;
+    return;
+  }
   sk_sp<SkSurface> surface = SkSurface::MakeRasterN32Premul(
       base_texture_->width(), base_texture_->height());
   SkCanvas* canvas = surface->getCanvas();
   canvas->drawImage(base_texture_, 0, 0);
   SkPaint paint;
   paint.setBlendMode(SkBlendMode::kSrc);
-  canvas->drawImage(patches_[state], kPatchesLocations[state].x(),
+  canvas->drawImage(patch, kPatchesLocations[state].x(),
                     kPatchesLocations[state].y(), &paint);
-  return sk_sp<SkImage>(surface->makeImageSnapshot());
+  textures_[state] = sk_sp<SkImage>(surface->makeImageSnapshot());
+}
+
+sk_sp<SkImage> VrControllerModel::GetTexture(int state) const {
+  DCHECK(state >= 0 && state < STATE_COUNT);
+  return textures_[state];
 }
 
 const char* VrControllerModel::Buffer() const {
@@ -141,7 +145,8 @@ const gltf::Accessor* VrControllerModel::Accessor(
   return it->second;
 }
 
-std::unique_ptr<VrControllerModel> VrControllerModel::LoadFromComponent() {
+std::unique_ptr<VrControllerModel> VrControllerModel::LoadFromResources() {
+  TRACE_EVENT0("gpu", "VrControllerModel::LoadFromResources");
   std::vector<std::unique_ptr<gltf::Buffer>> buffers;
   auto model_data = ResourceBundle::GetSharedInstance().GetRawDataResource(
       IDR_VR_SHELL_DDCONTROLLER_MODEL);
@@ -155,10 +160,12 @@ std::unique_ptr<VrControllerModel> VrControllerModel::LoadFromComponent() {
   controller_model->SetBaseTexture(std::move(base_texture));
 
   for (int i = 0; i < VrControllerModel::STATE_COUNT; i++) {
-    if (kTexturePatchesResources[i] == -1)
-      continue;
-    auto patch_image = LoadPng(kTexturePatchesResources[i]);
-    controller_model->SetTexturePatch(i, patch_image);
+    if (kTexturePatchesResources[i] == -1) {
+      controller_model->SetTexture(i, nullptr);
+    } else {
+      auto patch_image = LoadPng(kTexturePatchesResources[i]);
+      controller_model->SetTexture(i, patch_image);
+    }
   }
 
   return controller_model;

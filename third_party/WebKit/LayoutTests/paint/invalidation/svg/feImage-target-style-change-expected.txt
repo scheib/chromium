@@ -16,10 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGRect rect id='rect'",
-      "reason": "style change"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "style change"
     }

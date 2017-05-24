@@ -8,13 +8,14 @@
 #include "content/public/common/content_switches.h"
 #include "media/base/media_switches.h"
 #include "media/base/test_data_util.h"
+#include "media/mojo/features.h"
 
 #if defined(OS_ANDROID)
 #include "base/android/build_info.h"
 #include "base/sys_info.h"
 #endif
 
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
 // Remote mojo renderer does not send audio/video frames back to the renderer
 // process and hence does not support capture: https://crbug.com/641559.
 #define MAYBE_CaptureFromMediaElement DISABLED_CaptureFromMediaElement

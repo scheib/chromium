@@ -11098,6 +11098,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="405" label="FILE_MANAGER_PRIVATE_ON_APPS_UPDATED"/>
   <int value="406" label="ACCESSIBILITY_PRIVATE_ON_TWO_FINGER_TOUCH_START"/>
   <int value="407" label="ACCESSIBILITY_PRIVATE_ON_TWO_FINGER_TOUCH_STOP"/>
+  <int value="408" label="MEDIA_PERCEPTION_PRIVATE_ON_MEDIA_PERCEPTION"/>
 </enum>
 
 <enum name="ExtensionFileWriteResult" type="int">
@@ -12321,6 +12322,9 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="1171" label="AUTOTESTPRIVATE_GETPLAYSTORESTATE"/>
   <int value="1172" label="AUTOTESTPRIVATE_SETPLAYSTOREENABLED"/>
   <int value="1173" label="APP_CURRENTWINDOWINTERNAL_SETACTIVATEONPOINTER"/>
+  <int value="1174" label="MEDIAPERCEPTIONPRIVATE_GETSTATE"/>
+  <int value="1175" label="MEDIAPERCEPTIONPRIVATE_SETSTATE"/>
+  <int value="1176" label="MEDIAPERCEPTIONPRIVATE_GETDIAGNOSTICS"/>
 </enum>
 
 <enum name="ExtensionIconState" type="int">
@@ -12747,6 +12751,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="201" label="kNetworkingOnc"/>
   <int value="202" label="kVirtualKeyboard"/>
   <int value="203" label="kNetworkingCastPrivate"/>
+  <int value="204" label="kMediaPerceptionPrivate"/>
 </enum>
 
 <enum name="ExtensionServiceVerifyAllSuccess" type="int">
@@ -13936,8 +13941,8 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="958" label="BackspaceNavigatedBackAfterFormInteraction"/>
   <int value="959" label="CSPSourceWildcardWouldMatchExactHost"/>
   <int value="960" label="CredentialManagerGet"/>
-  <int value="961" label="CredentialManagerGetWithUI"/>
-  <int value="962" label="CredentialManagerGetWithoutUI"/>
+  <int value="961" label="CredentialManagerGetMediationOptional"/>
+  <int value="962" label="CredentialManagerGetMediationSilent"/>
   <int value="963" label="CredentialManagerStore"/>
   <int value="964" label="CredentialManagerRequireUserMediation"/>
   <int value="965" label="RequestAutocomplete"/>
@@ -14983,6 +14988,21 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="1974" label="PostMessageOutgoingWouldBeBlockedByConnectSrc"/>
   <int value="1975" label="PostMessageIncomingWouldBeBlockedByConnectSrc"/>
   <int value="1976" label="PaymentRequestNetworkNameInSupportedMethods"/>
+  <int value="1977" label="CrossOriginPropertyAccess"/>
+  <int value="1978" label="CrossOriginPropertyAccessFromOpener"/>
+  <int value="1979" label="CredentialManagerCreate"/>
+  <int value="1980" label="WebDatabaseCreateDropFTS3Table"/>
+  <int value="1981" label="FieldEditInSecureContext"/>
+  <int value="1982" label="FieldEditInNonSecureContext"/>
+  <int value="1983"
+      label="CredentialManagerCredentialRequestOptionsUnmediated"/>
+  <int value="1984" label="CredentialManagerGetMediationRequired"/>
+  <int value="1985" label="CredentialManagerIdName"/>
+  <int value="1986" label="CredentialManagerPasswordName"/>
+  <int value="1987" label="CredentialManagerAdditionalData"/>
+  <int value="1988" label="CredentialManagerCustomFetch"/>
+  <int value="1989" label="NetInfoRtt"/>
+  <int value="1990" label="NetInfoDownlink"/>
 </enum>
 
 <enum name="FeedbackSource" type="int">
@@ -15984,15 +16004,14 @@ uploading your change for review.  These are checked by presubmit scripts.
 </enum>
 
 <enum name="FtpDataConnectionError" type="int">
-  <int value="0">Data connection successful</int>
-  <int value="1">Local firewall blocked the connection</int>
-  <int value="2">Connection timed out</int>
-  <int value="3">
-    Connection has been established, but then got broken (either reset or
-    aborted)
-  </int>
-  <int value="4">Connection has been refused</int>
-  <int value="20">Other kind of error</int>
+  <int value="0" label="Data connection successful"/>
+  <int value="1" label="Local firewall blocked the connection"/>
+  <int value="2" label="Connection timed out"/>
+  <int value="3"
+      label="Connection has been established, but then got broken (either
+             reset or aborted)"/>
+  <int value="4" label="Connection has been refused"/>
+  <int value="20" label="Other kind of error"/>
 </enum>
 
 <enum name="FtpServerType" type="int">
@@ -18904,6 +18923,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="73" label="AUTOMATION_INFOBAR_DELEGATE"/>
   <int value="74" label="VR_SERVICES_UPGRADE_ANDROID"/>
   <int value="75" label="READER_MODE_INFOBAR_ANDROID"/>
+  <int value="76" label="VR_FEEDBACK_INFOBAR_ANDROID"/>
 </enum>
 
 <enum name="InfoBarResponse" type="int">
@@ -21220,6 +21240,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="-2062872298" label="market-url-for-testing"/>
   <int value="-2062373123" label="WebPaymentsModifiers:enabled"/>
   <int value="-2058656447" label="ContextualSearchUrlActions:enabled"/>
+  <int value="-2053860791" label="XGEOVisibleNetworks:enabled"/>
   <int value="-2048732429" label="enable-alternative-services"/>
   <int value="-2048679945" label="NTPOfflinePageDownloadSuggestions:disabled"/>
   <int value="-2047832738" label="enable-system-timezone-automatic-detection"/>
@@ -21227,6 +21248,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="-2043128632" label="enable-tab-switcher-in-document-mode"/>
   <int value="-2040471724" label="CrOSComponent:disabled"/>
   <int value="-2040115518" label="load-media-router-component-extension"/>
+  <int value="-2036149591" label="FaviconsFromWebManifest:disabled"/>
   <int value="-2033225430" label="NTPMostLikelyFaviconsFromServer:disabled"/>
   <int value="-2029912304" label="StaleWhileRevalidate2:enabled"/>
   <int value="-2025367104" label="enable-material-design-ntp"/>
@@ -21254,6 +21276,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="-1956349722" label="disable-smooth-scrolling"/>
   <int value="-1948540128" label="disable-webrtc-hw-encoding (deprecated)"/>
   <int value="-1946595906" label="enable-push-api-background-mode"/>
+  <int value="-1946522787" label="VrCustomTabBrowsing:disabled"/>
   <int value="-1943507605" label="enable-new-video-renderer"/>
   <int value="-1941852572" label="floating-virtual-keyboard"/>
   <int value="-1940806558" label="enable-syncfs-directory-operation"/>
@@ -21401,6 +21424,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="-1460462432" label="disable-media-source"/>
   <int value="-1456004000" label="VrShell:disabled"/>
   <int value="-1443796945" label="OfflinePagesSharing:disabled"/>
+  <int value="-1440440375" label="WebVrAutopresent:enabled"/>
   <int value="-1440152291" label="disable-gesture-typing"/>
   <int value="-1438279809" label="GamepadExtensions:disabled"/>
   <int value="-1433719718" label="enable-webrtc-stun-origin"/>
@@ -21463,6 +21487,18 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="-1203742042" label="enable-gesture-selection"/>
   <int value="-1201183153" label="enable-centered-app-list"/>
   <int value="-1197035323" label="ZeroSuggestRedirectToChrome:disabled"/>
+<!--
+Values in LoginCustomFlags are:  value=(uint32_t)MD5(label).
+This enum is verified by AboutFlagsHistogramTest unit test.
+To add a new entry, add it with any unique value and run test to compute valid
+value. After that run tools/metrics/histograms/validate_format.py to find out
+where the value should be inserted to maintain ordering.
+Don't remove entries when removing a flag, they are still used to decode data
+from previous Chrome versions.
+-->
+
+  <summary>Chrome flags that lead to chrome restart on ChromeOS.</summary>
+  <int value="-1195194959" label="XGEOVisibleNetworks:disabled"/>
   <int value="-1190174011" label="enable-hdr"/>
   <int value="-1184904651" label="enable-npapi"/>
   <int value="-1184480269" label="LsdPermissionPrompt:enabled"/>
@@ -21670,17 +21706,6 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="-418868128" label="enable-experimental-web-platform-features"/>
   <int value="-410852857" label="ImprovedA2HS:disabled"/>
   <int value="-405380243" label="enable-encryption-migration"/>
-<!--
-Values in LoginCustomFlags are:  value=(uint32_t)MD5(label).
-This enum is verified by AboutFlagsHistogramTest unit test.
-To add a new entry, add it with any unique value and run test to compute valid
-value. After that run tools/metrics/histograms/validate_format.py to find out
-where the value should be inserted to maintain ordering.
-Don't remove entries when removing a flag, they are still used to decode data
-from previous Chrome versions.
--->
-
-  <summary>Chrome flags that lead to chrome restart on ChromeOS.</summary>
   <int value="-400584764" label="ChromeHomeNtpRedesign:enabled"/>
   <int value="-396994784" label="enable-vr-shell"/>
   <int value="-396496344" label="ViewsTaskManager:enabled"/>
@@ -21732,6 +21757,7 @@ from previous Chrome versions.
   <int value="-268357961" label="enable-feature-policy"/>
   <int value="-254887599" label="google-profile-info"/>
   <int value="-250721831" label="AndroidAutofillAccessibility:disabled"/>
+  <int value="-248223420" label="AutofillKeyboardAccessory:disabled"/>
   <int value="-241353344" label="MidiManagerWinrt:disabled"/>
   <int value="-234966279" label="PointerEvent:disabled"/>
   <int value="-234687894"
@@ -21771,6 +21797,7 @@ from previous Chrome versions.
   <int value="-78035185" label="custom_summary"/>
   <int value="-77872983" label="BookmarkAppsMac:disabled"/>
   <int value="-76631048" label="disable-offline-auto-reload-visible-only"/>
+  <int value="-72455054" label="WebVrAutopresent:disabled"/>
   <int value="-70595606" label="ash-enable-unified-desktop"/>
   <int value="-68877684" label="BackgroundVideoTrackOptimization:enabled"/>
   <int value="-68225452" label="enable-translate-new-ux"/>
@@ -21828,6 +21855,7 @@ from previous Chrome versions.
   <int value="120429808" label="disable-new-profile-management"/>
   <int value="121684313" label="QuickUnlockPin:enabled"/>
   <int value="121858954" label="enable-supervised-user-safesites"/>
+  <int value="123097915" label="FaviconsFromWebManifest:enabled"/>
   <int value="125581289" label="WebRtcHWVP8Encoding:disabled"/>
   <int value="125934378" label="enable-password-link"/>
   <int value="131881947" label="D3DVsync:enabled"/>
@@ -21845,6 +21873,7 @@ from previous Chrome versions.
   <int value="203776499" label="enable-virtual-keyboard-overscroll"/>
   <int value="223662457" label="BackgroundLoadingForDownloads:enabled"/>
   <int value="244697230" label="enable-theme-color-in-tabbed-mode"/>
+  <int value="259021228" label="OffMainThreadFetch:disabled"/>
   <int value="262382944" label="GuestViewCrossProcessFrames:disabled"/>
   <int value="266702296" label="disable-plugin-power-saver"/>
   <int value="270267831" label="enable-scripts-require-action"/>
@@ -21960,7 +21989,6 @@ from previous Chrome versions.
   <int value="644674603" label="DataReductionProxySiteBreakdown:disabled"/>
   <int value="646252875" label="ReadItLaterInMenu:enabled"/>
   <int value="646738320" label="disable-gesture-editing"/>
-  <int value="650602639" label="enable-autofill-keyboard-accessory-view"/>
   <int value="651421878" label="VideoRotateToFullscreen:enabled"/>
   <int value="652561231" label="CustomContextMenu:enabled"/>
   <int value="683410401"
@@ -22160,6 +22188,7 @@ from previous Chrome versions.
   <int value="1359972809" label="enable-gesture-deletion"/>
   <int value="1361047396" label="disable-click-delay"/>
   <int value="1361073386" label="ContentSuggestionsNotifications:enabled"/>
+  <int value="1363136936" label="VrCustomTabBrowsing:enabled"/>
   <int value="1367529437" label="NTPAssetDownloadSuggestions:enabled"/>
   <int value="1367671275" label="enable-proximity-auth-proximity-detection"/>
   <int value="1371092708" label="disable-desktop-capture-picker-old-ui"/>
@@ -22257,6 +22286,7 @@ from previous Chrome versions.
   <int value="1733390925" label="force-enable-stylus-tools"/>
   <int value="1747279677" label="disable-delegated-renderer"/>
   <int value="1752168018" label="enable-stale-while-revalidate"/>
+  <int value="1762320532" label="AutofillKeyboardAccessory:enabled"/>
   <int value="1766676896" label="affiliation-based-matching:disabled"/>
   <int value="1772454319" label="enable-storage-manager"/>
   <int value="1775475563" label="malware-interstitial-v3"/>
@@ -22268,7 +22298,6 @@ from previous Chrome versions.
   <int value="1785093465" label="enable-document-passive-event-listeners"/>
   <int value="1786229999" label="disable-md-downloads"/>
   <int value="1786386775" label="TranslateCompactUI:disabled"/>
-  <int value="1791904609" label="disable-autofill-keyboard-accessory-view"/>
   <int value="1803465156" label="enable-zero-suggest-most-visited"/>
   <int value="1809940714" label="SpeculativeLaunchServiceWorker:disabled"/>
   <int value="1812368073" label="enable-new-app-list-mixer"/>
@@ -22323,6 +22352,7 @@ from previous Chrome versions.
   <int value="1951466218" label="enable-data-reduction-proxy-lite-page"/>
   <int value="1955677113" label="trace-export-events-to-etw"/>
   <int value="1958387645" label="ScanCardsInWebPayments:enabled"/>
+  <int value="1959148757" label="OffMainThreadFetch:enabled"/>
   <int value="1960169775" label="NewPhotoPicker:disabled"/>
   <int value="1961425320" label="force-qtkit"/>
   <int value="1964816410" label="AndroidPayIntegrationV2:enabled"/>
@@ -33412,9 +33442,7 @@ from previous Chrome versions.
   <int value="11" label="SELF_SIGNED: The cert is self-signed">
     This cause is recorded only for CERT_AUTHORITY_INVALID errors.
   </int>
-  <int value="12" label="EXPIRED_RECENTLY: Cert expired within last 28 days.">
-
-  </int>
+  <int value="12" label="EXPIRED_RECENTLY: Cert expired within last 28 days."/>
   <int value="13" label="LIKELY_SAME_DOMAIN: (Deprecated)">
     (Deprecated in favor of LIKELY_SAME_DOMAIN2)
   </int>
@@ -33734,6 +33762,9 @@ from previous Chrome versions.
   <int value="4" label="Frame detached"/>
   <int value="5" label="By context menu"/>
   <int value="6" label="DOM mutation after XHR"/>
+  <int value="7" label="Provisionally saved form on start provisional load"/>
+  <int value="8" label="Filled form on start provisional load"/>
+  <int value="9" label="Filled input elements on start provisional load"/>
 </enum>
 
 <enum name="SubresourceFilterActions" type="int">
@@ -36282,6 +36313,7 @@ from previous Chrome versions.
   <int value="1" label="Device no longer in range."/>
   <int value="2" label="Not found"/>
   <int value="3" label="No services"/>
+  <int value="4" label="Device disconnected"/>
 </enum>
 
 <enum name="WebBluetoothRequestDeviceOutcome" type="int">
@@ -36620,6 +36652,7 @@ from previous Chrome versions.
   <int value="0" label="Closed by system"/>
   <int value="1" label="Closed by user"/>
   <int value="2" label="Clicked"/>
+  <int value="3" label="Manual navigation to the landing page"/>
 </enum>
 
 <enum name="WebUsbPermissionRevoked" type="int">

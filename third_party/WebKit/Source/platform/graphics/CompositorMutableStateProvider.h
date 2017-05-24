@@ -5,9 +5,10 @@
 #ifndef CompositorMutableStateProvider_h
 #define CompositorMutableStateProvider_h
 
-#include "platform/PlatformExport.h"
 #include <cstdint>
 #include <memory>
+#include "platform/PlatformExport.h"
+#include "platform/graphics/CompositorElementId.h"
 
 namespace cc {
 class LayerTreeImpl;
@@ -25,8 +26,7 @@ class PLATFORM_EXPORT CompositorMutableStateProvider {
   CompositorMutableStateProvider(cc::LayerTreeImpl*, CompositorMutations*);
   ~CompositorMutableStateProvider();
 
-  std::unique_ptr<CompositorMutableState> GetMutableStateFor(
-      uint64_t element_id);
+  std::unique_ptr<CompositorMutableState> GetMutableStateFor(DOMNodeId);
 
  private:
   cc::LayerTreeImpl* tree_;

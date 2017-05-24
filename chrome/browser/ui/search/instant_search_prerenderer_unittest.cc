@@ -303,8 +303,8 @@ TEST_F(InstantSearchPrerendererTest, CommitQuery) {
   base::string16 query = ASCIIToUTF16("flowers");
   PrerenderSearchQuery(query);
   InstantSearchPrerenderer* prerenderer = GetInstantSearchPrerenderer();
-  EXPECT_CALL(*mock_search_box(), Submit(_, _));
-  prerenderer->Commit(query, EmbeddedSearchRequestParams());
+  EXPECT_CALL(*mock_search_box(), Submit(_));
+  prerenderer->Commit(EmbeddedSearchRequestParams());
 }
 
 TEST_F(InstantSearchPrerendererTest, CancelPrerenderRequestOnTabChangeEvent) {
@@ -524,8 +524,7 @@ TEST_F(TestUsePrerenderPage, SetEmbeddedSearchRequestParams) {
   EXPECT_TRUE(browser()->instant_controller());
   EXPECT_CALL(
       *mock_search_box(),
-      Submit(Eq(ASCIIToUTF16("foo")),
-             AllOf(Field(&EmbeddedSearchRequestParams::original_query,
+      Submit(AllOf(Field(&EmbeddedSearchRequestParams::original_query,
                          Eq(base::ASCIIToUTF16("f"))),
                    Field(&EmbeddedSearchRequestParams::input_encoding,
                          Eq(base::ASCIIToUTF16("utf-8"))),

@@ -28,6 +28,7 @@ import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.content_public.common.Referrer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -77,9 +78,11 @@ public class TabularContextMenuUiTest {
         final TabularContextMenuUi dialog = new TabularContextMenuUi(null);
 
         final List<Pair<Integer, List<ContextMenuItem>>> itemGroups = new ArrayList<>();
-        List<ContextMenuItem> item = CollectionUtil.newArrayList(ContextMenuItem.ADD_TO_CONTACTS,
-                ContextMenuItem.CALL, ContextMenuItem.COPY_LINK_ADDRESS);
-        itemGroups.add(new Pair<>(R.string.contextmenu_link_title, item));
+        List<? extends ContextMenuItem> item =
+                CollectionUtil.newArrayList(ChromeContextMenuItem.ADD_TO_CONTACTS,
+                        ChromeContextMenuItem.CALL, ChromeContextMenuItem.COPY_LINK_ADDRESS);
+        itemGroups.add(
+                new Pair<>(R.string.contextmenu_link_title, Collections.unmodifiableList(item)));
         final String url = "http://google.com";
         View view = ThreadUtils.runOnUiThreadBlocking(new Callable<View>() {
             @Override
@@ -100,10 +103,13 @@ public class TabularContextMenuUiTest {
         final TabularContextMenuUi dialog = new TabularContextMenuUi(null);
 
         final List<Pair<Integer, List<ContextMenuItem>>> itemGroups = new ArrayList<>();
-        List<ContextMenuItem> item = CollectionUtil.newArrayList(ContextMenuItem.ADD_TO_CONTACTS,
-                ContextMenuItem.CALL, ContextMenuItem.COPY_LINK_ADDRESS);
-        itemGroups.add(new Pair<>(R.string.contextmenu_link_title, item));
-        itemGroups.add(new Pair<>(R.string.contextmenu_link_title, item));
+        List<? extends ContextMenuItem> item =
+                CollectionUtil.newArrayList(ChromeContextMenuItem.ADD_TO_CONTACTS,
+                        ChromeContextMenuItem.CALL, ChromeContextMenuItem.COPY_LINK_ADDRESS);
+        itemGroups.add(
+                new Pair<>(R.string.contextmenu_link_title, Collections.unmodifiableList(item)));
+        itemGroups.add(
+                new Pair<>(R.string.contextmenu_link_title, Collections.unmodifiableList(item)));
         final String url = "http://google.com";
         View view = ThreadUtils.runOnUiThreadBlocking(new Callable<View>() {
             @Override
@@ -122,15 +128,16 @@ public class TabularContextMenuUiTest {
     @Feature({"CustomContextMenu"})
     public void testURLIsShownOnContextMenu() throws ExecutionException {
         final TabularContextMenuUi dialog = new TabularContextMenuUi(null);
-        final List<ContextMenuItem> item =
-                CollectionUtil.newArrayList(ContextMenuItem.ADD_TO_CONTACTS, ContextMenuItem.CALL,
-                        ContextMenuItem.COPY_LINK_ADDRESS);
+        final List<? extends ContextMenuItem> item =
+                CollectionUtil.newArrayList(ChromeContextMenuItem.ADD_TO_CONTACTS,
+                        ChromeContextMenuItem.CALL, ChromeContextMenuItem.COPY_LINK_ADDRESS);
         final String expectedUrl = "http://google.com";
         View view = ThreadUtils.runOnUiThreadBlocking(new Callable<View>() {
             @Override
             public View call() {
                 return dialog.createContextMenuPageUi(mActivityTestRule.getActivity(),
-                        new MockMenuParams(expectedUrl), item, false, item.size());
+                        new MockMenuParams(expectedUrl), Collections.unmodifiableList(item), false,
+                        item.size());
             }
         });
 
@@ -143,14 +150,15 @@ public class TabularContextMenuUiTest {
     @Feature({"CustomContextMenu"})
     public void testHeaderIsNotShownWhenThereIsNoParams() throws ExecutionException {
         final TabularContextMenuUi dialog = new TabularContextMenuUi(null);
-        final List<ContextMenuItem> item =
-                CollectionUtil.newArrayList(ContextMenuItem.ADD_TO_CONTACTS, ContextMenuItem.CALL,
-                        ContextMenuItem.COPY_LINK_ADDRESS);
+        final List<? extends ContextMenuItem> item =
+                CollectionUtil.newArrayList(ChromeContextMenuItem.ADD_TO_CONTACTS,
+                        ChromeContextMenuItem.CALL, ChromeContextMenuItem.COPY_LINK_ADDRESS);
         View view = ThreadUtils.runOnUiThreadBlocking(new Callable<View>() {
             @Override
             public View call() {
                 return dialog.createContextMenuPageUi(mActivityTestRule.getActivity(),
-                        new MockMenuParams(""), item, false, item.size());
+                        new MockMenuParams(""), Collections.unmodifiableList(item), false,
+                        item.size());
             }
         });
 
@@ -163,14 +171,15 @@ public class TabularContextMenuUiTest {
     @Feature({"CustomContextMenu"})
     public void testLinkShowsMultipleLinesWhenClicked() throws ExecutionException {
         final TabularContextMenuUi dialog = new TabularContextMenuUi(null);
-        final List<ContextMenuItem> item =
-                CollectionUtil.newArrayList(ContextMenuItem.ADD_TO_CONTACTS, ContextMenuItem.CALL,
-                        ContextMenuItem.COPY_LINK_ADDRESS);
+        final List<? extends ContextMenuItem> item =
+                CollectionUtil.newArrayList(ChromeContextMenuItem.ADD_TO_CONTACTS,
+                        ChromeContextMenuItem.CALL, ChromeContextMenuItem.COPY_LINK_ADDRESS);
         View view = ThreadUtils.runOnUiThreadBlocking(new Callable<View>() {
             @Override
             public View call() {
                 return dialog.createContextMenuPageUi(mActivityTestRule.getActivity(),
-                        new MockMenuParams("http://google.com"), item, false, item.size());
+                        new MockMenuParams("http://google.com"), Collections.unmodifiableList(item),
+                        false, item.size());
             }
         });
 

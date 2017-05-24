@@ -59,14 +59,6 @@
     {
       "object": "InlineTextBox 'Clipped. INVISIBLE.'",
       "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGResourceClipper clipPath id='dynClip'",
-      "reason": "appeared"
-    },
-    {
-      "object": "LayoutSVGPath path",
-      "reason": "appeared"
     }
   ]
 }

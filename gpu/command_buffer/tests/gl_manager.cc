@@ -35,6 +35,7 @@
 #include "gpu/command_buffer/service/image_manager.h"
 #include "gpu/command_buffer/service/mailbox_manager_impl.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/service_utils.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
@@ -188,7 +189,8 @@ scoped_refptr<gl::GLContext>* GLManager::base_context_;
 GLManager::Options::Options() = default;
 
 GLManager::GLManager()
-    : command_buffer_id_(
+    : discardable_manager_(new ServiceDiscardableManager()),
+      command_buffer_id_(
           CommandBufferId::FromUnsafeValue(g_next_command_buffer_id++)) {
   SetupBaseContext();
 }
@@ -301,7 +303,7 @@ void GLManager::InitializeWithCommandLine(
         new gpu::gles2::ShaderTranslatorCache(gpu_preferences_),
         new gpu::gles2::FramebufferCompletenessCache, feature_info,
         options.bind_generates_resource, options.image_factory, nullptr,
-        GpuFeatureInfo());
+        GpuFeatureInfo(), discardable_manager_.get());
   }
 
   decoder_.reset(::gpu::gles2::GLES2Decoder::Create(context_group));

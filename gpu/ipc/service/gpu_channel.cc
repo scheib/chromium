@@ -758,6 +758,7 @@ GpuChannel::GpuChannel(
     GpuWatchdogThread* watchdog,
     scoped_refptr<gl::GLShareGroup> share_group,
     scoped_refptr<gles2::MailboxManager> mailbox_manager,
+    ServiceDiscardableManager* discardable_manager,
     scoped_refptr<PreemptionFlag> preempting_flag,
     scoped_refptr<PreemptionFlag> preempted_flag,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
@@ -777,10 +778,12 @@ GpuChannel::GpuChannel(
       share_group_(share_group),
       mailbox_manager_(mailbox_manager),
       watchdog_(watchdog),
+      discardable_manager_(std::move(discardable_manager)),
       is_gpu_host_(is_gpu_host),
       weak_factory_(this) {
   DCHECK(gpu_channel_manager_);
   DCHECK(client_id_);
+  DCHECK(discardable_manager_);
 
   if (!scheduler_) {
     message_queue_ = new GpuChannelMessageQueue(

@@ -208,14 +208,15 @@ message LoginReputationClientRequest {
   repeated Frame frames = 3;
 
   // The message contains fields needed for a password reuse event.
+  // Next tag: 4
   message PasswordReuseEvent {
-    // Origins that the reused password had been used on. The origins are
-    // maintained by Chrome password manager.
-    // The field is filled in only when TriggerType is PASSWORD_REUSE_EVENT.
-    repeated string password_reused_original_origins = 1;
+    reserved 1;
 
     // The frame that the password reuse is detected.
     optional int32 frame_id = 2;
+
+    // Whether the reused password is used for Chrome signin.
+    optional bool is_chrome_signin_password = 3;
   }
 
   optional PasswordReuseEvent password_reuse_event = 4;

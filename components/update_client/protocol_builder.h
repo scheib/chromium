@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "components/update_client/component.h"
+#include "components/update_client/crx_downloader.h"
 #include "components/update_client/updater_state.h"
 
 namespace update_client {
@@ -56,6 +57,19 @@ std::string BuildUpdateCheckRequest(
 // </request>
 std::string BuildEventPingRequest(const Configurator& config,
                                   const Component& component);
+
+// Returns a string representing one ping event for the update of a component.
+// The event type for this ping event is 3.
+std::string BuildUpdateCompleteEventElement(const Component& component);
+
+// Returns a string representing one ping event for the uninstall of a
+// component. The event type for this ping event is 4.
+std::string BuildUninstalledEventElement(const Component& component);
+
+// Returns a string representing a download complete event corresponding to
+// one download metrics instance. The event type for this ping event is 14.
+std::string BuildDownloadCompleteEventElement(
+    const CrxDownloader::DownloadMetrics& metrics);
 
 // An update protocol request starts with a common preamble which includes
 // version and platform information for Chrome and the operating system,

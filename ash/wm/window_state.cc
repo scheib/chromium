@@ -11,8 +11,10 @@
 #include "ash/screen_util.h"
 #include "ash/wm/default_state.h"
 #include "ash/wm/window_positioning_utils.h"
+#include "ash/wm/window_properties.h"
 #include "ash/wm/window_state_delegate.h"
 #include "ash/wm/window_state_observer.h"
+#include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm_window.h"
 #include "base/auto_reset.h"
@@ -427,6 +429,26 @@ void WindowState::SetBoundsDirectCrossFade(const gfx::Rect& new_bounds) {
   }
 
   window_->SetBoundsDirectCrossFade(new_bounds);
+}
+
+WindowState* GetActiveWindowState() {
+  aura::Window* active = GetActiveWindow();
+  return active ? GetWindowState(active) : nullptr;
+}
+
+WindowState* GetWindowState(aura::Window* window) {
+  if (!window)
+    return nullptr;
+  WindowState* settings = window->GetProperty(kWindowStateKey);
+  if (!settings) {
+    settings = new WindowState(WmWindow::Get(window));
+    window->SetProperty(kWindowStateKey, settings);
+  }
+  return settings;
+}
+
+const WindowState* GetWindowState(const aura::Window* window) {
+  return GetWindowState(const_cast<aura::Window*>(window));
 }
 
 }  // namespace wm

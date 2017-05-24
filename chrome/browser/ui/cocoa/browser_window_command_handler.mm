@@ -56,6 +56,18 @@ void UpdateToggleStateWithTag(NSInteger tag, id item, NSWindow* window) {
     SetToggleState(prefs->GetBoolean(prefs::kShowFullscreenToolbar), item);
     return;
   }
+
+  if (tag == IDC_WINDOW_MUTE_TAB) {
+    TabStripModel* model = browser->tab_strip_model();
+    SetToggleState(!model->WillContextMenuMute(model->active_index()), item);
+    return;
+  }
+
+  if (tag == IDC_WINDOW_PIN_TAB) {
+    TabStripModel* model = browser->tab_strip_model();
+    SetToggleState(!model->WillContextMenuPin(model->active_index()), item);
+    return;
+  }
 }
 
 NSString* GetTitleForViewsFullscreenMenuItem(Browser* browser) {

@@ -162,12 +162,11 @@ void SearchIPCRouter::SendThemeBackgroundInfo(
   search_box()->ThemeChanged(theme_info);
 }
 
-void SearchIPCRouter::Submit(const base::string16& text,
-                             const EmbeddedSearchRequestParams& params) {
+void SearchIPCRouter::Submit(const EmbeddedSearchRequestParams& params) {
   if (!policy_->ShouldSubmitQuery())
     return;
 
-  search_box()->Submit(text, params);
+  search_box()->Submit(params);
 }
 
 void SearchIPCRouter::OnTabActivated() {

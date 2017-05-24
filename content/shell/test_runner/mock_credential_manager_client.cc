@@ -46,7 +46,7 @@ void MockCredentialManagerClient::DispatchRequireUserMediation(
 }
 
 void MockCredentialManagerClient::DispatchGet(
-    bool zero_click_only,
+    blink::WebCredentialMediationRequirement mediation,
     bool include_passwords,
     const blink::WebVector<blink::WebURL>& federations,
     RequestCallbacks* callbacks) {

@@ -67,6 +67,7 @@
 #include "content/public/common/url_constants.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/navigation_handle_observer.h"
 #include "content/public/test/test_frame_navigation_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
@@ -6412,14 +6413,15 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, PopupMenuTest) {
   RenderWidgetHostViewBase* rwhv_root = static_cast<RenderWidgetHostViewBase*>(
       root->current_frame_host()->GetRenderWidgetHost()->GetView());
 #endif
-  web_contents()->SendScreenRects();
 
-  content::TestNavigationObserver navigation_observer(shell()->web_contents());
   FrameTreeNode* child_node = root->child_at(0);
   GURL site_url(embedded_test_server()->GetURL(
       "baz.com", "/site_isolation/page-with-select.html"));
   NavigateFrameToURL(child_node, site_url);
-  navigation_observer.Wait();
+
+  web_contents()->SendScreenRects();
+
+  WaitForChildFrameSurfaceReady(child_node->current_frame_host());
 
   RenderWidgetHostViewBase* rwhv_child = static_cast<RenderWidgetHostViewBase*>(
       child_node->current_frame_host()->GetRenderWidgetHost()->GetView());
@@ -8703,6 +8705,7 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
 
   // Navigate main tab to a b.com URL that will not commit.
   GURL stall_url(embedded_test_server()->GetURL("b.com", "/title2.html"));
+  NavigationHandleObserver handle_observer(shell()->web_contents(), stall_url);
   TestNavigationManager delayer(shell()->web_contents(), stall_url);
   shell()->LoadURL(stall_url);
   EXPECT_TRUE(delayer.WaitForRequestStart());
@@ -8719,6 +8722,7 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
   // Since the navigation above didn't commit, the b.com RenderViewHost in the
   // main tab should still not be active.
   EXPECT_FALSE(rvh->is_active());
+  EXPECT_EQ(net::ERR_ABORTED, handle_observer.net_error_code());
 
   // Navigate popup to b.com to recreate the b.com process.  When creating
   // opener proxies, |rvh| should be reused as a swapped out RVH.  In

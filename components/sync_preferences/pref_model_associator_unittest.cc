@@ -65,15 +65,13 @@ class AbstractPreferenceMergeTest : public testing::Test {
   void SetContentPattern(base::DictionaryValue* patterns_dict,
                          const std::string& expression,
                          int setting) {
-    base::DictionaryValue* expression_dict;
-    bool found = patterns_dict->GetDictionaryWithoutPathExpansion(
-        expression, &expression_dict);
-    if (!found) {
-      expression_dict = new base::DictionaryValue;
-      patterns_dict->SetWithoutPathExpansion(expression, expression_dict);
+    base::DictionaryValue* expression_dict = nullptr;
+    if (!patterns_dict->GetDictionaryWithoutPathExpansion(expression,
+                                                          &expression_dict)) {
+      expression_dict = patterns_dict->SetDictionaryWithoutPathExpansion(
+          expression, base::MakeUnique<base::DictionaryValue>());
     }
-    expression_dict->SetWithoutPathExpansion("setting",
-                                             new base::Value(setting));
+    expression_dict->SetIntegerWithoutPathExpansion("setting", setting);
   }
 
   void SetPrefToEmpty(const std::string& pref_name) {

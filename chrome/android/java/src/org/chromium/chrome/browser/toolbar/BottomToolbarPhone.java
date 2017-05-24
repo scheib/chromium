@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.toolbar;
 
+import android.animation.Animator;
+import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
@@ -12,8 +14,10 @@ import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
 import android.support.v7.widget.Toolbar;
 import android.util.AttributeSet;
+import android.util.Property;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 
 import org.chromium.base.ApiCompatibilityUtils;
@@ -22,12 +26,16 @@ import org.chromium.chrome.browser.device.DeviceClassManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.util.ColorUtils;
 import org.chromium.chrome.browser.util.FeatureUtilities;
+import org.chromium.chrome.browser.util.MathUtils;
 import org.chromium.chrome.browser.widget.TintedImageButton;
 import org.chromium.chrome.browser.widget.ToolbarProgressBar;
+import org.chromium.chrome.browser.widget.animation.CancelAwareAnimatorListener;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheet;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheetMetrics;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheetObserver;
 import org.chromium.chrome.browser.widget.bottomsheet.EmptyBottomSheetObserver;
+import org.chromium.ui.base.LocalizationUtils;
+import org.chromium.ui.interpolators.BakedBezierInterpolator;
 
 /**
  * Phone specific toolbar that exists at the bottom of the screen.
@@ -53,33 +61,51 @@ public class BottomToolbarPhone extends ToolbarPhone {
         }
 
         @Override
-        public void onTransitionPeekToHalf(float transitionFraction) {
-            // TODO(twellington): animate end toolbar button appearance/disappearance.
-            if (transitionFraction >= 0.5 && !mShouldHideEndToolbarButtons) {
-                mShouldHideEndToolbarButtons = true;
-                updateUrlExpansionAnimation();
-            } else if (transitionFraction < 0.5 && mShouldHideEndToolbarButtons) {
-                mShouldHideEndToolbarButtons = false;
-                updateUrlExpansionAnimation();
-            }
-
-            boolean buttonsClickable = transitionFraction == 0.f;
-            mToggleTabStackButton.setClickable(buttonsClickable);
-            mMenuButton.setClickable(buttonsClickable);
-        }
-
-        @Override
         public void onSheetOffsetChanged(float heightFraction) {
             boolean isMovingDown = heightFraction < mLastHeightFraction;
+            boolean isMovingUp = heightFraction > mLastHeightFraction;
             mLastHeightFraction = heightFraction;
+
+            // TODO(twellington): Ideally we would wait to kick off an animation until the sheet is
+            // released if we know it was opened via swipe.
+            if (isMovingUp && !mAnimatingToolbarButtonDisappearance
+                    && mToolbarButtonVisibilityPercent != 0.f) {
+                animateToolbarButtonVisibility(false);
+            } else if (isMovingDown && heightFraction <= 0.5f && !mAnimatingToolbarButtonAppearance
+                    && mToolbarButtonVisibilityPercent != 1.f) {
+                animateToolbarButtonVisibility(true);
+            }
 
             // The only time the omnibox should have focus is when the sheet is fully expanded. Any
             // movement of the sheet should unfocus it.
             if (isMovingDown && getLocationBar().isUrlBarFocused()) {
                 getLocationBar().setUrlBarFocus(false);
             }
+
+            boolean buttonsClickable = heightFraction == 0.f;
+            mToggleTabStackButton.setClickable(buttonsClickable);
+            mMenuButton.setClickable(buttonsClickable);
+            if (!mUseToolbarHandle) mExpandButton.setClickable(buttonsClickable);
         }
     };
+
+    /**
+     * A property for animating the disappearance of toolbar bar buttons. 1.f is fully visible
+     * and 0.f is fully hidden.
+     */
+    private final Property<BottomToolbarPhone, Float> mToolbarButtonVisibilityProperty =
+            new Property<BottomToolbarPhone, Float>(Float.class, "") {
+                @Override
+                public Float get(BottomToolbarPhone object) {
+                    return object.mToolbarButtonVisibilityPercent;
+                }
+
+                @Override
+                public void set(BottomToolbarPhone object, Float value) {
+                    object.mToolbarButtonVisibilityPercent = value;
+                    if (!mUrlFocusChangeInProgress) updateToolbarButtonVisibility();
+                }
+            };
 
     /** The background alpha for the tab switcher. */
     private static final float TAB_SWITCHER_TOOLBAR_ALPHA = 0.7f;
@@ -97,10 +123,9 @@ public class BottomToolbarPhone extends ToolbarPhone {
     private TintedImageButton mExpandButton;
 
     /**
-     * Whether the end toolbar buttons should be hidden regardless of whether the URL bar is
-     * focused.
+     * Whether the toolbar buttons should be hidden regardless of whether the URL bar is focused.
      */
-    private boolean mShouldHideEndToolbarButtons;
+    private boolean mShouldHideToolbarButtons;
 
     /**
      * This tracks the height fraction of the bottom bar to determine if it is moving up or down.
@@ -112,6 +137,27 @@ public class BottomToolbarPhone extends ToolbarPhone {
 
     /** Whether or not the toolbar handle should be used. */
     private boolean mUseToolbarHandle;
+
+    /**
+     * Tracks whether the toolbar buttons are hidden, with 1.f being fully visible and 0.f being
+     * fully hidden.
+     */
+    private float mToolbarButtonVisibilityPercent;
+
+    /** Animates toolbar button visibility. */
+    private Animator mToolbarButtonVisibilityAnimator;
+
+    /** Whether the appearance of the toolbar buttons is currently animating. */
+    private boolean mAnimatingToolbarButtonAppearance;
+
+    /** Whether the disappearance of the toolbar buttons is currently animating. */
+    private boolean mAnimatingToolbarButtonDisappearance;
+
+    /** The current left position of the location bar background. */
+    private int mLocationBarBackgroundLeftPosition;
+
+    /** The current right position of the location bar background. */
+    private int mLocationBarBackgroundRightPosition;
 
     /**
      * Constructs a BottomToolbarPhone object.
@@ -128,6 +174,7 @@ public class BottomToolbarPhone extends ToolbarPhone {
         mLocationBarVerticalMargin =
                 getResources().getDimensionPixelOffset(R.dimen.bottom_location_bar_vertical_margin);
         mUseToolbarHandle = true;
+        mToolbarButtonVisibilityPercent = 1.f;
     }
 
     /**
@@ -204,6 +251,11 @@ public class BottomToolbarPhone extends ToolbarPhone {
                     hasFocus);
         }
 
+        if (mToolbarButtonVisibilityAnimator != null
+                && mToolbarButtonVisibilityAnimator.isRunning()) {
+            mToolbarButtonVisibilityAnimator.end();
+        }
+
         super.onUrlFocusChange(hasFocus);
     }
 
@@ -247,6 +299,19 @@ public class BottomToolbarPhone extends ToolbarPhone {
         mProgressBar.setProgressBarContainer(coordinator);
     }
 
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
+        if (!mDisableLocationBarRelayout && !isInTabSwitcherMode()
+                && (mAnimatingToolbarButtonAppearance || mAnimatingToolbarButtonDisappearance)) {
+            // ToolbarPhone calls #updateUrlExpansionAnimation() in its #onMeasure(). If the toolbar
+            // button visibility animation is running, call #updateToolbarButtonVisibility() to
+            // ensure that view properties are set correctly.
+            updateToolbarButtonVisibility();
+        }
+    }
+
     /**
      * @return The extra top margin that should be applied to the browser controls views to
      *         correctly offset them from the handle that sits above them.
@@ -259,10 +324,57 @@ public class BottomToolbarPhone extends ToolbarPhone {
     @Override
     protected int getBoundsAfterAccountingForLeftButton() {
         int padding = super.getBoundsAfterAccountingForLeftButton();
-        if (!mUseToolbarHandle && mExpandButton.getVisibility() != GONE) {
+        if (!mUseToolbarHandle && mExpandButton.getVisibility() != GONE
+                && !mShouldHideToolbarButtons) {
             padding = mExpandButton.getMeasuredWidth();
         }
         return padding;
+    }
+
+    @Override
+    protected int getLeftPositionOfLocationBarBackground(VisualState visualState) {
+        if (!mAnimatingToolbarButtonAppearance && !mAnimatingToolbarButtonDisappearance) {
+            mLocationBarBackgroundLeftPosition =
+                    super.getLeftPositionOfLocationBarBackground(visualState);
+        } else {
+            int targetPosition = getViewBoundsLeftOfLocationBar(visualState);
+            int currentPosition = targetPosition + getLocationBarBackgroundLeftOffset();
+            mLocationBarBackgroundLeftPosition = (int) MathUtils.interpolate(
+                    targetPosition, currentPosition, mToolbarButtonVisibilityPercent);
+        }
+
+        return mLocationBarBackgroundLeftPosition;
+    }
+
+    @Override
+    protected int getRightPositionOfLocationBarBackground(VisualState visualState) {
+        if (!mAnimatingToolbarButtonAppearance && !mAnimatingToolbarButtonDisappearance) {
+            mLocationBarBackgroundRightPosition =
+                    super.getRightPositionOfLocationBarBackground(visualState);
+        } else {
+            int targetPosition = getViewBoundsRightOfLocationBar(visualState);
+            int currentPosition = targetPosition - getLocationBarBackgroundRightOffset();
+            mLocationBarBackgroundRightPosition = (int) MathUtils.interpolate(
+                    targetPosition, currentPosition, mToolbarButtonVisibilityPercent);
+        }
+
+        return mLocationBarBackgroundRightPosition;
+    }
+
+    private int getLocationBarBackgroundLeftOffset() {
+        if (!ApiCompatibilityUtils.isLayoutRtl(this)) {
+            return !mUseToolbarHandle ? mExpandButton.getMeasuredWidth() - mToolbarSidePadding : 0;
+        } else {
+            return mToolbarButtonsContainer.getMeasuredWidth() - mToolbarSidePadding;
+        }
+    }
+
+    private int getLocationBarBackgroundRightOffset() {
+        if (!ApiCompatibilityUtils.isLayoutRtl(this)) {
+            return mToolbarButtonsContainer.getMeasuredWidth() - mToolbarSidePadding;
+        } else {
+            return !mUseToolbarHandle ? mExpandButton.getMeasuredWidth() - mToolbarSidePadding : 0;
+        }
     }
 
     @Override
@@ -279,8 +391,13 @@ public class BottomToolbarPhone extends ToolbarPhone {
         super.updateUrlExpansionAnimation();
 
         if (!mUseToolbarHandle) {
-            mExpandButton.setVisibility(mShouldHideEndToolbarButtons ? View.GONE : View.VISIBLE);
+            mExpandButton.setVisibility(mShouldHideToolbarButtons ? View.INVISIBLE : View.VISIBLE);
         }
+    }
+
+    @Override
+    protected boolean isChildLeft(View child) {
+        return (child == mNewTabButton || child == mExpandButton) ^ LocalizationUtils.isLayoutRtl();
     }
 
     @Override
@@ -456,8 +573,8 @@ public class BottomToolbarPhone extends ToolbarPhone {
     }
 
     @Override
-    protected boolean shouldHideEndToolbarButtons() {
-        return mShouldHideEndToolbarButtons;
+    protected boolean shouldHideToolbarButtons() {
+        return mShouldHideToolbarButtons;
     }
 
     @Override
@@ -487,5 +604,146 @@ public class BottomToolbarPhone extends ToolbarPhone {
                 ApiCompatibilityUtils.getPaddingEnd(otherToolbar), otherToolbar.getPaddingBottom());
 
         otherToolbar.requestLayout();
+    }
+
+    private void animateToolbarButtonVisibility(final boolean visible) {
+        if (mToolbarButtonVisibilityAnimator != null
+                && mToolbarButtonVisibilityAnimator.isRunning()) {
+            mToolbarButtonVisibilityAnimator.cancel();
+            mToolbarButtonVisibilityAnimator = null;
+        }
+
+        if (mUrlFocusChangeInProgress) {
+            if (visible) {
+                mShouldHideToolbarButtons = false;
+                mToolbarButtonVisibilityPercent = 1.f;
+
+                mToolbarButtonsContainer.setAlpha(1.f);
+                mToolbarButtonsContainer.setVisibility(View.VISIBLE);
+                mToolbarButtonsContainer.setTranslationX(0);
+
+                mExpandButton.setAlpha(1.f);
+                mExpandButton.setVisibility(View.VISIBLE);
+                mExpandButton.setTranslationX(0);
+                requestLayout();
+            } else {
+                mToolbarButtonVisibilityPercent = 0.f;
+                // Wait to set mShouldHideToolbarButtons until URL focus finishes.
+            }
+
+            return;
+        }
+
+        mToolbarButtonVisibilityAnimator = ObjectAnimator.ofFloat(
+                BottomToolbarPhone.this, mToolbarButtonVisibilityProperty, visible ? 1.f : 0.f);
+
+        mToolbarButtonVisibilityAnimator.setDuration(BottomSheet.BASE_ANIMATION_DURATION_MS);
+        mToolbarButtonVisibilityAnimator.setInterpolator(visible
+                        ? BakedBezierInterpolator.FADE_IN_CURVE
+                        : BakedBezierInterpolator.FADE_OUT_CURVE);
+
+        mToolbarButtonVisibilityAnimator.addListener(new CancelAwareAnimatorListener() {
+            @Override
+            public void onStart(Animator animation) {
+                mAnimatingToolbarButtonDisappearance = !visible;
+                mAnimatingToolbarButtonAppearance = visible;
+
+                if (!visible) {
+                    mShouldHideToolbarButtons = true;
+                    mLayoutLocationBarInFocusedMode = true;
+                    requestLayout();
+                } else {
+                    mDisableLocationBarRelayout = true;
+                }
+            }
+
+            @Override
+            public void onCancel(Animator animation) {
+                if (visible) mDisableLocationBarRelayout = false;
+
+                mAnimatingToolbarButtonDisappearance = false;
+                mAnimatingToolbarButtonAppearance = false;
+                mToolbarButtonVisibilityAnimator = null;
+            }
+
+            @Override
+            public void onEnd(Animator animation) {
+                if (visible) {
+                    mShouldHideToolbarButtons = false;
+                    mDisableLocationBarRelayout = false;
+                    mLayoutLocationBarInFocusedMode = false;
+                    requestLayout();
+                }
+
+                mAnimatingToolbarButtonDisappearance = false;
+                mAnimatingToolbarButtonAppearance = false;
+                mToolbarButtonVisibilityAnimator = null;
+            }
+        });
+
+        mToolbarButtonVisibilityAnimator.start();
+    }
+
+    @Override
+    protected void onUrlFocusChangeAnimationFinished() {
+        if (urlHasFocus()) {
+            mShouldHideToolbarButtons = true;
+            mToolbarButtonVisibilityPercent = 0.f;
+        }
+    }
+
+    private void updateToolbarButtonVisibility() {
+        boolean isRtl = ApiCompatibilityUtils.isLayoutRtl(this);
+        float toolbarButtonsContainerWidth = mToolbarButtonsContainer.getMeasuredWidth();
+        float toolbarButtonsTranslationX =
+                toolbarButtonsContainerWidth * (1.f - mToolbarButtonVisibilityPercent);
+        if (isRtl) toolbarButtonsTranslationX *= -1;
+
+        mToolbarButtonsContainer.setTranslationX(toolbarButtonsTranslationX);
+        mToolbarButtonsContainer.setAlpha(mToolbarButtonVisibilityPercent);
+        mToolbarButtonsContainer.setVisibility(
+                mToolbarButtonVisibilityPercent > 0.f ? View.VISIBLE : View.INVISIBLE);
+
+        if (!mUseToolbarHandle) {
+            float expandButtonWidth = mExpandButton.getMeasuredWidth();
+            float expandButtonTranslationX =
+                    expandButtonWidth * (1.f - mToolbarButtonVisibilityPercent);
+            if (!isRtl) expandButtonTranslationX *= -1;
+
+            mExpandButton.setTranslationX(expandButtonTranslationX);
+            mExpandButton.setAlpha(mToolbarButtonVisibilityPercent);
+            mExpandButton.setVisibility(
+                    mToolbarButtonVisibilityPercent > 0.f ? View.VISIBLE : View.INVISIBLE);
+        }
+
+        float locationBarTranslationX;
+        boolean isLocationBarRtl = ApiCompatibilityUtils.isLayoutRtl(mLocationBar);
+
+        if (isLocationBarRtl) {
+            locationBarTranslationX = mLocationBarBackgroundRightPosition
+                    - mUnfocusedLocationBarLayoutWidth - mUnfocusedLocationBarLayoutLeft;
+        } else {
+            locationBarTranslationX =
+                    mUnfocusedLocationBarLayoutLeft + mLocationBarBackgroundLeftPosition;
+        }
+
+        FrameLayout.LayoutParams locationBarLayoutParams = getFrameLayoutParams(mLocationBar);
+        int currentLeftMargin = locationBarLayoutParams.leftMargin;
+        locationBarTranslationX -= (currentLeftMargin + mToolbarSidePadding);
+
+        // Get the padding straight from the location bar instead of
+        // |mLocationBarBackgroundPadding|, because it might be different in incognito mode.
+        if (isRtl) {
+            locationBarTranslationX -= mLocationBar.getPaddingRight();
+        } else {
+            locationBarTranslationX += mLocationBar.getPaddingLeft();
+        }
+
+        mLocationBar.setTranslationX(locationBarTranslationX);
+
+        // Force an invalidation of the location bar to properly handle the clipping of the URL
+        // bar text as a result of the bounds changing.
+        mLocationBar.invalidate();
+        invalidate();
     }
 }

@@ -46,6 +46,8 @@ int SBThreatTypeToJavaThreatType(const SBThreatType& sb_threat_type) {
       return safe_browsing::JAVA_THREAT_TYPE_SOCIAL_ENGINEERING;
     case SB_THREAT_TYPE_URL_MALWARE:
       return safe_browsing::JAVA_THREAT_TYPE_POTENTIALLY_HARMFUL_APPLICATION;
+    case SB_THREAT_TYPE_URL_UNWANTED:
+      return safe_browsing::JAVA_THREAT_TYPE_UNWANTED_SOFTWARE;
     default:
       NOTREACHED();
       return 0;

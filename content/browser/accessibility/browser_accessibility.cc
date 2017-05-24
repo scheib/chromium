@@ -40,16 +40,13 @@ BrowserAccessibility* BrowserAccessibility::Create() {
 BrowserAccessibility::BrowserAccessibility()
     : manager_(nullptr),
       node_(nullptr),
-      unique_id_(ui::GetNextAXPlatformNodeUniqueId()),
-      platform_node_(nullptr) {
+      unique_id_(ui::GetNextAXPlatformNodeUniqueId()) {
   g_unique_id_map.Get()[unique_id_] = this;
 }
 
 BrowserAccessibility::~BrowserAccessibility() {
   if (unique_id_)
     g_unique_id_map.Get().erase(unique_id_);
-  if (platform_node_)
-    platform_node_->Destroy();
 }
 
 // static
@@ -65,13 +62,6 @@ void BrowserAccessibility::Init(BrowserAccessibilityManager* manager,
     ui::AXNode* node) {
   manager_ = manager;
   node_ = node;
-
-// Here we create the AXPlatformNode which contains a platform-specific
-// implementation of requried accessibility APIS for this node. At this point,
-// we only are creating this object for Windows. See http://crbug.com/703369
-#if defined(OS_WIN)
-  platform_node_ = ui::AXPlatformNode::Create(this);
-#endif
 }
 
 bool BrowserAccessibility::PlatformIsLeaf() const {
@@ -895,6 +885,10 @@ bool BrowserAccessibility::HasState(ui::AXState state_enum) const {
   return GetData().HasState(state_enum);
 }
 
+bool BrowserAccessibility::HasAction(ui::AXAction action_enum) const {
+  return GetData().HasAction(action_enum);
+}
+
 bool BrowserAccessibility::IsCellOrTableHeaderRole() const {
   return (GetRole() == ui::AX_ROLE_CELL ||
           GetRole() == ui::AX_ROLE_COLUMN_HEADER ||
@@ -1139,6 +1133,16 @@ gfx::Rect BrowserAccessibility::RelativeToAbsoluteBounds(
   return gfx::ToEnclosingRect(bounds);
 }
 
+gfx::NativeViewAccessible BrowserAccessibility::GetNativeViewAccessible() {
+  // TODO(703369) On Windows, where we have started to migrate to an
+  // AXPlatformNode implementation, the BrowserAccessibilityWin subclass has
+  // overridden this method. On all other platforms, this method should not be
+  // called yet. In the future, when all subclasses have moved over to be
+  // implemented by AXPlatformNode, we may make this method completely virtual.
+  NOTREACHED();
+  return nullptr;
+}
+
 //
 // AXPlatformNodeDelegate.
 //
@@ -1157,9 +1161,10 @@ gfx::NativeWindow BrowserAccessibility::GetTopLevelWidget() {
 
 gfx::NativeViewAccessible BrowserAccessibility::GetParent() {
   auto* parent = PlatformGetParent();
-  if (parent && parent->platform_node_)
-    return parent->platform_node_->GetNativeViewAccessible();
-  return nullptr;
+  if (!parent)
+    return nullptr;
+
+  return parent->GetNativeViewAccessible();
 }
 
 int BrowserAccessibility::GetChildCount() {
@@ -1168,9 +1173,10 @@ int BrowserAccessibility::GetChildCount() {
 
 gfx::NativeViewAccessible BrowserAccessibility::ChildAtIndex(int index) {
   auto* child = PlatformGetChild(index);
-  if (child && child->platform_node_)
-    return child->platform_node_->GetNativeViewAccessible();
-  return nullptr;
+  if (!child)
+    return nullptr;
+
+  return child->GetNativeViewAccessible();
 }
 
 gfx::Rect BrowserAccessibility::GetScreenBoundsRect() const {

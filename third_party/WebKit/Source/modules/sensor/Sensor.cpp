@@ -32,8 +32,7 @@ Sensor::Sensor(ExecutionContext* execution_context,
     : ContextLifecycleObserver(execution_context),
       sensor_options_(sensor_options),
       type_(type),
-      state_(SensorState::kIdle),
-      pending_reading_update_(false) {
+      state_(SensorState::kIdle) {
   // Check secure context.
   String error_message;
   if (!execution_context->IsSecureContext(error_message)) {
@@ -175,10 +174,8 @@ void Sensor::OnSensorReadingChanged() {
 
   // Return if reading update is already scheduled or the cached
   // reading is up-to-date.
-  if (pending_reading_update_)
+  if (pending_reading_update_.IsActive())
     return;
-
-  pending_reading_update_ = true;
 
   double elapsedTime = sensor_proxy_->reading().timestamp - reading_.timestamp;
   DCHECK_GT(elapsedTime, 0.0);
@@ -195,12 +192,16 @@ void Sensor::OnSensorReadingChanged() {
     // Invoke JS callbacks in a different callchain to obviate
     // possible modifications of SensorProxy::observers_ container
     // while it is being iterated through.
-    TaskRunnerHelper::Get(TaskType::kSensor, GetExecutionContext())
-        ->PostTask(BLINK_FROM_HERE, std::move(sensor_reading_changed));
+    pending_reading_update_ =
+        TaskRunnerHelper::Get(TaskType::kSensor, GetExecutionContext())
+            ->PostCancellableTask(BLINK_FROM_HERE,
+                                  std::move(sensor_reading_changed));
   } else {
-    TaskRunnerHelper::Get(TaskType::kSensor, GetExecutionContext())
-        ->PostDelayedTask(BLINK_FROM_HERE, std::move(sensor_reading_changed),
-                          WTF::TimeDelta::FromSecondsD(waitingTime));
+    pending_reading_update_ =
+        TaskRunnerHelper::Get(TaskType::kSensor, GetExecutionContext())
+            ->PostDelayedCancellableTask(
+                BLINK_FROM_HERE, std::move(sensor_reading_changed),
+                WTF::TimeDelta::FromSecondsD(waitingTime));
   }
 }
 
@@ -252,6 +253,8 @@ void Sensor::StopListening() {
   if (state_ == SensorState::kIdle)
     return;
 
+  pending_reading_update_.Cancel();
+
   DCHECK(sensor_proxy_);
   if (sensor_proxy_->IsInitialized()) {
     DCHECK(configuration_);
@@ -299,7 +302,6 @@ void Sensor::HandleError(ExceptionCode code,
 
 void Sensor::UpdateReading() {
   reading_ = sensor_proxy_->reading();
-  pending_reading_update_ = false;
   DispatchEvent(Event::Create(EventTypeNames::change));
 }
 

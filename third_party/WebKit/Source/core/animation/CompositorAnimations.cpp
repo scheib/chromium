@@ -446,15 +446,16 @@ void CompositorAnimations::AttachCompositedLayers(Element& element,
     return;
 
   if (!element.GetLayoutObject() ||
-      !element.GetLayoutObject()->IsBoxModelObject())
+      !element.GetLayoutObject()->IsBoxModelObject() ||
+      !element.GetLayoutObject()->HasLayer())
     return;
+
+  PaintLayer* layer =
+      ToLayoutBoxModelObject(element.GetLayoutObject())->Layer();
 
   // Composited animations do not depend on a composited layer mapping for SPv2.
   if (!RuntimeEnabledFeatures::slimmingPaintV2Enabled()) {
-    PaintLayer* layer =
-        ToLayoutBoxModelObject(element.GetLayoutObject())->Layer();
-
-    if (!layer || !layer->IsAllowedToQueryCompositingState() ||
+    if (!layer->IsAllowedToQueryCompositingState() ||
         !layer->GetCompositedLayerMapping() ||
         !layer->GetCompositedLayerMapping()->MainGraphicsLayer())
       return;
@@ -466,8 +467,8 @@ void CompositorAnimations::AttachCompositedLayers(Element& element,
   }
 
   CompositorAnimationPlayer* compositor_player = animation.CompositorPlayer();
-  compositor_player->AttachElement(CompositorElementIdFromDOMNodeId(
-      DOMNodeIds::IdForNode(&element), CompositorElementIdNamespace::kPrimary));
+  compositor_player->AttachElement(CompositorElementIdFromPaintLayerId(
+      layer->UniqueId(), CompositorElementIdNamespace::kPrimary));
 }
 
 bool CompositorAnimations::ConvertTimingForCompositor(

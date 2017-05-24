@@ -29,6 +29,7 @@
 #include "base/strings/string_split.h"
 #include "base/test/sequenced_worker_pool_owner.h"
 #include "chromeos/audio/cras_audio_handler.h"
+#include "chromeos/cryptohome/system_salt_getter.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/network/network_handler.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -150,6 +151,7 @@ void AshTestHelper::SetUp(bool start_session) {
     // Create CrasAudioHandler for testing since g_browser_process is not
     // created in AshTestBase tests.
     chromeos::CrasAudioHandler::InitializeForTesting();
+    chromeos::SystemSaltGetter::Initialize();
   }
 
   ash_test_environment_->SetUp();
@@ -227,6 +229,7 @@ void AshTestHelper::TearDown() {
     // Remove global message center state.
     message_center::MessageCenter::Shutdown();
 
+    chromeos::SystemSaltGetter::Shutdown();
     chromeos::CrasAudioHandler::Shutdown();
   }
 

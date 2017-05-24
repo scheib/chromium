@@ -178,7 +178,6 @@ class MockSubresourceFilterClient : public SubresourceFilterClient {
     return whitelisted_hosts_.count(handle->GetURL().host());
   }
 
-  void WhitelistByContentSettings(const GURL& url) override {}
   void WhitelistInCurrentWebContents(const GURL& url) override {
     ASSERT_TRUE(url.SchemeIsHTTPOrHTTPS());
     whitelisted_hosts_.insert(url.host());
@@ -311,20 +310,18 @@ class ContentSubresourceFilterDriverFactoryTest
     navigation_simulator->SetTransition(transition);
     navigation_simulator->Start();
 
-    if (blacklisted_urls.front()) {
-      factory()->OnMainResourceMatchedSafeBrowsingBlacklist(
-          navigation_chain.front(), threat_type, threat_type_metadata);
-    }
     ::testing::Mock::VerifyAndClearExpectations(client());
+    for (size_t i = 1; i < navigation_chain.size(); ++i)
+      navigation_simulator->Redirect(navigation_chain[i]);
 
-    for (size_t i = 1; i < navigation_chain.size(); ++i) {
-      const GURL url = navigation_chain[i];
-      if (i < blacklisted_urls.size() && blacklisted_urls[i]) {
-        factory()->OnMainResourceMatchedSafeBrowsingBlacklist(
-            url, threat_type, threat_type_metadata);
-      }
-      navigation_simulator->Redirect(url);
+    if (blacklisted_urls.size() != navigation_chain.size() ||
+        !blacklisted_urls.back()) {
+      threat_type = safe_browsing::SBThreatType::SB_THREAT_TYPE_SAFE;
+      threat_type_metadata = safe_browsing::ThreatPatternType::NONE;
     }
+    factory()->OnSafeBrowsingMatchComputed(
+        navigation_simulator->GetNavigationHandle(), threat_type,
+        threat_type_metadata);
     std::string suffix;
     ActivationList activation_list =
         GetListForThreatTypeAndMetadata(threat_type, threat_type_metadata);
@@ -736,9 +733,17 @@ TEST_P(ContentSubresourceFilterDriverFactoryActivationScopeTest,
                                   "https://example.test"};
   for (auto* url : unsupported_urls) {
     SCOPED_TRACE(url);
+    ActivationDecision expected_decision =
+        ActivationDecision::UNSUPPORTED_SCHEME;
+    // We only log UNSUPPORTED_SCHEME if the navigation would have otherwise
+    // activated. Note that non http/s URLs will never match an activation list.
+    if (test_data.expected_activation_decision ==
+            ActivationDecision::ACTIVATION_CONDITIONS_NOT_MET ||
+        test_data.activation_scope == ActivationScope::ACTIVATION_LIST) {
+      expected_decision = ActivationDecision::ACTIVATION_CONDITIONS_NOT_MET;
+    }
     NavigateAndExpectActivation({test_data.url_matches_activation_list},
-                                {GURL(url)},
-                                ActivationDecision::UNSUPPORTED_SCHEME);
+                                {GURL(url)}, expected_decision);
   }
   for (auto* url : supported_urls) {
     SCOPED_TRACE(url);

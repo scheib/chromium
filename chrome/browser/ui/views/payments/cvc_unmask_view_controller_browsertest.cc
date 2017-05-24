@@ -6,6 +6,7 @@
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
+#include "ui/views/controls/textfield/textfield.h"
 
 namespace payments {
 
@@ -81,6 +82,42 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCvcUnmaskViewControllerTest,
   WaitForObservedEvent();
 
   ExpectBodyContains({"\"cardSecurityCode\": \"012\""});
+}
+
+IN_PROC_BROWSER_TEST_F(PaymentRequestCvcUnmaskViewControllerTest,
+                       ButtonDisabled) {
+  autofill::AutofillProfile profile(autofill::test::GetFullProfile());
+  AddAutofillProfile(profile);
+  autofill::CreditCard card(autofill::test::GetCreditCard());  // Visa card.
+  card.set_billing_address_id(profile.guid());
+  AddCreditCard(card);
+
+  InvokePaymentRequestUI();
+
+  ResetEventObserver(DialogEvent::DIALOG_CLOSED);
+  // This prevents a timeout in error cases where PAY_BUTTON is disabled.
+  ASSERT_TRUE(dialog_view()
+                  ->GetViewByID(static_cast<int>(DialogViewID::PAY_BUTTON))
+                  ->enabled());
+  OpenCVCPromptWithCVC(base::ASCIIToUTF16(""));
+  views::View* done_button = dialog_view()->GetViewByID(
+      static_cast<int>(DialogViewID::CVC_PROMPT_CONFIRM_BUTTON));
+  EXPECT_FALSE(done_button->enabled());
+
+  views::Textfield* cvc_field =
+      static_cast<views::Textfield*>(dialog_view()->GetViewByID(
+          static_cast<int>(DialogViewID::CVC_PROMPT_TEXT_FIELD)));
+  cvc_field->SetText(base::UTF8ToUTF16(""));
+  cvc_field->InsertOrReplaceText(base::UTF8ToUTF16("0"));
+  EXPECT_FALSE(done_button->enabled());
+
+  cvc_field->SetText(base::UTF8ToUTF16(""));
+  cvc_field->InsertOrReplaceText(base::UTF8ToUTF16("aaa"));
+  EXPECT_FALSE(done_button->enabled());
+
+  cvc_field->SetText(base::UTF8ToUTF16(""));
+  cvc_field->InsertOrReplaceText(base::UTF8ToUTF16("111"));
+  EXPECT_TRUE(done_button->enabled());
 }
 
 }  // namespace payments

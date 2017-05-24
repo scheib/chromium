@@ -15,7 +15,7 @@ namespace {
 
 class CSPContextTest : public CSPContext {
  public:
-  const CSPViolationParams& last_violation() { return last_violation_; }
+  const std::vector<CSPViolationParams>& violations() { return violations_; }
 
   void AddSchemeToBypassCSP(const std::string& scheme) {
     scheme_to_bypass_.insert(scheme);
@@ -44,9 +44,9 @@ class CSPContextTest : public CSPContext {
  private:
   void ReportContentSecurityPolicyViolation(
       const CSPViolationParams& violation_params) override {
-    last_violation_ = violation_params;
+    violations_.push_back(violation_params);
   }
-  CSPViolationParams last_violation_;
+  std::vector<CSPViolationParams> violations_;
   std::set<std::string> scheme_to_bypass_;
   bool sanitize_data_for_use_in_csp_violation_ = false;
 };
@@ -121,12 +121,13 @@ TEST(CSPContextTest, SanitizeDataForUseInCspViolation) {
   {
     EXPECT_FALSE(context.IsAllowedByCsp(CSPDirective::FrameSrc, blocked_url,
                                         false, source_location));
-    EXPECT_EQ(context.last_violation().blocked_url, blocked_url);
-    EXPECT_EQ(context.last_violation().source_location.url,
+    ASSERT_EQ(1u, context.violations().size());
+    EXPECT_EQ(context.violations()[0].blocked_url, blocked_url);
+    EXPECT_EQ(context.violations()[0].source_location.url,
               "http://a.com/login");
-    EXPECT_EQ(context.last_violation().source_location.line_number, 10u);
-    EXPECT_EQ(context.last_violation().source_location.column_number, 20u);
-    EXPECT_EQ(context.last_violation().console_message,
+    EXPECT_EQ(context.violations()[0].source_location.line_number, 10u);
+    EXPECT_EQ(context.violations()[0].source_location.column_number, 20u);
+    EXPECT_EQ(context.violations()[0].console_message,
               "Refused to frame 'http://a.com/login?password=1234' because it "
               "violates the following Content Security Policy directive: "
               "\"frame-src a.com/iframe\".\n");
@@ -138,15 +139,45 @@ TEST(CSPContextTest, SanitizeDataForUseInCspViolation) {
   {
     EXPECT_FALSE(context.IsAllowedByCsp(CSPDirective::FrameSrc, blocked_url,
                                         false, source_location));
-    EXPECT_EQ(context.last_violation().blocked_url, blocked_url.GetOrigin());
-    EXPECT_EQ(context.last_violation().source_location.url, "http://a.com/");
-    EXPECT_EQ(context.last_violation().source_location.line_number, 0u);
-    EXPECT_EQ(context.last_violation().source_location.column_number, 0u);
-    EXPECT_EQ(context.last_violation().console_message,
+    ASSERT_EQ(2u, context.violations().size());
+    EXPECT_EQ(context.violations()[1].blocked_url, blocked_url.GetOrigin());
+    EXPECT_EQ(context.violations()[1].source_location.url, "http://a.com/");
+    EXPECT_EQ(context.violations()[1].source_location.line_number, 0u);
+    EXPECT_EQ(context.violations()[1].source_location.column_number, 0u);
+    EXPECT_EQ(context.violations()[1].console_message,
               "Refused to frame 'http://a.com/' because it violates the "
               "following Content Security Policy directive: \"frame-src "
               "a.com/iframe\".\n");
   }
+}
+
+// When several policies are infringed, all of them must be reported.
+TEST(CSPContextTest, MultipleInfringement) {
+  CSPContextTest context;
+  context.SetSelf(url::Origin(GURL("http://example.com")));
+
+  CSPSource source_a("", "a.com", false, url::PORT_UNSPECIFIED, false, "");
+  CSPSource source_b("", "b.com", false, url::PORT_UNSPECIFIED, false, "");
+  CSPSource source_c("", "c.com", false, url::PORT_UNSPECIFIED, false, "");
+
+  context.AddContentSecurityPolicy(
+      BuildPolicy(CSPDirective::FrameSrc, {source_a}));
+  context.AddContentSecurityPolicy(
+      BuildPolicy(CSPDirective::FrameSrc, {source_b}));
+  context.AddContentSecurityPolicy(
+      BuildPolicy(CSPDirective::FrameSrc, {source_c}));
+
+  EXPECT_FALSE(context.IsAllowedByCsp(
+      CSPDirective::FrameSrc, GURL("http://c.com"), false, SourceLocation()));
+  ASSERT_EQ(2u, context.violations().size());
+  const char console_message_a[] =
+      "Refused to frame 'http://c.com/' because it violates the following "
+      "Content Security Policy directive: \"frame-src a.com\".\n";
+  const char console_message_b[] =
+      "Refused to frame 'http://c.com/' because it violates the following "
+      "Content Security Policy directive: \"frame-src b.com\".\n";
+  EXPECT_EQ(console_message_a, context.violations()[0].console_message);
+  EXPECT_EQ(console_message_b, context.violations()[1].console_message);
 }
 
 }  // namespace content

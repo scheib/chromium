@@ -125,7 +125,7 @@ function testMarkCopied_FiresChangedEvent(callback) {
                       function() {
                         recorder.assertCallCount(1);
                         assertEquals(
-                            importer.ImportHistory.State.COPIED,
+                            importer.ImportHistoryState.COPIED,
                             recorder.getLastArguments()[0]['state']);
                       });
             });
@@ -202,7 +202,7 @@ function testMarkImport_FiresChangedEvent(callback) {
                       function() {
                         recorder.assertCallCount(1);
                         assertEquals(
-                            importer.ImportHistory.State.IMPORTED,
+                            importer.ImportHistoryState.IMPORTED,
                             recorder.getLastArguments()[0]['state']);
                       });
             });

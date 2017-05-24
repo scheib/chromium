@@ -1,5 +1,5 @@
 rootWebArea
-++group
+++genericContainer
 ++++image name='pipe'
 ++++image name=''
 ++++image name='  '

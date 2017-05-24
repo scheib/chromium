@@ -10,34 +10,35 @@ namespace remoting {
 
 namespace {
 
+const float kSecToMs = 0.001f;
+
 // TODO(yuweih): May need to tweak these numbers to get better smoothness.
 
 // Stop flinging if the speed drops below this.
-// 1px per 16ms. i.e. 1px/frame.
+// 0.5px per 16ms. i.e. 0.5px/frame.
 // TODO(yuweih): The screen unit may not be in pixel. This needs to be
 //               normalized with the DPI.
-const float kMinTrackSpeed = 0.0625f;
+const float kMinTrackSpeed = 0.03125f;
 
-// The minimum fling duration (ms) needed to trigger the fling animation. This
-// is to prevent unintentional fling with low velocity.
-const float kMinFlingTime = 500.f;
+// The minimum displacement needed to trigger the fling animation. This is to
+// prevent unintentional fling with low velocity.
+const float kMinDisplacement = 50.f;
 
-float GetExpFactor(float time_constant, float time_elapsed) {
-  return std::exp(-time_elapsed / time_constant);
-}
-
-float GetDisplacement(float initial_speed_rate, float exp_factor) {
-  // x = v0 * (1 - e^(-t / T))
+float GetDisplacement(float time_constant,
+                      float initial_speed_rate,
+                      float time_elapsed) {
+  // x = T * v0 * (1 - e^(-t / T))
   // This comes from a solution to the linear drag equation F=-kv
-  return initial_speed_rate * (1.f - exp_factor);
+  float exp_factor = -std::expm1(-time_elapsed / time_constant);
+  return time_constant * initial_speed_rate * exp_factor;
 }
 
-float GetSpeed(float initial_speed_rate,
-               float time_constant,
-               float exp_factor) {
-  // v = (1 / T) * v0 * e^(-t / T).
-  // Derivative of the displacement.
-  return (1.f / time_constant) * initial_speed_rate * exp_factor;
+// Returns the time needed for the object to get to the stable state where the
+// speed drops below kMinTrackSpeed.
+float GetDuration(float time_constant, float initial_speed_rate) {
+  // t = -T * ln(kMinTrackSpeed / v0)
+  // Solution of v(t) = kMinTrackSpeed
+  return -time_constant * std::log(kMinTrackSpeed / initial_speed_rate);
 }
 
 }  // namespace
@@ -48,13 +49,23 @@ FlingTracker::FlingTracker(float time_constant)
 FlingTracker::~FlingTracker() {}
 
 void FlingTracker::StartFling(float velocity_x, float velocity_y) {
-  start_time_ = base::TimeTicks::Now();
+  // Convert to pixel/ms
+  velocity_x *= kSecToMs;
+  velocity_y *= kSecToMs;
 
   initial_speed_rate_ =
       std::sqrt(velocity_x * velocity_x + velocity_y * velocity_y);
 
-  if (GetSpeed(initial_speed_rate_, time_constant_,
-               GetExpFactor(time_constant_, kMinFlingTime)) < kMinTrackSpeed) {
+  if (initial_speed_rate_ < kMinTrackSpeed) {
+    StopFling();
+    return;
+  }
+
+  fling_duration_ = GetDuration(time_constant_, initial_speed_rate_);
+
+  float final_displacement =
+      GetDisplacement(time_constant_, initial_speed_rate_, fling_duration_);
+  if (final_displacement < kMinDisplacement) {
     StopFling();
     return;
   }
@@ -83,16 +94,13 @@ bool FlingTracker::TrackMovement(base::TimeDelta time_elapsed,
 
   float time_elapsed_ms = time_elapsed.InMilliseconds();
 
-  float exp_factor = GetExpFactor(time_constant_, time_elapsed_ms);
-
-  float speed = GetSpeed(initial_speed_rate_, time_constant_, exp_factor);
-
-  if (speed < kMinTrackSpeed) {
+  if (time_elapsed_ms > fling_duration_) {
     StopFling();
     return false;
   }
 
-  float displacement = GetDisplacement(initial_speed_rate_, exp_factor);
+  float displacement =
+      GetDisplacement(time_constant_, initial_speed_rate_, time_elapsed_ms);
 
   float position_x = displacement * velocity_ratio_x_;
   float position_y = displacement * velocity_ratio_y_;

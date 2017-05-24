@@ -121,9 +121,19 @@ void UiScene::OnBeginFrame(const base::TimeTicks& current_time) {
   }
 }
 
-UiElement* UiScene::GetUiElementById(int element_id) {
+UiElement* UiScene::GetUiElementById(int element_id) const {
   for (const auto& element : ui_elements_) {
     if (element->id() == element_id) {
+      return element.get();
+    }
+  }
+  return nullptr;
+}
+
+UiElement* UiScene::GetUiElementByDebugId(UiElementDebugId debug_id) const {
+  DCHECK(debug_id != UiElementDebugId::kNone);
+  for (const auto& element : ui_elements_) {
+    if (element->debug_id() == debug_id) {
       return element.get();
     }
   }
@@ -133,7 +143,18 @@ UiElement* UiScene::GetUiElementById(int element_id) {
 std::vector<const UiElement*> UiScene::GetWorldElements() const {
   std::vector<const UiElement*> elements;
   for (const auto& element : ui_elements_) {
-    if (element->IsVisible() && !element->lock_to_fov()) {
+    if (element->IsVisible() && !element->lock_to_fov() &&
+        !element->is_overlay()) {
+      elements.push_back(element.get());
+    }
+  }
+  return elements;
+}
+
+std::vector<const UiElement*> UiScene::GetOverlayElements() const {
+  std::vector<const UiElement*> elements;
+  for (const auto& element : ui_elements_) {
+    if (element->IsVisible() && element->is_overlay()) {
       elements.push_back(element.get());
     }
   }
@@ -176,6 +197,10 @@ bool UiScene::GetWebVrRenderingEnabled() const {
 
 void UiScene::SetWebVrRenderingEnabled(bool enabled) {
   webvr_rendering_enabled_ = enabled;
+}
+
+void UiScene::set_is_exiting() {
+  is_exiting_ = true;
 }
 
 const std::vector<std::unique_ptr<UiElement>>& UiScene::GetUiElements() const {

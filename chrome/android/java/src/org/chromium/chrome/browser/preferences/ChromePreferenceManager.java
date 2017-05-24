@@ -50,6 +50,8 @@ public class ChromePreferenceManager {
 
     private static final String CHROME_DEFAULT_BROWSER = "applink.chrome_default_browser";
 
+    private static final String CONTENT_SUGGESTIONS_SHOWN_KEY = "content_suggestions_shown";
+
     private static final String NTP_SIGNIN_PROMO_DISMISSED = "ntp.signin_promo_dismissed";
     private static final String NTP_ANIMATION_RUN_COUNT = "ntp_recycler_view_animation_run_count";
 
@@ -414,6 +416,16 @@ public class ChromePreferenceManager {
      */
     public boolean isChromeHomeEnabled() {
         return mSharedPreferences.getBoolean(CHROME_HOME_ENABLED_KEY, false);
+    }
+
+    /** Marks that the content suggestions surface has been shown. */
+    public void setSuggestionsSurfaceShown() {
+        writeBoolean(CONTENT_SUGGESTIONS_SHOWN_KEY, true);
+    }
+
+    /** Returns whether the content suggestions surface has ever been shown. */
+    public boolean getSuggestionsSurfaceShown() {
+        return mSharedPreferences.getBoolean(CONTENT_SUGGESTIONS_SHOWN_KEY, false);
     }
 
     /**

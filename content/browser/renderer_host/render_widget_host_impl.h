@@ -33,6 +33,7 @@
 #include "content/browser/renderer_host/input/input_router_client.h"
 #include "content/browser/renderer_host/input/render_widget_host_latency_tracker.h"
 #include "content/browser/renderer_host/input/synthetic_gesture.h"
+#include "content/browser/renderer_host/input/synthetic_gesture_controller.h"
 #include "content/browser/renderer_host/input/touch_emulator_client.h"
 #include "content/browser/renderer_host/render_widget_host_delegate.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
@@ -53,6 +54,10 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/latency/latency_info.h"
 
+#if defined(OS_MACOSX)
+#include "device/wake_lock/public/interfaces/wake_lock_service.mojom.h"
+#endif
+
 class SkBitmap;
 struct FrameHostMsg_HittestData_Params;
 struct ViewHostMsg_SelectionBounds_Params;
@@ -67,12 +72,6 @@ struct WebCompositionUnderline;
 namespace cc {
 struct BeginFrameAck;
 }  // namespace cc
-
-#if defined(OS_MACOSX)
-namespace device {
-class PowerSaveBlocker;
-}  // namespace device
-#endif
 
 namespace gfx {
 class Image;
@@ -101,6 +100,7 @@ class CONTENT_EXPORT RenderWidgetHostImpl
       public InputRouterClient,
       public InputAckHandler,
       public TouchEmulatorClient,
+      public NON_EXPORTED_BASE(SyntheticGestureController::Delegate),
       public NON_EXPORTED_BASE(cc::mojom::MojoCompositorFrameSink),
       public IPC::Listener {
  public:
@@ -580,11 +580,16 @@ class CONTENT_EXPORT RenderWidgetHostImpl
     return last_frame_metadata_;
   }
 
+  // SyntheticGestureController::Delegate:
+  void RequestBeginFrameForSynthesizedInput(
+      base::OnceClosure begin_frame_callback) override;
+  bool HasGestureStopped() override;
+
   // cc::mojom::MojoCompositorFrameSink implementation.
   void SetNeedsBeginFrame(bool needs_begin_frame) override;
   void SubmitCompositorFrame(const cc::LocalSurfaceId& local_surface_id,
                              cc::CompositorFrame frame) override;
-  void BeginFrameDidNotSwap(const cc::BeginFrameAck& ack) override;
+  void DidNotProduceFrame(const cc::BeginFrameAck& ack) override;
   void EvictCurrentSurface() override {}
 
  protected:
@@ -638,8 +643,6 @@ class CONTENT_EXPORT RenderWidgetHostImpl
 
   void OnGpuSwapBuffersCompletedInternal(const ui::LatencyInfo& latency_info);
 
-  void RequestBeginFrameForSynthesizedInput(
-      base::OnceClosure begin_frame_callback);
 
   // IPC message handlers
   void OnRenderProcessGone(int status, int error_code);
@@ -648,7 +651,6 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   void OnRequestMove(const gfx::Rect& pos);
   void OnSetTooltipText(const base::string16& tooltip_text,
                         blink::WebTextDirection text_direction_hint);
-  void OnBeginFrameDidNotSwap(const cc::BeginFrameAck& ack);
   void OnUpdateRect(const ViewHostMsg_UpdateRect_Params& params);
   void OnQueueSyntheticGesture(const SyntheticGesturePacket& gesture_packet);
   void OnSetCursor(const WebCursor& cursor);
@@ -697,7 +699,6 @@ class CONTENT_EXPORT RenderWidgetHostImpl
       blink::WebInputEvent::Type event_type) override;
   void DecrementInFlightEventCount(InputEventAckSource ack_source) override;
   void OnHasTouchEventHandlers(bool has_handlers) override;
-  void DidFlush() override;
   void DidOverscroll(const ui::DidOverscrollParams& params) override;
   void DidStopFlinging() override;
 
@@ -759,6 +760,10 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // Once both the frame and its swap messages arrive, we call this method to
   // process the messages. Virtual for tests.
   virtual void ProcessSwapMessages(std::vector<IPC::Message> messages);
+
+#if defined(OS_MACOSX)
+  device::mojom::WakeLockService* GetWakeLockService();
+#endif
 
   // true if a renderer has once been valid. We use this flag to display a sad
   // tab only when we lose our renderer and not if a paint occurs during
@@ -957,7 +962,7 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   uint32_t last_received_content_source_id_ = 0;
 
 #if defined(OS_MACOSX)
-  std::unique_ptr<device::PowerSaveBlocker> power_save_blocker_;
+  device::mojom::WakeLockServicePtr wake_lock_;
 #endif
 
   // These information are used to verify that the renderer does not misbehave

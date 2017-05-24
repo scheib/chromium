@@ -6,6 +6,10 @@
            file="images/arrow_right.svg" type="BINDATA" />
   <include name="IDR_WEBUI_IMAGES_OPEN_IN_NEW"
            file="images/open_in_new.svg" type="BINDATA" />
+  <include name="IDR_WEBUI_IMAGES_ICON_CANCEL"
+           file="images/icon_cancel.svg" type="BINDATA" />
+  <include name="IDR_WEBUI_IMAGES_ICON_CANCEL_TOOLBAR"
+           file="images/icon_cancel_toolbar.svg" type="BINDATA" />
   <if expr="chromeos">
     <include name="IDR_CR_ELEMENTS_CELLULAR_0_SVG"
              file="cr_elements/network/cellular_0.svg" type="BINDATA" />

@@ -1,16 +1,16 @@
 AXWebArea
 ++AXList AXSubrole=AXContentList
-++++AXGroup AXTitle='First item properly groups itself despite bolded text.'
+++++AXGroup
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='First item properly groups itself despite '
 ++++++AXStaticText AXValue='bolded'
 ++++++AXStaticText AXValue=' text.'
-++++AXGroup AXTitle='This should also be seen as a group.'
+++++AXGroup
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='This should also be '
 ++++++AXStaticText AXValue='seen'
 ++++++AXStaticText AXValue=' as a group.'
-++++AXGroup AXTitle='Some more text.'
+++++AXGroup
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='Some '
 ++++++AXStaticText AXValue='more'

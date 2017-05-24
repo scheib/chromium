@@ -108,11 +108,6 @@ specific_include_rules = {
     "+content/public/browser/browser_thread.h",  # Only for DCHECK.
     "+content/public/common/resource_devtools_info.h",
   ],
-  "power_save_block_resource_throttle\.(cc|h)": [
-    "-content",
-    "+content/browser/loader/power_save_block_resource_throttle.h",
-    "+content/public/browser/resource_throttle.h",
-  ],
   "resource_dispatcher_host_impl\.(cc|h)": [
     "-content",
     "+content/browser/loader/async_resource_handler.h",
@@ -120,7 +115,6 @@ specific_include_rules = {
     "+content/browser/loader/loader_delegate.h",
     "+content/browser/loader/mojo_async_resource_handler.h",
     "+content/browser/loader/null_resource_controller.h",
-    "+content/browser/loader/power_save_block_resource_throttle.h",
     "+content/browser/loader/resource_dispatcher_host_impl.h",
     "+content/browser/loader/resource_loader.h",
     "+content/browser/loader/resource_loader_delegate.h",
@@ -131,6 +125,7 @@ specific_include_rules = {
     "+content/browser/loader/stream_resource_handler.h",
     "+content/browser/loader/sync_resource_handler.h",
     "+content/browser/loader/throttling_resource_handler.h",
+    "+content/browser/loader/wake_lock_resource_throttle.h",
     "+content/common/resource_request_body.h",
     "+content/common/resource_request_body_impl.h",
     "+content/common/url_loader.mojom.h",
@@ -348,5 +343,12 @@ specific_include_rules = {
 
     #TODO: To be removed when PlzNavigate lands.
     "+content/browser/loader/navigation_resource_throttle.h"
+  ],
+  "wake_lock_resource_throttle\.(cc|h)": [
+    "-content",
+    "+content/browser/loader/wake_lock_resource_throttle.h",
+    "+content/browser/service_manager/service_manager_context.h",
+    "+content/public/browser/browser_thread.h",
+    "+content/public/browser/resource_throttle.h",
   ],
 }

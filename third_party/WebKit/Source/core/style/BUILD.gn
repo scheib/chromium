@@ -13,7 +13,6 @@ blink_core_sources("rendering") {
     "AppliedTextDecorationList.h",
     "BasicShapes.cpp",
     "BasicShapes.h",
-    "BorderData.h",
     "BorderEdge.cpp",
     "BorderEdge.h",
     "BorderImageLength.h",

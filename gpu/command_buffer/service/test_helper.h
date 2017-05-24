@@ -212,6 +212,20 @@ class TestHelper {
   static sh::Varying ConstructVarying(
       GLenum type, GLint array_size, GLenum precision,
       bool static_use, const std::string& name);
+  static sh::InterfaceBlockField ConstructInterfaceBlockField(
+      GLenum type,
+      GLint array_size,
+      GLenum precision,
+      bool static_use,
+      const std::string& name);
+  static sh::InterfaceBlock ConstructInterfaceBlock(
+      GLint array_size,
+      sh::BlockLayoutType layout,
+      bool is_row_major_layout,
+      bool static_use,
+      const std::string& name,
+      const std::string& instance_name,
+      const std::vector<sh::InterfaceBlockField>& fields);
   static sh::OutputVariable ConstructOutputVariable(GLenum type,
                                                     GLint array_size,
                                                     GLenum precision,

@@ -52,7 +52,7 @@ class Font;
 class FontFaceCache;
 class ExecutionContext;
 
-using FontFaceSetIterable = PairIterable<Member<FontFace>, Member<FontFace>>;
+using FontFaceSetIterable = SetlikeIterable<Member<FontFace>>;
 
 class CORE_EXPORT FontFaceSet final : public EventTargetWithInlineData,
                                       public Supplement<Document>,
@@ -116,6 +116,7 @@ class CORE_EXPORT FontFaceSet final : public EventTargetWithInlineData,
     return new FontFaceSet(document);
   }
 
+  // Iterable overrides.
   FontFaceSetIterable::IterationSource* StartIteration(
       ScriptState*,
       ExceptionState&) override;

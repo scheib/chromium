@@ -586,12 +586,12 @@ void DocumentLoader::ResponseReceived(
           kContentSecurityPolicyHeaderTypeEnforce,
           kContentSecurityPolicyHeaderSourceHTTP);
     } else {
-      ContentSecurityPolicy* embedding_csp = ContentSecurityPolicy::Create();
-      embedding_csp->AddPolicyFromHeaderValue(
+      ContentSecurityPolicy* required_csp = ContentSecurityPolicy::Create();
+      required_csp->AddPolicyFromHeaderValue(
           GetFrameLoader().RequiredCSP(),
           kContentSecurityPolicyHeaderTypeEnforce,
           kContentSecurityPolicyHeaderSourceHTTP);
-      if (!embedding_csp->Subsumes(*content_security_policy_)) {
+      if (!required_csp->Subsumes(*content_security_policy_)) {
         String message = "Refused to display '" +
                          response.Url().ElidedString() +
                          "' because it has not opted-into the following policy "

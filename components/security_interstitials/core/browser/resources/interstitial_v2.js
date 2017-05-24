@@ -8,43 +8,6 @@
 var expandedDetails = false;
 var keyPressState = 0;
 
-// Should match security_interstitials::SecurityInterstitialCommands
-var CMD_DONT_PROCEED = 0;
-var CMD_PROCEED = 1;
-// Ways for user to get more information
-var CMD_SHOW_MORE_SECTION = 2;
-var CMD_OPEN_HELP_CENTER = 3;
-var CMD_OPEN_DIAGNOSTIC = 4;
-// Primary button actions
-var CMD_RELOAD = 5;
-var CMD_OPEN_DATE_SETTINGS = 6;
-var CMD_OPEN_LOGIN = 7;
-// Safe Browsing Extended Reporting
-var CMD_DO_REPORT = 8;
-var CMD_DONT_REPORT = 9;
-var CMD_OPEN_REPORTING_PRIVACY = 10;
-var CMD_OPEN_WHITEPAPER = 11;
-// Report a phishing error.
-var CMD_REPORT_PHISHING_ERROR = 12;
-
-/**
- * A convenience method for sending commands to the parent page.
- * @param {string} cmd  The command to send.
- */
-function sendCommand(cmd) {
-// <if expr="not is_ios">
-  window.domAutomationController.setAutomationId(1);
-  window.domAutomationController.send(cmd);
-// </if>
-// <if expr="is_ios">
-  // TODO(crbug.com/565877): Revisit message passing for WKWebView.
-  var iframe = document.createElement('IFRAME');
-  iframe.setAttribute('src', 'js-command:' + cmd);
-  document.documentElement.appendChild(iframe);
-  iframe.parentNode.removeChild(iframe);
-// </if>
-}
-
 /**
  * This allows errors to be skippped by typing a secret phrase into the page.
  * @param {string} e The key that was just pressed.
@@ -54,7 +17,7 @@ function handleKeypress(e) {
   if (BYPASS_SEQUENCE.charCodeAt(keyPressState) == e.keyCode) {
     keyPressState++;
     if (keyPressState == BYPASS_SEQUENCE.length) {
-      sendCommand(CMD_PROCEED);
+      sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
       keyPressState = 0;
     }
   } else {
@@ -122,20 +85,20 @@ function setupEvents() {
     $('primary-button').addEventListener('click', function() {
       switch (interstitialType) {
         case 'CAPTIVE_PORTAL':
-          sendCommand(CMD_OPEN_LOGIN);
+          sendCommand(SecurityInterstitialCommandId.CMD_OPEN_LOGIN);
           break;
 
         case 'SSL':
           if (badClock)
-            sendCommand(CMD_OPEN_DATE_SETTINGS);
+            sendCommand(SecurityInterstitialCommandId.CMD_OPEN_DATE_SETTINGS);
           else if (overridable)
-            sendCommand(CMD_DONT_PROCEED);
+            sendCommand(SecurityInterstitialCommandId.CMD_DONT_PROCEED);
           else
-            sendCommand(CMD_RELOAD);
+            sendCommand(SecurityInterstitialCommandId.CMD_RELOAD);
           break;
 
         case 'SAFEBROWSING':
-          sendCommand(CMD_DONT_PROCEED);
+          sendCommand(SecurityInterstitialCommandId.CMD_DONT_PROCEED);
           break;
 
         default:
@@ -147,7 +110,7 @@ function setupEvents() {
   if (overridable) {
     // Captive portal page isn't overridable.
     $('proceed-link').addEventListener('click', function(event) {
-      sendCommand(CMD_PROCEED);
+      sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
     });
   } else if (!ssl) {
     $('final-paragraph').classList.add('hidden');
@@ -159,13 +122,13 @@ function setupEvents() {
 
   if ($('diagnostic-link')) {
     $('diagnostic-link').addEventListener('click', function(event) {
-      sendCommand(CMD_OPEN_DIAGNOSTIC);
+      sendCommand(SecurityInterstitialCommandId.CMD_OPEN_DIAGNOSTIC);
     });
   }
 
   if ($('learn-more-link')) {
     $('learn-more-link').addEventListener('click', function(event) {
-      sendCommand(CMD_OPEN_HELP_CENTER);
+      sendCommand(SecurityInterstitialCommandId.CMD_OPEN_HELP_CENTER);
     });
   }
 
@@ -188,18 +151,15 @@ function setupEvents() {
           loadTimeData.getString('closeDetails');
       if (!expandedDetails) {
         // Record a histogram entry only the first time that details is opened.
-        sendCommand(CMD_SHOW_MORE_SECTION);
+        sendCommand(SecurityInterstitialCommandId.CMD_SHOW_MORE_SECTION);
         expandedDetails = true;
       }
     });
   }
 
-  // TODO(felt): This should be simplified once the Finch trial is no longer
-  // needed.
-  if (interstitialType == 'SAFEBROWSING' &&
-      loadTimeData.getBoolean('phishing') && $('report-error-link')) {
+  if ($('report-error-link')) {
     $('report-error-link').addEventListener('click', function(event) {
-      sendCommand(CMD_REPORT_PHISHING_ERROR);
+      sendCommand(SecurityInterstitialCommandId.CMD_REPORT_PHISHING_ERROR);
     });
   }
 

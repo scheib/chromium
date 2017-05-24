@@ -12,12 +12,12 @@
 
   <body>
     <script>
-      var sampleRate = 44100;
-      var renderFrames = 2048;
+      let sampleRate = 44100;
+      let renderFrames = 2048;
 
-      var audit = Audit.createTaskRunner();
+      let audit = Audit.createTaskRunner();
 
-      var testConfigs = [{
+      let testConfigs = [{
           channelCount: 1,
           message: "mono",
           floatRelError: 6.3283e-8
@@ -56,21 +56,21 @@
       function runTest(options, should) {
         // Context MUST have exactly one channel so that we downmix the source to mono to generate
         // the reference.
-        var context = new OfflineAudioContext(1, renderFrames, sampleRate);
+        let context = new OfflineAudioContext(1, renderFrames, sampleRate);
 
-        var channels = options.channelCount || 1;
-        var source = context.createBufferSource();
+        let channels = options.channelCount || 1;
+        let source = context.createBufferSource();
 
         // The signals in each channel. Doesn't matter much what is in here, but it's best if the
         // values aren't linearly increasing so that the average of the values isn't one of the
         // values (in case the implementation does something silly).  Only need to support up to 6
         // channels.
-        var bufferValues = [1, 2, 3, 4, 5, 6].map(function (x) {
+        let bufferValues = [1, 2, 3, 4, 5, 6].map(function (x) {
           return x * x
         });;
         source.buffer = createConstantBuffer(context, renderFrames, bufferValues.slice(0, channels));
 
-        var analyser = context.createAnalyser();
+        let analyser = context.createAnalyser();
         analyser.smoothingTimeConstant = 0;
         analyser.fftSize = 256;
 
@@ -80,10 +80,10 @@
         source.connect(analyser);
         source.connect(context.destination);
 
-        var timeData = new Float32Array(analyser.fftSize);
-        var freqData = new Float32Array(analyser.frequencyBinCount);
+        let timeData = new Float32Array(analyser.fftSize);
+        let freqData = new Float32Array(analyser.frequencyBinCount);
 
-        var suspendFrame = analyser.fftSize;
+        let suspendFrame = analyser.fftSize;
         context.suspend(suspendFrame / context.sampleRate).then(function () {
           analyser.getFloatTimeDomainData(timeData);
           analyser.getFloatFrequencyData(freqData);
@@ -91,18 +91,16 @@
 
         source.start();
         return context.startRendering().then(function (renderedBuffer) {
-          var success = true;
-
           // Verify the time domain data is correct.
-          var prefix = "Analyser downmix " + options.message + " to mono"
+          let prefix = "Analyser downmix " + options.message + " to mono"
           should(timeData, prefix + " time data")
             .beEqualToArray(renderedBuffer.getChannelData(0).subarray(0, analyser.fftSize));
 
-          var expectedTimeData = renderedBuffer.getChannelData(0).subarray(0, analyser.fftSize);
-          var fftOrder = Math.floor(Math.log2(analyser.fftSize));
-          var expectedFreqData = computeFFTMagnitude(expectedTimeData, fftOrder).map(linearToDb);
+          let expectedTimeData = renderedBuffer.getChannelData(0).subarray(0, analyser.fftSize);
+          let fftOrder = Math.floor(Math.log2(analyser.fftSize));
+          let expectedFreqData = computeFFTMagnitude(expectedTimeData, fftOrder).map(linearToDb);
 
-          var success = compareFloatFreq(prefix + " freq data", freqData,
+          compareFloatFreq(prefix + " freq data", freqData,
           expectedFreqData, should, {
             precision: 6,
             floatRelError: options.floatRelError,

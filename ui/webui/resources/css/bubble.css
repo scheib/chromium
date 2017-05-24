@@ -68,10 +68,10 @@ html[dir='rtl'] .bubble-close {
 }
 
 .bubble-arrow {
-  transform: rotate(45deg);
   box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.15);
   height: 15px;
   position: absolute;
+  transform: rotate(45deg);
   width: 15px;
   z-index: 2;
 }

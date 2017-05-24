@@ -243,7 +243,7 @@ String SmartClip::ExtractTextFromNode(Node* node) {
   StringBuilder result;
   for (Node& current_node : NodeTraversal::InclusiveDescendantsOf(*node)) {
     const ComputedStyle* style = current_node.EnsureComputedStyle();
-    if (style && style->UserSelect() == SELECT_NONE)
+    if (style && style->UserSelect() == EUserSelect::kNone)
       continue;
 
     if (Node* node_from_frame = NodeInsideFrame(&current_node))

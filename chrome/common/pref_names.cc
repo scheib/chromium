@@ -1914,6 +1914,11 @@ const char kOobeMdMode[] = "OobeMdModeEnabled";
 // and get enrolled into a domain automatically.
 const char kOobeControllerDetected[] = "OobeControllerDetected";
 
+// A 64-bit signed integer pref (encoded as a string) which stores the time
+// of the last OOBE-initiated update check not resulting in an update.
+const char kOobeTimeOfLastUpdateCheckWithoutUpdate[] =
+    "OobeTimeOfLastUpdateCheckWithoutUpdate";
+
 // A boolean pref for whether the Goodies promotion webpage has been displayed,
 // or otherwise disqualified for auto-display, on this device.
 const char kCanShowOobeGoodiesPage[] = "CanShowOobeGoodiesPage";

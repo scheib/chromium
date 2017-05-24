@@ -208,7 +208,7 @@ FileSystemContext::FileSystemContext(
 
 bool FileSystemContext::DeleteDataForOriginOnFileTaskRunner(
     const GURL& origin_url) {
-  DCHECK(default_file_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(default_file_task_runner()->RunsTasksInCurrentSequence());
   DCHECK(origin_url == origin_url.GetOrigin());
 
   bool success = true;
@@ -233,7 +233,7 @@ scoped_refptr<QuotaReservation>
 FileSystemContext::CreateQuotaReservationOnFileTaskRunner(
     const GURL& origin_url,
     FileSystemType type) {
-  DCHECK(default_file_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(default_file_task_runner()->RunsTasksInCurrentSequence());
   FileSystemBackend* backend = GetFileSystemBackend(type);
   if (!backend || !backend->GetQuotaUtil())
     return scoped_refptr<QuotaReservation>();
@@ -242,7 +242,7 @@ FileSystemContext::CreateQuotaReservationOnFileTaskRunner(
 }
 
 void FileSystemContext::Shutdown() {
-  if (!io_task_runner_->RunsTasksOnCurrentThread()) {
+  if (!io_task_runner_->RunsTasksInCurrentSequence()) {
     io_task_runner_->PostTask(
         FROM_HERE, base::Bind(&FileSystemContext::Shutdown,
                               make_scoped_refptr(this)));
@@ -338,7 +338,7 @@ void FileSystemContext::OpenFileSystem(
     FileSystemType type,
     OpenFileSystemMode mode,
     const OpenFileSystemCallback& callback) {
-  DCHECK(io_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(!callback.is_null());
 
   if (!FileSystemContext::IsSandboxFileSystem(type)) {
@@ -365,7 +365,7 @@ void FileSystemContext::ResolveURL(
   DCHECK(!callback.is_null());
 
   // If not on IO thread, forward before passing the task to the backend.
-  if (!io_task_runner_->RunsTasksOnCurrentThread()) {
+  if (!io_task_runner_->RunsTasksInCurrentSequence()) {
     ResolveURLCallback relay_callback =
         base::Bind(&RelayResolveURLCallback,
                    base::ThreadTaskRunnerHandle::Get(), callback);
@@ -412,7 +412,7 @@ void FileSystemContext::DeleteFileSystem(
     const GURL& origin_url,
     FileSystemType type,
     const StatusCallback& callback) {
-  DCHECK(io_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(origin_url == origin_url.GetOrigin());
   DCHECK(!callback.is_null());
 
@@ -510,8 +510,8 @@ void FileSystemContext::OpenPluginPrivateFileSystem(
 FileSystemContext::~FileSystemContext() {
 }
 
-void FileSystemContext::DeleteOnCorrectThread() const {
-  if (!io_task_runner_->RunsTasksOnCurrentThread() &&
+void FileSystemContext::DeleteOnCorrectSequence() const {
+  if (!io_task_runner_->RunsTasksInCurrentSequence() &&
       io_task_runner_->DeleteSoon(FROM_HERE, this)) {
     return;
   }
@@ -602,7 +602,7 @@ void FileSystemContext::DidOpenFileSystemForResolveURL(
     const GURL& filesystem_root,
     const std::string& filesystem_name,
     base::File::Error error) {
-  DCHECK(io_task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
 
   if (error != base::File::FILE_OK) {
     callback.Run(error, FileSystemInfo(), base::FilePath(),

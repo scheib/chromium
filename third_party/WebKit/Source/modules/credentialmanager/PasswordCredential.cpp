@@ -132,6 +132,11 @@ PasswordCredential::PasswordCredential(const String& id,
       id_name_("username"),
       password_name_("password") {}
 
+const String& PasswordCredential::password() const {
+  return static_cast<PlatformPasswordCredential*>(platform_credential_.Get())
+      ->Password();
+}
+
 PassRefPtr<EncodedFormData> PasswordCredential::EncodeFormData(
     String& content_type) const {
   if (additional_data_.isURLSearchParams()) {
@@ -145,7 +150,7 @@ PassRefPtr<EncodedFormData> PasswordCredential::EncodeFormData(
         params->append(name, param.second);
     }
     params->append(idName(), id());
-    params->append(passwordName(), Password());
+    params->append(passwordName(), password());
 
     content_type =
         AtomicString("application/x-www-form-urlencoded;charset=UTF-8");
@@ -169,17 +174,12 @@ PassRefPtr<EncodedFormData> PasswordCredential::EncodeFormData(
     }
   }
   form_data->append(idName(), id());
-  form_data->append(passwordName(), Password());
+  form_data->append(passwordName(), password());
 
   RefPtr<EncodedFormData> encoded_data = form_data->EncodeMultiPartFormData();
   content_type = AtomicString("multipart/form-data; boundary=") +
                  encoded_data->Boundary().data();
   return encoded_data.Release();
-}
-
-const String& PasswordCredential::Password() const {
-  return static_cast<PlatformPasswordCredential*>(platform_credential_.Get())
-      ->Password();
 }
 
 DEFINE_TRACE(PasswordCredential) {

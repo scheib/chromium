@@ -2,10 +2,6 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
-html.md {
-  background-color: #303030;
-}
-
 body {
   -webkit-font-smoothing: antialiased;
   font-size: 100%;
@@ -15,6 +11,8 @@ body {
 /** Typography -------------------------------------------------------------- */
 
 .content {
+  /* This is identical to the default background color. It's necessary to set it
+     for the case when a theme with a background image is installed. */
   background-color: #303030;
   color: rgba(255, 255, 255, 0.7);
   font-size: calc(100% - 2px);

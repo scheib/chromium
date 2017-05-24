@@ -216,7 +216,7 @@ class MOJO_CPP_BINDINGS_EXPORT Connector
 
   // The tag used to track heap allocations that originated from a Watcher
   // notification.
-  const char* heap_profiler_tag_ = nullptr;
+  const char* heap_profiler_tag_ = "unknown interface";
 
   // A cached pointer to the RunLoopNestingObserver for the thread on which this
   // Connector was created.

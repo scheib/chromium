@@ -39,6 +39,8 @@
 #include "core/dom/DOMNodeIds.h"
 #include "core/dom/Document.h"
 #include "core/dom/QualifiedName.h"
+#include "core/layout/LayoutTestHelper.h"
+#include "core/paint/PaintLayer.h"
 #include "core/testing/DummyPageHolder.h"
 #include "platform/testing/RuntimeEnabledFeaturesTestHelpers.h"
 #include "platform/weborigin/KURL.h"
@@ -46,9 +48,13 @@
 
 namespace blink {
 
-class AnimationAnimationTest : public ::testing::Test {
- protected:
+class AnimationAnimationTest : public RenderingTest {
+ public:
+  AnimationAnimationTest()
+      : RenderingTest(SingleChildLocalFrameClient::Create()) {}
+
   void SetUp() override {
+    RenderingTest::SetUp();
     SetUpWithoutStartingTimeline();
     StartTimeline();
   }
@@ -791,25 +797,29 @@ TEST_F(AnimationAnimationTest, PauseAfterCancel) {
 TEST_F(AnimationAnimationTest, NoCompositeWithoutCompositedElementId) {
   ScopedSlimmingPaintV2ForTest enable_s_pv2(true);
 
-  Persistent<Element> element_composited = document->createElement("foo");
-  Persistent<Element> element_not_composited = document->createElement("bar");
+  SetBodyInnerHTML(
+      "<div id='foo' style='position: relative'></div>"
+      "<div id='bar' style='position: relative'></div>");
+
+  LayoutObject* object_composited = GetLayoutObjectByElementId("foo");
+  LayoutObject* object_not_composited = GetLayoutObjectByElementId("bar");
 
   Optional<CompositorElementIdSet> composited_element_ids =
       CompositorElementIdSet();
   CompositorElementId expected_compositor_element_id =
-      CompositorElementIdFromDOMNodeId(
-          DOMNodeIds::IdForNode(element_composited),
+      CompositorElementIdFromPaintLayerId(
+          ToLayoutBoxModelObject(object_composited)->Layer()->UniqueId(),
           CompositorElementIdNamespace::kPrimary);
   composited_element_ids->insert(expected_compositor_element_id);
 
   Timing timing;
   timing.iteration_duration = 30;
   timing.playback_rate = 1;
-  KeyframeEffect* keyframe_effect_composited =
-      KeyframeEffect::Create(element_composited.Get(), nullptr, timing);
+  KeyframeEffect* keyframe_effect_composited = KeyframeEffect::Create(
+      ToElement(object_composited->GetNode()), nullptr, timing);
   Animation* animation_composited = timeline->Play(keyframe_effect_composited);
-  KeyframeEffect* keyframe_effect_not_composited =
-      KeyframeEffect::Create(element_not_composited.Get(), nullptr, timing);
+  KeyframeEffect* keyframe_effect_not_composited = KeyframeEffect::Create(
+      ToElement(object_not_composited->GetNode()), nullptr, timing);
   Animation* animation_not_composited =
       timeline->Play(keyframe_effect_not_composited);
 

@@ -30,7 +30,7 @@ body {
   color: rgb(80, 80, 82);
   display: -webkit-flex;
   font-size: 15px;
-  height: 48px;
+  min-height: 48px;
 }
 
 .title-bar #page-title {

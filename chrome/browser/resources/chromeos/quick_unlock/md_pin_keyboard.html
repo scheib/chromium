@@ -58,18 +58,15 @@
         background: none;
         border-radius: 0;
         box-sizing: border-box;
-        color: #000;
         display: flex;
         flex-direction: column;
-        font-size: 18px;
         height: 48px;
         justify-content: center;
-        margin: 0;
+        margin: 15px;
         min-height: 48px;
         min-width: 48px;
-        opacity: 0.87;
-        padding: 15px 21px;
-        width: 60px;
+        opacity: 1;
+        width: 48px;
       }
 
       [hidden=true] {
@@ -77,7 +74,7 @@
       }
 
       .first-row {
-        height: 43px;
+        display: none;
       }
 
       .bottom-row {
@@ -101,13 +98,12 @@
         border-radius: 100px;
         color: #000;
         height: 48px;
-        left: 6px;
         width: 48px;
       }
 
       .digit-button.backspace-button {
+        color: #FFF;
         left: 0;
-        opacity: var(--dark-primary-opacity);
         padding: 14px;
         position: absolute;
         top: 0;
@@ -119,10 +115,21 @@
       }
 
       .digit-button inner-text {
-        color: var(--paper-blue-grey-700);
         display: flex;
         flex-direction: column;
+        font-family: 'Roboto';
+      }
+
+      .number {
+        color: #FFF;
+        font-size: 20px;
         height: 52px;
+      }
+
+      .letter {
+        color: rgba(255, 255, 255, .34);
+        font-size: 9px;
+        margin-top: 4px;
       }
 
       #pinInput {
@@ -182,55 +189,62 @@
               hidden="[[!showPinInput_]]">
           </paper-input>
         </div>
-        <div class="separator" hidden="[[showPinInput_]]"></div>
         <div class="row keyboard">
           <paper-button class="digit-button" on-tap="onNumberTap_" value="1"
               noink>
-            <inner-text>$i18n{pinKeyboard1}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard1}</inner-text>
             <paper-ripple>
           </paper-button>
           <paper-button class="digit-button" on-tap="onNumberTap_" value="2"
               noink>
-            <inner-text>$i18n{pinKeyboard2}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard2}</inner-text>
+            <inner-text class="letter">ABC</inner-text>
             <paper-ripple>
           </paper-button>
           <paper-button class="digit-button" on-tap="onNumberTap_" value="3"
               noink>
-            <inner-text>$i18n{pinKeyboard3}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard3}</inner-text>
+            <inner-text class="letter">DEF</inner-text>
             <paper-ripple>
           </paper-button>
         </div>
         <div class="row keyboard">
           <paper-button class="digit-button" on-tap="onNumberTap_" value="4"
               noink>
-            <inner-text>$i18n{pinKeyboard4}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard4}</inner-text>
+            <inner-text class="letter">GHI</inner-text>
             <paper-ripple>
           </paper-button>
           <paper-button class="digit-button" on-tap="onNumberTap_" value="5"
               noink>
-            <inner-text>$i18n{pinKeyboard5}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard5}</inner-text>
+            <inner-text class="letter">JKL</inner-text>
             <paper-ripple>
           </paper-button>
           <paper-button class="digit-button" on-tap="onNumberTap_" value="6"
               noink>
-            <inner-text>$i18n{pinKeyboard6}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard6}</inner-text>
+            <inner-text class="letter">MNO</inner-text>
             <paper-ripple>
           </paper-button>
         </div>
         <div class="row keyboard">
           <paper-button class="digit-button" on-tap="onNumberTap_" value="7"
               noink>
-            <inner-text>$i18n{pinKeyboard7}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard7}</inner-text>
+            <inner-text class="letter">PQRS</inner-text>
             <paper-ripple>
           </paper-button>
           <paper-button class="digit-button" on-tap="onNumberTap_" value="8"
               noink>
-            <inner-text>$i18n{pinKeyboard8}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard8}</inner-text>
+            <inner-text class="letter">TUV</inner-text>
             <paper-ripple>
           </paper-button>
           <paper-button class="digit-button" on-tap="onNumberTap_" value="9"
               noink>
-            <inner-text>$i18n{pinKeyboard9}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard9}</inner-text>
+            <inner-text class="letter">WXYZ</inner-text>
             <paper-ripple>
           </paper-button>
         </div>
@@ -238,7 +252,8 @@
           <div class="digit-button"></div>
           <paper-button class="digit-button" on-tap="onNumberTap_" value="0"
               noink>
-            <inner-text>$i18n{pinKeyboard0}</inner-text>
+            <inner-text class="number">$i18n{pinKeyboard0}</inner-text>
+            <inner-text class="letter">+</inner-text>
             <paper-ripple>
           </paper-button>
           <div class="backspace-button-container">

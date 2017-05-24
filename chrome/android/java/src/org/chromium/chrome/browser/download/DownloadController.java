@@ -30,7 +30,6 @@ import org.chromium.ui.base.WindowAndroid.PermissionCallback;
  */
 public class DownloadController {
     private static final String LOGTAG = "DownloadController";
-    private static final DownloadController sInstance = new DownloadController();
 
     /**
      * Class for notifying the application that download has completed.
@@ -64,15 +63,6 @@ public class DownloadController {
 
     private static DownloadNotificationService sDownloadNotificationService;
 
-    @CalledByNative
-    public static DownloadController getInstance() {
-        return sInstance;
-    }
-
-    private DownloadController() {
-        nativeInit();
-    }
-
     public static void setDownloadNotificationService(DownloadNotificationService service) {
         sDownloadNotificationService = service;
     }
@@ -82,7 +72,7 @@ public class DownloadController {
      * download. This can be either a POST download or a GET download with authentication.
      */
     @CalledByNative
-    private void onDownloadCompleted(DownloadInfo downloadInfo) {
+    private static void onDownloadCompleted(DownloadInfo downloadInfo) {
         if (sDownloadNotificationService == null) return;
         sDownloadNotificationService.onDownloadCompleted(downloadInfo);
     }
@@ -92,7 +82,7 @@ public class DownloadController {
      * download. This can be either a POST download or a GET download with authentication.
      */
     @CalledByNative
-    private void onDownloadInterrupted(DownloadInfo downloadInfo, boolean isAutoResumable) {
+    private static void onDownloadInterrupted(DownloadInfo downloadInfo, boolean isAutoResumable) {
         if (sDownloadNotificationService == null) return;
         sDownloadNotificationService.onDownloadInterrupted(downloadInfo, isAutoResumable);
     }
@@ -101,7 +91,7 @@ public class DownloadController {
      * Called when a download was cancelled.
      */
     @CalledByNative
-    private void onDownloadCancelled(DownloadInfo downloadInfo) {
+    private static void onDownloadCancelled(DownloadInfo downloadInfo) {
         if (sDownloadNotificationService == null) return;
         sDownloadNotificationService.onDownloadCancelled(downloadInfo);
     }
@@ -111,7 +101,7 @@ public class DownloadController {
      * network stack use custom notification to display the progress of downloads.
      */
     @CalledByNative
-    private void onDownloadUpdated(DownloadInfo downloadInfo) {
+    private static void onDownloadUpdated(DownloadInfo downloadInfo) {
         if (sDownloadNotificationService == null) return;
         sDownloadNotificationService.onDownloadUpdated(downloadInfo);
     }
@@ -123,7 +113,7 @@ public class DownloadController {
      * @return true if allowed, or false otherwise.
      */
     @CalledByNative
-    private boolean hasFileAccess() {
+    private static boolean hasFileAccess() {
         Activity activity = ApplicationStatus.getLastTrackedFocusedActivity();
         if (activity instanceof ChromeActivity) {
             return ((ChromeActivity) activity)
@@ -134,7 +124,7 @@ public class DownloadController {
     }
 
     @CalledByNative
-    private void requestFileAccess(final long callbackId) {
+    private static void requestFileAccess(final long callbackId) {
         Activity activity = ApplicationStatus.getLastTrackedFocusedActivity();
         if (!(activity instanceof ChromeActivity)) {
             nativeOnAcquirePermissionResult(callbackId, false, null);
@@ -228,7 +218,7 @@ public class DownloadController {
      * Called when a download is started.
      */
     @CalledByNative
-    private void onDownloadStarted() {
+    private static void onDownloadStarted() {
         DownloadUtils.showDownloadStartToast(ContextUtils.getApplicationContext());
     }
 
@@ -256,7 +246,6 @@ public class DownloadController {
     }
 
     // native methods
-    private native void nativeInit();
-    private native void nativeOnAcquirePermissionResult(
+    private static native void nativeOnAcquirePermissionResult(
             long callbackId, boolean granted, String permissionToUpdate);
 }

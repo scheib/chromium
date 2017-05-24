@@ -15,6 +15,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/version.h"
 #include "components/update_client/component.h"
+#include "components/update_client/protocol_builder.h"
 #include "components/update_client/test_configurator.h"
 #include "components/update_client/update_engine.h"
 #include "components/update_client/url_request_post_interceptor.h"
@@ -86,6 +87,7 @@ TEST_F(PingManagerTest, SendPing) {
     component.state_ = base::MakeUnique<Component::StateUpdated>(&component);
     component.previous_version_ = base::Version("1.0");
     component.next_version_ = base::Version("2.0");
+    component.AppendEvent(BuildUpdateCompleteEventElement(component));
 
     ping_manager_->SendPing(component);
     base::RunLoop().RunUntilIdle();
@@ -106,6 +108,7 @@ TEST_F(PingManagerTest, SendPing) {
         base::MakeUnique<Component::StateUpdateError>(&component);
     component.previous_version_ = base::Version("1.0");
     component.next_version_ = base::Version("2.0");
+    component.AppendEvent(BuildUpdateCompleteEventElement(component));
 
     ping_manager_->SendPing(component);
     base::RunLoop().RunUntilIdle();
@@ -135,6 +138,7 @@ TEST_F(PingManagerTest, SendPing) {
     component.diff_error_code_ = 20;
     component.diff_extra_code1_ = -10;
     component.crx_diffurls_.push_back(GURL("http://host/path"));
+    component.AppendEvent(BuildUpdateCompleteEventElement(component));
 
     ping_manager_->SendPing(component);
     base::RunLoop().RunUntilIdle();
@@ -158,6 +162,7 @@ TEST_F(PingManagerTest, SendPing) {
     component.state_ = base::MakeUnique<Component::StateUpdated>(&component);
     component.previous_version_ = base::Version("1.0");
     component.next_version_ = base::Version("2.0");
+    component.AppendEvent(BuildUpdateCompleteEventElement(component));
 
     CrxDownloader::DownloadMetrics download_metrics;
     download_metrics.url = GURL("http://host1/path1");
@@ -166,7 +171,7 @@ TEST_F(PingManagerTest, SendPing) {
     download_metrics.downloaded_bytes = 123;
     download_metrics.total_bytes = 456;
     download_metrics.download_time_ms = 987;
-    component.download_metrics_.push_back(download_metrics);
+    component.AppendEvent(BuildDownloadCompleteEventElement(download_metrics));
 
     download_metrics = CrxDownloader::DownloadMetrics();
     download_metrics.url = GURL("http://host2/path2");
@@ -175,7 +180,7 @@ TEST_F(PingManagerTest, SendPing) {
     download_metrics.downloaded_bytes = 1230;
     download_metrics.total_bytes = 4560;
     download_metrics.download_time_ms = 9870;
-    component.download_metrics_.push_back(download_metrics);
+    component.AppendEvent(BuildDownloadCompleteEventElement(download_metrics));
 
     ping_manager_->SendPing(component);
     base::RunLoop().RunUntilIdle();

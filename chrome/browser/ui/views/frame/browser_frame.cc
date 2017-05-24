@@ -40,7 +40,7 @@
 #include "chrome/browser/ui/views/frame/browser_command_handler_linux.h"
 #endif
 
-#if defined(OS_LINUX) && !defined(OS_CHROMEOS)
+#if defined(USE_X11)
 #include "ui/views/widget/desktop_aura/x11_desktop_handler.h"
 #endif
 

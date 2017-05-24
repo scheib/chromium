@@ -2,7 +2,7 @@
 <grit-part>
   <!-- Strings describing Chrome security policy for DevTools security panel -->
   <message name="IDS_PRIVATE_USER_DATA_INPUT" desc="Summary phrase for a security problem where the site collects private user data on an insecure page." translateable="false">
-    Private User Data Input
+    Private user data input
   </message>
   <message name="IDS_PRIVATE_USER_DATA_INPUT_DESCRIPTION" desc="Description of a security problem where the site collects private user data on an insecure page, which results in an omnibox warning." translateable="false">
     This page includes a password or credit card input over HTTP. A warning has been added to the URL bar.
@@ -11,37 +11,43 @@
     This page is dangerous (flagged by Google Safe Browsing).
   </message>
   <message name="IDS_SHA1" desc="Summary phrase for a security problem where the site's certificate chain contains a SHA1 signature." translateable="false">
-    SHA-1 Certificate
+    SHA-1 certificate
   </message>
   <message name="IDS_SHA1_DESCRIPTION" desc="Description of a security problem where the site's certificate chain contains a SHA1 signature." translateable="false">
     The certificate chain for this site contains a certificate signed using SHA-1.
   </message>
   <message name="IDS_SUBJECT_ALT_NAME_MISSING" desc="Summary phrase for a security problem where the site's certificate is missing a subjectAltName extension." translateable="false">
-    Subject Alternative Name Missing
+    Subject Alternative Name missing
   </message>
   <message name="IDS_SUBJECT_ALT_NAME_MISSING_DESCRIPTION" desc="Description of a security problem where the site's certificate is missing a subjectAltName extension." translateable="false">
     The certificate for this site does not contain a Subject Alternative Name extension containing a domain name or IP address.
   </message>
   <message name="IDS_CERTIFICATE_CHAIN_ERROR" desc="Summary phrase for a security problem with the site's certificate." translateable="false">
-    Certificate Error
+    Certificate error
   </message>
   <message name="IDS_CERTIFICATE_CHAIN_ERROR_DESCRIPTION_FORMAT" desc="Description of a security problem with the site's certificate." translateable="false">
     There are issues with the site's certificate chain (<ph name="CERT_ERROR_DESCRIPTION">$1<ex>net::ERR_CERT_AUTHORITY_INVALID</ex></ph>).
   </message>
   <message name="IDS_VALID_SERVER_CERTIFICATE" desc="Summary phrase for a site that has a valid server certificate." translateable="false">
-    Valid Certificate
+    Valid certificate
   </message>
   <message name="IDS_VALID_SERVER_CERTIFICATE_DESCRIPTION" desc="Description of a site that has a valid server certificate." translateable="false">
     The connection to this site is using a valid, trusted server certificate.
   </message>
   <message name="IDS_STRONG_SSL_SUMMARY" desc="Summary phrase for a site that uses a modern, secure TLS protocol and cipher." translateable="false">
-    Secure Connection
+    Secure connection
+  </message>
+  <message name="IDS_PRIVATE_KEY_PINNING_BYPASSED" desc="Summary phrase for a security state where Private Key Pinning is ignored because the certificate chains to a locally-trusted root." translateable="false">
+    Public-Key-Pinning bypassed
+  </message>
+  <message name="IDS_PRIVATE_KEY_PINNING_BYPASSED_DESCRIPTION" desc="Description of a security state where Private Key Pinning is ignored because the certificate chains to a locally-trusted root." translateable="false">
+    Public-Key-Pinning was bypassed by a local root certificate.
   </message>
   <message name="IDS_STRONG_SSL_DESCRIPTION" desc="Description of a site that uses a modern, secure TLS protocol and cipher." translateable="false">
     The connection to this site is encrypted and authenticated using a strong protocol (<ph name="PROTOCOL_VERSION">$1<ex>TLS 1.2</ex></ph>), a strong key exchange (<ph name="KEY_EXCHANGE">$2<ex>ECDHE_RSA</ex></ph>), and a strong cipher (<ph name="CIPHER_SUTE">$3<ex>AES_128_GCM</ex></ph>).
   </message>
   <message name="IDS_OBSOLETE_SSL_SUMMARY" desc="Summary phrase for a site that uses an outdated SSL settings (protocol, key exchange, or cipher)." translateable="false">
-    Obsolete Connection Settings
+    Obsolete connection settings
   </message>
   <message name="IDS_OBSOLETE_SSL_DESCRIPTION" desc="Description of a site that uses an outdated TLS protocol or cipher." translateable="false">
     The connection to this site uses <ph name="A_PROTOCOL">$1<ex>an obsolete protocol</ex></ph> (<ph name="PROTOCOL">$2<ex>TLS 1.0</ex></ph>), <ph name="A_KEY_EXCHANGE">$3<ex>an obsolete key exchange</ex></ph> (<ph name="KEY_EXCHANGE">$4<ex>ECDHE_RSA</ex></ph>), and <ph name="A_CIPHER">$5<ex>an obsolete cipher</ex></ph> (<ph name="CIPHER">$6<ex>AES_256_CBC with HMAC-SHA1</ex></ph>).

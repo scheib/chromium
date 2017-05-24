@@ -681,9 +681,9 @@ ServiceWorkerContextCore::TransferProviderHostOut(int process_id,
                                                   int provider_id) {
   ProviderMap* map = GetProviderMapForProcess(process_id);
   ServiceWorkerProviderHost* transferee = map->Lookup(provider_id);
-  std::unique_ptr<ServiceWorkerProviderHost> replacement =
+  std::unique_ptr<ServiceWorkerProviderHost> provisional_host =
       transferee->PrepareForCrossSiteTransfer();
-  return map->Replace(provider_id, std::move(replacement));
+  return map->Replace(provider_id, std::move(provisional_host));
 }
 
 void ServiceWorkerContextCore::TransferProviderHostIn(
@@ -691,16 +691,12 @@ void ServiceWorkerContextCore::TransferProviderHostIn(
     int new_provider_id,
     std::unique_ptr<ServiceWorkerProviderHost> transferee) {
   ProviderMap* map = GetProviderMapForProcess(new_process_id);
-  ServiceWorkerProviderHost* temp = map->Lookup(new_provider_id);
-  if (!temp)
+  ServiceWorkerProviderHost* provisional_host = map->Lookup(new_provider_id);
+  if (!provisional_host)
     return;
 
-  DCHECK(temp->document_url().is_empty());
-  transferee->CompleteCrossSiteTransfer(new_process_id,
-                                        temp->frame_id(),
-                                        new_provider_id,
-                                        temp->provider_type(),
-                                        temp->dispatcher_host());
+  DCHECK(provisional_host->document_url().is_empty());
+  transferee->CompleteCrossSiteTransfer(provisional_host);
   map->Replace(new_provider_id, std::move(transferee));
 }
 

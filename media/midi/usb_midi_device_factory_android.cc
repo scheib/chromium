@@ -48,7 +48,7 @@ void UsbMidiDeviceFactoryAndroid::EnumerateDevices(
     return;
   }
   // No devices are found.
-  ScopedVector<UsbMidiDevice> devices;
+  UsbMidiDevice::Devices devices;
   callback.Run(true, &devices);
 }
 
@@ -58,11 +58,12 @@ void UsbMidiDeviceFactoryAndroid::OnUsbMidiDeviceRequestDone(
     const JavaParamRef<jobject>& caller,
     const JavaParamRef<jobjectArray>& devices) {
   size_t size = env->GetArrayLength(devices);
-  ScopedVector<UsbMidiDevice> devices_to_pass;
+  UsbMidiDevice::Devices devices_to_pass;
   for (size_t i = 0; i < size; ++i) {
     base::android::ScopedJavaLocalRef<jobject> raw_device(
         env, env->GetObjectArrayElement(devices, i));
-    devices_to_pass.push_back(new UsbMidiDeviceAndroid(raw_device, delegate_));
+    devices_to_pass.push_back(
+        base::MakeUnique<UsbMidiDeviceAndroid>(raw_device, delegate_));
   }
 
   callback_.Run(true, &devices_to_pass);

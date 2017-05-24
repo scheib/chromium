@@ -116,6 +116,7 @@ enum class UMAGetPrimaryServiceOutcome {
   NO_DEVICE = 1,
   NOT_FOUND = 2,
   NO_SERVICES = 3,
+  DEVICE_DISCONNECTED = 4,
   // Note: Add new GetPrimaryService outcomes immediately above this line.
   // Make sure to update the enum list in
   // tools/metrics/histograms/histograms.xml accordingly.

@@ -31,13 +31,13 @@
 #include "components/net_log/chrome_net_log.h"
 #include "components/network_session_configurator/network_session_configurator.h"
 #include "components/prefs/pref_service.h"
+#include "components/proxy_config/ios/proxy_service_factory.h"
 #include "components/proxy_config/pref_proxy_config_tracker.h"
 #include "components/variations/variations_associated_data.h"
 #include "components/version_info/version_info.h"
 #include "ios/chrome/browser/chrome_switches.h"
 #include "ios/chrome/browser/net/cookie_util.h"
 #include "ios/chrome/browser/net/ios_chrome_network_delegate.h"
-#include "ios/chrome/browser/net/proxy_service_factory.h"
 #include "ios/chrome/common/channel_info.h"
 #include "ios/web/public/user_agent.h"
 #include "ios/web/public/web_client.h"
@@ -278,7 +278,7 @@ IOSChromeIOThread::IOSChromeIOThread(PrefService* local_state,
       creation_time_(base::TimeTicks::Now()),
       weak_factory_(this) {
   pref_proxy_config_tracker_ =
-      ios::ProxyServiceFactory::CreatePrefProxyConfigTrackerOfLocalState(
+      ProxyServiceFactory::CreatePrefProxyConfigTrackerOfLocalState(
           local_state);
   IOSChromeNetworkDelegate::InitializePrefsOnUIThread(nullptr, local_state);
   ssl_config_service_manager_.reset(
@@ -499,9 +499,8 @@ void IOSChromeIOThread::InitSystemRequestContext() {
   // If we're in unit_tests, IOSChromeIOThread may not be run.
   if (!web::WebThread::IsMessageLoopValid(web::WebThread::IO))
     return;
-  system_proxy_config_service_ =
-      ios::ProxyServiceFactory::CreateProxyConfigService(
-          pref_proxy_config_tracker_.get());
+  system_proxy_config_service_ = ProxyServiceFactory::CreateProxyConfigService(
+      pref_proxy_config_tracker_.get());
 
   system_url_request_context_getter_ = new SystemURLRequestContextGetter(this);
   // Safe to post an unretained this pointer, since IOSChromeIOThread is
@@ -517,7 +516,7 @@ void IOSChromeIOThread::InitSystemRequestContextOnIOThread() {
   DCHECK(!globals_->system_proxy_service.get());
   DCHECK(system_proxy_config_service_.get());
 
-  globals_->system_proxy_service = ios::ProxyServiceFactory::CreateProxyService(
+  globals_->system_proxy_service = ProxyServiceFactory::CreateProxyService(
       net_log_, nullptr, globals_->system_network_delegate.get(),
       std::move(system_proxy_config_service_), true /* quick_check_enabled */);
 

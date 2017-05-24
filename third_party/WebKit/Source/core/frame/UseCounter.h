@@ -67,7 +67,12 @@ class CORE_EXPORT UseCounter {
   enum Context {
     kDefaultContext,
     // Counters for SVGImages (lifetime independent from other pages).
-    kSVGImageContext
+    kSVGImageContext,
+    // Counters for extensions.
+    kExtensionContext,
+    // Context when counters should be disabled (eg, internal pages such as
+    // about, chrome-devtools, etc).
+    kDisabledContext
   };
 
   UseCounter(Context = kDefaultContext);
@@ -700,8 +705,8 @@ class CORE_EXPORT UseCounter {
     kBackspaceNavigatedBackAfterFormInteraction = 958,
     kCSPSourceWildcardWouldMatchExactHost = 959,
     kCredentialManagerGet = 960,
-    kCredentialManagerGetWithUI = 961,
-    kCredentialManagerGetWithoutUI = 962,
+    kCredentialManagerGetMediationOptional = 961,
+    kCredentialManagerGetMediationSilent = 962,
     kCredentialManagerStore = 963,
     kCredentialManagerRequireUserMediation = 964,
     // The above items are available in M47 branch.
@@ -1583,6 +1588,20 @@ class CORE_EXPORT UseCounter {
     kPostMessageOutgoingWouldBeBlockedByConnectSrc = 1974,
     kPostMessageIncomingWouldBeBlockedByConnectSrc = 1975,
     kPaymentRequestNetworkNameInSupportedMethods = 1976,
+    kCrossOriginPropertyAccess = 1977,
+    kCrossOriginPropertyAccessFromOpener = 1978,
+    kCredentialManagerCreate = 1979,
+    kWebDatabaseCreateDropFTS3Table = 1980,
+    kFieldEditInSecureContext = 1981,
+    kFieldEditInNonSecureContext = 1982,
+    kCredentialManagerCredentialRequestOptionsUnmediated = 1983,
+    kCredentialManagerGetMediationRequired = 1984,
+    kCredentialManagerIdName = 1985,
+    kCredentialManagerPasswordName = 1986,
+    kCredentialManagerAdditionalData = 1987,
+    kCredentialManagerCustomFetch = 1988,
+    kNetInfoRtt = 1989,
+    kNetInfoDownlink = 1990,
 
     // Add new features immediately above this line. Don't change assigned
     // numbers of any item, and don't reuse removed slots.
@@ -1592,8 +1611,8 @@ class CORE_EXPORT UseCounter {
   };
 
   // An interface to observe UseCounter changes. Note that this is never
-  // notified when the counter is disabled by |m_muteCount| or
-  // |m_disableReporting|.
+  // notified when the counter is disabled by |m_muteCount| or when |m_context|
+  // is kDisabledContext.
   class Observer : public GarbageCollected<Observer> {
    public:
     // Notified when a feature is counted for the first time. This should return
@@ -1655,8 +1674,8 @@ class CORE_EXPORT UseCounter {
 
  private:
   // Notifies that a feature is newly counted to |m_observers|. This shouldn't
-  // be called when the counter is disabled by |m_muteCount| or
-  // |m_disableReporting|.
+  // be called when the counter is disabled by |m_muteCount| or when |m_context|
+  // if kDisabledContext.
   void NotifyFeatureCounted(Feature);
 
   EnumerationHistogram& FeaturesHistogram() const;
@@ -1666,10 +1685,8 @@ class CORE_EXPORT UseCounter {
   // If non-zero, ignore all 'count' calls completely.
   unsigned mute_count_;
 
-  // If true, disable reporting all histogram entries.
-  bool disable_reporting_;
-
-  // The scope represented by this UseCounter instance.
+  // The scope represented by this UseCounter instance, which must be fixed for
+  // the duration of a page but can change when a new page is loaded.
   Context context_;
 
   // Track what features/properties have been reported to the (non-legacy)

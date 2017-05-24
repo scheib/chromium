@@ -30,10 +30,6 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGResourceLinearGradient linearGradient id='gradient'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "SVG resource change"
     },

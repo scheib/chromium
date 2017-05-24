@@ -97,6 +97,7 @@ source_set("browser") {
     "//components/pref_registry",
     "//components/prefs",
     "//components/proxy_config",
+    "//components/proxy_config/ios",
     "//components/reading_list/ios",
     "//components/search_engines",
     "//components/signin/core/browser",
@@ -236,6 +237,7 @@ source_set("unit_tests") {
 }
 
 source_set("browser_internal") {
+  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "callback_counter.h",
     "callback_counter.mm",

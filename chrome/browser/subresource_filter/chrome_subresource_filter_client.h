@@ -95,11 +95,12 @@ class ChromeSubresourceFilterClient
       content::NavigationHandle* navigation_handle,
       std::vector<std::unique_ptr<content::NavigationThrottle>>* throttles);
 
+  void OnReloadRequested();
+
   // SubresourceFilterClient:
   void ToggleNotificationVisibility(bool visibility) override;
   bool OnPageActivationComputed(content::NavigationHandle* navigation_handle,
                                 bool activated) override;
-  void WhitelistByContentSettings(const GURL& url) override;
   void WhitelistInCurrentWebContents(const GURL& url) override;
   subresource_filter::VerifiedRulesetDealer::Handle* GetRulesetDealer()
       override;
@@ -111,6 +112,7 @@ class ChromeSubresourceFilterClient
   static void LogAction(SubresourceFilterAction action);
 
  private:
+  void WhitelistByContentSettings(const GURL& url);
   std::set<std::string> whitelisted_hosts_;
 
   // Owned by the profile.

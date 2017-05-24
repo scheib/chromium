@@ -40,6 +40,8 @@ const char kEventNameHarmful[] = "harmful_interstitial_";
 const char kEventNamePhishing[] = "phishing_interstitial_";
 const char kEventNameOther[] = "safebrowsing_other_interstitial_";
 
+const char kHelpCenterLink[] = "cpn_safe_browsing";
+
 }  // namespace
 
 // static
@@ -76,7 +78,8 @@ class SafeBrowsingBlockingPageFactoryImpl
         web_contents->GetBrowserContext()->IsOffTheRecord(),
         IsExtendedReportingEnabled(*prefs), IsScout(*prefs),
         is_proceed_anyway_disabled,
-        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources));
+        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
+        kHelpCenterLink);
 
     return new SafeBrowsingBlockingPage(ui_manager, web_contents,
                                         main_frame_url, unsafe_resources,

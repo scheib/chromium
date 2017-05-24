@@ -1,14 +1,15 @@
-<link rel="import" href="chrome://resources/cr_elements/cr_search_field/cr_search_field_behavior.html">
-<link rel="import" href="chrome://resources/cr_elements/hidden_style_css.html">
-<link rel="import" href="chrome://resources/cr_elements/icons.html">
 <link rel="import" href="chrome://resources/html/polymer.html">
+
+<link rel="import" href="chrome://resources/cr_elements/cr_search_field/cr_search_field_behavior.html">
+<link rel="import" href="chrome://resources/cr_elements/icons.html">
+<link rel="import" href="chrome://resources/cr_elements/shared_style_css.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-icon/iron-icon.html">
-<link rel="import" href="chrome://resources/polymer/v1_0/paper-icon-button/paper-icon-button.html">
+<link rel="import" href="chrome://resources/polymer/v1_0/paper-icon-button/paper-icon-button-light.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-input/paper-input-container.html">
 
 <dom-module id="settings-subpage-search">
   <template>
-    <style include="cr-hidden-style">
+    <style include="cr-shared-style">
       :host {
         --subpage-search-underline: {
           margin-bottom: -2px;
@@ -26,13 +27,6 @@
           /* Required to align the icon in |clearSearch| vertically. */
           line-height: 0;
         };
-      }
-
-      paper-icon-button {
-        /* A 16px icon that fits on the input line. */
-        height: 24px;
-        padding: 4px;
-        width: 24px;
       }
 
       #searchIcon {
@@ -64,6 +58,11 @@
       #clearSearch {
         -webkit-margin-end: -4px;
         -webkit-margin-start: 4px;
+
+        /* A 16px icon that fits on the input line. */
+        background-size: 16px;
+        height: 24px;
+        width: 24px;
       }
     </style>
     <iron-icon id="searchIcon" icon="cr:search"></iron-icon>
@@ -71,10 +70,10 @@
       <input id="searchInput" type="search" on-search="onSearchTermSearch"
           on-input="onSearchTermInput" aria-labelledby="prompt" incremental
           autofocus$="[[autofocus]]" placeholder="[[label]]">
-      <paper-icon-button suffix icon="cr:cancel" id="clearSearch"
-          on-tap="onTapClear_" title="[[clearLabel]]"
+      <button suffix is="paper-icon-button-light" id="clearSearch"
+          class="icon-cancel" on-tap="onTapClear_" title="[[clearLabel]]"
           hidden$="[[!hasSearchText]]">
-      </paper-icon-button>
+      </button>
     </paper-input-container>
   </template>
   <script src="settings_subpage_search.js"></script>

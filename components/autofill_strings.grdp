@@ -66,8 +66,8 @@
   <message name="IDS_AUTOFILL_CC_JCB" desc="JCB credit card name." formatter_data="android_java">
     JCB
   </message>
-  <message name="IDS_AUTOFILL_CC_MASTERCARD" desc="MasterCard credit card name." formatter_data="android_java">
-    MasterCard
+  <message name="IDS_AUTOFILL_CC_MASTERCARD" desc="Mastercard credit card name." formatter_data="android_java">
+    Mastercard
   </message>
   <message name="IDS_AUTOFILL_CC_MIR" desc="Mir credit card name." formatter_data="android_java">
     Mir
@@ -355,7 +355,7 @@
   <message name="IDS_AUTOFILL_SELECT" desc="The string to display in comboboxes when nothing got selected yet.">
     Select
   </message>
-  <message name="IDS_AUTOFILL_ADD_BILLING_ADDRESS" desc="The string to display in comboboxes when no billing addresses are available.">
-    Add a billing address
+  <message name="IDS_AUTOFILL_NO_SAVED_ADDRESS" desc="The string to display in comboboxes when no addresses are available.">
+    No saved addresses
   </message>
 </grit-part>

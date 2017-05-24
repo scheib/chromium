@@ -47,6 +47,7 @@ class SchedulerClient {
   virtual void ScheduledActionInvalidateCompositorFrameSink() = 0;
   virtual void ScheduledActionPerformImplSideInvalidation() = 0;
   virtual void DidFinishImplFrame() = 0;
+  virtual void DidNotProduceFrame(const BeginFrameAck& ack) = 0;
   virtual void SendBeginMainFrameNotExpectedSoon() = 0;
   virtual void ScheduledActionBeginMainFrameNotExpectedUntil(
       base::TimeTicks time) = 0;

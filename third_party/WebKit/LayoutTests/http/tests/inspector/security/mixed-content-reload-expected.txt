@@ -5,7 +5,7 @@ Tests that the mixed content explanation prompts the user to refresh when there 
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Mixed Content
+Mixed content
         </DIV>
         <DIV >
 The site includes HTTP resources.
@@ -20,7 +20,7 @@ Reload the page to record requests for HTTP resources.
     </DIV>
     <DIV class=security-explanation-text >
         <DIV class=security-explanation-title >
-Mixed Content
+Mixed content
         </DIV>
         <DIV >
 The site includes HTTP resources.

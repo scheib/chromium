@@ -854,7 +854,7 @@ void BrowserAccessibilityAuraLinux::InitRoleAndState() {
     case ui::AX_ROLE_DIALOG:
       atk_role_ = ATK_ROLE_DIALOG;
       break;
-    case ui::AX_ROLE_DIV:
+    case ui::AX_ROLE_GENERIC_CONTAINER:
     case ui::AX_ROLE_GROUP:
       atk_role_ = ATK_ROLE_SECTION;
       break;

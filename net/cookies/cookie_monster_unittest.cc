@@ -33,6 +33,8 @@
 #include "net/cookies/cookie_store_unittest.h"
 #include "net/cookies/cookie_util.h"
 #include "net/cookies/parsed_cookie.h"
+#include "net/ssl/channel_id_service.h"
+#include "net/ssl/default_channel_id_store.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -2469,6 +2471,19 @@ class CallbackCounter : public base::RefCountedThreadSafe<CallbackCounter> {
   volatile int callback_count_;
 };
 
+class FlushCountingChannelIDStore : public DefaultChannelIDStore {
+ public:
+  FlushCountingChannelIDStore()
+      : DefaultChannelIDStore(nullptr), flush_count_(0) {}
+
+  void Flush() override { flush_count_++; }
+
+  int flush_count() { return flush_count_; }
+
+ private:
+  int flush_count_;
+};
+
 }  // namespace
 
 // Test that FlushStore() is forwarded to the store and callbacks are posted.
@@ -2521,6 +2536,41 @@ TEST_F(CookieMonsterTest, FlushStore) {
   base::RunLoop().RunUntilIdle();
 
   ASSERT_EQ(3, counter->callback_count());
+}
+
+TEST_F(CookieMonsterTest, FlushChannelIDs) {
+  // |channel_id_service| owns |channel_id_store|.
+  FlushCountingChannelIDStore* channel_id_store =
+      new FlushCountingChannelIDStore();
+  std::unique_ptr<ChannelIDService> channel_id_service(
+      new ChannelIDService(channel_id_store));
+
+  scoped_refptr<FlushablePersistentStore> store(new FlushablePersistentStore());
+  std::unique_ptr<CookieMonster> cm(
+      new CookieMonster(store.get(), nullptr, channel_id_service.get()));
+  EXPECT_EQ(0, channel_id_store->flush_count());
+
+  // Before initialization, FlushStore() doesn't propagate to the
+  // ChannelIDStore.
+  cm->FlushStore(base::Closure());
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_EQ(0, channel_id_store->flush_count());
+
+  // After initialization, FlushStore() propagates to the ChannelIDStore.
+  GetAllCookies(cm.get());  // Force init.
+  cm->FlushStore(base::Closure());
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_EQ(1, channel_id_store->flush_count());
+
+  // If there is no persistent store, then a ChannelIDStore won't be notified.
+  cm.reset(new CookieMonster(nullptr, nullptr, channel_id_service.get()));
+  GetAllCookies(cm.get());  // Force init.
+  cm->FlushStore(base::Closure());
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_EQ(1, channel_id_store->flush_count());
 }
 
 TEST_F(CookieMonsterTest, SetAllCookies) {

@@ -237,6 +237,19 @@ class InputRouterImplTest : public testing::Test {
                                                   precise)));
   }
 
+  void SimulateWheelEventWithPhase(float x,
+                                   float y,
+                                   float dX,
+                                   float dY,
+                                   int modifiers,
+                                   bool precise,
+                                   WebMouseWheelEvent::Phase phase) {
+    WebMouseWheelEvent wheel_event = SyntheticWebMouseWheelEventBuilder::Build(
+        x, y, dX, dY, modifiers, precise);
+    wheel_event.phase = phase;
+    input_router_->SendWheelEvent(MouseWheelEventWithLatencyInfo(wheel_event));
+  }
+
   void SimulateMouseEvent(WebInputEvent::Type type, int x, int y) {
     input_router_->SendMouseEvent(MouseEventWithLatencyInfo(
         SyntheticWebMouseEventBuilder::Build(type, x, y, 0)));
@@ -352,14 +365,6 @@ class InputRouterImplTest : public testing::Test {
     return input_router()->touch_event_queue_->IsAckTimeoutEnabled();
   }
 
-  void RequestNotificationWhenFlushed() const {
-    return input_router_->RequestNotificationWhenFlushed();
-  }
-
-  size_t GetAndResetDidFlushCount() {
-    return client_->GetAndResetDidFlushCount();
-  }
-
   bool HasPendingEvents() const {
     return input_router_->HasPendingEvents();
   }
@@ -388,8 +393,17 @@ class InputRouterImplTest : public testing::Test {
 
   void UnhandledWheelEvent(bool wheel_scroll_latching_enabled) {
     // Simulate wheel events.
-    SimulateWheelEvent(0, 0, 0, -5, 0, false);   // sent directly
-    SimulateWheelEvent(0, 0, 0, -10, 0, false);  // enqueued
+    if (wheel_scroll_latching_enabled) {
+      SimulateWheelEventWithPhase(
+          0, 0, 0, -5, 0, false,
+          WebMouseWheelEvent::kPhaseBegan);  // sent directly
+      SimulateWheelEventWithPhase(
+          0, 0, 0, -10, 0, false,
+          WebMouseWheelEvent::kPhaseChanged);  // enqueued
+    } else {
+      SimulateWheelEvent(0, 0, 0, -5, 0, false);   // sent directly
+      SimulateWheelEvent(0, 0, 0, -10, 0, false);  // enqueued
+    }
 
     // Check that only the first event was sent.
     EXPECT_TRUE(process_->sink().GetUniqueMessageMatching(
@@ -1098,11 +1112,10 @@ TEST_F(InputRouterImplTest, AckedTouchEventState) {
 }
 #endif  // defined(USE_AURA)
 
-TEST_F(InputRouterImplTest, UnhandledWheelEventWithoutLatching) {
+TEST_F(InputRouterImplTest, UnhandledWheelEvent) {
   UnhandledWheelEvent(true);
 }
-TEST_F(InputRouterImplWheelScrollLatchingDisabledTest,
-       UnhandledWheelEventWithLatching) {
+TEST_F(InputRouterImplWheelScrollLatchingDisabledTest, UnhandledWheelEvent) {
   UnhandledWheelEvent(false);
 }
 
@@ -1190,19 +1203,22 @@ TEST_F(InputRouterImplTest, MouseTypesIgnoringAck) {
   ASSERT_LT(start_type, end_type);
   for (int i = start_type; i <= end_type; ++i) {
     WebInputEvent::Type type = static_cast<WebInputEvent::Type>(i);
-    int expected_in_flight_event_count =
-        !ShouldBlockEventStream(GetEventWithType(type)) ? 0 : 1;
 
-    // Note: Only MouseMove ack is forwarded to the ack handler.
     SimulateMouseEvent(type, 0, 0);
     EXPECT_EQ(1U, GetSentMessageCountAndResetSink());
-    EXPECT_EQ(0U, ack_handler_->GetAndResetAckCount());
-    EXPECT_EQ(expected_in_flight_event_count, client_->in_flight_event_count());
-    if (expected_in_flight_event_count) {
+
+    if (ShouldBlockEventStream(GetEventWithType(type))) {
+      EXPECT_EQ(0U, ack_handler_->GetAndResetAckCount());
+      EXPECT_EQ(1, client_->in_flight_event_count());
+
       SendInputEventACK(type, INPUT_EVENT_ACK_STATE_NOT_CONSUMED);
       EXPECT_EQ(0U, GetSentMessageCountAndResetSink());
-      uint32_t expected_ack_count = type == WebInputEvent::kMouseMove ? 1 : 0;
-      EXPECT_EQ(expected_ack_count, ack_handler_->GetAndResetAckCount());
+      EXPECT_EQ(1U, ack_handler_->GetAndResetAckCount());
+      EXPECT_EQ(0, client_->in_flight_event_count());
+    } else {
+      // Note: events which don't block the event stream immediately receive
+      // synthetic ACKs.
+      EXPECT_EQ(1U, ack_handler_->GetAndResetAckCount());
       EXPECT_EQ(0, client_->in_flight_event_count());
     }
   }
@@ -1787,121 +1803,6 @@ TEST_F(InputRouterImplRafAlignedTouchDisabledTest,
   EXPECT_EQ(1, client_->in_flight_event_count());
   SendInputEventACK(WebInputEvent::kGestureTap, INPUT_EVENT_ACK_STATE_CONSUMED);
   EXPECT_EQ(0, client_->in_flight_event_count());
-}
-
-// Test that the router will call the client's |DidFlush| after all events have
-// been dispatched following a call to |Flush|.
-TEST_F(InputRouterImplTest, InputFlush) {
-  EXPECT_FALSE(HasPendingEvents());
-
-  // Flushing an empty router should immediately trigger DidFlush.
-  RequestNotificationWhenFlushed();
-  EXPECT_EQ(1U, GetAndResetDidFlushCount());
-  EXPECT_FALSE(HasPendingEvents());
-
-  // Queue a TouchStart.
-  OnHasTouchEventHandlers(true);
-  PressTouchPoint(1, 1);
-  uint32_t touch_press_event_id = SendTouchEvent();
-  EXPECT_TRUE(HasPendingEvents());
-
-  // DidFlush should be called only after the event is ack'ed.
-  RequestNotificationWhenFlushed();
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-  SendTouchEventACK(WebInputEvent::kTouchStart,
-                    INPUT_EVENT_ACK_STATE_NOT_CONSUMED, touch_press_event_id);
-  EXPECT_EQ(1U, GetAndResetDidFlushCount());
-
-  // Ensure different types of enqueued events will prevent the DidFlush call
-  // until all such events have been fully dispatched.
-  MoveTouchPoint(0, 50, 50);
-  uint32_t touch_move_event_id = SendTouchEvent();
-  ASSERT_TRUE(HasPendingEvents());
-  SimulateGestureEvent(WebInputEvent::kGestureScrollBegin,
-                       blink::kWebGestureDeviceTouchscreen);
-  SimulateGestureEvent(WebInputEvent::kGestureScrollUpdate,
-                       blink::kWebGestureDeviceTouchscreen);
-  SimulateGestureEvent(WebInputEvent::kGesturePinchBegin,
-                       blink::kWebGestureDeviceTouchscreen);
-  SimulateGestureEvent(WebInputEvent::kGesturePinchUpdate,
-                       blink::kWebGestureDeviceTouchscreen);
-  RequestNotificationWhenFlushed();
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-
-  // Repeated flush calls should have no effect.
-  RequestNotificationWhenFlushed();
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-
-  // There are still pending gestures.
-  SendTouchEventACK(WebInputEvent::kTouchMove,
-                    INPUT_EVENT_ACK_STATE_NOT_CONSUMED, touch_move_event_id);
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-  EXPECT_TRUE(HasPendingEvents());
-
-  // One more gesture to go.
-  SendInputEventACK(WebInputEvent::kGestureScrollUpdate,
-                    INPUT_EVENT_ACK_STATE_CONSUMED);
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-  EXPECT_TRUE(HasPendingEvents());
-
-  // The final ack'ed gesture should trigger the DidFlush.
-  SendInputEventACK(WebInputEvent::kGesturePinchUpdate,
-                    INPUT_EVENT_ACK_STATE_CONSUMED);
-  EXPECT_EQ(1U, GetAndResetDidFlushCount());
-  EXPECT_FALSE(HasPendingEvents());
-}
-
-// Test that the router will call the client's |DidFlush| after all fling
-// animations have completed.
-TEST_F(InputRouterImplTest, InputFlushAfterFling) {
-  EXPECT_FALSE(HasPendingEvents());
-
-  // Simulate a fling.
-  SimulateGestureEvent(WebInputEvent::kGestureScrollBegin,
-                       blink::kWebGestureDeviceTouchscreen);
-  SimulateGestureEvent(WebInputEvent::kGestureFlingStart,
-                       blink::kWebGestureDeviceTouchscreen);
-  EXPECT_TRUE(HasPendingEvents());
-
-  // If the fling is unconsumed, the flush is complete.
-  RequestNotificationWhenFlushed();
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-  SimulateGestureEvent(WebInputEvent::kGestureScrollBegin,
-                       blink::kWebGestureDeviceTouchscreen);
-  SendInputEventACK(WebInputEvent::kGestureFlingStart,
-                    INPUT_EVENT_ACK_STATE_NOT_CONSUMED);
-  EXPECT_FALSE(HasPendingEvents());
-  EXPECT_EQ(1U, GetAndResetDidFlushCount());
-
-  // Simulate a second fling.
-  SimulateGestureEvent(WebInputEvent::kGestureFlingStart,
-                       blink::kWebGestureDeviceTouchscreen);
-  EXPECT_TRUE(HasPendingEvents());
-
-  // If the fling is consumed, the flush is complete only when the renderer
-  // reports that is has ended.
-  RequestNotificationWhenFlushed();
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-  SendInputEventACK(WebInputEvent::kGestureFlingStart,
-                    INPUT_EVENT_ACK_STATE_CONSUMED);
-  EXPECT_TRUE(HasPendingEvents());
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-
-  // The fling end notification should signal that the router is flushed.
-  input_router()->OnMessageReceived(InputHostMsg_DidStopFlinging(0));
-  EXPECT_EQ(1U, GetAndResetDidFlushCount());
-
-  // Even flings consumed by the client require a fling-end notification.
-  client_->set_filter_state(INPUT_EVENT_ACK_STATE_CONSUMED);
-  SimulateGestureEvent(WebInputEvent::kGestureScrollBegin,
-                       blink::kWebGestureDeviceTouchscreen);
-  SimulateGestureEvent(WebInputEvent::kGestureFlingStart,
-                       blink::kWebGestureDeviceTouchscreen);
-  ASSERT_TRUE(HasPendingEvents());
-  RequestNotificationWhenFlushed();
-  EXPECT_EQ(0U, GetAndResetDidFlushCount());
-  input_router()->OnMessageReceived(InputHostMsg_DidStopFlinging(0));
-  EXPECT_EQ(1U, GetAndResetDidFlushCount());
 }
 
 // Test that GesturePinchUpdate is handled specially for trackpad

@@ -170,17 +170,6 @@ void ChromeRuntimeAPIDelegate::RemoveUpdateObserver(
   }
 }
 
-base::Version ChromeRuntimeAPIDelegate::GetPreviousExtensionVersion(
-    const Extension* extension) {
-  // Get the previous version to check if this is an upgrade.
-  ExtensionService* service =
-      ExtensionSystem::Get(browser_context_)->extension_service();
-  const Extension* old = service->GetExtensionById(extension->id(), true);
-  if (old)
-    return *old->version();
-  return base::Version();
-}
-
 void ChromeRuntimeAPIDelegate::ReloadExtension(
     const std::string& extension_id) {
   std::pair<base::TimeTicks, int>& reload_info =

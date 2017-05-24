@@ -125,7 +125,7 @@ void BrowserInstantController::OpenInstant(WindowOpenDisposition disposition,
   if (prerenderer->CanCommitQuery(GetActiveWebContents(), search_terms)) {
     // Submit query to render the prefetched results. Browser will swap the
     // prerendered contents with the active tab contents.
-    prerenderer->Commit(search_terms, EmbeddedSearchRequestParams(url));
+    prerenderer->Commit(EmbeddedSearchRequestParams(url));
   } else {
     prerenderer->Cancel();
   }

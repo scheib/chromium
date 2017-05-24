@@ -263,9 +263,9 @@ TEST(AXTreeTest, SerializeSimpleAXTree) {
 
   EXPECT_EQ(
       "AXTree title=Title\n"
-      "id=1 dialog FOCUSABLE (0, 0)-(800, 600) child_ids=2,3\n"
-      "  id=2 button (20, 20)-(200, 30)\n"
-      "  id=3 checkBox (20, 50)-(200, 30)\n",
+      "id=1 dialog FOCUSABLE (0, 0)-(800, 600) actions= child_ids=2,3\n"
+      "  id=2 button (20, 20)-(200, 30) actions=\n"
+      "  id=3 checkBox (20, 50)-(200, 30) actions=\n",
       dst_tree.ToString());
 }
 
@@ -298,10 +298,10 @@ TEST(AXTreeTest, SerializeAXTreeUpdate) {
 
   EXPECT_EQ(
       "AXTreeUpdate: root id 3\n"
-      "id=3 list (0, 0)-(0, 0) child_ids=4,5,6\n"
-      "  id=5 listItem (0, 0)-(0, 0)\n"
-      "  id=6 listItem (0, 0)-(0, 0)\n"
-      "id=7 button (0, 0)-(0, 0)\n",
+      "id=3 list (0, 0)-(0, 0) actions= child_ids=4,5,6\n"
+      "  id=5 listItem (0, 0)-(0, 0) actions=\n"
+      "  id=6 listItem (0, 0)-(0, 0) actions=\n"
+      "id=7 button (0, 0)-(0, 0) actions=\n",
       update.ToString());
 }
 

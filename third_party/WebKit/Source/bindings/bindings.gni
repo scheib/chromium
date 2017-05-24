@@ -187,6 +187,7 @@ bindings_core_v8_output_dir = "$bindings_output_dir/core/v8"
 
 bindings_unittest_files =
     get_path_info([
+                    "core/v8/BindingSecurityTest.cpp",
                     "core/v8/DocumentWriteEvaluatorTest.cpp",
                     "core/v8/DOMWrapperWorldTest.cpp",
                     "core/v8/IDLTypesTest.cpp",

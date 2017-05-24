@@ -131,6 +131,7 @@ TEST_F(MediaInternalsVideoCaptureDeviceTest,
   api_to_string_map[VideoCaptureApi::WIN_DIRECT_SHOW] = "Direct Show";
   api_to_string_map[VideoCaptureApi::MACOSX_AVFOUNDATION] = "AV Foundation";
   api_to_string_map[VideoCaptureApi::MACOSX_DECKLINK] = "DeckLink";
+  api_to_string_map[VideoCaptureApi::MACOSX_SYPHON] = "Syphon";
   api_to_string_map[VideoCaptureApi::ANDROID_API1] = "Camera API1";
   api_to_string_map[VideoCaptureApi::ANDROID_API2_LEGACY] =
       "Camera API2 Legacy";

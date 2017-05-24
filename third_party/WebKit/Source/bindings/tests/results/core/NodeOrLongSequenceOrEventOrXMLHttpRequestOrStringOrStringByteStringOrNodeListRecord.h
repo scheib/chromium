@@ -48,9 +48,9 @@ class CORE_EXPORT NodeOrLongSequenceOrEventOrXMLHttpRequestOrStringOrStringByteS
   static NodeOrLongSequenceOrEventOrXMLHttpRequestOrStringOrStringByteStringOrNodeListRecord fromNode(Node*);
 
   bool isString() const { return m_type == SpecificTypeString; }
-  String getAsString() const;
-  void setString(String);
-  static NodeOrLongSequenceOrEventOrXMLHttpRequestOrStringOrStringByteStringOrNodeListRecord fromString(String);
+  const String& getAsString() const;
+  void setString(const String&);
+  static NodeOrLongSequenceOrEventOrXMLHttpRequestOrStringOrStringByteStringOrNodeListRecord fromString(const String&);
 
   bool isStringByteStringOrNodeListRecord() const { return m_type == SpecificTypeStringByteStringOrNodeListRecord; }
   const HeapVector<std::pair<String, ByteStringOrNodeList>>& getAsStringByteStringOrNodeListRecord() const;

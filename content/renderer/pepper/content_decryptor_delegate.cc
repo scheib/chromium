@@ -10,6 +10,7 @@
 
 #include "base/callback_helpers.h"
 #include "base/macros.h"
+#include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -809,7 +810,7 @@ void ContentDecryptorDelegate::OnSessionKeysChange(
   keys_info.reserve(key_count);
   for (uint32_t i = 0; i < key_count; ++i) {
     const auto& info = key_information[i];
-    keys_info.push_back(new media::CdmKeyInformation(
+    keys_info.push_back(base::MakeUnique<media::CdmKeyInformation>(
         info.key_id, info.key_id_size,
         PpCdmKeyStatusToCdmKeyInformationKeyStatus(info.key_status),
         info.system_code));

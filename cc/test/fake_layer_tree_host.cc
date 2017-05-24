@@ -79,19 +79,18 @@ LayerImpl* FakeLayerTreeHost::CommitAndCreateLayerImplTree() {
       property_trees(), active_tree());
 
   if (page_scale_layer() && inner_viewport_scroll_layer()) {
-    active_tree()->SetViewportLayersFromIds(
-        overscroll_elasticity_layer() ? overscroll_elasticity_layer()->id()
-                                      : Layer::INVALID_ID,
-        page_scale_layer()->id(),
-        inner_viewport_container_layer()
-            ? inner_viewport_container_layer()->id()
-            : Layer::INVALID_ID,
-        outer_viewport_container_layer()
-            ? outer_viewport_container_layer()->id()
-            : Layer::INVALID_ID,
-        inner_viewport_scroll_layer()->id(),
-        outer_viewport_scroll_layer() ? outer_viewport_scroll_layer()->id()
-                                      : Layer::INVALID_ID);
+    LayerTreeImpl::ViewportLayerIds ids;
+    if (overscroll_elasticity_layer())
+      ids.overscroll_elasticity = overscroll_elasticity_layer()->id();
+    ids.page_scale = page_scale_layer()->id();
+    if (inner_viewport_container_layer())
+      ids.inner_viewport_container = inner_viewport_container_layer()->id();
+    if (outer_viewport_container_layer())
+      ids.outer_viewport_container = outer_viewport_container_layer()->id();
+    ids.inner_viewport_scroll = inner_viewport_scroll_layer()->id();
+    if (outer_viewport_scroll_layer())
+      ids.outer_viewport_scroll = outer_viewport_scroll_layer()->id();
+    active_tree()->SetViewportLayersFromIds(ids);
   }
 
   return active_tree()->root_layer_for_testing();

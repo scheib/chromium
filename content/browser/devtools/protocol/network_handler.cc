@@ -23,6 +23,7 @@
 #include "content/common/resource_request_completion_status.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/resource_context.h"
@@ -454,8 +455,15 @@ Response NetworkHandler::Disable() {
 }
 
 Response NetworkHandler::ClearBrowserCache() {
-  if (host_)
-    GetContentClient()->browser()->ClearCache(host_);
+  if (host_) {
+    content::BrowsingDataRemover* remover =
+        content::BrowserContext::GetBrowsingDataRemover(
+            host_->GetSiteInstance()->GetProcess()->GetBrowserContext());
+    remover->Remove(base::Time(), base::Time::Max(),
+                    content::BrowsingDataRemover::DATA_TYPE_CACHE,
+                    content::BrowsingDataRemover::ORIGIN_TYPE_UNPROTECTED_WEB);
+  }
+
   return Response::OK();
 }
 

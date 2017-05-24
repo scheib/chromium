@@ -21,8 +21,7 @@ class MockSearchBox : public chrome::mojom::SearchBox {
                void(const std::vector<InstantMostVisitedItem>&));
   MOCK_METHOD1(SetInputInProgress, void(bool));
   MOCK_METHOD1(SetSuggestionToPrefetch, void(const InstantSuggestion&));
-  MOCK_METHOD2(Submit,
-               void(const base::string16&, const EmbeddedSearchRequestParams&));
+  MOCK_METHOD1(Submit, void(const EmbeddedSearchRequestParams&));
   MOCK_METHOD1(ThemeChanged, void(const ThemeBackgroundInfo&));
 };
 

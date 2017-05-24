@@ -96,6 +96,13 @@ public interface SuggestionsSource {
     void fetchSuggestions(@CategoryInt int category, String[] displayedSuggestionIds);
 
     /**
+     * Fetches suggestions related to the provided URL.
+     * @param url The context (site URL) for which we want to have suggestions.
+     * @param callback The callback to run with the received suggestions.
+     */
+    void fetchContextualSuggestions(String url, Callback<List<SnippetArticle>> callback);
+
+    /**
      * Tells the source to dismiss the content suggestion.
      */
     void dismissSuggestion(SnippetArticle suggestion);

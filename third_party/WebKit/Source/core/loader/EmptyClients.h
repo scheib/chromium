@@ -203,6 +203,7 @@ class CORE_EXPORT EmptyChromeClient : public ChromeClient {
   void OpenFileChooser(LocalFrame*, PassRefPtr<FileChooser>) override;
 
   void SetCursor(const Cursor&, LocalFrame* local_root) override {}
+  void SetCursorOverridden(bool) override {}
   Cursor LastSetCursorForTesting() const override { return PointerCursor(); }
 
   void AttachRootGraphicsLayer(GraphicsLayer*, LocalFrame* local_root) override;

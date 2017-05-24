@@ -136,7 +136,7 @@ ToolbarManager.prototype = {
 
   /**
    * Wrapper around Date.now() to make it easily replaceable for testing.
-   * @return {int}
+   * @return {number}
    * @private
    */
   getCurrentTimestamp_: function() {

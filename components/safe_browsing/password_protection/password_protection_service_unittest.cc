@@ -630,11 +630,8 @@ TEST_F(PasswordProtectionServiceTest,
             actual_request->trigger_type());
   EXPECT_EQ(1, actual_request->frames_size());
   EXPECT_EQ(kTargetUrl, actual_request->frames(0).url());
-  ASSERT_TRUE(actual_request->has_password_reuse_event());
-  ASSERT_EQ(1, actual_request->password_reuse_event()
-                   .password_reused_original_origins_size());
-  EXPECT_EQ(kSavedDomain, actual_request->password_reuse_event()
-                              .password_reused_original_origins(0));
+  // TODO(jialiul): Update this test when we're ready to fill more fields.
+  ASSERT_FALSE(actual_request->has_password_reuse_event());
 }
 
 }  // namespace safe_browsing

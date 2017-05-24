@@ -62,8 +62,6 @@
 - (void)viewDidLoad {
   self.view.backgroundColor =
       [UIColor colorWithWhite:kToolbarBackgroundBrightness alpha:1.0];
-  self.view.tintColor =
-      [UIColor colorWithWhite:kToolbarTintColorBrightness alpha:1.0];
   [self addChildViewController:self.locationBarViewController
                      toSubview:self.locationBarContainer];
   [self setUpToolbarStackView];
@@ -90,7 +88,7 @@
 - (void)setConstraints {
   [self.view setAutoresizingMask:UIViewAutoresizingFlexibleWidth |
                                  UIViewAutoresizingFlexibleHeight];
-  [NSLayoutConstraint activateConstraints:@[
+  NSArray* constraints = @[
     [self.stackView.topAnchor constraintEqualToAnchor:self.view.topAnchor
                                              constant:kVerticalMargin],
     [self.stackView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor
@@ -109,7 +107,12 @@
         constraintEqualToAnchor:self.view.bottomAnchor],
     [self.progressBar.heightAnchor
         constraintEqualToConstant:kProgressBarHeight],
-  ]];
+  ];
+
+  // Set the constraints priority to UILayoutPriorityDefaultHigh so these are
+  // not broken when the views are hidden or the VC's view size is 0.
+  [self activateConstraints:constraints
+               withPriority:UILayoutPriorityDefaultHigh];
 }
 
 - (void)viewWillTransitionToSize:(CGSize)size
@@ -123,10 +126,15 @@
 #pragma mark - Components Setup
 
 - (void)setUpToolbarButtons {
+  NSMutableArray* buttonConstraints = [[NSMutableArray alloc] init];
+
   // Back button.
   self.backButton = [ToolbarButton backToolbarButton];
   self.backButton.visibilityMask = ToolbarComponentVisibilityCompactWidth |
                                    ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.backButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.backButton addTarget:self
                       action:@selector(goBack:)
             forControlEvents:UIControlEventTouchUpInside];
@@ -136,6 +144,9 @@
   self.forwardButton.visibilityMask =
       ToolbarComponentVisibilityCompactWidthOnlyWhenEnabled |
       ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.forwardButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.forwardButton addTarget:self
                          action:@selector(goForward:)
                forControlEvents:UIControlEventTouchUpInside];
@@ -145,6 +156,9 @@
   self.tabSwitchStripButton.visibilityMask =
       ToolbarComponentVisibilityCompactWidth |
       ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.tabSwitchStripButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.tabSwitchStripButton addTarget:nil
                                 action:@selector(showTabStrip:)
                       forControlEvents:UIControlEventTouchUpInside];
@@ -154,6 +168,9 @@
   self.tabSwitchGridButton.visibilityMask =
       ToolbarComponentVisibilityCompactWidth |
       ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.tabSwitchGridButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.tabSwitchGridButton addTarget:self
                                action:@selector(showTabGrid:)
                      forControlEvents:UIControlEventTouchUpInside];
@@ -163,6 +180,9 @@
   self.toolsMenuButton = [ToolbarButton toolsMenuToolbarButton];
   self.toolsMenuButton.visibilityMask = ToolbarComponentVisibilityCompactWidth |
                                         ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.toolsMenuButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.toolsMenuButton addTarget:self
                            action:@selector(showToolsMenu:)
                  forControlEvents:UIControlEventTouchUpInside];
@@ -170,6 +190,9 @@
   // Share button.
   self.shareButton = [ToolbarButton shareToolbarButton];
   self.shareButton.visibilityMask = ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.shareButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.shareButton addTarget:self
                        action:@selector(showShareMenu:)
              forControlEvents:UIControlEventTouchUpInside];
@@ -177,6 +200,9 @@
   // Reload button.
   self.reloadButton = [ToolbarButton reloadToolbarButton];
   self.reloadButton.visibilityMask = ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.reloadButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.reloadButton addTarget:self
                         action:@selector(reload:)
               forControlEvents:UIControlEventTouchUpInside];
@@ -184,9 +210,17 @@
   // Stop button.
   self.stopButton = [ToolbarButton stopToolbarButton];
   self.stopButton.visibilityMask = ToolbarComponentVisibilityRegularWidth;
+  [buttonConstraints
+      addObject:[self.stopButton.widthAnchor
+                    constraintEqualToConstant:kToolbarButtonWidth]];
   [self.stopButton addTarget:self
                       action:@selector(stop:)
             forControlEvents:UIControlEventTouchUpInside];
+
+  // // Set the buttons constraints priority to UILayoutPriorityDefaultHigh so
+  // these are not broken when being hidden by the StackView.
+  [self activateConstraints:buttonConstraints
+               withPriority:UILayoutPriorityDefaultHigh];
 }
 
 - (void)setUpLocationBarContainer {
@@ -354,6 +388,15 @@
       [button setHiddenForCurrentStateAndSizeClass];
     }
   }
+}
+
+// Sets the priority for an array of constraints and activates them.
+- (void)activateConstraints:(NSArray*)constraintsArray
+               withPriority:(UILayoutPriority)priority {
+  for (NSLayoutConstraint* constraint in constraintsArray) {
+    constraint.priority = priority;
+  }
+  [NSLayoutConstraint activateConstraints:constraintsArray];
 }
 
 @end

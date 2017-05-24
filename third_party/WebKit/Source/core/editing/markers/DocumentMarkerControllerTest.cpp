@@ -57,6 +57,7 @@ class DocumentMarkerControllerTest : public ::testing::Test {
 
   Text* CreateTextNode(const char*);
   void MarkNodeContents(Node*);
+  void MarkNodeContentsTextMatch(Node*);
   void SetBodyInnerHTML(const char*);
 
  private:
@@ -74,6 +75,15 @@ void DocumentMarkerControllerTest::MarkNodeContents(Node* node) {
   auto range = EphemeralRange::RangeOfContents(*node);
   MarkerController().AddMarker(range.StartPosition(), range.EndPosition(),
                                DocumentMarker::kSpelling);
+}
+
+void DocumentMarkerControllerTest::MarkNodeContentsTextMatch(Node* node) {
+  // Force layoutObjects to be created; TextIterator, which is used in
+  // DocumentMarkerControllerTest::addMarker(), needs them.
+  GetDocument().UpdateStyleAndLayout();
+  auto range = EphemeralRange::RangeOfContents(*node);
+  MarkerController().AddTextMatchMarker(range,
+                                        DocumentMarker::MatchStatus::kActive);
 }
 
 void DocumentMarkerControllerTest::SetBodyInnerHTML(const char* body_content) {
@@ -193,15 +203,15 @@ TEST_F(DocumentMarkerControllerTest, NodeWillBeRemovedBySetInnerHTML) {
 TEST_F(DocumentMarkerControllerTest, UpdateRenderedRects) {
   SetBodyInnerHTML("<div style='margin: 100px'>foo</div>");
   Element* div = ToElement(GetDocument().body()->firstChild());
-  MarkNodeContents(div);
+  MarkNodeContentsTextMatch(div);
   Vector<IntRect> rendered_rects =
-      MarkerController().RenderedRectsForMarkers(DocumentMarker::kSpelling);
+      MarkerController().RenderedRectsForTextMatchMarkers();
   EXPECT_EQ(1u, rendered_rects.size());
 
   div->setAttribute(HTMLNames::styleAttr, "margin: 200px");
   GetDocument().UpdateStyleAndLayout();
   Vector<IntRect> new_rendered_rects =
-      MarkerController().RenderedRectsForMarkers(DocumentMarker::kSpelling);
+      MarkerController().RenderedRectsForTextMatchMarkers();
   EXPECT_EQ(1u, new_rendered_rects.size());
   EXPECT_NE(rendered_rects[0], new_rendered_rects[0]);
 }
@@ -228,13 +238,13 @@ TEST_F(DocumentMarkerControllerTest, SetMarkerActiveTest) {
   Position end_b_element = ToPositionInDOMTree(ephemeral_range.EndPosition());
   const EphemeralRange range(start_b_element, end_b_element);
   // Try to make active a marker that doesn't exist.
-  EXPECT_FALSE(MarkerController().SetMarkersActive(range, true));
+  EXPECT_FALSE(MarkerController().SetTextMatchMarkersActive(range, true));
 
   // Add a marker and try it once more.
   MarkerController().AddTextMatchMarker(range,
                                         DocumentMarker::MatchStatus::kInactive);
   EXPECT_EQ(1u, MarkerController().Markers().size());
-  EXPECT_TRUE(MarkerController().SetMarkersActive(range, true));
+  EXPECT_TRUE(MarkerController().SetTextMatchMarkersActive(range, true));
 }
 
 TEST_F(DocumentMarkerControllerTest, RemoveStartOfMarker) {

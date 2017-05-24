@@ -87,9 +87,23 @@ class MODULES_EXPORT IDBRequest : public EventTargetWithInlineData,
 
   const String& readyState() const;
 
-  // Returns a new WebIDBCallbacks for this request. Must only be called once.
+  // Returns a new WebIDBCallbacks for this request.
+  //
+  // Each call must be paired with a WebCallbacksDestroyed() call. Most requests
+  // have a single WebIDBCallbacks instance created for them.
+  //
+  // Requests used to open and iterate cursors are special, because they are
+  // reused between openCursor() and continue() / advance() calls. These
+  // requests have a new WebIDBCallbacks instance created for each of the
+  // above-mentioned calls that they are involved in.
   std::unique_ptr<WebIDBCallbacks> CreateWebCallbacks();
-  void WebCallbacksDestroyed();
+  void WebCallbacksDestroyed() {
+    DCHECK(web_callbacks_);
+    web_callbacks_ = nullptr;
+  }
+#if DCHECK_IS_ON()
+  WebIDBCallbacks* WebCallbacks() const { return web_callbacks_; }
+#endif  // DCHECK_IS_ON()
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(success);
   DEFINE_ATTRIBUTE_EVENT_LISTENER(error);

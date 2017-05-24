@@ -38,6 +38,7 @@
 #include "gpu/command_buffer/service/memory_program_cache.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/query_manager.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/service_utils.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
@@ -178,6 +179,14 @@ gpu::gles2::ProgramCache* InProcessCommandBuffer::Service::program_cache() {
   return program_cache_.get();
 }
 
+ServiceDiscardableManager*
+InProcessCommandBuffer::Service::discardable_manager() {
+  if (!discardable_manager_) {
+    discardable_manager_.reset(new ServiceDiscardableManager());
+  }
+  return discardable_manager_.get();
+}
+
 InProcessCommandBuffer::InProcessCommandBuffer(
     const scoped_refptr<Service>& service)
     : command_buffer_id_(CommandBufferId::FromUnsafeValue(
@@ -312,7 +321,8 @@ bool InProcessCommandBuffer::InitializeOnGpuThread(
                 service_->gpu_preferences(), service_->mailbox_manager(), NULL,
                 service_->shader_translator_cache(),
                 service_->framebuffer_completeness_cache(), feature_info,
-                bind_generates_resource, nullptr, nullptr, GpuFeatureInfo());
+                bind_generates_resource, nullptr, nullptr, GpuFeatureInfo(),
+                service_->discardable_manager());
 
   decoder_.reset(gles2::GLES2Decoder::Create(context_group_.get()));
 

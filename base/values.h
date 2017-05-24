@@ -261,8 +261,6 @@ class BASE_EXPORT DictionaryValue : public Value {
   // be used as paths.
   Value* SetWithoutPathExpansion(StringPiece key,
                                  std::unique_ptr<Value> in_value);
-  // Deprecated version of the above. TODO(estade): remove.
-  Value* SetWithoutPathExpansion(StringPiece key, Value* in_value);
 
   // Convenience forms of SetWithoutPathExpansion().
   Value* SetBooleanWithoutPathExpansion(StringPiece path, bool in_value);

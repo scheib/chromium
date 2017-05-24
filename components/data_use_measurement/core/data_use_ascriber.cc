@@ -14,6 +14,9 @@
 
 namespace data_use_measurement {
 
+DataUseAscriber::DataUseAscriber() {}
+DataUseAscriber::~DataUseAscriber() {}
+
 std::unique_ptr<net::NetworkDelegate> DataUseAscriber::CreateNetworkDelegate(
     std::unique_ptr<net::NetworkDelegate> wrapped_network_delegate,
     const metrics::UpdateUsagePrefCallbackType& metrics_data_use_forwarder) {

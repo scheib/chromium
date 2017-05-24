@@ -67,6 +67,8 @@ enum PromoAction {
                isPresentedOnSettings:NO
                          accessPoint:signin_metrics::AccessPoint::
                                          ACCESS_POINT_SIGNIN_PROMO
+                         promoAction:signin_metrics::PromoAction::
+                                         PROMO_ACTION_NO_SIGNIN_PROMO
                       signInIdentity:nil];
   if (self) {
     super.delegate = self;

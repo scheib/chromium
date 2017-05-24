@@ -6,54 +6,55 @@ suite('selection state', function() {
   var selection;
   var action;
 
-  function select(items, anchor, add) {
+  function select(items, anchor, clear, toggle) {
     return {
       name: 'select-items',
-      add: add,
+      clear: clear,
       anchor: anchor,
       items: items,
+      toggle: toggle,
     };
   }
 
   setup(function() {
     selection = {
       anchor: null,
-      items: {},
+      items: new Set(),
     };
   });
 
   test('can select an item', function() {
-    action = select(['1'], '1', false);
+    action = select(['1'], '1', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
 
     assertDeepEquals(['1'], normalizeSet(selection.items));
     assertEquals('1', selection.anchor);
 
     // Replace current selection.
-    action = select(['2'], '2', false);
+    action = select(['2'], '2', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
     assertDeepEquals(['2'], normalizeSet(selection.items));
     assertEquals('2', selection.anchor);
 
     // Add to current selection.
-    action = select(['3'], '3', true);
+    action = select(['3'], '3', false, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
     assertDeepEquals(['2', '3'], normalizeSet(selection.items));
     assertEquals('3', selection.anchor);
   });
 
   test('can select multiple items', function() {
-    action = select(['1', '2', '3'], '3', false);
+    action = select(['1', '2', '3'], '3', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
     assertDeepEquals(['1', '2', '3'], normalizeSet(selection.items));
 
-    action = select(['3', '4'], '4', true);
+    action = select(['3', '4'], '4', false, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
     assertDeepEquals(['1', '2', '3', '4'], normalizeSet(selection.items));
   });
 
   test('is cleared when selected folder changes', function() {
-    action = select(['1', '2', '3'], '3', false);
+    action = select(['1', '2', '3'], '3', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
 
     action = bookmarks.actions.selectFolder('2');
@@ -62,7 +63,7 @@ suite('selection state', function() {
   });
 
   test('is cleared when search finished', function() {
-    action = select(['1', '2', '3'], '3', false);
+    action = select(['1', '2', '3'], '3', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
 
     action = bookmarks.actions.setSearchResults(['2']);
@@ -71,7 +72,7 @@ suite('selection state', function() {
   });
 
   test('is cleared when search cleared', function() {
-    action = select(['1', '2', '3'], '3', false);
+    action = select(['1', '2', '3'], '3', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
 
     action = bookmarks.actions.clearSearch();
@@ -80,12 +81,21 @@ suite('selection state', function() {
   });
 
   test('deselect items', function() {
-    action = select(['1', '2', '3'], '3', false);
+    action = select(['1', '2', '3'], '3', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
 
     action = bookmarks.actions.deselectItems();
     selection = bookmarks.SelectionState.updateSelection(selection, action);
     assertDeepEquals({}, selection.items);
+  });
+
+  test('toggle an item', function() {
+    action = select(['1', '2', '3'], '3', true, false);
+    selection = bookmarks.SelectionState.updateSelection(selection, action);
+
+    action = select(['1'], '3', false, true);
+    selection = bookmarks.SelectionState.updateSelection(selection, action);
+    assertDeepEquals(['2', '3'], normalizeSet(selection.items));
   });
 
   test('deselects items when they are deleted', function() {
@@ -100,7 +110,7 @@ suite('selection state', function() {
       createItem('5'),
     ]));
 
-    action = select(['2', '4', '5'], '4', false);
+    action = select(['2', '4', '5'], '4', true, false);
     selection = bookmarks.SelectionState.updateSelection(selection, action);
 
     action = bookmarks.actions.removeBookmark('1', '0', 0, nodeMap);

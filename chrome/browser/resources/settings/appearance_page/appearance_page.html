@@ -190,6 +190,14 @@
             <span class="md-select-underline"></span>
           </div>
         </div>
+<if expr="is_macosx">
+        <div class="settings-box">
+          <settings-toggle-button class="start"
+              pref="{{prefs.webkit.webprefs.tabs_to_links}}"
+              label="$i18n{tabsToLinks}">
+          </settings-toggle-button>
+        </div>
+</if>
       </neon-animatable>
       <template is="dom-if" route-path="/fonts">
         <settings-subpage

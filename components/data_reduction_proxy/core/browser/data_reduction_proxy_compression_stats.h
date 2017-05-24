@@ -64,12 +64,24 @@ class DataReductionProxyCompressionStats {
   // Records detailed data usage broken down by connection type and domain. Also
   // records daily data savings statistics to prefs and reports data savings
   // UMA. |compressed_size| and |original_size| are measured in bytes.
+  // TODO(rajendrant): This can be changed to RecordRequestMimeType and
+  // |data_use_group| param removed. It records daily data savings statistics to
+  // prefs and reports data savings UMA.
   void UpdateContentLengths(int64_t compressed_size,
                             int64_t original_size,
                             bool data_reduction_proxy_enabled,
                             DataReductionProxyRequestType request_type,
                             const scoped_refptr<DataUseGroup>& data_use_group,
                             const std::string& mime_type);
+
+  // Record data usage and original size of request broken down by host.
+  // |original_request_size| and |data_used| are in bytes. |time| is the time at
+  // which the data usage occurred. This method should be called in real time,
+  // so |time| is expected to be |Time::Now()|.
+  void RecordDataUsage(const std::string& data_usage_host,
+                       int64_t original_request_size,
+                       int64_t data_used,
+                       const base::Time time);
 
   // Creates a |Value| summary of the persistent state of the network
   // statistics.
@@ -202,14 +214,6 @@ class DataReductionProxyCompressionStats {
                               bool via_data_reduction_proxy,
                               const char* original_size_via_proxy_pref,
                               const char* received_size_via_proxy_pref);
-
-  // Record data usage and original size of request broken down by host. |time|
-  // is the time at which the data usage occurred. This method should be called
-  // in real time, so |time| is expected to be |Time::Now()|.
-  void RecordDataUsage(const std::string& data_usage_host,
-                       int64_t original_request_size,
-                       int64_t data_used,
-                       const base::Time& time);
 
   // Persists the in memory data usage information to storage and clears all
   // in-memory data usage. Do not call this method unless |data_usage_loaded_|

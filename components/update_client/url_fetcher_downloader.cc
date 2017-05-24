@@ -15,6 +15,7 @@
 #include "components/data_use_measurement/core/data_use_user_data.h"
 #include "components/update_client/utils.h"
 #include "net/base/load_flags.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/url_request/url_fetcher.h"
 #include "url/gurl.h"
 
@@ -36,7 +37,36 @@ UrlFetcherDownloader::~UrlFetcherDownloader() {
 void UrlFetcherDownloader::DoStartDownload(const GURL& url) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  url_fetcher_ = net::URLFetcher::Create(0, url, net::URLFetcher::GET, this);
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("url_fetcher_downloader", R"(
+        semantics {
+          sender: "Component Updater"
+          description:
+            "The component updater in Chrome is responsible for updating code "
+            "and data modules such as Flash, CrlSet, Origin Trials, etc. These "
+            "modules are updated on cycles independent of the Chrome release "
+            "tracks. It runs in the browser process and communicates with a "
+            "set of servers using the Omaha protocol to find the latest "
+            "versions of components, download them, and register them with the "
+            "rest of Chrome."
+          trigger: "Manual or automatic software updates."
+          data:
+            "The URL that refers to a component. It is obfuscated for most "
+            "components."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: false
+          setting: "This feature cannot be disabled."
+          chrome_policy {
+            ComponentUpdatesEnabled {
+              policy_options {mode: MANDATORY}
+              ComponentUpdatesEnabled: false
+            }
+          }
+        })");
+  url_fetcher_ = net::URLFetcher::Create(0, url, net::URLFetcher::GET, this,
+                                         traffic_annotation);
   url_fetcher_->SetRequestContext(context_getter_);
   url_fetcher_->SetLoadFlags(net::LOAD_DO_NOT_SEND_COOKIES |
                              net::LOAD_DO_NOT_SAVE_COOKIES |

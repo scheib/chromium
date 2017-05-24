@@ -78,7 +78,7 @@ class Core : public protocol::CursorShapeStub, public GlRendererDelegate {
   EAGLContext* eagl_context_;
   std::unique_ptr<GlRenderer> renderer_;
   //  GlDemoScreen *demo_screen_;
-  id<GlDisplayHandlerDelegate> handler_delegate_;
+  __weak id<GlDisplayHandlerDelegate> handler_delegate_;
 
   // Used on display thread.
   base::WeakPtr<Core> weak_ptr_;

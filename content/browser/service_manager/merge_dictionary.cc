@@ -4,6 +4,8 @@
 
 #include "content/browser/service_manager/merge_dictionary.h"
 
+#include "base/memory/ptr_util.h"
+
 namespace content {
 
 void MergeDictionary(base::DictionaryValue* target,
@@ -36,7 +38,8 @@ void MergeDictionary(base::DictionaryValue* target,
       }
     }
     // All other cases: Make a copy and hook it up.
-    target->SetWithoutPathExpansion(it.key(), merge_value->DeepCopy());
+    target->SetWithoutPathExpansion(
+        it.key(), base::MakeUnique<base::Value>(*merge_value));
   }
 }
 

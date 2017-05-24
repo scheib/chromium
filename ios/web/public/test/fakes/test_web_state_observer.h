@@ -8,8 +8,6 @@
 #include "ios/web/public/test/fakes/test_web_state_observer_util.h"
 #include "ios/web/public/web_state/web_state_observer.h"
 
-class GURL;
-
 namespace web {
 
 class WebState;
@@ -21,9 +19,9 @@ class TestWebStateObserver : public WebStateObserver {
   TestWebStateObserver(WebState* web_state);
   ~TestWebStateObserver() override;
 
-  // Arguments passed to |ProvisionalNavigationStarted|.
-  web::TestStartProvisionalNavigationInfo* start_provisional_navigation_info() {
-    return start_provisional_navigation_info_.get();
+  // Arguments passed to |DidStartNavigation|.
+  web::TestDidStartNavigationInfo* did_start_navigation_info() {
+    return did_start_navigation_info_.get();
   }
   // Arguments passed to |DidFinishNavigation|.
   web::TestDidFinishNavigationInfo* did_finish_navigation_info() {
@@ -96,13 +94,13 @@ class TestWebStateObserver : public WebStateObserver {
 
  private:
   // WebStateObserver implementation:
-  void ProvisionalNavigationStarted(const GURL& url) override;
   void NavigationItemCommitted(const LoadCommittedDetails&) override;
   void PageLoaded(PageLoadCompletionStatus load_completion_status) override;
   void InterstitialDismissed() override;
   void LoadProgressChanged(double progress) override;
   void NavigationItemsPruned(size_t pruned_item_count) override;
   void NavigationItemChanged() override;
+  void DidStartNavigation(NavigationContext* context) override;
   void DidFinishNavigation(NavigationContext* context) override;
   void TitleWasSet() override;
   void DidChangeVisibleSecurityState() override;
@@ -120,8 +118,6 @@ class TestWebStateObserver : public WebStateObserver {
   void DidStartLoading() override;
   void DidStopLoading() override;
 
-  std::unique_ptr<web::TestStartProvisionalNavigationInfo>
-      start_provisional_navigation_info_;
   std::unique_ptr<web::TestCommitNavigationInfo> commit_navigation_info_;
   std::unique_ptr<web::TestLoadPageInfo> load_page_info_;
   std::unique_ptr<web::TestDismissInterstitialInfo> dismiss_interstitial_info_;
@@ -131,6 +127,7 @@ class TestWebStateObserver : public WebStateObserver {
       navigation_items_pruned_info_;
   std::unique_ptr<web::TestNavigationItemChangedInfo>
       navigation_item_changed_info_;
+  std::unique_ptr<web::TestDidStartNavigationInfo> did_start_navigation_info_;
   std::unique_ptr<web::TestDidFinishNavigationInfo> did_finish_navigation_info_;
   std::unique_ptr<web::TestTitleWasSetInfo> title_was_set_info_;
   std::unique_ptr<web::TestDidChangeVisibleSecurityStateInfo>

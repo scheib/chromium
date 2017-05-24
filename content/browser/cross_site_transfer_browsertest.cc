@@ -14,6 +14,7 @@
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/loader/resource_dispatcher_host_impl.h"
 #include "content/public/browser/navigation_entry.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/resource_dispatcher_host_delegate.h"
 #include "content/public/browser/resource_throttle.h"
@@ -22,6 +23,7 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/navigation_handle_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_content_browser_client.h"
@@ -428,6 +430,7 @@ IN_PROC_BROWSER_TEST_P(CrossSiteTransferTest, NoLeakOnCrossSiteCancel) {
   // request for url2.
   tracking_delegate().SetTrackedURL(url2);
 
+  NavigationHandleObserver handle_observer(shell()->web_contents(), url2);
   // Don't wait for the navigation to complete, since that never happens in
   // this case.
   NavigateToURLContentInitiated(shell(), url2, false, false);
@@ -440,6 +443,7 @@ IN_PROC_BROWSER_TEST_P(CrossSiteTransferTest, NoLeakOnCrossSiteCancel) {
   // Make sure the request for url2 did not complete.
   EXPECT_FALSE(tracking_delegate().WaitForTrackedURLAndGetCompleted());
 
+  EXPECT_EQ(net::ERR_ABORTED, handle_observer.net_error_code());
   shell()->web_contents()->SetDelegate(old_delegate);
 }
 

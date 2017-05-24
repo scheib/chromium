@@ -19,6 +19,14 @@ void BinderRegistry::AddInterface(
                                          callback, task_runner));
 }
 
+void BinderRegistry::AddInterface(
+    const std::string& interface_name,
+    const Binder& binder_callback,
+    const scoped_refptr<base::SingleThreadTaskRunner>& task_runner) {
+  SetInterfaceBinder(interface_name, base::MakeUnique<GenericCallbackBinder>(
+                                         binder_callback, task_runner));
+}
+
 void BinderRegistry::RemoveInterface(const std::string& interface_name) {
   auto it = binders_.find(interface_name);
   if (it != binders_.end())

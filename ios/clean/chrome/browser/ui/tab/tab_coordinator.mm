@@ -162,7 +162,7 @@
 }
 
 - (void)webState:(web::WebState*)webState
-    didStartProvisionalNavigationForURL:(const GURL&)URL {
+    didStartNavigation:(web::NavigationContext*)navigation {
   if (self.ntpCoordinator) {
     [self.ntpCoordinator stop];
     [self removeChildCoordinator:self.ntpCoordinator];

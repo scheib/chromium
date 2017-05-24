@@ -14,9 +14,12 @@
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/grit/components_resources.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/browser/threat_details.h"
 #include "components/safe_browsing/common/safe_browsing_prefs.h"
+#include "components/security_interstitials/core/safe_browsing_quiet_error_ui.h"
+#include "components/strings/grit/components_strings.h"
 #include "content/public/browser/interstitial_page.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/render_process_host.h"
@@ -24,6 +27,10 @@
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/l10n/l10n_util.h"
+#include "ui/base/resource/resource_bundle.h"
+#include "ui/base/webui/jstemplate_builder.h"
+#include "ui/base/webui/web_ui_util.h"
 
 using content::InterstitialPage;
 using content::NavigationEntry;
@@ -86,7 +93,8 @@ class TestSafeBrowsingBlockingPageFactory
         web_contents->GetBrowserContext()->IsOffTheRecord(),
         IsExtendedReportingEnabled(*prefs), IsScout(*prefs),
         is_proceed_anyway_disabled,
-        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources));
+        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
+        "cpn_safe_browsing" /* help_center_article_link */);
     return new TestSafeBrowsingBlockingPage(manager, web_contents,
                                             main_frame_url, unsafe_resources,
                                             display_options);
@@ -99,6 +107,80 @@ class MockTestingProfile : public TestingProfile {
   virtual ~MockTestingProfile() {}
 
   MOCK_CONST_METHOD0(IsOffTheRecord, bool());
+};
+
+class TestSafeBrowsingBlockingPageQuiet : public SafeBrowsingBlockingPage {
+ public:
+  TestSafeBrowsingBlockingPageQuiet(
+      BaseUIManager* manager,
+      WebContents* web_contents,
+      const GURL& main_frame_url,
+      const UnsafeResourceList& unsafe_resources,
+      const BaseSafeBrowsingErrorUI::SBErrorDisplayOptions& display_options)
+      : SafeBrowsingBlockingPage(manager,
+                                 web_contents,
+                                 main_frame_url,
+                                 unsafe_resources,
+                                 display_options),
+        sb_error_ui_(unsafe_resources[0].url,
+                     main_frame_url,
+                     GetInterstitialReason(unsafe_resources),
+                     display_options,
+                     manager->app_locale(),
+                     base::Time::NowFromSystemTime(),
+                     controller(),
+                     false) {
+    // Don't delay details at all for the unittest.
+    SetThreatDetailsProceedDelayForTesting(0);
+    DontCreateViewForTesting();
+  }
+
+  // Manually specify that the WebView extends beyond viewing bounds.
+  void SetGiantWebView() { sb_error_ui_.SetGiantWebViewForTesting(true); }
+
+  base::DictionaryValue GetUIStrings() {
+    base::DictionaryValue load_time_data;
+    sb_error_ui_.PopulateStringsForHtml(&load_time_data);
+    webui::SetLoadTimeDataDefaults(controller()->GetApplicationLocale(),
+                                   &load_time_data);
+    return load_time_data;
+  }
+
+  security_interstitials::SafeBrowsingQuietErrorUI sb_error_ui_;
+};
+
+// TODO(edwardjung): Refactor into TestSafeBrowsingBlockingPageFactory.
+class TestSafeBrowsingBlockingQuietPageFactory
+    : public SafeBrowsingBlockingPageFactory {
+ public:
+  TestSafeBrowsingBlockingQuietPageFactory() {}
+  ~TestSafeBrowsingBlockingQuietPageFactory() override {}
+
+  SafeBrowsingBlockingPage* CreateSafeBrowsingPage(
+      BaseUIManager* manager,
+      WebContents* web_contents,
+      const GURL& main_frame_url,
+      const SafeBrowsingBlockingPage::UnsafeResourceList& unsafe_resources)
+      override {
+    PrefService* prefs =
+        Profile::FromBrowserContext(web_contents->GetBrowserContext())
+            ->GetPrefs();
+    bool is_extended_reporting_opt_in_allowed =
+        prefs->GetBoolean(prefs::kSafeBrowsingExtendedReportingOptInAllowed);
+    bool is_proceed_anyway_disabled =
+        prefs->GetBoolean(prefs::kSafeBrowsingProceedAnywayDisabled);
+    BaseSafeBrowsingErrorUI::SBErrorDisplayOptions display_options(
+        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
+        is_extended_reporting_opt_in_allowed,
+        web_contents->GetBrowserContext()->IsOffTheRecord(),
+        IsExtendedReportingEnabled(*prefs), IsScout(*prefs),
+        is_proceed_anyway_disabled,
+        BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
+        "cpn_safe_browsing" /* help_center_article_link */);
+    return new TestSafeBrowsingBlockingPageQuiet(
+        manager, web_contents, main_frame_url, unsafe_resources,
+        display_options);
+  }
 };
 
 }  // namespace
@@ -793,6 +875,164 @@ TEST_F(SafeBrowsingBlockingPageTest,
   // No report should have been sent.
   EXPECT_EQ(0u, ui_manager_->GetThreatDetails()->size());
   ui_manager_->GetThreatDetails()->clear();
+}
+
+class SafeBrowsingBlockingQuietPageTest
+    : public ChromeRenderViewHostTestHarness {
+ public:
+  // The decision the user made.
+  enum UserResponse { PENDING, OK, CANCEL };
+
+  SafeBrowsingBlockingQuietPageTest() {
+    // The safe browsing UI manager does not need a service for this test.
+    ui_manager_ = new TestSafeBrowsingUIManager(NULL);
+  }
+
+  void SetUp() override {
+    ChromeRenderViewHostTestHarness::SetUp();
+
+    SafeBrowsingBlockingPage::RegisterFactory(&factory_);
+    SafeBrowsingUIManager::CreateWhitelistForTesting(web_contents());
+
+    safe_browsing::TestSafeBrowsingServiceFactory sb_service_factory;
+    sb_service_factory.SetTestUIManager(ui_manager_.get());
+    auto* safe_browsing_service =
+        sb_service_factory.CreateSafeBrowsingService();
+    // A profile was created already but SafeBrowsingService wasn't around to
+    // get notified of it, so include that notification now.
+    safe_browsing_service->AddPrefService(
+        Profile::FromBrowserContext(web_contents()->GetBrowserContext())
+            ->GetPrefs());
+    TestingBrowserProcess::GetGlobal()->SetSafeBrowsingService(
+        safe_browsing_service);
+    g_browser_process->safe_browsing_service()->Initialize();
+  }
+
+  void TearDown() override {
+    // Release the UI manager before the BrowserThreads are destroyed.
+    ui_manager_ = NULL;
+    TestingBrowserProcess::GetGlobal()->safe_browsing_service()->ShutDown();
+    TestingBrowserProcess::GetGlobal()->SetSafeBrowsingService(nullptr);
+    SafeBrowsingBlockingPage::RegisterFactory(NULL);
+    // Clean up singleton reference (crbug.com/110594).
+    ThreatDetails::RegisterFactory(NULL);
+    ChromeRenderViewHostTestHarness::TearDown();
+  }
+
+  void OnBlockingPageComplete(bool proceed) {
+    if (proceed)
+      user_response_ = OK;
+    else
+      user_response_ = CANCEL;
+  }
+
+  void ShowInterstitial(bool is_subresource,
+                        const char* url,
+                        SBThreatType type) {
+    security_interstitials::UnsafeResource resource;
+    InitResource(&resource, is_subresource, GURL(url), type);
+    SafeBrowsingBlockingPage::ShowBlockingPage(ui_manager_.get(), resource);
+  }
+
+  // Returns the SafeBrowsingBlockingPage currently showing or NULL if none is
+  // showing.
+  TestSafeBrowsingBlockingPageQuiet* GetSafeBrowsingBlockingPage() {
+    InterstitialPage* interstitial =
+        InterstitialPage::GetInterstitialPage(web_contents());
+    if (!interstitial)
+      return NULL;
+    return static_cast<TestSafeBrowsingBlockingPageQuiet*>(
+        interstitial->GetDelegateForTesting());
+  }
+
+  scoped_refptr<TestSafeBrowsingUIManager> ui_manager_;
+
+  // Owned by TestSafeBrowsingBlockingQuietPage.
+  MockTestingProfile* mock_profile_;
+
+ private:
+  void InitResource(security_interstitials::UnsafeResource* resource,
+                    bool is_subresource,
+                    const GURL& url,
+                    SBThreatType type) {
+    resource->callback =
+        base::Bind(&SafeBrowsingBlockingQuietPageTest::OnBlockingPageComplete,
+                   base::Unretained(this));
+    resource->callback_thread = content::BrowserThread::GetTaskRunnerForThread(
+        content::BrowserThread::IO);
+    resource->url = url;
+    resource->is_subresource = is_subresource;
+    resource->threat_type = type;
+    resource->web_contents_getter =
+        security_interstitials::UnsafeResource::GetWebContentsGetter(
+            web_contents()->GetRenderProcessHost()->GetID(),
+            web_contents()->GetMainFrame()->GetRoutingID());
+    resource->threat_source = safe_browsing::ThreatSource::LOCAL_PVER3;
+  }
+
+  UserResponse user_response_;
+  TestSafeBrowsingBlockingQuietPageFactory factory_;
+};
+
+// Tests showing a quiet blocking page for a malware page.
+TEST_F(SafeBrowsingBlockingQuietPageTest, MalwarePage) {
+  // Start a load.
+  controller().LoadURL(GURL(kBadURL), content::Referrer(),
+                       ui::PAGE_TRANSITION_TYPED, std::string());
+
+  // Simulate the load causing a safe browsing interstitial to be shown.
+  ShowInterstitial(false, kBadURL, SB_THREAT_TYPE_URL_MALWARE);
+  TestSafeBrowsingBlockingPageQuiet* sb_interstitial =
+      GetSafeBrowsingBlockingPage();
+  ASSERT_TRUE(sb_interstitial);
+
+  base::DictionaryValue load_time_data = sb_interstitial->GetUIStrings();
+  base::string16 str;
+  load_time_data.GetString("heading", &str);
+  EXPECT_EQ(str, l10n_util::GetStringUTF16(IDS_MALWARE_WEBVIEW_HEADING));
+  bool is_giant;
+  load_time_data.GetBoolean("is_giant", &is_giant);
+  EXPECT_FALSE(is_giant);
+}
+
+// Tests showing a quiet blocking page for a phishing page.
+TEST_F(SafeBrowsingBlockingQuietPageTest, PhishingPage) {
+  // Start a load.
+  controller().LoadURL(GURL(kBadURL), content::Referrer(),
+                       ui::PAGE_TRANSITION_TYPED, std::string());
+
+  // Simulate the load causing a safe browsing interstitial to be shown.
+  ShowInterstitial(false, kBadURL, SB_THREAT_TYPE_URL_PHISHING);
+  TestSafeBrowsingBlockingPageQuiet* sb_interstitial =
+      GetSafeBrowsingBlockingPage();
+  ASSERT_TRUE(sb_interstitial);
+
+  base::DictionaryValue load_time_data = sb_interstitial->GetUIStrings();
+  base::string16 str;
+  load_time_data.GetString("heading", &str);
+  EXPECT_EQ(str, l10n_util::GetStringUTF16(IDS_PHISHING_WEBVIEW_HEADING));
+  bool is_giant;
+  load_time_data.GetBoolean("is_giant", &is_giant);
+  EXPECT_FALSE(is_giant);
+}
+
+// Tests showing a quiet blocking page in a giant webview.
+TEST_F(SafeBrowsingBlockingQuietPageTest, GiantWebView) {
+  // Start a load.
+  controller().LoadURL(GURL(kBadURL), content::Referrer(),
+                       ui::PAGE_TRANSITION_TYPED, std::string());
+
+  // Simulate the load causing a safe browsing interstitial to be shown.
+  ShowInterstitial(false, kBadURL, SB_THREAT_TYPE_URL_MALWARE);
+  TestSafeBrowsingBlockingPageQuiet* sb_interstitial =
+      GetSafeBrowsingBlockingPage();
+  EXPECT_TRUE(sb_interstitial);
+
+  sb_interstitial->SetGiantWebView();
+  base::DictionaryValue load_time_data = sb_interstitial->GetUIStrings();
+  bool is_giant;
+  load_time_data.GetBoolean("is_giant", &is_giant);
+  EXPECT_TRUE(is_giant);
 }
 
 }  // namespace safe_browsing

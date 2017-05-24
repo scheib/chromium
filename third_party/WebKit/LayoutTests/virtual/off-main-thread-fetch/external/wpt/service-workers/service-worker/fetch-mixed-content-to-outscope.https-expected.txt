@@ -1,4 +1,0 @@
-This is a testharness.js-based test.
-FAIL Verify Mixed content of fetch() in a Service Worker assert_equals: expected "finish" but got "FAIL(3)FAIL(4)finish"
-Harness: the test ran to completion.
-

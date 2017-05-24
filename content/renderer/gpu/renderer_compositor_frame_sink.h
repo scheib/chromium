@@ -71,6 +71,7 @@ class RendererCompositorFrameSink
   bool BindToClient(cc::CompositorFrameSinkClient* client) override;
   void DetachFromClient() override;
   void SubmitCompositorFrame(cc::CompositorFrame frame) override;
+  void DidNotProduceFrame(const cc::BeginFrameAck& ack) override;
 
  private:
   class RendererCompositorFrameSinkProxy
@@ -104,7 +105,6 @@ class RendererCompositorFrameSink
 
   // cc::ExternalBeginFrameSourceClient implementation.
   void OnNeedsBeginFrames(bool need_begin_frames) override;
-  void OnDidFinishFrame(const cc::BeginFrameAck& ack) override;
 
   void EstablishMojoConnection();
 

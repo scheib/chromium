@@ -405,8 +405,7 @@ IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest, PRE_SessionCookies) {
   StoreDataWithPage("session_cookies.html");
 }
 
-// Flaky(crbug.com/700696)
-IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest, DISABLED_SessionCookies) {
+IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest, SessionCookies) {
   // The browsing session will be continued; just wait for the page to reload
   // and check the stored data.
   CheckReloadedPageRestored();
@@ -416,8 +415,7 @@ IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest, PRE_SessionStorage) {
   StoreDataWithPage("session_storage.html");
 }
 
-// Flaky(crbug.com/700699)
-IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest, DISABLED_SessionStorage) {
+IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest, SessionStorage) {
   CheckReloadedPageRestored();
 }
 

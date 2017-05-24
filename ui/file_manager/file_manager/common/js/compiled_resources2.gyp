@@ -19,7 +19,7 @@
       'target_name': 'importer_common',
       'dependencies': [
         '../../../externs/compiled_resources2.gyp:background_window',
-        '../../../externs/compiled_resources2.gyp:file_browser_background',
+        '../../../externs/background/compiled_resources2.gyp:file_browser_background',
         '<(DEPTH)/third_party/analytics/compiled_resources2.gyp:externs',
         '<(EXTERNS_GYP):chrome_extensions',
         '<(EXTERNS_GYP):command_line_private',

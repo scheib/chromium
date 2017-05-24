@@ -661,7 +661,7 @@ TEST_F(DiscardableImageMapTest, ClipsImageRects) {
   display_list->CreateAndAppendPairedBeginItem<ClipDisplayItem>(
       gfx::Rect(250, 250), std::vector<SkRRect>(), false);
   display_list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-      gfx::Rect(500, 500), record, SkRect::MakeWH(500, 500));
+      gfx::Rect(500, 500), record);
   display_list->CreateAndAppendPairedEndItem<EndClipDisplayItem>();
   display_list->Finalize();
   display_list->GenerateDiscardableImagesMetadata();
@@ -688,7 +688,7 @@ TEST_F(DiscardableImageMapTest, GathersDiscardableImagesFromNestedOps) {
   list_record->push<DrawImageOp>(discardable_image2, 100.f, 100.f, nullptr);
   scoped_refptr<DisplayItemList> display_list = new DisplayItemList;
   display_list->CreateAndAppendDrawingItem<DrawingDisplayItem>(
-      gfx::Rect(100, 100, 100, 100), list_record, SkRect::MakeWH(100, 100));
+      gfx::Rect(100, 100, 100, 100), list_record);
   display_list->Finalize();
 
   PaintOpBuffer buffer;

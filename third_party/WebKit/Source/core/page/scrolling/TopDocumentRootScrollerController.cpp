@@ -41,6 +41,20 @@ void TopDocumentRootScrollerController::DidChangeRootScroller() {
   RecomputeGlobalRootScroller();
 }
 
+void TopDocumentRootScrollerController::DidResizeViewport() {
+  if (!GlobalRootScroller())
+    return;
+
+  // Top controls can resize the viewport without invalidating compositing or
+  // paint so we need to do that manually here.
+  GlobalRootScroller()->SetNeedsCompositingUpdate();
+
+  if (RuntimeEnabledFeatures::slimmingPaintInvalidationEnabled()) {
+    if (GlobalRootScroller()->GetLayoutObject())
+      GlobalRootScroller()->GetLayoutObject()->SetNeedsPaintPropertyUpdate();
+  }
+}
+
 ScrollableArea* TopDocumentRootScrollerController::RootScrollerArea() const {
   return RootScrollerUtil::ScrollableAreaForRootScroller(GlobalRootScroller());
 }
@@ -125,8 +139,6 @@ void TopDocumentRootScrollerController::RecomputeGlobalRootScroller() {
   // in RootFrameViewport.
   viewport_apply_scroll_->SetScroller(target_scroller);
 
-  // The scrollers may need to stop using their own scrollbars as Android
-  // Chrome's VisualViewport provides the scrollbars for the root scroller.
   if (old_root_scroller_area)
     old_root_scroller_area->DidChangeGlobalRootScroller();
 

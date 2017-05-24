@@ -64,7 +64,6 @@
 namespace blink {
 
 class AXObjectCache;
-class ComputedStyle;
 class Cursor;
 class DocumentLifecycle;
 class Element;
@@ -145,7 +144,12 @@ class CORE_EXPORT FrameView final
   LayoutView* GetLayoutView() const;
   LayoutViewItem GetLayoutViewItem() const;
 
+  // If false, prevents scrollbars on the viewport even if web content would
+  // make them appear. Also prevents user-input scrolls (but not programmatic
+  // scrolls).
+  // This API is root-layer-scrolling-aware (affects root PLSA in RLS mode).
   void SetCanHaveScrollbars(bool);
+  bool CanHaveScrollbars() const { return can_have_scrollbars_; }
 
   Scrollbar* CreateScrollbar(ScrollbarOrientation);
 
@@ -362,12 +366,6 @@ class CORE_EXPORT FrameView final
   bool IsScrollable() const override;
   bool IsProgrammaticallyScrollable() override;
 
-  enum ScrollbarModesCalculationStrategy { kRulesFromWebContentOnly, kAnyRule };
-  void CalculateScrollbarModes(
-      ScrollbarMode& h_mode,
-      ScrollbarMode& v_mode,
-      ScrollbarModesCalculationStrategy = kAnyRule) const;
-
   IntPoint LastKnownMousePosition() const override;
   bool ShouldSetCursor() const;
 
@@ -553,11 +551,6 @@ class CORE_EXPORT FrameView final
 
   void SetScrollingModesLock(bool lock = true) {
     horizontal_scrollbar_lock_ = vertical_scrollbar_lock_ = lock;
-  }
-
-  bool CanHaveScrollbars() const {
-    return HorizontalScrollbarMode() != kScrollbarAlwaysOff ||
-           VerticalScrollbarMode() != kScrollbarAlwaysOff;
   }
 
   // The visible content rect has a location that is the scrolled offset of
@@ -946,10 +939,6 @@ class CORE_EXPORT FrameView final
   void FrameRectsChanged() override;
 
   bool ContentsInCompositedLayer() const;
-
-  void CalculateScrollbarModesFromOverflowStyle(const ComputedStyle*,
-                                                ScrollbarMode& h_mode,
-                                                ScrollbarMode& v_mode) const;
 
   void UpdateCounters();
   void ForceLayoutParentViewIfNeeded();

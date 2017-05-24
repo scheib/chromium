@@ -18,6 +18,7 @@
 #include "ash/test/status_area_widget_test_helper.h"
 #include "ash/wm/maximize_mode/maximize_mode_controller.h"
 #include "ash/wm/overview/window_selector_controller.h"
+#include "ash/wm/window_util.h"
 #include "base/command_line.h"
 #include "base/test/user_action_tester.h"
 #include "base/time/time.h"
@@ -45,6 +46,20 @@ OverviewButtonTray* GetTray() {
 OverviewButtonTray* GetSecondaryTray() {
   return StatusAreaWidgetTestHelper::GetSecondaryStatusAreaWidget()
       ->overview_button_tray();
+}
+
+// Helper function to perform a double tap on the overview button tray. A double
+// tap consists fot two tap gestures, one with tap count 1 and another with tap
+// count 2.
+void PerformDoubleTap() {
+  ui::GestureEvent first_tap(0, 0, 0, base::TimeTicks(),
+                             ui::GestureEventDetails(ui::ET_GESTURE_TAP));
+  GetTray()->PerformAction(first_tap);
+
+  ui::GestureEventDetails second_tap_details(ui::ET_GESTURE_TAP);
+  second_tap_details.set_tap_count(2);
+  ui::GestureEvent second_tap(0, 0, 0, base::TimeTicks(), second_tap_details);
+  GetTray()->PerformAction(second_tap);
 }
 
 }  // namespace
@@ -108,6 +123,38 @@ TEST_F(OverviewButtonTrayTest, PerformAction) {
                        ui::GestureEventDetails(ui::ET_GESTURE_TAP));
   GetTray()->PerformAction(tap);
   EXPECT_TRUE(Shell::Get()->window_selector_controller()->IsSelecting());
+
+  // Verify tapping on the button again closes overview mode.
+  GetTray()->PerformAction(tap);
+  EXPECT_FALSE(Shell::Get()->window_selector_controller()->IsSelecting());
+}
+
+TEST_F(OverviewButtonTrayTest, PerformDoubleTapAction) {
+  ASSERT_FALSE(Shell::Get()->window_selector_controller()->IsSelecting());
+
+  // Add two windows and activate the second one to test quick switch.
+  std::unique_ptr<aura::Window> window1(
+      CreateTestWindowInShellWithBounds(gfx::Rect(5, 5, 20, 20)));
+  std::unique_ptr<aura::Window> window2(
+      CreateTestWindowInShellWithBounds(gfx::Rect(5, 5, 20, 20)));
+  wm::ActivateWindow(window2.get());
+  EXPECT_TRUE(wm::IsActiveWindow(window2.get()));
+
+  // Verify that after double tapping, we have switched to window 1.
+  PerformDoubleTap();
+  EXPECT_TRUE(wm::IsActiveWindow(window1.get()));
+  EXPECT_FALSE(Shell::Get()->window_selector_controller()->IsSelecting());
+
+  // Verify that if we double tap on the window selection page, we leave the
+  // window selection page, but window 1 remains the active window.
+  ui::GestureEvent tap(0, 0, 0, base::TimeTicks(),
+                       ui::GestureEventDetails(ui::ET_GESTURE_TAP));
+  ASSERT_TRUE(wm::IsActiveWindow(window1.get()));
+  GetTray()->PerformAction(tap);
+  ASSERT_TRUE(Shell::Get()->window_selector_controller()->IsSelecting());
+  PerformDoubleTap();
+  EXPECT_TRUE(wm::IsActiveWindow(window1.get()));
+  EXPECT_FALSE(Shell::Get()->window_selector_controller()->IsSelecting());
 }
 
 // Tests that tapping on the control will record the user action Tray_Overview.

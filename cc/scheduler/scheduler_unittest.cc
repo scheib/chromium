@@ -123,6 +123,7 @@ class FakeSchedulerClient : public SchedulerClient,
     EXPECT_TRUE(inside_begin_impl_frame_);
     inside_begin_impl_frame_ = false;
   }
+  void DidNotProduceFrame(const BeginFrameAck& ack) override {}
 
   void ScheduledActionSendBeginMainFrame(const BeginFrameArgs& args) override {
     PushAction("ScheduledActionSendBeginMainFrame");

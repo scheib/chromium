@@ -30,11 +30,11 @@ DiscardableHandleBase& DiscardableHandleBase::operator=(
 DiscardableHandleBase& DiscardableHandleBase::operator=(
     DiscardableHandleBase&& other) = default;
 
-bool DiscardableHandleBase::IsLockedForTesting() {
+bool DiscardableHandleBase::IsLockedForTesting() const {
   return kHandleLockedStart <= base::subtle::NoBarrier_Load(AsAtomic());
 }
 
-bool DiscardableHandleBase::IsDeletedForTesting() {
+bool DiscardableHandleBase::IsDeletedForTesting() const {
   return kHandleDeleted == base::subtle::NoBarrier_Load(AsAtomic());
 }
 
@@ -112,6 +112,13 @@ bool ServiceDiscardableHandle::Delete() {
   // renderer process happens across the command buffer and includes barriers.
   return kHandleUnlocked == base::subtle::NoBarrier_CompareAndSwap(
                                 AsAtomic(), kHandleUnlocked, kHandleDeleted);
+}
+
+void ServiceDiscardableHandle::ForceDelete() {
+  // No barrier is needed as all GPU process access happens on a single thread,
+  // and communication of dependent data between the GPU process and the
+  // renderer process happens across the command buffer and includes barriers.
+  base::subtle::NoBarrier_Store(AsAtomic(), kHandleDeleted);
 }
 
 }  // namespace gpu

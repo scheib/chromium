@@ -16,6 +16,7 @@
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/json_pref_store.h"
 #include "components/prefs/pref_service.h"
+#include "components/proxy_config/ios/proxy_service_factory.h"
 #include "components/proxy_config/pref_proxy_config_tracker.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/user_prefs/user_prefs.h"
@@ -27,7 +28,6 @@
 #include "ios/chrome/browser/chrome_paths_internal.h"
 #include "ios/chrome/browser/file_metadata_util.h"
 #include "ios/chrome/browser/net/ios_chrome_url_request_context_getter.h"
-#include "ios/chrome/browser/net/proxy_service_factory.h"
 #include "ios/chrome/browser/pref_names.h"
 #include "ios/chrome/browser/prefs/browser_prefs.h"
 #include "ios/chrome/browser/prefs/ios_chrome_pref_service_factory.h"
@@ -244,7 +244,7 @@ void ChromeBrowserStateImpl::ClearNetworkingHistorySince(
 PrefProxyConfigTracker* ChromeBrowserStateImpl::GetProxyConfigTracker() {
   if (!pref_proxy_config_tracker_) {
     pref_proxy_config_tracker_ =
-        ios::ProxyServiceFactory::CreatePrefProxyConfigTrackerOfProfile(
+        ProxyServiceFactory::CreatePrefProxyConfigTrackerOfProfile(
             GetPrefs(), GetApplicationContext()->GetLocalState());
   }
   return pref_proxy_config_tracker_.get();

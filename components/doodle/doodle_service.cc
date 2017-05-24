@@ -17,6 +17,7 @@
 #include "components/prefs/pref_registry.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "ui/gfx/image/image.h"
 
 namespace doodle {
@@ -106,10 +107,34 @@ void DoodleService::GetImage(const ImageCallback& callback) {
   bool has_cta = cached_config_->large_cta_image.has_value();
   const GURL& image_url = has_cta ? cached_config_->large_cta_image->url
                                   : cached_config_->large_image.url;
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("doodle_service", R"(
+        semantics {
+          sender: "Doodle Service"
+          description:
+            "Downloads the Doodle image if Google is the configured search "
+            "provider."
+          trigger: "Displaying the new tab page on Android."
+          data: "None."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: false
+          setting:
+            "Choosing a non-Google search engine in Chromium settings under "
+            "'Search Engine' disables this feature."
+          chrome_policy {
+            DefaultSearchProviderEnabled {
+              policy_options {mode: MANDATORY}
+              DefaultSearchProviderEnabled: false
+            }
+          }
+        })");
   image_fetcher_->StartOrQueueNetworkRequest(
       image_url.spec(), image_url,
       base::Bind(&DoodleService::ImageFetched, base::Unretained(this),
-                 callback));
+                 callback),
+      traffic_annotation);
 }
 
 void DoodleService::AddObserver(Observer* observer) {

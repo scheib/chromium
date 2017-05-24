@@ -6,6 +6,7 @@
 
 #include "core/frame/Deprecation.h"
 #include "core/frame/UseCounter.h"
+#include "core/loader/MixedContentChecker.h"
 #include "core/timing/WorkerGlobalScopePerformance.h"
 #include "core/workers/WorkerClients.h"
 #include "core/workers/WorkerGlobalScope.h"
@@ -15,6 +16,8 @@
 #include "platform/loader/fetch/ResourceFetcher.h"
 #include "platform/scheduler/child/web_scheduler.h"
 #include "public/platform/Platform.h"
+#include "public/platform/WebMixedContent.h"
+#include "public/platform/WebMixedContentContextType.h"
 #include "public/platform/WebThread.h"
 #include "public/platform/WebURLRequest.h"
 #include "public/platform/WebWorkerFetchContext.h"
@@ -113,7 +116,10 @@ SubresourceFilter* WorkerFetchContext::GetSubresourceFilter() const {
 }
 
 SecurityContext* WorkerFetchContext::GetParentSecurityContext() const {
-  // TODO(horo): Implement this.
+  // This method was introduced to check the parent frame's security context
+  // while loading iframe document resources. So this method is not suitable for
+  // workers.
+  NOTREACHED();
   return nullptr;
 }
 
@@ -131,11 +137,14 @@ void WorkerFetchContext::DispatchDidBlockRequest(
 }
 
 void WorkerFetchContext::ReportLocalLoadFailed(const KURL&) const {
-  // TODO(horo): Implement this.
+  // Threre is no way to load local files from worker thread.
+  NOTREACHED();
 }
 
 bool WorkerFetchContext::ShouldBypassMainWorldCSP() const {
-  // TODO(horo): Implement this.
+  // This method was introduced to bypass the page's CSP while running the
+  // script from an isolated world (ex: Chrome extensions). But worker threads
+  // doesn't have any isolated world. So we can just return false.
   return false;
 }
 
@@ -155,8 +164,10 @@ bool WorkerFetchContext::ShouldBlockFetchByMixedContentCheck(
     const ResourceRequest& resource_request,
     const KURL& url,
     SecurityViolationReportingPolicy reporting_policy) const {
-  // TODO(horo): Implement this.
-  return false;
+  // TODO(horo): We need more detailed check which is implemented in
+  // MixedContentChecker::ShouldBlockFetch().
+  return MixedContentChecker::IsMixedContent(
+      worker_global_scope_->GetSecurityOrigin(), url);
 }
 
 std::unique_ptr<WebURLLoader> WorkerFetchContext::CreateURLLoader() {
@@ -188,6 +199,25 @@ void WorkerFetchContext::AddAdditionalRequestHeaders(ResourceRequest& request,
 
   if (web_context_->IsDataSaverEnabled())
     request.SetHTTPHeaderField("Save-Data", "on");
+}
+
+void WorkerFetchContext::DispatchDidReceiveResponse(
+    unsigned long identifier,
+    const ResourceResponse& response,
+    WebURLRequest::FrameType frame_type,
+    WebURLRequest::RequestContext request_context,
+    Resource* resource,
+    ResourceResponseType) {
+  if (response.HasMajorCertificateErrors()) {
+    WebMixedContentContextType context_type =
+        WebMixedContent::ContextTypeFromRequestContext(
+            request_context, false /* strictMixedContentCheckingForPlugin */);
+    if (context_type == WebMixedContentContextType::kBlockable) {
+      web_context_->DidRunContentWithCertificateErrors(response.Url());
+    } else {
+      web_context_->DidDisplayContentWithCertificateErrors(response.Url());
+    }
+  }
 }
 
 void WorkerFetchContext::AddResourceTiming(const ResourceTimingInfo& info) {

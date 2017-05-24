@@ -41,7 +41,7 @@ function setupExtendedReportingCheckbox() {
 
   $('opt-in-checkbox').addEventListener('click', function() {
     sendCommand($('opt-in-checkbox').checked ?
-                CMD_DO_REPORT :
-                CMD_DONT_REPORT);
+                SecurityInterstitialCommandId.CMD_DO_REPORT :
+                SecurityInterstitialCommandId.CMD_DONT_REPORT);
   });
 }

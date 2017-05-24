@@ -11,6 +11,7 @@
 #include "components/bubble/bubble_ui.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/views/bubble/bubble_border.h"
+#include "ui/views/widget/widget_observer.h"
 
 namespace views {
 class BubbleDialogDelegateView;
@@ -26,16 +27,19 @@ class ChooserBubbleUiViewDelegate;
 // for user to grant permission. It can be used by the WebUSB or WebBluetooth
 // APIs. It is owned by the BubbleController, which is owned by the
 // BubbleManager.
-class ChooserBubbleUi : public BubbleUi {
+class ChooserBubbleUi : public BubbleUi, public views::WidgetObserver {
  public:
   ChooserBubbleUi(Browser* browser,
                   std::unique_ptr<ChooserController> chooser_controller);
   ~ChooserBubbleUi() override;
 
-  // BubbleUi:
+  // BubbleUi
   void Show(BubbleReference bubble_reference) override;
   void Close() override;
   void UpdateAnchorPosition() override;
+
+  // views::WidgetObserver
+  void OnWidgetClosing(views::Widget* widget) override;
 
  private:
   // These functions have separate implementations for Views-based and

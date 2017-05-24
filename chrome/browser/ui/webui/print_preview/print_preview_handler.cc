@@ -1208,11 +1208,18 @@ void PrintPreviewHandler::GetNumberFormatAndMeasurementSystem(
 }
 
 void PrintPreviewHandler::HandleGetInitialSettings(
-    const base::ListValue* /*args*/) {
+    const base::ListValue* args) {
+  std::string callback_id;
+  CHECK(args->GetString(0, &callback_id));
+  CHECK(!callback_id.empty());
+
+  AllowJavascript();
+
   // Send before SendInitialSettings() to allow cloud printer auto select.
   SendCloudPrintEnabled();
-  printer_backend_proxy()->GetDefaultPrinter(base::Bind(
-      &PrintPreviewHandler::SendInitialSettings, weak_factory_.GetWeakPtr()));
+  printer_backend_proxy()->GetDefaultPrinter(
+      base::Bind(&PrintPreviewHandler::SendInitialSettings,
+                 weak_factory_.GetWeakPtr(), callback_id));
 }
 
 void PrintPreviewHandler::HandleForceOpenNewTab(const base::ListValue* args) {
@@ -1228,6 +1235,7 @@ void PrintPreviewHandler::HandleForceOpenNewTab(const base::ListValue* args) {
 }
 
 void PrintPreviewHandler::SendInitialSettings(
+    const std::string& callback_id,
     const std::string& default_printer) {
   base::DictionaryValue initial_settings;
   initial_settings.SetString(kInitiatorTitle,
@@ -1262,8 +1270,7 @@ void PrintPreviewHandler::SendInitialSettings(
 
   if (print_preview_ui()->source_is_modifiable())
     GetNumberFormatAndMeasurementSystem(&initial_settings);
-  web_ui()->CallJavascriptFunctionUnsafe("setInitialSettings",
-                                         initial_settings);
+  ResolveJavascriptCallback(base::Value(callback_id), initial_settings);
 }
 
 void PrintPreviewHandler::ClosePreviewDialog() {

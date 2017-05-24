@@ -14,7 +14,7 @@ namespace media {
 
 // VideoCaptureDeviceFactory is the base class for creation of video capture
 // devices in the different platforms. VCDFs are created by MediaStreamManager
-// on IO thread and plugged into VideoCaptureManager, who owns and operates them
+// on UI thread and plugged into VideoCaptureManager, who owns and operates them
 // in Device Thread (a.k.a. Audio Thread).
 // Typical operation is to first call GetDeviceDescriptors() to obtain
 // information about available devices. The obtained descriptors can then be

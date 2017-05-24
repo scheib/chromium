@@ -15,7 +15,6 @@
 #include "ash/shelf/wm_shelf.h"
 #include "ash/shell.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm_window.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"

@@ -92,6 +92,7 @@ class MODULES_EXPORT Response final : public Body {
   }
   bool bodyUsed() override;
 
+  String ContentType() const override;
   String MimeType() const override;
   String InternalMIMEType() const;
 

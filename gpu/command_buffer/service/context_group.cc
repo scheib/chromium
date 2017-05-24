@@ -22,6 +22,7 @@
 #include "gpu/command_buffer/service/progress_reporter.h"
 #include "gpu/command_buffer/service/renderbuffer_manager.h"
 #include "gpu/command_buffer/service/sampler_manager.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/shader_manager.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
@@ -70,7 +71,8 @@ ContextGroup::ContextGroup(
     bool bind_generates_resource,
     gpu::ImageFactory* image_factory,
     ProgressReporter* progress_reporter,
-    const GpuFeatureInfo& gpu_feature_info)
+    const GpuFeatureInfo& gpu_feature_info,
+    ServiceDiscardableManager* discardable_manager)
     : gpu_preferences_(gpu_preferences),
       mailbox_manager_(mailbox_manager),
       memory_tracker_(memory_tracker),
@@ -110,7 +112,9 @@ ContextGroup::ContextGroup(
       image_factory_(image_factory),
       passthrough_resources_(new PassthroughResources),
       progress_reporter_(progress_reporter),
-      gpu_feature_info_(gpu_feature_info) {
+      gpu_feature_info_(gpu_feature_info),
+      discardable_manager_(discardable_manager) {
+  DCHECK(discardable_manager);
   DCHECK(feature_info_);
   if (!mailbox_manager_.get())
     mailbox_manager_ = new MailboxManagerImpl;
@@ -311,7 +315,7 @@ bool ContextGroup::Initialize(GLES2Decoder* decoder,
       memory_tracker_.get(), feature_info_.get(), max_texture_size,
       max_cube_map_texture_size, max_rectangle_texture_size,
       max_3d_texture_size, max_array_texture_layers, bind_generates_resource_,
-      progress_reporter_));
+      progress_reporter_, discardable_manager_));
 
   const GLint kMinTextureImageUnits = 8;
   const GLint kMinVertexTextureImageUnits = 0;

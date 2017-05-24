@@ -20,15 +20,6 @@ function BackgroundComponents() {
 }
 
 /**
- * File Manager. This definition is required by
- * ui/file_manager/file_manager/foreground/js/ui/file_manager_dialog_base.js.
- *
- * @constructor
- * @struct
- */
-function FileManager() {}
-
-/**
  * A global flag which indicates whether it is in tests or not. This is set in
  * gallery/js/background.js.
  *

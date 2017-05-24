@@ -49,7 +49,7 @@ class PowerSaveBlocker::Delegate
         ui_task_runner_(ui_task_runner) {}
 
   void ApplyBlock() {
-    DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
     if (!chromeos::PowerPolicyController::IsInitialized())
       return;
 
@@ -69,7 +69,7 @@ class PowerSaveBlocker::Delegate
   }
 
   void RemoveBlock() {
-    DCHECK(ui_task_runner_->RunsTasksOnCurrentThread());
+    DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
     if (!chromeos::PowerPolicyController::IsInitialized())
       return;
 

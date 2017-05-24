@@ -72,7 +72,10 @@ class CHROMEOS_EXPORT SessionManagerClient : public DBusClient {
     // Called when the ARC instance is stopped after it had already started.
     // |clean| is true if the instance was stopped as a result of an explicit
     // request, false if it died unexpectedly.
-    virtual void ArcInstanceStopped(bool clean) {}
+    // |container_instance_id| is the identifier of the container instance.
+    // See details for StartArcInstanceCallback.
+    virtual void ArcInstanceStopped(bool clean,
+                                    const std::string& container_instance_id) {}
   };
 
   // Interface for performing actions on behalf of the stub implementation.
@@ -291,7 +294,12 @@ class CHROMEOS_EXPORT SessionManagerClient : public DBusClient {
     UNKNOWN_ERROR,
     LOW_FREE_DISK_SPACE,
   };
-  using StartArcInstanceCallback = base::Callback<void(StartArcInstanceResult)>;
+  // In case of success, |container_instance_id| will be passed as its second
+  // param. The ID is passed to ArcInstanceStopped() to identify which instance
+  // is stopped.
+  using StartArcInstanceCallback =
+      base::Callback<void(StartArcInstanceResult result,
+                          const std::string& container_instance_id)>;
   virtual void StartArcInstance(const cryptohome::Identification& cryptohome_id,
                                 bool disable_boot_completed_broadcast,
                                 bool enable_vendor_privileged,

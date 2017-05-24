@@ -56,6 +56,10 @@ base::string16 BrowserAccessibilityWin::GetText() const {
   return GetCOM()->win_attributes_->hypertext;
 }
 
+gfx::NativeViewAccessible BrowserAccessibilityWin::GetNativeViewAccessible() {
+  return GetCOM();
+}
+
 BrowserAccessibilityComWin* BrowserAccessibilityWin::GetCOM() const {
   DCHECK(browser_accessibility_com_);
   return browser_accessibility_com_;

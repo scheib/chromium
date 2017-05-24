@@ -228,8 +228,6 @@ class ASH_EXPORT WmWindow : public aura::WindowObserver,
   void SetShowState(ui::WindowShowState show_state);
   ui::WindowShowState GetShowState() const;
 
-  void SetPreMinimizedShowState(ui::WindowShowState show_state);
-  ui::WindowShowState GetPreMinimizedShowState() const;
   void SetPreFullscreenShowState(ui::WindowShowState show_state);
 
   // Sets the restore bounds and show state overrides. These values take

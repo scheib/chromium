@@ -17,7 +17,6 @@
 #include "ash/wm/panels/panel_frame_view.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_state_delegate.h"
 #include "ash/wm/window_state_observer.h"
 #include "ash/wm_window.h"

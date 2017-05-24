@@ -42,6 +42,7 @@
 #import "ios/chrome/browser/ui/authentication/signin_promo_view.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_configurator.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_consumer.h"
+#import "ios/chrome/browser/ui/authentication/signin_promo_view_delegate.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_mediator.h"
 #import "ios/chrome/browser/ui/collection_view/cells/MDCCollectionViewCell+Chrome.h"
 #import "ios/chrome/browser/ui/collection_view/cells/collection_view_account_item.h"
@@ -182,7 +183,8 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
                                                ChromeIdentityServiceObserver,
                                                BooleanObserver,
                                                PrefObserverDelegate,
-                                               SigninPromoViewConsumer> {
+                                               SigninPromoViewConsumer,
+                                               SigninPromoViewDelegate> {
   // The main browser state that hold the settings. Never off the record.
   ios::ChromeBrowserState* _mainBrowserState;  // weak
 
@@ -668,14 +670,7 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
     case ItemTypeSigninPromo: {
       SigninPromoCell* signinPromoCell =
           base::mac::ObjCCast<SigninPromoCell>(cell);
-      [signinPromoCell.signinPromoView.primaryButton
-                 addTarget:self
-                    action:@selector(signinPromoPrimaryAction:)
-          forControlEvents:UIControlEventTouchUpInside];
-      [signinPromoCell.signinPromoView.secondaryButton
-                 addTarget:self
-                    action:@selector(signinPromoSecondaryAction:)
-          forControlEvents:UIControlEventTouchUpInside];
+      signinPromoCell.signinPromoView.delegate = self;
       break;
     }
     case ItemTypeViewSource: {
@@ -741,7 +736,9 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
 
   switch (itemType) {
     case ItemTypeSignInButton:
-      [self showSignInWithIdentity:nil];
+      [self showSignInWithIdentity:nil
+                       promoAction:signin_metrics::PromoAction::
+                                       PROMO_ACTION_NO_SIGNIN_PROMO];
       break;
     case ItemTypeAccount:
       controller = [[AccountsCollectionViewController alloc]
@@ -986,7 +983,8 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
 
 #pragma mark Sign in
 
-- (void)showSignInWithIdentity:(ChromeIdentity*)identity {
+- (void)showSignInWithIdentity:(ChromeIdentity*)identity
+                   promoAction:(signin_metrics::PromoAction)promoAction {
   base::RecordAction(base::UserMetricsAction("Signin_Signin_FromSettings"));
   DCHECK(!_signinInteractionController);
   _signinInteractionController = [[SigninInteractionController alloc]
@@ -994,7 +992,8 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
       presentingViewController:self.navigationController
          isPresentedOnSettings:YES
                    accessPoint:signin_metrics::AccessPoint::
-                                   ACCESS_POINT_SETTINGS];
+                                   ACCESS_POINT_SETTINGS
+                   promoAction:promoAction];
 
   __weak SettingsCollectionViewController* weakSelf = self;
   [_signinInteractionController
@@ -1007,33 +1006,24 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
 
 - (void)didFinishSignin:(BOOL)signedIn {
   _signinInteractionController = nil;
-}
-
-- (void)signinPromoPrimaryAction:(id)unused {
-  ChromeIdentity* identity = _signinPromoViewMediator.defaultIdentity;
-  if (identity) {
-    base::RecordAction(
-        base::UserMetricsAction("Signin_SigninWithDefault_FromSettings"));
-  } else {
-    base::RecordAction(
-        base::UserMetricsAction("Signin_SigninNewAccount_FromSettings"));
-  }
-  [self showSignInWithIdentity:identity];
-}
-
-- (void)signinPromoSecondaryAction:(id)unused {
-  DCHECK(_signinPromoViewMediator.defaultIdentity);
-  base::RecordAction(
-      base::UserMetricsAction("Signin_SigninNotDefault_FromSettings"));
-  [self showSignInWithIdentity:nil];
+  // The sign-in is done. The sign-in promo cell or account cell can be
+  // reloaded.
+  [self reloadData];
 }
 
 #pragma mark NotificationBridgeDelegate
 
 - (void)onSignInStateChanged {
-  // Sign in state changes are rare. Just reload the entire collection when this
-  // happens.
-  [self reloadData];
+  // While the sign-in interaction controller is presented, the collection view
+  // should not be updated. Otherwise, it would lead to have an UI glitch either
+  // while the interaction controller is appearing or while it is disappearing.
+  // The collection view will be reloaded once the animation is finished. See:
+  // -[SettingsCollectionViewController didFinishSignin:].
+  if (!_signinInteractionController) {
+    // Sign in state changes are rare. Just reload the entire collection when
+    // this happens.
+    [self reloadData];
+  }
 }
 
 #pragma mark SettingsControllerProtocol
@@ -1150,6 +1140,20 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
 - (void)configureSigninPromoViewWithNewIdentity:(BOOL)newIdentity
                                    configurator:(SigninPromoViewConfigurator*)
                                                     configurator {
+  if (_signinInteractionController) {
+    // When sign-in is started in a cold state (no default account), the sign-in
+    // interaction controller does the sign-in and then asks for sync
+    // authorization. If the user cancels this operation, the controller
+    // signs-out from this new account, and then disappears while removing the
+    // new account asynchronously.
+    // This leads to an UI glitch. The interaction controller disappears before
+    // the newly added account is removed. The user can see the sign-in promo in
+    // warm state quickly before being replaced by the cold state sign-in promo.
+    // To avoid this UI glitch, all notifications from the mediator should be
+    // ignored, while the sign-in is in progress to avoid showing the warm
+    // state.
+    return;
+  }
   if (![self.collectionViewModel hasItemForItemType:ItemTypeSigninPromo
                                   sectionIdentifier:SectionIdentifierSignIn]) {
     return;
@@ -1166,6 +1170,39 @@ void SigninObserverBridge::GoogleSignedOut(const std::string& account_id,
     if (newIdentity)
       [self.collectionViewLayout invalidateLayout];
   }
+}
+
+#pragma mark - SigninPromoViewDelegate
+
+- (void)signinPromoViewDidTapSigninWithNewAccount:
+    (SigninPromoView*)signinPromoView {
+  DCHECK(!_signinPromoViewMediator.defaultIdentity);
+  base::RecordAction(
+      base::UserMetricsAction("Signin_SigninNewAccount_FromSettings"));
+  [self showSignInWithIdentity:nil
+                   promoAction:signin_metrics::PromoAction::
+                                   PROMO_ACTION_NEW_ACCOUNT];
+}
+
+- (void)signinPromoViewDidTapSigninWithDefaultAccount:
+    (SigninPromoView*)signinPromoView {
+  ChromeIdentity* identity = _signinPromoViewMediator.defaultIdentity;
+  DCHECK(identity);
+  base::RecordAction(
+      base::UserMetricsAction("Signin_SigninWithDefault_FromSettings"));
+  [self showSignInWithIdentity:identity
+                   promoAction:signin_metrics::PromoAction::
+                                   PROMO_ACTION_WITH_DEFAULT];
+}
+
+- (void)signinPromoViewDidTapSigninWithOtherAccount:
+    (SigninPromoView*)signinPromoView {
+  DCHECK(_signinPromoViewMediator.defaultIdentity);
+  base::RecordAction(
+      base::UserMetricsAction("Signin_SigninNotDefault_FromSettings"));
+  [self showSignInWithIdentity:nil
+                   promoAction:signin_metrics::PromoAction::
+                                   PROMO_ACTION_NOT_DEFAULT];
 }
 
 @end

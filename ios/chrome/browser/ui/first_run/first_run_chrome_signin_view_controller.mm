@@ -50,6 +50,8 @@ NSString* const kSignInSkipButtonAccessibilityIdentifier =
        initWithBrowserState:browserState
       isPresentedOnSettings:NO
                 accessPoint:signin_metrics::AccessPoint::ACCESS_POINT_START_PAGE
+                promoAction:signin_metrics::PromoAction::
+                                PROMO_ACTION_NO_SIGNIN_PROMO
              signInIdentity:identity];
   if (self) {
     _tabModel = tabModel;

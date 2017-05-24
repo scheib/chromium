@@ -26,6 +26,8 @@ class PLATFORM_EXPORT RendererWebSchedulerImpl : public WebSchedulerImpl {
       InterventionReporter* intervention_reporter,
       WebViewScheduler::WebViewSchedulerSettings* settings) override;
 
+  RendererScheduler* GetRendererSchedulerForTest() override;
+
  private:
   RendererSchedulerImpl* renderer_scheduler_;  // NOT OWNED
   RefPtr<WebTaskRunnerImpl> compositor_task_runner_;

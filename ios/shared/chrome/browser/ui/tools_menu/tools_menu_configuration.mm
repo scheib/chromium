@@ -18,6 +18,7 @@
 @synthesize noOpenedTabs = _noOpenedTabs;
 @synthesize inIncognito = _inIncognito;
 @synthesize userAgentType = _userAgentType;
+@synthesize requestStartTime = _requestStartTime;
 
 - (instancetype)initWithDisplayView:(UIView*)displayView {
   if (self = [super init]) {

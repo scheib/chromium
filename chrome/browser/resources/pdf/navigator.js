@@ -9,6 +9,7 @@
  * do the actual navigating.
  * @param {number} tabId The tab ID of the PDF viewer or -1 if the viewer is
  *    not displayed in a tab.
+ * @constructor
  */
 function NavigatorDelegate(tabId) {
   this.tabId_ = tabId;
@@ -22,6 +23,7 @@ function NavigatorDelegate(tabId) {
  * @param {Object} navigatorDelegate The object with callback functions that
  *    get called when navigation happens in the current tab, a new tab,
  *    and a new window.
+ * @constructor
  */
 function Navigator(originalUrl, viewport, paramsParser, navigatorDelegate) {
   this.originalUrl_ = originalUrl;
@@ -91,7 +93,6 @@ Navigator.WindowOpenDisposition = {
 
 Navigator.prototype = {
   /**
-   * @private
    * Function to navigate to the given URL. This might involve navigating
    * within the PDF page or opening a new url (in the same tab or a new tab).
    * @param {string} url The URL to navigate to.
@@ -173,7 +174,7 @@ Navigator.prototype = {
   /**
    * @private
    * Checks if the URL starts with a scheme and is not just a scheme.
-   * @param {string} The input URL
+   * @param {string} url The input URL
    * @return {boolean} Whether the url is valid.
    */
   isValidUrl_: function(url) {
@@ -206,7 +207,7 @@ Navigator.prototype = {
   /**
    * @private
    * Attempt to figure out what a URL is when there is no scheme.
-   * @param {string} The input URL
+   * @param {string} url The input URL
    * @return {string} The URL with a scheme or the original URL if it is not
    *     possible to determine the scheme.
    */

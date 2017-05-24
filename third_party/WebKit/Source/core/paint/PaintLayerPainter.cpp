@@ -4,7 +4,7 @@
 
 #include "core/paint/PaintLayerPainter.h"
 
-#include "core/frame/LocalFrame.h"
+#include "core/frame/FrameView.h"
 #include "core/layout/LayoutView.h"
 #include "core/paint/ClipPathClipper.h"
 #include "core/paint/FilterPainter.h"
@@ -105,6 +105,9 @@ PaintResult PaintLayerPainter::Paint(
     GraphicsContext& context,
     const PaintLayerPaintingInfo& painting_info,
     PaintLayerFlags paint_flags) {
+  if (paint_layer_.GetLayoutObject().GetFrameView()->ShouldThrottleRendering())
+    return kFullyPainted;
+
   // https://code.google.com/p/chromium/issues/detail?id=343772
   DisableCompositingQueryAsserts disabler;
 
@@ -126,13 +129,6 @@ PaintResult PaintLayerPainter::Paint(
     return kFullyPainted;
 
   if (ShouldSuppressPaintingLayer(paint_layer_))
-    return kFullyPainted;
-
-  if (paint_layer_.GetLayoutObject().View()->GetFrame() &&
-      paint_layer_.GetLayoutObject()
-          .View()
-          ->GetFrame()
-          ->ShouldThrottleRendering())
     return kFullyPainted;
 
   // If this layer is totally invisible then there is nothing to paint. In SPv2
@@ -272,6 +268,11 @@ PaintResult PaintLayerPainter::PaintLayerContents(
     const PaintLayerPaintingInfo& painting_info_arg,
     PaintLayerFlags paint_flags,
     FragmentPolicy fragment_policy) {
+  PaintResult result = kFullyPainted;
+
+  if (paint_layer_.GetLayoutObject().GetFrameView()->ShouldThrottleRendering())
+    return result;
+
   Optional<ScopedPaintChunkProperties> scoped_paint_chunk_properties;
   if (RuntimeEnabledFeatures::slimmingPaintV2Enabled() &&
       RuntimeEnabledFeatures::rootLayerScrollingEnabled() &&
@@ -313,17 +314,8 @@ PaintResult PaintLayerPainter::PaintLayerContents(
       (is_painting_composited_decoration || !is_painting_scrolling_content) &&
       paint_layer_.GetLayoutObject().StyleRef().HasOutline();
 
-  PaintResult result = kFullyPainted;
-
   if (paint_flags & kPaintLayerPaintingRootBackgroundOnly &&
       !paint_layer_.GetLayoutObject().IsLayoutView())
-    return result;
-
-  if (paint_layer_.GetLayoutObject().View()->GetFrame() &&
-      paint_layer_.GetLayoutObject()
-          .View()
-          ->GetFrame()
-          ->ShouldThrottleRendering())
     return result;
 
   // Ensure our lists are up to date.

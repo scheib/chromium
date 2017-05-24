@@ -127,6 +127,9 @@ void TestCompositorFrameSink::SetLocalSurfaceId(
 }
 
 void TestCompositorFrameSink::SubmitCompositorFrame(CompositorFrame frame) {
+  DCHECK(frame.metadata.begin_frame_ack.has_damage);
+  DCHECK_LE(BeginFrameArgs::kStartingFrameNumber,
+            frame.metadata.begin_frame_ack.sequence_number);
   test_client_->DisplayReceivedCompositorFrame(frame);
 
   if (!delegated_local_surface_id_.is_valid()) {
@@ -155,6 +158,12 @@ void TestCompositorFrameSink::SubmitCompositorFrame(CompositorFrame frame) {
         base::BindOnce(&TestCompositorFrameSink::SendCompositorFrameAckToClient,
                        weak_ptr_factory_.GetWeakPtr()));
   }
+}
+
+void TestCompositorFrameSink::DidNotProduceFrame(const BeginFrameAck& ack) {
+  DCHECK(!ack.has_damage);
+  DCHECK_LE(BeginFrameArgs::kStartingFrameNumber, ack.sequence_number);
+  support_->DidNotProduceFrame(ack);
 }
 
 void TestCompositorFrameSink::DidReceiveCompositorFrameAck(
@@ -197,8 +206,6 @@ void TestCompositorFrameSink::DisplayDidDrawAndSwap() {
 void TestCompositorFrameSink::OnNeedsBeginFrames(bool needs_begin_frames) {
   support_->SetNeedsBeginFrame(needs_begin_frames);
 }
-
-void TestCompositorFrameSink::OnDidFinishFrame(const BeginFrameAck& ack) {}
 
 void TestCompositorFrameSink::SendCompositorFrameAckToClient() {
   client_->DidReceiveCompositorFrameAck();

@@ -11,6 +11,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/display/manager/chromeos/default_touch_transform_setter.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/screen_base.h"
 #include "ui/events/devices/device_data_manager.h"
@@ -122,7 +123,8 @@ class TouchTransformControllerTest : public testing::Test {
     Screen::SetScreenInstance(screen.get());
     display_manager_ = base::MakeUnique<DisplayManager>(std::move(screen));
     touch_transform_controller_ = base::MakeUnique<TouchTransformController>(
-        nullptr, display_manager_.get());
+        nullptr, display_manager_.get(),
+        base::MakeUnique<DefaultTouchTransformSetter>());
   }
 
   void TearDown() override {

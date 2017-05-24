@@ -185,23 +185,27 @@ SafeBrowsingURLRequestContextGetter::GetURLRequestContext() {
       safe_browsing_request_context_->CopyFrom(
           system_context_getter_->GetURLRequestContext());
     }
-    safe_browsing_cookie_store_ =
-        content::CreateCookieStore(content::CookieStoreConfig(
-            CookieFilePath(),
-            content::CookieStoreConfig::EPHEMERAL_SESSION_COOKIES, nullptr,
-            nullptr));
+    scoped_refptr<base::SequencedTaskRunner> background_task_runner =
+        base::CreateSequencedTaskRunnerWithTraits(
+            {base::MayBlock(), base::TaskPriority::BACKGROUND,
+             base::TaskShutdownBehavior::BLOCK_SHUTDOWN});
+    // Set up the ChannelIDService
+    scoped_refptr<net::SQLiteChannelIDStore> channel_id_db =
+        new net::SQLiteChannelIDStore(ChannelIDFilePath(),
+                                      background_task_runner);
+    channel_id_service_.reset(new net::ChannelIDService(
+        new net::DefaultChannelIDStore(channel_id_db.get())));
 
+    // Set up the CookieStore
+    content::CookieStoreConfig cookie_config(
+        CookieFilePath(), content::CookieStoreConfig::EPHEMERAL_SESSION_COOKIES,
+        nullptr, nullptr);
+    cookie_config.channel_id_service = channel_id_service_.get();
+    cookie_config.background_task_runner = background_task_runner;
+    safe_browsing_cookie_store_ = content::CreateCookieStore(cookie_config);
     safe_browsing_request_context_->set_cookie_store(
         safe_browsing_cookie_store_.get());
 
-    // Set up the ChannelIDService
-    scoped_refptr<net::SQLiteChannelIDStore> channel_id_db =
-        new net::SQLiteChannelIDStore(
-            ChannelIDFilePath(),
-            base::CreateSequencedTaskRunnerWithTraits(
-                {base::MayBlock(), base::TaskPriority::BACKGROUND}));
-    channel_id_service_.reset(new net::ChannelIDService(
-        new net::DefaultChannelIDStore(channel_id_db.get())));
     safe_browsing_request_context_->set_channel_id_service(
         channel_id_service_.get());
     safe_browsing_cookie_store_->SetChannelIDServiceID(

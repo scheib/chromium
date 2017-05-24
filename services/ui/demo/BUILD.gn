@@ -68,24 +68,23 @@ service("mus_demo") {
   ]
 }
 
+group("demo") {
+  deps = [
+    ":mus_demo",
+  ]
+}
+
 service_manifest("manifest") {
   name = "mus_demo"
   source = "manifest.json"
 }
 
-service_manifest("test_manifest") {
-  name = "mus_demo_unittests"
-  source = "test_manifest.json"
-}
-
-service_test("mus_demo_unittests") {
+source_set("tests") {
   testonly = true
 
   sources = [
     "mus_demo_unittests.cc",
   ]
-
-  catalog = ":mus_demo_unittests_catalog"
 
   deps = [
     ":demo",
@@ -98,20 +97,17 @@ service_test("mus_demo_unittests") {
 
   data_deps = [
     ":mus_demo",
+    "//services/ui",
   ]
 }
 
-group("demo") {
-  deps = [
-    ":mus_demo",
-  ]
+service_manifest("unittest_manifest") {
+  name = "mus_demo_unittests"
+  source = "test_manifest.json"
 }
 
-catalog("mus_demo_unittests_catalog") {
-  embedded_services = [ ":test_manifest" ]
-
-  standalone_services = [
-    ":manifest",
-    "//services/ui:manifest",
-  ]
+catalog("tests_catalog") {
+  testonly = true
+  embedded_services = [ ":unittest_manifest" ]
+  standalone_services = [ ":manifest" ]
 }

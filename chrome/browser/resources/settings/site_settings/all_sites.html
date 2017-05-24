@@ -1,4 +1,5 @@
 <link rel="import" href="chrome://resources/html/polymer.html">
+
 <link rel="import" href="../settings_shared_css.html">
 <link rel="import" href="constants.html">
 <link rel="import" href="site_list.html">
@@ -10,9 +11,33 @@
       :host {
         display: block;
       }
+
+      .selectable {
+        -webkit-user-select: text;
+      }
     </style>
-    <site-list id="siteList" all-sites category="all-sites">
-    </site-list>
+    <div class="list-frame" hidden$="[[sites.length]]">
+      <div class="list-item secondary">$i18n{noSitesAdded}</div>
+    </div>
+    <div class="list-frame menu-content vertical-list" id="listContainer">
+      <template is="dom-repeat" items="[[sites]]">
+        <div class="list-item">
+          <div class="layout horizontal center flex" on-tap="onOriginTap_"
+              actionable>
+            <div class="favicon-image"
+                style$="[[computeSiteIcon(item.origin)]]">
+            </div>
+            <div class="middle no-min-width selectable text-elide"
+                id="displayName">
+              [[item.displayName]]
+            </div>
+            <button class="subpage-arrow" is="paper-icon-button-light"
+                aria-label$="[[item.displayName]]"
+                aria-describedby="displayName"></button>
+          </div>
+        </div>
+      </template>
+    </div>
   </template>
   <script src="all_sites.js"></script>
 </dom-module>

@@ -21,6 +21,7 @@
 #include "gpu/command_buffer/common/activity_flags.h"
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/command_buffer/service/gpu_preferences.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/gpu_export.h"
@@ -167,6 +168,7 @@ class GPU_EXPORT GpuChannelManager {
   scoped_refptr<gl::GLSurface> default_offscreen_surface_;
   GpuMemoryBufferFactory* const gpu_memory_buffer_factory_;
   GpuFeatureInfo gpu_feature_info_;
+  ServiceDiscardableManager discardable_manager_;
 #if defined(OS_ANDROID)
   // Last time we know the GPU was powered on. Global for tracking across all
   // transport surfaces.

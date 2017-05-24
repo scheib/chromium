@@ -14,42 +14,29 @@
 
 namespace media {
 
-// AVDASurfaceBundle is a collection of everything that the producer-side of
-// the output surface needs.  In other words, it's the surface, and any
-// SurfaceTexture that backs it.  The SurfaceTexture isn't needed directly by
-// the producer, but destroying it causes the surface not to work.
+// AVDASurfaceBundle is a Java surface, and the SurfaceTexture or Overlay that
+// backs it.
 //
-// The idea is that a reference to this should be kept with the codec, even if
-// the codec is sent to another thread.  This will prevent the output surface
-// from being destroyed while the codec depends on it.
-// While you may send a reference to this to other threads, be sure that it
-// doesn't drop the reference there without creating another one.  This has to
-// be destroyed on the gpu main thread.
+// Once a MediaCodec is configured with an output surface, the corresponding
+// AVDASurfaceBundle should be kept alive as long as the codec to prevent
+// crashes due to the codec losing its output surface.
+// TODO(watk): Remove AVDA from the name.
 struct MEDIA_GPU_EXPORT AVDASurfaceBundle
     : public base::RefCountedThreadSafe<AVDASurfaceBundle> {
  public:
-  // |overlay| is the overlay that we'll use, or nullptr for SurfaceTexture.
+  // Create an empty bundle to be manually populated.
+  explicit AVDASurfaceBundle();
   explicit AVDASurfaceBundle(std::unique_ptr<AndroidOverlay> overlay);
+  explicit AVDASurfaceBundle(
+      scoped_refptr<SurfaceTextureGLOwner> surface_texture_owner);
 
-  // The surface that MediaCodec is configured to output to.  This can be either
-  // a SurfaceTexture or other Surface provider.
-  // TODO(liberato): it would be nice if we had an abstraction that included
-  // SurfaceTexture and Overlay, but we don't right now.
-  const base::android::JavaRef<jobject>& j_surface() const {
-    if (overlay)
-      return overlay->GetJavaSurface();
-    else
-      return surface_texture_surface.j_surface();
-  }
+  const base::android::JavaRef<jobject>& GetJavaSurface() const;
 
-  // If |overlay| is non-null, then |overlay| owns j_surface().
+  // The Overlay or SurfaceTexture.
   std::unique_ptr<AndroidOverlay> overlay;
-
-  // The SurfaceTexture attached to |surface()|, or nullptr if j_surface() is
-  // SurfaceView backed.
   scoped_refptr<SurfaceTextureGLOwner> surface_texture;
 
-  // If |surface_texture| is not null, then this is the surface for it.
+  // The Java surface for |surface_texture|.
   gl::ScopedJavaSurface surface_texture_surface;
 
  private:

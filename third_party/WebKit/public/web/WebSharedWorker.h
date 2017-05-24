@@ -54,7 +54,8 @@ class WebSharedWorker {
                                   const WebString& name,
                                   const WebString& content_security_policy,
                                   WebContentSecurityPolicyType,
-                                  WebAddressSpace) = 0;
+                                  WebAddressSpace,
+                                  bool data_saver_enabled) = 0;
 
   // Sends a connect event to the SharedWorker context.
   virtual void Connect(std::unique_ptr<WebMessagePortChannel>) = 0;

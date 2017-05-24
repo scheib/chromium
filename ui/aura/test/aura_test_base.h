@@ -64,6 +64,11 @@ class AuraTestBase : public testing::Test,
   // Turns on mus with a test WindowTree. Must be called before SetUp().
   void EnableMusWithTestWindowTree();
 
+  // Deletes the WindowTreeClient now. Normally the WindowTreeClient is deleted
+  // at the right time and there is no need to call this. This is provided for
+  // testing shutdown ordering.
+  void DeleteWindowTreeClient();
+
   // Used to configure the backend. This is exposed to make parameterized tests
   // easy to write. This *must* be called from SetUp().
   void ConfigureBackend(BackendType type);

@@ -11,19 +11,23 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.support.customtabs.browseractions.BrowserActionItem;
 import android.support.customtabs.browseractions.BrowserActionsIntent;
+import android.view.Menu;
+import android.view.View;
 
 import org.chromium.base.Log;
 import org.chromium.base.annotations.SuppressFBWarnings;
 import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.UrlConstants;
+import org.chromium.chrome.browser.contextmenu.ContextMenuParams;
 import org.chromium.chrome.browser.init.AsyncInitializationActivity;
 import org.chromium.chrome.browser.util.IntentUtils;
+import org.chromium.content_public.common.Referrer;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A transparent {@link AsyncInitializationActivity} that displays the browser action context menu.
+ * A transparent {@link AsyncInitializationActivity} that displays the Browser Actions context menu.
  */
 public class BrowserActionActivity extends AsyncInitializationActivity {
     private static final String TAG = "BrowserActions";
@@ -32,10 +36,13 @@ public class BrowserActionActivity extends AsyncInitializationActivity {
     private Uri mUri;
     private String mCreatorPackageName;
     private List<BrowserActionItem> mActions = new ArrayList<>();
+    private BrowserActionsContextMenuHelper mHelper;
 
     @Override
     protected void setContentView() {
-        openContextMenu();
+        View view = new View(this);
+        setContentView(view);
+        openContextMenu(view);
     }
 
     @Override
@@ -78,8 +85,23 @@ public class BrowserActionActivity extends AsyncInitializationActivity {
     /**
      * Opens a Browser Actions context menu based on the parsed data.
      */
-    public void openContextMenu() {
+    @Override
+    public void openContextMenu(View view) {
+        ContextMenuParams params = createContextMenuParams();
+        mHelper = new BrowserActionsContextMenuHelper(this, params, mActions);
+        mHelper.displayBrowserActionsMenu(view);
         return;
+    }
+
+    /**
+     * Creates a {@link ContextMenuParams} with given Uri and type.
+     * @return The ContextMenuParams used to construct context menu.
+     */
+    private ContextMenuParams createContextMenuParams() {
+        Referrer referrer = IntentHandler.constructValidReferrerForAuthority(mCreatorPackageName);
+        return new ContextMenuParams(mType, mUri.toString(), mUri.toString(), mUri.toString(),
+                mUri.toString(), mUri.toString(), mUri.toString(), false /* imageWasFetchedLoFi */,
+                referrer, false /* canSaveMedia */);
     }
 
     @Override
@@ -122,7 +144,15 @@ public class BrowserActionActivity extends AsyncInitializationActivity {
     /**
      * Callback when Browser Actions menu dialog is shown.
      */
-    private void onMenuShown() {
+    public void onMenuShown() {
         startDelayedNativeInitialization();
+    }
+
+    @Override
+    public void onContextMenuClosed(Menu menu) {
+        super.onContextMenuClosed(menu);
+        if (mHelper != null) {
+            mHelper.onContextMenuClosed();
+        }
     }
 }

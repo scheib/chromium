@@ -69,7 +69,7 @@ static_library("update_client") {
     "//crypto",
     "//net",
     "//third_party/libxml",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:zip",
     "//url",
   ]
   libs = []

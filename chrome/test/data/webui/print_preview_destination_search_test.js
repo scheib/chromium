@@ -24,7 +24,10 @@ PrintPreviewDestinationSearchTest.prototype = {
   runAccessibilityChecks: false,
 
   /** @override */
-  extraLibraries: PolymerTest.getLibraries(ROOT_PATH),
+  extraLibraries: PolymerTest.getLibraries(ROOT_PATH).concat([
+      ROOT_PATH + 'chrome/test/data/webui/settings/test_browser_proxy.js',
+    ]),
+
 };
 
 TEST_F('PrintPreviewDestinationSearchTest', 'Select', function() {
@@ -38,6 +41,50 @@ TEST_F('PrintPreviewDestinationSearchTest', 'Select', function() {
     var invitationStore_;
     var destinationStore_;
     var userInfo_;
+
+    /**
+     * Test version of the native layer.
+     * TODO (rbpotter): Merge this with NativeLayerStub() from print_preview.js
+     * and put into a separate file.
+     * @constructor
+     * @extends {settings.TestBrowserProxy}
+     */
+    function NativeLayerStub() {
+      settings.TestBrowserProxy.call(this, [ 'setupPrinter' ]);
+      this.destinationToWatch_ = '';
+      this.eventTarget_ = mock(cr.EventTarget);
+      this.getLocalDestinationCapabilitiesCallCount_ = 0;
+      this.setupPrinterResponse_ = null;
+      this.shouldReject_ = false;
+    }
+
+    NativeLayerStub.prototype = {
+      __proto__: settings.TestBrowserProxy.prototype,
+      didGetCapabilitiesOnce: function(destinationId) {
+        return (destinationId == this.destinationToWatch_ &&
+                this.getLocalDestinationCapabilitiesCallCount_ == 1);
+      },
+      getEventTarget: function() { return this.eventTarget_; },
+      setDestinationToWatch: function(destinationId) {
+        this.destinationToWatch_ = destinationId;
+        this.getLocalDestinationCapabilitiesCallCount_ = 0;
+      },
+      setSetupPrinterResponse: function(reject, response) {
+        this.shouldReject_ = reject;
+        this.setupPrinterResponse_ = response;
+      },
+      setupPrinter: function(printerId) {
+        this.methodCalled('setupPrinter', printerId);
+        return this.shouldReject_ ?
+            Promise.reject(this.setupPrinterResponse_) :
+            Promise.resolve(this.setupPrinterResponse_);
+      },
+      startGetLocalDestinationCapabilities: function(destinationId) {
+        if (destinationId == this.destinationToWatch_)
+          this.getLocalDestinationCapabilitiesCallCount_++;
+      },
+    };
+    NativeLayerStub.EventType = print_preview.NativeLayer.EventType;
 
     function getCaps() {
       return {
@@ -99,17 +146,10 @@ TEST_F('PrintPreviewDestinationSearchTest', 'Select', function() {
     };
 
     function mockSetupCall(destId, nativeLayerMock) {
+      assert (!cr.isChromeOS);
+      nativeLayerMock.setDestinationToWatch(destId);
       var resolver = new PromiseResolver();
 
-      if (cr.isChromeOS) {
-        nativeLayerMock.expects(once()).setupPrinter(destId).
-            will(returnValue(resolver.promise));
-
-        return resolver;
-      }
-
-      nativeLayerMock.expects(once()).startGetLocalDestinationCapabilities(
-          destId);
       resolver.promise.then(
           function(result) {
             // Simulate the native layer dispatching capabilities.
@@ -117,12 +157,14 @@ TEST_F('PrintPreviewDestinationSearchTest', 'Select', function() {
                 new Event(print_preview.NativeLayer.EventType.CAPABILITIES_SET);
             capsSetEvent.settingsInfo = result;
             destinationStore_.onLocalDestinationCapabilitiesSet_(capsSetEvent);
+            expectTrue(nativeLayerMock.didGetCapabilitiesOnce(destId));
           }.bind(this),
           function() {
             var failEvent = new Event(
                 print_preview.NativeLayer.EventType.GET_CAPABILITIES_FAIL);
             failEvent.destinationId = destId;
             destinationStore_.onGetCapabilitiesFail_(failEvent);
+            expectTrue(nativeLayerMock.didGetCapabilitiesOnce(destId));
           }.bind(this));
 
       return resolver;
@@ -149,26 +191,18 @@ TEST_F('PrintPreviewDestinationSearchTest', 'Select', function() {
       }
     };
 
-    function resolveSetup(resolver, printerId, success, capabilities) {
-      var response = {
-        printerId: printerId,
-        capabilities: capabilities,
-        success: success
-      };
-
-      resolver.resolve(response);
-    }
-
     setup(function() {
       Mock4JS.clearMocksToVerify();
-
-      nativeLayer_ = mock(print_preview.NativeLayer);
-      nativeLayer_.expects(atLeastOnce())
+      nativeLayer_ = new NativeLayerStub();
+      var nativeLayerEventTarget = nativeLayer_.getEventTarget();
+      nativeLayerEventTarget.expects(atLeastOnce())
           .addEventListener(ANYTHING, ANYTHING, ANYTHING);
 
       invitationStore_ = new print_preview.InvitationStore();
+      var nativeLayerProxy = nativeLayer_;
+      nativeLayerProxy.eventTarget_ = nativeLayerEventTarget.proxy();
       destinationStore_ = new print_preview.DestinationStore(
-          nativeLayer_.proxy(), new print_preview.UserInfo(),
+          nativeLayerProxy, new print_preview.UserInfo(),
           new print_preview.AppState());
       userInfo_ = new print_preview.UserInfo();
 
@@ -183,45 +217,75 @@ TEST_F('PrintPreviewDestinationSearchTest', 'Select', function() {
 
     test('ResolutionFails', function() {
       var destId = "001122DEADBEEF";
-
-      var resolver = mockSetupCall(destId, nativeLayer_);
-      requestSetup(destId, destinationSearch_);
-      resolver.reject(destId);
+      if (cr.isChromeOS) {
+        nativeLayer_.setSetupPrinterResponse(true, { printerId: destId,
+                                                     success: false,});
+        requestSetup(destId, destinationSearch_);
+        return nativeLayer_.whenCalled('setupPrinter').then(
+            function(actualDestId) {
+              assertEquals(destId, actualDestId);
+            });
+      } else {
+        var resolver = mockSetupCall(destId, nativeLayer_);
+        requestSetup(destId, destinationSearch_);
+        resolver.reject(destId);
+      }
     });
 
     test('ReceiveSuccessfulSetup', function() {
       var destId = "00112233DEADBEEF";
+      var response = {
+        printerId: destId,
+        capabilities: getCaps(),
+        success: true,
+      };
+      if (cr.isChromeOS)
+        nativeLayer_.setSetupPrinterResponse(false, response);
 
       var waiter = waitForEvent(
           destinationStore_,
           print_preview.DestinationStore.EventType.DESTINATION_SELECT);
+      if (cr.isChromeOS) {
+        requestSetup(destId, destinationSearch_);
+        return Promise.all([
+            nativeLayer_.whenCalled('setupPrinter'), waiter
+        ]).then(function(results) {
+          assertEquals(destId, results[0]);
 
-      var resolver = mockSetupCall(destId, nativeLayer_);
-
-      requestSetup(destId, destinationSearch_);
-      resolveSetup(resolver, destId, true, getCaps());
-
-      // wait for event propogation to complete.
-      return waiter.then(function() {
-        // after setup succeeds, the destination should be selected.
-        assertNotEquals(null, destinationStore_.selectedDestination);
-        assertEquals(destId, destinationStore_.selectedDestination.id);
-      });
+          // after setup succeeds and event arrives, the destination should
+          // be selected.
+          assertNotEquals(null, destinationStore_.selectedDestination);
+          assertEquals(destId, destinationStore_.selectedDestination.id);
+        });
+      } else { //!cr.isChromeOS
+        var resolver = mockSetupCall(destId, nativeLayer_);
+        requestSetup(destId, destinationSearch_);
+        resolver.resolve(response);
+        return waiter.then(function() {
+          // after setup succeeds, the destination should be selected.
+          assertNotEquals(null, destinationStore_.selectedDestination);
+          assertEquals(destId, destinationStore_.selectedDestination.id);
+        });
+      }
     });
 
     if (cr.isChromeOS) {
       // The 'ResolutionFails' test covers this case for non-CrOS.
       test('ReceiveFailedSetup', function() {
         var destId = '00112233DEADBEEF';
-
-        var resolver = mockSetupCall(destId, nativeLayer_);
+        var response = {
+          printerId: destId,
+          capabilities: getCaps(),
+          success: false,
+        };
+        nativeLayer_.setSetupPrinterResponse(false, response);
         requestSetup(destId, destinationSearch_);
-
-        // Force resolution to fail.
-        resolveSetup(resolver, destId, false, null);
-
-        // Selection should not change on ChromeOS.
-        assertEquals(null, destinationStore_.selectedDestination);
+        return nativeLayer_.whenCalled('setupPrinter').then(
+            function (actualDestId) {
+              // Selection should not change on ChromeOS.
+              assertEquals(destId, actualDestId);
+              assertEquals(null, destinationStore_.selectedDestination);
+            });
       });
     }
 

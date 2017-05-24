@@ -4,6 +4,8 @@
 
 #include <stddef.h>
 
+#include <memory>
+
 #include "base/auto_reset.h"
 #include "base/command_line.h"
 #include "base/strings/utf_string_conversions.h"
@@ -857,14 +859,6 @@ class FakeDelegate : public ProtocolHandlerRegistry::Delegate {
     // Overrides in order to not register the handler with the
     // ChildProcessSecurityPolicy. That has persistent and unalterable
     // side effects on other tests.
-  }
-
-  scoped_refptr<shell_integration::DefaultProtocolClientWorker>
-  CreateShellWorker(
-      const shell_integration::DefaultWebClientWorkerCallback& callback,
-      const std::string& protocol) override {
-    VLOG(1) << "CreateShellWorker";
-    return NULL;
   }
 
   void RegisterWithOSAsDefaultClient(

@@ -1,4 +1,0 @@
-This is a testharness.js-based test.
-FAIL Invalid uncompiled raw handlers should only be compiled when about to call them. assert_array_equals: property 1, expected "error" but got "Error"
-Harness: the test ran to completion.
-

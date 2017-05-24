@@ -298,7 +298,7 @@ sk_sp<PaintRecord> GraphicsContext::EndRecording() {
 }
 
 void GraphicsContext::DrawRecord(sk_sp<const PaintRecord> record) {
-  if (ContextDisabled() || !record || !record->size())
+  if (ContextDisabled() || !record || record->cullRect().isEmpty())
     return;
 
   DCHECK(canvas_);
@@ -322,7 +322,7 @@ void GraphicsContext::CompositeRecord(sk_sp<PaintRecord> record,
   transform.setRectToRect(source_bounds, sk_bounds, SkMatrix::kFill_ScaleToFit);
   canvas_->concat(transform);
   flags.setImageFilter(SkPictureImageFilter::MakeForLocalSpace(
-      ToSkPicture(record, source_bounds), source_bounds,
+      ToSkPicture(record), source_bounds,
       static_cast<SkFilterQuality>(ImageInterpolationQuality())));
   canvas_->saveLayer(&source_bounds, &flags);
   canvas_->restore();

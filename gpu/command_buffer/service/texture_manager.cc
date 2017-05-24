@@ -28,6 +28,7 @@
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/progress_reporter.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_state_restorer.h"
@@ -439,6 +440,10 @@ TextureManager::~TextureManager() {
 
 void TextureManager::Destroy(bool have_context) {
   have_context_ = have_context;
+
+  // Retreive any outstanding unlocked textures from the discardable manager so
+  // we can clean them up here.
+  discardable_manager_->OnTextureManagerDestruction(this);
 
   while (!textures_.empty()) {
     textures_.erase(textures_.begin());
@@ -1889,7 +1894,8 @@ TextureManager::TextureManager(MemoryTracker* memory_tracker,
                                GLint max_3d_texture_size,
                                GLint max_array_texture_layers,
                                bool use_default_textures,
-                               ProgressReporter* progress_reporter)
+                               ProgressReporter* progress_reporter,
+                               ServiceDiscardableManager* discardable_manager)
     : memory_type_tracker_(new MemoryTypeTracker(memory_tracker)),
       memory_tracker_(memory_tracker),
       feature_info_(feature_info),
@@ -1917,7 +1923,8 @@ TextureManager::TextureManager(MemoryTracker* memory_tracker,
       texture_count_(0),
       have_context_(true),
       current_service_id_generation_(0),
-      progress_reporter_(progress_reporter) {
+      progress_reporter_(progress_reporter),
+      discardable_manager_(discardable_manager) {
   for (int ii = 0; ii < kNumDefaultTextures; ++ii) {
     black_texture_ids_[ii] = 0;
   }
@@ -2126,6 +2133,8 @@ void TextureManager::SetLevelInfo(TextureRef* ref,
   texture->SetLevelInfo(target, level, internal_format, width, height, depth,
                         border, format, type, cleared_rect);
   texture->GetMemTracker()->TrackMemAlloc(texture->estimated_size());
+  discardable_manager_->OnTextureSizeChanged(ref->client_id(), this,
+                                             texture->estimated_size());
 }
 
 Texture* TextureManager::Produce(TextureRef* ref) {
@@ -2219,9 +2228,34 @@ TextureRef* TextureManager::GetTexture(
   return it != textures_.end() ? it->second.get() : NULL;
 }
 
+scoped_refptr<TextureRef> TextureManager::TakeTexture(GLuint client_id) {
+  auto it = textures_.find(client_id);
+  if (it == textures_.end())
+    return nullptr;
+
+  scoped_refptr<TextureRef> ref = it->second;
+  textures_.erase(it);
+  return ref;
+}
+
+void TextureManager::ReturnTexture(scoped_refptr<TextureRef> texture_ref) {
+  GLuint client_id = texture_ref->client_id();
+  // If we've generated a replacement texture due to "bind generates resource",
+  // behavior, just delete the resource being returned.
+  TextureMap::iterator it = textures_.find(client_id);
+  if (it != textures_.end()) {
+    // Reset the client id so it doesn't interfere with the generated resource.
+    texture_ref->reset_client_id();
+    return;
+  }
+
+  textures_.emplace(client_id, std::move(texture_ref));
+}
+
 void TextureManager::RemoveTexture(GLuint client_id) {
   TextureMap::iterator it = textures_.find(client_id);
   if (it != textures_.end()) {
+    discardable_manager_->OnTextureDeleted(client_id, this);
     it->second->reset_client_id();
     textures_.erase(it);
   }
@@ -2258,6 +2292,9 @@ void TextureManager::StopTracking(TextureRef* ref) {
   }
   num_uncleared_mips_ -= texture->num_uncleared_mips();
   DCHECK_GE(num_uncleared_mips_, 0);
+
+  if (ref->client_id())
+    discardable_manager_->OnTextureDeleted(ref->client_id(), this);
 }
 
 MemoryTypeTracker* TextureManager::GetMemTracker() {

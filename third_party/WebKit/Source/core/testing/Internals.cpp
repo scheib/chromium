@@ -1070,13 +1070,13 @@ void Internals::addCompositionMarker(const Range* range,
   }
 }
 
-void Internals::setMarkersActive(Node* node,
-                                 unsigned start_offset,
-                                 unsigned end_offset,
-                                 bool active) {
+void Internals::setTextMatchMarkersActive(Node* node,
+                                          unsigned start_offset,
+                                          unsigned end_offset,
+                                          bool active) {
   DCHECK(node);
-  node->GetDocument().Markers().SetMarkersActive(node, start_offset, end_offset,
-                                                 active);
+  node->GetDocument().Markers().SetTextMatchMarkersActive(node, start_offset,
+                                                          end_offset, active);
 }
 
 void Internals::setMarkedTextMatchesAreHighlighted(Document* document,

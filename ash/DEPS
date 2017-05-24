@@ -8,6 +8,7 @@ include_rules = [
   "+components/signin/core/account_id",
   "+components/ui_devtools",
   "+components/user_manager",
+  "+components/vector_icons",
   "+components/wallpaper",
   "+gpu/config",
   "+media",

@@ -5,9 +5,10 @@
 #ifndef ASH_DEVTOOLS_ASH_DEVTOOLS_CSS_AGENT_H_
 #define ASH_DEVTOOLS_ASH_DEVTOOLS_CSS_AGENT_H_
 
+#include "ash/ash_export.h"
 #include "ash/devtools/ash_devtools_dom_agent.h"
+#include "base/macros.h"
 #include "components/ui_devtools/CSS.h"
-#include "ui/views/widget/widget_observer.h"
 
 namespace ash {
 namespace devtools {
@@ -20,7 +21,7 @@ class ASH_EXPORT AshDevToolsCSSAgent
   explicit AshDevToolsCSSAgent(AshDevToolsDOMAgent* dom_agent);
   ~AshDevToolsCSSAgent() override;
 
-  // CSS::Backend
+  // CSS::Backend:
   ui::devtools::protocol::Response enable() override;
   ui::devtools::protocol::Response disable() override;
   ui::devtools::protocol::Response getMatchedStylesForNode(
@@ -34,10 +35,8 @@ class ASH_EXPORT AshDevToolsCSSAgent
           ui::devtools::protocol::Array<ui::devtools::protocol::CSS::CSSStyle>>*
           result) override;
 
-  // AshDevToolsDOMAgentObserver
-  void OnWindowBoundsChanged(aura::Window* window) override;
-  void OnWidgetBoundsChanged(views::Widget* widget) override;
-  void OnViewBoundsChanged(views::View* view) override;
+  // AshDevToolsDOMAgentObserver:
+  void OnNodeBoundsChanged(int node_id) override;
 
  private:
   std::unique_ptr<ui::devtools::protocol::CSS::CSSStyle> GetStylesForNode(

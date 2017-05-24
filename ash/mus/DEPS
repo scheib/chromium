@@ -8,6 +8,7 @@ include_rules = [
   "+mojo/public",
   "+services/catalog/public",
   "+services/service_manager/public",
+  "+chromeos/cryptohome",
 ]
 
 specific_include_rules = {

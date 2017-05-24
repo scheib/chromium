@@ -46,6 +46,7 @@
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/named_platform_handle.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "mojo/edk/embedder/platform_handle_utils.h"
 #include "mojo/edk/embedder/scoped_ipc_support.h"
 #include "net/base/network_change_notifier.h"
@@ -372,7 +373,9 @@ mojo::ScopedMessagePipeHandle ServiceProcess::CreateChannelMessagePipe() {
 #endif
   CHECK(channel_handle.is_valid());
 
-  return mojo::edk::ConnectToPeerProcess(std::move(channel_handle));
+  peer_connection_ = base::MakeUnique<mojo::edk::PeerConnection>();
+  return peer_connection_->Connect(mojo::edk::ConnectionParams(
+      mojo::edk::TransportProtocol::kLegacy, std::move(channel_handle)));
 }
 
 cloud_print::CloudPrintProxy* ServiceProcess::GetCloudPrintProxy() {

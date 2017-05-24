@@ -25,6 +25,7 @@
 #include "gpu/command_buffer/service/gpu_switches.h"
 #include "gpu/command_buffer/service/logger.h"
 #include "gpu/command_buffer/service/mailbox_manager_impl.h"
+#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
 #include "ui/gfx/geometry/size.h"
@@ -145,7 +146,7 @@ class CommandBufferSetup {
         gpu_preferences_, mailbox_manager_.get(), nullptr, translator_cache_,
         completeness_cache_, feature_info, true /* bind_generates_resource */,
         nullptr /* image_factory */, nullptr /* progress_reporter */,
-        GpuFeatureInfo());
+        GpuFeatureInfo(), &discardable_manager_);
     command_buffer_.reset(
         new CommandBufferService(context_group->transfer_buffer_manager()));
     command_buffer_->SetPutOffsetChangeCallback(
@@ -309,6 +310,7 @@ class CommandBufferSetup {
   scoped_refptr<gles2::MailboxManager> mailbox_manager_;
   scoped_refptr<gl::GLShareGroup> share_group_;
   const gpu::CommandBufferId command_buffer_id_;
+  ServiceDiscardableManager discardable_manager_;
 
   bool recreate_context_ = false;
   scoped_refptr<gl::GLSurface> surface_;

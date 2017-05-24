@@ -1757,6 +1757,15 @@ void GL_APIENTRY GLES2SetDrawRectangleCHROMIUM(GLint x,
 void GL_APIENTRY GLES2SetEnableDCLayersCHROMIUM(GLboolean enabled) {
   gles2::GetGLContext()->SetEnableDCLayersCHROMIUM(enabled);
 }
+void GL_APIENTRY GLES2InitializeDiscardableTextureCHROMIUM(GLuint texture_id) {
+  gles2::GetGLContext()->InitializeDiscardableTextureCHROMIUM(texture_id);
+}
+void GL_APIENTRY GLES2UnlockDiscardableTextureCHROMIUM(GLuint texture_id) {
+  gles2::GetGLContext()->UnlockDiscardableTextureCHROMIUM(texture_id);
+}
+bool GL_APIENTRY GLES2LockDiscardableTextureCHROMIUM(GLuint texture_id) {
+  return gles2::GetGLContext()->LockDiscardableTextureCHROMIUM(texture_id);
+}
 
 namespace gles2 {
 
@@ -3080,6 +3089,21 @@ extern const NameToFunc g_gles2_function_table[] = {
     {
         "glSetEnableDCLayersCHROMIUM",
         reinterpret_cast<GLES2FunctionPointer>(glSetEnableDCLayersCHROMIUM),
+    },
+    {
+        "glInitializeDiscardableTextureCHROMIUM",
+        reinterpret_cast<GLES2FunctionPointer>(
+            glInitializeDiscardableTextureCHROMIUM),
+    },
+    {
+        "glUnlockDiscardableTextureCHROMIUM",
+        reinterpret_cast<GLES2FunctionPointer>(
+            glUnlockDiscardableTextureCHROMIUM),
+    },
+    {
+        "glLockDiscardableTextureCHROMIUM",
+        reinterpret_cast<GLES2FunctionPointer>(
+            glLockDiscardableTextureCHROMIUM),
     },
     {
         NULL, NULL,

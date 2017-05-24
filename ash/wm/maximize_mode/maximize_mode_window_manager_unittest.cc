@@ -21,7 +21,6 @@
 #include "ash/wm/switchable_windows.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_state_observer.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"

@@ -23,7 +23,6 @@ import android.widget.FrameLayout;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.UsedByReflection;
 import org.chromium.chrome.browser.compositor.layouts.Layout;
 import org.chromium.chrome.browser.compositor.layouts.LayoutProvider;
 import org.chromium.chrome.browser.compositor.layouts.LayoutRenderHost;
@@ -46,7 +45,8 @@ import java.util.List;
  * The is the {@link View} displaying the ui compositor results; including webpages and tabswitcher.
  */
 @JNINamespace("android")
-public class CompositorView extends FrameLayout implements SurfaceHolder.Callback2 {
+public class CompositorView
+        extends FrameLayout implements CompositorSurfaceManager.SurfaceHolderCallbackTarget {
     private static final String TAG = "CompositorView";
     private static final long NANOSECONDS_PER_MILLISECOND = 1000000;
 
@@ -251,12 +251,6 @@ public class CompositorView extends FrameLayout implements SurfaceHolder.Callbac
     }
 
     @Override
-    public void surfaceRedrawNeeded(SurfaceHolder holder) {
-        // Intentionally not implemented.
-    }
-
-    // TODO(boliu): Mark this override instead.
-    @UsedByReflection("Android")
     public void surfaceRedrawNeededAsync(SurfaceHolder holder, Runnable drawingFinished) {
         if (mDrawingFinishedCallbacks == null) mDrawingFinishedCallbacks = new ArrayList<>();
         mDrawingFinishedCallbacks.add(drawingFinished);

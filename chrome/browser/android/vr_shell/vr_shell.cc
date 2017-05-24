@@ -69,6 +69,9 @@ vr_shell::VrShell* g_instance;
 constexpr base::TimeDelta poll_media_access_interval_ =
     base::TimeDelta::FromSecondsD(0.01);
 
+constexpr base::TimeDelta kExitVrDueToUnsupportedModeDelay =
+    base::TimeDelta::FromSeconds(5);
+
 void SetIsInVR(content::WebContents* contents, bool is_in_vr) {
   if (contents && contents->GetRenderWidgetHostView()) {
     // TODO(asimjour) Contents should not be aware of VR mode. Instead, we
@@ -79,17 +82,6 @@ void SetIsInVR(content::WebContents* contents, bool is_in_vr) {
     VrTabHelper* vr_tab_helper = VrTabHelper::FromWebContents(contents);
     DCHECK(vr_tab_helper);
     vr_tab_helper->SetIsInVr(is_in_vr);
-  }
-}
-
-void LoadControllerModelTask(
-    base::WeakPtr<VrShell> weak_vr_shell,
-    scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner) {
-  auto controller_model = VrControllerModel::LoadFromComponent();
-  if (controller_model) {
-    main_thread_task_runner->PostTask(
-        FROM_HERE, base::Bind(&VrShell::SubmitControllerModel, weak_vr_shell,
-                              base::Passed(&controller_model)));
   }
 }
 
@@ -118,18 +110,12 @@ VrShell::VrShell(JNIEnv* env,
 
   gl_thread_ = base::MakeUnique<VrGLThread>(
       weak_ptr_factory_.GetWeakPtr(), main_thread_task_runner_, gvr_api,
-      for_web_vr, in_cct, reprojected_rendering_);
+      for_web_vr, in_cct, reprojected_rendering_, HasDaydreamSupport(env));
   ui_ = gl_thread_.get();
 
   base::Thread::Options options(base::MessageLoop::TYPE_DEFAULT, 0);
   options.priority = base::ThreadPriority::DISPLAY;
   gl_thread_->StartWithOptions(options);
-
-
-  content::BrowserThread::PostTask(
-      content::BrowserThread::FILE, FROM_HERE,
-      base::Bind(LoadControllerModelTask, weak_ptr_factory_.GetWeakPtr(),
-                 main_thread_task_runner_));
 }
 
 void VrShell::Destroy(JNIEnv* env, const JavaParamRef<jobject>& obj) {
@@ -255,6 +241,11 @@ void VrShell::NavigateBack() {
   Java_VrShellImpl_navigateBack(env, j_vr_shell_.obj());
 }
 
+void VrShell::ExitCct() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  Java_VrShellImpl_exitCct(env, j_vr_shell_.obj());
+}
+
 void VrShell::OnTriggerEvent(JNIEnv* env, const JavaParamRef<jobject>& obj) {
   WaitForGlThread();
   PostToGlThread(FROM_HERE, base::Bind(&VrShellGl::OnTriggerEvent,
@@ -371,13 +362,6 @@ void VrShell::SubmitWebVRFrame(int16_t frame_index,
                             gl_thread_->GetVrShellGl(), frame_index, mailbox));
 }
 
-void VrShell::SubmitControllerModel(std::unique_ptr<VrControllerModel> model) {
-  WaitForGlThread();
-  PostToGlThread(FROM_HERE,
-                 base::Bind(&VrShellGl::SetControllerModel,
-                            gl_thread_->GetVrShellGl(), base::Passed(&model)));
-}
-
 void VrShell::UpdateWebVRTextureBounds(int16_t frame_index,
                                        const gfx::RectF& left_bounds,
                                        const gfx::RectF& right_bounds,
@@ -409,6 +393,10 @@ void VrShell::SetSubmitClient(
 base::android::ScopedJavaGlobalRef<jobject> VrShell::TakeContentSurface(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj) {
+  if (!content_surface_) {
+    return base::android::ScopedJavaGlobalRef<jobject>(env, nullptr);
+  }
+  taken_surface_ = true;
   compositor_->SurfaceChanged(nullptr);
   base::android::ScopedJavaGlobalRef<jobject> surface(env, content_surface_);
   content_surface_ = nullptr;
@@ -417,6 +405,10 @@ base::android::ScopedJavaGlobalRef<jobject> VrShell::TakeContentSurface(
 
 void VrShell::RestoreContentSurface(JNIEnv* env,
                                     const JavaParamRef<jobject>& obj) {
+  // Don't try to restore the surface if we haven't successfully taken it yet.
+  if (!taken_surface_)
+    return;
+  taken_surface_ = false;
   WaitForGlThread();
   PostToGlThread(FROM_HERE, base::Bind(&VrShellGl::CreateContentSurface,
                                        gl_thread_->GetVrShellGl()));
@@ -431,9 +423,9 @@ void VrShell::SetHistoryButtonsEnabled(JNIEnv* env,
 
 void VrShell::ContentSurfaceChanged(jobject surface) {
   content_surface_ = surface;
-  compositor_->SurfaceChanged(surface);
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_VrShellImpl_contentSurfaceChanged(env, j_vr_shell_.obj());
+  compositor_->SurfaceChanged(content_surface_);
 }
 
 void VrShell::GvrDelegateReady() {
@@ -544,6 +536,14 @@ void VrShell::ExitFullscreen() {
   }
 }
 
+void VrShell::ExitVrDueToUnsupportedMode() {
+  ui_->SetIsExiting();
+  main_thread_task_runner_->PostDelayedTask(
+      FROM_HERE,
+      base::Bind(&VrShell::ForceExitVr, weak_ptr_factory_.GetWeakPtr()),
+      kExitVrDueToUnsupportedModeDelay);
+}
+
 void VrShell::OnVRVsyncProviderRequest(
     device::mojom::VRVSyncProviderRequest request) {
   WaitForGlThread();
@@ -624,6 +624,10 @@ void VrShell::RegisterGamepadDataFetcher(
     device::GvrGamepadDataFetcher* fetcher) {
   DVLOG(1) << __FUNCTION__ << "(" << fetcher << ")";
   gamepad_data_fetcher_ = fetcher;
+}
+
+bool VrShell::HasDaydreamSupport(JNIEnv* env) {
+  return Java_VrShellImpl_hasDaydreamSupport(env, j_vr_shell_.obj());
 }
 
 // ----------------------------------------------------------------------------

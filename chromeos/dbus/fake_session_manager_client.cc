@@ -4,12 +4,14 @@
 
 #include "chromeos/dbus/fake_session_manager_client.h"
 
+#include "base/base64.h"
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/location.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
+#include "base/rand_util.h"
 #include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -243,11 +245,16 @@ void FakeSessionManagerClient::StartArcInstance(
     bool disable_boot_completed_broadcast,
     bool enable_vendor_privileged,
     const StartArcInstanceCallback& callback) {
+  StartArcInstanceResult result;
+  std::string container_instance_id;
+  if (arc_available_) {
+    result = StartArcInstanceResult::SUCCESS;
+    base::Base64Encode(base::RandBytesAsString(16), &container_instance_id);
+  } else {
+    result = StartArcInstanceResult::UNKNOWN_ERROR;
+  }
   base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::Bind(callback, arc_available_
-                               ? StartArcInstanceResult::SUCCESS
-                               : StartArcInstanceResult::UNKNOWN_ERROR));
+      FROM_HERE, base::Bind(callback, result, container_instance_id));
 }
 
 void FakeSessionManagerClient::StopArcInstance(const ArcCallback& callback) {

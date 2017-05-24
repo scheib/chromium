@@ -216,12 +216,6 @@ class MEDIA_EXPORT GpuVideoDecoder
       PictureBufferTextureMap;
   PictureBufferTextureMap picture_buffers_at_display_;
 
-  // The texture target used for decoded pictures.
-  uint32_t decoder_texture_target_;
-
-  // The pixel format used for decoded pictures.
-  VideoPixelFormat pixel_format_;
-
   struct BufferData {
     BufferData(int32_t bbid,
                base::TimeDelta ts,

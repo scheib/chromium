@@ -14,10 +14,9 @@
 #include "media/base/media_export.h"
 #include "media/base/mime_util.h"
 #include "media/base/video_codecs.h"
+#include "media/base/video_color_space.h"
 
 namespace media {
-
-class VideoColorSpace;
 
 namespace internal {
 
@@ -58,11 +57,30 @@ class MEDIA_EXPORT MimeUtil {
     bool supports_opus = false;
   };
 
+  struct ParsedCodecResult {
+    Codec codec;
+    bool is_ambiguous;
+    VideoCodecProfile video_profile;
+    uint8_t video_level;
+    VideoColorSpace video_color_space;
+  };
+
   // See mime_util.h for more information on these methods.
   bool IsSupportedMediaMimeType(const std::string& mime_type) const;
   void SplitCodecsToVector(const std::string& codecs,
                            std::vector<std::string>* codecs_out,
                            bool strip);
+  bool ParseVideoCodecString(const std::string& mime_type,
+                             const std::string& codec_id,
+                             bool* out_is_ambiguous,
+                             VideoCodec* out_codec,
+                             VideoCodecProfile* out_profile,
+                             uint8_t* out_level,
+                             VideoColorSpace* out_color_space);
+  bool ParseAudioCodecString(const std::string& mime_type,
+                             const std::string& codec_id,
+                             bool* out_is_ambiguous,
+                             AudioCodec* out_codec);
   SupportsType IsSupportedMediaFormat(const std::string& mime_type,
                                       const std::vector<std::string>& codecs,
                                       bool is_encrypted) const;
@@ -100,32 +118,45 @@ class MEDIA_EXPORT MimeUtil {
   // IsNotSupported is returned if |mime_type_lower_case| is not supported or at
   // least one is not supported in |mime_type_lower_case|. |is_encrypted| means
   // the codec will be used with encrypted blocks.
-  SupportsType AreSupportedCodecs(const CodecSet& supported_codecs,
-                                  const std::vector<std::string>& codecs,
-                                  const std::string& mime_type_lower_case,
-                                  bool is_encrypted) const;
+  SupportsType AreSupportedCodecs(
+      const std::vector<ParsedCodecResult>& parsed_codecs,
+      const std::string& mime_type_lower_case,
+      bool is_encrypted) const;
 
-  // Converts a codec ID into an Codec enum value and attempts to output the
-  // |out_profile| and |out_level|.
-  // Returns true if this method was able to map |codec_id| with
-  // |mime_type_lower_case| to a specific Codec enum value. |codec| is only
-  // valid if true is returned.
-  // |ambiguous_codec_string| will be set to true when the codec string matches
-  // one of a small number of non-RFC compliant strings (e.g. "avc").
-  // |profile| and |level| indicate video codec profile and level (unused for
-  // audio codecs). These will be VIDEO_CODEC_PROFILE_UNKNOWN and 0 respectively
-  // whenever |codec_id| is incomplete/invalid, or in some cases when
-  // |ambiguous_codec_string| is set to true.
-  // |is_encrypted| means the codec will be used with encrypted blocks.
-  // |out_color| is the color space described by the
-  // |codec_id|.
-  bool ParseCodecString(const std::string& mime_type_lower_case,
+  // Parse the combination of |mime_type_lower_case| and |codecs|. Returns true
+  // when parsing succeeds and output is written to |out_results|. Returns false
+  // when parsing fails. Failure may be caused by
+  //  - invalid/unrecognized codec strings and mime_types
+  //  - invalid combinations of codec strings and mime_types (e.g. H264 in WebM)
+  // See comment for ParseCodecHelper().
+  bool ParseCodecStrings(const std::string& mime_type_lower_case,
+                         const std::vector<std::string>& codecs,
+                         std::vector<ParsedCodecResult>* out_results) const;
+
+  // Helper to ParseCodecStrings(). Parses a single |codec_id| with
+  // |mime_type_lower_case| to populate the fields of |out_result|. This helper
+  // method does not validate the combination of |mime_type_lower_case| and
+  // |codec_id|, nor does it handle empty/unprovided codecs; See caller
+  // ParseCodecStrings().
+  //
+  // |out_result| is only valid when this method returns true (parsing success).
+  // |out_result->is_ambiguous| will be set to true when the codec string
+  // matches one of a fixed number of *non-RFC compliant* strings (e.g. "avc").
+  // Ambiguous video codec strings may fail to provide video profile and/or
+  // level info. In these cases, we use the following values to indicate
+  // "unspecified":
+  //  - out_result->video_profile = VIDEO_CODEC_PROFILE_UNKNOWN
+  //  - out_result->video_level = 0
+  //
+  // For unambiguous video codecs, |video_profile| and |video_level| will be
+  // set in |out_result|.
+  //
+  // |out_result|'s |video_color_space| will report the codec strings color
+  // space when provided. Most codec strings do not yet describe color, so this
+  // will often be set to the default of REC709.
+  bool ParseCodecHelper(const std::string& mime_type_lower_case,
                         const std::string& codec_id,
-                        Codec* codec,
-                        bool* ambiguous_codec_string,
-                        VideoCodecProfile* out_profile,
-                        uint8_t* out_level,
-                        VideoColorSpace* out_colorspace) const;
+                        ParsedCodecResult* out_result) const;
 
   // Returns IsSupported if |codec| when platform supports codec contained in
   // |mime_type_lower_case|. Returns MayBeSupported when platform support is
@@ -156,13 +187,6 @@ class MEDIA_EXPORT MimeUtil {
   // |*default_codec| is undefined.
   bool GetDefaultCodec(const std::string& mime_type_lower_case,
                        Codec* default_codec) const;
-
-  // Returns IsSupported if |mime_type_lower_case| has a default codec
-  // associated with it and IsCodecSupported() returns IsSupported for that
-  // particular codec. |is_encrypted| means the codec will be used with
-  // encrypted blocks.
-  SupportsType IsDefaultCodecSupported(const std::string& mime_type_lower_case,
-                                       bool is_encrypted) const;
 
 #if defined(OS_ANDROID)
   // Indicates the support of various codecs within the platform.

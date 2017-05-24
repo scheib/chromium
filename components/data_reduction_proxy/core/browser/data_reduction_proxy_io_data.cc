@@ -316,6 +316,16 @@ void DataReductionProxyIOData::SetLoFiModeOff() {
   config_->SetLoFiModeOff();
 }
 
+void DataReductionProxyIOData::UpdateDataUseForHost(int64_t network_bytes,
+                                                    int64_t original_bytes,
+                                                    const std::string& host) {
+  DCHECK(io_task_runner_->BelongsToCurrentThread());
+
+  ui_task_runner_->PostTask(
+      FROM_HERE, base::Bind(&DataReductionProxyService::UpdateDataUseForHost,
+                            service_, network_bytes, original_bytes, host));
+}
+
 void DataReductionProxyIOData::UpdateContentLengths(
     int64_t data_used,
     int64_t original_size,

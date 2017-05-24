@@ -97,6 +97,12 @@ const char kSpeculativePrefetchDescription[] =
     R"*("Learning" means that only the database construction is enabled, )*"
     R"*("Prefetching" that learning and prefetching are enabled.)*";
 
+const char kOffMainThreadFetchName[] = "Off-main-thread fetch for Web Workers";
+
+const char kOffMainThreadFetchDescription[] =
+    "If enabled, the resource fetches from worker threads will not be blocked "
+    "by the busy main thread.";
+
 //  Force Tablet Mode
 
 const char kForceTabletModeName[] = "Force Tablet Mode";
@@ -116,12 +122,13 @@ const char kForceTabletModeClamshell[] = "Clamshell";
 const char kForceTabletModeAuto[] = "Auto (default)";
 
 //  Print Preview features
-
+#if !defined(OS_WIN) && !defined(OS_MACOSX)
 const char kPrintPdfAsImageName[] = "Print Pdf as Image";
 
 const char kPrintPdfAsImageDescription[] =
     "If enabled, an option to print PDF files as images will be available "
     "in print preview.";
+#endif
 
 #if !defined(DISABLE_NACL)
 
@@ -587,12 +594,16 @@ const char kWebvrDescription[] =
     "Enabling this option allows web applications to access experimental "
     "Virtual Reality APIs.";
 
+#if BUILDFLAG(ENABLE_VR)
+
 const char kWebvrExperimentalRenderingName[] =
     "WebVR experimental rendering optimizations";
 
 const char kWebvrExperimentalRenderingDescription[] =
     "Enabling this option activates experimental rendering path "
     "optimizations for WebVR.";
+
+#endif  // BUILDFLAG(ENABLE_VR)
 
 const char kGamepadExtensionsName[] = "Gamepad Extensions";
 
@@ -2154,6 +2165,13 @@ const char kWebPaymentsModifiersDescription[] =
     "when instruments are switched, and send modified payment method "
     "specific data to the payment app.";
 
+const char kXGEOVisibleNetworksName[] = "Enable XGEO Visible Networks";
+
+const char kXGEOVisibleNetworksDescription[] =
+    "If location permissions are granted, include visible networks in the XGEO "
+    "Header for omnibox queries. This will only happen if location is not "
+    "fresh or not available (for example, due to a cold start).";
+
 #endif  // defined(OS_ANDROID)
 
 #if defined(OS_WIN)
@@ -2342,6 +2360,12 @@ const char kEnableContentSuggestionsNewFaviconServerDescription[] =
     "If enabled, the content suggestions (on the NTP) will get favicons from a "
     "new favicon server.";
 
+const char kEnableFaviconsFromWebManifestName[] =
+    "Load favicons from Web Manifests";
+
+const char kEnableFaviconsFromWebManifestDescription[] =
+    "Fetch Web Manifests on page load to read favicons from them.";
+
 const char kEnableNtpMostLikelyFaviconsFromServerName[] =
     "Download favicons for NTP tiles from Google.";
 
@@ -2522,12 +2546,23 @@ const char kVibrateRequiresUserGestureDescription[] =
     "the frame or any embedded frame.";
 
 #if defined(OS_ANDROID)
-
+#if BUILDFLAG(ENABLE_VR)
 const char kEnableVrShellName[] = "Enable Chrome VR.";
 
 const char kEnableVrShellDescription[] =
     "Allow browsing with a VR headset if available for this device.";
 
+const char kVrCustomTabBrowsingName[] = "Enable Custom Tab browsing in VR.";
+
+const char kVrCustomTabBrowsingDescription[] =
+    "Allow browsing with a VR headset in a Custom Tab if available for this "
+    "device.";
+
+const char kWebVrAutopresentName[] = "Enable WebVr auto presentation";
+
+const char kWebVrAutopresentDescription[] =
+    "Allows auto presentation of WebVr content from trusted first-party apps";
+#endif  // BUILDFLAG(ENABLE_VR)
 #endif  // defined(OS_ANDROID)
 
 //  Web payments

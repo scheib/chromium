@@ -98,7 +98,7 @@
           Restart Chromium
         </message>
       </if>
-      <if expr="is_win or is_linux or is_maxosx or chromeos">
+      <if expr="is_win or is_linux or is_macosx or chromeos">
         <message name="IDS_SAD_TAB_RELOAD_RESTART_DEVICE" desc="One of the bullet points displayed on the web page if a reload failed to fix the issue, advising the user to restart their computer." formatter_data="android_java">
           Restart your computer
         </message>

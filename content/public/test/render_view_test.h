@@ -50,6 +50,7 @@ class FakeCompositorDependencies;
 class MockRenderProcess;
 class PageState;
 class RendererMainPlatformDelegate;
+class RendererBlinkPlatformImpl;
 class RendererBlinkPlatformImplTestOverrideImpl;
 class RenderView;
 struct ResizeParams;
@@ -62,7 +63,7 @@ class RenderViewTest : public testing::Test, blink::WebLeakDetectorClient {
    public:
     RendererBlinkPlatformImplTestOverride();
     ~RendererBlinkPlatformImplTestOverride();
-    blink::Platform* Get() const;
+    RendererBlinkPlatformImpl* Get() const;
     void Shutdown();
 
    private:

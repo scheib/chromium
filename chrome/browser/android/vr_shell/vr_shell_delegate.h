@@ -50,6 +50,10 @@ class VrShellDelegate : public device::GvrDelegateProvider {
                            jdouble interval_seconds);
   void OnPause(JNIEnv* env, const base::android::JavaParamRef<jobject>& obj);
   void OnResume(JNIEnv* env, const base::android::JavaParamRef<jobject>& obj);
+  void UpdateNonPresentingContext(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& obj,
+      jlong context);
   void Destroy(JNIEnv* env, const base::android::JavaParamRef<jobject>& obj);
 
   device::GvrDeviceProvider* device_provider() { return device_provider_; }

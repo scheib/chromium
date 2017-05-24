@@ -7,13 +7,15 @@
 
 #include <string>
 
+#include "services/service_manager/public/cpp/types_export.h"
+
 namespace service_manager {
 
 // Represents the identity of an application.
 // |name| is the structured name of the application.
 // |instance| is a string that allows to tie a specific instance to another. A
 // typical use case of instance is to control process grouping for a given name.
-class Identity {
+class SERVICE_MANAGER_PUBLIC_CPP_TYPES_EXPORT Identity {
  public:
   Identity();
   explicit Identity(const std::string& name);

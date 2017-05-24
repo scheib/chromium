@@ -59,7 +59,6 @@
 #include "core/frame/LocalFrame.h"
 #include "core/frame/Settings.h"
 #include "core/html/HTMLBodyElement.h"
-#include "core/html/HTMLFormElement.h"
 #include "core/html/HTMLFrameElementBase.h"
 #include "core/html/HTMLInputElement.h"
 #include "core/html/HTMLSelectElement.h"
@@ -656,7 +655,7 @@ static Node* NonBoundaryShadowTreeRootNode(const Position& position) {
              : nullptr;
 }
 
-void FrameSelection::SelectAll() {
+void FrameSelection::SelectAll(EUserTriggered user_triggered) {
   if (isHTMLSelectElement(GetDocument().FocusedElement())) {
     HTMLSelectElement* select_element =
         toHTMLSelectElement(GetDocument().FocusedElement());
@@ -668,7 +667,12 @@ void FrameSelection::SelectAll() {
 
   Node* root = nullptr;
   Node* select_start_target = nullptr;
-  if (ComputeVisibleSelectionInDOMTree().IsContentEditable()) {
+  if (user_triggered == kUserTriggered && IsHidden()) {
+    // Hidden selection appears as no selection to user, in which case user-
+    // triggered SelectAll should act as if there is no selection.
+    root = GetDocument().documentElement();
+    select_start_target = GetDocument().body();
+  } else if (ComputeVisibleSelectionInDOMTree().IsContentEditable()) {
     root = HighestEditableRoot(ComputeVisibleSelectionInDOMTree().Start());
     if (Node* shadow_root = NonBoundaryShadowTreeRootNode(
             ComputeVisibleSelectionInDOMTree().Start()))
@@ -703,11 +707,13 @@ void FrameSelection::SelectAll() {
       return;
   }
 
+  // TODO(editing-dev): Should we pass in user_triggered?
   SetSelection(SelectionInDOMTree::Builder()
                    .SelectAllChildren(*root)
                    .SetIsHandleVisible(IsHandleVisible())
                    .Build());
   SelectFrameElementInParentIfFullySelected();
+  // TODO(editing-dev): Should we pass in user_triggered?
   NotifyTextControlOfSelectionChange(kUserTriggered);
 }
 
@@ -943,55 +949,13 @@ LayoutRect FrameSelection::UnclippedBounds() const {
   return LayoutRect(layout_selection_->SelectionBounds());
 }
 
-static inline HTMLFormElement* AssociatedFormElement(HTMLElement& element) {
-  if (isHTMLFormElement(element))
-    return &toHTMLFormElement(element);
-  return element.formOwner();
+static IntRect AbsoluteSelectionBoundsOf(
+    const VisibleSelectionInFlatTree& selection) {
+  return ComputeTextRect(
+      EphemeralRangeInFlatTree(selection.Start(), selection.end()));
 }
 
-// Scans logically forward from "start", including any child frames.
-static HTMLFormElement* ScanForForm(Node* start) {
-  if (!start)
-    return 0;
-
-  for (HTMLElement& element : Traversal<HTMLElement>::StartsAt(
-           start->IsHTMLElement() ? ToHTMLElement(start)
-                                  : Traversal<HTMLElement>::Next(*start))) {
-    if (HTMLFormElement* form = AssociatedFormElement(element))
-      return form;
-
-    if (IsHTMLFrameElementBase(element)) {
-      Node* child_document = ToHTMLFrameElementBase(element).contentDocument();
-      if (HTMLFormElement* frame_result = ScanForForm(child_document))
-        return frame_result;
-    }
-  }
-  return 0;
-}
-
-// We look for either the form containing the current focus, or for one
-// immediately after it
-HTMLFormElement* FrameSelection::CurrentForm() const {
-  // Start looking either at the active (first responder) node, or where the
-  // selection is.
-  Node* start = GetDocument().FocusedElement();
-  if (!start)
-    start = ComputeVisibleSelectionInDOMTree().Start().AnchorNode();
-  if (!start)
-    return 0;
-
-  // Try walking up the node tree to find a form element.
-  for (HTMLElement* element =
-           Traversal<HTMLElement>::FirstAncestorOrSelf(*start);
-       element; element = Traversal<HTMLElement>::FirstAncestor(*element)) {
-    if (HTMLFormElement* form = AssociatedFormElement(*element))
-      return form;
-  }
-
-  // Try walking forward in the node tree to find a form element.
-  return ScanForForm(start);
-}
-
+// TODO(editing-dev): This should be done in FlatTree world.
 void FrameSelection::RevealSelection(const ScrollAlignment& alignment,
                                      RevealExtentOption reveal_extent_option) {
   DCHECK(IsAvailable());
@@ -1010,10 +974,11 @@ void FrameSelection::RevealSelection(const ScrollAlignment& alignment,
       rect = LayoutRect(AbsoluteCaretBounds());
       break;
     case kRangeSelection:
-      rect = LayoutRect(reveal_extent_option == kRevealExtent
-                            ? AbsoluteCaretBoundsOf(CreateVisiblePosition(
-                                  ComputeVisibleSelectionInDOMTree().Extent()))
-                            : EnclosingIntRect(UnclippedBounds()));
+      rect = LayoutRect(
+          reveal_extent_option == kRevealExtent
+              ? AbsoluteCaretBoundsOf(CreateVisiblePosition(
+                    ComputeVisibleSelectionInDOMTree().Extent()))
+              : AbsoluteSelectionBoundsOf(ComputeVisibleSelectionInFlatTree()));
       break;
   }
 

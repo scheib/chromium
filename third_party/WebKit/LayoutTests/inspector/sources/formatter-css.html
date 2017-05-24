@@ -14,7 +14,7 @@ async function test()
     InspectorTest.addResult(`Formatted:\n${targetContent}`);
 
     var originalContent = await uiSourceCode.requestContent();
-    var styleHeader = Bindings.NetworkProject.styleHeaderForUISourceCode(uiSourceCode);
+    var styleHeader = Bindings.cssWorkspaceBinding.uiLocationToRawLocations(uiSourceCode.uiLocation(0, 0))[0].header();
     var text = new TextUtils.Text(originalContent);
     var liveLocationsPool = new Bindings.LiveLocationPool();
     var locationUpdateCount = 0;

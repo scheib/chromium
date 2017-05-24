@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.suggestions;
 import android.support.v7.widget.RecyclerView;
 
 import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.chrome.browser.preferences.ChromePreferenceManager;
 
 /**
  * Exposes methods to report suggestions related events, for UMA or Fetch scheduling purposes.
@@ -17,7 +18,20 @@ public abstract class SuggestionsMetrics {
     // UI Element interactions
 
     public static void recordSurfaceVisible() {
+        if (!ChromePreferenceManager.getInstance().getSuggestionsSurfaceShown()) {
+            RecordUserAction.record("Suggestions.FirstTimeSurfaceVisible");
+            ChromePreferenceManager.getInstance().setSuggestionsSurfaceShown();
+        }
+
         RecordUserAction.record("Suggestions.SurfaceVisible");
+    }
+
+    public static void recordSurfaceHalfVisible() {
+        RecordUserAction.record("Suggestions.SurfaceHalfVisible");
+    }
+
+    public static void recordSurfaceFullyVisible() {
+        RecordUserAction.record("Suggestions.SurfaceFullyVisible");
     }
 
     public static void recordSurfaceHidden() {

@@ -13,8 +13,8 @@
         border: 0;
         border-radius: 2px;
         bottom: 0;
-        box-shadow: 0px 0px 16px rgba(0, 0, 0, 0.12),
-                    0px 16px 16px rgba(0, 0, 0, 0.24);
+        box-shadow: 0 0 16px rgba(0, 0, 0, 0.12),
+                    0 16px 16px rgba(0, 0, 0, 0.24);
         color: inherit;
         padding: 0;
         top: 0;
@@ -49,16 +49,16 @@
       }
 
       :host ::content .title {
+        flex: 1;
         font-size: calc(15 / 13 * 100%);
         line-height: 1;
         padding: 16px 16px;
-        flex: 1;
       }
 
       :host ::content .button-container {
-        padding: 16px 16px;
         display: flex;
         justify-content: flex-end;
+        padding: 16px;
       }
 
       :host ::content .button-container .cancel-button {
@@ -78,14 +78,14 @@
       }
 
       .body-container {
+        /* Prevent layout moving when border does appear. */
+        border-bottom: 1px solid transparent;
+        border-top: 1px solid transparent;
+
         display: flex;
         flex-direction: column;
         min-height: 60px; /* Minimum reasonably usable height. */
         overflow: auto;
-
-        /* Prevent layout moving when border does appear. */
-        border-bottom: 1px solid transparent;
-        border-top: 1px solid transparent;
 
         @apply(--cr-dialog-body-container);
       }

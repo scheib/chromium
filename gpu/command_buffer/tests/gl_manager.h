@@ -35,6 +35,7 @@ namespace gpu {
 class CommandBufferService;
 class CommandExecutor;
 class ImageFactory;
+class ServiceDiscardableManager;
 class SyncPointClientState;
 class SyncPointOrderData;
 class SyncPointManager;
@@ -167,6 +168,7 @@ class GLManager : private GpuControl {
   scoped_refptr<SyncPointClientState> sync_point_client_state_;
   scoped_refptr<gles2::MailboxManager> mailbox_manager_;
   scoped_refptr<gl::GLShareGroup> share_group_;
+  std::unique_ptr<ServiceDiscardableManager> discardable_manager_;
   std::unique_ptr<CommandBufferService> command_buffer_;
   std::unique_ptr<gles2::GLES2Decoder> decoder_;
   std::unique_ptr<CommandExecutor> executor_;

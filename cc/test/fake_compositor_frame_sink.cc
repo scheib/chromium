@@ -64,6 +64,8 @@ void FakeCompositorFrameSink::SubmitCompositorFrame(CompositorFrame frame) {
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
+void FakeCompositorFrameSink::DidNotProduceFrame(const BeginFrameAck& ack) {}
+
 void FakeCompositorFrameSink::DidReceiveCompositorFrameAck() {
   client_->DidReceiveCompositorFrameAck();
 }

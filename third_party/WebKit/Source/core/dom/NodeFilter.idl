@@ -46,6 +46,5 @@
     // This function declaration doesn't generate any code because
     // V8NodeFilterCondition represents this callback interface in Blink.
     // TODO(bashi): Fix crbug.com/630986, and use generated code.
-    // FIXME: The node argument should not be optional.
-    [RaisesException] unsigned short acceptNode([Default=Undefined] optional Node node);
+    [RaisesException] unsigned short acceptNode(Node node);
 };

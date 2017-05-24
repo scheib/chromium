@@ -48,6 +48,11 @@ class BodyStreamBuffer::LoaderClient final
     client_->DidFetchDataLoadedArrayBuffer(array_buffer);
   }
 
+  void DidFetchDataLoadedFormData(FormData* form_data) override {
+    buffer_->EndLoading();
+    client_->DidFetchDataLoadedFormData(form_data);
+  }
+
   void DidFetchDataLoadedString(const String& string) override {
     buffer_->EndLoading();
     client_->DidFetchDataLoadedString(string);

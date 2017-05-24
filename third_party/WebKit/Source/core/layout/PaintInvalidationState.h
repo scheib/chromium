@@ -65,25 +65,25 @@ class CORE_EXPORT PaintInvalidationState {
 
   bool ForcedSubtreeInvalidationCheckingWithinContainer() const {
     return forced_subtree_invalidation_flags_ &
-           PaintInvalidatorContext::kForcedSubtreeInvalidationChecking;
+           PaintInvalidatorContext::kSubtreeInvalidationChecking;
   }
   void SetForceSubtreeInvalidationCheckingWithinContainer() {
     forced_subtree_invalidation_flags_ |=
-        PaintInvalidatorContext::kForcedSubtreeInvalidationChecking;
+        PaintInvalidatorContext::kSubtreeInvalidationChecking;
   }
 
   bool ForcedSubtreeFullInvalidationWithinContainer() const {
     return forced_subtree_invalidation_flags_ &
-           PaintInvalidatorContext::kForcedSubtreeFullInvalidation;
+           PaintInvalidatorContext::kSubtreeFullInvalidation;
   }
 
   bool ForcedSubtreeInvalidationRectUpdateWithinContainerOnly() const {
     return forced_subtree_invalidation_flags_ ==
-           PaintInvalidatorContext::kForcedSubtreeVisualRectUpdate;
+           PaintInvalidatorContext::kSubtreeVisualRectUpdate;
   }
   void SetForceSubtreeInvalidationRectUpdateWithinContainer() {
     forced_subtree_invalidation_flags_ |=
-        PaintInvalidatorContext::kForcedSubtreeVisualRectUpdate;
+        PaintInvalidatorContext::kSubtreeVisualRectUpdate;
   }
 
   const LayoutBoxModelObject& PaintInvalidationContainer() const {

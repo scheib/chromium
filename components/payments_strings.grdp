@@ -222,14 +222,17 @@
   </message>
   <message name="IDS_PAYMENT_REQUEST_ORDER_SUMMARY_MORE_ITEMS" desc="The label in the Order Summary section of the Payment Sheet that indicates how many display items are hidden. [ICU Syntax]">
     {MORE_ITEMS, plural,
-      =1 {<ph name="ITEM_COUNT">#<ex>1</ex></ph> more item&#x2026;}
-      other {<ph name="ITEM_COUNT">#<ex>2</ex></ph> more items&#x2026;}}
+      =1 {<ph name="ITEM_COUNT">#<ex>1</ex></ph> item}
+      other {<ph name="ITEM_COUNT">#<ex>2</ex></ph> items}}
   </message>
   <message name="IDS_PAYMENT_REQUEST_SHIPPING_SECTION_NAME" desc="The name of the Shipping Address section in the Payment Sheet of the Payment Request dialog.">
     Shipping address
   </message>
   <message name="IDS_PAYMENT_REQUEST_CONTACT_INFO_SECTION_NAME" desc="The name of the Contact Info section in the Payment Sheet of the Payment Request dialog.">
     Contact info
+  </message>
+  <message name="IDS_PAYMENT_REQUEST_ORDER_SUMMARY_MULTIPLE_CURRENCY_INDICATOR" desc="The label that indicates that there are multiple currencies among the display items">
+    Multiple
   </message>
 
   <!-- Shipping address in web payments API -->

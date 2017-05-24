@@ -225,10 +225,15 @@ PermissionResult PermissionContextBase::GetPermissionStatus(
                             PermissionStatusSource::KILL_SWITCH);
   }
 
-  if (IsRestrictedToSecureOrigins() &&
-      !content::IsOriginSecure(requesting_origin)) {
-    return PermissionResult(CONTENT_SETTING_BLOCK,
-                            PermissionStatusSource::UNSPECIFIED);
+  if (IsRestrictedToSecureOrigins()) {
+    // TODO(raymes): We should check the entire chain of embedders here whenever
+    // possible as this corresponds to the requirements of the secure contexts
+    // spec and matches what is implemented in blink.
+    if (!content::IsOriginSecure(requesting_origin) ||
+        !content::IsOriginSecure(embedding_origin)) {
+      return PermissionResult(CONTENT_SETTING_BLOCK,
+                              PermissionStatusSource::UNSPECIFIED);
+    }
   }
 
   ContentSetting content_setting = GetPermissionStatusInternal(

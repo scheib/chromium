@@ -1,0 +1,28 @@
+{
+  "layers": [
+    {
+      "name": "LayoutView #document",
+      "bounds": [800, 600],
+      "contentsOpaque": true,
+      "drawsContent": true,
+      "paintInvalidations": [
+        {
+          "object": "LayoutSVGRect rect",
+          "rect": [0, 0, 140, 140],
+          "reason": "full"
+        }
+      ]
+    }
+  ],
+  "objectPaintInvalidations": [
+    {
+      "object": "LayoutSVGResourceFilter filter id='blur'",
+      "reason": "full"
+    },
+    {
+      "object": "LayoutSVGRect rect",
+      "reason": "full"
+    }
+  ]
+}
+

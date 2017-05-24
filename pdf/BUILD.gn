@@ -50,6 +50,7 @@ if (enable_pdf) {
     if (pdf_engine == 0) {
       deps += [
         "//pdf/pdfium/fuzzers",
+        "//printing",
         "//third_party/pdfium",
       ]
 

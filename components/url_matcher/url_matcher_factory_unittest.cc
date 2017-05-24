@@ -11,6 +11,7 @@
 
 #include "base/format_macros.h"
 #include "base/macros.h"
+#include "base/memory/ptr_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "components/url_matcher/url_matcher_constants.h"
@@ -234,9 +235,9 @@ void UrlConditionCaseTest::CheckCondition(
     UrlConditionCaseTest::ResultType expected_result) const {
   base::DictionaryValue condition;
   if (use_list_of_strings_) {
-    base::ListValue* list = new base::ListValue();
+    auto list = base::MakeUnique<base::ListValue>();
     list->AppendString(value);
-    condition.SetWithoutPathExpansion(condition_key_, list);
+    condition.SetWithoutPathExpansion(condition_key_, std::move(list));
   } else {
     condition.SetStringWithoutPathExpansion(condition_key_, value);
   }

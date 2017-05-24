@@ -113,6 +113,7 @@ source_set("authentication_arc") {
     "//ios/chrome/app/strings",
     "//ios/chrome/browser/signin",
     "//ios/chrome/browser/ui",
+    "//ios/chrome/browser/ui/commands",
     "//ios/public/provider/chrome/browser",
     "//ios/public/provider/chrome/browser/signin",
     "//ios/third_party/material_components_ios",
@@ -133,6 +134,7 @@ source_set("authentication_ui") {
     "signin_promo_view_configurator.h",
     "signin_promo_view_configurator.mm",
     "signin_promo_view_consumer.h",
+    "signin_promo_view_delegate.h",
   ]
   deps = [
     "//base",

@@ -36,7 +36,6 @@
 #include "core/dom/NodeComputedStyle.h"
 #include "core/dom/shadow/ShadowRoot.h"
 #include "core/editing/FrameSelection.h"
-#include "core/editing/iterators/TextIterator.h"
 #include "core/events/BeforeTextInsertedEvent.h"
 #include "core/events/KeyboardEvent.h"
 #include "core/events/TextEvent.h"

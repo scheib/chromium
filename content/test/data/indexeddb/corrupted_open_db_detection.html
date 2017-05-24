@@ -140,24 +140,6 @@ var tests = {
       request.onerror = requestError;
     });
   },
-  failWebkitGetDatabaseNames: function() {
-    tests.testCommon('readonly');
-    gotRequestError = 0;
-    db.onclose = function(event) {
-      shouldBe("numTransactionErrors", "0");
-      shouldBe("numTransactionAborts", "1");
-      shouldBe("gotRequestError", "1");
-
-      done("Closed as expected");
-    };
-    testXhr("/corrupt/test/fail?class=LevelDBIterator&method=Seek", function() {
-      request = window.indexedDB.webkitGetDatabaseNames();
-      request.onsuccess = unexpectedSuccessCallback;
-      request.onerror = function(evt) {
-        gotRequestError += 1;
-      };
-    });
-  },
   iterate: function() {
     testXhr("/corrupt/test/corruptdb?storeName", function() {
       tests.testCommon('readonly');

@@ -36,18 +36,32 @@ class IdleRequestCallbackWrapper
       PassRefPtr<IdleRequestCallbackWrapper> callback_wrapper,
       double deadline_seconds) {
     // TODO(rmcilroy): Implement clamping of deadline in some form.
-    if (ScriptedIdleTaskController* controller = callback_wrapper->Controller())
+    if (ScriptedIdleTaskController* controller =
+            callback_wrapper->Controller()) {
+      // If we are going to yield immediately, reschedule the callback for
+      // later.
+      if (Platform::Current()
+              ->CurrentThread()
+              ->Scheduler()
+              ->ShouldYieldForHighPriorityWork()) {
+        controller->ScheduleCallback(std::move(callback_wrapper),
+                                     /* timeout_millis */ 0);
+        return;
+      }
       controller->CallbackFired(callback_wrapper->Id(), deadline_seconds,
                                 IdleDeadline::CallbackType::kCalledWhenIdle);
+    }
     callback_wrapper->Cancel();
   }
 
   static void TimeoutFired(
       PassRefPtr<IdleRequestCallbackWrapper> callback_wrapper) {
-    if (ScriptedIdleTaskController* controller = callback_wrapper->Controller())
+    if (ScriptedIdleTaskController* controller =
+            callback_wrapper->Controller()) {
       controller->CallbackFired(callback_wrapper->Id(),
                                 MonotonicallyIncreasingTime(),
                                 IdleDeadline::CallbackType::kCalledByTimeout);
+    }
     callback_wrapper->Cancel();
   }
 
@@ -108,6 +122,17 @@ ScriptedIdleTaskController::RegisterCallback(
 
   RefPtr<internal::IdleRequestCallbackWrapper> callback_wrapper =
       internal::IdleRequestCallbackWrapper::Create(id, this);
+  ScheduleCallback(std::move(callback_wrapper), timeout_millis);
+  TRACE_EVENT_INSTANT1("devtools.timeline", "RequestIdleCallback",
+                       TRACE_EVENT_SCOPE_THREAD, "data",
+                       InspectorIdleCallbackRequestEvent::Data(
+                           GetExecutionContext(), id, timeout_millis));
+  return id;
+}
+
+void ScriptedIdleTaskController::ScheduleCallback(
+    RefPtr<internal::IdleRequestCallbackWrapper> callback_wrapper,
+    long long timeout_millis) {
   scheduler_->PostIdleTask(
       BLINK_FROM_HERE,
       WTF::Bind(&internal::IdleRequestCallbackWrapper::IdleTaskFired,
@@ -119,11 +144,6 @@ ScriptedIdleTaskController::RegisterCallback(
                   callback_wrapper),
         TimeDelta::FromMilliseconds(timeout_millis));
   }
-  TRACE_EVENT_INSTANT1("devtools.timeline", "RequestIdleCallback",
-                       TRACE_EVENT_SCOPE_THREAD, "data",
-                       InspectorIdleCallbackRequestEvent::Data(
-                           GetExecutionContext(), id, timeout_millis));
-  return id;
 }
 
 void ScriptedIdleTaskController::CancelCallback(CallbackId id) {

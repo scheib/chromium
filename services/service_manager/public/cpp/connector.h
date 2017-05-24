@@ -10,6 +10,7 @@
 
 #include "base/callback.h"
 #include "base/threading/thread_checker.h"
+#include "services/service_manager/public/cpp/export.h"
 #include "services/service_manager/public/cpp/identity.h"
 #include "services/service_manager/public/interfaces/connector.mojom.h"
 #include "services/service_manager/public/interfaces/service.mojom.h"
@@ -34,7 +35,7 @@ namespace service_manager {
 // connection with the service manager is bound to the lifetime of the instance
 // that created it, i.e. when the application is terminated the Connector pipe
 // is closed.
-class Connector {
+class SERVICE_MANAGER_PUBLIC_CPP_EXPORT Connector {
  public:
   using StartServiceCallback =
       base::Callback<void(mojom::ConnectResult, const Identity& identity)>;

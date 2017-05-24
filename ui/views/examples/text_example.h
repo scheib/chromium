@@ -38,7 +38,7 @@ class VIEWS_EXAMPLES_EXPORT TextExample : public ExampleBase,
   // Creates and adds a combobox to the layout.
   Combobox* AddCombobox(GridLayout* layout,
                         const char* name,
-                        const char** strings,
+                        const char* const* strings,
                         int count);
 
   // ButtonListener:
@@ -63,14 +63,14 @@ class VIEWS_EXAMPLES_EXPORT TextExample : public ExampleBase,
   // Combo box to choose one of the sample texts.
   Combobox* text_cb_;
 
+  // Combo box to choose a font weight.
+  Combobox* weight_cb_;
+
   // Check box to enable/disable multiline text drawing.
   Checkbox* multiline_checkbox_;
 
   // Check box to enable/disable character break behavior.
   Checkbox* break_checkbox_;
-
-  // Check box to enable/disable bold style.
-  Checkbox* bold_checkbox_;
 
   // Check box to enable/disable italic style.
   Checkbox* italic_checkbox_;

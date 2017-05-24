@@ -6,6 +6,8 @@
 #include "base/macros.h"
 #include "base/run_loop.h"
 #include "components/payments/mojom/payment_app.mojom.h"
+#include "content/browser/storage_partition_impl.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/payment_app_provider.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
@@ -114,6 +116,22 @@ class PaymentAppBrowserTest : public ContentBrowserTest {
     return response;
   }
 
+  void ClearStoragePartitionData() {
+    // Clear data from the storage partition. Parameters are set to clear data
+    // for service workers, for all origins, for an unbounded time range.
+    base::RunLoop run_loop;
+
+    static_cast<StoragePartitionImpl*>(
+        content::BrowserContext::GetDefaultStoragePartition(
+            shell()->web_contents()->GetBrowserContext()))
+        ->ClearData(StoragePartition::REMOVE_DATA_MASK_SERVICE_WORKERS,
+                    StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL, GURL(),
+                    StoragePartition::OriginMatcherFunction(), base::Time(),
+                    base::Time::Max(), run_loop.QuitClosure());
+
+    run_loop.Run();
+  }
+
  private:
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
 
@@ -128,6 +146,11 @@ IN_PROC_BROWSER_TEST_F(PaymentAppBrowserTest, PaymentAppInvocation) {
 
   payments::mojom::PaymentAppResponsePtr response(InvokePaymentApp(ids[0]));
   ASSERT_EQ("test", response->method_name);
+
+  ClearStoragePartitionData();
+
+  ids = GetAllPaymentAppIDs();
+  ASSERT_EQ(0U, ids.size());
 }
 
 }  // namespace content

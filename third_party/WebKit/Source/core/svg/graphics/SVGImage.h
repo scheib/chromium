@@ -68,6 +68,7 @@ class CORE_EXPORT SVGImage final : public Image {
   bool IsSVGImage() const override { return true; }
   IntSize Size() const override { return intrinsic_size_; }
 
+  void CheckLoaded() const;
   bool CurrentFrameHasSingleSecurityOrigin() const override;
 
   void StartAnimation(CatchUpAnimation = kCatchUp) override;
@@ -154,7 +155,7 @@ class CORE_EXPORT SVGImage final : public Image {
   // Paints the current frame. If a PaintCanvas is passed, paints into that
   // canvas and returns nullptr.
   // Otherwise returns a pointer to the new PaintRecord.
-  sk_sp<PaintRecord> PaintRecordForCurrentFrame(const IntRect& bounds,
+  sk_sp<PaintRecord> PaintRecordForCurrentFrame(const FloatRect& bounds,
                                                 const KURL&,
                                                 PaintCanvas* = nullptr);
 
@@ -185,6 +186,7 @@ class CORE_EXPORT SVGImage final : public Image {
 
   Page* GetPageForTesting() { return page_; }
   void LoadCompleted();
+  void NotifyAsyncLoadCompleted();
 
   class SVGImageLocalFrameClient;
 

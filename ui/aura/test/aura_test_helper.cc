@@ -86,6 +86,11 @@ void AuraTestHelper::EnableMusWithWindowTreeClient(
   window_tree_client_ = window_tree_client;
 }
 
+void AuraTestHelper::DeleteWindowTreeClient() {
+  window_tree_client_setup_.reset();
+  window_tree_client_ = nullptr;
+}
+
 void AuraTestHelper::SetUp(ui::ContextFactory* context_factory,
                            ui::ContextFactoryPrivate* context_factory_private) {
   setup_called_ = true;
@@ -172,8 +177,6 @@ void AuraTestHelper::TearDown() {
 
   if (env_)
     env_.reset();
-  else
-    EnvTestHelper().SetWindowTreeClient(nullptr);
   wm_state_.reset();
 }
 

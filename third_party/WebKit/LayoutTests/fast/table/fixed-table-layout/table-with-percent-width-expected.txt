@@ -3,5 +3,5 @@ The following fixed layout tables, with 100% percent widths, should expand to th
 
 PASS
 PASS
- PASS
+PASS
 PASS

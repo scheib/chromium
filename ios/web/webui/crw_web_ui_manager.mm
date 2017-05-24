@@ -19,6 +19,7 @@
 #include "ios/web/grit/ios_web_resources.h"
 #include "ios/web/public/browser_state.h"
 #import "ios/web/public/web_client.h"
+#import "ios/web/public/web_state/navigation_context.h"
 #import "ios/web/public/web_state/web_state_observer_bridge.h"
 #import "ios/web/web_state/web_state_impl.h"
 #import "ios/web/webui/crw_web_ui_page_builder.h"
@@ -106,24 +107,20 @@ const char kScriptCommandPrefix[] = "webui";
 #pragma mark - CRWWebStateObserver Methods
 
 - (void)webState:(web::WebState*)webState
-    didStartProvisionalNavigationForURL:(const GURL&)URL {
+    didStartNavigation:(web::NavigationContext*)navigation {
   DCHECK(webState == _webState);
   // If URL is not an application specific URL, ignore the navigation.
+  GURL URL(navigation->GetUrl());
   if (!web::GetWebClient()->IsAppSpecificURL(URL))
     return;
 
-  // Copy |URL| as it is passed by reference which does not work correctly
-  // with blocks (if the object is destroyed the block will have a dangling
-  // reference).
-  GURL copyURL(URL);
   base::WeakNSObject<CRWWebUIManager> weakSelf(self);
-  [self loadWebUIPageForURL:copyURL
-          completionHandler:^(NSString* HTML) {
-            web::WebStateImpl* webState = [weakSelf webState];
-            if (webState) {
-              webState->LoadWebUIHtml(base::SysNSStringToUTF16(HTML), copyURL);
-            }
-          }];
+  [self loadWebUIPageForURL:URL completionHandler:^(NSString* HTML) {
+    web::WebStateImpl* webState = [weakSelf webState];
+    if (webState) {
+      webState->LoadWebUIHtml(base::SysNSStringToUTF16(HTML), URL);
+    }
+  }];
 }
 
 - (void)webState:(web::WebState*)webState didLoadPageWithSuccess:(BOOL)success {

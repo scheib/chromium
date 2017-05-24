@@ -1,5 +1,5 @@
 test1 test2
- PASS successfullyParsed is true
+PASS successfullyParsed is true
 
 TEST COMPLETE
 PASS gFocusedDocument.activeElement.getAttribute("id") is "end"

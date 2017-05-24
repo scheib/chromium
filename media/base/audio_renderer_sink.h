@@ -73,6 +73,9 @@ class AudioRendererSink
   // Must never be called on the IO thread.
   virtual OutputDeviceInfo GetOutputDeviceInfo() = 0;
 
+  // Returns |true| if a source with hardware parameters is preferable.
+  virtual bool IsOptimizedForHardwareParameters() = 0;
+
   // If DCHECKs are enabled, this function returns true if called on rendering
   // thread, otherwise false. With DCHECKs disabled, it returns true. Thus, it
   // is intended to be used for DCHECKing.

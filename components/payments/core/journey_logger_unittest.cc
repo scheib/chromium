@@ -7,7 +7,6 @@
 #include "base/metrics/metrics_hashes.h"
 #include "base/test/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "components/autofill/core/browser/autofill_experiments.h"
 #include "components/metrics/proto/ukm/entry.pb.h"
 #include "components/ukm/test_ukm_service.h"
 #include "components/ukm/ukm_entry.h"
@@ -703,9 +702,6 @@ TEST(JourneyLoggerTest, RecordJourneyStatsHistograms_TwoPaymentRequests) {
 
 // Tests that the Payment Request UKMs are logged correctly.
 TEST(JourneyLoggerTest, RecordJourneyStatsHistograms_CheckoutFunnelUkm) {
-  base::test::ScopedFeatureList scoped_feature_list_;
-  scoped_feature_list_.InitAndEnableFeature(autofill::kAutofillUkmLogging);
-
   ukm::UkmServiceTestingHarness ukm_service_test_harness;
   ukm::TestUkmService* ukm_service =
       ukm_service_test_harness.test_ukm_service();

@@ -3,6 +3,6 @@
 # found in the LICENSE file.
 
 typemaps = [
-  "//services/resource_coordinator/public/cpp/memory/memory_instrumentation.typemap",
+  "//services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.typemap",
   "//services/resource_coordinator/public/cpp/coordination_unit.typemap",
 ]

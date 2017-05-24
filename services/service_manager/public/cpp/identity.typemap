@@ -6,5 +6,8 @@ mojom = "//services/service_manager/public/interfaces/connector.mojom"
 public_headers = [ "//services/service_manager/public/cpp/identity.h" ]
 traits_headers =
     [ "//services/service_manager/public/cpp/identity_struct_traits.h" ]
+public_deps = [
+  "//services/service_manager/public/cpp:cpp_types",
+]
 
 type_mappings = [ "service_manager.mojom.Identity=::service_manager::Identity" ]

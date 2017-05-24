@@ -17,6 +17,7 @@
 #include "ui/events/event_utils.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
+#include "ui/views/animation/ink_drop.h"
 #include "ui/views/animation/ink_drop_impl.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -41,8 +42,7 @@ ContentSettingImageView::ContentSettingImageView(
       slide_animator_(this),
       pause_animation_(false),
       pause_animation_state_(0.0),
-      bubble_view_(nullptr),
-      suppress_mouse_released_action_(false) {
+      bubble_view_(nullptr) {
   set_next_element_interior_padding(LocationBarView::kIconInteriorPadding);
   SetInkDropMode(InkDropMode::ON);
   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
@@ -81,11 +81,11 @@ void ContentSettingImageView::Update(content::WebContents* web_contents) {
   // the user.  If this becomes a problem, we could design some sort of queueing
   // mechanism to show one after the other, but it doesn't seem important now.
   int string_id = content_setting_image_model_->explanatory_string_id();
+  AnimateInkDrop(views::InkDropState::HIDDEN, nullptr /* event */);
   if (string_id && !label()->visible()) {
-    AnimateInkDrop(views::InkDropState::HIDDEN, nullptr /* event */);
     SetLabel(l10n_util::GetStringUTF16(string_id));
     label()->SetVisible(true);
-    slide_animator_.Show();
+    AnimateIn();
   }
 
   content_setting_image_model_->SetAnimationHasRun(web_contents);
@@ -99,40 +99,7 @@ void ContentSettingImageView::OnBoundsChanged(
     const gfx::Rect& previous_bounds) {
   if (bubble_view_)
     bubble_view_->OnAnchorBoundsChanged();
-}
-
-bool ContentSettingImageView::OnMousePressed(const ui::MouseEvent& event) {
-  // If the bubble is showing then don't reshow it when the mouse is released.
-  suppress_mouse_released_action_ = bubble_view_ != nullptr;
-  if (!suppress_mouse_released_action_ && !label()->visible())
-    AnimateInkDrop(views::InkDropState::ACTION_PENDING, &event);
-
-  // We want to show the bubble on mouse release; that is the standard behavior
-  // for buttons.
-  return true;
-}
-
-void ContentSettingImageView::OnMouseReleased(const ui::MouseEvent& event) {
-  // If this is the second click on this view then the bubble was showing on the
-  // mouse pressed event and is hidden now. Prevent the bubble from reshowing by
-  // doing nothing here.
-  if (suppress_mouse_released_action_) {
-    suppress_mouse_released_action_ = false;
-    return;
-  }
-  const bool activated = HitTestPoint(event.location());
-  if (!label()->visible() && !activated)
-    AnimateInkDrop(views::InkDropState::HIDDEN, &event);
-  if (activated)
-    OnActivate(event);
-}
-
-void ContentSettingImageView::OnGestureEvent(ui::GestureEvent* event) {
-  if (event->type() == ui::ET_GESTURE_TAP)
-    OnActivate(*event);
-  if ((event->type() == ui::ET_GESTURE_TAP) ||
-      (event->type() == ui::ET_GESTURE_TAP_DOWN))
-    event->SetHandled();
+  IconLabelBubbleView::OnBoundsChanged(previous_bounds);
 }
 
 bool ContentSettingImageView::GetTooltipText(const gfx::Point& p,
@@ -145,12 +112,6 @@ void ContentSettingImageView::OnNativeThemeChanged(
     const ui::NativeTheme* native_theme) {
   UpdateImage();
   IconLabelBubbleView::OnNativeThemeChanged(native_theme);
-}
-
-std::unique_ptr<views::InkDrop> ContentSettingImageView::CreateInkDrop() {
-  std::unique_ptr<views::InkDropImpl> ink_drop = CreateDefaultInkDropImpl();
-  ink_drop->SetShowHighlightOnFocus(true);
-  return std::move(ink_drop);
 }
 
 SkColor ContentSettingImageView::GetTextColor() const {
@@ -186,7 +147,7 @@ bool ContentSettingImageView::IsShrinking() const {
           slide_animator_.GetCurrentValue() > (1.0 - kOpenFraction));
 }
 
-bool ContentSettingImageView::OnActivate(const ui::Event& event) {
+bool ContentSettingImageView::ShowBubble(const ui::Event& event) {
   if (slide_animator_.is_animating()) {
     // If the user clicks while we're animating, the bubble arrow will be
     // pointing to the image, and if we allow the animation to keep running, the
@@ -233,6 +194,10 @@ bool ContentSettingImageView::OnActivate(const ui::Event& event) {
   return true;
 }
 
+bool ContentSettingImageView::IsBubbleShowing() const {
+  return bubble_view_ != nullptr;
+}
+
 void ContentSettingImageView::AnimationEnded(const gfx::Animation* animation) {
   slide_animator_.Reset();
   if (!pause_animation_) {
@@ -240,6 +205,9 @@ void ContentSettingImageView::AnimationEnded(const gfx::Animation* animation) {
     parent_->Layout();
     parent_->SchedulePaint();
   }
+
+  GetInkDrop()->SetShowHighlightOnHover(true);
+  GetInkDrop()->SetShowHighlightOnFocus(true);
 }
 
 void ContentSettingImageView::AnimationProgressed(
@@ -264,17 +232,23 @@ void ContentSettingImageView::OnWidgetDestroying(views::Widget* widget) {
   if (pause_animation_) {
     slide_animator_.Reset(pause_animation_state_);
     pause_animation_ = false;
-    slide_animator_.Show();
+    AnimateIn();
   }
 }
 
 void ContentSettingImageView::OnWidgetVisibilityChanged(views::Widget* widget,
                                                         bool visible) {
   // |widget| is a bubble that has just got shown / hidden.
-  if (!visible && !label()->visible())
+  if (!visible)
     AnimateInkDrop(views::InkDropState::DEACTIVATED, nullptr /* event */);
 }
 
 void ContentSettingImageView::UpdateImage() {
   SetImage(content_setting_image_model_->GetIcon(GetTextColor()).AsImageSkia());
+}
+
+void ContentSettingImageView::AnimateIn() {
+  slide_animator_.Show();
+  GetInkDrop()->SetShowHighlightOnHover(false);
+  GetInkDrop()->SetShowHighlightOnFocus(false);
 }

@@ -11,7 +11,6 @@
 #include "ash/wm/focus_rules.h"
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm_window.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"

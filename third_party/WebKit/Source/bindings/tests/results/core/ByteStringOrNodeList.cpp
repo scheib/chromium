@@ -24,18 +24,18 @@ namespace blink {
 
 ByteStringOrNodeList::ByteStringOrNodeList() : m_type(SpecificTypeNone) {}
 
-String ByteStringOrNodeList::getAsByteString() const {
+const String& ByteStringOrNodeList::getAsByteString() const {
   DCHECK(isByteString());
   return m_byteString;
 }
 
-void ByteStringOrNodeList::setByteString(String value) {
+void ByteStringOrNodeList::setByteString(const String& value) {
   DCHECK(isNull());
   m_byteString = value;
   m_type = SpecificTypeByteString;
 }
 
-ByteStringOrNodeList ByteStringOrNodeList::fromByteString(String value) {
+ByteStringOrNodeList ByteStringOrNodeList::fromByteString(const String& value) {
   ByteStringOrNodeList container;
   container.setByteString(value);
   return container;

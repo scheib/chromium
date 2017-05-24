@@ -113,6 +113,7 @@ class VrShell : public device::PresentingGvrDelegate,
                     jint id);
   void OnContentPaused(bool paused);
   void NavigateBack();
+  void ExitCct();
   base::android::ScopedJavaGlobalRef<jobject> TakeContentSurface(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj);
@@ -156,6 +157,7 @@ class VrShell : public device::PresentingGvrDelegate,
   void ForceExitVr();
   void ExitPresent();
   void ExitFullscreen();
+  void ExitVrDueToUnsupportedMode();
 
   void ProcessContentGesture(std::unique_ptr<blink::WebInputEvent> event);
   void SubmitControllerModel(std::unique_ptr<VrControllerModel> model);
@@ -195,6 +197,8 @@ class VrShell : public device::PresentingGvrDelegate,
 
   void PollMediaAccessFlag();
 
+  bool HasDaydreamSupport(JNIEnv* env);
+
   bool vr_shell_enabled_;
 
   bool content_paused_ = false;
@@ -221,6 +225,7 @@ class VrShell : public device::PresentingGvrDelegate,
   bool reprojected_rendering_;
 
   jobject content_surface_ = nullptr;
+  bool taken_surface_ = false;
   base::CancelableClosure poll_capturing_media_task_;
   bool is_capturing_audio_ = false;
   bool is_capturing_video_ = false;

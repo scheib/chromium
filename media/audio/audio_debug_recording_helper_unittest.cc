@@ -11,6 +11,7 @@
 #include "base/run_loop.h"
 #include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/test/scoped_task_environment.h"
 #include "base/test/test_message_loop.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_sample_types.h"
@@ -41,11 +42,8 @@ const base::FilePath::CharType kFileNameExtension[] = FILE_PATH_LITERAL("wav");
 // Mock class for the audio file writer that the helper wraps.
 class MockAudioDebugFileWriter : public AudioDebugFileWriter {
  public:
-  MockAudioDebugFileWriter(
-      const AudioParameters& params,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner)
-      : AudioDebugFileWriter(params, std::move(file_task_runner)),
-        reference_data_(nullptr) {}
+  MockAudioDebugFileWriter(const AudioParameters& params)
+      : AudioDebugFileWriter(params), reference_data_(nullptr) {}
   ~MockAudioDebugFileWriter() override {}
 
   MOCK_METHOD1(Start, void(const base::FilePath&));
@@ -91,11 +89,9 @@ class AudioDebugRecordingHelperUnderTest : public AudioDebugRecordingHelper {
   AudioDebugRecordingHelperUnderTest(
       const AudioParameters& params,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
       base::OnceClosure on_destruction_closure)
       : AudioDebugRecordingHelper(params,
                                   std::move(task_runner),
-                                  std::move(file_task_runner),
                                   std::move(on_destruction_closure)) {}
   ~AudioDebugRecordingHelperUnderTest() override {}
 
@@ -103,10 +99,8 @@ class AudioDebugRecordingHelperUnderTest : public AudioDebugRecordingHelper {
   // Creates the mock writer. After the mock writer is returned, we always
   // expect GetFileNameExtension() and Start() to be called on it by the helper.
   std::unique_ptr<AudioDebugFileWriter> CreateAudioDebugFileWriter(
-      const AudioParameters& params,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner) override {
-    MockAudioDebugFileWriter* writer =
-        new MockAudioDebugFileWriter(params, std::move(file_task_runner));
+      const AudioParameters& params) override {
+    MockAudioDebugFileWriter* writer = new MockAudioDebugFileWriter(params);
     EXPECT_CALL(*writer, GetFileNameExtension())
         .WillOnce(Return(kFileNameExtension));
     base::FilePath expected_file_path =
@@ -130,7 +124,7 @@ class AudioDebugRecordingHelperTest : public ::testing::Test {
       const AudioParameters& params,
       base::OnceClosure on_destruction_closure) {
     return base::MakeUnique<AudioDebugRecordingHelperUnderTest>(
-        params, message_loop_.task_runner(), message_loop_.task_runner(),
+        params, scoped_task_environment_.GetMainThreadTaskRunner(),
         std::move(on_destruction_closure));
   }
 
@@ -144,7 +138,8 @@ class AudioDebugRecordingHelperTest : public ::testing::Test {
  protected:
   base::FilePath file_path_;
 
-  base::TestMessageLoop message_loop_;
+  // The test task environment.
+  base::test::ScopedTaskEnvironment scoped_task_environment_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(AudioDebugRecordingHelperTest);

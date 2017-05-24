@@ -480,6 +480,7 @@ willAnimateFromState:(BookmarkBar::State)oldState
 - (bookmarks::BookmarkBarLayout)layoutFromCurrentState;
 - (void)applyLayout:(const bookmarks::BookmarkBarLayout&)layout
            animated:(BOOL)animated;
+- (void)rebuildLayoutWithAnimated:(BOOL)animated;
 - (void)openBookmarkFolder:(id)sender;
 - (void)openOrCloseBookmarkFolderForOffTheSideButton;
 - (BookmarkBarView*)buttonView;

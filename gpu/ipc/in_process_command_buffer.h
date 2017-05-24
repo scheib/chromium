@@ -52,6 +52,7 @@ class Size;
 
 namespace gpu {
 
+class ServiceDiscardableManager;
 class SyncPointClientState;
 class SyncPointOrderData;
 class SyncPointManager;
@@ -201,6 +202,7 @@ class GPU_EXPORT InProcessCommandBuffer : public CommandBuffer,
     scoped_refptr<gl::GLShareGroup> share_group();
     scoped_refptr<gles2::MailboxManager> mailbox_manager();
     gpu::gles2::ProgramCache* program_cache();
+    ServiceDiscardableManager* discardable_manager();
     virtual bool BlockThreadOnWaitSyncToken() const = 0;
 
    protected:
@@ -211,6 +213,7 @@ class GPU_EXPORT InProcessCommandBuffer : public CommandBuffer,
     std::unique_ptr<gpu::gles2::ProgramCache> program_cache_;
     // No-op default initialization is used in in-process mode.
     GpuProcessActivityFlags activity_flags_;
+    std::unique_ptr<ServiceDiscardableManager> discardable_manager_;
   };
 
  private:

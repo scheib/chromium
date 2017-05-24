@@ -30,7 +30,7 @@
 #define AXObjectCacheImpl_h
 
 #include <memory>
-#include "core/dom/AXObjectCache.h"
+#include "core/dom/AXObjectCacheBase.h"
 #include "modules/ModulesExport.h"
 #include "modules/accessibility/AXObjectImpl.h"
 #include "platform/wtf/Forward.h"
@@ -44,14 +44,14 @@ class HTMLAreaElement;
 class FrameView;
 
 // This class should only be used from inside the accessibility directory.
-class MODULES_EXPORT AXObjectCacheImpl : public AXObjectCache {
+class MODULES_EXPORT AXObjectCacheImpl : public AXObjectCacheBase {
   WTF_MAKE_NONCOPYABLE(AXObjectCacheImpl);
 
  public:
   static AXObjectCache* Create(Document&);
 
   explicit AXObjectCacheImpl(Document&);
-  ~AXObjectCacheImpl();
+  virtual ~AXObjectCacheImpl();
   DECLARE_VIRTUAL_TRACE();
 
   AXObjectImpl* FocusedObject();
@@ -128,7 +128,7 @@ class MODULES_EXPORT AXObjectCacheImpl : public AXObjectCache {
   AXObjectImpl* GetOrCreate(AbstractInlineTextBox*);
 
   // will only return the AXObjectImpl if it already exists
-  AXObjectImpl* Get(Node*);
+  AXObjectImpl* Get(Node*) override;
   AXObjectImpl* Get(LayoutObject*);
   AXObjectImpl* Get(AbstractInlineTextBox*);
 

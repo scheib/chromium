@@ -21,7 +21,7 @@ class ScopedComPtrRef;
 
 // DEPRECATED: Use Microsoft::WRL::ComPtr instead.
 // A fairly minimalistic smart class for COM interface pointers.
-template <class Interface, const IID* interface_id = &__uuidof(Interface)>
+template <class Interface>
 class ScopedComPtr {
  public:
   using InterfaceType = Interface;
@@ -43,7 +43,7 @@ class ScopedComPtr {
       ptr_->AddRef();
   }
 
-  ScopedComPtr(const ScopedComPtr<Interface, interface_id>& p) : ptr_(p.Get()) {
+  ScopedComPtr(const ScopedComPtr<Interface>& p) : ptr_(p.Get()) {
     if (ptr_)
       ptr_->AddRef();
   }
@@ -51,9 +51,8 @@ class ScopedComPtr {
   ~ScopedComPtr() {
     // We don't want the smart pointer class to be bigger than the pointer
     // it wraps.
-    static_assert(
-        sizeof(ScopedComPtr<Interface, interface_id>) == sizeof(Interface*),
-        "ScopedComPtrSize");
+    static_assert(sizeof(ScopedComPtr<Interface>) == sizeof(Interface*),
+                  "ScopedComPtrSize");
     Reset();
   }
 
@@ -130,7 +129,7 @@ class ScopedComPtr {
     return reinterpret_cast<BlockIUnknownMethods*>(ptr_);
   }
 
-  ScopedComPtr<Interface, interface_id>& operator=(Interface* rhs) {
+  ScopedComPtr<Interface>& operator=(Interface* rhs) {
     // AddRef first so that self assignment should work
     if (rhs)
       rhs->AddRef();
@@ -141,8 +140,7 @@ class ScopedComPtr {
     return *this;
   }
 
-  ScopedComPtr<Interface, interface_id>& operator=(
-      const ScopedComPtr<Interface, interface_id>& rhs) {
+  ScopedComPtr<Interface>& operator=(const ScopedComPtr<Interface>& rhs) {
     return *this = rhs.ptr_;
   }
 
@@ -151,7 +149,7 @@ class ScopedComPtr {
     return *ptr_;
   }
 
-  bool operator==(const ScopedComPtr<Interface, interface_id>& rhs) const {
+  bool operator==(const ScopedComPtr<Interface>& rhs) const {
     return ptr_ == rhs.Get();
   }
 
@@ -165,7 +163,7 @@ class ScopedComPtr {
     return ptr_ == rhs;
   }
 
-  bool operator!=(const ScopedComPtr<Interface, interface_id>& rhs) const {
+  bool operator!=(const ScopedComPtr<Interface>& rhs) const {
     return ptr_ != rhs.Get();
   }
 
@@ -179,12 +177,11 @@ class ScopedComPtr {
     return ptr_ != rhs;
   }
 
-  details::ScopedComPtrRef<ScopedComPtr<Interface, interface_id>> operator&() {
-    return details::ScopedComPtrRef<ScopedComPtr<Interface, interface_id>>(
-        this);
+  details::ScopedComPtrRef<ScopedComPtr<Interface>> operator&() {
+    return details::ScopedComPtrRef<ScopedComPtr<Interface>>(this);
   }
 
-  void swap(ScopedComPtr<Interface, interface_id>& r) {
+  void swap(ScopedComPtr<Interface>& r) {
     Interface* tmp = ptr_;
     ptr_ = r.ptr_;
     r.ptr_ = tmp;

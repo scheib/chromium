@@ -31,8 +31,8 @@
 #ifndef WebPrintParams_h
 #define WebPrintParams_h
 
-#include "../platform/WebRect.h"
-#include "../platform/WebSize.h"
+#include "public/platform/WebRect.h"
+#include "public/platform/WebSize.h"
 #include "WebPrintScalingOption.h"
 
 namespace blink {

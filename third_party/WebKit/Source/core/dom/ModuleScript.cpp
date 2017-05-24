@@ -18,7 +18,8 @@ ModuleScript* ModuleScript::Create(
     const String& nonce,
     ParserDisposition parser_state,
     WebURLRequest::FetchCredentialsMode credentials_mode,
-    AccessControlStatus access_control_status) {
+    AccessControlStatus access_control_status,
+    const TextPosition& start_position) {
   // https://html.spec.whatwg.org/#creating-a-module-script
   // Step 1. Let script be a new module script that this algorithm will
   // subsequently initialize.
@@ -28,7 +29,7 @@ ModuleScript* ModuleScript::Create(
 
   // Delegate to Modulator::compileModule to process Steps 3-6.
   ScriptModule result = modulator->CompileModule(
-      source_text, base_url.GetString(), access_control_status);
+      source_text, base_url.GetString(), access_control_status, start_position);
   // Step 6: "...return null, and abort these steps."
   if (result.IsNull())
     return nullptr;

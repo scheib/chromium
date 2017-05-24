@@ -112,11 +112,9 @@ webview_repack_locales("repack_locales") {
 
 android_assets("locale_pak_assets") {
   disable_compression = true
-  renaming_sources = []
-  renaming_destinations = []
+  sources = []
   foreach(_locale, locales) {
-    renaming_sources += [ "$root_out_dir/android_webview/locales/$_locale.pak" ]
-    renaming_destinations += [ "stored-locales/$_locale.pak" ]
+    sources += [ "$root_out_dir/android_webview/locales/$_locale.pak" ]
   }
   deps = [
     ":repack_locales",
@@ -485,8 +483,6 @@ source_set("common") {
     "browser/aw_metrics_log_uploader.h",
     "browser/aw_metrics_service_client.cc",
     "browser/aw_metrics_service_client.h",
-    "browser/aw_metrics_service_client_impl.cc",
-    "browser/aw_metrics_service_client_impl.h",
     "browser/aw_pdf_exporter.cc",
     "browser/aw_pdf_exporter.h",
     "browser/aw_permission_manager.cc",
@@ -499,8 +495,6 @@ source_set("common") {
     "browser/aw_printing_message_filter.h",
     "browser/aw_quota_manager_bridge.cc",
     "browser/aw_quota_manager_bridge.h",
-    "browser/aw_quota_manager_bridge_impl.cc",
-    "browser/aw_quota_manager_bridge_impl.h",
     "browser/aw_quota_permission_context.cc",
     "browser/aw_quota_permission_context.h",
     "browser/aw_render_process_gone_delegate.h",
@@ -508,7 +502,6 @@ source_set("common") {
     "browser/aw_render_thread_context_provider.h",
     "browser/aw_renderer_priority_manager.cc",
     "browser/aw_renderer_priority_manager.h",
-    "browser/aw_resource.cc",
     "browser/aw_resource_context.cc",
     "browser/aw_resource_context.h",
     "browser/aw_result_codes.h",
@@ -558,7 +551,6 @@ source_set("common") {
     "browser/input_stream_impl.h",
     "browser/java_browser_view_renderer_helper.cc",
     "browser/java_browser_view_renderer_helper.h",
-    "browser/jni_dependency_factory.h",
     "browser/net/android_stream_reader_url_request_job.cc",
     "browser/net/android_stream_reader_url_request_job.h",
     "browser/net/aw_cookie_store_wrapper.cc",
@@ -580,14 +572,12 @@ source_set("common") {
     "browser/net/aw_web_resource_request.cc",
     "browser/net/aw_web_resource_request.h",
     "browser/net/aw_web_resource_response.h",
+    "browser/net/init_native_callback.cc",
     "browser/net/init_native_callback.h",
     "browser/net/input_stream_reader.cc",
     "browser/net/input_stream_reader.h",
     "browser/net/token_binding_manager.cc",
     "browser/net/token_binding_manager.h",
-    "browser/net_disk_cache_remover.cc",
-    "browser/net_disk_cache_remover.h",
-    "browser/net_init_native_callback.cc",
     "browser/parent_compositor_draw_constraints.cc",
     "browser/parent_compositor_draw_constraints.h",
     "browser/parent_output_surface.cc",
@@ -636,6 +626,7 @@ source_set("common") {
     "common/aw_media_drm_bridge_client.h",
     "common/aw_paths.cc",
     "common/aw_paths.h",
+    "common/aw_resource.cc",
     "common/aw_resource.h",
     "common/aw_switches.cc",
     "common/aw_switches.h",

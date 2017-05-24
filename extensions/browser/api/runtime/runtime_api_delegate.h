@@ -51,10 +51,6 @@ class RuntimeAPIDelegate {
   // Unregisters an UpdateObserver on behalf of the runtime API.
   virtual void RemoveUpdateObserver(UpdateObserver* observer) = 0;
 
-  // Determines an extension's previously installed version if applicable.
-  virtual base::Version GetPreviousExtensionVersion(
-      const Extension* extension) = 0;
-
   // Reloads an extension.
   virtual void ReloadExtension(const std::string& extension_id) = 0;
 

@@ -604,7 +604,10 @@
             ],
             "experiments": [
                 {
-                    "name": "Enabled"
+                    "name": "Enabled",
+                    "params": {
+                        "enable_warmup": "true"
+                    }
                 }
             ]
         }
@@ -1537,6 +1540,21 @@
             ]
         }
     ],
+    "NTPFaviconsFromNewServer": [
+        {
+            "platforms": [
+                "android"
+            ],
+            "experiments": [
+                {
+                    "name": "Enabled",
+                    "enable_features": [
+                        "ContentSuggestionsFaviconsFromNewServer"
+                    ]
+                }
+            ]
+        }
+    ],
     "NTPLaunchAfterInactivity": [
         {
             "platforms": [
@@ -1550,6 +1568,22 @@
                     },
                     "enable_features": [
                         "NTPLaunchAfterInactivity"
+                    ]
+                }
+            ]
+        }
+    ],
+    "NTPMostLikelyFaviconsFromServer": [
+        {
+            "platforms": [
+                "android",
+                "ios"
+            ],
+            "experiments": [
+                {
+                    "name": "Enabled",
+                    "enable_features": [
+                        "NTPMostLikelyFaviconsFromServer"
                     ]
                 }
             ]

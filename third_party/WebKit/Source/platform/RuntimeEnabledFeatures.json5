@@ -649,8 +649,16 @@
       name: "NavigatorContentUtils",
     },
     {
+      name: "NetInfoDownlink",
+      status: "experimental",
+    },
+    {
       name: "NetInfoDownlinkMax",
       status: "stable",
+    },
+    {
+      name: "NetInfoRtt",
+      status: "experimental",
     },
     {
       name: "NetworkInformation",
@@ -986,10 +994,6 @@
     },
     {
       name: "VideoRotateToFullscreen",
-    },
-    {
-      name: "VisibilityChangeOnUnload",
-      status: "stable",
     },
     {
       name: "VisualViewportAPI",

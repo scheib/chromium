@@ -219,7 +219,7 @@ class MEDIA_EXPORT AudioRendererImpl
 
   MediaLog* media_log_;
 
-  // Cached copy of hardware params from |sink_|.
+  // Cached copy of audio params that the renderer is initialized with.
   AudioParameters audio_parameters_;
 
   RendererClient* client_;

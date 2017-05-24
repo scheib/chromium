@@ -14,6 +14,14 @@ function getOnLine() {
   sendValueToTest(navigator.onLine);
 }
 
+function getRtt() {
+  sendValueToTest(navigator.connection.rtt.toString());
+}
+
+function getDownlink() {
+  sendValueToTest(navigator.connection.downlink.toString());
+}
+
 function sendValueToTest(value) {
   window.domAutomationController.setAutomationId(0);
   window.domAutomationController.send(value);

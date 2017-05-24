@@ -13,6 +13,7 @@ specific_include_rules = {
   ],
   "ash_test_helper\.cc": [
     "+ash/host",
+    "+chromeos/cryptohome",
   ],
   "mirror_window_test_api\.cc": [
     "+ash/host"

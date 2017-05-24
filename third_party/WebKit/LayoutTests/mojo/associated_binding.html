@@ -1,146 +1,125 @@
 <!DOCTYPE html>
 <script src="../resources/testharness.js"></script>
 <script src="../resources/testharnessreport.js"></script>
-<script src="../resources/mojo-helpers.js"></script>
+<script src="file:///gen/layout_test_data/mojo/public/js/mojo_bindings.js"></script>
+<script src="file:///gen/mojo/public/interfaces/bindings/tests/test_associated_interfaces.mojom.js"></script>
 <script>
 'use strict';
 
-setup({ explicit_done: true });
+function SenderImpl(callback) {
+  this.callback = callback;
+}
 
-define([
-    "mojo/public/interfaces/bindings/tests/test_associated_interfaces.mojom",
-    "mojo/public/js/associated_bindings",
-    "mojo/public/js/bindings",
-], function(testAssociatedInterfaces, associatedBindings, bindings) {
+SenderImpl.prototype.echo = function(value) {
+  return Promise.resolve({value: value});
+};
 
-  function SenderImpl(callback) {
-    this.callback = callback;
+SenderImpl.prototype.send = function(value) {
+  if (this.callback) {
+    this.callback(value);
   }
+};
 
-  SenderImpl.prototype.echo = function(value) {
-    return Promise.resolve({value: value});
-  };
+var IntegerSenderImpl = SenderImpl;
 
-  SenderImpl.prototype.send = function(value) {
-    if (this.callback) {
-      this.callback(value);
-    }
-  };
+function IntegerSenderConnectionImpl() {
+  this.integerSenderBindings = new mojo.AssociatedBindingSet(
+      mojo.test.IntegerSender);
+}
 
-  var IntegerSenderImpl = SenderImpl;
+IntegerSenderConnectionImpl.prototype.getSender = function(
+    integerSenderRequest) {
+  this.integerSenderBindings.addBinding(new IntegerSenderImpl(),
+      integerSenderRequest);
+};
 
-  function IntegerSenderConnectionImpl() {
-    this.integerSenderBindings = new associatedBindings.AssociatedBindingSet(
-        testAssociatedInterfaces.IntegerSender);
-  }
+promise_test(async () => {
+  var integerSenderConnection = new mojo.test.IntegerSenderConnectionPtr();
+  var integerSenderConnectionImpl = new IntegerSenderConnectionImpl();
+  var integerSenderConnectionBinding = new mojo.Binding(
+      mojo.test.IntegerSenderConnection,
+      integerSenderConnectionImpl,
+      mojo.makeRequest(integerSenderConnection));
 
-  IntegerSenderConnectionImpl.prototype.getSender = function(
-      integerSenderRequest) {
-    this.integerSenderBindings.addBinding(new IntegerSenderImpl(),
-        integerSenderRequest);
-  };
+  // AssociatedInterfaceRequest for integerSender.
+  var integerSenderPtrInfo0 = new mojo.AssociatedInterfacePtrInfo();
+  var integerSenderRequest0 = mojo.makeRequest(integerSenderPtrInfo0);
+  var integerSender0 = new mojo.test.IntegerSenderAssociatedPtr(
+      integerSenderPtrInfo0);
 
-  promise_test(async () => {
-    var integerSenderConnection =
-        new testAssociatedInterfaces.IntegerSenderConnectionPtr();
-    var integerSenderConnectionImpl = new IntegerSenderConnectionImpl();
-    var integerSenderConnectionBinding = new bindings.Binding(
-        testAssociatedInterfaces.IntegerSenderConnection,
-        integerSenderConnectionImpl,
-        bindings.makeRequest(integerSenderConnection));
+  var integerSenderPtrInfo1 = new mojo.AssociatedInterfacePtrInfo();
+  var integerSenderRequest1 = mojo.makeRequest(integerSenderPtrInfo1);
+  var integerSender1 = new mojo.test.IntegerSenderAssociatedPtr(
+      integerSenderPtrInfo1);
 
+  integerSenderConnection.getSender(integerSenderRequest0);
+  integerSenderConnection.getSender(integerSenderRequest1);
+
+  // Master Binding close triggers connection error handler on
+  // interface endpoint clients for all associated endpoints.
+  var connectionErrorHandler0 = new Promise((resolve, reject) => {
+    integerSender0.ptr.setConnectionErrorHandler(() => {
+      resolve();
+    });
+  });
+
+  var connectionErrorHandler1 = new Promise((resolve, reject) => {
+    integerSender1.ptr.setConnectionErrorHandler(() => {
+      resolve();
+    });
+  });
+
+  setTimeout(integerSenderConnectionBinding.close.bind(
+      integerSenderConnectionBinding), 0);
+  await Promise.all([connectionErrorHandler0, connectionErrorHandler1]);
+}, 'all endpoints connectionErrorHandler called on master binding close');
+
+promise_test(async () => {
+  var integerSenderConnection = new mojo.test.IntegerSenderConnectionPtr();
+  var integerSenderConnectionImpl = new IntegerSenderConnectionImpl();
+  var integerSenderConnectionBinding = new mojo.Binding(
+      mojo.test.IntegerSenderConnection,
+      integerSenderConnectionImpl,
+      mojo.makeRequest(integerSenderConnection));
+
+  var integerSenders = [];
+  for (var i = 0; i < 3; i++) {
     // AssociatedInterfaceRequest for integerSender.
-    var integerSenderPtrInfo0 =
-        new associatedBindings.AssociatedInterfacePtrInfo();
-    var integerSenderRequest0 = associatedBindings.makeRequest(
-        integerSenderPtrInfo0);
-    var integerSender0 =
-        new testAssociatedInterfaces.AssociatedIntegerSenderPtr(
-            integerSenderPtrInfo0);
+    var integerSenderPtrInfo = new mojo.AssociatedInterfacePtrInfo();
+    var integerSenderRequest = mojo.makeRequest(integerSenderPtrInfo);
+    var integerSender =
+        new mojo.test.IntegerSenderAssociatedPtr(integerSenderPtrInfo);
+    integerSenderConnection.getSender(integerSenderRequest);
 
-    var integerSenderPtrInfo1 =
-        new associatedBindings.AssociatedInterfacePtrInfo();
-    var integerSenderRequest1 = associatedBindings.makeRequest(
-        integerSenderPtrInfo1);
-    var integerSender1 =
-        new testAssociatedInterfaces.AssociatedIntegerSenderPtr(
-            integerSenderPtrInfo1);
+    // Wait for integerSenderConnection getSender message to be received by
+    // integerSenderConnection's binding side and all integerSender binding
+    // to be created.
+    assert_equals((await integerSender.echo(3)).value, 3);
+    integerSenders.push(integerSender);
+  }
 
-    integerSenderConnection.getSender(integerSenderRequest0);
-    integerSenderConnection.getSender(integerSenderRequest1);
+  await new Promise((resolve, reject) => {
+    integerSenderConnectionImpl.integerSenderBindings
+        .setConnectionErrorHandler(() => {resolve();});
+    integerSenders[0].ptr.reset();
+  });
 
-    // Master Binding close triggers connection error handler on
-    // interface endpoint clients for all associated endpoints.
-    var connectionErrorHandler0 = new Promise((resolve, reject) => {
-      integerSender0.ptr.setConnectionErrorHandler(() => {
-        resolve();
-      });
+  await new Promise((resolve, reject) => {
+    integerSenderConnectionImpl.integerSenderBindings
+        .setConnectionErrorHandler(function({customReason, description}) {
+      assert_equals(customReason, 32);
+      assert_equals(description, 'goodbye');
+      resolve();
     });
+    integerSenders[1].ptr.resetWithReason({customReason: 32,
+        description: 'goodbye'});
+  });
 
-    var connectionErrorHandler1 = new Promise((resolve, reject) => {
-      integerSender1.ptr.setConnectionErrorHandler(() => {
-        resolve();
-      });
-    });
+  // integerSender2's binding should still exist.
+  assert_equals((await integerSenders[2].echo(11)).value, 11);
 
-    setTimeout(integerSenderConnectionBinding.close.bind(
-        integerSenderConnectionBinding), 0);
-    await Promise.all([connectionErrorHandler0, connectionErrorHandler1]);
-  }, 'all endpoints connectionErrorHandler called on master binding close');
-
-  promise_test(async () => {
-    var integerSenderConnection =
-        new testAssociatedInterfaces.IntegerSenderConnectionPtr();
-    var integerSenderConnectionImpl = new IntegerSenderConnectionImpl();
-    var integerSenderConnectionBinding = new bindings.Binding(
-        testAssociatedInterfaces.IntegerSenderConnection,
-        integerSenderConnectionImpl,
-        bindings.makeRequest(integerSenderConnection));
-
-    var integerSenders = [];
-    for (var i = 0; i < 3; i++) {
-      // AssociatedInterfaceRequest for integerSender.
-      var integerSenderPtrInfo =
-          new associatedBindings.AssociatedInterfacePtrInfo();
-      var integerSenderRequest = associatedBindings.makeRequest(
-          integerSenderPtrInfo);
-      var integerSender =
-          new testAssociatedInterfaces.AssociatedIntegerSenderPtr(
-              integerSenderPtrInfo);
-      integerSenderConnection.getSender(integerSenderRequest);
-
-      // Wait for integerSenderConnection getSender message to be received by
-      // integerSenderConnection's binding side and all integerSender binding
-      // to be created.
-      assert_equals((await integerSender.echo(3)).value, 3);
-      integerSenders.push(integerSender);
-    }
-
-    await new Promise((resolve, reject) => {
-      integerSenderConnectionImpl.integerSenderBindings
-          .setConnectionErrorHandler(() => {resolve();});
-      integerSenders[0].ptr.reset();
-    });
-
-    await new Promise((resolve, reject) => {
-      integerSenderConnectionImpl.integerSenderBindings
-          .setConnectionErrorHandler(function({custom_reason, description}) {
-        assert_equals(custom_reason, 32);
-        assert_equals(description, 'goodbye');
-        resolve();
-      });
-      integerSenders[1].ptr.resetWithReason({custom_reason: 32,
-          description: 'goodbye'});
-    });
-
-    // integerSender2's binding should still exist.
-    assert_equals((await integerSenders[2].echo(11)).value, 11);
-
-    integerSenderConnectionImpl.integerSenderBindings.closeAllBindings();
-    assert_true(integerSenderConnectionImpl.integerSenderBindings.isEmpty());
-  }, 'associated binding set');
-
-  done();
-});
+  integerSenderConnectionImpl.integerSenderBindings.closeAllBindings();
+  assert_true(integerSenderConnectionImpl.integerSenderBindings.isEmpty());
+}, 'associated binding set');
 
 </script>

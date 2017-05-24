@@ -35,10 +35,12 @@ class MemoryAblationExperiment {
   void Start(scoped_refptr<base::SequencedTaskRunner> task_runner, size_t size);
 
   void AllocateMemory(size_t size);
-  void TouchMemory();
+  void TouchMemory(size_t offset);
+  void ScheduleTouchMemory(size_t offset);
 
   static MemoryAblationExperiment* GetInstance();
 
+  scoped_refptr<base::SequencedTaskRunner> task_runner_;
   size_t memory_size_ = 0;
   std::unique_ptr<uint8_t[]> memory_;
 };

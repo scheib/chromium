@@ -4,6 +4,10 @@
 
 #include "ash/devtools/ash_devtools_dom_agent.h"
 
+#include "ash/devtools/ui_element.h"
+#include "ash/devtools/view_element.h"
+#include "ash/devtools/widget_element.h"
+#include "ash/devtools/window_element.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
@@ -13,23 +17,25 @@
 #include "ui/display/display.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
+#include "ui/views/view.h"
+#include "ui/views/widget/widget.h"
 #include "ui/wm/core/window_util.h"
 
 namespace ash {
 namespace devtools {
-
 namespace {
+
 using namespace ui::devtools::protocol;
 // TODO(mhashmi): Make ids reusable
-DOM::NodeId node_ids = 1;
 
 std::unique_ptr<DOM::Node> BuildNode(
     const std::string& name,
     std::unique_ptr<Array<std::string>> attributes,
-    std::unique_ptr<Array<DOM::Node>> children) {
+    std::unique_ptr<Array<DOM::Node>> children,
+    int node_ids) {
   constexpr int kDomElementNodeType = 1;
   std::unique_ptr<DOM::Node> node = DOM::Node::create()
-                                        .setNodeId(node_ids++)
+                                        .setNodeId(node_ids)
                                         .setNodeName(name)
                                         .setNodeType(kDomElementNodeType)
                                         .setAttributes(std::move(attributes))
@@ -39,50 +45,38 @@ std::unique_ptr<DOM::Node> BuildNode(
   return node;
 }
 
-std::unique_ptr<Array<std::string>> GetAttributes(const aura::Window* window) {
+// TODO(thanhph): Move this function to UIElement::GetAttributes().
+std::unique_ptr<Array<std::string>> GetAttributes(UIElement* ui_element) {
   std::unique_ptr<Array<std::string>> attributes = Array<std::string>::create();
   attributes->addItem("name");
-  attributes->addItem(window->GetName());
-  attributes->addItem("active");
-  attributes->addItem(::wm::IsActiveWindow(window) ? "true" : "false");
-  return attributes;
-}
-
-std::unique_ptr<Array<std::string>> GetAttributes(const views::Widget* widget) {
-  std::unique_ptr<Array<std::string>> attributes = Array<std::string>::create();
-  attributes->addItem("name");
-  attributes->addItem(widget->GetName());
-  attributes->addItem("active");
-  attributes->addItem(widget->IsActive() ? "true" : "false");
-  return attributes;
-}
-
-std::unique_ptr<Array<std::string>> GetAttributes(const views::View* view) {
-  std::unique_ptr<Array<std::string>> attributes = Array<std::string>::create();
-  attributes->addItem("name");
-  attributes->addItem(view->GetClassName());
-  return attributes;
-}
-
-aura::Window* FindPreviousSibling(aura::Window* window) {
-  const aura::Window::Windows& siblings = window->parent()->children();
-  auto it = std::find(siblings.begin(), siblings.end(), window);
-  DCHECK(it != siblings.end());
-  // If this is the first child of its parent, the previous sibling is null
-  return it == siblings.begin() ? nullptr : *std::prev(it);
-}
-
-views::View* FindPreviousSibling(views::View* view) {
-  views::View* parent = view->parent();
-  int view_index = -1;
-  for (int i = 0, count = parent->child_count(); i < count; i++) {
-    if (view == parent->child_at(i)) {
-      view_index = i;
+  switch (ui_element->type()) {
+    case UIElementType::WINDOW: {
+      aura::Window* window =
+          UIElement::GetBackingElement<aura::Window, WindowElement>(ui_element);
+      attributes->addItem(window->GetName());
+      attributes->addItem("active");
+      attributes->addItem(::wm::IsActiveWindow(window) ? "true" : "false");
       break;
     }
+    case UIElementType::WIDGET: {
+      views::Widget* widget =
+          UIElement::GetBackingElement<views::Widget, WidgetElement>(
+              ui_element);
+      attributes->addItem(widget->GetName());
+      attributes->addItem("active");
+      attributes->addItem(widget->IsActive() ? "true" : "false");
+      break;
+    }
+    case UIElementType::VIEW: {
+      attributes->addItem(
+          UIElement::GetBackingElement<views::View, ViewElement>(ui_element)
+              ->GetClassName());
+      break;
+    }
+    default:
+      DCHECK(false);
   }
-  DCHECK_GE(view_index, 0);
-  return view_index == 0 ? nullptr : parent->child_at(view_index - 1);
+  return attributes;
 }
 
 int MaskColor(int value) {
@@ -103,12 +97,29 @@ views::Widget* GetWidgetFromWindow(aura::Window* window) {
   return views::Widget::GetWidgetForNativeView(window);
 }
 
+std::unique_ptr<DOM::Node> BuildDomNodeFromUIElement(UIElement* root) {
+  std::unique_ptr<Array<DOM::Node>> children = Array<DOM::Node>::create();
+  for (auto* it : root->children())
+    children->addItem(BuildDomNodeFromUIElement(it));
+
+  constexpr int kDomElementNodeType = 1;
+  std::unique_ptr<DOM::Node> node = DOM::Node::create()
+                                        .setNodeId(root->node_id())
+                                        .setNodeName(root->GetTypeName())
+                                        .setNodeType(kDomElementNodeType)
+                                        .setAttributes(GetAttributes(root))
+                                        .build();
+  node->setChildNodeCount(children->length());
+  node->setChildren(std::move(children));
+  return node;
+}
+
 }  // namespace
 
-AshDevToolsDOMAgent::AshDevToolsDOMAgent() {}
+AshDevToolsDOMAgent::AshDevToolsDOMAgent() : is_building_tree_(false) {}
 
 AshDevToolsDOMAgent::~AshDevToolsDOMAgent() {
-  RemoveObservers();
+  Reset();
 }
 
 ui::devtools::protocol::Response AshDevToolsDOMAgent::disable() {
@@ -135,105 +146,54 @@ ui::devtools::protocol::Response AshDevToolsDOMAgent::hideHighlight() {
   return ui::devtools::protocol::Response::OK();
 }
 
-// Handles removing windows.
-void AshDevToolsDOMAgent::OnWindowHierarchyChanging(
-    const HierarchyChangeParams& params) {
-  // Only trigger this when params.receiver == params.old_parent.
-  // Only removals are handled here. Removing a node can occur as a result of
-  // reorganizing a window or just destroying it. OnWindowHierarchyChanged
-  // is only called if there is a new_parent. The only case this method isn't
-  // called is when adding a node because old_parent is then null.
-  // Finally, We only trigger this  0 or 1 times as an old_parent will
-  // either exist and only call this callback once, or not at all.
-  if (params.receiver == params.old_parent)
-    RemoveWindowTree(params.target, true);
+void AshDevToolsDOMAgent::OnUIElementAdded(UIElement* parent,
+                                           UIElement* child) {
+  // When parent is null, only need to update |node_id_to_ui_element_|.
+  if (!parent) {
+    node_id_to_ui_element_[child->node_id()] = child;
+    return;
+  }
+  // If tree is being built, don't add child to dom tree again.
+  if (is_building_tree_)
+    return;
+  DCHECK(node_id_to_ui_element_.count(parent->node_id()));
+
+  const auto& children = parent->children();
+  auto iter = std::find(children.begin(), children.end(), child);
+  int prev_node_id =
+      (iter == children.end() - 1) ? 0 : (*std::next(iter))->node_id();
+  frontend()->childNodeInserted(parent->node_id(), prev_node_id,
+                                BuildTreeForUIElement(child));
 }
 
-// Handles adding windows.
-void AshDevToolsDOMAgent::OnWindowHierarchyChanged(
-    const HierarchyChangeParams& params) {
-  // Only trigger this when params.receiver == params.new_parent.
-  // If there is an old_parent + new_parent, then this window's node was
-  // removed in OnWindowHierarchyChanging and will now be added to the
-  // new_parent. If there is only a new_parent, OnWindowHierarchyChanging is
-  // never called and the window is only added here.
-  if (params.receiver == params.new_parent)
-    AddWindowTree(params.target);
+void AshDevToolsDOMAgent::OnUIElementReordered(UIElement* parent,
+                                               UIElement* child) {
+  DCHECK(node_id_to_ui_element_.count(parent->node_id()));
+
+  const auto& children = parent->children();
+  auto iter = std::find(children.begin(), children.end(), child);
+  int prev_node_id =
+      (iter == children.begin()) ? 0 : (*std::prev(iter))->node_id();
+  RemoveDomNode(child);
+  frontend()->childNodeInserted(parent->node_id(), prev_node_id,
+                                BuildDomNodeFromUIElement(child));
 }
 
-void AshDevToolsDOMAgent::OnWindowStackingChanged(aura::Window* window) {
-  RemoveWindowTree(window, false);
-  AddWindowTree(window);
+void AshDevToolsDOMAgent::OnUIElementRemoved(UIElement* ui_element) {
+  DCHECK(node_id_to_ui_element_.count(ui_element->node_id()));
+
+  RemoveDomNode(ui_element);
+  node_id_to_ui_element_.erase(ui_element->node_id());
 }
 
-void AshDevToolsDOMAgent::OnWindowBoundsChanged(aura::Window* window,
-                                                const gfx::Rect& old_bounds,
-                                                const gfx::Rect& new_bounds) {
+void AshDevToolsDOMAgent::OnUIElementBoundsChanged(UIElement* ui_element) {
   for (auto& observer : observers_)
-    observer.OnWindowBoundsChanged(window);
+    observer.OnNodeBoundsChanged(ui_element->node_id());
 }
 
-void AshDevToolsDOMAgent::OnWillRemoveView(views::Widget* widget,
-                                           views::View* view) {
-  if (view == widget->GetRootView())
-    RemoveViewTree(view, nullptr, true);
-}
-
-void AshDevToolsDOMAgent::OnWidgetBoundsChanged(views::Widget* widget,
-                                                const gfx::Rect& new_bounds) {
-  for (auto& observer : observers_)
-    observer.OnWidgetBoundsChanged(widget);
-}
-
-void AshDevToolsDOMAgent::OnChildViewRemoved(views::View* parent,
-                                             views::View* view) {
-  RemoveViewTree(view, parent, true);
-}
-
-void AshDevToolsDOMAgent::OnChildViewAdded(views::View* parent,
-                                           views::View* view) {
-  AddViewTree(view);
-}
-
-void AshDevToolsDOMAgent::OnChildViewReordered(views::View* parent,
-                                               views::View* view) {
-  RemoveViewTree(view, parent, false);
-  AddViewTree(view);
-}
-
-void AshDevToolsDOMAgent::OnViewBoundsChanged(views::View* view) {
-  for (auto& observer : observers_)
-    observer.OnViewBoundsChanged(view);
-}
-
-aura::Window* AshDevToolsDOMAgent::GetWindowFromNodeId(int nodeId) {
-  return node_id_to_window_map_.count(nodeId) ? node_id_to_window_map_[nodeId]
-                                              : nullptr;
-}
-
-views::Widget* AshDevToolsDOMAgent::GetWidgetFromNodeId(int nodeId) {
-  return node_id_to_widget_map_.count(nodeId) ? node_id_to_widget_map_[nodeId]
-                                              : nullptr;
-}
-
-views::View* AshDevToolsDOMAgent::GetViewFromNodeId(int nodeId) {
-  return node_id_to_view_map_.count(nodeId) ? node_id_to_view_map_[nodeId]
-                                            : nullptr;
-}
-
-int AshDevToolsDOMAgent::GetNodeIdFromWindow(aura::Window* window) {
-  DCHECK(window_to_node_id_map_.count(window));
-  return window_to_node_id_map_[window];
-}
-
-int AshDevToolsDOMAgent::GetNodeIdFromWidget(views::Widget* widget) {
-  DCHECK(widget_to_node_id_map_.count(widget));
-  return widget_to_node_id_map_[widget];
-}
-
-int AshDevToolsDOMAgent::GetNodeIdFromView(views::View* view) {
-  DCHECK(view_to_node_id_map_.count(view));
-  return view_to_node_id_map_[view];
+bool AshDevToolsDOMAgent::IsHighlightingWindow(aura::Window* window) {
+  return widget_for_highlighting_ &&
+         GetWidgetFromWindow(window) == widget_for_highlighting_.get();
 }
 
 void AshDevToolsDOMAgent::AddObserver(AshDevToolsDOMAgentObserver* observer) {
@@ -245,225 +205,127 @@ void AshDevToolsDOMAgent::RemoveObserver(
   observers_.RemoveObserver(observer);
 }
 
+UIElement* AshDevToolsDOMAgent::GetElementFromNodeId(int node_id) {
+  return node_id_to_ui_element_[node_id];
+}
+
+void AshDevToolsDOMAgent::OnNodeBoundsChanged(int node_id) {
+  for (auto& observer : observers_)
+    observer.OnNodeBoundsChanged(node_id);
+}
+
 std::unique_ptr<ui::devtools::protocol::DOM::Node>
 AshDevToolsDOMAgent::BuildInitialTree() {
+  is_building_tree_ = true;
   std::unique_ptr<Array<DOM::Node>> children = Array<DOM::Node>::create();
-  for (aura::Window* window : Shell::GetAllRootWindows())
-    children->addItem(BuildTreeForWindow(window));
-  return BuildNode("root", nullptr, std::move(children));
+
+  // TODO(thanhph): Root of UIElement tree shoudn't be WindowElement
+  // but maybe a new different element type.
+  window_element_root_ = new WindowElement(nullptr, this, nullptr);
+
+  for (aura::Window* window : Shell::GetAllRootWindows()) {
+    UIElement* window_element =
+        new WindowElement(window, this, window_element_root_);
+
+    children->addItem(BuildTreeForUIElement(window_element));
+    window_element_root_->AddChild(window_element);
+  }
+  std::unique_ptr<ui::devtools::protocol::DOM::Node> root_node = BuildNode(
+      "root", nullptr, std::move(children), window_element_root_->node_id());
+  is_building_tree_ = false;
+  return root_node;
+}
+
+std::unique_ptr<ui::devtools::protocol::DOM::Node>
+AshDevToolsDOMAgent::BuildTreeForUIElement(UIElement* ui_element) {
+  if (ui_element->type() == UIElementType::WINDOW) {
+    return BuildTreeForWindow(
+        ui_element,
+        UIElement::GetBackingElement<aura::Window, WindowElement>(ui_element));
+  } else if (ui_element->type() == UIElementType::WIDGET) {
+    return BuildTreeForRootWidget(
+        ui_element,
+        UIElement::GetBackingElement<views::Widget, WidgetElement>(ui_element));
+  } else if (ui_element->type() == UIElementType::VIEW) {
+    return BuildTreeForView(
+        ui_element,
+        UIElement::GetBackingElement<views::View, ViewElement>(ui_element));
+  }
+  return nullptr;
 }
 
 std::unique_ptr<DOM::Node> AshDevToolsDOMAgent::BuildTreeForWindow(
+    UIElement* window_element_root,
     aura::Window* window) {
-  DCHECK(!window_to_node_id_map_.count(window));
   std::unique_ptr<Array<DOM::Node>> children = Array<DOM::Node>::create();
   views::Widget* widget = GetWidgetFromWindow(window);
-  if (widget)
-    children->addItem(BuildTreeForRootWidget(widget));
-  for (aura::Window* child : window->children()) {
-    if (!IsHighlightingWindow(child))
-      children->addItem(BuildTreeForWindow(child));
-  }
+  if (widget) {
+    UIElement* widget_element =
+        new WidgetElement(widget, this, window_element_root);
 
+    children->addItem(BuildTreeForRootWidget(widget_element, widget));
+    window_element_root->AddChild(widget_element);
+  }
+  for (aura::Window* child : window->children()) {
+    UIElement* window_element =
+        new WindowElement(child, this, window_element_root);
+
+    children->addItem(BuildTreeForWindow(window_element, child));
+    window_element_root->AddChild(window_element);
+  }
   std::unique_ptr<ui::devtools::protocol::DOM::Node> node =
-      BuildNode("Window", GetAttributes(window), std::move(children));
-  if (!window->HasObserver(this))
-    window->AddObserver(this);
-  window_to_node_id_map_[window] = node->getNodeId();
-  node_id_to_window_map_[node->getNodeId()] = window;
+      BuildNode("Window", GetAttributes(window_element_root),
+                std::move(children), window_element_root->node_id());
   return node;
 }
 
 std::unique_ptr<DOM::Node> AshDevToolsDOMAgent::BuildTreeForRootWidget(
+    UIElement* widget_element,
     views::Widget* widget) {
-  DCHECK(!widget_to_node_id_map_.count(widget));
   std::unique_ptr<Array<DOM::Node>> children = Array<DOM::Node>::create();
-  children->addItem(BuildTreeForView(widget->GetRootView()));
+
+  UIElement* view_element =
+      new ViewElement(widget->GetRootView(), this, widget_element);
+
+  children->addItem(BuildTreeForView(view_element, widget->GetRootView()));
+  widget_element->AddChild(view_element);
+
   std::unique_ptr<ui::devtools::protocol::DOM::Node> node =
-      BuildNode("Widget", GetAttributes(widget), std::move(children));
-  if (!widget->HasRemovalsObserver(this))
-    widget->AddRemovalsObserver(this);
-  widget_to_node_id_map_[widget] = node->getNodeId();
-  node_id_to_widget_map_[node->getNodeId()] = widget;
+      BuildNode("Widget", GetAttributes(widget_element), std::move(children),
+                widget_element->node_id());
   return node;
 }
 
 std::unique_ptr<DOM::Node> AshDevToolsDOMAgent::BuildTreeForView(
+    UIElement* view_element,
     views::View* view) {
-  DCHECK(!view_to_node_id_map_.count(view));
   std::unique_ptr<Array<DOM::Node>> children = Array<DOM::Node>::create();
-  for (int i = 0, count = view->child_count(); i < count; i++)
-    children->addItem(BuildTreeForView(view->child_at(i)));
+
+  for (auto* child : view->GetChildrenInZOrder()) {
+    UIElement* view_element_child = new ViewElement(child, this, view_element);
+
+    children->addItem(BuildTreeForView(view_element_child, child));
+    view_element->AddChild(view_element_child);
+  }
   std::unique_ptr<ui::devtools::protocol::DOM::Node> node =
-      BuildNode("View", GetAttributes(view), std::move(children));
-  if (!view->HasObserver(this))
-    view->AddObserver(this);
-  view_to_node_id_map_[view] = node->getNodeId();
-  node_id_to_view_map_[node->getNodeId()] = view;
+      BuildNode("View", GetAttributes(view_element), std::move(children),
+                view_element->node_id());
   return node;
 }
 
-void AshDevToolsDOMAgent::AddWindowTree(aura::Window* window) {
-  if (IsHighlightingWindow(window))
-    return;
-
-  DCHECK(window_to_node_id_map_.count(window->parent()));
-  aura::Window* prev_sibling = FindPreviousSibling(window);
-  frontend()->childNodeInserted(
-      window_to_node_id_map_[window->parent()],
-      prev_sibling ? window_to_node_id_map_[prev_sibling] : 0,
-      BuildTreeForWindow(window));
-}
-
-void AshDevToolsDOMAgent::RemoveWindowTree(aura::Window* window,
-                                           bool remove_observer) {
-  DCHECK(window);
-  if (IsHighlightingWindow(window))
-    return;
-
-  if (GetWidgetFromWindow(window))
-    RemoveWidgetTree(GetWidgetFromWindow(window), remove_observer);
-
-  for (aura::Window* child : window->children())
-    RemoveWindowTree(child, remove_observer);
-
-  RemoveWindowNode(window, remove_observer);
-}
-
-void AshDevToolsDOMAgent::RemoveWindowNode(aura::Window* window,
-                                           bool remove_observer) {
-  WindowToNodeIdMap::iterator window_to_node_id_it =
-      window_to_node_id_map_.find(window);
-  DCHECK(window_to_node_id_it != window_to_node_id_map_.end());
-
-  int node_id = window_to_node_id_it->second;
-  int parent_id = GetNodeIdFromWindow(window->parent());
-
-  NodeIdToWindowMap::iterator node_id_to_window_it =
-      node_id_to_window_map_.find(node_id);
-  DCHECK(node_id_to_window_it != node_id_to_window_map_.end());
-
-  if (remove_observer)
-    window->RemoveObserver(this);
-
-  node_id_to_window_map_.erase(node_id_to_window_it);
-  window_to_node_id_map_.erase(window_to_node_id_it);
-  frontend()->childNodeRemoved(parent_id, node_id);
-}
-
-void AshDevToolsDOMAgent::RemoveWidgetTree(views::Widget* widget,
-                                           bool remove_observer) {
-  DCHECK(widget);
-  if (widget->GetRootView())
-    RemoveViewTree(widget->GetRootView(), nullptr, remove_observer);
-  RemoveWidgetNode(widget, remove_observer);
-}
-
-void AshDevToolsDOMAgent::RemoveWidgetNode(views::Widget* widget,
-                                           bool remove_observer) {
-  WidgetToNodeIdMap::iterator widget_to_node_id_it =
-      widget_to_node_id_map_.find(widget);
-  DCHECK(widget_to_node_id_it != widget_to_node_id_map_.end());
-
-  int node_id = widget_to_node_id_it->second;
-  int parent_id = GetNodeIdFromWindow(widget->GetNativeWindow());
-
-  if (remove_observer)
-    widget->RemoveRemovalsObserver(this);
-
-  NodeIdToWidgetMap::iterator node_id_to_widget_it =
-      node_id_to_widget_map_.find(node_id);
-  DCHECK(node_id_to_widget_it != node_id_to_widget_map_.end());
-
-  widget_to_node_id_map_.erase(widget_to_node_id_it);
-  node_id_to_widget_map_.erase(node_id_to_widget_it);
-  frontend()->childNodeRemoved(parent_id, node_id);
-}
-
-void AshDevToolsDOMAgent::AddViewTree(views::View* view) {
-  DCHECK(view_to_node_id_map_.count(view->parent()));
-  views::View* prev_sibling = FindPreviousSibling(view);
-  frontend()->childNodeInserted(
-      view_to_node_id_map_[view->parent()],
-      prev_sibling ? view_to_node_id_map_[prev_sibling] : 0,
-      BuildTreeForView(view));
-}
-
-void AshDevToolsDOMAgent::RemoveViewTree(views::View* view,
-                                         views::View* parent,
-                                         bool remove_observer) {
-  DCHECK(view);
-  for (int i = 0, count = view->child_count(); i < count; i++)
-    RemoveViewTree(view->child_at(i), view, remove_observer);
-  RemoveViewNode(view, parent, remove_observer);
-}
-
-void AshDevToolsDOMAgent::RemoveViewNode(views::View* view,
-                                         views::View* parent,
-                                         bool remove_observer) {
-  ViewToNodeIdMap::iterator view_to_node_id_it =
-      view_to_node_id_map_.find(view);
-  DCHECK(view_to_node_id_it != view_to_node_id_map_.end());
-
-  int node_id = view_to_node_id_it->second;
-  int parent_id = 0;
-  if (parent)
-    parent_id = GetNodeIdFromView(parent);
-  else  // views::RootView
-    parent_id = GetNodeIdFromWidget(view->GetWidget());
-
-  if (remove_observer)
-    view->RemoveObserver(this);
-
-  NodeIdToViewMap::iterator node_id_to_view_it =
-      node_id_to_view_map_.find(node_id);
-  DCHECK(node_id_to_view_it != node_id_to_view_map_.end());
-
-  view_to_node_id_map_.erase(view_to_node_id_it);
-  node_id_to_view_map_.erase(node_id_to_view_it);
-  frontend()->childNodeRemoved(parent_id, node_id);
-}
-
-void AshDevToolsDOMAgent::RemoveObservers() {
-  for (auto& pair : window_to_node_id_map_)
-    pair.first->RemoveObserver(this);
-  for (auto& pair : widget_to_node_id_map_)
-    pair.first->RemoveRemovalsObserver(this);
-  for (auto& pair : view_to_node_id_map_)
-    pair.first->RemoveObserver(this);
+void AshDevToolsDOMAgent::RemoveDomNode(UIElement* ui_element) {
+  for (auto* child_element : ui_element->children())
+    RemoveDomNode(child_element);
+  frontend()->childNodeRemoved(ui_element->parent()->node_id(),
+                               ui_element->node_id());
 }
 
 void AshDevToolsDOMAgent::Reset() {
-  RemoveObservers();
+  is_building_tree_ = false;
   widget_for_highlighting_.reset();
-  window_to_node_id_map_.clear();
-  widget_to_node_id_map_.clear();
-  view_to_node_id_map_.clear();
-  node_id_to_window_map_.clear();
-  node_id_to_widget_map_.clear();
-  node_id_to_view_map_.clear();
-  node_ids = 1;
-}
-
-AshDevToolsDOMAgent::WindowAndBoundsPair
-AshDevToolsDOMAgent::GetNodeWindowAndBounds(int node_id) {
-  aura::Window* window = GetWindowFromNodeId(node_id);
-  if (window)
-    return std::make_pair(window, window->GetBoundsInScreen());
-
-  views::Widget* widget = GetWidgetFromNodeId(node_id);
-  if (widget) {
-    return std::make_pair(widget->GetNativeWindow(),
-                          widget->GetWindowBoundsInScreen());
-  }
-
-  views::View* view = GetViewFromNodeId(node_id);
-  if (view) {
-    gfx::Rect bounds = view->GetBoundsInScreen();
-    return std::make_pair(view->GetWidget()->GetNativeWindow(), bounds);
-  }
-
-  return std::make_pair(nullptr, gfx::Rect());
+  delete window_element_root_;
+  node_id_to_ui_element_.clear();
+  observers_.Clear();
 }
 
 void AshDevToolsDOMAgent::InitializeHighlightingWidget() {
@@ -485,7 +347,7 @@ void AshDevToolsDOMAgent::InitializeHighlightingWidget() {
 }
 
 void AshDevToolsDOMAgent::UpdateHighlight(
-    const WindowAndBoundsPair& window_and_bounds,
+    const std::pair<aura::Window*, gfx::Rect>& window_and_bounds,
     SkColor background,
     SkColor border) {
   constexpr int kBorderThickness = 1;
@@ -507,12 +369,15 @@ ui::devtools::protocol::Response AshDevToolsDOMAgent::HighlightNode(
   if (!widget_for_highlighting_)
     InitializeHighlightingWidget();
 
-  WindowAndBoundsPair window_and_bounds(GetNodeWindowAndBounds(node_id));
+  std::pair<aura::Window*, gfx::Rect> window_and_bounds =
+      node_id_to_ui_element_.count(node_id)
+          ? node_id_to_ui_element_[node_id]->GetNodeWindowAndBounds()
+          : std::make_pair<aura::Window*, gfx::Rect>(nullptr, gfx::Rect());
 
-  if (!window_and_bounds.first)
+  if (!window_and_bounds.first) {
     return ui::devtools::protocol::Response::Error(
         "No node found with that id");
-
+  }
   SkColor border_color =
       RGBAToSkColor(highlight_config->getBorderColor(nullptr));
   SkColor content_color =
@@ -523,11 +388,6 @@ ui::devtools::protocol::Response AshDevToolsDOMAgent::HighlightNode(
     widget_for_highlighting_->Show();
 
   return ui::devtools::protocol::Response::OK();
-}
-
-bool AshDevToolsDOMAgent::IsHighlightingWindow(aura::Window* window) {
-  return widget_for_highlighting_ &&
-         GetWidgetFromWindow(window) == widget_for_highlighting_.get();
 }
 
 }  // namespace devtools

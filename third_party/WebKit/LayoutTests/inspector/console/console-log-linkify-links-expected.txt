@@ -5,11 +5,11 @@ CONSOLE MESSAGE: line 9: 123
 CONSOLE MESSAGE: line 10: http://www.chromium.org/some?v=114:56:57
 Test that console.log() would linkify the links. Bug 231074.
 
-console-log-linkify-links.html:6 http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link
-console-log-linkify-links.html:7 follow http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link
-console-log-linkify-links.html:8 string http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link
-console-log-linkify-links.html:9 123 "http://www.chromium.org/" console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > object-value-number source-code > object-value-string source-code > object-value-string-quote > devtools-link > object-value-string-quote
-console-log-linkify-links.html:10 http://www.chromium.org/some?v=114:56:57 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > product-registry-badge monospace > console-message-text > devtools-link
+console-log-linkify-links.html:6 http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link
+console-log-linkify-links.html:7 follow http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link
+console-log-linkify-links.html:8 string http://www.chromium.org/ console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link
+console-log-linkify-links.html:9 123 "http://www.chromium.org/" console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > object-value-number source-code > object-value-string source-code > object-value-string-quote > devtools-link > object-value-string-quote
+console-log-linkify-links.html:10 http://www.chromium.org/some?v=114:56:57 console-message > source-code > console-message-anchor > devtools-link > hidden console-message-badge > hide-badge-title > console-message-text > devtools-link
 Dump urls in messages
 linked url:null
 linked url:http://www.chromium.org/

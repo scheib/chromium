@@ -111,7 +111,6 @@ ScriptPromise GlobalFetch::fetch(ScriptState* script_state,
                                  const RequestInfo& input,
                                  const Dictionary& init,
                                  ExceptionState& exception_state) {
-  // Note that UseCounter doesn't work with SharedWorker or ServiceWorker.
   UseCounter::Count(worker.GetExecutionContext(), UseCounter::kFetch);
   return ScopedFetcher::From(worker)->Fetch(script_state, input, init,
                                             exception_state);

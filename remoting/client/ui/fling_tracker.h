@@ -13,13 +13,15 @@ namespace remoting {
 // liquid.
 class FlingTracker {
  public:
-  // time_constant: The larger the number the longer it takes to fling.
+  // time_constant: The larger the number the longer it takes to fling and the
+  // further the object can move.
   explicit FlingTracker(float time_constant);
 
   ~FlingTracker();
 
   // Sets the position of the object and start fling. This will reset the
   // existing fling.
+  // |velocity_x| and |velocity_y| need to be in pixel per second.
   void StartFling(float velocity_x, float velocity_y);
 
   void StopFling();
@@ -36,12 +38,11 @@ class FlingTracker {
  private:
   float time_constant_;
   float initial_speed_rate_ = 0.f;
+  float fling_duration_ = 0.f;
   float velocity_ratio_x_ = 0.f;
   float velocity_ratio_y_ = 0.f;
   float previous_position_x_ = 0.f;
   float previous_position_y_ = 0.f;
-
-  base::TimeTicks start_time_;
 
   // FlingTracker is neither copyable nor movable.
   FlingTracker(const FlingTracker&) = delete;

@@ -1,9 +1,0 @@
-This is a testharness.js-based test.
-PASS fetch() from document with Data-Saver disabled. 
-PASS fetch() from document with Data-Saver enabled. 
-PASS fetch() from dedicated worker with Data-Saver disabled. 
-PASS fetch() from dedicated worker with Data-Saver enabled. 
-PASS fetch() from shared worker with Data-Saver disabled. 
-FAIL fetch() from shared worker with Data-Saver enabled. assert_equals: Save-Data header should be sent for worker script when enabled. expected "Save-Data: on" but got "No Save-Data"
-Harness: the test ran to completion.
-

@@ -28,6 +28,7 @@ class ShellLinkItem : public base::RefCountedThreadSafe<ShellLinkItem> {
 
   const base::string16& title() const { return title_; }
   const base::string16& icon_path() const { return icon_path_; }
+  const std::string& url() const { return url_; }
   int icon_index() const { return icon_index_; }
   const gfx::ImageSkia& icon_image() const { return icon_image_; }
 
@@ -35,11 +36,11 @@ class ShellLinkItem : public base::RefCountedThreadSafe<ShellLinkItem> {
   base::CommandLine* GetCommandLine();
 
   void set_title(const base::string16& title) { title_ = title; }
-
   void set_icon(const base::string16& path, int index) {
     icon_path_ = path;
     icon_index_ = index;
   }
+  void set_url(const std::string& url) { url_ = url; }
 
   void set_icon_image(const gfx::ImageSkia& image) {
     icon_image_ = image;
@@ -57,6 +58,9 @@ class ShellLinkItem : public base::RefCountedThreadSafe<ShellLinkItem> {
 
   // The absolute path to an icon to be displayed in a JumpList.
   base::string16 icon_path_;
+
+  // The tab URL corresponding to this link's favicon.
+  std::string url_;
 
   // The icon index in the icon file. If an icon file consists of two or more
   // icons, set this value to identify the icon. If an icon file consists of

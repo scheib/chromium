@@ -282,7 +282,7 @@ ChannelMojo::ChannelMojo(
 }
 
 void ChannelMojo::ForwardMessageFromThreadSafePtr(mojo::Message message) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   if (!message_reader_ || !message_reader_->sender().is_bound())
     return;
   message_reader_->sender().internal_state()->ForwardMessage(
@@ -292,7 +292,7 @@ void ChannelMojo::ForwardMessageFromThreadSafePtr(mojo::Message message) {
 void ChannelMojo::ForwardMessageWithResponderFromThreadSafePtr(
     mojo::Message message,
     std::unique_ptr<mojo::MessageReceiver> responder) {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   if (!message_reader_ || !message_reader_->sender().is_bound())
     return;
   message_reader_->sender().internal_state()->ForwardMessageWithResponder(
@@ -300,12 +300,12 @@ void ChannelMojo::ForwardMessageWithResponderFromThreadSafePtr(
 }
 
 ChannelMojo::~ChannelMojo() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
   Close();
 }
 
 bool ChannelMojo::Connect() {
-  DCHECK(task_runner_->RunsTasksOnCurrentThread());
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
   WillConnect();
 
@@ -347,7 +347,7 @@ void ChannelMojo::Close() {
 
 void ChannelMojo::OnPipeError() {
   DCHECK(task_runner_);
-  if (task_runner_->RunsTasksOnCurrentThread()) {
+  if (task_runner_->RunsTasksInCurrentSequence()) {
     listener_->OnChannelError();
   } else {
     task_runner_->PostTask(

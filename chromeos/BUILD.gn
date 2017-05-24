@@ -569,6 +569,8 @@ static_library("test_support") {
     "network/network_state_test.h",
     "network/onc/onc_test_utils.cc",
     "network/onc/onc_test_utils.h",
+    "network/portal_detector/mock_network_portal_detector.cc",
+    "network/portal_detector/mock_network_portal_detector.h",
   ]
 }
 

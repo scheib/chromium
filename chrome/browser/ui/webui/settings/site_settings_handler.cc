@@ -647,9 +647,7 @@ void SiteSettingsHandler::SendIncognitoStatus(
   bool incognito_enabled = profile_->HasOffTheRecordProfile() &&
       !(was_destroyed && profile == profile_->GetOffTheRecordProfile());
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("onIncognitoStatusChanged"),
-                         base::Value(incognito_enabled));
+  FireWebUIListener("onIncognitoStatusChanged", base::Value(incognito_enabled));
 }
 
 void SiteSettingsHandler::HandleFetchZoomLevels(const base::ListValue* args) {
@@ -733,9 +731,7 @@ void SiteSettingsHandler::SendZoomLevels() {
     zoom_levels_exceptions.Append(std::move(exception));
   }
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("onZoomLevelsChanged"),
-                         zoom_levels_exceptions);
+  FireWebUIListener("onZoomLevelsChanged", zoom_levels_exceptions);
 }
 
 void SiteSettingsHandler::HandleRemoveZoomLevel(const base::ListValue* args) {

@@ -17,7 +17,7 @@ ios_app_bundle("showcase") {
 
     # All shared libraries must have the sanitizer deps to properly link in
     # asan mode (this target will be empty in other cases).
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
   bundle_deps = [ "//ios/showcase/core/resources" ]
   assert_no_deps = ios_assert_no_deps
@@ -63,7 +63,7 @@ ios_eg_test("ios_showcase_egtests") {
 
     # All shared libraries must have the sanitizer deps to properly link in
     # asan mode (this target will be empty in other cases).
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
   ]
   bundle_deps = [ "//ios/showcase/core/resources" ]
   assert_no_deps = ios_assert_no_deps

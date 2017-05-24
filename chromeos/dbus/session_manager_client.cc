@@ -151,12 +151,9 @@ void LogPolicyResponseUma(base::StringPiece method_name,
 // The SessionManagerClient implementation used in production.
 class SessionManagerClientImpl : public SessionManagerClient {
  public:
-  SessionManagerClientImpl()
-      : session_manager_proxy_(NULL),
-        screen_is_locked_(false),
-        weak_ptr_factory_(this) {}
+  SessionManagerClientImpl() : weak_ptr_factory_(this) {}
 
-  ~SessionManagerClientImpl() override {}
+  ~SessionManagerClientImpl() override = default;
 
   // SessionManagerClient overrides:
   void SetStubDelegate(StubDelegate* delegate) override {
@@ -205,10 +202,8 @@ class SessionManagerClientImpl : public SessionManagerClient {
     writer.AppendString(cryptohome_id.id());
     writer.AppendString("");  // Unique ID is deprecated
     session_manager_proxy_->CallMethod(
-        &method_call,
-        dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnStartSession,
-                   weak_ptr_factory_.GetWeakPtr()));
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        dbus::ObjectProxy::EmptyResponseCallback());
   }
 
   void StopSession() override {
@@ -217,20 +212,13 @@ class SessionManagerClientImpl : public SessionManagerClient {
     dbus::MessageWriter writer(&method_call);
     writer.AppendString("");  // Unique ID is deprecated
     session_manager_proxy_->CallMethod(
-        &method_call,
-        dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnStopSession,
-                   weak_ptr_factory_.GetWeakPtr()));
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        dbus::ObjectProxy::EmptyResponseCallback());
   }
 
   void StartDeviceWipe() override {
-    dbus::MethodCall method_call(login_manager::kSessionManagerInterface,
-                                 login_manager::kSessionManagerStartDeviceWipe);
-    session_manager_proxy_->CallMethod(
-        &method_call,
-        dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnDeviceWipe,
-                   weak_ptr_factory_.GetWeakPtr()));
+    SimpleMethodCallToSessionManager(
+        login_manager::kSessionManagerStartDeviceWipe);
   }
 
   void RequestLockScreen() override {
@@ -347,12 +335,9 @@ class SessionManagerClientImpl : public SessionManagerClient {
         reinterpret_cast<const uint8_t*>(policy_blob.data()),
         policy_blob.size());
     session_manager_proxy_->CallMethod(
-        &method_call,
-        dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnStorePolicy,
-                   weak_ptr_factory_.GetWeakPtr(),
-                   login_manager::kSessionManagerStorePolicy,
-                   callback));
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        base::Bind(&SessionManagerClientImpl::OnNoOutputParamResponse,
+                   weak_ptr_factory_.GetWeakPtr(), callback));
   }
 
   void StorePolicyForUser(const cryptohome::Identification& cryptohome_id,
@@ -440,9 +425,8 @@ class SessionManagerClientImpl : public SessionManagerClient {
                                  login_manager::kSessionManagerStopArcInstance);
     session_manager_proxy_->CallMethod(
         &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnArcMethod,
-                   weak_ptr_factory_.GetWeakPtr(),
-                   login_manager::kSessionManagerStopArcInstance, callback));
+        base::Bind(&SessionManagerClientImpl::OnNoOutputParamResponse,
+                   weak_ptr_factory_.GetWeakPtr(), callback));
   }
 
   void SetArcCpuRestriction(
@@ -455,10 +439,8 @@ class SessionManagerClientImpl : public SessionManagerClient {
     writer.AppendUint32(restriction_state);
     session_manager_proxy_->CallMethod(
         &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnArcMethod,
-                   weak_ptr_factory_.GetWeakPtr(),
-                   login_manager::kSessionManagerSetArcCpuRestriction,
-                   callback));
+        base::Bind(&SessionManagerClientImpl::OnNoOutputParamResponse,
+                   weak_ptr_factory_.GetWeakPtr(), callback));
   }
 
   void EmitArcBooted(const cryptohome::Identification& cryptohome_id,
@@ -469,9 +451,8 @@ class SessionManagerClientImpl : public SessionManagerClient {
     writer.AppendString(cryptohome_id.id());
     session_manager_proxy_->CallMethod(
         &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnArcMethod,
-                   weak_ptr_factory_.GetWeakPtr(),
-                   login_manager::kSessionManagerEmitArcBooted, callback));
+        base::Bind(&SessionManagerClientImpl::OnNoOutputParamResponse,
+                   weak_ptr_factory_.GetWeakPtr(), callback));
   }
 
   void GetArcStartTime(const GetArcStartTimeCallback& callback) override {
@@ -493,9 +474,8 @@ class SessionManagerClientImpl : public SessionManagerClient {
     writer.AppendString(cryptohome_id.id());
     session_manager_proxy_->CallMethod(
         &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(&SessionManagerClientImpl::OnArcMethod,
-                   weak_ptr_factory_.GetWeakPtr(),
-                   login_manager::kSessionManagerRemoveArcData, callback));
+        base::Bind(&SessionManagerClientImpl::OnNoOutputParamResponse,
+                   weak_ptr_factory_.GetWeakPtr(), callback));
   }
 
  protected:
@@ -556,6 +536,15 @@ class SessionManagerClientImpl : public SessionManagerClient {
         dbus::ObjectProxy::EmptyResponseCallback());
   }
 
+  // Calls given callback (if non-null), with the |success| boolean
+  // representing the dbus call was successful or not.
+  void OnNoOutputParamResponse(
+      const base::Callback<void(bool success)>& callback,
+      dbus::Response* response) {
+    if (!callback.is_null())
+      callback.Run(response != nullptr);
+  }
+
   // Helper for RetrieveDeviceLocalAccountPolicy and RetrievePolicyForUser.
   void CallRetrievePolicyByUsername(const std::string& method_name,
                                     const std::string& account_id,
@@ -612,13 +601,9 @@ class SessionManagerClientImpl : public SessionManagerClient {
         reinterpret_cast<const uint8_t*>(policy_blob.data()),
         policy_blob.size());
     session_manager_proxy_->CallMethod(
-        &method_call,
-        dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::Bind(
-            &SessionManagerClientImpl::OnStorePolicy,
-            weak_ptr_factory_.GetWeakPtr(),
-            method_name,
-            callback));
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        base::Bind(&SessionManagerClientImpl::OnNoOutputParamResponse,
+                   weak_ptr_factory_.GetWeakPtr(), callback));
   }
 
   // Called when kSessionManagerRestartJob method is complete.
@@ -631,27 +616,6 @@ class SessionManagerClientImpl : public SessionManagerClient {
                           : DBUS_METHOD_CALL_FAILURE);
   }
 
-  // Called when kSessionManagerStartSession method is complete.
-  void OnStartSession(dbus::Response* response) {
-    LOG_IF(ERROR, !response)
-        << "Failed to call "
-        << login_manager::kSessionManagerStartSession;
-  }
-
-  // Called when kSessionManagerStopSession method is complete.
-  void OnStopSession(dbus::Response* response) {
-    LOG_IF(ERROR, !response)
-        << "Failed to call "
-        << login_manager::kSessionManagerStopSession;
-  }
-
-  // Called when kSessionManagerStopSession method is complete.
-  void OnDeviceWipe(dbus::Response* response) {
-    LOG_IF(ERROR, !response)
-        << "Failed to call "
-        << login_manager::kSessionManagerStartDeviceWipe;
-  }
-
   // Called when kSessionManagerRetrieveActiveSessions method is complete.
   void OnRetrieveActiveSessions(const std::string& method_name,
                                 const ActiveSessionsCallback& callback,
@@ -659,20 +623,19 @@ class SessionManagerClientImpl : public SessionManagerClient {
     ActiveSessionsMap sessions;
     bool success = false;
     if (!response) {
-      LOG(ERROR) << "Failed to call " << method_name;
       callback.Run(sessions, success);
       return;
     }
 
     dbus::MessageReader reader(response);
-    dbus::MessageReader array_reader(NULL);
+    dbus::MessageReader array_reader(nullptr);
 
     if (!reader.PopArray(&array_reader)) {
       LOG(ERROR) << method_name << " response is incorrect: "
                  << response->ToString();
     } else {
       while (array_reader.HasMoreData()) {
-        dbus::MessageReader dict_entry_reader(NULL);
+        dbus::MessageReader dict_entry_reader(nullptr);
         std::string key;
         std::string value;
         if (!array_reader.PopDictEntry(&dict_entry_reader) ||
@@ -697,7 +660,7 @@ class SessionManagerClientImpl : public SessionManagerClient {
       return;
     }
     dbus::MessageReader reader(response);
-    const uint8_t* values = NULL;
+    const uint8_t* values = nullptr;
     size_t length = 0;
     if (!reader.PopArrayOfBytes(&values, &length)) {
       LOG(ERROR) << "Invalid response: " << response->ToString();
@@ -729,16 +692,6 @@ class SessionManagerClientImpl : public SessionManagerClient {
     callback.Run(std::string(), response_type);
 
     LogPolicyResponseUma(method_name, response_type);
-  }
-
-  // Called when kSessionManagerStorePolicy or kSessionManagerStorePolicyForUser
-  // method is complete.
-  void OnStorePolicy(const std::string& method_name,
-                     const StorePolicyCallback& callback,
-                     dbus::Response* response) {
-    bool success = response != nullptr;
-    LOG_IF(ERROR, !success) << "Failed to call " << method_name;
-    callback.Run(success);
   }
 
   // Called when the owner key set signal is received.
@@ -784,12 +737,13 @@ class SessionManagerClientImpl : public SessionManagerClient {
   void ArcInstanceStoppedReceived(dbus::Signal* signal) {
     dbus::MessageReader reader(signal);
     bool clean = false;
-    if (!reader.PopBool(&clean)) {
+    std::string container_instance_id;
+    if (!reader.PopBool(&clean) || !reader.PopString(&container_instance_id)) {
       LOG(ERROR) << "Invalid signal: " << signal->ToString();
       return;
     }
     for (auto& observer : observers_)
-      observer.ArcInstanceStopped(clean);
+      observer.ArcInstanceStopped(clean, container_instance_id);
   }
 
   // Called when the object is connected to the signal.
@@ -803,26 +757,22 @@ class SessionManagerClientImpl : public SessionManagerClient {
   void OnGetServerBackedStateKeys(const StateKeysCallback& callback,
                                   dbus::Response* response) {
     std::vector<std::string> state_keys;
-    if (!response) {
-      LOG(ERROR) << "Failed to call "
-                 << login_manager::kSessionManagerGetServerBackedStateKeys;
-    } else {
+    if (response) {
       dbus::MessageReader reader(response);
-      dbus::MessageReader array_reader(NULL);
+      dbus::MessageReader array_reader(nullptr);
 
       if (!reader.PopArray(&array_reader)) {
         LOG(ERROR) << "Bad response: " << response->ToString();
       } else {
         while (array_reader.HasMoreData()) {
-          const uint8_t* data = NULL;
+          const uint8_t* data = nullptr;
           size_t size = 0;
           if (!array_reader.PopArrayOfBytes(&data, &size)) {
             LOG(ERROR) << "Bad response: " << response->ToString();
             state_keys.clear();
             break;
           }
-          state_keys.push_back(
-              std::string(reinterpret_cast<const char*>(data), size));
+          state_keys.emplace_back(reinterpret_cast<const char*>(data), size);
         }
       }
     }
@@ -835,10 +785,7 @@ class SessionManagerClientImpl : public SessionManagerClient {
   void OnCheckArcAvailability(const ArcCallback& callback,
                               dbus::Response* response) {
     bool available = false;
-    if (!response) {
-      LOG(ERROR) << "Failed to call "
-                 << login_manager::kSessionManagerCheckArcAvailability;
-    } else {
+    if (response) {
       dbus::MessageReader reader(response);
       if (!reader.PopBool(&available))
         LOG(ERROR) << "Invalid response: " << response->ToString();
@@ -851,10 +798,7 @@ class SessionManagerClientImpl : public SessionManagerClient {
                          dbus::Response* response) {
     bool success = false;
     base::TimeTicks arc_start_time;
-    if (!response) {
-      LOG(ERROR) << "Failed to call "
-                 << login_manager::kSessionManagerGetArcStartTimeTicks;
-    } else {
+    if (response) {
       dbus::MessageReader reader(response);
       int64_t ticks = 0;
       if (reader.PopInt64(&ticks)) {
@@ -867,26 +811,20 @@ class SessionManagerClientImpl : public SessionManagerClient {
     callback.Run(success, arc_start_time);
   }
 
-  // Called when kSessionManagerStartArcInstance or
-  // kSessionManagerStopArcInstance methods complete.
-  void OnArcMethod(const std::string& method_name,
-                   const ArcCallback& callback,
-                   dbus::Response* response) {
-    bool success = false;
-    if (!response) {
-      LOG(ERROR) << "Failed to call " << method_name;
-    } else {
-      success = true;
+  void OnStartArcInstanceSucceeded(const StartArcInstanceCallback& callback,
+                                   dbus::Response* response) {
+    DCHECK(response);
+    dbus::MessageReader reader(response);
+    std::string container_instance_id;
+    if (!reader.PopString(&container_instance_id)) {
+      LOG(ERROR) << "Invalid response: " << response->ToString();
+      if (!callback.is_null())
+        callback.Run(StartArcInstanceResult::UNKNOWN_ERROR, std::string());
+      return;
     }
 
     if (!callback.is_null())
-      callback.Run(success);
-  }
-
-  void OnStartArcInstanceSucceeded(const StartArcInstanceCallback& callback,
-                                   dbus::Response* response) {
-    if (!callback.is_null())
-      callback.Run(StartArcInstanceResult::SUCCESS);
+      callback.Run(StartArcInstanceResult::SUCCESS, container_instance_id);
   }
 
   void OnStartArcInstanceFailed(const StartArcInstanceCallback& callback,
@@ -897,16 +835,17 @@ class SessionManagerClientImpl : public SessionManagerClient {
       callback.Run(response && response->GetErrorName() ==
                                    login_manager::dbus_error::kLowFreeDisk
                        ? StartArcInstanceResult::LOW_FREE_DISK_SPACE
-                       : StartArcInstanceResult::UNKNOWN_ERROR);
+                       : StartArcInstanceResult::UNKNOWN_ERROR,
+                   std::string());
     }
   }
 
-  dbus::ObjectProxy* session_manager_proxy_;
+  dbus::ObjectProxy* session_manager_proxy_ = nullptr;
   std::unique_ptr<BlockingMethodCaller> blocking_method_caller_;
   base::ObserverList<Observer> observers_;
 
   // Most recent screen-lock state received from session_manager.
-  bool screen_is_locked_;
+  bool screen_is_locked_ = false;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
@@ -919,8 +858,8 @@ class SessionManagerClientImpl : public SessionManagerClient {
 // which does nothing.
 class SessionManagerClientStubImpl : public SessionManagerClient {
  public:
-  SessionManagerClientStubImpl() : delegate_(NULL), screen_is_locked_(false) {}
-  ~SessionManagerClientStubImpl() override {}
+  SessionManagerClientStubImpl() = default;
+  ~SessionManagerClientStubImpl() override = default;
 
   // SessionManagerClient overrides
   void Init(dbus::Bus* bus) override {}
@@ -1109,7 +1048,7 @@ class SessionManagerClientStubImpl : public SessionManagerClient {
                         bool disable_boot_completed_broadcast,
                         bool enable_vendor_privileged,
                         const StartArcInstanceCallback& callback) override {
-    callback.Run(StartArcInstanceResult::UNKNOWN_ERROR);
+    callback.Run(StartArcInstanceResult::UNKNOWN_ERROR, std::string());
   }
 
   void SetArcCpuRestriction(
@@ -1140,10 +1079,10 @@ class SessionManagerClientStubImpl : public SessionManagerClient {
   }
 
  private:
-  StubDelegate* delegate_;  // Weak pointer; may be NULL.
+  StubDelegate* delegate_ = nullptr;  // Weak pointer; may be nullptr.
   base::ObserverList<Observer> observers_;
   std::string device_policy_;
-  bool screen_is_locked_;
+  bool screen_is_locked_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(SessionManagerClientStubImpl);
 };

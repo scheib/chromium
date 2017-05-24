@@ -11,4 +11,4 @@ class MapsExpectations(GpuTestExpectations):
     # Sample Usage:
     # self.Fail('Maps.maps_001',
     #     ['mac', 'amd', ('nvidia', 0x1234)], bug=123)
-    self.Flaky('Maps_maps_004', ['win10', 'nvidia'], bug=670098)
+    pass

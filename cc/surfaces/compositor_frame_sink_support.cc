@@ -85,8 +85,7 @@ void CompositorFrameSinkSupport::SetNeedsBeginFrame(bool needs_begin_frame) {
   UpdateNeedsBeginFramesInternal();
 }
 
-void CompositorFrameSinkSupport::BeginFrameDidNotSwap(
-    const BeginFrameAck& ack) {
+void CompositorFrameSinkSupport::DidNotProduceFrame(const BeginFrameAck& ack) {
   // TODO(eseckler): While a pending CompositorFrame exists (see TODO below), we
   // should not acknowledge immediately. Instead, we should update the ack that
   // will be sent to DisplayScheduler when the pending frame is activated.

@@ -217,6 +217,7 @@ test("gl_tests") {
 test("gpu_unittests") {
   sources = [
     "command_buffer/client/buffer_tracker_unittest.cc",
+    "command_buffer/client/client_discardable_manager_unittest.cc",
     "command_buffer/client/client_test_helper.cc",
     "command_buffer/client/client_test_helper.h",
     "command_buffer/client/cmd_buffer_helper_test.cc",
@@ -287,6 +288,7 @@ test("gpu_unittests") {
     "command_buffer/service/query_manager_unittest.cc",
     "command_buffer/service/renderbuffer_manager_unittest.cc",
     "command_buffer/service/scheduler_unittest.cc",
+    "command_buffer/service/service_discardable_manager_unittest.cc",
     "command_buffer/service/shader_manager_unittest.cc",
     "command_buffer/service/shader_translator_cache_unittest.cc",
     "command_buffer/service/shader_translator_unittest.cc",

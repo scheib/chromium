@@ -29,6 +29,7 @@
 #include "ipc/ipc_message.h"
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
+#include "mojo/edk/embedder/peer_connection.h"
 
 namespace {
 
@@ -51,6 +52,7 @@ class TestShimClient : public IPC::Listener {
   void OnChannelError() override;
 
   base::Thread io_thread_;
+  mojo::edk::PeerConnection peer_connection_;
   std::unique_ptr<IPC::ChannelProxy> channel_;
 
   DISALLOW_COPY_AND_ASSIGN(TestShimClient);
@@ -73,8 +75,10 @@ TestShimClient::TestShimClient() : io_thread_("TestShimClientIO") {
 
   channel_ = IPC::ChannelProxy::Create(
       IPC::ChannelMojo::CreateClientFactory(
-          mojo::edk::ConnectToPeerProcess(mojo::edk::CreateClientHandle(
-              mojo::edk::NamedPlatformHandle(socket_path.value()))),
+          peer_connection_.Connect(mojo::edk::ConnectionParams(
+              mojo::edk::TransportProtocol::kLegacy,
+              mojo::edk::CreateClientHandle(
+                  mojo::edk::NamedPlatformHandle(socket_path.value())))),
           io_thread_.task_runner().get()),
       this, io_thread_.task_runner().get());
 }

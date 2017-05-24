@@ -50,9 +50,9 @@ void GpuCompositorFrameSink::SubmitCompositorFrame(
   support_->SubmitCompositorFrame(local_surface_id, std::move(frame));
 }
 
-void GpuCompositorFrameSink::BeginFrameDidNotSwap(
+void GpuCompositorFrameSink::DidNotProduceFrame(
     const cc::BeginFrameAck& begin_frame_ack) {
-  support_->BeginFrameDidNotSwap(begin_frame_ack);
+  support_->DidNotProduceFrame(begin_frame_ack);
 }
 
 void GpuCompositorFrameSink::DidReceiveCompositorFrameAck(

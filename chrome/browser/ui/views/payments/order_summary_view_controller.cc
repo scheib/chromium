@@ -74,6 +74,8 @@ std::unique_ptr<views::View> CreateLineItemView(const base::string16& label,
   std::unique_ptr<views::Label> amount_text =
       base::MakeUnique<views::Label>(amount);
   amount_text->set_id(static_cast<int>(amount_label_id));
+  amount_text->SetMultiLine(true);
+  amount_text->SetAllowCharacterBreak(true);
   if (emphasize) {
     label_text->SetFontList(
         label_text->font_list().DeriveWithWeight(gfx::Font::Weight::MEDIUM));

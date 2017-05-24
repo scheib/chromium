@@ -21,14 +21,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGResourceMarker marker id='markerStart'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGRect rect",
-      "reason": "geometry"
-    },
-    {
       "object": "LayoutSVGContainer g",
       "reason": "geometry"
     },

@@ -70,7 +70,9 @@ PermissionMenuModel::PermissionMenuModel(Profile* profile,
         effective_default_setting, permission_.source);
   }
 
-  AddCheckItem(CONTENT_SETTING_DEFAULT, label);
+  // The subresource filter permission does not display the default menu item.
+  if (permission_.type != CONTENT_SETTINGS_TYPE_SUBRESOURCE_FILTER)
+    AddCheckItem(CONTENT_SETTING_DEFAULT, label);
 
   // Retrieve the string to show for allowing the permission.
   // Notifications does not support CONTENT_SETTING_ALLOW in incognito.
@@ -104,6 +106,10 @@ PermissionMenuModel::PermissionMenuModel(Profile* profile,
 
   // Retrieve the string to show for blocking the permission.
   label = l10n_util::GetStringUTF16(IDS_PAGE_INFO_MENU_ITEM_BLOCK);
+  if (permission_.type == CONTENT_SETTINGS_TYPE_SUBRESOURCE_FILTER) {
+    label = l10n_util::GetStringUTF16(
+        IDS_PAGE_INFO_MENU_ITEM_SUBRESOURCE_FILTER_BLOCK);
+  }
   if (ui::MaterialDesignController::IsSecondaryUiMaterial()) {
     label = PageInfoUI::PermissionActionToUIString(
         profile, info.type, CONTENT_SETTING_BLOCK, effective_default_setting,

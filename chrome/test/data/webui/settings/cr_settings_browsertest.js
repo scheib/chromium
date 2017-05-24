@@ -854,6 +854,35 @@ TEST_F('CrSettingsCategorySettingExceptionsTest', 'All', function() {
  * @constructor
  * @extends {CrSettingsBrowserTest}
  */
+function CrSettingsAllSitesTest() {}
+
+CrSettingsAllSitesTest.prototype = {
+  __proto__: CrSettingsBrowserTest.prototype,
+
+  /** @override */
+  browsePreload: 'chrome://md-settings/privacy_page/privacy_page.html',
+
+  /** @override */
+  commandLineSwitches: [{
+    switchName: 'enable-site-settings',
+  }],
+
+  /** @override */
+  extraLibraries: CrSettingsBrowserTest.prototype.extraLibraries.concat([
+    'test_browser_proxy.js',
+    'test_site_settings_prefs_browser_proxy.js',
+    'all_sites_tests.js',
+  ]),
+};
+
+TEST_F('CrSettingsAllSitesTest', 'All', function() {
+  mocha.run();
+});
+
+/**
+ * @constructor
+ * @extends {CrSettingsBrowserTest}
+ */
 function CrSettingsSiteDetailsTest() {}
 
 CrSettingsSiteDetailsTest.prototype = {

@@ -20,7 +20,6 @@
 #include "ash/wm/window_parenting_utils.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_window.h"
 #include "base/auto_reset.h"

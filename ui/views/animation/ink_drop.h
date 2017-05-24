@@ -19,11 +19,13 @@
 
 namespace views {
 
-// Pure virtual base class that manages the lifetime and state of an ink drop
-// ripple as well as visual hover state feedback.
+class InkDropObserver;
+
+// Base class that manages the lifetime and state of an ink drop ripple as
+// well as visual hover state feedback.
 class VIEWS_EXPORT InkDrop {
  public:
-  virtual ~InkDrop() {}
+  virtual ~InkDrop();
 
   // Called by ink drop hosts when their size is changed.
   virtual void HostSizeChanged(const gfx::Size& new_size) = 0;
@@ -46,10 +48,29 @@ class VIEWS_EXPORT InkDrop {
   // Enables or disables the focus state.
   virtual void SetFocused(bool is_focused) = 0;
 
+  // Returns true if the highlight animation is in the process of fading in or
+  // is visible.
+  virtual bool IsHighlightFadingInOrVisible() const = 0;
+
+  // Enables or disables the highlight when the target is hovered.
+  virtual void SetShowHighlightOnHover(bool show_highlight_on_hover) = 0;
+
+  // Enables or disables the highlight when the target is focused.
+  virtual void SetShowHighlightOnFocus(bool show_highlight_on_focus) = 0;
+
+  // Methods to add/remove observers for this object.
+  void AddObserver(InkDropObserver* observer);
+  void RemoveObserver(InkDropObserver* observer);
+
  protected:
-  InkDrop() {}
+  InkDrop();
+
+  // Notifes all of the observers that the animation has started.
+  void NotifyInkDropAnimationStarted();
 
  private:
+  base::ObserverList<InkDropObserver> observers_;
+
   DISALLOW_COPY_AND_ASSIGN(InkDrop);
 };
 

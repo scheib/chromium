@@ -163,7 +163,6 @@ class MEDIA_EXPORT AudioInputController
   // The audio device will be created on the audio thread, and when that is
   // done, the event handler will receive an OnCreated() call from that same
   // thread. |user_input_monitor| is used for typing detection and can be NULL.
-  // |file_task_runner| is used for debug recordings.
   // TODO(grunell): Move handling of debug recording to AudioManager.
   static scoped_refptr<AudioInputController> Create(
       AudioManager* audio_manager,
@@ -173,14 +172,13 @@ class MEDIA_EXPORT AudioInputController
       const AudioParameters& params,
       const std::string& device_id,
       // External synchronous writer for audio controller.
-      bool agc_is_enabled,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner);
+      bool agc_is_enabled);
 
   // Factory method for creating an AudioInputController with an existing
   // |stream|. The stream will be opened on the audio thread, and when that is
   // done, the event  handler will receive an OnCreated() call from that same
   // thread. |user_input_monitor| is used for typing detection and can be NULL.
-  // |file_task_runner| and |params| are used for debug recordings.
+  // |params| is used for debug recordings.
   static scoped_refptr<AudioInputController> CreateForStream(
       const scoped_refptr<base::SingleThreadTaskRunner>& task_runner,
       EventHandler* event_handler,
@@ -188,7 +186,6 @@ class MEDIA_EXPORT AudioInputController
       // External synchronous writer for audio controller.
       SyncWriter* sync_writer,
       UserInputMonitor* user_input_monitor,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
       const AudioParameters& params);
 
   // Starts recording using the created audio input stream.
@@ -258,14 +255,12 @@ class MEDIA_EXPORT AudioInputController
   };
 #endif
 
-  AudioInputController(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      EventHandler* handler,
-      SyncWriter* sync_writer,
-      UserInputMonitor* user_input_monitor,
-      const AudioParameters& params,
-      StreamType type,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner);
+  AudioInputController(scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+                       EventHandler* handler,
+                       SyncWriter* sync_writer,
+                       UserInputMonitor* user_input_monitor,
+                       const AudioParameters& params,
+                       StreamType type);
   virtual ~AudioInputController();
 
   const scoped_refptr<base::SingleThreadTaskRunner>& GetTaskRunnerForTesting()

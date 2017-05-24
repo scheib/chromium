@@ -255,12 +255,12 @@ void CaretDisplayItemClient::InvalidatePaintInCurrentLayoutBlock(
     // paint invalidation.
     if (IsImmediateFullPaintInvalidationReason(
             layout_block_->FullPaintInvalidationReason()) ||
-        // For non-SPv2, ForcedSubtreeInvalidationChecking may hint change of
+        // For non-SPv2, kSubtreeInvalidationChecking may hint change of
         // paint offset. See ObjectPaintInvalidatorWithContext::
         // invalidatePaintIfNeededWithComputedReason().
         (!RuntimeEnabledFeatures::slimmingPaintV2Enabled() &&
-         (context.forced_subtree_invalidation_flags &
-          PaintInvalidatorContext::kForcedSubtreeInvalidationChecking))) {
+         (context.subtree_flags &
+          PaintInvalidatorContext::kSubtreeInvalidationChecking))) {
       object_invalidator.InvalidateDisplayItemClient(
           *this, PaintInvalidationReason::kCaret);
     }

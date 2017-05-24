@@ -411,9 +411,7 @@ CGSize PreferredCellSizeForWidth(UICollectionViewCell* cell, CGFloat width) {
           dequeueReusableCellWithReuseIdentifier:[BookmarkSigninPromoCell
                                                      reuseIdentifier]
                                     forIndexPath:indexPath];
-      [signinPromoCell.signinPromoView
-          enableChromeCommandWithAccessPoint:signin_metrics::AccessPoint::
-                                                 ACCESS_POINT_BOOKMARK_MANAGER];
+      signinPromoCell.signinPromoView.delegate = _signinPromoViewMediator;
       [[_signinPromoViewMediator createConfigurator]
           configureSigninPromoView:signinPromoCell.signinPromoView];
       __weak BookmarkFolderCollectionView* weakSelf = self;
@@ -517,6 +515,8 @@ CGSize PreferredCellSizeForWidth(UICollectionViewCell* cell, CGFloat width) {
       } else {
         _signinPromoViewMediator = [[SigninPromoViewMediator alloc] init];
         _signinPromoViewMediator.consumer = self;
+        _signinPromoViewMediator.accessPoint =
+            signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER;
       }
     }
     [self.collectionView reloadData];

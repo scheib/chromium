@@ -105,6 +105,11 @@ source_set("api") {
   ]
 
   if (is_chromeos) {
+    sources += [
+      "media_perception_private/media_perception_private_api.cc",
+      "media_perception_private/media_perception_private_api.h",
+    ]
+
     public_deps += [
       "//extensions/browser/api/clipboard",
       "//extensions/browser/api/diagnostics",

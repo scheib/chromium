@@ -37,9 +37,10 @@ void RendererProxy::SetCursorPosition(float x, float y) {
 }
 
 void RendererProxy::SetCursorVisibility(bool visible) {
+  // Cursor visibility and position should be synchronized.
   RunTaskOnProperThread(
       base::Bind(&GlRenderer::OnCursorVisibilityChanged, renderer_, visible),
-      false);
+      true);
 }
 
 void RendererProxy::StartInputFeedback(float x, float y, float diameter) {

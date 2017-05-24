@@ -21,6 +21,8 @@ static_library("lib") {
     "access_policy_delegate.h",
     "accessibility_manager.cc",
     "accessibility_manager.h",
+    "compositor_frame_sink_client_binding.cc",
+    "compositor_frame_sink_client_binding.h",
     "cursor_location_manager.cc",
     "cursor_location_manager.h",
     "cursor_state.cc",
@@ -31,8 +33,6 @@ static_library("lib") {
     "display.h",
     "display_binding.cc",
     "display_binding.h",
-    "display_client_compositor_frame_sink.cc",
-    "display_client_compositor_frame_sink.h",
     "display_manager.cc",
     "display_manager.h",
     "drag_controller.cc",
@@ -224,14 +224,11 @@ static_library("test_support") {
 group("tests") {
   testonly = true
   deps = [
-    ":mus_ws_unittests",
+    ":ui_service_unittests",
   ]
-  if (!is_android) {
-    deps += [ "//services/ui/public/cpp/tests:mus_public_unittests" ]
-  }
 }
 
-service_test("mus_ws_unittests") {
+service_test("ui_service_unittests") {
   sources = [
     "cursor_location_manager_unittest.cc",
     "cursor_state_unittest.cc",
@@ -270,7 +267,7 @@ service_test("mus_ws_unittests") {
     sources += [ "platform_display_default_unittest.cc" ]
   }
 
-  catalog = ":mus_ws_unittests_catalog"
+  catalog = ":ui_service_unittests_catalog"
 
   deps = [
     ":lib",
@@ -303,13 +300,13 @@ service_test("mus_ws_unittests") {
   ]
 }
 
-service_manifest("mus_ws_unittests_app_manifest") {
-  name = "mus_ws_unittests_app"
-  source = "mus_ws_unittests_app_manifest.json"
+service_manifest("ui_service_unittests_app_manifest") {
+  name = "ui_service_unittests_app"
+  source = "ui_service_unittests_app_manifest.json"
 }
 
-catalog("mus_ws_unittests_catalog") {
-  embedded_services = [ ":mus_ws_unittests_app_manifest" ]
+catalog("ui_service_unittests_catalog") {
+  embedded_services = [ ":ui_service_unittests_app_manifest" ]
 
   standalone_services = [ "//services/ui:manifest" ]
 }

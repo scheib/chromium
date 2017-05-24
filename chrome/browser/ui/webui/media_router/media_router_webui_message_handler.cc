@@ -178,7 +178,8 @@ std::unique_ptr<base::DictionaryValue> RouteToValue(
 
 std::unique_ptr<base::ListValue> CastModesToValue(
     const CastModeSet& cast_modes,
-    const std::string& source_host) {
+    const std::string& source_host,
+    base::Optional<MediaCastMode> forced_cast_mode) {
   std::unique_ptr<base::ListValue> value(new base::ListValue);
 
   for (const MediaCastMode& cast_mode : cast_modes) {
@@ -188,6 +189,8 @@ std::unique_ptr<base::ListValue> CastModesToValue(
     cast_mode_val->SetString(
         "description", MediaCastModeToDescription(cast_mode, source_host));
     cast_mode_val->SetString("host", source_host);
+    cast_mode_val->SetBoolean(
+        "isForced", forced_cast_mode && forced_cast_mode == cast_mode);
     value->Append(std::move(cast_mode_val));
   }
 
@@ -275,10 +278,11 @@ void MediaRouterWebUIMessageHandler::UpdateRoutes(
 
 void MediaRouterWebUIMessageHandler::UpdateCastModes(
     const CastModeSet& cast_modes,
-    const std::string& source_host) {
+    const std::string& source_host,
+    base::Optional<MediaCastMode> forced_cast_mode) {
   DVLOG(2) << "UpdateCastModes";
   std::unique_ptr<base::ListValue> cast_modes_val(
-      CastModesToValue(cast_modes, source_host));
+      CastModesToValue(cast_modes, source_host, forced_cast_mode));
   web_ui()->CallJavascriptFunctionUnsafe(kSetCastModeList, *cast_modes_val);
 }
 
@@ -485,7 +489,8 @@ void MediaRouterWebUIMessageHandler::OnRequestInitialData(
 
   const std::set<MediaCastMode> cast_modes = media_router_ui_->cast_modes();
   std::unique_ptr<base::ListValue> cast_modes_list(CastModesToValue(
-      cast_modes, media_router_ui_->GetPresentationRequestSourceName()));
+      cast_modes, media_router_ui_->GetPresentationRequestSourceName(),
+      media_router_ui_->forced_cast_mode()));
   initial_data.Set("castModes", std::move(cast_modes_list));
 
   // If the cast mode last chosen for the current origin is tab mirroring,

@@ -1211,7 +1211,7 @@ void RenderWidgetHostViewAndroid::SubmitCompositorFrame(
     DestroyDelegatedContent();
 
     ack.has_damage = false;
-    OnBeginFrameDidNotSwap(ack);
+    OnDidNotProduceFrame(ack);
   } else {
     delegated_frame_host_->SubmitCompositorFrame(local_surface_id,
                                                  std::move(frame));
@@ -1242,8 +1242,16 @@ void RenderWidgetHostViewAndroid::DestroyDelegatedContent() {
   delegated_frame_host_->DestroyDelegatedContent();
 }
 
-void RenderWidgetHostViewAndroid::OnBeginFrameDidNotSwap(
+void RenderWidgetHostViewAndroid::OnDidNotProduceFrame(
     const cc::BeginFrameAck& ack) {
+  if (!delegated_frame_host_) {
+    // We are not using the browser compositor and there's no DisplayScheduler
+    // that needs to be notified about the BeginFrameAck, so we can drop it.
+    DCHECK(!using_browser_compositor_);
+    return;
+  }
+
+  delegated_frame_host_->DidNotProduceFrame(ack);
   AcknowledgeBeginFrame(ack);
 }
 
@@ -2071,7 +2079,7 @@ void RenderWidgetHostViewAndroid::OnDetachCompositor() {
 void RenderWidgetHostViewAndroid::OnBeginFrame(const cc::BeginFrameArgs& args) {
   TRACE_EVENT0("cc,benchmark", "RenderWidgetHostViewAndroid::OnBeginFrame");
   if (!host_) {
-    OnBeginFrameDidNotSwap(
+    OnDidNotProduceFrame(
         cc::BeginFrameAck(args.source_id, args.sequence_number,
                           cc::BeginFrameArgs::kInvalidFrameNumber, false));
     return;
@@ -2084,8 +2092,8 @@ void RenderWidgetHostViewAndroid::OnBeginFrame(const cc::BeginFrameArgs& args) {
     uint64_t confirmed = cc::BeginFrameArgs::kInvalidFrameNumber;
     if (args.source_id == latest_confirmed_begin_frame_source_id_)
       confirmed = latest_confirmed_begin_frame_sequence_number_;
-    OnBeginFrameDidNotSwap(cc::BeginFrameAck(
-        args.source_id, args.sequence_number, confirmed, false));
+    OnDidNotProduceFrame(cc::BeginFrameAck(args.source_id, args.sequence_number,
+                                           confirmed, false));
     return;
   }
 
@@ -2109,8 +2117,8 @@ void RenderWidgetHostViewAndroid::OnBeginFrame(const cc::BeginFrameArgs& args) {
     ClearBeginFrameRequest(BEGIN_FRAME);
     SendBeginFrame(args);
   } else {
-    OnBeginFrameDidNotSwap(cc::BeginFrameAck(
-        args.source_id, args.sequence_number, args.sequence_number, false));
+    OnDidNotProduceFrame(cc::BeginFrameAck(args.source_id, args.sequence_number,
+                                           args.sequence_number, false));
   }
 }
 

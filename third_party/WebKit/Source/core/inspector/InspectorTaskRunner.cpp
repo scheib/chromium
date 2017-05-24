@@ -41,7 +41,7 @@ std::unique_ptr<InspectorTaskRunner::Task> InspectorTaskRunner::TakeNextTask(
   double absolute_time = wait_mode == kWaitForTask ? infinite_time : 0.0;
   while (!killed_ && !timed_out && queue_.IsEmpty())
     timed_out = !condition_.TimedWait(mutex_, absolute_time);
-  ASSERT(!timed_out || absolute_time != infinite_time);
+  DCHECK(!timed_out || absolute_time != infinite_time);
 
   if (killed_ || timed_out)
     return nullptr;

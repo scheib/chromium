@@ -4,13 +4,8 @@
 
 module service_manager.mojom;
 
+import "services/service_manager/public/interfaces/constants.mojom";
 import "services/service_manager/public/interfaces/interface_provider.mojom";
-
-// TODO(beng): Determine who (if anyone) uses kRootUserID.
-const string kRootUserID = "505C0EE9-3013-43C0-82B0-A84F50CF8D84";
-const string kInheritUserID = "D26290E4-4485-4EAE-81A2-66D1EEB40A9D";
-
-const uint32 kInvalidInstanceID = 0;
 
 // TODO(beng): Evalute the utility of this enum. There are some inconsistencies
 //             in its use with BindInterface/StartService.

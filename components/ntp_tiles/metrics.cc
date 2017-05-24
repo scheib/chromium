@@ -25,6 +25,7 @@ const char kHistogramClientName[] = "client";
 const char kHistogramServerName[] = "server";
 const char kHistogramPopularName[] = "popular";
 const char kHistogramWhitelistName[] = "whitelist";
+const char kHistogramHomepageName[] = "homepage";
 
 // Suffixes for the various icon types.
 const char kTileTypeSuffixIconColor[] = "IconsColor";
@@ -56,6 +57,8 @@ std::string GetSourceHistogramName(TileSource source) {
       return kHistogramWhitelistName;
     case TileSource::SUGGESTIONS_SERVICE:
       return kHistogramServerName;
+    case TileSource::HOMEPAGE:
+      return kHistogramHomepageName;
   }
   NOTREACHED();
   return std::string();

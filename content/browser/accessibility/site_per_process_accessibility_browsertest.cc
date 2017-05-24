@@ -108,7 +108,7 @@ IN_PROC_BROWSER_TEST_F(MAYBE_SitePerProcessAccessibilityBrowserTest,
   ASSERT_EQ(1U, ax_root->PlatformChildCount());
 
   BrowserAccessibility* ax_group = ax_root->PlatformGetChild(0);
-  EXPECT_EQ(ui::AX_ROLE_GROUP, ax_group->GetRole());
+  EXPECT_EQ(ui::AX_ROLE_GENERIC_CONTAINER, ax_group->GetRole());
   ASSERT_EQ(2U, ax_group->PlatformChildCount());
 
   BrowserAccessibility* ax_iframe = ax_group->PlatformGetChild(0);
@@ -123,7 +123,7 @@ IN_PROC_BROWSER_TEST_F(MAYBE_SitePerProcessAccessibilityBrowserTest,
 
   BrowserAccessibility* ax_child_frame_group =
       ax_child_frame_root->PlatformGetChild(0);
-  EXPECT_EQ(ui::AX_ROLE_GROUP, ax_child_frame_group->GetRole());
+  EXPECT_EQ(ui::AX_ROLE_GENERIC_CONTAINER, ax_child_frame_group->GetRole());
   ASSERT_EQ(1U, ax_child_frame_group->PlatformChildCount());
 
   BrowserAccessibility* ax_child_frame_static_text =

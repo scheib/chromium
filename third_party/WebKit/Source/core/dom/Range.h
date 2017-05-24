@@ -143,7 +143,6 @@ class CORE_EXPORT Range final : public GarbageCollected<Range>,
   IntRect BoundingBox() const;
 
   // Transform-friendly
-  void TextQuads(Vector<FloatQuad>&) const;
   void GetBorderAndTextQuads(Vector<FloatQuad>&) const;
   FloatRect BoundingRect() const;
 

@@ -43,6 +43,7 @@
 #include "core/events/AnimationPlaybackEvent.h"
 #include "core/frame/UseCounter.h"
 #include "core/inspector/InspectorTraceEvents.h"
+#include "core/paint/PaintLayer.h"
 #include "core/probe/CoreProbes.h"
 #include "platform/RuntimeEnabledFeatures.h"
 #include "platform/ScriptForbiddenScope.h"
@@ -752,11 +753,19 @@ bool Animation::CanStartAnimationOnCompositor(
     if (!target_element)
       return false;
 
-    CompositorElementId target_element_id = CompositorElementIdFromDOMNodeId(
-        DOMNodeIds::IdForNode(target_element),
-        CompositorElementIdNamespace::kPrimary);
-    if (!composited_element_ids->Contains(target_element_id))
+    if (target_element->GetLayoutObject() &&
+        target_element->GetLayoutObject()->IsBoxModelObject() &&
+        target_element->GetLayoutObject()->HasLayer()) {
+      PaintLayer* paint_layer =
+          ToLayoutBoxModelObject(target_element->GetLayoutObject())->Layer();
+      CompositorElementId target_element_id =
+          CompositorElementIdFromPaintLayerId(
+              paint_layer->UniqueId(), CompositorElementIdNamespace::kPrimary);
+      if (!composited_element_ids->Contains(target_element_id))
+        return false;
+    } else {
       return false;
+    }
   }
 
   return Playing();

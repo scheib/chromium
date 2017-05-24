@@ -4,7 +4,28 @@
 
 #include "ui/views/animation/ink_drop.h"
 
+#include "ui/views/animation/ink_drop_observer.h"
+
 namespace views {
+
+InkDrop::~InkDrop() {}
+
+void InkDrop::AddObserver(InkDropObserver* observer) {
+  CHECK(observer);
+  observers_.AddObserver(observer);
+}
+
+void InkDrop::RemoveObserver(InkDropObserver* observer) {
+  CHECK(observer);
+  observers_.RemoveObserver(observer);
+}
+
+InkDrop::InkDrop() {}
+
+void InkDrop::NotifyInkDropAnimationStarted() {
+  for (InkDropObserver& observer : observers_)
+    observer.InkDropAnimationStarted();
+}
 
 InkDropContainerView::InkDropContainerView() {}
 

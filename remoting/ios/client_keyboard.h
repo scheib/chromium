@@ -8,6 +8,11 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
+@protocol ClientKeyboardDelegate<NSObject>
+- (void)clientKeyboardShouldSend:(NSString*)text;
+- (void)clientKeyboardShouldDelete;
+@end
+
 @interface ClientKeyboard : UIView<UIKeyInput, UITextInputTraits>
 
 @property(nonatomic) UIKeyboardAppearance keyboardAppearance;
@@ -15,6 +20,9 @@
 @property(nonatomic) UITextAutocapitalizationType autocapitalizationType;
 @property(nonatomic) UITextAutocorrectionType autocorrectionType;
 @property(nonatomic) UITextSpellCheckingType spellCheckingType;
+
+// This delegate is used to call back to handler key entry.
+@property(weak, nonatomic) id<ClientKeyboardDelegate> delegate;
 
 @end
 

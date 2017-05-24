@@ -3,11 +3,13 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "base/bind.h"
 #include "base/message_loop/message_loop.h"
 #include "base/run_loop.h"
+#include "services/resource_coordinator/coordination_unit/coordination_unit_impl_unittest_util.h"
 #include "services/resource_coordinator/coordination_unit/coordination_unit_provider_impl.h"
 #include "services/service_manager/public/cpp/service_context_ref.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -16,30 +18,7 @@ namespace resource_coordinator {
 
 namespace {
 
-void OnLastServiceRefDestroyed() {
-  // No-op. This is required by service_manager::ServiceContextRefFactory
-  // construction but not needed for the tests.
-}
-
-class CoordinationUnitImplTest : public testing::Test {
- public:
-  CoordinationUnitImplTest()
-      : service_ref_factory_(base::Bind(&OnLastServiceRefDestroyed)),
-        provider_(&service_ref_factory_) {}
-  ~CoordinationUnitImplTest() override {}
-
-  // testing::Test:
-  void TearDown() override { base::RunLoop().RunUntilIdle(); }
-
- protected:
-  CoordinationUnitProviderImpl* provider() { return &provider_; }
-
- private:
-  base::MessageLoop message_loop_;
-
-  service_manager::ServiceContextRefFactory service_ref_factory_;
-  CoordinationUnitProviderImpl provider_;
-};
+class CoordinationUnitImplTest : public CoordinationUnitImplTestBase {};
 
 class TestCoordinationUnit : public mojom::CoordinationPolicyCallback {
  public:

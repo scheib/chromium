@@ -382,6 +382,11 @@ static_library("test_support") {
 
 chrome_packaged_services = [ ":chrome_manifest" ]
 
+if (enable_basic_printing || enable_print_preview) {
+  chrome_packaged_services +=
+      [ "//components/printing/service:pdf_compositor_manifest" ]
+}
+
 if (is_chromeos) {
   chrome_packaged_services +=
       [ "//chrome/browser:preferences_forwarder_manifest" ]

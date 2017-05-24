@@ -31,6 +31,7 @@
 #include "public/web/WebNode.h"
 
 #include "bindings/core/v8/ExceptionState.h"
+#include "core/dom/AXObjectCacheBase.h"
 #include "core/dom/Document.h"
 #include "core/dom/Element.h"
 #include "core/dom/Node.h"
@@ -41,11 +42,11 @@
 #include "core/editing/EditingUtilities.h"
 #include "core/editing/serializers/Serialization.h"
 #include "core/events/Event.h"
+#include "core/exported/WebPluginContainerBase.h"
 #include "core/html/HTMLCollection.h"
 #include "core/html/HTMLElement.h"
 #include "core/layout/LayoutObject.h"
 #include "core/layout/LayoutPart.h"
-#include "modules/accessibility/AXObjectCacheImpl.h"
 #include "modules/accessibility/AXObjectImpl.h"
 #include "platform/wtf/PtrUtil.h"
 #include "public/platform/WebString.h"
@@ -55,7 +56,6 @@
 #include "public/web/WebElement.h"
 #include "public/web/WebElementCollection.h"
 #include "public/web/WebPluginContainer.h"
-#include "web/WebPluginContainerImpl.h"
 
 namespace blink {
 
@@ -185,7 +185,7 @@ WebPluginContainer* WebNode::PluginContainerFromNode(const Node* node) {
   if (object && object->IsLayoutPart()) {
     PluginView* plugin = ToLayoutPart(object)->Plugin();
     if (plugin && plugin->IsPluginContainer())
-      return ToWebPluginContainerImpl(plugin);
+      return ToWebPluginContainerBase(plugin);
   }
 
   return nullptr;
@@ -198,7 +198,7 @@ WebPluginContainer* WebNode::PluginContainer() const {
 WebAXObject WebNode::AccessibilityObject() {
   WebDocument web_document = GetDocument();
   const Document* doc = GetDocument().ConstUnwrap<Document>();
-  AXObjectCacheImpl* cache = ToAXObjectCacheImpl(doc->ExistingAXObjectCache());
+  AXObjectCacheBase* cache = ToAXObjectCacheBase(doc->ExistingAXObjectCache());
   Node* node = Unwrap<Node>();
   return cache ? WebAXObject(cache->Get(node)) : WebAXObject();
 }

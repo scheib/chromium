@@ -8,23 +8,24 @@
 #include <memory>
 
 #include "base/macros.h"
-#include "ui/web_dialogs/web_dialog_ui.h"
-
-class SigninErrorHandler;
+#include "chrome/browser/ui/webui/signin/signin_web_dialog_ui.h"
 
 namespace ui {
 class WebUI;
 }
 
-class SigninErrorUI : public ui::WebDialogUI {
+class SigninErrorUI : public SigninWebDialogUI {
  public:
   explicit SigninErrorUI(content::WebUI* web_ui);
-  // Used to inject a SigninErrorHandler in tests.
-  SigninErrorUI(content::WebUI* web_ui,
-                std::unique_ptr<SigninErrorHandler> handler);
   ~SigninErrorUI() override {}
 
+  // SigninWebDialogUI:
+  void InitializeMessageHandlerWithBrowser(Browser* browser) override;
+
  private:
+  void InitializeMessageHandlerForUserManager();
+  void Initialize(Browser* browser, bool is_system_profile);
+
   DISALLOW_COPY_AND_ASSIGN(SigninErrorUI);
 };
 

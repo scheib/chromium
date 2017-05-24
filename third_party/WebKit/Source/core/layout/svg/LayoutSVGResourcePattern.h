@@ -32,6 +32,7 @@
 namespace blink {
 
 class AffineTransform;
+class FloatRect;
 class SVGPatternElement;
 struct PatternData;
 
@@ -52,7 +53,7 @@ class LayoutSVGResourcePattern final : public LayoutSVGResourcePaintServer {
 
  private:
   std::unique_ptr<PatternData> BuildPatternData(const LayoutObject&);
-  sk_sp<PaintRecord> AsPaintRecord(const FloatSize&,
+  sk_sp<PaintRecord> AsPaintRecord(const FloatRect& tile,
                                    const AffineTransform&) const;
   PatternData* PatternForLayoutObject(const LayoutObject&);
 

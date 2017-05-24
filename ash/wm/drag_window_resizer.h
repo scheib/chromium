@@ -53,8 +53,6 @@ class ASH_EXPORT DragWindowResizer : public WindowResizer {
   // Returns true if we should allow the mouse pointer to warp.
   bool ShouldAllowMouseWarp();
 
-  aura::Window* GetAuraTarget();
-
   std::unique_ptr<WindowResizer> next_window_resizer_;
 
   // Shows a semi-transparent image of the window being dragged.

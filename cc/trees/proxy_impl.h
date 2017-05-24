@@ -98,6 +98,7 @@ class CC_EXPORT ProxyImpl : public NON_EXPORTED_BASE(LayerTreeHostImplClient),
   // SchedulerClient implementation
   void WillBeginImplFrame(const BeginFrameArgs& args) override;
   void DidFinishImplFrame() override;
+  void DidNotProduceFrame(const BeginFrameAck& ack) override;
   void ScheduledActionSendBeginMainFrame(const BeginFrameArgs& args) override;
   DrawResult ScheduledActionDrawIfPossible() override;
   DrawResult ScheduledActionDrawForced() override;

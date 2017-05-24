@@ -16,7 +16,6 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/window_resizer.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm_window.h"
 #include "base/strings/string_number_conversions.h"
 #include "ui/aura/window.h"
@@ -243,9 +242,9 @@ TEST_F(ShelfWindowWatcherTest, DragWindow) {
   EXPECT_EQ(STATUS_ACTIVE, model_->items()[index].status);
 
   // Simulate dragging of the window and check its item is not changed.
-  std::unique_ptr<WindowResizer> resizer(CreateWindowResizer(
-      WmWindow::Get(widget->GetNativeWindow()), gfx::Point(), HTCAPTION,
-      aura::client::WINDOW_MOVE_SOURCE_MOUSE));
+  std::unique_ptr<WindowResizer> resizer(
+      CreateWindowResizer(widget->GetNativeWindow(), gfx::Point(), HTCAPTION,
+                          aura::client::WINDOW_MOVE_SOURCE_MOUSE));
   ASSERT_TRUE(resizer.get());
   resizer->Drag(gfx::Point(50, 50), 0);
   resizer->CompleteDrag();

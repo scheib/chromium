@@ -39,8 +39,7 @@ StylusTextSelector::StylusTextSelector(StylusTextSelectorClient* client)
     : client_(client),
       text_selection_triggered_(false),
       secondary_button_pressed_(false),
-      dragging_(false),
-      dragged_(false),
+      drag_state_(NO_DRAG),
       anchor_x_(0.0f),
       anchor_y_(0.0f) {
   DCHECK(client);
@@ -63,15 +62,15 @@ bool StylusTextSelector::OnTouchEvent(const MotionEvent& event) {
 
   switch (event.GetAction()) {
     case MotionEvent::ACTION_DOWN:
-      dragging_ = false;
-      dragged_ = false;
+      drag_state_ = NO_DRAG;
       anchor_x_ = event.GetX();
       anchor_y_ = event.GetY();
       break;
 
     case MotionEvent::ACTION_MOVE:
       if (!secondary_button_pressed_) {
-        dragging_ = false;
+        if (drag_state_ == DRAGGING_WITH_BUTTON_PRESSED)
+          drag_state_ = DRAGGING_WITH_BUTTON_RELEASED;
         anchor_x_ = event.GetX();
         anchor_y_ = event.GetY();
       }
@@ -79,10 +78,10 @@ bool StylusTextSelector::OnTouchEvent(const MotionEvent& event) {
 
     case MotionEvent::ACTION_UP:
     case MotionEvent::ACTION_CANCEL:
-      if (dragged_)
+      if (drag_state_ == DRAGGING_WITH_BUTTON_PRESSED ||
+          drag_state_ == DRAGGING_WITH_BUTTON_RELEASED)
         client_->OnStylusSelectEnd();
-      dragged_ = false;
-      dragging_ = false;
+      drag_state_ = NO_DRAG;
       break;
 
     case MotionEvent::ACTION_POINTER_UP:
@@ -110,7 +109,7 @@ bool StylusTextSelector::OnTouchEvent(const MotionEvent& event) {
 
 bool StylusTextSelector::OnSingleTapUp(const MotionEvent& e, int tap_count) {
   DCHECK(text_selection_triggered_);
-  DCHECK(!dragging_);
+  DCHECK_NE(DRAGGING_WITH_BUTTON_PRESSED, drag_state_);
   client_->OnStylusSelectTap(e.GetEventTime(), e.GetX(), e.GetY());
   return true;
 }
@@ -126,9 +125,8 @@ bool StylusTextSelector::OnScroll(const MotionEvent& e1,
   if (!secondary_button_pressed_)
     return true;
 
-  if (!dragging_) {
-    dragging_ = true;
-    dragged_ = true;
+  if (drag_state_ == NO_DRAG || drag_state_ == DRAGGING_WITH_BUTTON_RELEASED) {
+    drag_state_ = DRAGGING_WITH_BUTTON_PRESSED;
     client_->OnStylusSelectBegin(anchor_x_, anchor_y_, e2.GetX(), e2.GetY());
   } else {
     client_->OnStylusSelectUpdate(e2.GetX(), e2.GetY());

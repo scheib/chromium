@@ -3,34 +3,34 @@
 <body>
 <script>
 description('Tests that a script processor node is not prematurely GCed');
-var jsTestIsAsync = true;
+window.jsTestIsAsync = true;
 
 if (!window.internals) {
     testFailed('This test requires window.internals.');
     finishJSTest();
 }
 
-var wasCalled, wasCollectedPrematurely, savedNode, savedCallback;
+let wasCalled, wasCollectedPrematurely, savedNode, savedCallback;
 
 function test(saveReference, nextStep) {
     debug('Testing ' + (saveReference ? 'with' : 'without') + ' explicitly ' +
           'keeping a reference to the script processor node alive.');
 
     // Create an audio context
-    var context = new OfflineAudioContext(
+    let context = new OfflineAudioContext(
         2,        // channels
         4096,     // length (frames)
         44100.0); // sample rate
 
     // Set up a source, reading from an empty buffer
-    var source = context.createBufferSource();
+    let source = context.createBufferSource();
     source.buffer = context.createBuffer(
         2,        // source channels
         4096,     // length (frames)
         44100.0); // sample rate
 
     // Set up a script processor node to generate something
-    var node = context.createScriptProcessor(
+    let node = context.createScriptProcessor(
         512, // buffer size
         0,   // input channels
         2);  // output channels
@@ -43,7 +43,7 @@ function test(saveReference, nextStep) {
     // generate anything
 
     wasCalled = false;
-    var callback = function () { wasCalled = true; };
+    let callback = function () { wasCalled = true; };
     node.onaudioprocess = callback;
 
     if (saveReference) {
@@ -53,7 +53,7 @@ function test(saveReference, nextStep) {
 
     // Watch the callback; if it dies, we're obviously not generating anything
 
-    var observation = internals.observeGC(callback);
+    let observation = internals.observeGC(callback);
     node = callback = null;
     gc();
     wasCollectedPrematurely = observation.wasCollected;
@@ -83,5 +83,5 @@ function step2() {
 
 step1();
 
-var successfullyParsed = true;
+window.successfullyParsed = true;
 </script>

@@ -11,14 +11,9 @@ renderers using a `SUID` helper binary. This is one of
 ## `SUID` helper executable
 
 The `SUID` helper binary is called `chrome_sandbox` and you must build it
-separately from the main 'chrome' target. To use this sandbox, you have to
-specify its path in the `linux_sandbox_path` GYP variable. When spawning the
-[zygote process](linux_zygote.md), if the `SUID` sandbox is enabled, Chromium
-will check for the sandbox binary at the location specified by
-`linux_sandbox_path`. For Google Chrome, this is set to
-`/opt/google/chrome/chrome-sandbox`, and early version had this value hard coded
-in `chrome/browser/zygote_host_linux.cc`.
-
+separately from the main 'chrome' target. Chrome now just assumes it's next
+to the executable in the same directory. You can also control its path
+by CHROME_DEVEL_SANDBOX environment variable.
 
 In order for the sandbox to be used, the following conditions must be met:
 

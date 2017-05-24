@@ -18,7 +18,6 @@ import org.junit.runner.RunWith;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
-import org.chromium.base.test.util.FlakyTest;
 import org.chromium.base.test.util.MinAndroidSdkLevel;
 import org.chromium.base.test.util.RetryOnFailure;
 import org.chromium.base.test.util.UrlUtils;
@@ -44,7 +43,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @RetryOnFailure
-@CommandLineFlags.Add({ChromeSwitches.ENABLE_AUTOFILL_KEYBOARD_ACCESSORY,
+@CommandLineFlags.Add({"enable-features=AutofillKeyboardAccessory",
         ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
         ChromeActivityTestRule.DISABLE_NETWORK_PREDICTION_FLAG})
 public class AutofillKeyboardAccessoryTest {
@@ -113,7 +112,7 @@ public class AutofillKeyboardAccessoryTest {
     @MediumTest
     @Feature({"keyboard-accessory"})
     public void testAutofocusedFieldDoesNotShowKeyboardAccessory()
-            throws InterruptedException, ExecutionException, TimeoutException {
+            throws ExecutionException, InterruptedException, TimeoutException {
         loadTestPage(false);
         Assert.assertTrue("Keyboard accessory should be hidden.",
                 ThreadUtils
@@ -157,12 +156,9 @@ public class AutofillKeyboardAccessoryTest {
     /**
      * Switching fields should re-scroll the keyboard accessory to the left.
      */
-    /*
+    @Test
     @MediumTest
     @Feature({"keyboard-accessory"})
-    */
-    @Test
-    @FlakyTest(message = "https://crbug.com/563640")
     public void testSwitchFieldsRescrollsKeyboardAccessory()
             throws ExecutionException, InterruptedException, TimeoutException {
         loadTestPage(false);

@@ -35,14 +35,24 @@ LocalCurrentGraphicsContext::LocalCurrentGraphicsContext(
                                   graphics_context.DeviceScaleFactor(),
                                   dirty_rect) {}
 
-static IntRect ClampRect(int size, const IntRect& rect) {
-  IntRect clamped_rect(rect);
-  clamped_rect.SetSize(IntSize(std::min(size, clamped_rect.Width()),
-                               std::min(size, clamped_rect.Height())));
-  return clamped_rect;
-}
-
 static const int kMaxDirtyRectPixelSize = 10000;
+
+static SkIRect LocalToClampedDeviceRect(PaintCanvas* canvas,
+                                        const IntRect& local) {
+  const SkMatrix& matrix = canvas->getTotalMatrix();
+  SkRect device;
+  if (!matrix.mapRect(&device, local))
+    return SkIRect();
+  // Constrain the maximum size of what we paint to something reasonable. This
+  // accordingly means we will not paint the entirety of truly huge native form
+  // elements, which is deemed an acceptable tradeoff for this simple approach
+  // to manage such an edge case.
+  SkIRect idevice = device.roundOut();
+  idevice.intersect(SkIRect::MakeXYWH(idevice.x(), idevice.y(),
+                                      kMaxDirtyRectPixelSize,
+                                      kMaxDirtyRectPixelSize));
+  return idevice;
+}
 
 LocalCurrentGraphicsContext::LocalCurrentGraphicsContext(
     PaintCanvas* canvas,
@@ -50,20 +60,12 @@ LocalCurrentGraphicsContext::LocalCurrentGraphicsContext(
     const IntRect& dirty_rect)
     : did_set_graphics_context_(false),
       inflated_dirty_rect_(ThemeMac::InflateRectForAA(dirty_rect)),
-      graphics_context_canvas_(canvas,
-                               inflated_dirty_rect_,
-                               device_scale_factor) {
+      graphics_context_canvas_(
+          canvas,
+          LocalToClampedDeviceRect(canvas, inflated_dirty_rect_),
+          device_scale_factor) {
   saved_canvas_ = canvas;
   canvas->save();
-
-  // Constrain the maximum size of what we paint to something reasonable. This
-  // accordingly means we will not paint the entirety of truly huge native form
-  // elements, which is deemed an acceptable tradeoff for this simple approach
-  // to manage such an edge case.
-  if (dirty_rect.Width() > kMaxDirtyRectPixelSize ||
-      dirty_rect.Height() > kMaxDirtyRectPixelSize)
-    canvas->clipRect(ClampRect(kMaxDirtyRectPixelSize, dirty_rect),
-                     SkRegion::kIntersect_Op);
 
   CGContextRef cg_context = this->CgContext();
   if (cg_context == [[NSGraphicsContext currentContext] graphicsPort]) {

@@ -6,6 +6,7 @@ include_rules = [
     "+base/metrics",
     "+base/optional.h",
     "+base/strings",
+    "+base/time",
     "+base/trace_event",
     "-bindings",
     "+cc",

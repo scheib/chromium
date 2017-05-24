@@ -13,7 +13,23 @@
       'includes': ['../../../../third_party/closure_compiler/include_js.gypi'],
     },
     {
+      'target_name': 'file_browser_background',
+      'includes': ['../../../../third_party/closure_compiler/include_js.gypi'],
+    },
+    {
+      'target_name': 'file_browser_background_full',
+      'includes': ['../../../../third_party/closure_compiler/include_js.gypi'],
+    },
+    {
       'target_name': 'file_operation_manager',
+      'includes': ['../../../../third_party/closure_compiler/include_js.gypi'],
+    },
+    {
+      'target_name': 'import_history',
+      'includes': ['../../../../third_party/closure_compiler/include_js.gypi'],
+    },
+    {
+      'target_name': 'import_history_enum',
       'includes': ['../../../../third_party/closure_compiler/include_js.gypi'],
     },
     {

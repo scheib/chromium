@@ -1,14 +1,14 @@
 AXWebArea
 ++AXList
-++++AXGroup AXTitle='grabbed-true blue' AXGrabbed='1'
+++++AXGroup AXGrabbed='1'
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='grabbed-true '
 ++++++AXImage AXDescription='blue'
-++++AXGroup AXTitle='grabbed-false blue' AXGrabbed='0'
+++++AXGroup AXGrabbed='0'
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='grabbed-false '
 ++++++AXImage AXDescription='blue'
-++++AXGroup AXTitle='grabbed-undefined blue'
+++++AXGroup
 ++++++AXListMarker AXValue='•'
 ++++++AXStaticText AXValue='grabbed-undefined '
 ++++++AXImage AXDescription='blue'

@@ -53,10 +53,13 @@ void ReportUmaThreatSubType(SBThreatType threat_type,
 ThreatPatternType ParseThreatSubType(
     const base::DictionaryValue* match,
     SBThreatType threat_type) {
-  std::string pattern_key;
-  if (threat_type == SB_THREAT_TYPE_SUBRESOURCE_FILTER) {
+  if (threat_type == SB_THREAT_TYPE_SUBRESOURCE_FILTER ||
+      threat_type == SB_THREAT_TYPE_URL_UNWANTED) {
     return ThreatPatternType::NONE;
-  } else if (threat_type == SB_THREAT_TYPE_URL_MALWARE) {
+  }
+
+  std::string pattern_key;
+  if (threat_type == SB_THREAT_TYPE_URL_MALWARE) {
     pattern_key = "pha_pattern_type";
   } else {
     DCHECK(threat_type == SB_THREAT_TYPE_URL_PHISHING);
@@ -113,25 +116,31 @@ std::string ParseUserPopulation(const base::DictionaryValue* match) {
     return population_id;
 }
 
-int GetThreatSeverity(int java_threat_num) {
-  // Assign higher numbers to more severe threats.
-  switch (java_threat_num) {
+// Returns the severity level for a given SafeBrowsing list. The lowest value is
+// 0, which represents the most severe list.
+int GetThreatSeverity(JavaThreatTypes threat_type) {
+  switch (threat_type) {
     case JAVA_THREAT_TYPE_POTENTIALLY_HARMFUL_APPLICATION:
-      return 3;
+      return 0;
     case JAVA_THREAT_TYPE_SOCIAL_ENGINEERING:
+      return 1;
+    case JAVA_THREAT_TYPE_UNWANTED_SOFTWARE:
       return 2;
     case JAVA_THREAT_TYPE_SUBRESOURCE_FILTER:
-      return 1;
-    default:
-      // Unknown threat type
-      return -1;
+      return 3;
+    case JAVA_THREAT_TYPE_MAX_VALUE:
+      return std::numeric_limits<int>::max();
   }
+  NOTREACHED() << "Unhandled threat_type: " << threat_type;
+  return std::numeric_limits<int>::max();
 }
 
 SBThreatType JavaToSBThreatType(int java_threat_num) {
   switch (java_threat_num) {
     case JAVA_THREAT_TYPE_POTENTIALLY_HARMFUL_APPLICATION:
       return SB_THREAT_TYPE_URL_MALWARE;
+    case JAVA_THREAT_TYPE_UNWANTED_SOFTWARE:
+      return SB_THREAT_TYPE_URL_UNWANTED;
     case JAVA_THREAT_TYPE_SOCIAL_ENGINEERING:
       return SB_THREAT_TYPE_URL_PHISHING;
     case JAVA_THREAT_TYPE_SUBRESOURCE_FILTER:
@@ -152,9 +161,9 @@ SBThreatType JavaToSBThreatType(int java_threat_num) {
 //   or
 // {"matches":[{"threat_type":"4", "UserPopulation":"YXNvZWZpbmFqO..."}]
 UmaRemoteCallResult ParseJsonFromGMSCore(const std::string& metadata_str,
-                                         SBThreatType* worst_threat,
+                                         SBThreatType* worst_sb_threat_type,
                                          ThreatMetadata* metadata) {
-  *worst_threat = SB_THREAT_TYPE_SAFE;  // Default to safe.
+  *worst_sb_threat_type = SB_THREAT_TYPE_SAFE;  // Default to safe.
   *metadata = ThreatMetadata();  // Default values.
 
   if (metadata_str.empty())
@@ -171,33 +180,37 @@ UmaRemoteCallResult ParseJsonFromGMSCore(const std::string& metadata_str,
   }
 
   // Go through each matched threat type and pick the most severe.
-  int worst_threat_num = -1;
+  JavaThreatTypes worst_threat_type = JAVA_THREAT_TYPE_MAX_VALUE;
   const base::DictionaryValue* worst_match = nullptr;
   for (size_t i = 0; i < matches->GetSize(); i++) {
     // Get the threat number
     const base::DictionaryValue* match;
     std::string threat_num_str;
-    int java_threat_num = -1;
+
+    int threat_type_num;
     if (!matches->GetDictionary(i, &match) ||
         !match->GetString(kJsonKeyThreatType, &threat_num_str) ||
-        !base::StringToInt(threat_num_str, &java_threat_num)) {
+        !base::StringToInt(threat_num_str, &threat_type_num)) {
       continue;  // Skip malformed list entries
     }
 
-    if (GetThreatSeverity(java_threat_num) >
-        GetThreatSeverity(worst_threat_num)) {
-      worst_threat_num = java_threat_num;
+    JavaThreatTypes threat_type = static_cast<JavaThreatTypes>(threat_type_num);
+    if (threat_type > JAVA_THREAT_TYPE_MAX_VALUE) {
+      threat_type = JAVA_THREAT_TYPE_MAX_VALUE;
+    }
+    if (GetThreatSeverity(threat_type) < GetThreatSeverity(worst_threat_type)) {
+      worst_threat_type = threat_type;
       worst_match = match;
     }
   }
 
-  *worst_threat = JavaToSBThreatType(worst_threat_num);
-  if (*worst_threat == SB_THREAT_TYPE_SAFE || !worst_match)
+  *worst_sb_threat_type = JavaToSBThreatType(worst_threat_type);
+  if (*worst_sb_threat_type == SB_THREAT_TYPE_SAFE || !worst_match)
     return UMA_STATUS_JSON_UNKNOWN_THREAT;
 
   // Fill in the metadata
   metadata->threat_pattern_type =
-      ParseThreatSubType(worst_match, *worst_threat);
+      ParseThreatSubType(worst_match, *worst_sb_threat_type);
   metadata->population_id = ParseUserPopulation(worst_match);
 
   return UMA_STATUS_MATCH;  // success

@@ -5,6 +5,7 @@
 #ifndef CC_LAYERS_SCROLLBAR_LAYER_IMPL_BASE_H_
 #define CC_LAYERS_SCROLLBAR_LAYER_IMPL_BASE_H_
 
+#include "base/containers/flat_set.h"
 #include "base/macros.h"
 #include "cc/cc_export.h"
 #include "cc/input/scrollbar.h"
@@ -96,7 +97,7 @@ class CC_EXPORT ScrollbarLayerImplBase : public LayerImpl {
   DISALLOW_COPY_AND_ASSIGN(ScrollbarLayerImplBase);
 };
 
-typedef std::set<ScrollbarLayerImplBase*> ScrollbarSet;
+using ScrollbarSet = base::flat_set<ScrollbarLayerImplBase*>;
 
 }  // namespace cc
 

@@ -5,7 +5,7 @@
 #include "ios/chrome/browser/net/chrome_cookie_store_ios_client.h"
 
 #include "base/logging.h"
-#include "base/threading/sequenced_worker_pool.h"
+#include "base/task_scheduler/post_task.h"
 #import "ios/chrome/browser/browsing_data/browsing_data_change_listening.h"
 #include "ios/web/public/web_thread.h"
 
@@ -29,7 +29,6 @@ void ChromeCookieStoreIOSClient::DidChangeCookieStorage() const {
 scoped_refptr<base::SequencedTaskRunner>
 ChromeCookieStoreIOSClient::GetTaskRunner() const {
   DCHECK(thread_checker_.CalledOnValidThread());
-
-  base::SequencedWorkerPool* pool = web::WebThread::GetBlockingPool();
-  return pool->GetSequencedTaskRunner(pool->GetSequenceToken()).get();
+  return base::CreateSequencedTaskRunnerWithTraits(
+      {base::MayBlock(), base::TaskPriority::BACKGROUND});
 }

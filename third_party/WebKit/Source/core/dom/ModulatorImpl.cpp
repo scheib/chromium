@@ -118,7 +118,8 @@ bool ModulatorImpl::HasValidContext() {
 ScriptModule ModulatorImpl::CompileModule(
     const String& provided_source,
     const String& url_str,
-    AccessControlStatus access_control_status) {
+    AccessControlStatus access_control_status,
+    const TextPosition& position) {
   // Implements Steps 3-6 of
   // https://html.spec.whatwg.org/multipage/webappapis.html#creating-a-module-script
 
@@ -138,7 +139,7 @@ ScriptModule ModulatorImpl::CompileModule(
   // Note: reporting is routed via V8Initializer::messageHandlerInMainThread.
   ScriptState::Scope scope(script_state_.Get());
   return ScriptModule::Compile(script_state_->GetIsolate(), script_source,
-                               url_str, access_control_status);
+                               url_str, access_control_status, position);
 }
 
 ScriptValue ModulatorImpl::InstantiateModule(ScriptModule script_module) {

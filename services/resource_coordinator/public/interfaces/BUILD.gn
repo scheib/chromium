@@ -11,8 +11,8 @@ mojom("interfaces_internal") {
     "coordination_unit.mojom",
     "coordination_unit_provider.mojom",
     "events.mojom",
-    "memory/constants.mojom",
-    "memory/memory_instrumentation.mojom",
+    "memory_instrumentation/constants.mojom",
+    "memory_instrumentation/memory_instrumentation.mojom",
     "service_constants.mojom",
     "tracing/tracing.mojom",
   ]

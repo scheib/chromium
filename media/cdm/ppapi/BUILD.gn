@@ -27,7 +27,7 @@ shared_library("clearkeycdm") {
 
   deps = [
     "//base",
-    "//build/config/sanitizers:deps",
+    "//build/config:exe_and_shlib_deps",
     "//media",  # For media::AudioTimestampHelper
     "//media:cdm_api",  # For content_decryption_module.h
     "//media:shared_memory_support",  # For media::AudioBus.

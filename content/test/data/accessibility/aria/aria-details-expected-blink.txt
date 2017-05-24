@@ -1,5 +1,5 @@
 rootWebArea
-++div
+++genericContainer
 ++++textField detailsIds=paragraph
 ++paragraph
 ++++staticText name='Details'

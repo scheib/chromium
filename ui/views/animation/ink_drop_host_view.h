@@ -107,6 +107,8 @@ class VIEWS_EXPORT InkDropHostView : public View, public InkDropHost {
 
   // Subclasses can override to return a mask for the ink drop. By default,
   // returns nullptr (i.e no mask).
+  // TODO(bruthig): InkDropMasks do not currently work on Windows. See
+  // crbug.com/713359.
   virtual std::unique_ptr<views::InkDropMask> CreateInkDropMask() const;
 
   // Provides access to |ink_drop_|. Implements lazy initialization of

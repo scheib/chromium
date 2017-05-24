@@ -8,7 +8,6 @@
 #include "ash/shell.h"
 #include "ash/wm/lock_window_state.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm_window.h"
 #include "ui/events/event.h"

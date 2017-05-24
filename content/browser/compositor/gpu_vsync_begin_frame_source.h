@@ -27,7 +27,6 @@ class GpuVSyncBeginFrameSource : public cc::ExternalBeginFrameSource,
 
   // cc::ExternalBeginFrameSourceClient implementation.
   void OnNeedsBeginFrames(bool needs_begin_frames) override;
-  void OnDidFinishFrame(const cc::BeginFrameAck& ack) override;
 
   void OnVSync(base::TimeTicks timestamp, base::TimeDelta interval);
 

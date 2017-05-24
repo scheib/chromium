@@ -88,7 +88,7 @@ class STORAGE_EXPORT FileSystemUsageCache {
 
   bool HasCacheFileHandle(const base::FilePath& file_path);
 
-  bool CalledOnValidThread();
+  bool CalledOnValidSequence();
 
   std::unique_ptr<TimedTaskHelper> timer_;
   std::map<base::FilePath, std::unique_ptr<base::File>> cache_files_;

@@ -29,7 +29,6 @@
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/controls/tabbed_pane/tabbed_pane.h"
 #include "ui/views/layout/box_layout.h"
-#include "ui/views/layout/layout_constants.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/dialog_client_view.h"
 #include "ui/wm/core/shadow_types.h"
@@ -65,11 +64,13 @@ DesktopMediaPickerDialogView::DesktopMediaPickerDialogView(
       description_label_(new views::Label()),
       audio_share_checkbox_(nullptr),
       pane_(new views::TabbedPane()) {
+  ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
+
   SetLayoutManager(new views::BoxLayout(
-      views::BoxLayout::kVertical, views::kButtonHEdgeMarginNew,
-      ChromeLayoutProvider::Get()->GetDistanceMetric(
-          DISTANCE_PANEL_CONTENT_MARGIN),
-      views::kLabelToControlVerticalSpacing));
+      views::BoxLayout::kVertical,
+      provider->GetDistanceMetric(DISTANCE_DIALOG_BUTTON_MARGIN),
+      provider->GetDistanceMetric(DISTANCE_PANEL_CONTENT_MARGIN),
+      provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL)));
 
   description_label_->SetMultiLine(true);
   description_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);

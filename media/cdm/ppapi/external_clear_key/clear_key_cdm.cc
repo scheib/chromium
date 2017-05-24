@@ -206,7 +206,7 @@ cdm::KeyStatus ConvertKeyStatus(media::CdmKeyInformation::KeyStatus status) {
 // Shallow copy all the key information from |keys_info| into |keys_vector|.
 // |keys_vector| is only valid for the lifetime of |keys_info| because it
 // contains pointers into the latter.
-void ConvertCdmKeysInfo(const std::vector<media::CdmKeyInformation*>& keys_info,
+void ConvertCdmKeysInfo(const media::CdmKeysInfo& keys_info,
                         std::vector<cdm::KeyInformation>* keys_vector) {
   keys_vector->reserve(keys_info.size());
   for (const auto& key_info : keys_info) {
@@ -868,7 +868,7 @@ void ClearKeyCdm::OnSessionKeysChange(const std::string& session_id,
   }
 
   std::vector<cdm::KeyInformation> keys_vector;
-  ConvertCdmKeysInfo(keys_info.get(), &keys_vector);
+  ConvertCdmKeysInfo(keys_info, &keys_vector);
   host_->OnSessionKeysChange(new_session_id.data(), new_session_id.length(),
                              has_additional_usable_key, keys_vector.data(),
                              keys_vector.size());
@@ -943,7 +943,7 @@ void ClearKeyCdm::OnLoadSessionUpdated() {
     keys_info.swap(keys_info_for_emulated_loadsession_);
     has_received_keys_change_event_for_emulated_loadsession_ = false;
     DCHECK(!keys_vector.empty());
-    ConvertCdmKeysInfo(keys_info.get(), &keys_vector);
+    ConvertCdmKeysInfo(keys_info, &keys_vector);
     host_->OnSessionKeysChange(kLoadableSessionId, strlen(kLoadableSessionId),
                                !keys_vector.empty(), keys_vector.data(),
                                keys_vector.size());

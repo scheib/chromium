@@ -242,7 +242,8 @@ class RebaselineCLTest(BaseTestCase, LoggingTestCase):
         self.assertLog([
             'INFO: Triggering try jobs for:\n',
             'INFO:   MOCK Try Linux\n',
-            'INFO: Please re-run webkit-patch rebaseline-cl once all pending try jobs have finished.\n',
+            'INFO: Once all pending try jobs have finished, please re-run\n'
+            'webkit-patch rebaseline-cl to fetch new baselines.\n',
         ])
         self.assertEqual(
             self.tool.executive.calls,
@@ -304,6 +305,8 @@ class RebaselineCLTest(BaseTestCase, LoggingTestCase):
             'INFO: Triggering try jobs for:\n',
             'INFO:   MOCK Try Linux\n',
             'INFO:   MOCK Try Win\n',
+            'INFO: Once all pending try jobs have finished, please re-run\n'
+            'webkit-patch rebaseline-cl to fetch new baselines.\n',
         ])
 
     def test_builders_with_pending_builds(self):

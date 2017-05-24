@@ -212,25 +212,14 @@ void ArcSessionManager::OnSessionStopped(ArcStopReason reason,
     return;
   }
 
+  SetState(State::STOPPED);
+
   // TODO(crbug.com/625923): Use |reason| to report more detailed errors.
   if (arc_sign_in_timer_.IsRunning())
     OnProvisioningFinished(ProvisioningResult::ARC_STOPPED);
 
   for (auto& observer : observer_list_)
     observer.OnArcSessionStopped(reason);
-
-  // Transition to the ARC data remove state.
-  if (!profile_->GetPrefs()->GetBoolean(prefs::kArcDataRemoveRequested)) {
-    // TODO(crbug.com/665316): This is the workaround for the bug.
-    // If it is not necessary to remove the data, MaybeStartArcDataRemoval()
-    // synchronously calls MaybeReenableArc(), which causes unexpected
-    // ARC session stop. (Please see the bug for details).
-    SetState(State::REMOVING_DATA_DIR);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::Bind(&ArcSessionManager::MaybeReenableArc,
-                              weak_ptr_factory_.GetWeakPtr()));
-    return;
-  }
 
   MaybeStartArcDataRemoval();
 }
@@ -879,9 +868,7 @@ void ArcSessionManager::MaybeStartArcDataRemoval() {
   DCHECK(profile_);
   // Data removal cannot run in parallel with ARC session.
   DCHECK(arc_session_runner_->IsStopped());
-
-  // TODO(hidehiko): DCHECK the previous state, when the state machine is
-  // fixed.
+  DCHECK_EQ(State::STOPPED, state_);
   SetState(State::REMOVING_DATA_DIR);
 
   // TODO(hidehiko): Extract the implementation of data removal, so that

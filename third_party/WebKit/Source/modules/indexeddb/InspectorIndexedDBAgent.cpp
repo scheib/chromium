@@ -782,7 +782,7 @@ void InspectorIndexedDBAgent::requestDatabaseNames(
   ScriptState::Scope scope(script_state);
   DummyExceptionStateForTesting exception_state;
   IDBRequest* idb_request =
-      idb_factory->getDatabaseNames(script_state, exception_state);
+      idb_factory->GetDatabaseNames(script_state, exception_state);
   if (exception_state.HadException()) {
     request_callback->sendFailure(
         Response::Error("Could not obtain database names."));

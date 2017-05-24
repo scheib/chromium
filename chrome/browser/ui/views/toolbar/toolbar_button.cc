@@ -16,6 +16,8 @@
 #include "ui/base/models/menu_model.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
+#include "ui/views/animation/ink_drop_highlight.h"
+#include "ui/views/animation/ink_drop_ripple.h"
 #include "ui/views/controls/button/label_button_border.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
@@ -25,7 +27,7 @@
 ToolbarButton::ToolbarButton(Profile* profile,
                              views::ButtonListener* listener,
                              ui::MenuModel* model)
-    : views::LabelButton(listener, base::string16()),
+    : views::ImageButton(listener),
       profile_(profile),
       model_(model),
       menu_showing_(false),
@@ -35,13 +37,18 @@ ToolbarButton::ToolbarButton(Profile* profile,
   set_context_menu_controller(this);
   SetInkDropMode(InkDropMode::ON);
   SetFocusPainter(nullptr);
+  SetLeadingMargin(0);
 }
 
 ToolbarButton::~ToolbarButton() {}
 
 void ToolbarButton::Init() {
   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
-  image()->EnableCanvasFlippingForRTLUI(true);
+}
+
+void ToolbarButton::SetLeadingMargin(int margin) {
+  SetBorder(views::CreateEmptyBorder(gfx::Insets(kInteriorPadding) +
+                                     gfx::Insets(0, margin, 0, 0)));
 }
 
 void ToolbarButton::ClearPendingMenu() {
@@ -50,13 +57,6 @@ void ToolbarButton::ClearPendingMenu() {
 
 bool ToolbarButton::IsMenuShowing() const {
   return menu_showing_;
-}
-
-gfx::Size ToolbarButton::GetPreferredSize() const {
-  DCHECK(label()->text().empty());
-  gfx::Rect rect(gfx::Size(image()->GetPreferredSize()));
-  rect.Inset(gfx::Insets(-kInteriorPadding));
-  return rect.size();
 }
 
 bool ToolbarButton::OnMousePressed(const ui::MouseEvent& event) {
@@ -77,11 +77,11 @@ bool ToolbarButton::OnMousePressed(const ui::MouseEvent& event) {
         base::TimeDelta::FromMilliseconds(kMenuTimerDelay));
   }
 
-  return LabelButton::OnMousePressed(event);
+  return ImageButton::OnMousePressed(event);
 }
 
 bool ToolbarButton::OnMouseDragged(const ui::MouseEvent& event) {
-  bool result = LabelButton::OnMouseDragged(event);
+  bool result = ImageButton::OnMouseDragged(event);
 
   if (show_menu_factory_.HasWeakPtrs()) {
     // If the mouse is dragged to a y position lower than where it was when
@@ -99,7 +99,7 @@ bool ToolbarButton::OnMouseDragged(const ui::MouseEvent& event) {
 void ToolbarButton::OnMouseReleased(const ui::MouseEvent& event) {
   if (IsTriggerableEvent(event) ||
       (event.IsRightMouseButton() && !HitTestPoint(event.location()))) {
-    LabelButton::OnMouseReleased(event);
+    ImageButton::OnMouseReleased(event);
   }
 
   if (IsTriggerableEvent(event))
@@ -124,7 +124,7 @@ void ToolbarButton::OnGestureEvent(ui::GestureEvent* event) {
     return;
   }
 
-  LabelButton::OnGestureEvent(event);
+  ImageButton::OnGestureEvent(event);
 }
 
 void ToolbarButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
@@ -137,15 +137,15 @@ void ToolbarButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   }
 }
 
-std::unique_ptr<views::LabelButtonBorder> ToolbarButton::CreateDefaultBorder()
+std::unique_ptr<views::InkDropRipple> ToolbarButton::CreateInkDropRipple()
     const {
-  std::unique_ptr<views::LabelButtonBorder> border =
-      views::LabelButton::CreateDefaultBorder();
+  return CreateDefaultInkDropRipple(GetContentsBounds().CenterPoint());
+}
 
-  if (ThemeServiceFactory::GetForProfile(profile_)->UsingSystemTheme())
-    border->set_insets(gfx::Insets(kInteriorPadding));
-
-  return border;
+std::unique_ptr<views::InkDropHighlight> ToolbarButton::CreateInkDropHighlight()
+    const {
+  return CreateDefaultInkDropHighlight(
+      gfx::RectF(GetContentsBounds()).CenterPoint());
 }
 
 void ToolbarButton::ShowContextMenuForView(View* source,

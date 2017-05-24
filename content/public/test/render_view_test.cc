@@ -138,8 +138,8 @@ RenderViewTest::RendererBlinkPlatformImplTestOverride::
     ~RendererBlinkPlatformImplTestOverride() {
 }
 
-blink::Platform*
-    RenderViewTest::RendererBlinkPlatformImplTestOverride::Get() const {
+RendererBlinkPlatformImpl*
+RenderViewTest::RendererBlinkPlatformImplTestOverride::Get() const {
   return blink_platform_impl_.get();
 }
 
@@ -278,6 +278,9 @@ void RenderViewTest::SetUp() {
   // since we are using a MockRenderThread.
   RenderThreadImpl::RegisterSchemes();
 
+  RenderThreadImpl::SetRendererBlinkPlatformImplForTesting(
+      blink_platform_impl_.Get());
+
   // This check is needed because when run under content_browsertests,
   // ResourceBundle isn't initialized (since we have to use a diferent test
   // suite implementation than for content_unittests). For browser_tests, this
@@ -327,6 +330,8 @@ void RenderViewTest::TearDown() {
 
   view_ = NULL;
   mock_process_.reset();
+
+  RenderThreadImpl::SetRendererBlinkPlatformImplForTesting(nullptr);
 
   // After telling the view to close and resetting mock_process_ we may get
   // some new tasks which need to be processed before shutting down WebKit

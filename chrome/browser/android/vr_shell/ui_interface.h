@@ -30,6 +30,7 @@ class UiInterface {
   virtual void SetWebVrSecureOrigin(bool secure) = 0;
   virtual void SetLoading(bool loading) = 0;
   virtual void SetLoadProgress(float progress) = 0;
+  virtual void SetIsExiting() = 0;
   virtual void SetHistoryButtonsEnabled(bool can_go_back,
                                         bool can_go_forward) = 0;
   virtual void SetVideoCapturingIndicator(bool enabled) = 0;

@@ -42,7 +42,6 @@
 #include "cc/trees/clip_node.h"
 #include "cc/trees/draw_property_utils.h"
 #include "cc/trees/effect_node.h"
-#include "cc/trees/layer_tree_impl.h"
 #include "cc/trees/property_tree_builder.h"
 #include "cc/trees/scroll_node.h"
 #include "cc/trees/single_thread_proxy.h"
@@ -603,10 +602,10 @@ TEST_F(LayerTreeHostCommonTest, TransformsAboutScrollOffset) {
 
   // Test that page scale is updated even when we don't rebuild property trees.
   page_scale = 1.888f;
-  root_layer->layer_tree_impl()->SetViewportLayersFromIds(
-      Layer::INVALID_ID, scroll_layer->test_properties()->parent->id(),
-      Layer::INVALID_ID, Layer::INVALID_ID, Layer::INVALID_ID,
-      Layer::INVALID_ID);
+
+  LayerTreeImpl::ViewportLayerIds viewport_ids;
+  viewport_ids.page_scale = scroll_layer->test_properties()->parent->id();
+  root_layer->layer_tree_impl()->SetViewportLayersFromIds(viewport_ids);
   root_layer->layer_tree_impl()->SetPageScaleOnActiveTree(page_scale);
   EXPECT_FALSE(root_layer->layer_tree_impl()->property_trees()->needs_rebuild);
   ExecuteCalculateDrawProperties(root_layer, kDeviceScale, page_scale,
@@ -4110,9 +4109,9 @@ TEST_F(LayerTreeHostCommonScalingTest, SurfaceLayerTransformsInHighDPI) {
 
   float device_scale_factor = 2.5f;
   float page_scale_factor = 3.f;
-  root->layer_tree_impl()->SetViewportLayersFromIds(
-      Layer::INVALID_ID, page_scale->id(), Layer::INVALID_ID, Layer::INVALID_ID,
-      Layer::INVALID_ID, Layer::INVALID_ID);
+  LayerTreeImpl::ViewportLayerIds viewport_ids;
+  viewport_ids.page_scale = page_scale->id();
+  root->layer_tree_impl()->SetViewportLayersFromIds(viewport_ids);
   root->layer_tree_impl()->BuildLayerListAndPropertyTreesForTesting();
   root->layer_tree_impl()->SetPageScaleOnActiveTree(page_scale_factor);
   ExecuteCalculateDrawProperties(root, device_scale_factor, page_scale_factor,
@@ -4427,13 +4426,13 @@ TEST_F(LayerTreeHostCommonTest, OpacityAnimatingOnPendingTree) {
   inputs.can_adjust_raster_scales = true;
   LayerTreeHostCommon::CalculateDrawPropertiesForTesting(&inputs);
 
-  // We should have one render surface and one layer. The child
-  // layer should not be included as its transparent.
+  // We should have one render surface and two layers. The child
+  // layer should be included even though it is transparent.
   ASSERT_EQ(1u, render_surface_list.size());
-  ASSERT_EQ(1, GetRenderSurface(root_layer)->num_contributors());
+  ASSERT_EQ(2, GetRenderSurface(root_layer)->num_contributors());
 
-  // If the root itself is hidden, the child should not be drawn and should not
-  // raster even if it has an animating opacity.
+  // If the root itself is hidden, the child should not be drawn even if it has
+  // an animating opacity.
   root_layer->test_properties()->opacity = 0.0f;
   root_layer->layer_tree_impl()->property_trees()->needs_rebuild = true;
   RenderSurfaceList render_surface_list2;
@@ -4443,11 +4442,13 @@ TEST_F(LayerTreeHostCommonTest, OpacityAnimatingOnPendingTree) {
   LayerTreeHostCommon::CalculateDrawPropertiesForTesting(&inputs2);
 
   LayerImpl* child_ptr = root_layer->layer_tree_impl()->LayerById(2);
-  EXPECT_FALSE(child_ptr->contributes_to_drawn_render_surface());
-  EXPECT_FALSE(child_ptr->raster_even_if_not_in_rsll());
+  EffectTree& tree =
+      root_layer->layer_tree_impl()->property_trees()->effect_tree;
+  EffectNode* node = tree.Node(child_ptr->effect_tree_index());
+  EXPECT_FALSE(node->is_drawn);
 
-  // The child layer should not be drawn as its transparent but should raster
-  // as its opacity is animating.
+  // A layer should be drawn and it should contribute to drawn surface when
+  // it has animating opacity even if it has opacity 0.
   root_layer->test_properties()->opacity = 1.0f;
   child_ptr->test_properties()->opacity = 0.0f;
   root_layer->layer_tree_impl()->property_trees()->needs_rebuild = true;
@@ -4458,19 +4459,27 @@ TEST_F(LayerTreeHostCommonTest, OpacityAnimatingOnPendingTree) {
   LayerTreeHostCommon::CalculateDrawPropertiesForTesting(&inputs3);
 
   child_ptr = root_layer->layer_tree_impl()->LayerById(2);
-  EXPECT_FALSE(child_ptr->contributes_to_drawn_render_surface());
-  EXPECT_TRUE(child_ptr->raster_even_if_not_in_rsll());
+  tree = root_layer->layer_tree_impl()->property_trees()->effect_tree;
+  node = tree.Node(child_ptr->effect_tree_index());
+  EXPECT_TRUE(node->is_drawn);
+  EXPECT_TRUE(tree.ContributesToDrawnSurface(child_ptr->effect_tree_index()));
 
-  // The child layer should not be drawn as its transparent but should raster
-  // as its opacity is animating even after activation.
+  // But if the opacity of the layer remains 0 after activation, it should not
+  // be drawn.
   host_impl.ActivateSyncTree();
   LayerImpl* active_root = host_impl.active_tree()->LayerById(root_layer->id());
   LayerImpl* active_child = host_impl.active_tree()->LayerById(child_ptr->id());
 
+  EffectTree& active_effect_tree =
+      host_impl.active_tree()->property_trees()->effect_tree;
+  EXPECT_TRUE(active_effect_tree.needs_update());
+
   ExecuteCalculateDrawProperties(active_root);
 
-  EXPECT_FALSE(active_child->contributes_to_drawn_render_surface());
-  EXPECT_TRUE(active_child->raster_even_if_not_in_rsll());
+  node = active_effect_tree.Node(active_child->effect_tree_index());
+  EXPECT_FALSE(node->is_drawn);
+  EXPECT_FALSE(active_effect_tree.ContributesToDrawnSurface(
+      active_child->effect_tree_index()));
 }
 
 using LCDTextTestParam = std::tr1::tuple<bool, bool, bool>;
@@ -6549,8 +6558,11 @@ TEST_F(LayerTreeHostCommonTest, StickyPositionBottomInnerViewportDelta) {
   scroller->AddChild(sticky_pos);
   host()->SetRootLayer(root);
   scroller->SetScrollClipLayerId(root->id());
-  host()->RegisterViewportLayers(nullptr, root, root, nullptr, scroller,
-                                 nullptr);
+  LayerTreeHost::ViewportLayers viewport_layers;
+  viewport_layers.page_scale = root;
+  viewport_layers.inner_viewport_container = root;
+  viewport_layers.inner_viewport_scroll = scroller;
+  host()->RegisterViewportLayers(viewport_layers);
 
   LayerStickyPositionConstraint sticky_position;
   sticky_position.is_sticky = true;
@@ -6623,8 +6635,13 @@ TEST_F(LayerTreeHostCommonTest, StickyPositionBottomOuterViewportDelta) {
   host()->SetRootLayer(root);
   scroller->SetScrollClipLayerId(root->id());
   outer_viewport->SetScrollClipLayerId(outer_clip->id());
-  host()->RegisterViewportLayers(nullptr, root, root, outer_clip, scroller,
-                                 outer_viewport);
+  LayerTreeHost::ViewportLayers viewport_layers;
+  viewport_layers.page_scale = root;
+  viewport_layers.inner_viewport_container = root;
+  viewport_layers.outer_viewport_container = outer_clip;
+  viewport_layers.inner_viewport_scroll = scroller;
+  viewport_layers.outer_viewport_scroll = outer_viewport;
+  host()->RegisterViewportLayers(viewport_layers);
 
   LayerStickyPositionConstraint sticky_position;
   sticky_position.is_sticky = true;
@@ -8125,9 +8142,9 @@ TEST_F(LayerTreeHostCommonTest, ViewportBoundsDeltaAffectVisibleContentRect) {
 
   // Make root the inner viewport scroll layer. This ensures the later call to
   // |SetViewportBoundsDelta| will be on a viewport layer.
-  host_impl.active_tree()->SetViewportLayersFromIds(
-      Layer::INVALID_ID, Layer::INVALID_ID, Layer::INVALID_ID,
-      Layer::INVALID_ID, root->id(), Layer::INVALID_ID);
+  LayerTreeImpl::ViewportLayerIds viewport_ids;
+  viewport_ids.inner_viewport_scroll = root->id();
+  host_impl.active_tree()->SetViewportLayersFromIds(viewport_ids);
 
   root->test_properties()->AddChild(
       LayerImpl::Create(host_impl.active_tree(), 2));
@@ -8174,10 +8191,13 @@ TEST_F(LayerTreeHostCommonTest, NodesAffectedByViewportBoundsDeltaGetUpdated) {
   outer_viewport_scroll_layer->SetIsContainerForFixedPositionLayers(true);
 
   host()->SetRootLayer(root);
-  host()->RegisterViewportLayers(nullptr, root, inner_viewport_container_layer,
-                                 outer_viewport_container_layer,
-                                 inner_viewport_scroll_layer,
-                                 outer_viewport_scroll_layer);
+  LayerTreeHost::ViewportLayers viewport_layers;
+  viewport_layers.page_scale = root;
+  viewport_layers.inner_viewport_container = inner_viewport_container_layer;
+  viewport_layers.outer_viewport_container = outer_viewport_container_layer;
+  viewport_layers.inner_viewport_scroll = inner_viewport_scroll_layer;
+  viewport_layers.outer_viewport_scroll = outer_viewport_scroll_layer;
+  host()->RegisterViewportLayers(viewport_layers);
 
   scoped_refptr<Layer> fixed_to_inner = Layer::Create();
   scoped_refptr<Layer> fixed_to_outer = Layer::Create();
@@ -10004,8 +10024,11 @@ TEST_F(LayerTreeHostCommonTest, ScrollTreeBuilderTest) {
   parent5->SetNonFastScrollableRegion(gfx::Rect(0, 0, 50, 50));
   parent5->SetBounds(gfx::Size(10, 10));
 
-  host()->RegisterViewportLayers(nullptr, page_scale_layer, root1, nullptr,
-                                 parent2, nullptr);
+  LayerTreeHost::ViewportLayers viewport_layers;
+  viewport_layers.page_scale = page_scale_layer;
+  viewport_layers.inner_viewport_container = root1;
+  viewport_layers.inner_viewport_scroll = parent2;
+  host()->RegisterViewportLayers(viewport_layers);
   ExecuteCalculateDrawPropertiesAndSaveUpdateLayerList(root1.get());
 
   const int kRootPropertyTreeNodeId = 0;

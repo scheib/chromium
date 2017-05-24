@@ -17,8 +17,9 @@
     : UIViewController<TabCollectionConsumer, UICollectionViewDataSource>
 // A collection view of tabs.
 @property(nonatomic, weak, readonly) UICollectionView* tabs;
-// Data source for the tabs to be displayed.
-@property(nonatomic, weak) id<TabCollectionDataSource> dataSource;
+// Model for collection view.
+@property(nonatomic, strong, readonly)
+    NSMutableArray<TabCollectionItem*>* items;
 @end
 
 #endif  // IOS_CLEAN_CHROME_BROWSER_UI_TAB_COLLECTION_TAB_COLLECTION_VIEW_CONTROLLER_H_

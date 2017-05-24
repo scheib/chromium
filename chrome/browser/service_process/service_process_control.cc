@@ -11,6 +11,7 @@
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/location.h"
+#include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_delta_serialization.h"
 #include "base/metrics/histogram_macros.h"
@@ -34,28 +35,59 @@
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/named_platform_handle.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
+#include "mojo/edk/embedder/peer_connection.h"
 
 using content::BrowserThread;
 
 namespace {
 
-void ConnectAsync(mojo::ScopedMessagePipeHandle handle,
-                  mojo::edk::NamedPlatformHandle os_pipe) {
+// The number of and initial delay between retry attempts when connecting to the
+// service process. These are applied with exponential backoff and are necessary
+// to avoid inherent raciness in how the service process listens for incoming
+// connections, particularly on Windows.
+const size_t kMaxConnectionAttempts = 10;
+constexpr base::TimeDelta kInitialConnectionRetryDelay =
+    base::TimeDelta::FromMilliseconds(20);
+
+void ConnectAsyncWithBackoff(
+    mojo::ScopedMessagePipeHandle handle,
+    mojo::edk::NamedPlatformHandle os_pipe,
+    size_t num_retries_left,
+    base::TimeDelta retry_delay,
+    scoped_refptr<base::TaskRunner> response_task_runner,
+    base::OnceCallback<void(std::unique_ptr<mojo::edk::PeerConnection>)>
+        response_callback) {
   mojo::edk::ScopedPlatformHandle os_pipe_handle =
       mojo::edk::CreateClientHandle(os_pipe);
-  if (!os_pipe_handle.is_valid())
-    return;
-
-  mojo::FuseMessagePipes(
-      mojo::edk::ConnectToPeerProcess(std::move(os_pipe_handle)),
-      std::move(handle));
+  if (!os_pipe_handle.is_valid()) {
+    if (num_retries_left == 0) {
+      response_task_runner->PostTask(
+          FROM_HERE, base::BindOnce(std::move(response_callback), nullptr));
+    } else {
+      base::PostDelayedTaskWithTraits(
+          FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
+          base::BindOnce(&ConnectAsyncWithBackoff, std::move(handle),
+                         std::move(os_pipe), num_retries_left - 1,
+                         retry_delay * 2, std::move(response_task_runner),
+                         std::move(response_callback)),
+          retry_delay);
+    }
+  } else {
+    auto peer_connection = base::MakeUnique<mojo::edk::PeerConnection>();
+    mojo::FuseMessagePipes(
+        peer_connection->Connect(mojo::edk::ConnectionParams(
+            mojo::edk::TransportProtocol::kLegacy, std::move(os_pipe_handle))),
+        std::move(handle));
+    response_task_runner->PostTask(FROM_HERE,
+                                   base::BindOnce(std::move(response_callback),
+                                                  std::move(peer_connection)));
+  }
 }
 
 }  // namespace
 
 // ServiceProcessControl implementation.
-ServiceProcessControl::ServiceProcessControl() {
-}
+ServiceProcessControl::ServiceProcessControl() : weak_factory_(this) {}
 
 ServiceProcessControl::~ServiceProcessControl() {
 }
@@ -74,8 +106,12 @@ void ServiceProcessControl::ConnectInternal() {
   mojo::MessagePipe pipe;
   base::PostTaskWithTraits(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
-      base::Bind(&ConnectAsync, base::Passed(&pipe.handle1),
-                 GetServiceProcessChannel()));
+      base::BindOnce(
+          &ConnectAsyncWithBackoff, std::move(pipe.handle1),
+          GetServiceProcessChannel(), kMaxConnectionAttempts,
+          kInitialConnectionRetryDelay, base::ThreadTaskRunnerHandle::Get(),
+          base::BindOnce(&ServiceProcessControl::OnPeerConnectionComplete,
+                         weak_factory_.GetWeakPtr())));
   // TODO(hclam): Handle error connecting to channel.
   auto io_task_runner =
       BrowserThread::GetTaskRunnerForThread(BrowserThread::IO);
@@ -83,6 +119,12 @@ void ServiceProcessControl::ConnectInternal() {
       IPC::ChannelProxy::Create(IPC::ChannelMojo::CreateClientFactory(
                                     std::move(pipe.handle0), io_task_runner),
                                 this, io_task_runner));
+}
+
+void ServiceProcessControl::OnPeerConnectionComplete(
+    std::unique_ptr<mojo::edk::PeerConnection> peer_connection) {
+  // Hold onto the connection object so the connection is kept alive.
+  peer_connection_ = std::move(peer_connection);
 }
 
 void ServiceProcessControl::SetChannel(
@@ -157,6 +199,7 @@ void ServiceProcessControl::Launch(const base::Closure& success_task,
 void ServiceProcessControl::Disconnect() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   channel_.reset();
+  peer_connection_.reset();
 }
 
 void ServiceProcessControl::OnProcessLaunched() {
@@ -216,6 +259,7 @@ void ServiceProcessControl::OnChannelError() {
                             SERVICE_EVENT_CHANNEL_ERROR, SERVICE_EVENT_MAX);
 
   channel_.reset();
+  peer_connection_.reset();
   RunConnectDoneTasks();
 }
 
@@ -343,6 +387,7 @@ bool ServiceProcessControl::Shutdown() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   bool ret = Send(new ServiceMsg_Shutdown());
   channel_.reset();
+  peer_connection_.reset();
   return ret;
 }
 

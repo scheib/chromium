@@ -43,9 +43,9 @@ class CORE_EXPORT StringOrArrayBufferOrArrayBufferView final {
   static StringOrArrayBufferOrArrayBufferView fromArrayBufferView(NotShared<TestArrayBufferView>);
 
   bool isString() const { return m_type == SpecificTypeString; }
-  String getAsString() const;
-  void setString(String);
-  static StringOrArrayBufferOrArrayBufferView fromString(String);
+  const String& getAsString() const;
+  void setString(const String&);
+  static StringOrArrayBufferOrArrayBufferView fromString(const String&);
 
   StringOrArrayBufferOrArrayBufferView(const StringOrArrayBufferOrArrayBufferView&);
   ~StringOrArrayBufferOrArrayBufferView();

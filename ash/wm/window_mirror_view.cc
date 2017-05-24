@@ -6,7 +6,6 @@
 
 #include "ash/wm/widget_finder.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm_window.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
@@ -43,7 +42,7 @@ WindowMirrorView::~WindowMirrorView() {
     target_->ClearProperty(aura::client::kMirroringEnabledKey);
 }
 
-gfx::Size WindowMirrorView::GetPreferredSize() const {
+gfx::Size WindowMirrorView::CalculatePreferredSize() const {
   return GetClientAreaBounds().size();
 }
 

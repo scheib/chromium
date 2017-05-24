@@ -26,19 +26,19 @@ TestDictionaryDerivedImplementedAs& TestDictionaryDerivedImplementedAs::operator
 bool TestDictionaryDerivedImplementedAs::hasDerivedStringMember() const {
   return !m_derivedStringMember.IsNull();
 }
-String TestDictionaryDerivedImplementedAs::derivedStringMember() const {
+const String& TestDictionaryDerivedImplementedAs::derivedStringMember() const {
   return m_derivedStringMember;
 }
-void TestDictionaryDerivedImplementedAs::setDerivedStringMember(String value) {
+void TestDictionaryDerivedImplementedAs::setDerivedStringMember(const String& value) {
   m_derivedStringMember = value;
 }
 bool TestDictionaryDerivedImplementedAs::hasDerivedStringMemberWithDefault() const {
   return !m_derivedStringMemberWithDefault.IsNull();
 }
-String TestDictionaryDerivedImplementedAs::derivedStringMemberWithDefault() const {
+const String& TestDictionaryDerivedImplementedAs::derivedStringMemberWithDefault() const {
   return m_derivedStringMemberWithDefault;
 }
-void TestDictionaryDerivedImplementedAs::setDerivedStringMemberWithDefault(String value) {
+void TestDictionaryDerivedImplementedAs::setDerivedStringMemberWithDefault(const String& value) {
   m_derivedStringMemberWithDefault = value;
 }
 bool TestDictionaryDerivedImplementedAs::hasRequiredLongMember() const {

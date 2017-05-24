@@ -24,7 +24,6 @@
 #include "ash/wm/overview/window_selector_item.h"
 #include "ash/wm/panels/panel_layout_manager.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/workspace/workspace_window_resizer.h"
@@ -1853,7 +1852,7 @@ TEST_F(WindowSelectorTest, OverviewWhileDragging) {
   const gfx::Rect bounds(10, 10, 100, 100);
   std::unique_ptr<aura::Window> window(CreateWindow(bounds));
   std::unique_ptr<WindowResizer> resizer(
-      CreateWindowResizer(WmWindow::Get(window.get()), gfx::Point(), HTCAPTION,
+      CreateWindowResizer(window.get(), gfx::Point(), HTCAPTION,
                           aura::client::WINDOW_MOVE_SOURCE_MOUSE));
   ASSERT_TRUE(resizer.get());
   gfx::Point location = resizer->GetInitialLocation();

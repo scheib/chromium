@@ -9,50 +9,6 @@ import("//services/service_manager/public/service_manifest.gni")
 import("//services/service_manager/public/tools/test/service_test.gni")
 import("//testing/test.gni")
 
-config("mojo_media_config") {
-  if (!enable_mojo_media) {
-    assert(mojo_media_services == [], "Mojo media is not enabled")
-    assert(mojo_media_host == "none", "Mojo media is not enabled")
-    assert(!enable_test_mojo_media_client, "Mojo media is not enabled")
-  } else {
-    defines = [ "ENABLE_MOJO_MEDIA" ]
-
-    assert(mojo_media_services != [], "No mojo media service specified")
-    mojo_renderer_enabled = false
-    foreach(service, mojo_media_services) {
-      if (service == "renderer") {
-        defines += [ "ENABLE_MOJO_RENDERER" ]
-        mojo_renderer_enabled = true
-      } else if (service == "cdm") {
-        defines += [ "ENABLE_MOJO_CDM" ]
-      } else if (service == "audio_decoder") {
-        defines += [ "ENABLE_MOJO_AUDIO_DECODER" ]
-      } else if (service == "video_decoder") {
-        defines += [ "ENABLE_MOJO_VIDEO_DECODER" ]
-      } else {
-        assert(false, "Invalid mojo media service: $service")
-      }
-    }
-    assert(
-        mojo_renderer_enabled || !enable_runtime_media_renderer_selection,
-        "The mojo renderer must be enabled to use runtime media renderer selection.")
-
-    if (mojo_media_host == "browser") {
-      defines += [ "ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS" ]
-    } else if (mojo_media_host == "gpu") {
-      defines += [ "ENABLE_MOJO_MEDIA_IN_GPU_PROCESS" ]
-    } else if (mojo_media_host == "utility") {
-      defines += [ "ENABLE_MOJO_MEDIA_IN_UTILITY_PROCESS" ]
-    } else {
-      assert(false, "Invalid mojo media host: $mojo_media_host")
-    }
-
-    if (enable_test_mojo_media_client) {
-      defines += [ "ENABLE_TEST_MOJO_MEDIA_CLIENT" ]
-    }
-  }
-}
-
 component("services") {
   output_name = "media_mojo_services"
 
@@ -113,11 +69,11 @@ source_set("lib") {
 
   # TODO(jschuh): crbug.com/167187 fix size_t to int truncations.
   configs += [ "//build/config/compiler:no_size_t_to_int_warning" ]
-  public_configs = [ ":mojo_media_config" ]
 
   public_deps = [
     "//base",
     "//media",
+    "//media/mojo:features",
     "//media/mojo/interfaces",
     "//mojo/public/cpp/bindings",
     "//mojo/public/cpp/system",

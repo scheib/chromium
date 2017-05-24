@@ -19,13 +19,14 @@
 
 // This is a helper utility for Bind()ing callbacks to a given TaskRunner.
 // The typical use is when |a| (of class |A|) wants to hand a callback such as
-// base::Bind(&A::AMethod, a) to |b|, but needs to ensure that when |b| executes
-// the callback, it does so on a specific TaskRunner (for example, |a|'s current
-// MessageLoop).
+// base::BindOnce(&A::AMethod, a) to |b|, but needs to ensure that when |b|
+// executes the callback, it does so on a specific TaskRunner (for example,
+// |a|'s current MessageLoop).
 //
 // Typical usage: request to be called back on the current thread:
 // other->StartAsyncProcessAndCallMeBack(
-//    BindToTaskRunner(my_task_runner_, base::Bind(&MyClass::MyMethod, this)));
+//    BindToTaskRunner(my_task_runner_,
+//                     base::BindOnce(&MyClass::MyMethod, this)));
 //
 // Note that the callback is always posted to the target TaskRunner.
 //
@@ -35,28 +36,6 @@
 namespace chromecast {
 namespace bind_helpers {
 
-// Used to wrap a OnceClosure in a RepeatingClosure to pass to a task runner.
-inline void RunOnceClosure(base::OnceClosure&& callback) {
-  std::move(callback).Run();
-}
-
-template <typename T>
-T& TrampolineForward(T& t) {
-  return t;
-}
-
-template <typename T, typename R>
-base::internal::PassedWrapper<std::unique_ptr<T, R>> TrampolineForward(
-    std::unique_ptr<T, R>& p) {
-  return base::Passed(&p);
-}
-
-template <typename T>
-base::internal::PassedWrapper<ScopedVector<T>> TrampolineForward(
-    ScopedVector<T>& p) {
-  return base::Passed(&p);
-}
-
 template <typename Sig>
 struct BindToTaskRunnerTrampoline;
 
@@ -64,9 +43,7 @@ template <>
 struct BindToTaskRunnerTrampoline<void()> {
   static void RunOnce(base::TaskRunner* task_runner,
                       base::OnceClosure&& callback) {
-    task_runner->PostTask(
-        FROM_HERE,
-        base::Bind(&RunOnceClosure, base::Passed(std::move(callback))));
+    task_runner->PostTask(FROM_HERE, std::move(callback));
   }
 
   static void RunRepeating(base::TaskRunner* task_runner,
@@ -82,17 +59,15 @@ struct BindToTaskRunnerTrampoline<void(Args...)> {
                       Args... args) {
     task_runner->PostTask(
         FROM_HERE,
-        base::Bind(&RunOnceClosure,
-                   base::Passed(base::BindOnce(std::move(callback),
-                                               std::forward<Args>(args)...))));
+        base::BindOnce(std::move(callback), std::forward<Args>(args)...));
   }
 
   static void RunRepeating(
       base::TaskRunner* task_runner,
       const base::RepeatingCallback<void(Args...)>& callback,
       Args... args) {
-    task_runner->PostTask(FROM_HERE,
-                          base::Bind(callback, TrampolineForward(args)...));
+    task_runner->PostTask(
+        FROM_HERE, base::BindOnce(callback, std::forward<Args>(args)...));
   }
 };
 

@@ -48,4 +48,8 @@ OutputDeviceInfo MockAudioRendererSink::GetOutputDeviceInfo() {
   return output_device_info_;
 }
 
+bool MockAudioRendererSink::IsOptimizedForHardwareParameters() {
+  return false;
+}
+
 }  // namespace media

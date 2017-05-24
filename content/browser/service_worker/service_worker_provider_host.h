@@ -88,14 +88,14 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
 
   const std::string& client_uuid() const { return client_uuid_; }
   int process_id() const { return render_process_id_; }
-  int provider_id() const { return provider_id_; }
+  int provider_id() const { return info_.provider_id; }
   int frame_id() const;
-  int route_id() const { return route_id_; }
+  int route_id() const { return info_.route_id; }
   const WebContentsGetter& web_contents_getter() const {
     return web_contents_getter_;
   }
 
-  bool is_parent_frame_secure() const { return is_parent_frame_secure_; }
+  bool is_parent_frame_secure() const { return info_.is_parent_frame_secure; }
 
   // Returns whether this provider host is secure enough to have a service
   // worker controller.
@@ -157,7 +157,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   ServiceWorkerVersion* running_hosted_version() const {
     // Only providers for controllers can host a running version.
     DCHECK(!running_hosted_version_ ||
-           provider_type_ == SERVICE_WORKER_PROVIDER_FOR_CONTROLLER);
+           info_.type == SERVICE_WORKER_PROVIDER_FOR_CONTROLLER);
     return running_hosted_version_.get();
   }
 
@@ -170,7 +170,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   void SetTopmostFrameUrl(const GURL& url);
   const GURL& topmost_frame_url() const { return topmost_frame_url_; }
 
-  ServiceWorkerProviderType provider_type() const { return provider_type_; }
+  ServiceWorkerProviderType provider_type() const { return info_.type; }
   bool IsProviderForClient() const;
   blink::WebServiceWorkerClientType client_type() const;
 
@@ -241,12 +241,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
 
   // Methods to support cross site navigations.
   std::unique_ptr<ServiceWorkerProviderHost> PrepareForCrossSiteTransfer();
-  void CompleteCrossSiteTransfer(
-      int new_process_id,
-      int new_frame_id,
-      int new_provider_id,
-      ServiceWorkerProviderType new_provider_type,
-      ServiceWorkerDispatcherHost* dispatcher_host);
+  void CompleteCrossSiteTransfer(ServiceWorkerProviderHost* provisional_host);
   ServiceWorkerDispatcherHost* dispatcher_host() const {
     return dispatcher_host_;
   }
@@ -324,10 +319,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   };
 
   ServiceWorkerProviderHost(int render_process_id,
-                            int route_id,
-                            int provider_id,
-                            ServiceWorkerProviderType provider_type,
-                            bool is_parent_frame_secure,
+                            ServiceWorkerProviderHostInfo info,
                             base::WeakPtr<ServiceWorkerContextCore> context,
                             ServiceWorkerDispatcherHost* dispatcher_host);
 
@@ -376,25 +368,20 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   std::string client_uuid_;
   int render_process_id_;
 
-  // See the constructor's documentation.
-  int route_id_;
-
   // For provider hosts that are hosting a running service worker, the id of the
   // service worker thread. Otherwise, |kDocumentMainThreadId|. May be
   // |kInvalidEmbeddedWorkerThreadId| before the hosted service worker starts
   // up, or during cross-site transfers.
   int render_thread_id_;
 
-  // Unique within the renderer process.
-  int provider_id_;
+  // Keeps the basic provider's info provided from the renderer side.
+  ServiceWorkerProviderHostInfo info_;
 
   // PlzNavigate
   // Only set when this object is pre-created for a navigation. It indicates the
   // tab where the navigation occurs.
   WebContentsGetter web_contents_getter_;
 
-  ServiceWorkerProviderType provider_type_;
-  const bool is_parent_frame_secure_;
   GURL document_url_;
   GURL topmost_frame_url_;
 

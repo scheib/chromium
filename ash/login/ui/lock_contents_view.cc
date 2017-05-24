@@ -4,6 +4,9 @@
 
 #include "ash/login/ui/lock_contents_view.h"
 
+#include "ash/login/lock_screen_controller.h"
+#include "ash/session/session_controller.h"
+#include "ash/shell.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
@@ -33,8 +36,14 @@ void LockContentsView::ButtonPressed(views::Button* sender,
                                      const ui::Event& event) {
   DCHECK(unlock_button_ == sender);
 
-  // TODO: Run mojo call that talks to backend which unlocks the device.
-  NOTIMPLEMENTED();
+  // TODO: user index shouldn't be hard coded here. Complete the implementation
+  // below.
+  const int user_index = 0;
+  const mojom::UserSession* const user_session =
+      Shell::Get()->session_controller()->GetUserSession(user_index);
+  Shell::Get()->lock_screen_controller()->AuthenticateUser(
+      user_session->account_id, std::string(),
+      false /* authenticated_by_pin */);
 }
 
 }  // namespace ash

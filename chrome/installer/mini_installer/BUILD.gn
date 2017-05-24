@@ -257,7 +257,7 @@ template("generate_mini_installer") {
       ":$archive_name",
       ":lib",
       ":version",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//build/win:default_exe_manifest",
     ]
   }

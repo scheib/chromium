@@ -8,7 +8,7 @@ Scope variables sidebar pane:
 Catch
     e: Error: An exception
     at innerFunction (...)
-    at testFunction (...) {stack: "Error: An exception↵    at innerFunction (...)", message: "An exception"}
+    at testFunction (...)
 Local
     innerFunctionLocalVar: 2012
     negInf: -Infinity

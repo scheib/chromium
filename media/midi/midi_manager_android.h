@@ -14,7 +14,6 @@
 
 #include "base/android/scoped_java_ref.h"
 #include "base/containers/hash_tables.h"
-#include "base/memory/scoped_vector.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "media/midi/midi_input_port_android.h"
@@ -72,7 +71,7 @@ class MidiManagerAndroid final : public MidiManager,
   void AddOutputPortAndroid(MidiOutputPortAndroid* port,
                             MidiDeviceAndroid* device);
 
-  ScopedVector<MidiDeviceAndroid> devices_;
+  std::vector<std::unique_ptr<MidiDeviceAndroid>> devices_;
   // All ports held in |devices_|. Each device has ownership of ports, but we
   // can store pointers here because a device will keep its ports while it is
   // alive.

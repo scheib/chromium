@@ -502,9 +502,20 @@ TEST_F(DirectCompositionPixelTest, VideoSwapchain) {
   ui::DCRendererLayerParams params(
       false, gfx::Rect(), 1, gfx::Transform(),
       std::vector<scoped_refptr<gl::GLImage>>{image_dxgi},
-      gfx::RectF(gfx::Rect(texture_size)), gfx::Rect(window_size), 0, 0, 1.0,
+      gfx::RectF(gfx::Rect(texture_size)), gfx::Rect(texture_size), 0, 0, 1.0,
       0);
   surface_->ScheduleDCLayer(params);
+
+  EXPECT_EQ(gfx::SwapResult::SWAP_ACK, surface_->SwapBuffers());
+
+  // Scaling up the swapchain with the same image should cause it to be
+  // transformed again, but not presented again.
+  ui::DCRendererLayerParams params2(
+      false, gfx::Rect(), 1, gfx::Transform(),
+      std::vector<scoped_refptr<gl::GLImage>>{image_dxgi},
+      gfx::RectF(gfx::Rect(texture_size)), gfx::Rect(window_size), 0, 0, 1.0,
+      0);
+  surface_->ScheduleDCLayer(params2);
 
   EXPECT_EQ(gfx::SwapResult::SWAP_ACK, surface_->SwapBuffers());
   Sleep(1000);

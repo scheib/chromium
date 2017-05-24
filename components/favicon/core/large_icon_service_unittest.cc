@@ -108,10 +108,11 @@ class MockImageFetcher : public image_fetcher::ImageFetcher {
   MOCK_METHOD1(SetImageDownloadLimit,
                void(base::Optional<int64_t> max_download_bytes));
   MOCK_METHOD1(SetDesiredImageFrameSize, void(const gfx::Size& size));
-  MOCK_METHOD3(StartOrQueueNetworkRequest,
+  MOCK_METHOD4(StartOrQueueNetworkRequest,
                void(const std::string&,
                     const GURL&,
-                    const ImageFetcherCallback&));
+                    const ImageFetcherCallback&,
+                    const net::NetworkTrafficAnnotationTag&));
   MOCK_METHOD0(GetImageDecoder, image_fetcher::ImageDecoder*());
 };
 
@@ -147,7 +148,7 @@ TEST_F(LargeIconServiceTest, ShouldGetFromGoogleServer) {
 
   base::MockCallback<base::Callback<void(bool success)>> callback;
   EXPECT_CALL(*mock_image_fetcher_,
-              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _))
+              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _, _))
       .WillOnce(PostFetchReply(gfx::Image::CreateFrom1xBitmap(
           CreateTestSkBitmap(64, 64, kTestColor))));
   EXPECT_CALL(mock_favicon_service_,
@@ -183,7 +184,7 @@ TEST_F(LargeIconServiceTest, ShouldGetFromGoogleServerWithCustomUrl) {
 
   base::MockCallback<base::Callback<void(bool success)>> callback;
   EXPECT_CALL(*mock_image_fetcher_,
-              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _))
+              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _, _))
       .WillOnce(PostFetchReply(gfx::Image::CreateFrom1xBitmap(
           CreateTestSkBitmap(64, 64, kTestColor))));
   EXPECT_CALL(mock_favicon_service_,
@@ -210,7 +211,7 @@ TEST_F(LargeIconServiceTest, ShouldGetFromGoogleServerWithOriginalUrl) {
   image_fetcher::RequestMetadata expected_metadata;
   expected_metadata.content_location_header = kExpectedOriginalUrl.spec();
   EXPECT_CALL(*mock_image_fetcher_,
-              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _))
+              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _, _))
       .WillOnce(PostFetchReplyWithMetadata(
           gfx::Image::CreateFrom1xBitmap(
               CreateTestSkBitmap(64, 64, kTestColor)),
@@ -238,7 +239,7 @@ TEST_F(LargeIconServiceTest, ShouldTrimQueryParametersForGoogleServer) {
       "&fallback_opts=TYPE,SIZE,URL&url=http://www.example.com/");
 
   EXPECT_CALL(*mock_image_fetcher_,
-              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _))
+              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _, _))
       .WillOnce(PostFetchReply(gfx::Image::CreateFrom1xBitmap(
           CreateTestSkBitmap(64, 64, kTestColor))));
   // Verify that the non-trimmed page URL is used when writing to the database.
@@ -256,7 +257,7 @@ TEST_F(LargeIconServiceTest, ShouldTrimQueryParametersForGoogleServer) {
 TEST_F(LargeIconServiceTest, ShouldNotQueryGoogleServerIfInvalidScheme) {
   const GURL kDummyFtpUrl("ftp://www.example.com");
 
-  EXPECT_CALL(*mock_image_fetcher_, StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*mock_image_fetcher_, StartOrQueueNetworkRequest(_, _, _, _))
       .Times(0);
 
   base::MockCallback<base::Callback<void(bool success)>> callback;
@@ -285,7 +286,7 @@ TEST_F(LargeIconServiceTest, ShouldReportUnavailableIfFetchFromServerFails) {
 
   base::MockCallback<base::Callback<void(bool success)>> callback;
   EXPECT_CALL(*mock_image_fetcher_,
-              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _))
+              StartOrQueueNetworkRequest(_, kExpectedServerUrl, _, _))
       .WillOnce(PostFetchReply(gfx::Image()));
   EXPECT_CALL(mock_favicon_service_,
               UnableToDownloadFavicon(kExpectedServerUrl));
@@ -312,7 +313,7 @@ TEST_F(LargeIconServiceTest, ShouldNotGetFromGoogleServerIfUnavailable) {
       .WillByDefault(Return(true));
 
   EXPECT_CALL(mock_favicon_service_, UnableToDownloadFavicon(_)).Times(0);
-  EXPECT_CALL(*mock_image_fetcher_, StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*mock_image_fetcher_, StartOrQueueNetworkRequest(_, _, _, _))
       .Times(0);
   EXPECT_CALL(mock_favicon_service_, SetLastResortFavicons(_, _, _, _, _))
       .Times(0);

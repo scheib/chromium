@@ -323,9 +323,7 @@ void PeopleHandler::DisplaySpinner() {
                              base::TimeDelta::FromSeconds(kTimeoutSec), this,
                              &PeopleHandler::DisplayTimeout);
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("page-status-changed"),
-                         base::Value(kSpinnerPageStatus));
+  FireWebUIListener("page-status-changed", base::Value(kSpinnerPageStatus));
 }
 
 void PeopleHandler::DisplayTimeout() {
@@ -335,9 +333,7 @@ void PeopleHandler::DisplayTimeout() {
   // Do not listen to sync startup events.
   sync_startup_tracker_.reset();
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("page-status-changed"),
-                         base::Value(kTimeoutPageStatus));
+  FireWebUIListener("page-status-changed", base::Value(kTimeoutPageStatus));
 }
 
 void PeopleHandler::OnDidClosePage(const base::ListValue* args) {
@@ -695,9 +691,7 @@ void PeopleHandler::FocusUI() {
 
 void PeopleHandler::CloseUI() {
   CloseSyncSetup();
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("page-status-changed"),
-                         base::Value(kDonePageStatus));
+  FireWebUIListener("page-status-changed", base::Value(kDonePageStatus));
 }
 
 void PeopleHandler::GoogleSigninSucceeded(const std::string& /* account_id */,
@@ -885,8 +879,7 @@ void PeopleHandler::PushSyncPrefs() {
                    GetStringUTF16(IDS_SYNC_FULL_ENCRYPTION_BODY_CUSTOM));
   }
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("sync-prefs-changed"), args);
+  FireWebUIListener("sync-prefs-changed", args);
 }
 
 LoginUIService* PeopleHandler::GetLoginUIService() const {
@@ -894,9 +887,7 @@ LoginUIService* PeopleHandler::GetLoginUIService() const {
 }
 
 void PeopleHandler::UpdateSyncStatus() {
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("sync-status-changed"),
-                         *GetSyncStatusDictionary());
+  FireWebUIListener("sync-status-changed", *GetSyncStatusDictionary());
 }
 
 void PeopleHandler::MarkFirstSetupComplete() {

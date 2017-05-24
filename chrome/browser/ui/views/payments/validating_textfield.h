@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PAYMENTS_VALIDATING_TEXTFIELD_H_
 #define CHROME_BROWSER_UI_VIEWS_PAYMENTS_VALIDATING_TEXTFIELD_H_
 
+#include <memory>
+
 #include "base/macros.h"
 #include "chrome/browser/ui/views/payments/validation_delegate.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -25,6 +27,9 @@ class ValidatingTextfield : public views::Textfield {
 
   // Called when the textfield contents is changed. May do validation.
   void OnContentsChanged();
+
+  // Identifies whether the current content if valid or not.
+  bool IsValid();
 
  private:
   // Will call to the ValidationDelegate to validate the contents of the

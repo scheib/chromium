@@ -248,6 +248,8 @@ class CONTENT_EXPORT WebBluetoothServiceImpl
   CacheQueryResult QueryCacheForDescriptor(
       const std::string& descriptor_instance_id);
 
+  void RunPendingPrimaryServicesRequests(device::BluetoothDevice* device);
+
   RenderProcessHost* GetRenderProcessHost();
   device::BluetoothAdapter* GetAdapter();
   url::Origin GetOrigin();

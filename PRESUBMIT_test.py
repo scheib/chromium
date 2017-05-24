@@ -413,20 +413,6 @@ class CheckSingletonInHeadersTest(unittest.TestCase):
     self.assertEqual(0, len(warnings))
 
 
-class CheckNoDeprecatedCompiledResourcesGypTest(unittest.TestCase):
-  def testNoDeprecatedCompiledResourcsGyp(self):
-    mock_input_api = MockInputApi()
-    mock_input_api.files = [MockFile('some/js/compiled_resources.gyp', [])]
-    errors = PRESUBMIT._CheckNoDeprecatedCompiledResourcesGyp(mock_input_api,
-                                                              MockOutputApi())
-    self.assertEquals(1, len(errors))
-
-    mock_input_api.files = [MockFile('some/js/compiled_resources2.gyp', [])]
-    errors = PRESUBMIT._CheckNoDeprecatedCompiledResourcesGyp(mock_input_api,
-                                                              MockOutputApi())
-    self.assertEquals(0, len(errors))
-
-
 class InvalidOSMacroNamesTest(unittest.TestCase):
   def testInvalidOSMacroNames(self):
     lines = ['#if defined(OS_WINDOWS)',

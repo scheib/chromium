@@ -10,7 +10,7 @@ test
 
 test
 test
- PASS successfullyParsed is true
+PASS successfullyParsed is true
 
 TEST COMPLETE
 PASS gFocusedDocument.activeElement.getAttribute("id") is "4"

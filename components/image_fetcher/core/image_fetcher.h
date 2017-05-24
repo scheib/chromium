@@ -12,6 +12,7 @@
 #include "base/optional.h"
 #include "components/data_use_measurement/core/data_use_user_data.h"
 #include "components/image_fetcher/core/image_fetcher_delegate.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "url/gurl.h"
 
 namespace gfx {
@@ -64,7 +65,8 @@ class ImageFetcher {
   virtual void StartOrQueueNetworkRequest(
       const std::string& id,
       const GURL& image_url,
-      const ImageFetcherCallback& callback) = 0;
+      const ImageFetcherCallback& callback,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation) = 0;
 
   virtual ImageDecoder* GetImageDecoder() = 0;
 

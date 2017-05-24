@@ -57,6 +57,7 @@
 #include "core/layout/shapes/ShapeOutsideInfo.h"
 #include "core/page/AutoscrollController.h"
 #include "core/page/Page.h"
+#include "core/page/scrolling/RootScrollerController.h"
 #include "core/page/scrolling/ScrollingCoordinator.h"
 #include "core/page/scrolling/SnapCoordinator.h"
 #include "core/paint/BackgroundImageGeometry.h"
@@ -69,6 +70,21 @@
 #include "platform/geometry/FloatQuad.h"
 #include "platform/geometry/FloatRoundedRect.h"
 #include "platform/wtf/PtrUtil.h"
+
+namespace {
+
+// Node that is currently being used as the scrolling root of a frame. See
+// |effective rootScroller| in core/page/scrolling/README.md.
+bool IsEffectiveRootScroller(const blink::LayoutBox* box) {
+  if (!box || !box->GetNode())
+    return false;
+
+  return box->GetNode() == &box->GetDocument()
+                                .GetRootScrollerController()
+                                .EffectiveRootScroller();
+}
+
+}  // namespace
 
 namespace blink {
 
@@ -109,7 +125,8 @@ PaintLayerType LayoutBox::LayerTypeRequired() const {
       HasTransformRelatedProperty() || Style()->HasCompositorProxy() ||
       HasHiddenBackface() || HasReflection() || Style()->SpecifiesColumns() ||
       Style()->IsStackingContext() ||
-      Style()->ShouldCompositeForCurrentAnimations())
+      Style()->ShouldCompositeForCurrentAnimations() ||
+      IsEffectiveRootScroller(this))
     return kNormalPaintLayer;
 
   if (HasOverflowClip())
@@ -1481,7 +1498,7 @@ bool LayoutBox::NodeAtPoint(HitTestResult& result,
                             HitTestAction action) {
   LayoutPoint adjusted_location = accumulated_offset + Location();
 
-  if (!IsLayoutView()) {
+  if (!IsEffectiveRootScroller(this)) {
     // Check if we need to do anything at all.
     // If we have clipping, then we can't have any spillout.
     LayoutRect overflow_box =
@@ -1877,6 +1894,9 @@ PaintInvalidationReason LayoutBox::InvalidatePaint(
 LayoutRect LayoutBox::OverflowClipRect(
     const LayoutPoint& location,
     OverlayScrollbarClipBehavior overlay_scrollbar_clip_behavior) const {
+  if (IsEffectiveRootScroller(this))
+    return View()->ViewRect();
+
   // FIXME: When overflow-clip (CSS3) is implemented, we'll obtain the property
   // here.
   LayoutRect clip_rect = BorderBoxRect();

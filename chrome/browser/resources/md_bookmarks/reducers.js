@@ -19,11 +19,18 @@ cr.define('bookmarks', function() {
    */
   SelectionState.selectItems = function(selectionState, action) {
     var newItems = new Set();
-    if (action.add)
+    if (!action.clear)
       newItems = new Set(selectionState.items);
 
     action.items.forEach(function(id) {
-      newItems.add(id);
+      var add = true;
+      if (action.toggle)
+        add = !newItems.has(id);
+
+      if (add)
+        newItems.add(id);
+      else
+        newItems.delete(id);
     });
 
     return /** @type {SelectionState} */ (Object.assign({}, selectionState, {
@@ -51,7 +58,9 @@ cr.define('bookmarks', function() {
   SelectionState.deselectDeletedItems = function(selectionState, deleted) {
     return /** @type {SelectionState} */ Object.assign({}, selectionState, {
       items: bookmarks.util.removeIdsFromSet(selectionState.items, deleted),
-      anchor: null,
+      anchor: !selectionState.anchor || deleted.has(selectionState.anchor) ?
+          null :
+          selectionState.anchor,
     });
   };
 

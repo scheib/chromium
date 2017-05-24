@@ -36,18 +36,18 @@ DoubleOrString DoubleOrString::fromDouble(double value) {
   return container;
 }
 
-String DoubleOrString::getAsString() const {
+const String& DoubleOrString::getAsString() const {
   DCHECK(isString());
   return m_string;
 }
 
-void DoubleOrString::setString(String value) {
+void DoubleOrString::setString(const String& value) {
   DCHECK(isNull());
   m_string = value;
   m_type = SpecificTypeString;
 }
 
-DoubleOrString DoubleOrString::fromString(String value) {
+DoubleOrString DoubleOrString::fromString(const String& value) {
   DoubleOrString container;
   container.setString(value);
   return container;

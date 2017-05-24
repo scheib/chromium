@@ -1,5 +1,5 @@
 rootWebArea
-++group
+++genericContainer
 ++++button keyShortcuts='Ctrl+X' name='Cut'
 ++++button keyShortcuts='Ctrl+C' name='Copy'
 ++++button keyShortcuts='Ctrl+V' name='Paste'

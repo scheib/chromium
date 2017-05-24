@@ -176,8 +176,8 @@ void MojoCdmService::OnSessionKeysChange(const std::string& session_id,
            << " has_additional_usable_key=" << has_additional_usable_key;
 
   std::vector<mojom::CdmKeyInformationPtr> keys_data;
-  for (auto* key : keys_info)
-    keys_data.push_back(mojom::CdmKeyInformation::From(*key));
+  for (auto& key : keys_info)
+    keys_data.push_back(mojom::CdmKeyInformation::From(*(key.get())));
   client_->OnSessionKeysChange(session_id, has_additional_usable_key,
                                std::move(keys_data));
 }

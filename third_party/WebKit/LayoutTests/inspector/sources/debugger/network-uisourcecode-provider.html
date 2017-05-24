@@ -51,7 +51,7 @@ function test()
 
         function didRequestContent(content, contentEncoded)
         {
-            InspectorTest.addResult("Highlighter type: " + Bindings.NetworkProject.uiSourceCodeMimeType(uiSourceCode));
+            InspectorTest.addResult("Highlighter type: " + uiSourceCode.mimeType());
             InspectorTest.addResult("UISourceCode content: " + content);
             callback();
         }

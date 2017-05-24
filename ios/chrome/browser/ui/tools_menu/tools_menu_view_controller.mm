@@ -12,6 +12,7 @@
 #include "base/mac/objc_property_releaser.h"
 #include "base/mac/scoped_nsobject.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/histogram_macros.h"
 #include "components/strings/grit/components_strings.h"
 #include "ios/chrome/browser/experimental_flags.h"
 #import "ios/chrome/browser/ui/animation_util.h"
@@ -36,7 +37,6 @@
 #include "ios/web/public/user_agent.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/l10n/l10n_util_mac.h"
-
 using ios::material::TimingFunction;
 
 namespace {
@@ -114,6 +114,10 @@ NS_INLINE void AnimateInViews(NSArray* views,
 @property(nonatomic, retain) ToolsMenuCollectionView* menuView;
 @property(nonatomic, retain) MDCInkView* touchFeedbackView;
 @property(nonatomic, assign) ToolbarType toolbarType;
+// Populated by the configuration object in |initializeMenuWithConfiguration:|
+// stores the time this view controller was requested by the user for the
+// reporting of metrics.
+@property(nonatomic, assign) NSTimeInterval requestStartTime;
 
 // Returns the reading list cell.
 - (ReadingListMenuViewCell*)readingListCell;
@@ -128,6 +132,7 @@ NS_INLINE void AnimateInViews(NSArray* views,
 @synthesize toolbarType = _toolbarType;
 @synthesize menuItems = _menuItems;
 @synthesize delegate = _delegate;
+@synthesize requestStartTime = _requestStartTime;
 
 #pragma mark Public methods
 
@@ -209,6 +214,8 @@ NS_INLINE void AnimateInViews(NSArray* views,
 }
 
 - (void)initializeMenuWithConfiguration:(ToolsMenuConfiguration*)configuration {
+  self.requestStartTime = configuration.requestStartTime;
+
   if (configuration.readingListMenuNotifier) {
     _readingListMenuNotifier.reset(configuration.readingListMenuNotifier);
     [configuration.readingListMenuNotifier setDelegate:self];
@@ -434,6 +441,18 @@ NS_INLINE void AnimateInViews(NSArray* views,
   [CATransaction
       setAnimationTimingFunction:TimingFunction(ios::material::CurveEaseInOut)];
   [CATransaction setAnimationDuration:ios::material::kDuration5];
+  [CATransaction setCompletionBlock:^{
+    if (self.requestStartTime != 0) {
+      UMA_HISTOGRAM_TIMES(
+          "Toolbar.ShowToolsMenuResponsiveness",
+          base::TimeDelta::FromSecondsD(
+              [NSDate timeIntervalSinceReferenceDate] - self.requestStartTime));
+      // Reset the start time to ensure that whatever happens, we only record
+      // this once.
+      self.requestStartTime = 0;
+    }
+
+  }];
   AnimateInViews([toolsCell allButtons], 10, 0);
   AnimateInViews(visibleCells, 0, -10);
   [CATransaction commit];

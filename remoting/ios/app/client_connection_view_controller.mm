@@ -31,6 +31,8 @@ static const CGFloat kMargin = 20.f;
 
 static const CGFloat kBarHeight = 58.f;
 
+static const CGFloat kKeyboardAnimationTime = 0.3;
+
 @interface ClientConnectionViewController ()<PinEntryDelegate> {
   UIImageView* _iconView;
   MDCActivityIndicator* _activityIndicator;
@@ -175,12 +177,12 @@ static const CGFloat kBarHeight = 58.f;
 
 - (void)keyboardWillShow:(NSNotification*)notification {
   CGSize keyboardSize =
-      [[[notification userInfo] objectForKey:UIKeyboardFrameBeginUserInfoKey]
+      [[[notification userInfo] objectForKey:UIKeyboardFrameEndUserInfoKey]
           CGRectValue]
           .size;
 
   [UIView
-      animateWithDuration:0.3
+      animateWithDuration:kKeyboardAnimationTime
                animations:^{
                  CGRect f = self.view.frame;
                  CGFloat newHeight =
@@ -196,7 +198,7 @@ static const CGFloat kBarHeight = 58.f;
 }
 
 - (void)keyboardWillHide:(NSNotification*)notification {
-  [UIView animateWithDuration:0.3
+  [UIView animateWithDuration:kKeyboardAnimationTime
                    animations:^{
                      CGRect f = self.view.frame;
                      f.origin.y = 0.f;

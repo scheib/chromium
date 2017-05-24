@@ -12,6 +12,42 @@ import os
 import sys
 
 
+def GetTestNames(test_files_dir):
+  """Returns test names specified in the *.tests files in |test_files_dir|."""
+  test_files = sorted(glob.glob(test_files_dir + "/*.tests"))
+  test_names = set()
+  for test_filename in test_files:
+    with open(test_filename, "r") as test_file:
+      for test_file_line in test_file:
+        # Binary name may be a simple test target (cast_net_unittests) or be a
+        # qualified gyp path (../base.gyp:base_unittests).
+        test_name = test_file_line.split(":")[-1].strip()
+        test_names.add(test_name)
+  return test_names
+
+
+def GetTestFilters(test_files_dir, test_names, include_filters):
+  """Returns filters specified in the *.filters files in |test_files_dir|."""
+  # GYP targets may provide a numbered priority for the filename. Sort to
+  # use that priority.
+  filter_files = sorted(glob.glob(test_files_dir + "/*.filters"))
+  test_filters = {}
+  if include_filters:
+    for filter_filename in filter_files:
+      with open(filter_filename, "r") as filter_file:
+        for filter_line in filter_file:
+          (test_name, test_filter) = filter_line.strip().split(" ", 1)
+
+          if test_name not in test_names:
+            raise Exception("Filter found for unknown target: " + test_name)
+
+          # Note: This may overwrite a previous rule. This is okay, since higher
+          # priority files are evaluated after lower priority files.
+          test_filters[test_name] = test_filter
+
+  return test_filters
+
+
 def CombineList(test_files_dir, list_output_file, include_filters,
                 additional_runtime_options):
   """Writes a unit test file in a format compatible for Chromecast scripts.
@@ -31,44 +67,17 @@ def CombineList(test_files_dir, list_output_file, include_filters,
   Raises:
     Exception: if filter is found for an unknown target.
   """
-
-  # GYP targets may provide a numbered priority for the filename. Sort to
-  # use that priority.
-  test_files = sorted(glob.glob(test_files_dir + "/*.tests"))
-  filter_files = sorted(glob.glob(test_files_dir + "/*.filters"))
-
-  test_bin_set = set()
-  for test_filename in test_files:
-    with open(test_filename, "r") as test_file:
-      for test_file_line in test_file:
-        # Binary name may be a simple test target (cast_net_unittests) or be a
-        # qualified gyp path (../base.gyp:base_unittests).
-        test_binary_name = test_file_line.split(":")[-1].strip()
-        test_bin_set.add(test_binary_name)
-
-  test_filters = {}
-  if include_filters:
-    for filter_filename in filter_files:
-      with open(filter_filename, "r") as filter_file:
-        for filter_line in filter_file:
-          (test_binary_name, filter) = filter_line.strip().split(" ", 1)
-
-          if test_binary_name not in test_bin_set:
-            raise Exception("Filter found for unknown target: " +
-                            test_binary_name)
-
-          # Note: This may overwrite a previous rule. This is okay, since higher
-          # priority files are evaluated after lower priority files.
-          test_filters[test_binary_name] = filter
-
-  test_binaries = [
-      binary + " " + (additional_runtime_options or "") +
-      (" " + test_filters[binary] if binary in test_filters else "")
-      for binary in test_bin_set
+  test_names = GetTestNames(test_files_dir)
+  test_filters = GetTestFilters(test_files_dir, test_names, include_filters)
+  test_commands = [
+      "{} {} {}".format(test_name,
+                        additional_runtime_options,
+                        test_filters.get(test_name, ""))
+      for test_name in test_names
   ]
 
   with open(list_output_file, "w") as f:
-    f.write("\n".join(sorted(test_binaries)))
+    f.write("\n".join(sorted(test_commands)))
 
 
 def CombineRuntimeDeps(test_files_dir, deps_output_file):
@@ -93,11 +102,15 @@ def CombineRuntimeDeps(test_files_dir, deps_output_file):
         runtime deps files.
     deps_output_file: Path to write the JSON file out to.
   """
+  test_names = GetTestNames(test_files_dir)
   runtime_deps = {}
   runtime_deps_dir = os.path.join(test_files_dir, "runtime_deps")
   for runtime_deps_file in glob.glob(runtime_deps_dir + "/*_runtime_deps.txt"):
-    test_name = os.path.basename(runtime_deps_file).replace("_runtime_deps.txt",
-                                                            "")
+    test_name = os.path.basename(runtime_deps_file).replace(
+        "_runtime_deps.txt", "")
+    if test_name not in test_names:
+      continue
+
     with open(runtime_deps_file, "r") as f:
       runtime_deps[test_name] = [dep.strip() for dep in f]
 
@@ -149,7 +162,7 @@ def DoMain(argv):
   list_output_file = options.list_output_file
   deps_output_file = options.deps_output_file
   test_files_dir = options.test_files_dir
-  additional_runtime_options = options.additional_runtime_options
+  additional_runtime_options = options.additional_runtime_options or ""
 
   if len(inputs) < 1:
     parser.error("No command given.\n")

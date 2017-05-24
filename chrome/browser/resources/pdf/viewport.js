@@ -446,8 +446,8 @@ Viewport.prototype = {
 
   /**
    * @private
-   * @param {integer} y the y-coordinate to get the page at.
-   * @return {integer} the index of a page overlapping the given y-coordinate.
+   * @param {number} y the y-coordinate to get the page at.
+   * @return {number} the index of a page overlapping the given y-coordinate.
    */
   getPageAtY_: function(y) {
     var min = 0;
@@ -477,7 +477,7 @@ Viewport.prototype = {
   /**
    * Returns the page with the greatest proportion of its height in the current
    * viewport.
-   * @return {int} the index of the most visible page.
+   * @return {number} the index of the most visible page.
    */
   getMostVisiblePage: function() {
     var firstVisiblePage = this.getPageAtY_(this.position.y / this.zoom);

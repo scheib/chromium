@@ -83,6 +83,8 @@ class SafeBrowsingBlockingPage : public BaseBlockingPage {
  protected:
   friend class SafeBrowsingBlockingPageFactoryImpl;
   friend class SafeBrowsingBlockingPageTest;
+  friend class SafeBrowsingBlockingQuietPageFactoryImpl;
+  friend class SafeBrowsingBlockingQuietPageTest;
   FRIEND_TEST_ALL_PREFIXES(SafeBrowsingBlockingPageTest,
                            ProceedThenDontProceed);
   FRIEND_TEST_ALL_PREFIXES(SafeBrowsingBlockingPageTest,

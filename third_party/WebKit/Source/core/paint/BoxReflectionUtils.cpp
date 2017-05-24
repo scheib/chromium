@@ -51,30 +51,31 @@ BoxReflection BoxReflectionForPaintLayer(const PaintLayer& layer,
       break;
   }
 
+  sk_sp<PaintRecord> mask;
   const NinePieceImage& mask_nine_piece = reflect_style->Mask();
-  if (!mask_nine_piece.HasImage())
-    return BoxReflection(direction, offset, nullptr, FloatRect());
+  if (mask_nine_piece.HasImage()) {
+    LayoutRect mask_rect(LayoutPoint(), frame_layout_rect.Size());
+    LayoutRect mask_bounding_rect(mask_rect);
+    mask_bounding_rect.Expand(style.ImageOutsets(mask_nine_piece));
+    FloatRect mask_bounding_float_rect(mask_bounding_rect);
 
-  LayoutRect mask_rect(LayoutPoint(), frame_layout_rect.Size());
-  LayoutRect mask_bounding_rect(mask_rect);
-  mask_bounding_rect.Expand(style.ImageOutsets(mask_nine_piece));
-  FloatRect mask_bounding_float_rect(mask_bounding_rect);
-
-  // TODO(jbroman): PaintRecordBuilder + DrawingRecorder seems excessive.
-  // If NinePieceImagePainter operated on SkCanvas, we'd only need a
-  // PictureRecorder here.
-  PaintRecordBuilder builder(mask_bounding_float_rect);
-  {
-    GraphicsContext& context = builder.Context();
-    DrawingRecorder drawing_recorder(context, layer.GetLayoutObject(),
-                                     DisplayItem::kReflectionMask,
-                                     mask_bounding_float_rect);
-    NinePieceImagePainter().Paint(builder.Context(), layer.GetLayoutObject(),
-                                  mask_rect, style, mask_nine_piece,
-                                  SkBlendMode::kSrcOver);
+    // TODO(jbroman): PaintRecordBuilder + DrawingRecorder seems excessive.
+    // If NinePieceImagePainter operated on SkCanvas, we'd only need a
+    // PictureRecorder here.
+    PaintRecordBuilder builder(mask_bounding_float_rect);
+    {
+      GraphicsContext& context = builder.Context();
+      DrawingRecorder drawing_recorder(context, layer.GetLayoutObject(),
+                                       DisplayItem::kReflectionMask,
+                                       mask_bounding_float_rect);
+      NinePieceImagePainter().Paint(builder.Context(), layer.GetLayoutObject(),
+                                    mask_rect, style, mask_nine_piece,
+                                    SkBlendMode::kSrcOver);
+    }
+    mask = builder.EndRecording();
   }
-  return BoxReflection(direction, offset, builder.EndRecording(),
-                       mask_bounding_float_rect);
+
+  return BoxReflection(direction, offset, std::move(mask));
 }
 
 }  // namespace blink

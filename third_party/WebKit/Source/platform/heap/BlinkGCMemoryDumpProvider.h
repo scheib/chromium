@@ -6,16 +6,15 @@
 #define BlinkGCMemoryDumpProvider_h
 
 #include "base/trace_event/memory_dump_provider.h"
+#include "base/trace_event/sharded_allocation_register.h"
 #include "platform/PlatformExport.h"
 #include "platform/heap/BlinkGC.h"
 #include "platform/wtf/Allocator.h"
-#include "platform/wtf/ThreadingPrimitives.h"
 #include "platform/wtf/text/WTFString.h"
 
 namespace base {
 namespace trace_event {
 
-class AllocationRegister;
 class MemoryAllocatorDump;
 
 }  // namespace trace_event
@@ -57,11 +56,9 @@ class PLATFORM_EXPORT BlinkGCMemoryDumpProvider final
  private:
   BlinkGCMemoryDumpProvider();
 
-  Mutex allocation_register_mutex_;
-  std::unique_ptr<base::trace_event::AllocationRegister> allocation_register_;
+  base::trace_event::ShardedAllocationRegister allocation_register_;
   std::unique_ptr<base::trace_event::ProcessMemoryDump>
       current_process_memory_dump_;
-  bool is_heap_profiling_enabled_;
 };
 
 }  // namespace blink

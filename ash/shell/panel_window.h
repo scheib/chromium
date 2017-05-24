@@ -31,7 +31,7 @@ class PanelWindow : public views::WidgetDelegateView {
 
  private:
   // Overridden from views::View:
-  gfx::Size GetPreferredSize() const override;
+  gfx::Size CalculatePreferredSize() const override;
   void OnPaint(gfx::Canvas* canvas) override;
 
   // Overridden from views::WidgetDelegate:

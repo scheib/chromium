@@ -35,35 +35,11 @@
       "reason": "subtree"
     },
     {
-      "object": "LayoutSVGHiddenContainer defs",
-      "reason": "subtree"
-    },
-    {
-      "object": "LayoutSVGResourceClipper clipPath id='p'",
-      "reason": "subtree"
-    },
-    {
-      "object": "LayoutSVGRect rect id='r'",
-      "reason": "subtree"
-    },
-    {
       "object": "LayoutSVGImage image",
       "reason": "subtree"
     },
     {
       "object": "LayoutSVGContainer g id='g'",
-      "reason": "subtree"
-    },
-    {
-      "object": "LayoutSVGHiddenContainer defs",
-      "reason": "subtree"
-    },
-    {
-      "object": "LayoutSVGResourceClipper clipPath id='p'",
-      "reason": "subtree"
-    },
-    {
-      "object": "LayoutSVGRect rect id='r'",
       "reason": "subtree"
     },
     {

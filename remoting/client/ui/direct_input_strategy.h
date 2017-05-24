@@ -19,12 +19,12 @@ class DirectInputStrategy : public InputStrategy {
 
   // InputStrategy overrides.
 
-  void HandlePinch(const ViewMatrix::Point& pivot,
-                   float scale,
-                   DesktopViewport* viewport) override;
+  void HandleZoom(const ViewMatrix::Point& pivot,
+                  float scale,
+                  DesktopViewport* viewport) override;
 
-  void HandlePan(const ViewMatrix::Vector2D& translation,
-                 bool is_dragging_mode,
+  bool HandlePan(const ViewMatrix::Vector2D& translation,
+                 Gesture simultaneous_gesture,
                  DesktopViewport* viewport) override;
 
   void TrackTouchInput(const ViewMatrix::Point& touch_point,

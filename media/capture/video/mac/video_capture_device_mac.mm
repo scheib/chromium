@@ -413,6 +413,21 @@ void VideoCaptureDeviceMac::GetPhotoCapabilities(
   callback.Run(std::move(photo_capabilities));
 }
 
+void VideoCaptureDeviceMac::SetPhotoOptions(mojom::PhotoSettingsPtr settings,
+                                            SetPhotoOptionsCallback callback) {
+  DCHECK(task_runner_->BelongsToCurrentThread());
+  // Drop |callback| and return if there are any unsupported |settings|.
+  // TODO(mcasas): centralise checks elsewhere, https://crbug.com/724285.
+  if ((settings->has_width &&
+       settings->width != capture_format_.frame_size.width()) ||
+      (settings->has_height &&
+       settings->height != capture_format_.frame_size.height()) ||
+      settings->has_fill_light_mode || settings->has_red_eye_reduction) {
+    return;
+  }
+  callback.Run(true);
+}
+
 bool VideoCaptureDeviceMac::Init(VideoCaptureApi capture_api_type) {
   DCHECK(task_runner_->BelongsToCurrentThread());
   DCHECK_EQ(state_, kNotInitialized);
@@ -491,7 +506,7 @@ std::string VideoCaptureDeviceMac::GetDeviceModelId(
   if (capture_api == VideoCaptureApi::MACOSX_AVFOUNDATION &&
       transport_type != VideoCaptureTransportType::MACOSX_USB_OR_BUILT_IN)
     return "";
-  if (capture_api == VideoCaptureApi::MACOSX_DECKLINK)
+    if (capture_api == VideoCaptureApi::MACOSX_DECKLINK || capture_api == VideoCaptureApi::MACOSX_SYPHON)
     return "";
   // Both PID and VID are 4 characters.
   if (device_id.size() < 2 * kVidPidSize)

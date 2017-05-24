@@ -118,6 +118,6 @@ Polymer({
    * @private
    */
   shouldShowEmail_: function(user) {
-    return !user.isSupervised && user.name != user.email;
+    return !user.isSupervised && user.name != user.displayEmail;
   },
 });

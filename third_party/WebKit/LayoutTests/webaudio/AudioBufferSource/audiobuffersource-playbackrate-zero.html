@@ -14,20 +14,20 @@
     // Sample rate should be power of 128 to observe the change of AudioParam at
     // the beginning of rendering quantum. (playbackRate is k-rate) This is the
     // minimum sample rate in the valid sample rate range.
-    var sampleRate = 4096;
+    let sampleRate = 4096;
 
     // The render duration in seconds, and the length in samples.
-    var renderDuration = 1.0;
-    var renderLength = renderDuration * sampleRate;
+    let renderDuration = 1.0;
+    let renderLength = renderDuration * sampleRate;
 
-    var context = new OfflineAudioContext(1, renderLength, sampleRate);
-    var audit = Audit.createTaskRunner();
+    let context = new OfflineAudioContext(1, renderLength, sampleRate);
+    let audit = Audit.createTaskRunner();
 
 
     // Task: Render the actual buffer and compare with the reference.
     audit.define('synthesize-verify', (task, should) => {
-      var ramp = context.createBufferSource();
-      var rampBuffer = createLinearRampBuffer(context, renderLength);
+      let ramp = context.createBufferSource();
+      let rampBuffer = createLinearRampBuffer(context, renderLength);
       ramp.buffer = rampBuffer;
 
       ramp.connect(context.destination);
@@ -40,12 +40,13 @@
       ramp.playbackRate.setValueAtTime(0.0, renderDuration / 2);
 
       context.startRendering().then(function (renderedBuffer) {
-        var data = renderedBuffer.getChannelData(0);
-        var rampData = rampBuffer.getChannelData(0);
-        var half = rampData.length / 2;
-        var passed = true;
+        let data = renderedBuffer.getChannelData(0);
+        let rampData = rampBuffer.getChannelData(0);
+        let half = rampData.length / 2;
+        let passed = true;
+        let i;
 
-        for (var i = 1; i < rampData.length; i++) {
+        for (i = 1; i < rampData.length; i++) {
           if (i < half) {
             // Before the half position, the actual should match with the
             // original ramp data.

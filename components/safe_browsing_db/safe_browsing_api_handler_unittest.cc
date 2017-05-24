@@ -159,4 +159,21 @@ TEST_F(SafeBrowsingApiHandlerUtilTest, SubresourceFilterSubTypes) {
   EXPECT_EQ(expected, meta_);
 }
 
+TEST_F(SafeBrowsingApiHandlerUtilTest, NoUnwantedSoftwareSubTypes) {
+  ThreatMetadata expected;
+
+  EXPECT_EQ(UMA_STATUS_MATCH,
+            ResetAndParseJson("{\"matches\":[{\"threat_type\":\"3\"}]}"));
+  EXPECT_EQ(SB_THREAT_TYPE_URL_UNWANTED, threat_);
+  expected.threat_pattern_type = ThreatPatternType::NONE;
+  EXPECT_EQ(expected, meta_);
+
+  EXPECT_EQ(UMA_STATUS_MATCH,
+            ResetAndParseJson("{\"matches\":[{\"threat_type\":\"3\", "
+                              "\"se_pattern_type\":\"junk\"}]}"));
+  EXPECT_EQ(SB_THREAT_TYPE_URL_UNWANTED, threat_);
+  expected.threat_pattern_type = ThreatPatternType::NONE;
+  EXPECT_EQ(expected, meta_);
+}
+
 }  // namespace safe_browsing

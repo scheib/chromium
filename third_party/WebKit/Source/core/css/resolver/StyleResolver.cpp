@@ -1957,24 +1957,11 @@ bool StyleResolver::HasAuthorBackground(const StyleResolverState& state) {
 bool StyleResolver::HasAuthorBorder(const StyleResolverState& state) {
   const CachedUAStyle* cached_ua_style = state.GetCachedUAStyle();
   return cached_ua_style &&
-         (cached_ua_style->border != state.Style()->Border() ||
+         (cached_ua_style->border_image != state.Style()->BorderImage() ||
           !cached_ua_style->BorderColorEquals(*state.Style()) ||
-          (cached_ua_style->border_left_width !=
-               state.Style()->BorderLeftWidth() ||
-           cached_ua_style->border_right_width !=
-               state.Style()->BorderRightWidth() ||
-           cached_ua_style->border_top_width !=
-               state.Style()->BorderTopWidth() ||
-           cached_ua_style->border_bottom_width !=
-               state.Style()->BorderBottomWidth()) ||
-          !(cached_ua_style->top_left_ ==
-                state.Style()->BorderTopLeftRadius() &&
-            cached_ua_style->top_right_ ==
-                state.Style()->BorderTopRightRadius() &&
-            cached_ua_style->bottom_left_ ==
-                state.Style()->BorderBottomLeftRadius() &&
-            cached_ua_style->bottom_right_ ==
-                state.Style()->BorderBottomRightRadius()));
+          !cached_ua_style->BorderWidthEquals(*state.Style()) ||
+          !cached_ua_style->BorderRadiiEquals(*state.Style()) ||
+          !cached_ua_style->BorderStyleEquals(*state.Style()));
 }
 
 void StyleResolver::ApplyCallbackSelectors(StyleResolverState& state) {

@@ -5,11 +5,8 @@
 #import "ios/chrome/browser/ui/authentication/signin_promo_view.h"
 
 #include "base/logging.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
+#import "ios/chrome/browser/ui/authentication/signin_promo_view_delegate.h"
 #import "ios/chrome/browser/ui/colors/MDCPalette+CrAdditions.h"
-#import "ios/chrome/browser/ui/commands/UIKit+ChromeExecuteCommand.h"
-#import "ios/chrome/browser/ui/commands/show_signin_command.h"
 #import "ios/chrome/browser/ui/uikit_ui_util.h"
 #include "ios/chrome/grit/ios_chromium_strings.h"
 #import "ios/third_party/material_components_ios/src/components/Buttons/src/MaterialButtons.h"
@@ -31,87 +28,15 @@ const CGFloat kButtonVerticalPadding = 6;
 const CGFloat kProfileImageFixedSize = 48;
 // Button height.
 const CGFloat kButtonHeight = 36;
-
-void RecordSigninUserActionForAccessPoint(
-    signin_metrics::AccessPoint access_point) {
-  switch (access_point) {
-    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
-      base::RecordAction(
-          base::UserMetricsAction("Signin_Signin_FromBookmarkManager"));
-      break;
-    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
-      base::RecordAction(
-          base::UserMetricsAction("Signin_Signin_FromRecentTabs"));
-      break;
-    default:
-      NOTREACHED() << "Unexpected value for access point "
-                   << static_cast<int>(access_point);
-      break;
-  }
-}
-
-void RecordSigninDefaultUserActionForAccessPoint(
-    signin_metrics::AccessPoint access_point) {
-  switch (access_point) {
-    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
-      base::RecordAction(base::UserMetricsAction(
-          "Signin_SigninWithDefault_FromBookmarkManager"));
-      break;
-    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
-      base::RecordAction(
-          base::UserMetricsAction("Signin_SigninWithDefault_FromRecentTabs"));
-      break;
-    default:
-      NOTREACHED() << "Unexpected value for access point "
-                   << static_cast<int>(access_point);
-      break;
-  }
-}
-
-void RecordSigninNotDefaultUserActionForAccessPoint(
-    signin_metrics::AccessPoint access_point) {
-  switch (access_point) {
-    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
-      base::RecordAction(base::UserMetricsAction(
-          "Signin_SigninNotDefault_FromBookmarkManager"));
-      break;
-    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
-      base::RecordAction(
-          base::UserMetricsAction("Signin_SigninNotDefault_FromRecentTabs"));
-      break;
-    default:
-      NOTREACHED() << "Unexpected value for access point "
-                   << static_cast<int>(access_point);
-      break;
-  }
-}
-
-void RecordSigninNewAccountUserActionForAccessPoint(
-    signin_metrics::AccessPoint access_point) {
-  switch (access_point) {
-    case signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_MANAGER:
-      base::RecordAction(base::UserMetricsAction(
-          "Signin_SigninNewAccount_FromBookmarkManager"));
-      break;
-    case signin_metrics::AccessPoint::ACCESS_POINT_RECENT_TABS:
-      base::RecordAction(
-          base::UserMetricsAction("Signin_SigninNewAccount_FromRecentTabs"));
-      break;
-    default:
-      NOTREACHED() << "Unexpected value for access point "
-                   << static_cast<int>(access_point);
-      break;
-  }
-}
 }
 
 @implementation SigninPromoView {
   NSArray<NSLayoutConstraint*>* _coldStateConstraints;
   NSArray<NSLayoutConstraint*>* _warmStateConstraints;
-  BOOL _shouldSendChromeCommand;
   signin_metrics::AccessPoint _accessPoint;
 }
 
+@synthesize delegate = _delegate;
 @synthesize mode = _mode;
 @synthesize imageView = _imageView;
 @synthesize textLabel = _textLabel;
@@ -122,7 +47,6 @@ void RecordSigninNewAccountUserActionForAccessPoint(
   self = [super initWithFrame:frame];
   if (self) {
     self.isAccessibilityElement = YES;
-    [self disableChromeCommand];
 
     // Adding subviews.
     self.clipsToBounds = YES;
@@ -281,51 +205,19 @@ void RecordSigninNewAccountUserActionForAccessPoint(
   return kHorizontalPadding;
 }
 
-- (void)enableChromeCommandWithAccessPoint:
-    (signin_metrics::AccessPoint)accessPoint {
-  _shouldSendChromeCommand = YES;
-  _accessPoint = accessPoint;
-}
-
-- (void)disableChromeCommand {
-  _shouldSendChromeCommand = NO;
-  _accessPoint = signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN;
-}
-
 - (void)onPrimaryButtonAction:(id)unused {
-  if (!_shouldSendChromeCommand) {
-    return;
-  }
-  RecordSigninUserActionForAccessPoint(_accessPoint);
-  ShowSigninCommand* command = nil;
   switch (_mode) {
     case SigninPromoViewModeColdState:
-      RecordSigninNewAccountUserActionForAccessPoint(_accessPoint);
-      command = [[ShowSigninCommand alloc]
-          initWithOperation:AUTHENTICATION_OPERATION_SIGNIN
-                accessPoint:_accessPoint];
+      [_delegate signinPromoViewDidTapSigninWithNewAccount:self];
       break;
     case SigninPromoViewModeWarmState:
-      RecordSigninDefaultUserActionForAccessPoint(_accessPoint);
-      command = [[ShowSigninCommand alloc]
-          initWithOperation:AUTHENTICATION_OPERATION_SIGNIN_PROMO_CONTINUE_AS
-                accessPoint:_accessPoint];
+      [_delegate signinPromoViewDidTapSigninWithDefaultAccount:self];
       break;
   }
-  DCHECK(command);
-  [self chromeExecuteCommand:command];
 }
 
 - (void)onSecondaryButtonAction:(id)unused {
-  if (!_shouldSendChromeCommand) {
-    return;
-  }
-  RecordSigninUserActionForAccessPoint(_accessPoint);
-  RecordSigninNotDefaultUserActionForAccessPoint(_accessPoint);
-  ShowSigninCommand* command = [[ShowSigninCommand alloc]
-      initWithOperation:AUTHENTICATION_OPERATION_SIGNIN
-            accessPoint:_accessPoint];
-  [self chromeExecuteCommand:command];
+  [_delegate signinPromoViewDidTapSigninWithOtherAccount:self];
 }
 
 #pragma mark - NSObject(Accessibility)

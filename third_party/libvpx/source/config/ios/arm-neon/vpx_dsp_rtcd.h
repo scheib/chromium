@@ -228,7 +228,8 @@ void vpx_fdct32x32_rd_c(const int16_t *input, tran_low_t *output, int stride);
 #define vpx_fdct32x32_rd vpx_fdct32x32_rd_c
 
 void vpx_fdct4x4_c(const int16_t *input, tran_low_t *output, int stride);
-#define vpx_fdct4x4 vpx_fdct4x4_c
+void vpx_fdct4x4_neon(const int16_t *input, tran_low_t *output, int stride);
+#define vpx_fdct4x4 vpx_fdct4x4_neon
 
 void vpx_fdct4x4_1_c(const int16_t *input, tran_low_t *output, int stride);
 #define vpx_fdct4x4_1 vpx_fdct4x4_1_c

@@ -52,7 +52,7 @@ base::string16 AddressComboboxModel::GetItemAt(int index) {
 
   // Special entry when no profiles have been created yet.
   if (addresses_.empty())
-    return l10n_util::GetStringUTF16(IDS_AUTOFILL_ADD_BILLING_ADDRESS);
+    return l10n_util::GetStringUTF16(IDS_AUTOFILL_NO_SAVED_ADDRESS);
 
   // Always show the "Select" entry at the top, default selection position.
   if (index == 0)

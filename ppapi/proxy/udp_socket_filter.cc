@@ -117,7 +117,7 @@ void UDPSocketFilter::OnPluginMsgPushRecvResult(
     int32_t result,
     const std::string& data,
     const PP_NetAddress_Private& addr) {
-  DCHECK(PluginGlobals::Get()->ipc_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(PluginGlobals::Get()->ipc_task_runner()->RunsTasksInCurrentSequence());
   base::AutoLock acquire(lock_);
   auto it = queues_.find(params.pp_resource());
   // The RecvQueue might be gone if there were messages in-flight for a
@@ -151,7 +151,7 @@ void UDPSocketFilter::RecvQueue::DataReceivedOnIOThread(
     int32_t result,
     const std::string& data,
     const PP_NetAddress_Private& addr) {
-  DCHECK(PluginGlobals::Get()->ipc_task_runner()->RunsTasksOnCurrentThread());
+  DCHECK(PluginGlobals::Get()->ipc_task_runner()->RunsTasksInCurrentSequence());
   DCHECK_LT(recv_buffers_.size(),
             static_cast<size_t>(
                 UDPSocketResourceConstants::kPluginReceiveBufferSlots));

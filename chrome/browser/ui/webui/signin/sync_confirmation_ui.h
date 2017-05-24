@@ -8,28 +8,23 @@
 #include <memory>
 
 #include "base/macros.h"
-#include "ui/web_dialogs/web_dialog_ui.h"
-
-class SyncConfirmationHandler;
+#include "chrome/browser/ui/webui/signin/signin_web_dialog_ui.h"
 
 namespace ui {
 class WebUI;
 }
 
-class Browser;
-
 // WebUI controller for the sync confirmation dialog.
 //
 // Note: This controller does not set the WebUI message handler. It is
 // the responsability of the caller to pass the correct message handler.
-class SyncConfirmationUI : public ui::WebDialogUI {
+class SyncConfirmationUI : public SigninWebDialogUI {
  public:
   explicit SyncConfirmationUI(content::WebUI* web_ui);
   ~SyncConfirmationUI() override {}
 
-  // Initializes a SyncConfirmationHandler for |browser| and adds it to
-  // |web_ui()|.
-  void InitializeMessageHandlerWithBrowser(Browser* browser);
+  // SigninWebDialogUI:
+  void InitializeMessageHandlerWithBrowser(Browser* browser) override;
 
   DISALLOW_COPY_AND_ASSIGN(SyncConfirmationUI);
 };

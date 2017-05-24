@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/memory/ptr_util.h"
 #include "base/message_loop/message_loop.h"
 #include "base/strings/stringprintf.h"
 #include "media/midi/midi_scheduler.h"
@@ -67,7 +68,7 @@ void MidiManagerUsb::DispatchSendMidiData(MidiManagerClient* client,
   scheduler_->PostSendDataTask(
       client, data.size(), timestamp,
       base::Bind(&UsbMidiOutputStream::Send,
-                 base::Unretained(output_streams_[port_index]), data));
+                 base::Unretained(output_streams_[port_index].get()), data));
 }
 
 void MidiManagerUsb::ReceiveUsbMidiData(UsbMidiDevice* device,
@@ -87,14 +88,14 @@ void MidiManagerUsb::ReceiveUsbMidiData(UsbMidiDevice* device,
 void MidiManagerUsb::OnDeviceAttached(std::unique_ptr<UsbMidiDevice> device) {
   int device_id = static_cast<int>(devices_.size());
   devices_.push_back(std::move(device));
-  AddPorts(devices_.back(), device_id);
+  AddPorts(devices_.back().get(), device_id);
 }
 
 void MidiManagerUsb::OnDeviceDetached(size_t index) {
   if (index >= devices_.size()) {
     return;
   }
-  UsbMidiDevice* device = devices_[index];
+  UsbMidiDevice* device = devices_[index].get();
   for (size_t i = 0; i < output_streams_.size(); ++i) {
     if (output_streams_[i]->jack().device == device) {
       SetOutputPortState(static_cast<uint32_t>(i), PortState::DISCONNECTED);
@@ -125,7 +126,7 @@ void MidiManagerUsb::OnEnumerateDevicesDone(bool result,
   input_stream_.reset(new UsbMidiInputStream(this));
   devices->swap(devices_);
   for (size_t i = 0; i < devices_.size(); ++i) {
-    if (!AddPorts(devices_[i], static_cast<int>(i))) {
+    if (!AddPorts(devices_[i].get(), static_cast<int>(i))) {
       initialize_callback_.Run(Result::INITIALIZATION_ERROR);
       return;
     }
@@ -156,7 +157,8 @@ bool MidiManagerUsb::AddPorts(UsbMidiDevice* device, int device_id) {
     std::string id(
         base::StringPrintf("usb:port-%d-%ld", device_id, static_cast<long>(j)));
     if (jacks[j].direction() == UsbMidiJack::DIRECTION_OUT) {
-      output_streams_.push_back(new UsbMidiOutputStream(jacks[j]));
+      output_streams_.push_back(
+          base::MakeUnique<UsbMidiOutputStream>(jacks[j]));
       AddOutputPort(MidiPortInfo(id, manufacturer, product_name, version,
                                  PortState::OPENED));
     } else {

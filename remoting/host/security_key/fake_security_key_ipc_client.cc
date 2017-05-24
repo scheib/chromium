@@ -16,6 +16,7 @@
 #include "ipc/ipc_message_macros.h"
 #include "mojo/edk/embedder/embedder.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "remoting/host/chromoting_messages.h"
 
 namespace remoting {
@@ -60,6 +61,7 @@ bool FakeSecurityKeyIpcClient::SendSecurityKeyRequest(
 
 void FakeSecurityKeyIpcClient::CloseIpcConnection() {
   client_channel_.reset();
+  peer_connection_.reset();
   channel_event_callback_.Run();
 }
 
@@ -70,8 +72,13 @@ bool FakeSecurityKeyIpcClient::ConnectViaIpc(
   if (!handle.is_valid()) {
     return false;
   }
+  peer_connection_ = base::MakeUnique<mojo::edk::PeerConnection>();
   client_channel_ = IPC::Channel::CreateClient(
-      mojo::edk::ConnectToPeerProcess(std::move(handle)).release(), this);
+      peer_connection_
+          ->Connect(mojo::edk::ConnectionParams(
+              mojo::edk::TransportProtocol::kLegacy, std::move(handle)))
+          .release(),
+      this);
   return client_channel_->Connect();
 }
 

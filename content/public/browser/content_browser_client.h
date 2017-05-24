@@ -358,9 +358,6 @@ class CONTENT_EXPORT ContentBrowserClient {
                               int render_frame_id,
                               const net::CookieOptions& options);
 
-  // This is called on the IO thread.
-  virtual bool AllowSaveLocalState(ResourceContext* context);
-
   // Allow the embedder to control if access to file system by a shared worker
   // is allowed.
   // This is called on the IO thread.
@@ -378,15 +375,6 @@ class CONTENT_EXPORT ContentBrowserClient {
       const base::string16& name,
       ResourceContext* context,
       const std::vector<std::pair<int, int> >& render_frames);
-
-#if BUILDFLAG(ENABLE_WEBRTC)
-  // Allow the embedder to control if WebRTC identities are allowed to be cached
-  // and potentially reused for future requests (within the same origin).
-  // This is called on the IO thread.
-  virtual bool AllowWebRTCIdentityCache(const GURL& url,
-                                        const GURL& first_party_url,
-                                        ResourceContext* context);
-#endif  // BUILDFLAG(ENABLE_WEBRTC)
 
   // Allow the embedder to control whether we can use Web Bluetooth.
   // TODO(crbug.com/589228): Replace this with a use of the permission system.
@@ -542,14 +530,6 @@ class CONTENT_EXPORT ContentBrowserClient {
   // Notifies that BrowserURLHandler has been created, so that the embedder can
   // optionally add their own handlers.
   virtual void BrowserURLHandlerCreated(BrowserURLHandler* handler) {}
-
-  // Clears browser cache.
-  // TODO(crbug.com/668114): Deprecated. Use BrowsingDataRemover instead.
-  virtual void ClearCache(RenderFrameHost* rfh) {}
-
-  // Clears browser cookies.
-  // TODO(crbug.com/668114): Deprecated. Use BrowsingDataRemover instead.
-  virtual void ClearCookies(RenderFrameHost* rfh) {}
 
   // Clears |browser_context|'s data stored for the given |origin|.
   // The datatypes to be removed are specified by |remove_cookies|,

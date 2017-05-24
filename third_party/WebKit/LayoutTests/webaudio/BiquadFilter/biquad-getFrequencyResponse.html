@@ -18,55 +18,46 @@ let audit = Audit.createTaskRunner();
 // used doesn't matter since we're testing getFrequencyResponse and not the actual filter output.
 // The filters are extensively tested in other biquad tests.
 
-var context;
-
-// The biquad filter node.
-var filter;
-
 // The magnitude response of the biquad filter.
-var magResponse;
+let magResponse;
 
 // The phase response of the biquad filter.
-var phaseResponse;
+let phaseResponse;
 
 // Number of frequency samples to take.
-var numberOfFrequencies = 1000;
+let numberOfFrequencies = 1000;
 
 // The filter parameters.
-var filterCutoff = 1000; // Hz.
-var filterQ = 1;
-var filterGain = 5; // Decibels.
+let filterCutoff = 1000; // Hz.
+let filterQ = 1;
+let filterGain = 5; // Decibels.
 
 // The maximum allowed error in the magnitude response.
-var maxAllowedMagError = 5.7e-7;
+let maxAllowedMagError = 5.7e-7;
 
 // The maximum allowed error in the phase response.
-var maxAllowedPhaseError = 4.7e-8;
-
-// The magnitudes and phases of the reference frequency response.
-var magResponse;
-var phaseResponse;
+let maxAllowedPhaseError = 4.7e-8;
       
 // The magnitudes and phases of the reference frequency response.
-var expectedMagnitudes;
-var expectedPhases;
+let expectedMagnitudes;
+let expectedPhases;
 
 // Convert frequency in Hz to a normalized frequency between 0 to 1 with 1 corresponding to the
 // Nyquist frequency.
 function normalizedFrequency(freqHz, sampleRate)
 {
-    var nyquist = sampleRate / 2;
+    let nyquist = sampleRate / 2;
     return freqHz / nyquist;
 }
 
 // Get the filter response at a (normalized) frequency |f| for the filter with coefficients |coef|.
 function getResponseAt(coef, f)
 {
-    var b0 = coef.b0;
-    var b1 = coef.b1;
-    var b2 = coef.b2;
-    var a1 = coef.a1;
-    var a2 = coef.a2;
+    let b0 = coef.b0;
+    let b1 = coef.b1;
+    let b2 = coef.b2;
+    let a1 = coef.a1;
+    let a2 = coef.a2;
 
     // H(z) = (b0 + b1 / z + b2 / z^2) / (1 + a1 / z + a2 / z^2)
     //
@@ -82,15 +73,15 @@ function getResponseAt(coef, f)
     //
     // Compute the magnitude and phase from the real and imaginary parts.
 
-    var omega = Math.PI * f;
-    var numeratorReal = b0 + b1 * Math.cos(omega) + b2 * Math.cos(2 * omega);
-    var numeratorImag = -(b1 * Math.sin(omega) + b2 * Math.sin(2 * omega));
-    var denominatorReal = 1 + a1 * Math.cos(omega) + a2 * Math.cos(2 * omega);
-    var denominatorImag = -(a1 * Math.sin(omega) + a2 * Math.sin(2 * omega));
+    let omega = Math.PI * f;
+    let numeratorReal = b0 + b1 * Math.cos(omega) + b2 * Math.cos(2 * omega);
+    let numeratorImag = -(b1 * Math.sin(omega) + b2 * Math.sin(2 * omega));
+    let denominatorReal = 1 + a1 * Math.cos(omega) + a2 * Math.cos(2 * omega);
+    let denominatorImag = -(a1 * Math.sin(omega) + a2 * Math.sin(2 * omega));
 
-    var magnitude = Math.sqrt((numeratorReal * numeratorReal + numeratorImag * numeratorImag)
+    let magnitude = Math.sqrt((numeratorReal * numeratorReal + numeratorImag * numeratorImag)
                               / (denominatorReal * denominatorReal + denominatorImag * denominatorImag));
-    var phase = Math.atan2(numeratorImag, numeratorReal) - Math.atan2(denominatorImag, denominatorReal);
+    let phase = Math.atan2(numeratorImag, numeratorReal) - Math.atan2(denominatorImag, denominatorReal);
     
     if (phase >= Math.PI) {
         phase -= 2 * Math.PI;
@@ -105,15 +96,15 @@ function getResponseAt(coef, f)
 // given by |frequencies|.
 function frequencyResponseReference(filter, frequencies)
 {
-    var sampleRate = filter.context.sampleRate;
-    var normalizedFreq = normalizedFrequency(filter.frequency.value, sampleRate);
-    var filterCoefficients = createFilter(filter.type, normalizedFreq, filter.Q.value, filter.gain.value);
+    let sampleRate = filter.context.sampleRate;
+    let normalizedFreq = normalizedFrequency(filter.frequency.value, sampleRate);
+    let filterCoefficients = createFilter(filter.type, normalizedFreq, filter.Q.value, filter.gain.value);
 
-    var magnitudes = [];
-    var phases = [];
+    let magnitudes = [];
+    let phases = [];
 
-    for (var k = 0; k < frequencies.length; ++k) {
-        var response = getResponseAt(filterCoefficients, normalizedFrequency(frequencies[k], sampleRate));
+    for (let k = 0; k < frequencies.length; ++k) {
+        let response = getResponseAt(filterCoefficients, normalizedFrequency(frequencies[k], sampleRate));
         magnitudes.push(response.magnitude);
         phases.push(response.phase);
     }
@@ -124,11 +115,11 @@ function frequencyResponseReference(filter, frequencies)
 // Compute a set of linearly spaced frequencies.
 function createFrequencies(nFrequencies, sampleRate)
 {
-    var frequencies = new Float32Array(nFrequencies);
-    var nyquist = sampleRate / 2;
-    var freqDelta = nyquist / nFrequencies;
+    let frequencies = new Float32Array(nFrequencies);
+    let nyquist = sampleRate / 2;
+    let freqDelta = nyquist / nFrequencies;
 
-    for (var k = 0; k < nFrequencies; ++k) {
+    for (let k = 0; k < nFrequencies; ++k) {
         frequencies[k] = k * freqDelta;
     }
 
@@ -148,7 +139,7 @@ function linearToDecibels(x)
 // -1 if none.
 function findBadNumber(signal)
 {
-    for (var k = 0; k < signal.length; ++k) {
+    for (let k = 0; k < signal.length; ++k) {
         if (!isValidNumber(signal[k])) {
            return k;
         }
@@ -160,7 +151,7 @@ function findBadNumber(signal)
 // of phases.
 function absolutePhaseDifference(x, y)
 {
-    var diff = Math.abs(x - y);
+    let diff = Math.abs(x - y);
     
     if (diff > Math.PI) {
         diff = 2 * Math.PI - diff;
@@ -171,19 +162,19 @@ function absolutePhaseDifference(x, y)
 // Compare the frequency response with our expected response.
 function compareResponses(should, filter, frequencies, magResponse, phaseResponse)
 {
-    var expectedResponse = frequencyResponseReference(filter, frequencies);
+    let expectedResponse = frequencyResponseReference(filter, frequencies);
 
     expectedMagnitudes = expectedResponse.magnitudes;
     expectedPhases = expectedResponse.phases;
 
-    var n = magResponse.length;
-    var badResponse = false;
+    let n = magResponse.length;
+    let badResponse = false;
 
-    var maxMagError = -1;
-    var maxMagErrorIndex = -1;
+    let maxMagError = -1;
+    let maxMagErrorIndex = -1;
 
-    var k;
-    var hasBadNumber;
+    let k;
+    let hasBadNumber;
 
     hasBadNumber = findBadNumber(magResponse);
     badResponse = !should(hasBadNumber >= 0 ? 1 : 0,
@@ -214,7 +205,7 @@ function compareResponses(should, filter, frequencies, magResponse, phaseRespons
       .beTrue();
 
     for (k = 0; k < n; ++k) {
-        var error = Math.abs(linearToDecibels(magResponse[k]) - linearToDecibels(expectedMagnitudes[k]));
+        let error = Math.abs(linearToDecibels(magResponse[k]) - linearToDecibels(expectedMagnitudes[k]));
         if (error > maxMagError) {
             maxMagError = error;
             maxMagErrorIndex = k;
@@ -227,11 +218,11 @@ function compareResponses(should, filter, frequencies, magResponse, phaseRespons
             ' dB) of magnitude response at frequency ' +
             frequencies[maxMagErrorIndex] + ' Hz')
         .beLessThanOrEqualTo(linearToDecibels(maxAllowedMagError));
-    var maxPhaseError = -1;
-    var maxPhaseErrorIndex = -1;
+    let maxPhaseError = -1;
+    let maxPhaseErrorIndex = -1;
 
     for (k = 0; k < n; ++k) {
-        var error = absolutePhaseDifference(phaseResponse[k], expectedPhases[k]);
+        let error = absolutePhaseDifference(phaseResponse[k], expectedPhases[k]);
         if (error > maxPhaseError) {
             maxPhaseError = error;
             maxPhaseErrorIndex = k;
@@ -264,7 +255,7 @@ audit.define({
     filter.Q.value = filterQ;
     filter.gain.value = filterGain;
 
-    var frequencies = createFrequencies(numberOfFrequencies, context.sampleRate);
+    let frequencies = createFrequencies(numberOfFrequencies, context.sampleRate);
     magResponse = new Float32Array(numberOfFrequencies);
     phaseResponse = new Float32Array(numberOfFrequencies);
 

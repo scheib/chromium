@@ -7,6 +7,7 @@
 
 #include "public/platform/WebCallbacks.h"
 #include "public/platform/WebCredentialManagerError.h"
+#include "public/platform/WebCredentialMediationRequirement.h"
 #include "public/platform/WebVector.h"
 
 #include <memory>
@@ -32,7 +33,7 @@ class WebCredentialManagerClient {
                                     NotificationCallbacks*) {}
   virtual void DispatchStore(const WebCredential&, NotificationCallbacks*) {}
   virtual void DispatchRequireUserMediation(NotificationCallbacks*) {}
-  virtual void DispatchGet(bool zero_click_only,
+  virtual void DispatchGet(WebCredentialMediationRequirement mediation,
                            bool include_passwords,
                            const WebVector<WebURL>& federations,
                            RequestCallbacks*) {}

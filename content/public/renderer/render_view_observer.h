@@ -38,7 +38,6 @@ class CONTENT_EXPORT RenderViewObserver : public IPC::Listener,
   // These match the WebKit API notifications
   virtual void DidStartLoading() {}
   virtual void DidStopLoading() {}
-  virtual void DidFinishLoad(blink::WebLocalFrame* frame) {}
   virtual void DidFailProvisionalLoad(blink::WebLocalFrame* frame,
                                       const blink::WebURLError& error) {}
   virtual void DidCommitProvisionalLoad(blink::WebLocalFrame* frame,

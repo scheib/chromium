@@ -25,6 +25,7 @@ class GpuMemoryBufferManager;
 
 namespace cc {
 
+struct BeginFrameAck;
 class CompositorFrame;
 class CompositorFrameSinkClient;
 class LocalSurfaceId;
@@ -120,6 +121,10 @@ class CC_EXPORT CompositorFrameSink {
   // DidReceiveCompositorFrameAck() asynchronously when the frame has been
   // processed in order to unthrottle the next frame.
   virtual void SubmitCompositorFrame(CompositorFrame frame) = 0;
+
+  // Signals that a BeginFrame issued by the BeginFrameSource provided to the
+  // client did not lead to a CompositorFrame submission.
+  virtual void DidNotProduceFrame(const BeginFrameAck& ack) = 0;
 
  protected:
   // Bound to the ContextProvider to hear about when it is lost and inform the

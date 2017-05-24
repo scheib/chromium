@@ -1441,17 +1441,7 @@ Node* Range::PastLastNode() const {
 }
 
 IntRect Range::BoundingBox() const {
-  IntRect result;
-  const Vector<IntRect>& rects = ComputeTextRects(EphemeralRange(this));
-  for (const IntRect& rect : rects)
-    result.Unite(rect);
-  return result;
-}
-
-// TODO(tanvir.rizvi): We will replace Range::TextQuads with
-// ComputeTextQuads(in VisibleUnits) and get rid of Range::TextQuads.
-void Range::TextQuads(Vector<FloatQuad>& quads) const {
-  quads.AppendVector(ComputeTextQuads(EphemeralRange(this)));
+  return ComputeTextRect(EphemeralRange(this));
 }
 
 bool AreRangesEqual(const Range* a, const Range* b) {

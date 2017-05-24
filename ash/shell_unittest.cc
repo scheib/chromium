@@ -506,13 +506,6 @@ class ShellTest2 : public test::AshTestBase {
 };
 
 TEST_F(ShellTest2, DontCrashWhenWindowDeleted) {
-  // TODO: delete this test when conversion to mash is done. This test isn't
-  // applicable to mash as all windows must be destroyed before ash, that isn't
-  // the case with classic-ash where embedders can separately create
-  // aura::Windows.
-  if (Shell::GetAshConfig() == Config::MASH)
-    return;
-
   window_.reset(new aura::Window(NULL));
   window_->Init(ui::LAYER_NOT_DRAWN);
 }

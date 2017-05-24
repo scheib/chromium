@@ -87,6 +87,11 @@ void UpgradeDetector::NotifyUpgradeRecommended() {
   }
 }
 
+void UpgradeDetector::NotifyUpdateOverCellularAvailable() {
+  for (auto& observer : observer_list_)
+    observer.OnUpdateOverCellularAvailable();
+}
+
 void UpgradeDetector::TriggerCriticalUpdate() {
   const base::TimeDelta idle_timer = UseTestingIntervals() ?
       base::TimeDelta::FromSeconds(kIdleRepeatingTimerWait) :
@@ -137,4 +142,12 @@ void UpgradeDetector::IdleCallback(ui::IdleState state) {
                      // automatic restart or show notification to user).
       break;
   }
+}
+
+void UpgradeDetector::AddObserver(UpgradeObserver* observer) {
+  observer_list_.AddObserver(observer);
+}
+
+void UpgradeDetector::RemoveObserver(UpgradeObserver* observer) {
+  observer_list_.RemoveObserver(observer);
 }

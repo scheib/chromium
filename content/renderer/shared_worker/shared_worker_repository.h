@@ -33,6 +33,7 @@ class SharedWorkerRepository final
       blink::WebContentSecurityPolicyType,
       blink::WebAddressSpace,
       blink::WebSharedWorkerCreationContextType,
+      bool data_saver_enabled,
       std::unique_ptr<blink::WebMessagePortChannel> channel,
       std::unique_ptr<blink::WebSharedWorkerConnectListener> listener) override;
   void DocumentDetached(DocumentID document_id) override;

@@ -32,6 +32,7 @@ class MEDIA_EXPORT ClocklessAudioSink
   void Play() override;
   bool SetVolume(double volume) override;
   OutputDeviceInfo GetOutputDeviceInfo() override;
+  bool IsOptimizedForHardwareParameters() override;
   bool CurrentThreadIsRenderingThread() override;
 
   // Returns the time taken to consume all the audio.

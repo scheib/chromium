@@ -104,11 +104,11 @@ TEST(CreditCardTest, PreviewSummaryAndNetworkAndLastFourDigitsStrings) {
                           "5105 1051 0510 5100", "", "2010", "1");
   base::string16 summary2 = credit_card2.Label();
   EXPECT_EQ(
-      UTF8ToUTF16(std::string("MasterCard") + kUTF8MidlineEllipsis + "5100"),
+      UTF8ToUTF16(std::string("Mastercard") + kUTF8MidlineEllipsis + "5100"),
       summary2);
   base::string16 obfuscated2 = credit_card2.NetworkAndLastFourDigits();
   EXPECT_EQ(
-      UTF8ToUTF16(std::string("MasterCard") + kUTF8MidlineEllipsis + "5100"),
+      UTF8ToUTF16(std::string("Mastercard") + kUTF8MidlineEllipsis + "5100"),
       obfuscated2);
 
   // Case 3: No year.
@@ -117,11 +117,11 @@ TEST(CreditCardTest, PreviewSummaryAndNetworkAndLastFourDigitsStrings) {
                           "5105 1051 0510 5100", "01", "", "1");
   base::string16 summary3 = credit_card3.Label();
   EXPECT_EQ(
-      UTF8ToUTF16(std::string("MasterCard") + kUTF8MidlineEllipsis + "5100"),
+      UTF8ToUTF16(std::string("Mastercard") + kUTF8MidlineEllipsis + "5100"),
       summary3);
   base::string16 obfuscated3 = credit_card3.NetworkAndLastFourDigits();
   EXPECT_EQ(
-      UTF8ToUTF16(std::string("MasterCard") + kUTF8MidlineEllipsis + "5100"),
+      UTF8ToUTF16(std::string("Mastercard") + kUTF8MidlineEllipsis + "5100"),
       obfuscated3);
 
   // Case 4: Have everything.
@@ -129,12 +129,12 @@ TEST(CreditCardTest, PreviewSummaryAndNetworkAndLastFourDigitsStrings) {
   test::SetCreditCardInfo(&credit_card4, "John Dillinger",
                           "5105 1051 0510 5100", "01", "2010", "1");
   base::string16 summary4 = credit_card4.Label();
-  EXPECT_EQ(UTF8ToUTF16(std::string("MasterCard") + kUTF8MidlineEllipsis +
+  EXPECT_EQ(UTF8ToUTF16(std::string("Mastercard") + kUTF8MidlineEllipsis +
                         "5100, 01/2010"),
             summary4);
   base::string16 obfuscated4 = credit_card4.NetworkAndLastFourDigits();
   EXPECT_EQ(
-      UTF8ToUTF16(std::string("MasterCard") + kUTF8MidlineEllipsis + "5100"),
+      UTF8ToUTF16(std::string("Mastercard") + kUTF8MidlineEllipsis + "5100"),
       obfuscated4);
 
   // Case 5: Very long credit card

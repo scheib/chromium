@@ -426,6 +426,7 @@ enum HistogramValue {
   FILE_MANAGER_PRIVATE_ON_APPS_UPDATED,
   ACCESSIBILITY_PRIVATE_ON_TWO_FINGER_TOUCH_START,
   ACCESSIBILITY_PRIVATE_ON_TWO_FINGER_TOUCH_STOP,
+  MEDIA_PERCEPTION_PRIVATE_ON_MEDIA_PERCEPTION,
   // Last entry: Add new entries above, then run:
   // python tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY

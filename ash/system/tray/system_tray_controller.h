@@ -46,6 +46,7 @@ class ASH_EXPORT SystemTrayController
   void ShowPowerSettings();
   void ShowChromeSlow();
   void ShowIMESettings();
+  void ShowAboutChromeOS();
   void ShowHelp();
   void ShowAccessibilityHelp();
   void ShowAccessibilitySettings();
@@ -74,6 +75,7 @@ class ASH_EXPORT SystemTrayController
   void ShowUpdateIcon(mojom::UpdateSeverity severity,
                       bool factory_reset_required,
                       mojom::UpdateType update_type) override;
+  void ShowUpdateOverCellularAvailableIcon() override;
 
  private:
   // Client interface in chrome browser. May be null in tests.

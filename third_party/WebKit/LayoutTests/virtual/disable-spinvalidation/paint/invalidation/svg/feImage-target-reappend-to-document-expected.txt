@@ -1,0 +1,49 @@
+{
+  "layers": [
+    {
+      "name": "LayoutView #document",
+      "bounds": [800, 600],
+      "contentsOpaque": true,
+      "drawsContent": true,
+      "paintInvalidations": [
+        {
+          "object": "LayoutSVGRect rect",
+          "rect": [0, 0, 110, 110],
+          "reason": "full"
+        },
+        {
+          "object": "LayoutSVGRect rect",
+          "rect": [0, 0, 110, 110],
+          "reason": "style change"
+        }
+      ]
+    }
+  ],
+  "objectPaintInvalidations": [
+    {
+      "object": "LayoutSVGResourceFilterPrimitive feImage id='feimage-green'",
+      "reason": "disappeared"
+    },
+    {
+      "object": "LayoutSVGResourceFilter filter id='filter'",
+      "reason": "full"
+    },
+    {
+      "object": "LayoutSVGRect rect",
+      "reason": "full"
+    },
+    {
+      "object": "LayoutSVGResourceFilter filter id='filter'",
+      "reason": "full"
+    },
+    {
+      "object": "LayoutSVGResourceFilterPrimitive feImage id='feimage-green'",
+      "reason": "appeared"
+    },
+    {
+      "object": "LayoutSVGRect rect",
+      "reason": "style change"
+    }
+  ]
+}
+

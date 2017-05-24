@@ -16,7 +16,6 @@
 #include "ash/test/cursor_manager_test_api.h"
 #include "ash/test/test_shell_delegate.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/wm_event.h"
 #include "base/command_line.h"
 #include "ui/aura/client/focus_change_observer.h"

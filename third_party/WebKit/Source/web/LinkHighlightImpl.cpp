@@ -278,9 +278,9 @@ void LinkHighlightImpl::PaintContents(
     return;
 
   PaintRecorder recorder;
-  gfx::Rect record_bounds = PaintableRegion();
+  gfx::Rect visual_rect = PaintableRegion();
   PaintCanvas* canvas =
-      recorder.beginRecording(record_bounds.width(), record_bounds.height());
+      recorder.beginRecording(visual_rect.width(), visual_rect.height());
 
   PaintFlags flags;
   flags.setStyle(PaintFlags::kFill_Style);
@@ -289,11 +289,9 @@ void LinkHighlightImpl::PaintContents(
   canvas->drawPath(path_.GetSkPath(), flags);
 
   web_display_item_list->AppendDrawingItem(
-      WebRect(record_bounds.x(), record_bounds.y(), record_bounds.width(),
-              record_bounds.height()),
-      recorder.finishRecordingAsPicture(),
-      WebRect(record_bounds.x(), record_bounds.y(), record_bounds.width(),
-              record_bounds.height()));
+      WebRect(visual_rect.x(), visual_rect.y(), visual_rect.width(),
+              visual_rect.height()),
+      recorder.finishRecordingAsPicture());
 }
 
 void LinkHighlightImpl::StartHighlightAnimationIfNeeded() {

@@ -31,6 +31,10 @@ class CORE_EXPORT NGLayoutInputNode
 
   bool IsFloating() const { return IsBlock() && Style().IsFloating(); }
 
+  bool IsOutOfFlowPositioned() const {
+    return IsBlock() && Style().HasOutOfFlowPosition();
+  }
+
   virtual ~NGLayoutInputNode(){};
 
   // Performs layout on this input node, will return the layout result.

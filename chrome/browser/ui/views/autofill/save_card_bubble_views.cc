@@ -11,6 +11,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/views/autofill/view_util.h"
+#include "chrome/browser/ui/views/harmony/chrome_layout_provider.h"
 #include "components/autofill/core/browser/credit_card.h"
 #include "components/autofill/core/browser/legal_message_line.h"
 #include "components/autofill/core/browser/ui/save_card_bubble_controller.h"
@@ -26,7 +27,6 @@
 #include "ui/views/controls/styled_label.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/box_layout.h"
-#include "ui/views/layout/layout_constants.h"
 #include "ui/views/window/dialog_client_view.h"
 
 namespace autofill {
@@ -182,14 +182,17 @@ void SaveCardBubbleViews::StyledLabelLinkClicked(views::StyledLabel* label,
 // Create view containing everything except for the footnote.
 std::unique_ptr<views::View> SaveCardBubbleViews::CreateMainContentView() {
   std::unique_ptr<View> view(new View());
-  view->SetLayoutManager(
-      new views::BoxLayout(views::BoxLayout::kVertical, 0, 0,
-                           views::kUnrelatedControlVerticalSpacing));
+  ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
+
+  view->SetLayoutManager(new views::BoxLayout(
+      views::BoxLayout::kVertical, 0, 0,
+      provider->GetDistanceMetric(DISTANCE_UNRELATED_CONTROL_VERTICAL)));
 
   // Add the card type icon, last four digits and expiration date.
   views::View* description_view = new views::View();
   description_view->SetLayoutManager(new views::BoxLayout(
-      views::BoxLayout::kHorizontal, 0, 0, views::kRelatedButtonHSpacing));
+      views::BoxLayout::kHorizontal, 0, 0,
+      provider->GetDistanceMetric(views::DISTANCE_RELATED_BUTTON_HORIZONTAL)));
   view->AddChildView(description_view);
 
   const CreditCard& card = controller_->GetCard();
@@ -226,8 +229,10 @@ std::unique_ptr<views::View> SaveCardBubbleViews::CreateMainContentView() {
 
 std::unique_ptr<views::View> SaveCardBubbleViews::CreateRequestCvcView() {
   std::unique_ptr<View> request_cvc_view = base::MakeUnique<views::View>();
-  request_cvc_view->SetLayoutManager(new views::BoxLayout(
-      views::BoxLayout::kHorizontal, 0, 0, views::kRelatedButtonHSpacing));
+  request_cvc_view->SetLayoutManager(
+      new views::BoxLayout(views::BoxLayout::kHorizontal, 0, 0,
+                           ChromeLayoutProvider::Get()->GetDistanceMetric(
+                               views::DISTANCE_RELATED_BUTTON_HORIZONTAL)));
 
   DCHECK(!cvc_textfield_);
   cvc_textfield_ = CreateCvcTextfield();

@@ -720,6 +720,24 @@ TEST_F(BookmarkBarControllerTest, LayoutManagedAppsButton) {
   EXPECT_TRUE(layout.IsAppsButtonVisible());
 }
 
+// This tests a formerly-pathological case where if there was a single
+// bookmark on the bar and it was renamed, the button wouldn't update
+// since the offset and number of buttons stayed the same.
+// See crbug.com/724201
+TEST_F(BookmarkBarControllerTest, RenameBookmark) {
+  BookmarkModel* model = BookmarkModelFactory::GetForBrowserContext(profile());
+  const BookmarkNode* barNode = model->bookmark_bar_node();
+  const BookmarkNode* node = model->AddURL(barNode, 0, ASCIIToUTF16("Lorem"),
+                                           GURL("http://example.com"));
+  EXPECT_EQ([[bar_ buttons] count], 1U);
+  EXPECT_NSEQ([[[bar_ buttons] firstObject] title], @"Lorem");
+
+  model->SetTitle(node, ASCIIToUTF16("Ipsum"));
+  [bar_ rebuildLayoutWithAnimated:NO];
+  EXPECT_EQ([[bar_ buttons] count], 1U);
+  EXPECT_NSEQ([[[bar_ buttons] firstObject] title], @"Ipsum");
+}
+
 TEST_F(BookmarkBarControllerTest, NoItemsResizing) {
   bookmarks::BookmarkBarLayout layout = [bar_ layoutFromCurrentState];
   EXPECT_TRUE(layout.IsNoItemTextFieldVisible() &&

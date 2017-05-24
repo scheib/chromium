@@ -49,6 +49,7 @@
 #include "components/signin/core/browser/fake_profile_oauth2_token_service.h"
 #include "components/signin/core/browser/fake_signin_manager.h"
 #include "components/variations/variations_params_manager.h"
+#include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/test_url_fetcher_factory.h"
 #include "net/url_request/url_request_test_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -351,10 +352,11 @@ class MockImageFetcher : public ImageFetcher {
   MOCK_METHOD1(SetImageDownloadLimit,
                void(base::Optional<int64_t> max_download_bytes));
   MOCK_METHOD1(SetDesiredImageFrameSize, void(const gfx::Size&));
-  MOCK_METHOD3(StartOrQueueNetworkRequest,
+  MOCK_METHOD4(StartOrQueueNetworkRequest,
                void(const std::string&,
                     const GURL&,
-                    const ImageFetcherCallback&));
+                    const ImageFetcherCallback&,
+                    const net::NetworkTrafficAnnotationTag&));
   MOCK_METHOD0(GetImageDecoder, image_fetcher::ImageDecoder*());
 };
 
@@ -1002,7 +1004,7 @@ TEST_F(RemoteSuggestionsProviderImplTest, LoadsAdditionalSuggestions) {
   // Verify we can resolve the image of the new suggestions.
   ServeImageCallback cb =
       base::Bind(&ServeOneByOneImage, &service->GetImageFetcherForTesting());
-  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _, _))
       .Times(2)
       .WillRepeatedly(WithArgs<0, 2>(Invoke(CreateFunctor(cb))));
   image_decoder()->SetDecodedImage(gfx::test::CreateImage(1, 1));
@@ -1211,7 +1213,7 @@ TEST_F(RemoteSuggestionsProviderImplTest,
   // assumptions for the test are right.
   ServeImageCallback cb =
       base::Bind(&ServeOneByOneImage, &service->GetImageFetcherForTesting());
-  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _, _))
       .Times(2)
       .WillRepeatedly(WithArgs<0, 2>(Invoke(CreateFunctor(cb))));
   image_decoder()->SetDecodedImage(gfx::test::CreateImage(1, 1));
@@ -1376,7 +1378,7 @@ TEST_F(RemoteSuggestionsProviderImplTest, Dismiss) {
   // Load the image to store it in the database.
   ServeImageCallback cb =
       base::Bind(&ServeOneByOneImage, &service->GetImageFetcherForTesting());
-  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _, _))
       .WillOnce(WithArgs<0, 2>(Invoke(CreateFunctor(cb))));
   image_decoder()->SetDecodedImage(gfx::test::CreateImage(1, 1));
   gfx::Image image = FetchImage(service.get(), MakeArticleID(kSuggestionUrl));
@@ -1481,7 +1483,7 @@ TEST_F(RemoteSuggestionsProviderImplTest, RemoveExpiredDismissedContent) {
   // fetching expectations.
   ServeImageCallback cb =
       base::Bind(&ServeOneByOneImage, &service->GetImageFetcherForTesting());
-  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _, _))
       .WillOnce(WithArgs<0, 2>(Invoke(CreateFunctor(cb))));
   image_decoder()->SetDecodedImage(gfx::test::CreateImage(1, 1));
   gfx::Image image = FetchImage(service.get(), MakeArticleID(kSuggestionUrl));
@@ -1655,7 +1657,7 @@ TEST_F(RemoteSuggestionsProviderImplTest, ImageReturnedWithTheSameId) {
       base::Bind(&ServeOneByOneImage, &service->GetImageFetcherForTesting());
   {
     InSequence s;
-    EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _))
+    EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _, _))
         .WillOnce(WithArgs<0, 2>(Invoke(CreateFunctor(cb))));
     EXPECT_CALL(image_fetched, Call(_)).WillOnce(SaveArg<0>(&image));
   }
@@ -1762,7 +1764,7 @@ TEST_F(RemoteSuggestionsProviderImplTest, ShouldClearOrphanedImagesOnRestart) {
   ServeImageCallback cb =
       base::Bind(&ServeOneByOneImage, &service->GetImageFetcherForTesting());
 
-  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _))
+  EXPECT_CALL(*image_fetcher(), StartOrQueueNetworkRequest(_, _, _, _))
       .WillOnce(WithArgs<0, 2>(Invoke(CreateFunctor(cb))));
   image_decoder()->SetDecodedImage(gfx::test::CreateImage(1, 1));
 

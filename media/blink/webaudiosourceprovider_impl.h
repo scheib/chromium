@@ -65,6 +65,7 @@ class MEDIA_BLINK_EXPORT WebAudioSourceProviderImpl
   void Pause() override;
   bool SetVolume(double volume) override;
   OutputDeviceInfo GetOutputDeviceInfo() override;
+  bool IsOptimizedForHardwareParameters() override;
   bool CurrentThreadIsRenderingThread() override;
   void SwitchOutputDevice(const std::string& device_id,
                           const url::Origin& security_origin,

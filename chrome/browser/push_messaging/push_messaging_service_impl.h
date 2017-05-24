@@ -26,6 +26,8 @@
 #include "components/gcm_driver/gcm_client.h"
 #include "components/gcm_driver/instance_id/instance_id.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "content/public/browser/notification_observer.h"
+#include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/push_messaging_service.h"
 #include "content/public/common/push_event_payload.h"
 #include "content/public/common/push_messaging_status.h"
@@ -50,7 +52,8 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
                                  public gcm::GCMAppHandler,
                                  public content_settings::Observer,
                                  public KeyedService,
-                                 public BackgroundTrigger {
+                                 public BackgroundTrigger,
+                                 public content::NotificationObserver {
  public:
   // If any Service Workers are using push, starts GCM and adds an app handler.
   static void InitializeForProfile(Profile* profile);
@@ -114,6 +117,11 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
   base::string16 GetName() override;
   gfx::ImageSkia* GetIcon() override;
   void OnMenuClick() override;
+
+  // content::NotificationObserver:
+  void Observe(int type,
+               const content::NotificationSource& source,
+               const content::NotificationDetails& details) override;
 
   void SetMessageCallbackForTesting(const base::Closure& callback);
   void SetUnsubscribeCallbackForTesting(const base::Closure& callback);
@@ -278,6 +286,12 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
   // we can finish processing them without being interrupted.
   std::unique_ptr<ScopedKeepAlive> in_flight_keep_alive_;
 #endif
+
+  content::NotificationRegistrar registrar_;
+
+  // True when shutdown has started. Do not allow processing of incoming
+  // messages when this is true.
+  bool shutdown_started_ = false;
 
   base::WeakPtrFactory<PushMessagingServiceImpl> weak_factory_;
 

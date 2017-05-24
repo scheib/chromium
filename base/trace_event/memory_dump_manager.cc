@@ -157,8 +157,11 @@ MemoryDumpManager* MemoryDumpManager::GetInstance() {
 }
 
 // static
-void MemoryDumpManager::SetInstanceForTesting(MemoryDumpManager* instance) {
-  g_instance_for_testing = instance;
+std::unique_ptr<MemoryDumpManager>
+MemoryDumpManager::CreateInstanceForTesting() {
+  std::unique_ptr<MemoryDumpManager> instance(new MemoryDumpManager());
+  g_instance_for_testing = instance.get();
+  return instance;
 }
 
 MemoryDumpManager::MemoryDumpManager()
@@ -186,6 +189,7 @@ MemoryDumpManager::~MemoryDumpManager() {
   }
   AutoLock lock(lock_);
   dump_thread_.reset();
+  g_instance_for_testing = nullptr;
 }
 
 void MemoryDumpManager::EnableHeapProfilingIfNeeded() {

@@ -6,8 +6,11 @@
 
 #include <stddef.h>
 
+#include <map>
+#include <memory>
 #include <set>
 #include <string>
+#include <utility>
 
 #include "base/bind.h"
 #include "base/bind_helpers.h"
@@ -163,7 +166,8 @@ void LoadScriptsOnFileThread(
       UserScriptLoader::Serialize(*user_scripts);
   content::BrowserThread::PostTask(
       content::BrowserThread::UI, FROM_HERE,
-      base::Bind(callback, base::Passed(&user_scripts), base::Passed(&memory)));
+      base::BindOnce(std::move(callback), std::move(user_scripts),
+                     std::move(memory)));
 }
 
 }  // namespace
@@ -212,8 +216,9 @@ void ExtensionUserScriptLoader::LoadScripts(
 
   content::BrowserThread::PostTask(
       content::BrowserThread::FILE, FROM_HERE,
-      base::Bind(&LoadScriptsOnFileThread, base::Passed(&user_scripts),
-                 hosts_info_, added_script_ids, content_verifier_, callback));
+      base::BindOnce(&LoadScriptsOnFileThread, std::move(user_scripts),
+                     hosts_info_, added_script_ids, content_verifier_,
+                     std::move(callback)));
 }
 
 void ExtensionUserScriptLoader::UpdateHostsInfo(

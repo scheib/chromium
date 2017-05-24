@@ -99,14 +99,9 @@ void WebIDBCursorImpl::Advance(unsigned long count,
                             count, base::Passed(&callbacks_impl)));
 }
 
-void WebIDBCursorImpl::continueFunction(const WebIDBKey& key,
-                                        WebIDBCallbacks* callbacks_ptr) {
-  ContinueFunction(key, WebIDBKey::CreateNull(), callbacks_ptr);
-}
-
-void WebIDBCursorImpl::ContinueFunction(const WebIDBKey& key,
-                                        const WebIDBKey& primary_key,
-                                        WebIDBCallbacks* callbacks_ptr) {
+void WebIDBCursorImpl::Continue(const WebIDBKey& key,
+                                const WebIDBKey& primary_key,
+                                WebIDBCallbacks* callbacks_ptr) {
   std::unique_ptr<WebIDBCallbacks> callbacks(callbacks_ptr);
 
   if (key.KeyType() == blink::kWebIDBKeyTypeNull &&

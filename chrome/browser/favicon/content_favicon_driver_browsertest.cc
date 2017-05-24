@@ -21,6 +21,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/favicon/core/favicon_handler.h"
 #include "components/favicon/core/favicon_service.h"
+#include "components/favicon/core/features.h"
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/notification_types.h"

@@ -7,13 +7,15 @@ component("resource_coordinator_cpp") {
     "coordination_unit_id.cc",
     "coordination_unit_id.h",
     "coordination_unit_types.h",
-    "memory/coordinator.h",
-    "memory/process_local_dump_manager_impl.cc",
-    "memory/process_local_dump_manager_impl.h",
+    "memory_instrumentation/client_process_impl.cc",
+    "memory_instrumentation/client_process_impl.h",
+    "memory_instrumentation/coordinator.h",
     "resource_coordinator_features.cc",
     "resource_coordinator_features.h",
     "resource_coordinator_interface.cc",
     "resource_coordinator_interface.h",
+    "tracing/chrome_trace_event_agent.cc",
+    "tracing/chrome_trace_event_agent.h",
   ]
 
   defines = [ "SERVICES_RESOURCE_COORDINATOR_PUBLIC_CPP_IMPLEMENTATION" ]
@@ -37,8 +39,8 @@ source_set("struct_traits") {
   sources = [
     "coordination_unit_struct_traits.cc",
     "coordination_unit_struct_traits.h",
-    "memory/memory_instrumentation_struct_traits.cc",
-    "memory/memory_instrumentation_struct_traits.h",
+    "memory_instrumentation/memory_instrumentation_struct_traits.cc",
+    "memory_instrumentation/memory_instrumentation_struct_traits.h",
   ]
 
   defines = [ "SERVICES_RESOURCE_COORDINATOR_PUBLIC_CPP_IMPLEMENTATION" ]

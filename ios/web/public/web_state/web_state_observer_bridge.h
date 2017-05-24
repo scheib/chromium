@@ -13,21 +13,19 @@
 #include "base/macros.h"
 #include "ios/web/public/web_state/web_state_observer.h"
 
-class GURL;
-
 // Observes page lifecyle events from Objective-C. To use as a
 // web::WebStateObserver, wrap in a web::WebStateObserverBridge.
 @protocol CRWWebStateObserver<NSObject>
 @optional
 
-// Invoked by WebStateObserverBridge::ProvisionalNavigationStarted.
-- (void)webState:(web::WebState*)webState
-    didStartProvisionalNavigationForURL:(const GURL&)URL;
-
 // Invoked by WebStateObserverBridge::NavigationItemCommitted.
 - (void)webState:(web::WebState*)webState
     didCommitNavigationWithDetails:
         (const web::LoadCommittedDetails&)load_details;
+
+// Invoked by WebStateObserverBridge::DidStartNavigation.
+- (void)webState:(web::WebState*)webState
+    didStartNavigation:(web::NavigationContext*)navigation;
 
 // Invoked by WebStateObserverBridge::DidFinishNavigation.
 - (void)webState:(web::WebState*)webState
@@ -101,9 +99,9 @@ class WebStateObserverBridge : public web::WebStateObserver {
   ~WebStateObserverBridge() override;
 
   // web::WebStateObserver methods.
-  void ProvisionalNavigationStarted(const GURL& url) override;
   void NavigationItemCommitted(
       const LoadCommittedDetails& load_details) override;
+  void DidStartNavigation(NavigationContext* navigation_context) override;
   void DidFinishNavigation(NavigationContext* navigation_context) override;
   void PageLoaded(
       web::PageLoadCompletionStatus load_completion_status) override;

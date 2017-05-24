@@ -41,6 +41,7 @@
 #include "core/editing/EditingUtilities.h"
 #include "core/editing/FrameSelection.h"
 #include "core/editing/TextAffinity.h"
+#include "core/editing/VisibleUnits.h"
 #include "core/frame/DeprecatedScheduleStyleRecalcDuringLayout.h"
 #include "core/frame/EventHandlerRegistry.h"
 #include "core/frame/FrameView.h"
@@ -1000,7 +1001,7 @@ FloatRect LayoutObject::AbsoluteBoundingBoxRectForRange(const Range* range) {
   range->OwnerDocument().UpdateStyleAndLayout();
 
   Vector<FloatQuad> quads;
-  range->TextQuads(quads);
+  quads.AppendVector(ComputeTextQuads(EphemeralRange(range)));
 
   FloatRect result;
   for (size_t i = 0; i < quads.size(); ++i)
@@ -1392,7 +1393,7 @@ void LayoutObject::ShowLayoutTreeAndMark(const LayoutObject* marked_object1,
 #endif  // NDEBUG
 
 bool LayoutObject::IsSelectable() const {
-  return !IsInert() && !(Style()->UserSelect() == SELECT_NONE &&
+  return !IsInert() && !(Style()->UserSelect() == EUserSelect::kNone &&
                          Style()->UserModify() == EUserModify::kReadOnly);
 }
 

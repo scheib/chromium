@@ -1171,8 +1171,11 @@ void RenderViewContextMenu::AppendMediaItems() {
 
 void RenderViewContextMenu::AppendPluginItems() {
   if (params_.page_url == params_.src_url ||
-      guest_view::GuestViewBase::IsGuest(source_web_contents_)) {
-    // Full page plugin, so show page menu items.
+      (guest_view::GuestViewBase::IsGuest(source_web_contents_) &&
+       (!embedder_web_contents_ || !embedder_web_contents_->IsSavable()))) {
+    // Both full page and embedded plugins are hosted as guest now,
+    // the difference is a full page plugin is not considered as savable.
+    // For full page plugin, we show page menu items.
     if (params_.link_url.is_empty() && params_.selection_text.empty())
       AppendPageItems();
   } else {

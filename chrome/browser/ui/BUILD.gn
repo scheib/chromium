@@ -364,8 +364,6 @@ split_static_library("ui") {
     "webui/invalidations_message_handler.h",
     "webui/invalidations_ui.cc",
     "webui/invalidations_ui.h",
-    "webui/large_icon_source.cc",
-    "webui/large_icon_source.h",
     "webui/local_state/local_state_ui.cc",
     "webui/local_state/local_state_ui.h",
     "webui/log_web_ui_url.cc",
@@ -654,7 +652,12 @@ split_static_library("ui") {
     ]
   }
 
-  if (!is_android) {
+  if (is_android) {
+    sources += [
+      "webui/large_icon_source.cc",
+      "webui/large_icon_source.h",
+    ]
+  } else {
     sources += [
       "apps/app_info_dialog.h",
       "apps/chrome_app_delegate.cc",
@@ -1258,6 +1261,8 @@ split_static_library("ui") {
       "app_list/search/launcher_search/launcher_search_provider.h",
       "app_list/search/launcher_search/launcher_search_result.cc",
       "app_list/search/launcher_search/launcher_search_result.h",
+      "ash/lock_screen_client.cc",
+      "ash/lock_screen_client.h",
       "ash/session_controller_client.cc",
       "ash/session_controller_client.h",
       "ash/system_tray_client.cc",
@@ -1904,8 +1909,6 @@ split_static_library("ui") {
         "views/toolbar/app_menu_button.cc",
         "views/toolbar/app_menu_button.h",
         "views/toolbar/app_menu_observer.h",
-        "views/toolbar/back_button.cc",
-        "views/toolbar/back_button.h",
         "views/toolbar/browser_actions_container.cc",
         "views/toolbar/browser_actions_container.h",
         "views/toolbar/extension_toolbar_menu_view.cc",
@@ -2064,6 +2067,8 @@ split_static_library("ui") {
       "webui/signin/signin_error_ui.h",
       "webui/signin/signin_supervised_user_import_handler.cc",
       "webui/signin/signin_supervised_user_import_handler.h",
+      "webui/signin/signin_web_dialog_ui.cc",
+      "webui/signin/signin_web_dialog_ui.h",
       "webui/signin/sync_confirmation_handler.cc",
       "webui/signin/sync_confirmation_handler.h",
       "webui/signin/sync_confirmation_ui.cc",

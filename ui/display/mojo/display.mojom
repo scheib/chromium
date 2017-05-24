@@ -25,9 +25,13 @@ enum TouchSupport {
 struct Display {
   int64 id;
   gfx.mojom.Rect bounds;
+  gfx.mojom.Size size_in_pixels;
   gfx.mojom.Rect work_area;
   float device_scale_factor;
   Rotation rotation;
   TouchSupport touch_support;
   gfx.mojom.Size maximum_cursor_size;
+  int32 color_depth;
+  int32 depth_per_component;
+  bool is_monochrome;
 };

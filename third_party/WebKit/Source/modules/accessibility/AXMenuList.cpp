@@ -72,10 +72,6 @@ void AXMenuList::ClearChildren() {
   children_dirty_ = false;
 }
 
-bool AXMenuList::NameFromContents() const {
-  return false;
-}
-
 void AXMenuList::AddChildren() {
   DCHECK(!IsDetached());
   have_children_ = true;

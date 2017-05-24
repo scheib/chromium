@@ -20,10 +20,6 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGResourceFilter filter id='filter'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "full"
     }

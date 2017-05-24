@@ -7,11 +7,11 @@ On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE
 Before:
 AXRole: AXWebArea
     AXRole: AXLink
-    AXRole: AXDiv
+    AXRole: AXGenericContainer
         AXRole: AXStaticText "End of test"
 After:
 AXRole: AXWebArea
-    AXRole: AXDiv
+    AXRole: AXGenericContainer
         AXRole: AXStaticText "End of test"
 PASS successfullyParsed is true
 

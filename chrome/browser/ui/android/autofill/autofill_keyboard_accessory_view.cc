@@ -45,8 +45,13 @@ void AddToJavaArray(const Suggestion& suggestion,
 }  // namespace
 
 AutofillKeyboardAccessoryView::AutofillKeyboardAccessoryView(
-    AutofillPopupController* controller)
-    : controller_(controller), deleting_index_(-1) {
+    AutofillPopupController* controller,
+    unsigned int animation_duration_millis,
+    bool should_limit_label_width)
+    : controller_(controller),
+      animation_duration_millis_(animation_duration_millis),
+      should_limit_label_width_(should_limit_label_width),
+      deleting_index_(-1) {
   JNIEnv* env = base::android::AttachCurrentThread();
   java_object_.Reset(Java_AutofillKeyboardAccessoryBridge_create(env));
 }
@@ -63,7 +68,8 @@ void AutofillKeyboardAccessoryView::Show() {
   DCHECK(view_android);
   Java_AutofillKeyboardAccessoryBridge_init(
       env, java_object_, reinterpret_cast<intptr_t>(this),
-      view_android->GetWindowAndroid()->GetJavaObject());
+      view_android->GetWindowAndroid()->GetJavaObject(),
+      animation_duration_millis_, should_limit_label_width_);
 
   OnSuggestionsChanged();
 }
@@ -87,20 +93,26 @@ void AutofillKeyboardAccessoryView::OnSuggestionsChanged() {
   positions_.resize(count);
   size_t position = 0;
 
-  // Place "CLEAR FORM" item first in the list.
+  // Place "CLEAR FORM" and "CREATE HINT" items first in the list.
+  // Both "CLEAR FORM" and "CREATE HINT" cannot be present in the list.
   for (size_t i = 0; i < count; ++i) {
     const Suggestion& suggestion = controller_->GetSuggestionAt(i);
-    if (suggestion.frontend_id == POPUP_ITEM_ID_CLEAR_FORM) {
-      AddToJavaArray(suggestion, controller_->layout_model().GetIconResourceID(
-                                     suggestion.icon),
-                     env, data_array.obj(), position, false);
+    if (suggestion.frontend_id == POPUP_ITEM_ID_CLEAR_FORM ||
+        suggestion.frontend_id == POPUP_ITEM_ID_CREATE_HINT) {
+      AddToJavaArray(
+          suggestion,
+          controller_->layout_model().GetIconResourceID(suggestion.icon), env,
+          data_array.obj(), position, false);
       positions_[position++] = i;
     }
   }
 
+  DCHECK_LT(position, 2U);
+
   for (size_t i = 0; i < count; ++i) {
     const Suggestion& suggestion = controller_->GetSuggestionAt(i);
-    if (suggestion.frontend_id != POPUP_ITEM_ID_CLEAR_FORM) {
+    if (suggestion.frontend_id != POPUP_ITEM_ID_CLEAR_FORM &&
+        suggestion.frontend_id != POPUP_ITEM_ID_CREATE_HINT) {
       bool deletable =
           controller_->GetRemovalConfirmationText(i, nullptr, nullptr);
       AddToJavaArray(suggestion, controller_->layout_model().GetIconResourceID(

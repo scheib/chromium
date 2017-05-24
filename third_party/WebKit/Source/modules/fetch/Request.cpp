@@ -752,6 +752,12 @@ String Request::MimeType() const {
   return request_->MimeType();
 }
 
+String Request::ContentType() const {
+  String result;
+  request_->HeaderList()->Get(HTTPNames::Content_Type, result);
+  return result;
+}
+
 void Request::RefreshBody(ScriptState* script_state) {
   v8::Local<v8::Value> request = ToV8(this, script_state);
   if (request.IsEmpty()) {

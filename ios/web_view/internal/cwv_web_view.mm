@@ -197,7 +197,7 @@ static NSString* gUserAgentProduct = nil;
 // WebStateObserver implementation.
 
 - (void)webState:(web::WebState*)webState
-    didStartProvisionalNavigationForURL:(const GURL&)URL {
+    didStartNavigation:(web::NavigationContext*)navigation {
   [self updateNavigationAvailability];
   SEL selector = @selector(webViewDidStartProvisionalNavigation:);
   if ([_navigationDelegate respondsToSelector:selector]) {

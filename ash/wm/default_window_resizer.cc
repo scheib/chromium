@@ -6,7 +6,7 @@
 
 #include "ash/shell_port.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm_window.h"
+#include "ui/aura/window.h"
 
 namespace ash {
 
@@ -22,7 +22,7 @@ DefaultWindowResizer* DefaultWindowResizer::Create(
 
 void DefaultWindowResizer::Drag(const gfx::Point& location, int event_flags) {
   gfx::Rect bounds(CalculateBoundsForDrag(location));
-  if (bounds != GetTarget()->GetBounds()) {
+  if (bounds != GetTarget()->bounds()) {
     if (!did_move_or_resize_ && !details().restore_bounds.IsEmpty())
       window_state_->ClearRestoreBounds();
     did_move_or_resize_ = true;

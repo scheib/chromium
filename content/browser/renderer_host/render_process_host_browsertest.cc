@@ -20,6 +20,7 @@
 #include "media/base/bind_to_current_loop.h"
 #include "media/base/media_switches.h"
 #include "media/base/test_data_util.h"
+#include "media/mojo/features.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
 #if defined(OS_WIN)
@@ -266,7 +267,7 @@ class MediaStopObserver : public WebContentsObserver {
 // Note: This test can't run when the Mojo Renderer is used since it does not
 // create audio streams through the normal audio pathways; at present this is
 // only used by Chromecast.
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
 #define KillProcessZerosAudioStreams DISABLED_KillProcessZerosAudioStreams
 #endif
 IN_PROC_BROWSER_TEST_F(RenderProcessHostTest, KillProcessZerosAudioStreams) {

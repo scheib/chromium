@@ -70,6 +70,11 @@ void SystemTrayController::ShowIMESettings() {
     system_tray_client_->ShowIMESettings();
 }
 
+void SystemTrayController::ShowAboutChromeOS() {
+  if (system_tray_client_)
+    system_tray_client_->ShowAboutChromeOS();
+}
+
 void SystemTrayController::ShowHelp() {
   if (system_tray_client_)
     system_tray_client_->ShowHelp();
@@ -207,6 +212,17 @@ void SystemTrayController::ShowUpdateIcon(mojom::UpdateSeverity severity,
       continue;
     tray->tray_update()->ShowUpdateIcon(severity, factory_reset_required,
                                         update_type);
+  }
+}
+
+void SystemTrayController::ShowUpdateOverCellularAvailableIcon() {
+  // Show the icon on all displays.
+  for (WmWindow* root : ShellPort::Get()->GetAllRootWindows()) {
+    ash::SystemTray* tray = root->GetRootWindowController()->GetSystemTray();
+    // External monitors might not have a tray yet.
+    if (!tray)
+      continue;
+    tray->tray_update()->ShowUpdateOverCellularAvailableIcon();
   }
 }
 

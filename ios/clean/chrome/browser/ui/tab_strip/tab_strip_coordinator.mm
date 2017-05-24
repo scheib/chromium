@@ -45,7 +45,6 @@
   self.mediator = [[TabCollectionMediator alloc] init];
   self.mediator.webStateList = &self.webStateList;
   self.mediator.consumer = self.viewController;
-  self.viewController.dataSource = self.mediator;
   self.viewController.dispatcher = static_cast<id>(self.browser->dispatcher());
 
   [super start];

@@ -193,6 +193,7 @@
 #include "gpu/config/gpu_switches.h"
 #include "media/audio/audio_manager.h"
 #include "media/media_features.h"
+#include "media/mojo/features.h"
 #include "net/base/mime_util.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "net/cookies/canonical_cookie.h"
@@ -378,18 +379,22 @@
 #include "chrome/browser/media/cast_remoting_connector.h"
 #endif
 
+#if BUILDFLAG(ENABLE_PRINTING)
+#include "components/printing/service/public/interfaces/pdf_compositor.mojom.h"
+#endif
+
 #if BUILDFLAG(ENABLE_WAYLAND_SERVER)
 #include "chrome/browser/chrome_browser_main_extra_parts_exo.h"
 #endif
 
-#if defined(ENABLE_MOJO_MEDIA)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA)
 #include "chrome/browser/media/output_protection_impl.h"
-#if defined(ENABLE_MOJO_CDM) && defined(OS_ANDROID)
+#if BUILDFLAG(ENABLE_MOJO_CDM) && defined(OS_ANDROID)
 #include "chrome/browser/media/android/cdm/media_drm_storage_factory.h"
 #endif
 #endif
 
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
 #include "media/mojo/services/media_service_factory.h"  // nogncheck
 #endif
 
@@ -1885,10 +1890,6 @@ void ChromeContentBrowserClient::AppendExtraCommandLineSwitches(
 
     // Please keep this in alphabetical order.
     static const char* const kSwitchNames[] = {
-#if defined(OS_ANDROID)
-      autofill::switches::kDisableAccessorySuggestionView,
-      autofill::switches::kEnableAccessorySuggestionView,
-#endif
       autofill::switches::kDisablePasswordGeneration,
       autofill::switches::kEnablePasswordGeneration,
       autofill::switches::kEnableSingleClickAutofill,
@@ -2120,19 +2121,6 @@ bool ChromeContentBrowserClient::AllowSetCookie(
   return allow;
 }
 
-bool ChromeContentBrowserClient::AllowSaveLocalState(
-    content::ResourceContext* context) {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  ProfileIOData* io_data = ProfileIOData::FromResourceContext(context);
-  content_settings::CookieSettings* cookie_settings =
-      io_data->GetCookieSettings();
-  ContentSetting setting = cookie_settings->GetDefaultCookieSetting(NULL);
-
-  // TODO(bauerb): Should we also disallow local state if the default is BLOCK?
-  // Could we even support per-origin settings?
-  return setting != CONTENT_SETTING_SESSION_ONLY;
-}
-
 void ChromeContentBrowserClient::AllowWorkerFileSystem(
     const GURL& url,
     content::ResourceContext* context,
@@ -2242,19 +2230,6 @@ bool ChromeContentBrowserClient::AllowWorkerIndexedDB(
 
   return allow;
 }
-
-#if BUILDFLAG(ENABLE_WEBRTC)
-bool ChromeContentBrowserClient::AllowWebRTCIdentityCache(
-    const GURL& url,
-    const GURL& first_party_url,
-    content::ResourceContext* context) {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  ProfileIOData* io_data = ProfileIOData::FromResourceContext(context);
-  content_settings::CookieSettings* cookie_settings =
-      io_data->GetCookieSettings();
-  return cookie_settings->IsCookieAccessAllowed(url, first_party_url);
-}
-#endif  // BUILDFLAG(ENABLE_WEBRTC)
 
 ChromeContentBrowserClient::AllowWebBluetoothResult
 ChromeContentBrowserClient::AllowWebBluetooth(
@@ -2765,15 +2740,6 @@ void ChromeContentBrowserClient::BrowserURLHandlerCreated(
   handler->AddHandlerPair(&HandleWebUI, &HandleWebUIReverse);
 }
 
-void ChromeContentBrowserClient::ClearCache(RenderFrameHost* rfh) {
-  content::BrowsingDataRemover* remover =
-      content::BrowserContext::GetBrowsingDataRemover(
-          rfh->GetSiteInstance()->GetProcess()->GetBrowserContext());
-  remover->Remove(base::Time(), base::Time::Max(),
-                  content::BrowsingDataRemover::DATA_TYPE_CACHE,
-                  content::BrowsingDataRemover::ORIGIN_TYPE_UNPROTECTED_WEB);
-}
-
 void ChromeContentBrowserClient::ClearSiteData(
     content::BrowserContext* browser_context,
     const url::Origin& origin,
@@ -3154,14 +3120,14 @@ void ChromeContentBrowserClient::ExposeInterfacesToMediaService(
                  render_frame_host));
 #endif  // defined(OS_CHROMEOS)
 
-#if defined(ENABLE_MOJO_MEDIA)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA)
   registry->AddInterface(
       base::Bind(&OutputProtectionImpl::Create, render_frame_host));
-#if defined(ENABLE_MOJO_CDM) && defined(OS_ANDROID)
+#if BUILDFLAG(ENABLE_MOJO_CDM) && defined(OS_ANDROID)
   registry->AddInterface(
       base::Bind(&chrome::CreateMediaDrmStorage, render_frame_host));
 #endif
-#endif  // defined(ENABLE_MOJO_MEDIA)
+#endif  // BUILDFLAG(ENABLE_MOJO_MEDIA)
 }
 
 void ChromeContentBrowserClient::ExposeInterfacesToFrame(
@@ -3252,7 +3218,7 @@ void ChromeContentBrowserClient::BindInterfaceRequest(
 
 void ChromeContentBrowserClient::RegisterInProcessServices(
     StaticServiceMap* services) {
-#if defined(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_BROWSER_PROCESS)
   content::ServiceInfo info;
   info.factory = base::Bind(&media::CreateMediaService);
   services->insert(std::make_pair("media", info));
@@ -3288,8 +3254,12 @@ void ChromeContentBrowserClient::RegisterInProcessServices(
 void ChromeContentBrowserClient::RegisterOutOfProcessServices(
       OutOfProcessServiceMap* services) {
 #if defined(ENABLE_MOJO_MEDIA_IN_UTILITY_PROCESS)
-  services->insert(std::make_pair("media",
-                                  base::ASCIIToUTF16("Media Service")));
+  services->emplace("media", base::ASCIIToUTF16("Media Service"));
+#endif
+
+#if BUILDFLAG(ENABLE_PRINTING)
+  services->emplace(printing::mojom::kServiceName,
+                    base::ASCIIToUTF16("PDF Compositor Service"));
 #endif
 }
 
@@ -3326,6 +3296,9 @@ ChromeContentBrowserClient::GetExtraServiceManifests() {
         {nacl::kNaClBrokerServiceName, IDR_NACL_BROKER_MANIFEST},
 #endif  // defined(OS_WIN)
 #endif  // !defined(DISABLE_NACL)
+#if BUILDFLAG(ENABLE_PRINTING)
+        {printing::mojom::kServiceName, IDR_PDF_COMPOSITOR_MANIFEST},
+#endif
   });
 }
 

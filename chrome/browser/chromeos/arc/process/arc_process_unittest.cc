@@ -5,7 +5,9 @@
 #include "chrome/browser/chromeos/arc/process/arc_process.h"
 
 #include <assert.h>
+
 #include <list>
+#include <sstream>
 
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -187,6 +189,13 @@ TEST(ArcProcess, TestIsKernelKillable) {
   EXPECT_TRUE(ArcProcess(0, 0, "process", mojom::ProcessState::CACHED_EMPTY,
                          kIsNotFocused, 0)
                   .IsKernelKillable());
+}
+
+// Tests operator<<() does not crash and returns non-empty result, at least.
+TEST(ArcProcess, TestStringification) {
+  std::stringstream s;
+  s << ArcProcess(0, 0, "p", mojom::ProcessState::PERSISTENT, false, 0);
+  EXPECT_FALSE(s.str().empty());
 }
 
 }  // namespace

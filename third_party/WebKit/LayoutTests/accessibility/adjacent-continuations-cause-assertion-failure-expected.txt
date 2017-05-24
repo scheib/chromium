@@ -10,12 +10,12 @@ On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE
 AXRole: AXWebArea
     AXRole: AXStaticText "x"
         AXRole: AXInlineTextBox "x"
-    AXRole: AXDiv
+    AXRole: AXGenericContainer
         AXRole: AXStaticText "y"
             AXRole: AXInlineTextBox "y"
     AXRole: AXStaticText "z"
         AXRole: AXInlineTextBox "z"
-    AXRole: AXDiv
+    AXRole: AXGenericContainer
         AXRole: AXStaticText "End of test"
 PASS successfullyParsed is true
 

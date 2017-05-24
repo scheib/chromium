@@ -234,10 +234,6 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGRect rect id='rect'",
-      "reason": "style change"
-    },
-    {
       "object": "LayoutSVGContainer g",
       "reason": "SVG resource change"
     },

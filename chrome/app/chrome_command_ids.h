@@ -83,6 +83,8 @@
 #define IDC_TRANSLATE_PAGE              35009
 #define IDC_MANAGE_PASSWORDS_FOR_PAGE   35010
 #define IDC_ROUTE_MEDIA                 35011
+#define IDC_WINDOW_MUTE_TAB             35012
+#define IDC_WINDOW_PIN_TAB              35013
 
 // Clipboard commands
 #define IDC_CUT                         36000

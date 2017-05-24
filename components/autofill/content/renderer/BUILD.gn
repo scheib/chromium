@@ -71,6 +71,7 @@ static_library("test_support") {
     "//components/autofill/content/renderer",
     "//ipc",
     "//skia",
+    "//third_party/WebKit/public:blink",
   ]
 }
 

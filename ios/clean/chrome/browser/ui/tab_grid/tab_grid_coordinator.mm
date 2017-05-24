@@ -63,7 +63,6 @@
   [self registerForToolsMenuCommands];
 
   self.viewController = [[TabGridViewController alloc] init];
-  self.viewController.dataSource = self.mediator;
   self.viewController.dispatcher = static_cast<id>(self.browser->dispatcher());
 
   self.mediator.consumer = self.viewController;

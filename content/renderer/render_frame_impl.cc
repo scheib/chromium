@@ -263,19 +263,19 @@
 #include "content/renderer/media/cdm/render_cdm_factory.h"
 #endif
 
-#if defined(ENABLE_MOJO_MEDIA)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA)
 #include "content/renderer/media/media_interface_provider.h"
 #endif
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
 #include "media/mojo/clients/mojo_cdm_factory.h"  // nogncheck
 #endif
 
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
 #include "media/mojo/clients/mojo_renderer_factory.h"  // nogncheck
 #endif
 
-#if defined(ENABLE_MOJO_AUDIO_DECODER) || defined(ENABLE_MOJO_VIDEO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER) || BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
 #include "media/mojo/clients/mojo_decoder_factory.h"  // nogncheck
 #endif
 
@@ -2676,7 +2676,7 @@ void RenderFrameImpl::EnsureMojoBuiltinsAreAvailable(
       isolate, BlinkConnectorJsWrapper::kModuleName,
       BlinkConnectorJsWrapper::Create(
           isolate, context,
-          RenderThreadImpl::current()->blink_platform_impl()->GetConnector())
+          RenderThreadImpl::current_blink_platform_impl()->GetConnector())
           .ToV8());
 }
 
@@ -2910,7 +2910,7 @@ blink::WebMediaPlayer* RenderFrameImpl::CreateMediaPlayer(
 #endif  // defined(OS_ANDROID)
 
   bool use_mojo_renderer_factory = false;
-#if defined(ENABLE_MOJO_RENDERER)
+#if BUILDFLAG(ENABLE_MOJO_RENDERER)
 #if BUILDFLAG(ENABLE_RUNTIME_MEDIA_RENDERER_SELECTION)
   use_mojo_renderer_factory =
       !base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -2929,7 +2929,7 @@ blink::WebMediaPlayer* RenderFrameImpl::CreateMediaPlayer(
     factory_selector->SetBaseFactoryType(
         media::RendererFactorySelector::FactoryType::MOJO);
   }
-#endif  // defined(ENABLE_MOJO_RENDERER)
+#endif  // BUILDFLAG(ENABLE_MOJO_RENDERER)
 
   if (!use_mojo_renderer_factory) {
     factory_selector->AddFactory(
@@ -3037,6 +3037,8 @@ RenderFrameImpl::CreateWorkerFetchContext() {
   worker_fetch_context->set_parent_frame_id(routing_id_);
   worker_fetch_context->set_first_party_for_cookies(
       frame_->GetDocument().FirstPartyForCookies());
+  worker_fetch_context->set_is_secure_context(
+      frame_->GetDocument().IsSecureContext());
   blink::WebServiceWorkerNetworkProvider* web_provider =
       frame_->DataSource()->GetServiceWorkerNetworkProvider();
   if (web_provider) {
@@ -4042,8 +4044,6 @@ void RenderFrameImpl::DidFinishLoad() {
                          TRACE_EVENT_SCOPE_PROCESS);
   }
 
-  for (auto& observer : render_view_->observers())
-    observer.DidFinishLoad(frame_);
   for (auto& observer : observers_)
     observer.DidFinishLoad();
 
@@ -6733,7 +6733,7 @@ media::MediaPermission* RenderFrameImpl::GetMediaPermission() {
   return media_permission_dispatcher_.get();
 }
 
-#if defined(ENABLE_MOJO_MEDIA)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA)
 service_manager::mojom::InterfaceProvider*
 RenderFrameImpl::GetMediaInterfaceProvider() {
   if (!media_interface_provider_) {
@@ -6743,7 +6743,7 @@ RenderFrameImpl::GetMediaInterfaceProvider() {
 
   return media_interface_provider_.get();
 }
-#endif  // defined(ENABLE_MOJO_MEDIA)
+#endif  // BUILDFLAG(ENABLE_MOJO_MEDIA)
 
 bool RenderFrameImpl::AreSecureCodecsSupported() {
 #if defined(OS_ANDROID)
@@ -6767,10 +6767,10 @@ media::CdmFactory* RenderFrameImpl::GetCdmFactory() {
   if (cdm_factory_)
     return cdm_factory_.get();
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
   cdm_factory_.reset(new media::MojoCdmFactory(GetMediaInterfaceProvider()));
   return cdm_factory_.get();
-#endif  //  defined(ENABLE_MOJO_CDM)
+#endif  //  BUILDFLAG(ENABLE_MOJO_CDM)
 
 #if BUILDFLAG(ENABLE_PEPPER_CDMS)
   DCHECK(frame_);
@@ -6788,7 +6788,7 @@ media::CdmFactory* RenderFrameImpl::GetCdmFactory() {
 }
 
 media::DecoderFactory* RenderFrameImpl::GetDecoderFactory() {
-#if defined(ENABLE_MOJO_AUDIO_DECODER) || defined(ENABLE_MOJO_VIDEO_DECODER)
+#if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER) || BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
   if (!decoder_factory_) {
     decoder_factory_.reset(
         new media::MojoDecoderFactory(GetMediaInterfaceProvider()));

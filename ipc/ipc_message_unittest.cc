@@ -91,7 +91,7 @@ TEST(IPCMessageTest, DictionaryValue) {
   input.Set("null", base::MakeUnique<base::Value>());
   input.Set("bool", new base::Value(true));
   input.Set("int", new base::Value(42));
-  input.SetWithoutPathExpansion("int.with.dot", new base::Value(43));
+  input.SetIntegerWithoutPathExpansion("int.with.dot", 43);
 
   std::unique_ptr<base::DictionaryValue> subdict(new base::DictionaryValue());
   subdict->Set("str", new base::Value("forty two"));

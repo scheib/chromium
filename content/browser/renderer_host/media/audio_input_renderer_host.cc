@@ -355,7 +355,6 @@ void AudioInputRendererHost::DoCreateStream(
             device_id, audio_params, audio_manager_->GetWorkerTaskRunner(),
             audio_mirroring_manager_),
         entry->writer.get(), user_input_monitor_,
-        BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE),
         audio_params);
     // Only count for captures from desktop media picker dialog.
     if (entry->controller.get() && type == MEDIA_DESKTOP_AUDIO_CAPTURE)
@@ -363,8 +362,7 @@ void AudioInputRendererHost::DoCreateStream(
   } else {
     entry->controller = media::AudioInputController::Create(
         audio_manager_, this, entry->writer.get(), user_input_monitor_,
-        audio_params, device_id, config.automatic_gain_control,
-        BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE));
+        audio_params, device_id, config.automatic_gain_control);
     oss << ", AGC=" << config.automatic_gain_control;
 
     // Only count for captures from desktop media picker dialog and system loop

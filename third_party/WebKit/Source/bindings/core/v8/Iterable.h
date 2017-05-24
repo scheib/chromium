@@ -175,13 +175,27 @@ class Iterable {
 };
 
 // Utiltity mixin base-class for classes implementing IDL interfaces with
-// "iterable<T1, T2>".
+// "iterable<T1, T2>" or "maplike<T1, T2>".
 template <typename KeyType, typename ValueType>
 class PairIterable : public Iterable<KeyType, ValueType> {
  public:
   Iterator* GetIterator(ScriptState* script_state,
                         ExceptionState& exception_state) {
     return this->entriesForBinding(script_state, exception_state);
+  }
+};
+
+// Utiltity mixin base-class for classes implementing IDL interfaces with
+// "setlike<V>" (not "iterable<V>").
+// IDL interfaces with "iterable<V>" (value iterators) inherit @@iterator,
+// values(), entries(), keys() and forEach() from the %ArrayPrototype%
+// intrinsic object automatically.
+template <typename ValueType>
+class SetlikeIterable : public Iterable<ValueType, ValueType> {
+ public:
+  Iterator* GetIterator(ScriptState* script_state,
+                        ExceptionState& exception_state) {
+    return this->valuesForBinding(script_state, exception_state);
   }
 };
 

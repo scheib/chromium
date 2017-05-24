@@ -16,7 +16,7 @@
 #include "content/public/common/connection_filter.h"
 #include "content/public/common/service_manager_connection.h"
 #include "mojo/public/cpp/bindings/interface_request.h"
-#include "services/resource_coordinator/memory/coordinator/coordinator_impl.h"
+#include "services/resource_coordinator/memory_instrumentation/coordinator_impl.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
 
 namespace content {

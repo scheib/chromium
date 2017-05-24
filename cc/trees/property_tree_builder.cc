@@ -948,10 +948,12 @@ bool AddEffectNodeIfNeeded(
     }
     node->clip_id = data_from_ancestor.clip_tree_parent;
   } else {
-    // Root render surface acts the unbounded and untransformed to draw content
-    // into. Transform node created from root layer (includes device scale
-    // factor) and clip node created from root layer (include viewports) applies
-    // to root render surface's content, but not root render surface itself.
+    // The root render surface acts as the unbounded and untransformed
+    // surface into which content is drawn. The transform node created
+    // from the root layer (which includes device scale factor) and
+    // the clip node created from the root layer (which includes
+    // viewports) apply to the root render surface's content, but not
+    // to the root render surface itself.
     node->transform_id = TransformTree::kRootNodeId;
     node->clip_id = ClipTree::kViewportNodeId;
   }

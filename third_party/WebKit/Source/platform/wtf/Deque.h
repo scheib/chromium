@@ -33,8 +33,9 @@
 // FIXME: Could move what Vector and Deque share into a separate file.
 // Deque doesn't actually use Vector.
 
-#include "platform/wtf/Vector.h"
 #include <iterator>
+#include "platform/wtf/Allocator.h"
+#include "platform/wtf/Vector.h"
 
 namespace WTF {
 

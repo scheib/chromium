@@ -166,12 +166,8 @@ void BuildCommitItem(const syncable::Entry& meta_entry,
     if (meta_entry.GetIsDel()) {
       sync_entry->set_deleted(true);
     } else {
-      // Both insert_after_item_id and position_in_parent fields are set only
-      // for legacy reasons.  See comments in sync.proto for more information.
-      const Id& prev_id = meta_entry.GetPredecessorId();
-      string prev_id_string =
-          prev_id.IsNull() ? string() : prev_id.GetServerId();
-      sync_entry->set_insert_after_item_id(prev_id_string);
+      // position_in_parent field is set only for legacy reasons.  See comments
+      // in sync.proto for more information.
       sync_entry->set_position_in_parent(
           meta_entry.GetUniquePosition().ToInt64());
       meta_entry.GetUniquePosition().ToProto(

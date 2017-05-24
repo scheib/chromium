@@ -175,7 +175,6 @@ const InternalRoleEntry kInternalRoles[] = {
     {kDialogRole, "Dialog"},
     {kDirectoryRole, "Directory"},
     {kDisclosureTriangleRole, "DisclosureTriangle"},
-    {kDivRole, "Div"},
     {kDocumentRole, "Document"},
     {kEmbeddedObjectRole, "EmbeddedObject"},
     {kFeedRole, "feed"},
@@ -183,6 +182,7 @@ const InternalRoleEntry kInternalRoles[] = {
     {kFigureRole, "Figure"},
     {kFooterRole, "Footer"},
     {kFormRole, "Form"},
+    {kGenericContainerRole, "GenericContainer"},
     {kGridRole, "Grid"},
     {kGroupRole, "Group"},
     {kHeadingRole, "Heading"},
@@ -746,6 +746,23 @@ bool AXObjectImpl::IsPresentationalChild() const {
   return cached_is_presentational_child_;
 }
 
+bool AXObjectImpl::CanReceiveAccessibilityFocus() const {
+  const Node* node = this->GetNode();
+  if (!node)
+    return false;
+
+  const Element* elem = ToElement(node);
+  if (!elem)
+    return false;
+
+  // Focusable, and not forwarding the focus somewhere else
+  if (elem->IsFocusable() && !elem->FastHasAttribute(aria_activedescendantAttr))
+    return true;
+
+  // aria-activedescendant focus
+  return elem->FastHasAttribute(idAttr) && AncestorExposesActiveDescendant();
+}
+
 bool AXObjectImpl::AncestorExposesActiveDescendant() const {
   UpdateCachedAttributeValuesIfNeeded();
   return cached_ancestor_exposes_active_descendant_;
@@ -1118,7 +1135,7 @@ bool AXObjectImpl::SupportsRangeValue() const {
 }
 
 bool AXObjectImpl::SupportsSetSizeAndPosInSet() const {
-  AXObjectImpl* parent = ParentObject();
+  AXObjectImpl* parent = ParentObjectUnignored();
   if (!parent)
     return false;
 
@@ -1131,7 +1148,7 @@ bool AXObjectImpl::SupportsSetSizeAndPosInSet() const {
       (role == kRadioButtonRole) ||
       (role == kTabRole && parent_role == kTabListRole) ||
       (role == kTreeItemRole && parent_role == kTreeRole) ||
-      (role == kTreeItemRole && parent_role == kGroupRole)) {
+      (role == kTreeItemRole && parent_role == kTreeItemRole)) {
     return true;
   }
 
@@ -1823,21 +1840,24 @@ bool AXObjectImpl::IncludesARIAWidgetRole(const String& role) {
   return false;
 }
 
-bool AXObjectImpl::NameFromContents() const {
+bool AXObjectImpl::NameFromContents(bool recursive) const {
   // ARIA 1.1, section 5.2.7.5.
+  bool result = false;
+
   switch (RoleValue()) {
+    // ----- NameFrom: contents -------------------------
+    // Get their own name from contents, or contribute to ancestors
     case kAnchorRole:
     case kButtonRole:
     case kCellRole:
     case kCheckBoxRole:
     case kColumnHeaderRole:
-    case kDirectoryRole:
     case kDisclosureTriangleRole:
     case kHeadingRole:
     case kLineBreakRole:
     case kLinkRole:
     case kListBoxOptionRole:
-    case kListItemRole:
+    case kMenuButtonRole:
     case kMenuItemRole:
     case kMenuItemCheckBoxRole:
     case kMenuItemRadioRole:
@@ -1846,26 +1866,133 @@ bool AXObjectImpl::NameFromContents() const {
     case kRadioButtonRole:
     case kRowHeaderRole:
     case kStaticTextRole:
-    case kStatusRole:
     case kSwitchRole:
     case kTabRole:
     case kToggleButtonRole:
     case kTreeItemRole:
     case kUserInterfaceTooltipRole:
-      return true;
-    case kRowRole: {
-      // Spec says we should always expose the name on rows,
-      // but for performance reasons we only do it
-      // if the row might receive focus
-      if (AncestorExposesActiveDescendant()) {
-        return true;
-      }
-      const Element* element = this->GetElement();
-      return element && element->IsFocusable();
-    }
-    default:
-      return false;
+      result = true;
+      break;
+
+    // ----- No name from contents -------------------------
+    // These never have or contribute a name from contents, as they are
+    // containers for many subobjects. Superset of nameFrom:author ARIA roles.
+    case kAlertRole:
+    case kAlertDialogRole:
+    case kApplicationRole:
+    case kAudioRole:
+    case kArticleRole:
+    case kBannerRole:
+    case kBlockquoteRole:
+    case kColorWellRole:
+    case kColumnRole:
+    case kComboBoxRole:
+    case kComplementaryRole:
+    case kContentInfoRole:
+    case kDateRole:
+    case kDateTimeRole:
+    case kDefinitionRole:
+    case kDialogRole:
+    case kDirectoryRole:
+    case kDocumentRole:
+    case kEmbeddedObjectRole:
+    case kFeedRole:
+    case kFigureRole:
+    case kFormRole:
+    case kGridRole:
+    case kGroupRole:
+    case kIframePresentationalRole:
+    case kIframeRole:
+    case kImageRole:
+    case kInputTimeRole:
+    case kListBoxRole:
+    case kLogRole:
+    case kMainRole:
+    case kMarqueeRole:
+    case kMathRole:
+    case kMenuListPopupRole:
+    case kMenuRole:
+    case kMenuBarRole:
+    case kMeterRole:
+    case kNavigationRole:
+    case kNoteRole:
+    case kOutlineRole:
+    case kProgressIndicatorRole:
+    case kRadioGroupRole:
+    case kRegionRole:
+    case kRootWebAreaRole:
+    case kScrollBarRole:
+    case kSearchRole:
+    case kSearchBoxRole:
+    case kSplitterRole:
+    case kSliderRole:
+    case kSpinButtonRole:
+    case kStatusRole:
+    case kScrollAreaRole:
+    case kSeamlessWebAreaRole:
+    case kSliderThumbRole:
+    case kSpinButtonPartRole:
+    case kSVGRootRole:
+    case kTableRole:
+    case kTableHeaderContainerRole:
+    case kTabGroupRole:
+    case kTabListRole:
+    case kTabPanelRole:
+    case kTermRole:
+    case kTextFieldRole:
+    case kTimeRole:
+    case kTimerRole:
+    case kToolbarRole:
+    case kTreeRole:
+    case kTreeGridRole:
+    case kVideoRole:
+    case kWebAreaRole:
+    case kWindowRole:
+      result = false;
+      break;
+
+    // ----- Conditional: contribute to ancestor only, unless focusable -------
+    // Some objects can contribute their contents to ancestor names, but
+    // only have their own name if they are focusable
+    case kAbbrRole:
+    case kAnnotationRole:
+    case kBusyIndicatorRole:
+    case kCanvasRole:
+    case kCaptionRole:
+    case kDescriptionListDetailRole:
+    case kDescriptionListRole:
+    case kDescriptionListTermRole:
+    case kDetailsRole:
+    case kFigcaptionRole:
+    case kFooterRole:
+    case kGenericContainerRole:
+    case kIgnoredRole:
+    case kImageMapLinkRole:
+    case kImageMapRole:
+    case kInlineTextBoxRole:
+    case kLabelRole:
+    case kLegendRole:
+    case kListRole:
+    case kListItemRole:
+    case kListMarkerRole:
+    case kMarkRole:
+    case kNoneRole:
+    case kParagraphRole:
+    case kPreRole:
+    case kPresentationalRole:
+    // Spec says we should always expose the name on rows,
+    // but for performance reasons we only do it
+    // if the row might receive focus
+    case kRowRole:
+    case kRubyRole:
+    case kRulerRole:
+    case kUnknownRole:
+    case kNumRoles:
+      result = recursive || (CanReceiveAccessibilityFocus() && !IsEditable());
+      break;
   }
+
+  return result;
 }
 
 AccessibilityRole AXObjectImpl::ButtonRoleType() const {

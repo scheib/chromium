@@ -7,7 +7,6 @@
 #include <unordered_map>
 
 #include "base/strings/stringprintf.h"
-#include "base/trace_event/heap_profiler_allocation_context.h"
 #include "base/trace_event/heap_profiler_allocation_context_tracker.h"
 #include "base/trace_event/heap_profiler_allocation_register.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -135,25 +134,17 @@ bool PartitionAllocMemoryDumpProvider::OnMemoryDump(
   using base::trace_event::MemoryDumpLevelOfDetail;
 
   MemoryDumpLevelOfDetail level_of_detail = args.level_of_detail;
-  if (is_heap_profiling_enabled_) {
+  if (allocation_register_.is_enabled()) {
     // Overhead should always be reported, regardless of light vs. heavy.
     base::trace_event::TraceEventMemoryOverhead overhead;
     std::unordered_map<base::trace_event::AllocationContext,
                        base::trace_event::AllocationMetrics>
         metrics_by_context;
-    {
-      MutexLocker locker(allocation_register_mutex_);
-      // Dump only the overhead estimation in non-detailed dumps.
-      if (level_of_detail == MemoryDumpLevelOfDetail::DETAILED) {
-        for (const auto& alloc_size : *allocation_register_) {
-          base::trace_event::AllocationMetrics& metrics =
-              metrics_by_context[alloc_size.context];
-          metrics.size += alloc_size.size;
-          metrics.count++;
-        }
-      }
-      allocation_register_->EstimateTraceMemoryOverhead(&overhead);
+    // Dump only the overhead estimation in non-detailed dumps.
+    if (level_of_detail == MemoryDumpLevelOfDetail::DETAILED) {
+      allocation_register_.UpdateAndReturnsMetrics(metrics_by_context);
     }
+    allocation_register_.EstimateTraceMemoryOverhead(&overhead);
     memory_dump->DumpHeapUsage(metrics_by_context, overhead, "partition_alloc");
   }
 
@@ -181,25 +172,20 @@ bool PartitionAllocMemoryDumpProvider::OnMemoryDump(
 
 // |m_allocationRegister| should be initialized only when necessary to avoid
 // waste of memory.
-PartitionAllocMemoryDumpProvider::PartitionAllocMemoryDumpProvider()
-    : allocation_register_(nullptr), is_heap_profiling_enabled_(false) {}
+PartitionAllocMemoryDumpProvider::PartitionAllocMemoryDumpProvider() {}
 
 PartitionAllocMemoryDumpProvider::~PartitionAllocMemoryDumpProvider() {}
 
 void PartitionAllocMemoryDumpProvider::OnHeapProfilingEnabled(bool enabled) {
   if (enabled) {
-    {
-      MutexLocker locker(allocation_register_mutex_);
-      if (!allocation_register_)
-        allocation_register_.reset(new base::trace_event::AllocationRegister());
-    }
+    allocation_register_.SetEnabled();
     WTF::PartitionAllocHooks::SetAllocationHook(ReportAllocation);
     WTF::PartitionAllocHooks::SetFreeHook(ReportFree);
   } else {
     WTF::PartitionAllocHooks::SetAllocationHook(nullptr);
     WTF::PartitionAllocHooks::SetFreeHook(nullptr);
+    allocation_register_.SetDisabled();
   }
-  is_heap_profiling_enabled_ = enabled;
 }
 
 void PartitionAllocMemoryDumpProvider::insert(void* address,
@@ -212,15 +198,15 @@ void PartitionAllocMemoryDumpProvider::insert(void* address,
     return;
 
   context.type_name = type_name;
-  MutexLocker locker(allocation_register_mutex_);
-  if (allocation_register_)
-    allocation_register_->Insert(address, size, context);
+  if (!allocation_register_.is_enabled())
+    return;
+  allocation_register_.Insert(address, size, context);
 }
 
 void PartitionAllocMemoryDumpProvider::Remove(void* address) {
-  MutexLocker locker(allocation_register_mutex_);
-  if (allocation_register_)
-    allocation_register_->Remove(address);
+  if (!allocation_register_.is_enabled())
+    return;
+  allocation_register_.Remove(address);
 }
 
 }  // namespace blink

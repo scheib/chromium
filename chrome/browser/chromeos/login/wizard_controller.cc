@@ -1374,6 +1374,13 @@ void WizardController::SkipPostLoginScreensForTesting() {
   skip_post_login_screens_ = true;
 }
 
+// static
+bool WizardController::UsingHandsOffEnrollment() {
+  return policy::DeviceCloudPolicyManagerChromeOS::
+             GetZeroTouchEnrollmentMode() ==
+         policy::ZeroTouchEnrollmentMode::HANDS_OFF;
+}
+
 void WizardController::OnLocalStateInitialized(bool /* succeeded */) {
   if (GetLocalState()->GetInitializationStatus() !=
       PrefService::INITIALIZATION_STATUS_ERROR) {

@@ -56,14 +56,6 @@ Polymer({
     },
 
     /**
-     * Whether this list is for the All Sites category.
-     */
-    allSites: {
-      type: Boolean,
-      value: false,
-    },
-
-    /**
      * The type of category this widget is displaying data for. Normally
      * either 'allow' or 'block', representing which sites are allowed or
      * blocked respectively.
@@ -131,7 +123,7 @@ Polymer({
    * @private
    */
   siteWithinCategoryChanged_: function(category, site) {
-    if (category == this.category || this.allSites)
+    if (category == this.category)
       this.configureWidget_();
   },
 
@@ -192,7 +184,7 @@ Polymer({
   shouldHideResetButton_: function(exception, readOnlyList) {
     return exception.enforcement ==
         chrome.settingsPrivate.Enforcement.ENFORCED ||
-        this.allSites || !(readOnlyList || !!exception.embeddingOrigin);
+        !(readOnlyList || !!exception.embeddingOrigin);
   },
 
   /**
@@ -204,7 +196,7 @@ Polymer({
   shouldHideActionMenu_: function(exception, readOnlyList) {
     return exception.enforcement ==
         chrome.settingsPrivate.Enforcement.ENFORCED ||
-        this.allSites || readOnlyList || !!exception.embeddingOrigin;
+        readOnlyList || !!exception.embeddingOrigin;
   },
 
   /**
@@ -233,18 +225,11 @@ Polymer({
    * @private
    */
   populateList_: function() {
-    if (this.allSites) {
-      this.getAllSitesList_().then(function(lists) {
-        this.processExceptions_(lists);
-        this.closeActionMenu_();
-      }.bind(this));
-    } else {
-      this.browserProxy_.getExceptionList(this.category).then(
-        function(exceptionList) {
+    this.browserProxy_.getExceptionList(this.category)
+        .then(function(exceptionList) {
           this.processExceptions_([exceptionList]);
           this.closeActionMenu_();
-      }.bind(this));
-    }
+        }.bind(this));
   },
 
   /**
@@ -258,9 +243,8 @@ Polymer({
     for (var i = 0; i < data.length; ++i) {
       var exceptionList = data[i];
       for (var k = 0; k < exceptionList.length; ++k) {
-        if (!this.allSites &&
-            (exceptionList[k].setting == settings.PermissionValues.DEFAULT ||
-             exceptionList[k].setting != this.categorySubtype)) {
+        if (exceptionList[k].setting == settings.PermissionValues.DEFAULT ||
+            exceptionList[k].setting != this.categorySubtype) {
           continue;
         }
 
@@ -271,77 +255,19 @@ Polymer({
   },
 
   /**
-   * Retrieves a list of all known sites (any category/setting).
-   * @return {!Promise}
-   * @private
-   */
-  getAllSitesList_: function() {
-    var promiseList = [];
-    for (var type in settings.ContentSettingsTypes) {
-      if (settings.ContentSettingsTypes[type] ==
-          settings.ContentSettingsTypes.PROTOCOL_HANDLERS ||
-          settings.ContentSettingsTypes[type] ==
-          settings.ContentSettingsTypes.USB_DEVICES ||
-          settings.ContentSettingsTypes[type] ==
-          settings.ContentSettingsTypes.ZOOM_LEVELS) {
-        // Some categories store their data in a custom way.
-        continue;
-      }
-
-      promiseList.push(
-          this.browserProxy_.getExceptionList(
-              settings.ContentSettingsTypes[type]));
-    }
-
-    return Promise.all(promiseList);
-  },
-
-  /**
    * Converts a list of exceptions received from the C++ handler to
-   * full SiteException objects. If this site-list is used as an all sites
-   * view, the list is sorted by site name, then protocol and port and de-duped
-   * (by origin).
+   * full SiteException objects.
    * @param {!Array<RawSiteException>} sites A list of sites to convert.
-   * @return {!Array<SiteException>} A list of full SiteExceptions. Sorted and
-   *    deduped if allSites is set.
+   * @return {!Array<SiteException>} A list of full SiteExceptions.
    * @private
    */
   toSiteArray_: function(sites) {
-    var self = this;
-    if (this.allSites) {
-      sites.sort(function(a, b) {
-        var url1 = self.toUrl(a.origin);
-        var url2 = self.toUrl(b.origin);
-        var comparison = url1.host.localeCompare(url2.host);
-        if (comparison == 0) {
-          comparison = url1.protocol.localeCompare(url2.protocol);
-          if (comparison == 0) {
-            comparison = url1.port.localeCompare(url2.port);
-            if (comparison == 0) {
-              // Compare hosts for the embedding origins.
-              var host1 = self.toUrl(a.embeddingOrigin);
-              var host2 = self.toUrl(b.embeddingOrigin);
-              host1 = (host1 == null) ? '' : host1.host;
-              host2 = (host2 == null) ? '' : host2.host;
-              return host1.localeCompare(host2);
-            }
-          }
-        }
-        return comparison;
-      });
-    }
     var results = /** @type {!Array<SiteException>} */([]);
     var lastOrigin = '';
     var lastEmbeddingOrigin = '';
     for (var i = 0; i < sites.length; ++i) {
       /** @type {!SiteException} */
       var siteException = this.expandSiteException(sites[i]);
-
-      // The All Sites category can contain duplicates (from other categories).
-      if (this.allSites && siteException.origin == lastOrigin &&
-          siteException.embeddingOrigin == lastEmbeddingOrigin) {
-        continue;
-      }
 
       results.push(siteException);
       lastOrigin = siteException.origin;

@@ -1,6 +1,6 @@
 AXWebArea
 ++AXList size=(400, 400)
-++++AXGroup AXTitle='One' size=(400, 200)
+++++AXGroup size=(400, 200)
 ++++++AXStaticText AXValue='One'
-++++AXGroup AXTitle='Two' size=(400, 200)
+++++AXGroup size=(400, 200)
 ++++++AXStaticText AXValue='Two'

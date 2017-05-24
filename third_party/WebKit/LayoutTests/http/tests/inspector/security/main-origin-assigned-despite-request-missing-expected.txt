@@ -2,11 +2,11 @@ Tests that the Main Origin is assigned even if there is no matching Request.
 
 Page origin: http://127.0.0.1:8000
 Detected main origin: http://127.0.0.1:8000
-Group: Main Origin
+Group: Main origin
 <SPAN class=title >
 http://127.0.0.1:8000
 </SPAN>
-Group: Unknown / Canceled
+Group: Unknown / canceled
 <SPAN class=title >
 https://foo.test
 </SPAN>

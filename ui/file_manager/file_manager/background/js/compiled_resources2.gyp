@@ -24,6 +24,7 @@
     {
       'target_name': 'background',
       'dependencies': [
+        '../../../externs/background/compiled_resources2.gyp:file_browser_background_full',
         '../../../externs/compiled_resources2.gyp:volume_manager',
         '../../common/js/compiled_resources2.gyp:metrics',
         '../../common/js/compiled_resources2.gyp:util',
@@ -130,6 +131,7 @@
     {
       'target_name': 'import_history',
       'dependencies': [
+        '../../../externs/background/compiled_resources2.gyp:import_history',
         '../../common/js/compiled_resources2.gyp:importer_common',
         '../../common/js/compiled_resources2.gyp:metrics',
         '../../common/js/compiled_resources2.gyp:metrics_events',

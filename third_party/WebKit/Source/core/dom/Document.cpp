@@ -2279,7 +2279,7 @@ void Document::LayoutUpdated() {
   if (GetFrame() && GetFrame()->GetPage())
     GetFrame()->GetPage()->GetChromeClient().LayoutUpdated(GetFrame());
 
-  Markers().InvalidateRectsForAllMarkers();
+  Markers().InvalidateRectsForAllTextMatchMarkers();
 
   // The layout system may perform layouts with pending stylesheets. When
   // recording first layout time, we ignore these layouts, since painting is
@@ -3032,9 +3032,6 @@ void Document::ImplicitClose() {
 
   load_event_progress_ = kLoadEventInProgress;
 
-  ScriptableDocumentParser* parser = GetScriptableDocumentParser();
-  well_formed_ = parser && parser->WellFormed();
-
   // We have to clear the parser, in case someone document.write()s from the
   // onLoad event handler, as in Radar 3206524.
   DetachParser();
@@ -3244,8 +3241,7 @@ void Document::DispatchUnloadEvents() {
 
       PageVisibilityState visibility_state = GetPageVisibilityState();
       load_event_progress_ = kUnloadVisibilityChangeInProgress;
-      if (visibility_state != kPageVisibilityStateHidden &&
-          RuntimeEnabledFeatures::visibilityChangeOnUnloadEnabled()) {
+      if (visibility_state != kPageVisibilityStateHidden) {
         // Dispatch visibilitychange event, but don't bother doing
         // other notifications as we're about to be unloaded.
         DispatchEvent(Event::CreateBubble(EventTypeNames::visibilitychange));
@@ -5500,6 +5496,9 @@ void Document::FinishedParsing() {
   // FIXME: Remove this ad-hoc checkpoint when DOMContentLoaded is dispatched in
   // a queued task, which will do a checkpoint anyway. https://crbug.com/425790
   Microtask::PerformCheckpoint(V8PerIsolateData::MainThreadIsolate());
+
+  ScriptableDocumentParser* parser = GetScriptableDocumentParser();
+  well_formed_ = parser && parser->WellFormed();
 
   if (LocalFrame* frame = this->GetFrame()) {
     // Don't update the layout tree if we haven't requested the main resource

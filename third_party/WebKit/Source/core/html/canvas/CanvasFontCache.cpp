@@ -105,8 +105,8 @@ MutableStylePropertySet* CanvasFontCache::ParseFont(const String& font_string) {
     // Hard limit is applied here, on the fly, while the soft limit is
     // applied at the end of the task.
     if (fetched_fonts_.size() > HardMaxFonts()) {
-      ASSERT(fetched_fonts_.size() == HardMaxFonts() + 1);
-      ASSERT(font_lru_list_.size() == HardMaxFonts() + 1);
+      DCHECK_EQ(fetched_fonts_.size(), HardMaxFonts() + 1);
+      DCHECK_EQ(font_lru_list_.size(), HardMaxFonts() + 1);
       fetched_fonts_.erase(font_lru_list_.front());
       fonts_resolved_using_default_style_.erase(font_lru_list_.front());
       font_lru_list_.RemoveFirst();

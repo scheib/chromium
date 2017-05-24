@@ -169,7 +169,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
       override;
   void SubmitCompositorFrame(const cc::LocalSurfaceId& local_surface_id,
                              cc::CompositorFrame frame) override;
-  void OnBeginFrameDidNotSwap(const cc::BeginFrameAck& ack) override;
+  void OnDidNotProduceFrame(const cc::BeginFrameAck& ack) override;
   void ClearCompositorFrame() override;
   void DidStopFlinging() override;
   void OnDidNavigateMainFrameToNewPage() override;

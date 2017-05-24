@@ -90,17 +90,8 @@ std::unique_ptr<cryptauth::ConnectionFinder>
 RemoteDeviceLifeCycleImpl::CreateConnectionFinder() {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           proximity_auth::switches::kEnableBluetoothLowEnergyDiscovery)) {
-    cryptauth::RemoteBeaconSeedFetcher fetcher(
-        proximity_auth_client_->GetCryptAuthDeviceManager());
-    std::vector<cryptauth::BeaconSeed> beacon_seeds;
-    if (!fetcher.FetchSeedsForDevice(remote_device_, &beacon_seeds)) {
-      PA_LOG(ERROR) << "Unable to fetch BeaconSeeds for "
-                    << remote_device_.name;
-      return nullptr;
-    }
-
     return base::MakeUnique<BluetoothLowEnergyConnectionFinder>(
-        remote_device_, beacon_seeds, bluetooth_throttler_);
+        remote_device_, bluetooth_throttler_);
   } else {
     return base::MakeUnique<BluetoothConnectionFinder>(
         remote_device_, device::BluetoothUUID(kClassicBluetoothServiceUUID),

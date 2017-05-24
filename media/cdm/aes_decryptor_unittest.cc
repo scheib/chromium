@@ -387,7 +387,7 @@ class AesDecryptorTest : public testing::TestWithParam<std::string> {
   bool KeysInfoContains(const std::vector<uint8_t>& expected_key_id,
                         CdmKeyInformation::KeyStatus expected_status =
                             CdmKeyInformation::USABLE) {
-    for (auto* key_id : cdm_client_.keys_info()) {
+    for (auto& key_id : cdm_client_.keys_info()) {
       if (key_id->key_id == expected_key_id &&
           key_id->status == expected_status) {
         return true;

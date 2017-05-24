@@ -551,7 +551,7 @@ if (enable_remoting_host) {
     ]
 
     deps = [
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
     ]
 
     configs += [ "//build/config/compiler:wexit_time_destructors" ]
@@ -755,7 +755,7 @@ if (enable_me2me_host) {
 
         deps = [
           ":remoting_me2me_host_static",
-          "//build/config/sanitizers:deps",
+          "//build/config:exe_and_shlib_deps",
           "//remoting/base:breakpad",
           "//remoting/host/installer:credits",
           "//remoting/resources",

@@ -10,6 +10,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "services/service_manager/public/cpp/types_export.h"
+
 namespace service_manager {
 
 using Capability = std::string;
@@ -21,7 +23,7 @@ using Name = std::string;
 // See comments in
 // services/service_manager/public/interfaces/interface_provider_spec.mojom for
 // a description of InterfaceProviderSpec.
-struct InterfaceProviderSpec {
+struct SERVICE_MANAGER_PUBLIC_CPP_TYPES_EXPORT InterfaceProviderSpec {
   InterfaceProviderSpec();
   InterfaceProviderSpec(const InterfaceProviderSpec& other);
   InterfaceProviderSpec(InterfaceProviderSpec&& other);
@@ -41,9 +43,10 @@ using InterfaceProviderSpecMap =
 // Convenience for reading a spec named |spec_name| out of |map|. If such a spec
 // is found, |spec| is modified and this function returns true. If a spec is not
 // found, |spec| is unmodified and this function returns false.
-bool GetInterfaceProviderSpec(const std::string& spec_name,
-                              const InterfaceProviderSpecMap& map,
-                              InterfaceProviderSpec* spec);
+bool SERVICE_MANAGER_PUBLIC_CPP_TYPES_EXPORT
+GetInterfaceProviderSpec(const std::string& spec_name,
+                         const InterfaceProviderSpecMap& map,
+                         InterfaceProviderSpec* spec);
 
 }  // namespace service_manager
 

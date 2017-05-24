@@ -60,8 +60,9 @@ NativeNotificationDisplayService::NativeNotificationDisplayService(
   AddNotificationHandler(NotificationCommon::PERSISTENT,
                          base::MakeUnique<PersistentNotificationHandler>());
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  AddNotificationHandler(NotificationCommon::EXTENSION,
-                         base::MakeUnique<ExtensionNotificationHandler>());
+  AddNotificationHandler(
+      NotificationCommon::EXTENSION,
+      base::MakeUnique<extensions::ExtensionNotificationHandler>());
 #endif
 }
 

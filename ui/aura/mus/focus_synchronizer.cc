@@ -20,6 +20,8 @@ FocusSynchronizer::FocusSynchronizer(FocusSynchronizerDelegate* delegate,
 
 FocusSynchronizer::~FocusSynchronizer() {
   SetActiveFocusClientInternal(nullptr);
+  if (active_focus_client_root_)
+    active_focus_client_root_->RemoveObserver(this);
 }
 
 void FocusSynchronizer::AddObserver(FocusSynchronizerObserver* observer) {

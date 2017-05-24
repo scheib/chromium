@@ -28,9 +28,9 @@ class CORE_EXPORT StringOrStringSequence final {
   bool isNull() const { return m_type == SpecificTypeNone; }
 
   bool isString() const { return m_type == SpecificTypeString; }
-  String getAsString() const;
-  void setString(String);
-  static StringOrStringSequence fromString(String);
+  const String& getAsString() const;
+  void setString(const String&);
+  static StringOrStringSequence fromString(const String&);
 
   bool isStringSequence() const { return m_type == SpecificTypeStringSequence; }
   const Vector<String>& getAsStringSequence() const;

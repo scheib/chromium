@@ -311,7 +311,7 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
       override;
   void SubmitCompositorFrame(const cc::LocalSurfaceId& local_surface_id,
                              cc::CompositorFrame frame) override;
-  void OnBeginFrameDidNotSwap(const cc::BeginFrameAck& ack) override;
+  void OnDidNotProduceFrame(const cc::BeginFrameAck& ack) override;
   void ClearCompositorFrame() override;
   BrowserAccessibilityManager* CreateBrowserAccessibilityManager(
       BrowserAccessibilityDelegate* delegate, bool for_root_frame) override;

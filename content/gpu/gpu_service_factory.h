@@ -10,6 +10,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/single_thread_task_runner.h"
 #include "content/child/service_factory.h"
+#include "media/mojo/features.h"
 
 namespace media {
 class MediaGpuChannelManager;
@@ -28,7 +29,7 @@ class GpuServiceFactory : public ServiceFactory {
   void RegisterServices(ServiceMap* services) override;
 
  private:
-#if defined(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
+#if BUILDFLAG(ENABLE_MOJO_MEDIA_IN_GPU_PROCESS)
   // Task runner we were constructed on, and that |media_gpu_channel_manager_|
   // must be accessed from (the GPU main thread task runner). We expect
   // RegisterServices() to be called on this task runner as well, but the

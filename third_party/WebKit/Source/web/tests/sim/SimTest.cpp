@@ -25,9 +25,6 @@ SimTest::SimTest() : web_view_client_(compositor_), web_frame_client_(*this) {
   // in the middle of a test.
   LayoutTestSupport::SetMockThemeEnabledForTest(true);
   ScrollbarTheme::SetMockScrollbarsEnabled(true);
-  web_view_helper_.Initialize(true, &web_frame_client_, &web_view_client_);
-  compositor_.SetWebView(WebView());
-  page_.SetPage(WebView().GetPage());
 }
 
 SimTest::~SimTest() {
@@ -38,6 +35,14 @@ SimTest::~SimTest() {
   LayoutTestSupport::SetMockThemeEnabledForTest(false);
   ScrollbarTheme::SetMockScrollbarsEnabled(false);
   WebCache::Clear();
+}
+
+void SimTest::SetUp() {
+  Test::SetUp();
+
+  web_view_helper_.Initialize(true, &web_frame_client_, &web_view_client_);
+  compositor_.SetWebView(WebView());
+  page_.SetPage(WebView().GetPage());
 }
 
 void SimTest::LoadURL(const String& url) {

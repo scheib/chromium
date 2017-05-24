@@ -51,7 +51,6 @@
 #include "content/browser/loader/navigation_resource_throttle.h"
 #include "content/browser/loader/navigation_url_loader_impl_core.h"
 #include "content/browser/loader/null_resource_controller.h"
-#include "content/browser/loader/power_save_block_resource_throttle.h"
 #include "content/browser/loader/redirect_to_file_resource_handler.h"
 #include "content/browser/loader/resource_loader.h"
 #include "content/browser/loader/resource_message_filter.h"
@@ -62,6 +61,7 @@
 #include "content/browser/loader/sync_resource_handler.h"
 #include "content/browser/loader/throttling_resource_handler.h"
 #include "content/browser/loader/upload_data_stream_builder.h"
+#include "content/browser/loader/wake_lock_resource_throttle.h"
 #include "content/browser/resource_context_impl.h"
 #include "content/browser/service_worker/foreign_fetch_request_handler.h"
 #include "content/browser/service_worker/link_header_support.h"
@@ -1550,10 +1550,9 @@ ResourceDispatcherHostImpl::AddStandardHandlers(
   }
 
   if (request->has_upload()) {
-    // Block power save while uploading data.
-    throttles.push_back(base::MakeUnique<PowerSaveBlockResourceThrottle>(
-        request->url().host(), main_thread_task_runner_,
-        BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE)));
+    // Request wake lock while uploading data.
+    throttles.push_back(
+        base::MakeUnique<WakeLockResourceThrottle>(request->url().host()));
   }
 
   // TODO(ricea): Stop looking this up so much.

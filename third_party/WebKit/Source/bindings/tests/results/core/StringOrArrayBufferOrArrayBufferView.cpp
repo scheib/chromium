@@ -54,18 +54,18 @@ StringOrArrayBufferOrArrayBufferView StringOrArrayBufferOrArrayBufferView::fromA
   return container;
 }
 
-String StringOrArrayBufferOrArrayBufferView::getAsString() const {
+const String& StringOrArrayBufferOrArrayBufferView::getAsString() const {
   DCHECK(isString());
   return m_string;
 }
 
-void StringOrArrayBufferOrArrayBufferView::setString(String value) {
+void StringOrArrayBufferOrArrayBufferView::setString(const String& value) {
   DCHECK(isNull());
   m_string = value;
   m_type = SpecificTypeString;
 }
 
-StringOrArrayBufferOrArrayBufferView StringOrArrayBufferOrArrayBufferView::fromString(String value) {
+StringOrArrayBufferOrArrayBufferView StringOrArrayBufferOrArrayBufferView::fromString(const String& value) {
   StringOrArrayBufferOrArrayBufferView container;
   container.setString(value);
   return container;

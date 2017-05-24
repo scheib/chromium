@@ -31,7 +31,7 @@
 #ifndef WebFormControlElement_h
 #define WebFormControlElement_h
 
-#include "../platform/WebString.h"
+#include "public/platform/WebString.h"
 #include "WebElement.h"
 #include "WebFormElement.h"
 

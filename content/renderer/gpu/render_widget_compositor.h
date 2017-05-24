@@ -145,6 +145,7 @@ class CONTENT_EXPORT RenderWidgetCompositor
   void CompositeAndReadbackAsync(
       blink::WebCompositeAndReadbackAsyncCallback* callback) override;
   void SetDeferCommits(bool defer_commits) override;
+  // TODO(pdr): Refactor to use a struct like LayerTreeHost::ViewportLayers.
   void RegisterViewportLayers(
       const blink::WebLayer* overscrollElasticityLayer,
       const blink::WebLayer* pageScaleLayer,

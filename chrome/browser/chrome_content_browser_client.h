@@ -153,7 +153,6 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
                       int render_process_id,
                       int render_frame_id,
                       const net::CookieOptions& options) override;
-  bool AllowSaveLocalState(content::ResourceContext* context) override;
   void AllowWorkerFileSystem(
       const GURL& url,
       content::ResourceContext* context,
@@ -164,11 +163,6 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
       const base::string16& name,
       content::ResourceContext* context,
       const std::vector<std::pair<int, int>>& render_frames) override;
-#if BUILDFLAG(ENABLE_WEBRTC)
-  bool AllowWebRTCIdentityCache(const GURL& url,
-                                const GURL& first_party_url,
-                                content::ResourceContext* context) override;
-#endif  // BUILDFLAG(ENABLE_WEBRTC)
   AllowWebBluetoothResult AllowWebBluetooth(
       content::BrowserContext* browser_context,
       const url::Origin& requesting_origin,
@@ -222,7 +216,6 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
   void OverrideWebkitPrefs(content::RenderViewHost* rvh,
                            content::WebPreferences* prefs) override;
   void BrowserURLHandlerCreated(content::BrowserURLHandler* handler) override;
-  void ClearCache(content::RenderFrameHost* rfh) override;
   void ClearSiteData(content::BrowserContext* browser_context,
                      const url::Origin& origin,
                      bool remove_cookies,

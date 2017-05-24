@@ -426,9 +426,14 @@ void Surface::Commit() {
     CommitSurfaceHierarchy();
   }
 
-  if (begin_frame_source_ && current_begin_frame_ack_.sequence_number !=
-                                 cc::BeginFrameArgs::kInvalidFrameNumber) {
-    begin_frame_source_->DidFinishFrame(this, current_begin_frame_ack_);
+  if (current_begin_frame_ack_.sequence_number !=
+      cc::BeginFrameArgs::kInvalidFrameNumber) {
+    if (begin_frame_source_)
+      begin_frame_source_->DidFinishFrame(this, current_begin_frame_ack_);
+    if (!current_begin_frame_ack_.has_damage) {
+      compositor_frame_sink_holder_->GetCompositorFrameSink()
+          ->DidNotProduceFrame(current_begin_frame_ack_);
+    }
     current_begin_frame_ack_.sequence_number =
         cc::BeginFrameArgs::kInvalidFrameNumber;
   }

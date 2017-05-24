@@ -246,11 +246,11 @@ public class VideoCaptureCamera2 extends VideoCapture {
     static {
         COLOR_TEMPERATURES_MAP = new SparseIntArray();
         COLOR_TEMPERATURES_MAP.append(2850, CameraMetadata.CONTROL_AWB_MODE_INCANDESCENT);
-        COLOR_TEMPERATURES_MAP.append(2940, CameraMetadata.CONTROL_AWB_MODE_WARM_FLUORESCENT);
-        COLOR_TEMPERATURES_MAP.append(3000, CameraMetadata.CONTROL_AWB_MODE_TWILIGHT);
-        COLOR_TEMPERATURES_MAP.append(4230, CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT);
+        COLOR_TEMPERATURES_MAP.append(2950, CameraMetadata.CONTROL_AWB_MODE_WARM_FLUORESCENT);
+        COLOR_TEMPERATURES_MAP.append(4250, CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT);
+        COLOR_TEMPERATURES_MAP.append(4600, CameraMetadata.CONTROL_AWB_MODE_TWILIGHT);
+        COLOR_TEMPERATURES_MAP.append(5000, CameraMetadata.CONTROL_AWB_MODE_DAYLIGHT);
         COLOR_TEMPERATURES_MAP.append(6000, CameraMetadata.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT);
-        COLOR_TEMPERATURES_MAP.append(6504, CameraMetadata.CONTROL_AWB_MODE_DAYLIGHT);
         COLOR_TEMPERATURES_MAP.append(7000, CameraMetadata.CONTROL_AWB_MODE_SHADE);
     };
 
@@ -336,8 +336,20 @@ public class VideoCaptureCamera2 extends VideoCapture {
         previewRequestBuilder.set(
                 CaptureRequest.NOISE_REDUCTION_MODE, CameraMetadata.NOISE_REDUCTION_MODE_FAST);
         previewRequestBuilder.set(CaptureRequest.EDGE_MODE, CameraMetadata.EDGE_MODE_FAST);
-        previewRequestBuilder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
-                CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON);
+
+        // Depending on the resolution and other parameters, stabilization might not be available,
+        // see https://crbug.com/718387.
+        // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#CONTROL_VIDEO_STABILIZATION_MODE
+        final CameraCharacteristics cameraCharacteristics = getCameraCharacteristics(mId);
+        final int[] stabilizationModes = cameraCharacteristics.get(
+                CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES);
+        for (int mode : stabilizationModes) {
+            if (mode == CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON) {
+                previewRequestBuilder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                        CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON);
+                break;
+            }
+        }
 
         configureCommonCaptureSettings(previewRequestBuilder);
 
@@ -359,6 +371,8 @@ public class VideoCaptureCamera2 extends VideoCapture {
     }
 
     private void configureCommonCaptureSettings(CaptureRequest.Builder requestBuilder) {
+        final CameraCharacteristics cameraCharacteristics = getCameraCharacteristics(mId);
+
         // |mFocusMode| indicates if we're in auto/continuous, single-shot or manual mode.
         if (mFocusMode == AndroidMeteringMode.CONTINUOUS) {
             requestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
@@ -384,7 +398,6 @@ public class VideoCaptureCamera2 extends VideoCapture {
 
             // We need to configure by hand the exposure time when AE mode is off.  Set it to the
             // middle of the allowed range. Further tuning will be done via |mIso|.
-            final CameraCharacteristics cameraCharacteristics = getCameraCharacteristics(mId);
             Range<Long> range = cameraCharacteristics.get(
                     CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
             requestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,
@@ -441,11 +454,13 @@ public class VideoCaptureCamera2 extends VideoCapture {
                     CaptureRequest.CONTROL_AWB_MODE, CameraMetadata.CONTROL_AWB_MODE_OFF);
         } else if (mWhiteBalanceMode == AndroidMeteringMode.FIXED) {
             requestBuilder.set(CaptureRequest.CONTROL_AWB_LOCK, true);
-            if (mColorTemperature > 0) {
-                final int colorSetting = getClosestWhiteBalance(mColorTemperature);
-                if (colorSetting != -1) {
-                    requestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, colorSetting);
-                }
+        }
+        if (mColorTemperature > 0) {
+            final int colorSetting = getClosestWhiteBalance(mColorTemperature,
+                    cameraCharacteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES));
+            Log.d(TAG, " Color temperature (%d ==> %d)", mColorTemperature, colorSetting);
+            if (colorSetting != -1) {
+                requestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, colorSetting);
             }
         }
 
@@ -492,11 +507,21 @@ public class VideoCaptureCamera2 extends VideoCapture {
         return closestSize;
     }
 
-    private int getClosestWhiteBalance(int colorTemperature) {
+    private static int findInIntArray(int[] hayStack, int needle) {
+        for (int i = 0; i < hayStack.length; ++i) {
+            if (needle == hayStack[i]) return i;
+        }
+        return -1;
+    }
+
+    private int getClosestWhiteBalance(int colorTemperature, int[] supportedTemperatures) {
         int minDiff = Integer.MAX_VALUE;
         int matchedTemperature = -1;
 
         for (int i = 0; i < COLOR_TEMPERATURES_MAP.size(); ++i) {
+            if (findInIntArray(supportedTemperatures, COLOR_TEMPERATURES_MAP.valueAt(i)) == -1) {
+                continue;
+            }
             final int diff = Math.abs(colorTemperature - COLOR_TEMPERATURES_MAP.keyAt(i));
             if (diff >= minDiff) continue;
             minDiff = diff;
@@ -880,7 +905,7 @@ public class VideoCaptureCamera2 extends VideoCapture {
         if (index >= 0) {
             builder.setCurrentColorTemperature(COLOR_TEMPERATURES_MAP.keyAt(index));
         }
-        builder.setStepColorTemperature(1);
+        builder.setStepColorTemperature(50);
 
         if (!cameraCharacteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE)) {
             builder.setSupportsTorch(false);
@@ -983,9 +1008,7 @@ public class VideoCaptureCamera2 extends VideoCapture {
                               .floatValue());
         }
         if (iso > 0) mIso = (int) Math.round(iso);
-        if (mWhiteBalanceMode == AndroidMeteringMode.FIXED && colorTemperature > 0) {
-            mColorTemperature = (int) Math.round(colorTemperature);
-        }
+        if (colorTemperature > 0) mColorTemperature = (int) Math.round(colorTemperature);
 
         if (hasRedEyeReduction) mRedEyeReduction = redEyeReduction;
         if (fillLightMode != AndroidFillLightMode.NOT_SET) mFillLightMode = fillLightMode;

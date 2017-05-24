@@ -1,0 +1,9 @@
+rootWebArea name='Actions'
+++genericContainer
+++++slider actions=setValue
+++++++sliderThumb
+++++textField name='Test textfield' actions=setValue
+++++++genericContainer
+++++++++staticText name='Test textfield'
+++++++++++inlineTextBox name='Test textfield'
+<-- End-of-file -->

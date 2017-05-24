@@ -159,6 +159,17 @@ constexpr int kLetterPortraitPageHeight = 792;
 
 namespace blink {
 
+namespace {
+
+void SetNeedsCompositingUpdate(blink::LayoutViewItem layout_view_item,
+                               blink::CompositingUpdateType update_type) {
+  if (PaintLayerCompositor* compositor =
+          !layout_view_item.IsNull() ? layout_view_item.Compositor() : nullptr)
+    compositor->SetNeedsCompositingUpdate(update_type);
+}
+
+}  // namespace
+
 using namespace HTMLNames;
 
 // The maximum number of updatePlugins iterations that should be done before
@@ -771,75 +782,6 @@ void FrameView::AdjustViewSizeAndLayout() {
   }
 }
 
-void FrameView::CalculateScrollbarModesFromOverflowStyle(
-    const ComputedStyle* style,
-    ScrollbarMode& h_mode,
-    ScrollbarMode& v_mode) const {
-  h_mode = v_mode = kScrollbarAuto;
-
-  EOverflow overflow_x = style->OverflowX();
-  EOverflow overflow_y = style->OverflowY();
-
-  if (!ShouldIgnoreOverflowHidden()) {
-    if (overflow_x == EOverflow::kHidden)
-      h_mode = kScrollbarAlwaysOff;
-    if (overflow_y == EOverflow::kHidden)
-      v_mode = kScrollbarAlwaysOff;
-  }
-
-  if (overflow_x == EOverflow::kScroll)
-    h_mode = kScrollbarAlwaysOn;
-  if (overflow_y == EOverflow::kScroll)
-    v_mode = kScrollbarAlwaysOn;
-}
-
-void FrameView::CalculateScrollbarModes(
-    ScrollbarMode& h_mode,
-    ScrollbarMode& v_mode,
-    ScrollbarModesCalculationStrategy strategy) const {
-#define RETURN_SCROLLBAR_MODE(mode) \
-  {                                 \
-    h_mode = v_mode = mode;         \
-    return;                         \
-  }
-
-  // Setting scrolling="no" on an iframe element disables scrolling.
-  if (frame_->Owner() &&
-      frame_->Owner()->ScrollingMode() == kScrollbarAlwaysOff)
-    RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
-
-  // Framesets can't scroll.
-  Node* body = frame_->GetDocument()->body();
-  if (isHTMLFrameSetElement(body) && body->GetLayoutObject())
-    RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
-
-  // Scrollbars can be disabled by FrameView::setCanHaveScrollbars.
-  if (!can_have_scrollbars_ && strategy != kRulesFromWebContentOnly)
-    RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
-
-  // This will be the LayoutObject for either the body element or the html
-  // element (see Document::viewportDefiningElement).
-  LayoutObject* viewport = ViewportLayoutObject();
-  if (!viewport || !viewport->Style())
-    RETURN_SCROLLBAR_MODE(kScrollbarAuto);
-
-  if (viewport->IsSVGRoot()) {
-    // Don't allow overflow to affect <img> and css backgrounds
-    if (ToLayoutSVGRoot(viewport)->IsEmbeddedThroughSVGImage())
-      RETURN_SCROLLBAR_MODE(kScrollbarAuto);
-
-    // FIXME: evaluate if we can allow overflow for these cases too.
-    // Overflow is always hidden when stand-alone SVG documents are embedded.
-    if (ToLayoutSVGRoot(viewport)
-            ->IsEmbeddedThroughFrameContainingSVGDocument())
-      RETURN_SCROLLBAR_MODE(kScrollbarAlwaysOff);
-  }
-
-  CalculateScrollbarModesFromOverflowStyle(viewport->Style(), h_mode, v_mode);
-
-#undef RETURN_SCROLLBAR_MODE
-}
-
 void FrameView::UpdateAcceleratedCompositingSettings() {
   if (LayoutViewItem layout_view_item = this->GetLayoutViewItem())
     layout_view_item.Compositor()->UpdateAcceleratedCompositingSettings();
@@ -1097,7 +1039,7 @@ std::unique_ptr<TracedValue> FrameView::AnalyzerCounters() {
   "blink,benchmark,rail," TRACE_DISABLED_BY_DEFAULT("blink.debug.layout")
 
 void FrameView::PerformLayout(bool in_subtree_layout) {
-  ASSERT(in_subtree_layout || layout_subtree_root_list_.IsEmpty());
+  DCHECK(in_subtree_layout || layout_subtree_root_list_.IsEmpty());
 
   int contents_height_before_layout =
       GetLayoutViewItem().DocumentRect().Height();
@@ -1262,7 +1204,7 @@ void FrameView::UpdateLayout() {
 
       ScrollbarMode h_mode;
       ScrollbarMode v_mode;
-      CalculateScrollbarModes(h_mode, v_mode);
+      GetLayoutView()->CalculateScrollbarModes(h_mode, v_mode);
 
       // Now set our scrollbar state for the layout.
       ScrollbarMode current_h_mode = HorizontalScrollbarMode();
@@ -1705,6 +1647,9 @@ void FrameView::ViewportSizeChanged(bool width_changed, bool height_changed) {
       }
     }
   }
+
+  if (frame_->IsMainFrame())
+    frame_->GetPage()->GlobalRootScrollerController().DidResizeViewport();
 
   ShowOverlayScrollbars();
 
@@ -2683,11 +2628,12 @@ void FrameView::InvalidatePaintForTickmarks() {
 }
 
 void FrameView::GetTickmarks(Vector<IntRect>& tickmarks) const {
-  if (!tickmarks_.IsEmpty())
+  if (!tickmarks_.IsEmpty()) {
     tickmarks = tickmarks_;
-  else
-    tickmarks = GetFrame().GetDocument()->Markers().RenderedRectsForMarkers(
-        DocumentMarker::kTextMatch);
+    return;
+  }
+  tickmarks =
+      GetFrame().GetDocument()->Markers().RenderedRectsForTextMatchMarkers();
 }
 
 void FrameView::SetInputEventsTransformForEmulation(
@@ -2765,8 +2711,7 @@ FrameView::ScrollingReasons FrameView::GetScrollingReasons() const {
   // Cover #3 and #4.
   ScrollbarMode horizontal_mode;
   ScrollbarMode vertical_mode;
-  CalculateScrollbarModes(horizontal_mode, vertical_mode,
-                          kRulesFromWebContentOnly);
+  GetLayoutView()->CalculateScrollbarModes(horizontal_mode, vertical_mode);
   if (horizontal_mode == kScrollbarAlwaysOff &&
       vertical_mode == kScrollbarAlwaysOff)
     return kNotScrollableExplicitlyDisabled;
@@ -2939,11 +2884,18 @@ FrameView* FrameView::ParentFrameView() const {
 }
 
 void FrameView::DidChangeGlobalRootScroller() {
-  if (!frame_->GetSettings() || !frame_->GetSettings()->GetViewportEnabled())
-    return;
+  // Being the global root scroller will affect clipping size due to browser
+  // controls behavior so we need to update compositing based on updated clip
+  // geometry.
+  LayoutViewItem view = GetLayoutViewItem();
+  SetNeedsCompositingUpdate(view, kCompositingUpdateAfterGeometryChange);
+  if (RuntimeEnabledFeatures::slimmingPaintInvalidationEnabled())
+    SetNeedsPaintPropertyUpdate();
 
-  // Avoid drawing two sets of scrollbars when visual viewport is enabled.
-  VisualViewportScrollbarsChanged();
+  // Avoid drawing two sets of scrollbars when visual viewport provides
+  // scrollbars.
+  if (frame_->GetSettings() && frame_->GetSettings()->GetViewportEnabled())
+    VisualViewportScrollbarsChanged();
 }
 
 // TODO(pdr): This logic is similar to adjustScrollbarExistence and the common
@@ -3074,10 +3026,8 @@ void FrameView::SetupPrintContext() {
   bool is_us = DefaultLanguage() == "en-US";
   int width = is_us ? kLetterPortraitPageWidth : kA4PortraitPageWidth;
   int height = is_us ? kLetterPortraitPageHeight : kA4PortraitPageHeight;
-  FloatRect page_rect(0, 0, width, height);
-  print_context_->BeginPrintMode(page_rect.Width(), page_rect.Height());
-  float dummy_height;
-  print_context_->ComputePageRects(page_rect, 0, 0, 1.0, dummy_height);
+  print_context_->BeginPrintMode(width, height);
+  print_context_->ComputePageRects(FloatSize(width, height));
   DispatchEventsForPrintingOnAllFrames();
 }
 
@@ -3272,7 +3222,7 @@ void FrameView::PaintTree() {
   TRACE_EVENT0("blink", "FrameView::paintTree");
   SCOPED_BLINK_UMA_HISTOGRAM_TIMER("Blink.Paint.UpdateTime");
 
-  ASSERT(GetFrame() == GetPage()->MainFrame() ||
+  DCHECK(GetFrame() == GetPage()->MainFrame() ||
          (!GetFrame().Tree().Parent()->IsLocalFrame()));
 
   LayoutViewItem view = GetLayoutViewItem();
@@ -4812,13 +4762,6 @@ IntPoint FrameView::ConvertFromContainingFrameViewBaseToScrollbar(
   // Scrollbars won't be transformed within us
   new_point.MoveBy(-scrollbar.Location());
   return new_point;
-}
-
-static void SetNeedsCompositingUpdate(LayoutViewItem layout_view_item,
-                                      CompositingUpdateType update_type) {
-  if (PaintLayerCompositor* compositor =
-          !layout_view_item.IsNull() ? layout_view_item.Compositor() : nullptr)
-    compositor->SetNeedsCompositingUpdate(update_type);
 }
 
 void FrameView::SetParentVisible(bool visible) {

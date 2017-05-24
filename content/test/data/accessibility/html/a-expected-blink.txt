@@ -1,5 +1,5 @@
 rootWebArea
-++group
+++genericContainer
 ++++link name='normal link'
 ++++++staticText name='normal link'
 ++++++++inlineTextBox name='normal link'

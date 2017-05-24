@@ -26,7 +26,7 @@ if (is_linux && !is_chromeos && current_cpu != "arm" && use_x11) {
 
     deps = [
       "//base",
-      "//build/config/sanitizers:deps",
+      "//build/config:exe_and_shlib_deps",
       "//ui/gl",
       "//ui/gl/init",
     ]

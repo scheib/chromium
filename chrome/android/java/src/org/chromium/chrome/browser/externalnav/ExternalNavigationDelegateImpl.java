@@ -557,6 +557,8 @@ public class ExternalNavigationDelegateImpl implements ExternalNavigationDelegat
 
     @Override
     public boolean isSerpReferrer(Tab tab) {
+        // TODO (thildebr): Investigate whether or not we can use getLastCommittedUrl() instead of
+        // the NavigationController.
         if (tab == null || tab.getWebContents() == null) return false;
 
         NavigationController nController = tab.getWebContents().getNavigationController();
@@ -594,6 +596,12 @@ public class ExternalNavigationDelegateImpl implements ExternalNavigationDelegat
                     tab.getWebContents());
         }
         return false;
+    }
+
+    @Override
+    public String getPreviousUrl() {
+        if (mTab == null || mTab.getWebContents() == null) return null;
+        return mTab.getWebContents().getLastCommittedUrl();
     }
 
     /**

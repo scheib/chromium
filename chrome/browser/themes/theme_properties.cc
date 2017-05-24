@@ -67,6 +67,7 @@ constexpr SkColor kDefaultColorNTPBackground = SK_ColorWHITE;
 constexpr SkColor kDefaultColorNTPText = SK_ColorBLACK;
 const SkColor kDefaultColorNTPLink = SkColorSetRGB(0x06, 0x37, 0x74);
 #endif  // OS_WIN
+const SkColor kDefaultColorNTPBackgroundOtr = SkColorSetRGB(0x30, 0x30, 0x30);
 
 const SkColor kDefaultColorNTPHeader = SkColorSetRGB(0x96, 0x96, 0x96);
 constexpr SkColor kDefaultColorButtonBackground = SK_ColorTRANSPARENT;
@@ -235,7 +236,7 @@ SkColor ThemeProperties::GetDefaultColor(int id, bool otr) {
       return otr ? kDefaultColorBackgroundTabTextIncognito
                  : kDefaultColorBackgroundTabText;
     case COLOR_NTP_BACKGROUND:
-      return kDefaultColorNTPBackground;
+      return otr ? kDefaultColorNTPBackgroundOtr : kDefaultColorNTPBackground;
     case COLOR_NTP_TEXT:
       return kDefaultColorNTPText;
     case COLOR_NTP_LINK:

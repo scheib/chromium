@@ -211,7 +211,7 @@ bool ClipPathClipper::DrawClipAsMask(const FloatRect& target_bounding_box,
                                                    content_transform);
       mask_context.GetPaintController().CreateAndAppend<DrawingDisplayItem>(
           layout_object_, DisplayItem::kSVGClip,
-          resource_clipper_->CreatePaintRecord(), target_bounding_box);
+          resource_clipper_->CreatePaintRecord());
     }
   }
 

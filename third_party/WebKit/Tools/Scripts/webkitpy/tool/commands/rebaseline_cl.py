@@ -63,18 +63,12 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
         _log.debug('Issue number for current branch: %s', issue_number)
 
         builds = self.git_cl().latest_try_jobs(self._try_bots())
-
-        builders_with_pending_builds = self.builders_with_pending_builds(builds)
-        if builders_with_pending_builds:
-            _log.info('There are existing pending builds for:')
-            for builder in sorted(builders_with_pending_builds):
-                _log.info('  %s', builder)
+        self._log_pending_builds(builds)
         builders_with_no_results = self.builders_with_no_results(builds)
 
-        if options.trigger_jobs and builders_with_no_results:
-            self.trigger_builds(builders_with_no_results)
-            _log.info('Please re-run webkit-patch rebaseline-cl once all pending try jobs have finished.')
-            return 1
+        if options.trigger_jobs:
+            if self.trigger_builds(builders_with_no_results):
+                return 1
 
         if builders_with_no_results and not options.fill_missing:
             _log.error('The following builders have no results:')
@@ -87,17 +81,12 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
         if not options.fill_missing and len(builds_to_results) < len(builds):
             return 1
 
-        test_baseline_set = TestBaselineSet(tool)
         if args:
-            for test in args:
-                for build in builds:
-                    if not builds_to_results.get(build):
-                        continue
-                    test_baseline_set.add(test, build)
+            test_baseline_set = self._make_test_baseline_set_for_tests(
+                args, builds_to_results)
         else:
             test_baseline_set = self._make_test_baseline_set(
-                builds_to_results,
-                only_changed_tests=options.only_changed_tests)
+                builds_to_results, options.only_changed_tests)
 
         if options.fill_missing:
             self.fill_in_missing_results(test_baseline_set)
@@ -120,15 +109,29 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
         return GitCL(self._tool)
 
     def trigger_builds(self, builders):
+        """Triggers try jobs if necessary; returns whether builds were triggered."""
+        if builders is None:
+            return False
         _log.info('Triggering try jobs for:')
         for builder in sorted(builders):
             _log.info('  %s', builder)
         self.git_cl().trigger_try_jobs(builders)
+        _log.info('Once all pending try jobs have finished, please re-run\n'
+                  'webkit-patch rebaseline-cl to fetch new baselines.')
+        return True
 
     def builders_with_no_results(self, builds):
         """Returns the set of builders that don't have finished results."""
         builders_with_no_builds = set(self._try_bots()) - {b.builder_name for b in builds}
         return builders_with_no_builds | self.builders_with_pending_builds(builds)
+
+    def _log_pending_builds(self, builds):
+        builders = self.builders_with_pending_builds(builds)
+        if not builders:
+            return
+        _log.info('There are existing pending builds for:')
+        for builder in sorted(builders):
+            _log.info('  %s', builder)
 
     def builders_with_pending_builds(self, builds):
         """Returns the set of builders that have pending builds."""
@@ -166,6 +169,13 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
                 continue
             results[build] = layout_test_results
         return results
+
+    def _make_test_baseline_set_for_tests(self, tests, builds_to_results):
+        test_baseline_set = TestBaselineSet(self._tool)
+        for test in tests:
+            for build in builds_to_results:
+                test_baseline_set.add(test, build)
+        return test_baseline_set
 
     def _make_test_baseline_set(self, builds_to_results, only_changed_tests):
         """Returns a dict which lists the set of baselines to fetch.

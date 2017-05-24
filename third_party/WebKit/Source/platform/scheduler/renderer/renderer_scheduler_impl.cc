@@ -1168,8 +1168,10 @@ void RendererSchedulerImpl::UpdatePolicyLocked(UpdateType update_type) {
 
   // TODO(altimin): Consider adding default timer tq to background time
   // budget pool.
-  if (GetMainThreadOnly().renderer_backgrounded)
+  if (GetMainThreadOnly().renderer_backgrounded &&
+      RuntimeEnabledFeatures::timerThrottlingForBackgroundTabsEnabled()) {
     new_policy.timer_queue_policy.time_domain_type = TimeDomainType::THROTTLED;
+  }
 
   // Tracing is done before the early out check, because it's quite possible we
   // will otherwise miss this information in traces.

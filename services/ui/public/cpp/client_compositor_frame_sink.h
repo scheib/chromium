@@ -38,6 +38,7 @@ class ClientCompositorFrameSink
   void DetachFromClient() override;
   void SetLocalSurfaceId(const cc::LocalSurfaceId& local_surface_id) override;
   void SubmitCompositorFrame(cc::CompositorFrame frame) override;
+  void DidNotProduceFrame(const cc::BeginFrameAck& ack) override;
 
  private:
   ClientCompositorFrameSink(
@@ -55,7 +56,6 @@ class ClientCompositorFrameSink
 
   // cc::ExternalBeginFrameSourceClient implementation.
   void OnNeedsBeginFrames(bool needs_begin_frames) override;
-  void OnDidFinishFrame(const cc::BeginFrameAck& ack) override;
 
   gfx::Size last_submitted_frame_size_;
   cc::LocalSurfaceId local_surface_id_;

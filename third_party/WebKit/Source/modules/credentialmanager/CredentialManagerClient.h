@@ -9,6 +9,7 @@
 #include "modules/ModulesExport.h"
 #include "platform/Supplementable.h"
 #include "public/platform/WebCredentialManagerClient.h"
+#include "public/platform/WebCredentialMediationRequirement.h"
 #include "public/platform/WebVector.h"
 
 namespace blink {
@@ -45,7 +46,7 @@ class MODULES_EXPORT CredentialManagerClient final
       WebCredentialManagerClient::NotificationCallbacks*);
   virtual void DispatchRequireUserMediation(
       WebCredentialManagerClient::NotificationCallbacks*);
-  virtual void DispatchGet(bool zero_click_only,
+  virtual void DispatchGet(WebCredentialMediationRequirement,
                            bool include_passwords,
                            const WebVector<WebURL>& federations,
                            WebCredentialManagerClient::RequestCallbacks*);

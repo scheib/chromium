@@ -18,6 +18,7 @@
 #include "ui/aura/mus/window_port_mus.h"
 #include "ui/aura/mus/window_tree_client.h"
 #include "ui/aura/window.h"
+#include "ui/aura/window_port_for_shutdown.h"
 #include "ui/events/event_target_iterator.h"
 #include "ui/events/platform/platform_event_source.h"
 
@@ -83,6 +84,9 @@ std::unique_ptr<WindowPort> Env::CreateWindowPort(Window* window) {
   if (mode_ == Mode::LOCAL)
     return base::MakeUnique<WindowPortLocal>(window);
 
+  if (in_mus_shutdown_)
+    return base::MakeUnique<WindowPortForShutdown>();
+
   DCHECK(window_tree_client_);
   WindowMusType window_mus_type;
   switch (window->GetProperty(aura::client::kEmbedType)) {
@@ -122,7 +126,8 @@ const gfx::Point& Env::last_mouse_location() const {
   }
 
   // Some tests may not install a WindowTreeClient, and we allow multiple
-  // WindowTreeClients for the case of multiple connections.
+  // WindowTreeClients for the case of multiple connections, and this may be
+  // called during shutdown, when there is no WindowTreeClient.
   if (window_tree_client_)
     last_mouse_location_ = window_tree_client_->GetCursorScreenPoint();
   return last_mouse_location_;
@@ -195,6 +200,16 @@ void Env::NotifyHostInitialized(WindowTreeHost* host) {
 void Env::NotifyHostActivated(WindowTreeHost* host) {
   for (EnvObserver& observer : observers_)
     observer.OnHostActivated(host);
+}
+
+void Env::WindowTreeClientDestroyed(aura::WindowTreeClient* client) {
+  DCHECK_EQ(Mode::MUS, mode_);
+
+  if (client != window_tree_client_)
+    return;
+
+  in_mus_shutdown_ = true;
+  window_tree_client_ = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

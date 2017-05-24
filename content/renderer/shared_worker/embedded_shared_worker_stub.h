@@ -53,7 +53,8 @@ class EmbeddedSharedWorkerStub : public IPC::Listener,
       blink::WebContentSecurityPolicyType security_policy_type,
       blink::WebAddressSpace creation_address_space,
       bool pause_on_start,
-      int route_id);
+      int route_id,
+      bool data_saver_enabled);
 
   // IPC::Listener implementation.
   bool OnMessageReceived(const IPC::Message& message) override;

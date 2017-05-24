@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "android_webview/browser/jni_dependency_factory.h"
 #include "android_webview/common/aw_content_client.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
@@ -31,8 +30,7 @@ class AwContentRendererClient;
 // this class runs per process, (browser and renderer) so when making changes
 // make sure to properly conditionalize for browser vs. renderer wherever
 // needed.
-class AwMainDelegate : public content::ContentMainDelegate,
-                       public JniDependencyFactory {
+class AwMainDelegate : public content::ContentMainDelegate {
  public:
   AwMainDelegate();
   ~AwMainDelegate() override;
@@ -48,12 +46,6 @@ class AwMainDelegate : public content::ContentMainDelegate,
   content::ContentBrowserClient* CreateContentBrowserClient() override;
   content::ContentGpuClient* CreateContentGpuClient() override;
   content::ContentRendererClient* CreateContentRendererClient() override;
-
-  // JniDependencyFactory implementation.
-  scoped_refptr<AwQuotaManagerBridge> CreateAwQuotaManagerBridge(
-      AwBrowserContext* browser_context) override;
-  content::WebContentsViewDelegate* CreateViewDelegate(
-      content::WebContents* web_contents) override;
 
   std::unique_ptr<content::BrowserMainRunner> browser_runner_;
   AwContentClient content_client_;

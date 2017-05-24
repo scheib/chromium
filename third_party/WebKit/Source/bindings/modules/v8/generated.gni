@@ -46,6 +46,8 @@ bindings_modules_generated_union_type_files = [
   "$bindings_modules_v8_output_dir/LongOrConstrainLongRange.h",
   "$bindings_modules_v8_output_dir/OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContext.cpp",
   "$bindings_modules_v8_output_dir/OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContext.h",
+  "$bindings_modules_v8_output_dir/PasswordCredentialDataOrHTMLFormElement.cpp",
+  "$bindings_modules_v8_output_dir/PasswordCredentialDataOrHTMLFormElement.h",
   "$bindings_modules_v8_output_dir/Point2DSequenceOrConstrainPoint2DParameters.cpp",
   "$bindings_modules_v8_output_dir/Point2DSequenceOrConstrainPoint2DParameters.h",
   "$bindings_modules_v8_output_dir/RTCIceCandidateInitOrRTCIceCandidate.cpp",

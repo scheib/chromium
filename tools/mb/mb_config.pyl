@@ -240,7 +240,6 @@
       'Android Release (Nexus 6)': 'android_release_trybot',
       'Android Release (Nexus 6P)': 'android_release_trybot_arm64',
       'Android Release (Nexus 9)': 'android_release_trybot_arm64',
-      'Android Release (Pixel C)': 'android_release_trybot_arm64',
       'Android Release (NVIDIA Shield TV)': 'android_release_trybot_arm64',
       'GPU Linux Builder (dbg)': 'gpu_fyi_tests_debug_trybot',
       'GPU Linux Builder': 'gpu_fyi_tests_release_trybot',

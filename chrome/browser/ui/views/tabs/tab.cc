@@ -100,12 +100,14 @@ const char kTabCloseButtonName[] = "TabCloseButton";
 ////////////////////////////////////////////////////////////////////////////////
 // Drawing and utility functions
 
-// Returns the width of the tab endcap at scale 1.  More precisely, this is the
+// Returns the width of the tab endcap in DIP.  More precisely, this is the
 // width of the curve making up either the outer or inner edge of the stroke;
 // since these two curves are horizontally offset by 1 px (regardless of scale),
 // the total width of the endcap from tab outer edge to the inside end of the
 // stroke inner edge is (GetUnscaledEndcapWidth() * scale) + 1.
-float GetUnscaledEndcapWidth() {
+//
+// The value returned here must be at least Tab::kMinimumEndcapWidth.
+float GetTabEndcapWidth() {
   return GetLayoutInsets(TAB).left() - 0.5f;
 }
 
@@ -134,24 +136,23 @@ bool ShouldThemifyFaviconForUrl(const GURL& url) {
 
 // Returns a path corresponding to the tab's content region inside the outer
 // stroke.
-gfx::Path GetFillPath(float scale, const gfx::Size& size) {
+gfx::Path GetFillPath(float scale, const gfx::Size& size, float endcap_width) {
   const float right = size.width() * scale;
   // The bottom of the tab needs to be pixel-aligned or else when we call
   // ClipPath with anti-aliasing enabled it can cause artifacts.
   const float bottom = std::ceil(size.height() * scale);
-  const float unscaled_endcap_width = GetUnscaledEndcapWidth();
 
   gfx::Path fill;
   fill.moveTo(right - 1, bottom);
   fill.rCubicTo(-0.75 * scale, 0, -1.625 * scale, -0.5 * scale, -2 * scale,
                 -1.5 * scale);
-  fill.lineTo(right - 1 - (unscaled_endcap_width - 2) * scale, 2.5 * scale);
+  fill.lineTo(right - 1 - (endcap_width - 2) * scale, 2.5 * scale);
   // Prevent overdraw in the center near minimum width (only happens if
   // scale < 2).  We could instead avoid this by increasing the tab inset
   // values, but that would shift all the content inward as well, unless we
   // then overlapped the content on the endcaps, by which point we'd have a
   // huge mess.
-  const float scaled_endcap_width = 1 + unscaled_endcap_width * scale;
+  const float scaled_endcap_width = 1 + endcap_width * scale;
   const float overlap = scaled_endcap_width * 2 - right;
   const float offset = (overlap > 0) ? (overlap / 2) : 0;
   fill.rCubicTo(-0.375 * scale, -1 * scale, -1.25 * scale + offset,
@@ -167,38 +168,39 @@ gfx::Path GetFillPath(float scale, const gfx::Size& size) {
   return fill;
 }
 
-// Returns a path corresponding to the tab's outer border for a given tab |size|
-// and |scale|.  If |unscale_at_end| is true, this path will be normalized to a
-// 1x scale by scaling by 1/scale before returning.  If |extend_to_top| is true,
-// the path is extended vertically to the top of the tab bounds.  The caller
-// uses this for Fitts' Law purposes in maximized/fullscreen mode.
+// Returns a path corresponding to the tab's outer border for a given tab
+// |size|, |scale|, and |endcap_width|.  If |unscale_at_end| is true, this path
+// will be normalized to a 1x scale by scaling by 1/scale before returning.  If
+// |extend_to_top| is true, the path is extended vertically to the top of the
+// tab bounds.  The caller uses this for Fitts' Law purposes in
+// maximized/fullscreen mode.
 gfx::Path GetBorderPath(float scale,
                         bool unscale_at_end,
                         bool extend_to_top,
+                        float endcap_width,
                         const gfx::Size& size) {
   const float top = scale - 1;
   const float right = size.width() * scale;
   const float bottom = size.height() * scale;
-  const float unscaled_endcap_width = GetUnscaledEndcapWidth();
 
   gfx::Path path;
   path.moveTo(0, bottom);
   path.rLineTo(0, -1);
   path.rCubicTo(0.75 * scale, 0, 1.625 * scale, -0.5 * scale, 2 * scale,
                 -1.5 * scale);
-  path.lineTo((unscaled_endcap_width - 2) * scale, top + 1.5 * scale);
+  path.lineTo((endcap_width - 2) * scale, top + 1.5 * scale);
   if (extend_to_top) {
     // Create the vertical extension by extending the side diagonals until
     // they reach the top of the bounds.
     const float dy = 2.5 * scale - 1;
     const float dx = Tab::GetInverseDiagonalSlope() * dy;
     path.rLineTo(dx, -dy);
-    path.lineTo(right - (unscaled_endcap_width - 2) * scale - dx, 0);
+    path.lineTo(right - (endcap_width - 2) * scale - dx, 0);
     path.rLineTo(dx, dy);
   } else {
     path.rCubicTo(0.375 * scale, -scale, 1.25 * scale, -1.5 * scale, 2 * scale,
                   -1.5 * scale);
-    path.lineTo(right - unscaled_endcap_width * scale, top);
+    path.lineTo(right - endcap_width * scale, top);
     path.rCubicTo(0.75 * scale, 0, 1.625 * scale, 0.5 * scale, 2 * scale,
                   1.5 * scale);
   }
@@ -626,8 +628,9 @@ gfx::Size Tab::GetMinimumActiveSize() {
 
 // static
 gfx::Size Tab::GetStandardSize() {
-  const int kNetTabWidth = 193;
-  return gfx::Size(kNetTabWidth + kOverlap, GetMinimumInactiveSize().height());
+  constexpr int kNetTabWidth = 193;
+  const int overlap = GetOverlap();
+  return gfx::Size(kNetTabWidth + overlap, GetMinimumInactiveSize().height());
 }
 
 // static
@@ -644,17 +647,23 @@ int Tab::GetPinnedWidth() {
 // static
 float Tab::GetInverseDiagonalSlope() {
   // This is computed from the border path as follows:
-  // * The unscaled endcap width is enough for the whole stroke outer curve,
-  //   i.e. the side diagonal plus the curves on both its ends.
-  // * The bottom and top curve are each (2 * scale) px wide, so the diagonal is
-  //   (unscaled endcap width - 2 - 2) * scale px wide.
+  // * The endcap width is enough for the whole stroke outer curve, i.e. the
+  //   side diagonal plus the curves on both its ends.
+  // * The bottom and top curve together are kMinimumEndcapWidth DIP wide, so
+  //   the diagonal is (endcap_width - kMinimumEndcapWidth) DIP wide.
   // * The bottom and top curve are each 1.5 px high.  Additionally, there is an
   //   extra 1 px below the bottom curve and (scale - 1) px above the top curve,
   //   so the diagonal is ((height - 1.5 - 1.5) * scale - 1 - (scale - 1)) px
-  //   high.
-  // Simplifying these gives the expression below.
-  return (GetUnscaledEndcapWidth() - 4) /
-      (GetMinimumInactiveSize().height() - 4);
+  //   high.  Simplifying this gives (height - 4) * scale px, or (height - 4)
+  //   DIP.
+  return (GetTabEndcapWidth() - kMinimumEndcapWidth) /
+         (Tab::GetMinimumInactiveSize().height() - 4);
+}
+
+// static
+int Tab::GetOverlap() {
+  // We want to overlap the endcap portions entirely.
+  return gfx::ToCeiledInt(GetTabEndcapWidth());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -716,9 +725,10 @@ bool Tab::GetHitTestMask(gfx::Path* mask) const {
   // shadow of the tab, such that the user can click anywhere along the top
   // edge of the screen to select a tab. Ditto for immersive fullscreen.
   const views::Widget* widget = GetWidget();
-  *mask = GetBorderPath(
-      GetWidget()->GetCompositor()->device_scale_factor(), true,
-      widget && (widget->IsMaximized() || widget->IsFullscreen()), size());
+  *mask =
+      GetBorderPath(GetWidget()->GetCompositor()->device_scale_factor(), true,
+                    widget && (widget->IsMaximized() || widget->IsFullscreen()),
+                    GetTabEndcapWidth(), size());
   return true;
 }
 
@@ -741,7 +751,9 @@ void Tab::OnPaint(gfx::Canvas* canvas) {
 
   gfx::Path clip;
   if (!controller_->ShouldPaintTab(
-          this, base::Bind(&GetBorderPath, canvas->image_scale(), true, false),
+          this,
+          base::Bind(&GetBorderPath, canvas->image_scale(), true, false,
+                     GetTabEndcapWidth()),
           &clip))
     return;
 
@@ -807,24 +819,25 @@ void Tab::Layout() {
   alert_indicator_button_->SetVisible(showing_alert_indicator_);
 
   // Size the title to fill the remaining width and use all available height.
-  const bool show_title = ShouldRenderAsNormalTab();
+  bool show_title = ShouldRenderAsNormalTab();
   if (show_title) {
     constexpr int kTitleSpacing = 6;
-    int title_left =
+    const int title_left =
         showing_icon_ ? (favicon_bounds_.right() + kTitleSpacing) : start;
-    int title_width = lb.right() - title_left;
+    int title_right = lb.right();
     if (showing_alert_indicator_) {
-      title_width =
-          alert_indicator_button_->x() - kAfterTitleSpacing - title_left;
+      title_right = alert_indicator_button_->x() - kAfterTitleSpacing;
     } else if (showing_close_button_) {
       // Allow the title to overlay the close button's empty border padding.
-      title_width = close_button_->x() + close_button_->GetInsets().left() -
-          kAfterTitleSpacing - title_left;
+      title_right = close_button_->x() + close_button_->GetInsets().left() -
+                    kAfterTitleSpacing;
     }
+    const int title_width = std::max(title_right - title_left, 0);
     // The Label will automatically center the font's cap height within the
     // provided vertical space.
-    title_->SetBoundsRect(
-        gfx::Rect(title_left, lb.y(), std::max(title_width, 0), lb.height()));
+    const gfx::Rect title_bounds(title_left, lb.y(), title_width, lb.height());
+    title_->SetBoundsRect(title_bounds);
+    show_title = title_width > 0;
   }
   title_->SetVisible(show_title);
 }
@@ -952,6 +965,16 @@ void Tab::OnMouseExited(const ui::MouseEvent& event) {
   hover_controller_.Hide();
 }
 
+void Tab::GetAccessibleNodeData(ui::AXNodeData* node_data) {
+  node_data->role = ui::AX_ROLE_TAB;
+  node_data->SetName(controller_->GetAccessibleTabName(this));
+  node_data->AddState(ui::AX_STATE_MULTISELECTABLE);
+  node_data->AddState(ui::AX_STATE_SELECTABLE);
+  controller_->UpdateTabAccessibilityState(this, node_data);
+  if (IsSelected())
+    node_data->AddState(ui::AX_STATE_SELECTED);
+}
+
 void Tab::OnGestureEvent(ui::GestureEvent* event) {
   switch (event->type()) {
     case ui::ET_GESTURE_TAP_DOWN: {
@@ -986,16 +1009,6 @@ void Tab::OnGestureEvent(ui::GestureEvent* event) {
       break;
   }
   event->SetHandled();
-}
-
-void Tab::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ui::AX_ROLE_TAB;
-  node_data->SetName(controller_->GetAccessibleTabName(this));
-  node_data->AddState(ui::AX_STATE_MULTISELECTABLE);
-  node_data->AddState(ui::AX_STATE_SELECTABLE);
-  controller_->UpdateTabAccessibilityState(this, node_data);
-  if (IsSelected())
-    node_data->AddState(ui::AX_STATE_SELECTED);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1089,6 +1102,7 @@ void Tab::PaintTabBackground(gfx::Canvas* canvas,
   // |y_offset| is only set when |fill_id| is being used.
   DCHECK(!y_offset || fill_id);
 
+  const float endcap_width = GetTabEndcapWidth();
   const ui::ThemeProvider* tp = GetThemeProvider();
   const SkColor active_color = tp->GetColor(ThemeProperties::COLOR_TOOLBAR);
   const SkColor inactive_color =
@@ -1104,9 +1118,10 @@ void Tab::PaintTabBackground(gfx::Canvas* canvas,
   // effects change on every invalidation and we would need to invalidate the
   // cache based on the hover states.
   if (fill_id || paint_hover_effect) {
-    gfx::Path fill_path = GetFillPath(canvas->image_scale(), size());
-    gfx::Path stroke_path =
-        GetBorderPath(canvas->image_scale(), false, false, size());
+    gfx::Path fill_path =
+        GetFillPath(canvas->image_scale(), size(), endcap_width);
+    gfx::Path stroke_path = GetBorderPath(canvas->image_scale(), false, false,
+                                          endcap_width, size());
     PaintTabBackgroundFill(canvas, fill_path, active, paint_hover_effect,
                            active_color, inactive_color, fill_id, y_offset);
     gfx::ScopedCanvas scoped_canvas(clip ? canvas : nullptr);
@@ -1121,9 +1136,10 @@ void Tab::PaintTabBackground(gfx::Canvas* canvas,
       active ? background_active_cache_ : background_inactive_cache_;
   if (!cache.CacheKeyMatches(canvas->image_scale(), size(), active_color,
                              inactive_color, stroke_color)) {
-    gfx::Path fill_path = GetFillPath(canvas->image_scale(), size());
-    gfx::Path stroke_path =
-        GetBorderPath(canvas->image_scale(), false, false, size());
+    gfx::Path fill_path =
+        GetFillPath(canvas->image_scale(), size(), endcap_width);
+    gfx::Path stroke_path = GetBorderPath(canvas->image_scale(), false, false,
+                                          endcap_width, size());
     cc::PaintRecorder recorder;
 
     {

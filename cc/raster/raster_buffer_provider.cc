@@ -12,6 +12,7 @@
 #include "cc/resources/platform_color.h"
 #include "cc/resources/resource_format_utils.h"
 #include "third_party/skia/include/core/SkCanvas.h"
+#include "third_party/skia/include/core/SkMath.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "ui/gfx/geometry/axis_transform2d.h"
 
@@ -22,6 +23,58 @@ RasterBufferProvider::RasterBufferProvider() {}
 RasterBufferProvider::~RasterBufferProvider() {}
 
 namespace {
+
+// TODO(enne): http://crbug.com/721744.  Add CHECKs for conditions that would
+// cause Skia to not create a surface here to diagnose what's going wrong.  This
+// replicates SkSurfaceValidateRasterInfo and needs to be kept in sync with
+// the corresponding Skia code.  This code should be removed as quickly as
+// possible once a diagnosis is made.
+void CheckValidRasterInfo(const SkImageInfo& info,
+                          void* pixels,
+                          size_t row_bytes) {
+  CHECK(pixels);
+  CHECK(!info.isEmpty());
+
+  static const size_t kMaxTotalSize = SK_MaxS32;
+
+  int shift = 0;
+  switch (info.colorType()) {
+    case kAlpha_8_SkColorType:
+      CHECK(!info.colorSpace());
+      shift = 0;
+      break;
+    case kRGB_565_SkColorType:
+      CHECK(!info.colorSpace());
+      shift = 1;
+      break;
+    case kN32_SkColorType:
+      if (info.colorSpace())
+        CHECK(info.colorSpace()->gammaCloseToSRGB());
+      shift = 2;
+      break;
+    case kRGBA_F16_SkColorType:
+      if (info.colorSpace())
+        CHECK(info.colorSpace()->gammaIsLinear());
+      shift = 3;
+      break;
+    default:
+      CHECK(false) << "Unknown color type";
+      break;
+  }
+
+  static constexpr size_t kIgnoreRowBytesValue = static_cast<size_t>(~0);
+  if (kIgnoreRowBytesValue == row_bytes)
+    return;
+
+  uint64_t min_row_bytes = static_cast<uint64_t>(info.width()) << shift;
+  CHECK_LE(min_row_bytes, row_bytes);
+
+  size_t aligned_row_bytes = row_bytes >> shift << shift;
+  CHECK_EQ(aligned_row_bytes, row_bytes);
+
+  uint64_t size = sk_64_mul(info.height(), row_bytes);
+  CHECK_LE(size, kMaxTotalSize);
+}
 
 bool IsSupportedPlaybackToMemoryFormat(ResourceFormat format) {
   switch (format) {
@@ -80,8 +133,10 @@ void RasterBufferProvider::PlaybackToMemory(
     case RGBA_8888:
     case BGRA_8888:
     case RGBA_F16: {
+      CheckValidRasterInfo(info, memory, stride);
       sk_sp<SkSurface> surface =
           SkSurface::MakeRasterDirect(info, memory, stride, &surface_props);
+      CHECK(surface);
       raster_source->PlaybackToCanvas(surface->getCanvas(), target_color_space,
                                       canvas_bitmap_rect, canvas_playback_rect,
                                       transform, playback_settings);

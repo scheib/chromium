@@ -11,21 +11,9 @@
 
 using content::BrowserThread;
 
-ChromeDeviceClient::ChromeDeviceClient() {}
+ChromeDeviceClient::ChromeDeviceClient() = default;
 
-ChromeDeviceClient::~ChromeDeviceClient() {
-#if DCHECK_IS_ON()
-  DCHECK(did_shutdown_);
-#endif
-}
-
-void ChromeDeviceClient::Shutdown() {
-  if (usb_service_)
-    usb_service_->Shutdown();
-#if DCHECK_IS_ON()
-  did_shutdown_ = true;
-#endif
-}
+ChromeDeviceClient::~ChromeDeviceClient() = default;
 
 device::UsbService* ChromeDeviceClient::GetUsbService() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);

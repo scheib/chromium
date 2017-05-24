@@ -160,7 +160,9 @@ int WebAXObject::GenerateAXID() const {
 bool WebAXObject::UpdateLayoutAndCheckValidity() {
   if (!IsDetached()) {
     Document* document = private_->GetDocument();
-    if (!document || !document->View())
+    // TODO(szager): Investigate whether/why document->IsDetached() can be
+    // true when this->IsDetached() is false.
+    if (!document || !document->View() || document->IsDetached())
       return false;
     document->View()->UpdateLifecycleToCompositingCleanPlusScrolling();
   }

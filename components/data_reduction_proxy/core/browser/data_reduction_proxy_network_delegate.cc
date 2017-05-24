@@ -123,6 +123,8 @@ void RecordContentLengthHistograms(bool lofi_low_header_added,
 // otherwise it assumes that the original request would have used the same
 // protocol as |request| did. This is to account for stuff like HTTP/2 header
 // compression.
+// TODO(rajendrant): Remove this method when data use ascriber observers are
+// used to record the per-site data usage.
 int64_t EstimateOriginalHeaderBytes(const net::URLRequest& request,
                                     bool used_drp) {
   if (used_drp) {
@@ -138,6 +140,8 @@ int64_t EstimateOriginalHeaderBytes(const net::URLRequest& request,
 // true, this function estimates how many bytes would have been received if the
 // response had been received directly from the origin without any data saver
 // optimizations.
+// TODO(rajendrant): Remove this method when data use ascriber observers are
+// used to record the per-site data usage.
 int64_t EstimateOriginalReceivedBytes(const net::URLRequest& request,
                                       bool used_drp,
                                       const LoFiDecider* lofi_decider) {

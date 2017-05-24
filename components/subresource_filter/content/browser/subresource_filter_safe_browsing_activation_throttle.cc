@@ -82,11 +82,8 @@ SubresourceFilterSafeBrowsingActivationThrottle::WillRedirectRequest() {
 
 content::NavigationThrottle::ThrottleCheckResult
 SubresourceFilterSafeBrowsingActivationThrottle::WillProcessResponse() {
-  if (!database_client_)
-    return content::NavigationThrottle::PROCEED;
-
   // No need to defer the navigation if the check already happened.
-  if (check_results_.back().finished) {
+  if (!database_client_ || check_results_.back().finished) {
     NotifyResult();
     return content::NavigationThrottle::ThrottleCheckResult::PROCEED;
   }
@@ -132,14 +129,20 @@ void SubresourceFilterSafeBrowsingActivationThrottle::NotifyResult() {
 
   using subresource_filter::ContentSubresourceFilterDriverFactory;
 
-  const SubresourceFilterSafeBrowsingClient::CheckResult& result =
-      check_results_.back();
   ContentSubresourceFilterDriverFactory* driver_factory =
       ContentSubresourceFilterDriverFactory::FromWebContents(web_contents);
   DCHECK(driver_factory);
 
-  driver_factory->OnMainResourceMatchedSafeBrowsingBlacklist(
-      navigation_handle()->GetURL(), result.threat_type, result.pattern_type);
+  auto threat_type = safe_browsing::SBThreatType::SB_THREAT_TYPE_SAFE;
+  auto pattern_type = safe_browsing::ThreatPatternType::NONE;
+  if (database_client_) {
+    DCHECK(!check_results_.empty());
+    DCHECK(check_results_.back().finished);
+    threat_type = check_results_.back().threat_type;
+    pattern_type = check_results_.back().pattern_type;
+  }
+  driver_factory->OnSafeBrowsingMatchComputed(navigation_handle(), threat_type,
+                                              pattern_type);
 
   base::TimeDelta delay = defer_time_.is_null()
                               ? base::TimeDelta::FromMilliseconds(0)
@@ -150,7 +153,7 @@ void SubresourceFilterSafeBrowsingActivationThrottle::NotifyResult() {
   // speculatively checks URLs on WillStartRequest. This is only different from
   // the actual delay if there was at least one redirect.
   base::TimeDelta no_redirect_speculation_delay =
-      check_results_.size() > 1 ? result.check_time : delay;
+      check_results_.size() > 1 ? check_results_.back().check_time : delay;
   UMA_HISTOGRAM_TIMES(
       "SubresourceFilter.PageLoad.SafeBrowsingDelay.NoRedirectSpeculation",
       no_redirect_speculation_delay);

@@ -1,5 +1,5 @@
 rootWebArea
-++div name='parent node' activedescendantId=menuItemCheckBox
+++genericContainer name='parent node' activedescendantId=menuItemCheckBox
 ++++menuItem name='Inactive descendant'
 ++++menuItemCheckBox name='Active descendant'
 ++++++staticText name='Active descendant'

@@ -64,41 +64,35 @@ class ArcCustomNotificationView::EventForwarder : public ui::EventHandler {
       return;
     }
 
-    if (event->IsScrollEvent()) {
-      ForwardScrollEvent(event->AsScrollEvent());
-    } else if (event->IsMouseWheelEvent()) {
-      ForwardMouseWheelEvent(event->AsMouseWheelEvent());
-    } else if (!event->IsTouchEvent() && event->type() != ui::ET_GESTURE_TAP) {
-      // TODO(yoshiki): Use a better tigger (eg. focusing EditText on
-      // notification) than clicking (crbug.com/697379).
-      if (event->type() == ui::ET_MOUSE_PRESSED)
-        owner_->ActivateToast();
+    // TODO(yoshiki): Use a better tigger (eg. focusing EditText on
+    // notification) than clicking (crbug.com/697379).
+    if (event->type() == ui::ET_MOUSE_PRESSED)
+      owner_->ActivateToast();
 
-      // Forward the rest events to |owner_| except for:
-      // 1. Touches, because View should no longer receive touch events.
-      //    See View::OnTouchEvent.
-      // 2. Tap gestures are handled on the Android side, so ignore them.
-      //    See crbug.com/709911.
-      owner_->OnEvent(event);
+    views::Widget* widget = owner_->GetWidget();
+    if (!widget)
+      return;
+
+    // Forward the events to the containing widget, except for:
+    // 1. Touches, because View should no longer receive touch events.
+    //    See View::OnTouchEvent.
+    // 2. Tap gestures are handled on the Android side, so ignore them.
+    //    See crbug.com/709911.
+    // 3. Key events. These are already forwarded by NotificationSurface's
+    //    WindowDelegate.
+    if (event->IsLocatedEvent()) {
+      ui::LocatedEvent* located_event = event->AsLocatedEvent();
+      located_event->target()->ConvertEventToTarget(widget->GetNativeWindow(),
+                                                    located_event);
+      if (located_event->type() == ui::ET_MOUSE_MOVED) {
+        widget->OnMouseEvent(located_event->AsMouseEvent());
+      } else if (located_event->IsScrollEvent()) {
+        widget->OnScrollEvent(located_event->AsScrollEvent());
+      } else if (located_event->IsGestureEvent() &&
+                 event->type() != ui::ET_GESTURE_TAP) {
+        widget->OnGestureEvent(located_event->AsGestureEvent());
+      }
     }
-  }
-
-  void ForwardScrollEvent(ui::ScrollEvent* event) {
-    views::Widget* widget = owner_->GetWidget();
-    if (!widget)
-      return;
-
-    event->target()->ConvertEventToTarget(widget->GetNativeWindow(), event);
-    widget->OnScrollEvent(event);
-  }
-
-  void ForwardMouseWheelEvent(ui::MouseWheelEvent* event) {
-    views::Widget* widget = owner_->GetWidget();
-    if (!widget)
-      return;
-
-    event->target()->ConvertEventToTarget(widget->GetNativeWindow(), event);
-    widget->OnMouseEvent(event);
   }
 
   ArcCustomNotificationView* const owner_;
@@ -200,6 +194,11 @@ class ArcCustomNotificationView::ContentViewDelegate
 
   void UpdateControlButtonsVisibility() override {
     owner_->UpdateControlButtonsVisibility();
+  }
+
+  void OnSlideChanged() override {
+    if (owner_->slide_helper_)
+      owner_->slide_helper_->Update();
   }
 
  private:
@@ -570,20 +569,6 @@ void ArcCustomNotificationView::OnPaint(gfx::Canvas* canvas) {
                        item_->GetSnapshot().height(), contents_bounds.x(),
                        contents_bounds.y(), contents_bounds.width(),
                        contents_bounds.height(), false);
-}
-
-void ArcCustomNotificationView::OnKeyEvent(ui::KeyEvent* event) {
-  // Forward to parent CustomNotificationView to handle keyboard dismissal.
-  parent()->OnKeyEvent(event);
-}
-
-void ArcCustomNotificationView::OnGestureEvent(ui::GestureEvent* event) {
-  // Forward to parent CustomNotificationView to handle sliding out.
-  parent()->OnGestureEvent(event);
-
-  // |slide_helper_| could be null before |surface_| is attached.
-  if (slide_helper_)
-    slide_helper_->Update();
 }
 
 void ArcCustomNotificationView::OnMouseEntered(const ui::MouseEvent&) {

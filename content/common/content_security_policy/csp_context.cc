@@ -17,12 +17,12 @@ bool CSPContext::IsAllowedByCsp(CSPDirective::Name directive_name,
   if (SchemeShouldBypassCSP(url.scheme_piece()))
     return true;
 
+  bool allow = true;
   for (const auto& policy : policies_) {
-    if (!ContentSecurityPolicy::Allow(policy, directive_name, url, is_redirect,
-                                      this, source_location))
-      return false;
+    allow &= ContentSecurityPolicy::Allow(policy, directive_name, url,
+                                          is_redirect, this, source_location);
   }
-  return true;
+  return allow;
 }
 
 void CSPContext::SetSelf(const url::Origin origin) {

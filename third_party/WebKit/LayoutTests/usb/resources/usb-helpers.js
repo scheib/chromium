@@ -1,15 +1,13 @@
 'use strict';
 
 function usb_test(func, name, properties) {
-  promise_test(() => {
-    return navigator.usb.test.initialize().then(() => {
-      let testResult = func();
-      let cleanup = () => {
-        navigator.usb.test.reset();
-      };
-      testResult.then(cleanup, cleanup);
-      return testResult;
-    });
+  promise_test(async () => {
+    await navigator.usb.test.initialize()
+    try {
+      await func();
+    } finally {
+      await navigator.usb.test.reset();
+    }
   }, name, properties);
 }
 

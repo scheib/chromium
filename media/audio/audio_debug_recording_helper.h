@@ -53,7 +53,6 @@ class MEDIA_EXPORT AudioDebugRecordingHelper
   AudioDebugRecordingHelper(
       const AudioParameters& params,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
       base::OnceClosure on_destruction_closure);
   ~AudioDebugRecordingHelper() override;
 
@@ -76,8 +75,7 @@ class MEDIA_EXPORT AudioDebugRecordingHelper
 
   // Creates an AudioDebugFileWriter. Overridden by test.
   virtual std::unique_ptr<AudioDebugFileWriter> CreateAudioDebugFileWriter(
-      const AudioParameters& params,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner);
+      const AudioParameters& params);
 
   const AudioParameters params_;
   std::unique_ptr<AudioDebugFileWriter> debug_writer_;
@@ -88,9 +86,6 @@ class MEDIA_EXPORT AudioDebugRecordingHelper
 
   // The task runner for accessing |debug_writer_|.
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
-
-  // Task runner passed to |debug_writer_| to do file output operations on.
-  scoped_refptr<base::SingleThreadTaskRunner> file_task_runner_;
 
   // Runs in destructor if set.
   base::OnceClosure on_destruction_closure_;

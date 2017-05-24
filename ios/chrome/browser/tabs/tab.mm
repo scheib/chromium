@@ -123,7 +123,7 @@
 #include "ios/web/public/url_util.h"
 #include "ios/web/public/web_client.h"
 #import "ios/web/public/web_state/js/crw_js_injection_receiver.h"
-#include "ios/web/public/web_state/navigation_context.h"
+#import "ios/web/public/web_state/navigation_context.h"
 #import "ios/web/public/web_state/ui/crw_generic_content_view.h"
 #include "ios/web/public/web_state/web_state.h"
 #import "ios/web/public/web_state/web_state_observer_bridge.h"
@@ -1164,7 +1164,7 @@ void TabInfoBarObserver::OnInfoBarReplaced(infobars::InfoBar* old_infobar,
       faviconDriver->FetchFavicon(navigation->GetUrl());
   }
 
-  if (!navigation->IsErrorPage()) {
+  if (!navigation->GetError()) {
     [self addCurrentEntryToHistoryDB];
     [self countMainFrameLoad];
   }
@@ -1405,7 +1405,7 @@ void TabInfoBarObserver::OnInfoBarReplaced(infobars::InfoBar* old_infobar,
 }
 
 - (void)webState:(web::WebState*)webState
-    didStartProvisionalNavigationForURL:(const GURL&)URL {
+    didStartNavigation:(web::NavigationContext*)navigation {
   [self.dialogDelegate cancelDialogForTab:self];
   [_parentTabModel notifyTabChanged:self];
   [_openInController disable];

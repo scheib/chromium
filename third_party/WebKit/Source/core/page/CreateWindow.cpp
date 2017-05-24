@@ -130,11 +130,11 @@ static Frame* CreateWindowHelper(LocalFrame& opener_frame,
                                  const WindowFeatures& features,
                                  NavigationPolicy policy,
                                  bool& created) {
-  ASSERT(!features.dialog || request.FrameName().IsEmpty());
-  ASSERT(request.GetResourceRequest().RequestorOrigin() ||
+  DCHECK(!features.dialog || request.FrameName().IsEmpty());
+  DCHECK(request.GetResourceRequest().RequestorOrigin() ||
          opener_frame.GetDocument()->Url().IsEmpty());
-  ASSERT(request.GetResourceRequest().GetFrameType() ==
-         WebURLRequest::kFrameTypeAuxiliary);
+  DCHECK_EQ(request.GetResourceRequest().GetFrameType(),
+            WebURLRequest::kFrameTypeAuxiliary);
 
   created = false;
 
@@ -259,7 +259,7 @@ DOMWindow* CreateWindow(const String& url_string,
 void CreateWindowForRequest(const FrameLoadRequest& request,
                             LocalFrame& opener_frame,
                             NavigationPolicy policy) {
-  ASSERT(request.GetResourceRequest().RequestorOrigin() ||
+  DCHECK(request.GetResourceRequest().RequestorOrigin() ||
          (opener_frame.GetDocument() &&
           opener_frame.GetDocument()->Url().IsEmpty()));
 

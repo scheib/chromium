@@ -11,7 +11,6 @@
 #import "ios/clean/chrome/browser/ui/commands/settings_commands.h"
 #import "ios/clean/chrome/browser/ui/commands/tab_grid_commands.h"
 #import "ios/clean/chrome/browser/ui/commands/tools_menu_commands.h"
-#import "ios/clean/chrome/browser/ui/tab_collection/tab_collection_data_source.h"
 #import "ios/clean/chrome/browser/ui/tab_collection/tab_collection_tab_cell.h"
 #import "ios/clean/chrome/browser/ui/tab_grid/mdc_floating_button+cr_tab_grid.h"
 #import "ios/clean/chrome/browser/ui/tab_grid/tab_grid_collection_view_layout.h"
@@ -66,6 +65,10 @@
     [self.toolbar.trailingAnchor
         constraintEqualToAnchor:self.view.trailingAnchor]
   ]];
+
+  if (self.items.count == 0) {
+    [self addNoTabsOverlay];
+  }
 }
 
 - (void)viewWillAppear:(BOOL)animated {

@@ -31,6 +31,34 @@
 
 namespace blink {
 
+namespace {
+
+// Set the geometry to InlineFlowBox by computing the union of children.
+void PlaceInlineFlowBoxes(InlineFlowBox* flow_box) {
+  LayoutUnit logical_left = LayoutUnit::Max();
+  LayoutUnit logical_right = LayoutUnit::Min();
+  LayoutUnit logical_top = LayoutUnit::Max();
+  for (InlineBox* curr = flow_box->FirstChild(); curr;
+       curr = curr->NextOnLine()) {
+    if (curr->GetLineLayoutItem().IsLayoutInline()) {
+      InlineFlowBox* flow = ToInlineFlowBox(curr);
+      PlaceInlineFlowBoxes(flow);
+    }
+    logical_left = std::min(curr->LogicalLeft(), logical_left);
+    logical_right = std::max(curr->LogicalRight(), logical_right);
+    logical_top = std::min(curr->LogicalTop(), logical_top);
+  }
+  if (logical_left == LayoutUnit::Max())
+    return;
+  logical_left -= flow_box->MarginBorderPaddingLogicalLeft();
+  logical_right += flow_box->MarginBorderPaddingLogicalRight();
+  flow_box->SetLogicalLeft(logical_left);
+  flow_box->SetLogicalWidth(logical_right - logical_left);
+  flow_box->SetLogicalTop(logical_top);
+}
+
+}  // namespace
+
 NGInlineNode::NGInlineNode(LayoutObject* start_inline, LayoutNGBlockFlow* block)
     : NGLayoutInputNode(NGLayoutInputNodeType::kLegacyInline),
       start_inline_(start_inline),
@@ -357,6 +385,10 @@ void NGInlineNode::CopyFragmentDataToLayoutBox(
       run = run->Next();
     }
     DCHECK(!run);
+
+    // InlineTextBox and InlineBox are placed, but when ConstructLine() created
+    // InlineFlowBox, they needed to be placed as well.
+    PlaceInlineFlowBoxes(root_line_box);
 
     // Copy to RootInlineBox.
     NGLineBoxFragment line_box(constraint_space.WritingMode(),

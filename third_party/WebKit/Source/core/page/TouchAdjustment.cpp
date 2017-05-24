@@ -117,7 +117,7 @@ bool ProvidesContextMenuItems(Node* node) {
   // This function tries to match the nodes that receive special context-menu
   // items in ContextMenuController::populate(), and should be kept uptodate
   // with those.
-  ASSERT(node->GetLayoutObject() || node->IsShadowRoot());
+  DCHECK(node->GetLayoutObject() || node->IsShadowRoot());
   if (!node->GetLayoutObject())
     return false;
   node->GetDocument().UpdateStyleAndLayoutTree();

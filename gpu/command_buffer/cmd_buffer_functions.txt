@@ -372,3 +372,8 @@ GL_APICALL void         GL_APIENTRY glSetDrawRectangleCHROMIUM (GLint x, GLint y
 
 // Extension CHROMIUM_dc_overlays
 GL_APICALL void         GL_APIENTRY glSetEnableDCLayersCHROMIUM (GLboolean enabled);
+
+// Extension CHROMIUM_discardable_textures
+GL_APICALL void         GL_APIENTRY glInitializeDiscardableTextureCHROMIUM (GLuint texture_id);
+GL_APICALL void         GL_APIENTRY glUnlockDiscardableTextureCHROMIUM (GLuint texture_id);
+GL_APICALL bool         GL_APIENTRY glLockDiscardableTextureCHROMIUM (GLuint texture_id);

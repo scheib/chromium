@@ -21,7 +21,7 @@
 #import "ios/web/public/test/fakes/test_web_client.h"
 #include "ios/web/public/test/scoped_testing_web_client.h"
 #include "ios/web/public/test/web_test.h"
-#include "ios/web/web_state/navigation_context_impl.h"
+#import "ios/web/web_state/navigation_context_impl.h"
 #import "ios/web/web_state/web_state_impl.h"
 #import "ios/web/webui/crw_web_ui_page_builder.h"
 #import "ios/web/webui/url_fetcher_block_adapter.h"

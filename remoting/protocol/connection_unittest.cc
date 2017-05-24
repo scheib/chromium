@@ -532,7 +532,10 @@ TEST_P(ConnectionTest, Video) {
       host_connection_->StartVideoStream(
           base::MakeUnique<TestScreenCapturer>());
 
-  WaitNextVideoFrame();
+  // Receive 5 frames.
+  for (int i = 0; i < 5; ++i) {
+    WaitNextVideoFrame();
+  }
 }
 
 // Verifies that the VideoStream doesn't loose any video frames while the

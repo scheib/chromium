@@ -165,6 +165,10 @@ IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityActionVerbs) {
   RunHtmlTest(FILE_PATH_LITERAL("action-verbs.html"));
 }
 
+IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityActions) {
+  RunHtmlTest(FILE_PATH_LITERAL("actions.html"));
+}
+
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityAddress) {
   RunHtmlTest(FILE_PATH_LITERAL("address.html"));
 }
@@ -1297,22 +1301,13 @@ IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
   RunHtmlTest(FILE_PATH_LITERAL("modal-dialog-opened.html"));
 }
 
-// Flaky: crbug.com/593846, crbug.com/596514
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
-                       DISABLED_AccessibilityModalDialogInIframeClosed) {
+                       AccessibilityModalDialogInIframeClosed) {
   RunHtmlTest(FILE_PATH_LITERAL("modal-dialog-in-iframe-closed.html"));
 }
 
-// Flaky on Windows and Mac: crbug.com/593846
-#if defined(OS_WIN) || defined(OS_MACOSX)
-#define MAYBE_AccessibilityModalDialogInIframeOpened \
-    DISABLED_AccessibilityModalDialogInIframeOpened
-#else
-#define MAYBE_AccessibilityModalDialogInIframeOpened \
-    AccessibilityModalDialogInIframeOpened
-#endif
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
-                       MAYBE_AccessibilityModalDialogInIframeOpened) {
+                       AccessibilityModalDialogInIframeOpened) {
   RunHtmlTest(FILE_PATH_LITERAL("modal-dialog-in-iframe-opened.html"));
 }
 

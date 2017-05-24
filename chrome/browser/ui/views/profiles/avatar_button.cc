@@ -368,7 +368,6 @@ void AvatarButton::SetButtonAvatar(int avatar_idr) {
 bool AvatarButton::IsCondensible() const {
 #if defined(OS_WIN)
   return (base::win::GetVersion() >= base::win::VERSION_WIN10) &&
-         ThemeServiceFactory::GetForProfile(profile_)->UsingSystemTheme() &&
          button_style_ == AvatarButtonStyle::NATIVE;
 #else
   return false;

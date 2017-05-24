@@ -5,7 +5,6 @@
 #include "core/layout/ng/ng_unpositioned_float.h"
 
 #include "core/style/ComputedStyle.h"
-#include "core/style/ComputedStyleConstants.h"
 
 namespace blink {
 
@@ -15,6 +14,10 @@ bool NGUnpositionedFloat::IsLeft() const {
 
 bool NGUnpositionedFloat::IsRight() const {
   return node->Style().Floating() == EFloat::kRight;
+}
+
+EClear NGUnpositionedFloat::ClearType() const {
+  return node->Style().Clear();
 }
 
 }  // namespace blink

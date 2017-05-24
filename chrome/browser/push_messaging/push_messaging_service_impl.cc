@@ -19,6 +19,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
 #include "chrome/browser/gcm/instance_id/instance_id_profile_service.h"
@@ -46,6 +47,7 @@
 #include "components/rappor/public/rappor_utils.h"
 #include "components/rappor/rappor_service_impl.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/storage_partition.h"
@@ -161,6 +163,9 @@ PushMessagingServiceImpl::PushMessagingServiceImpl(Profile* profile)
       weak_factory_(this) {
   DCHECK(profile);
   HostContentSettingsMapFactory::GetForProfile(profile_)->AddObserver(this);
+
+  registrar_.Add(this, chrome::NOTIFICATION_APP_TERMINATING,
+                 content::NotificationService::AllSources());
 }
 
 PushMessagingServiceImpl::~PushMessagingServiceImpl() = default;
@@ -240,7 +245,7 @@ void PushMessagingServiceImpl::OnMessage(const std::string& app_id,
   // We won't have time to process and act on the message.
   // TODO(peter) This should be checked at the level of the GCMDriver, so that
   // the message is not consumed. See https://crbug.com/612815
-  if (g_browser_process->IsShuttingDown())
+  if (g_browser_process->IsShuttingDown() || shutdown_started_)
     return;
 
   in_flight_message_deliveries_.insert(app_id);
@@ -972,6 +977,19 @@ void PushMessagingServiceImpl::OnMenuClick() {
   chrome::ShowContentSettings(
       BackgroundModeManager::GetBrowserWindowForProfile(profile_),
       CONTENT_SETTINGS_TYPE_NOTIFICATIONS);
+#endif  // BUILDFLAG(ENABLE_BACKGROUND)
+}
+
+// content::NotificationObserver methods ---------------------------------------
+
+void PushMessagingServiceImpl::Observe(
+    int type,
+    const content::NotificationSource& source,
+    const content::NotificationDetails& details) {
+  DCHECK_EQ(chrome::NOTIFICATION_APP_TERMINATING, type);
+  shutdown_started_ = true;
+#if BUILDFLAG(ENABLE_BACKGROUND)
+  in_flight_keep_alive_.reset();
 #endif  // BUILDFLAG(ENABLE_BACKGROUND)
 }
 

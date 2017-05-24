@@ -62,15 +62,5 @@ const char kShowAutofillSignatures[] = "show-autofill-signatures";
 // Use the sandbox Online Wallet service URL (for developer testing).
 const char kWalletServiceUseSandbox[]       = "wallet-service-use-sandbox";
 
-#if defined(OS_ANDROID)
-// Disables showing suggestions in a keyboard accessory view.
-const char kDisableAccessorySuggestionView[] =
-    "disable-autofill-keyboard-accessory-view";
-
-// Enables showing suggestions in a keyboard accessory view.
-const char kEnableAccessorySuggestionView[] =
-    "enable-autofill-keyboard-accessory-view";
-#endif  // defined(OS_ANDROID)
-
 }  // namespace switches
 }  // namespace autofill

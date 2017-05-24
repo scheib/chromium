@@ -153,35 +153,39 @@ void WebLayerTreeViewImplForTesting::RegisterViewportLayers(
     const blink::WebLayer* outer_viewport_container_layer,
     const blink::WebLayer* inner_viewport_scroll_layer,
     const blink::WebLayer* outer_viewport_scroll_layer) {
-  layer_tree_host_->RegisterViewportLayers(
-      overscroll_elasticity_layer ? static_cast<const cc_blink::WebLayerImpl*>(
-                                        overscroll_elasticity_layer)
-                                        ->layer()
-                                  : nullptr,
-      static_cast<const cc_blink::WebLayerImpl*>(page_scale_layer)->layer(),
-      inner_viewport_container_layer
-          ? static_cast<const cc_blink::WebLayerImpl*>(
-                inner_viewport_container_layer)
-                ->layer()
-          : nullptr,
-      outer_viewport_container_layer
-          ? static_cast<const cc_blink::WebLayerImpl*>(
-                outer_viewport_container_layer)
-                ->layer()
-          : nullptr,
+  cc::LayerTreeHost::ViewportLayers viewport_layers;
+  if (overscroll_elasticity_layer) {
+    viewport_layers.overscroll_elasticity =
+        static_cast<const cc_blink::WebLayerImpl*>(overscroll_elasticity_layer)
+            ->layer();
+  }
+  viewport_layers.page_scale =
+      static_cast<const cc_blink::WebLayerImpl*>(page_scale_layer)->layer();
+  if (inner_viewport_container_layer) {
+    viewport_layers.inner_viewport_container =
+        static_cast<const cc_blink::WebLayerImpl*>(
+            inner_viewport_container_layer)
+            ->layer();
+  }
+  if (outer_viewport_container_layer) {
+    viewport_layers.outer_viewport_container =
+        static_cast<const cc_blink::WebLayerImpl*>(
+            outer_viewport_container_layer)
+            ->layer();
+  }
+  viewport_layers.inner_viewport_scroll =
       static_cast<const cc_blink::WebLayerImpl*>(inner_viewport_scroll_layer)
-          ->layer(),
-      outer_viewport_scroll_layer ? static_cast<const cc_blink::WebLayerImpl*>(
-                                        outer_viewport_scroll_layer)
-                                        ->layer()
-                                  : nullptr);
+          ->layer();
+  if (outer_viewport_scroll_layer) {
+    viewport_layers.outer_viewport_scroll =
+        static_cast<const cc_blink::WebLayerImpl*>(outer_viewport_scroll_layer)
+            ->layer();
+  }
+  layer_tree_host_->RegisterViewportLayers(viewport_layers);
 }
 
 void WebLayerTreeViewImplForTesting::ClearViewportLayers() {
-  layer_tree_host_->RegisterViewportLayers(
-      scoped_refptr<cc::Layer>(), scoped_refptr<cc::Layer>(),
-      scoped_refptr<cc::Layer>(), scoped_refptr<cc::Layer>(),
-      scoped_refptr<cc::Layer>(), scoped_refptr<cc::Layer>());
+  layer_tree_host_->RegisterViewportLayers(cc::LayerTreeHost::ViewportLayers());
 }
 
 void WebLayerTreeViewImplForTesting::RegisterSelection(

@@ -15,7 +15,7 @@ AXRole: AXWebArea
             AXRole: AXRadioButton
             AXRole: AXStaticText "Overnight"
                 AXRole: AXInlineTextBox "Overnight"
-    AXRole: AXDiv
+    AXRole: AXGenericContainer
         AXRole: AXStaticText "End of test"
 PASS titleUIElement != null is true
 PASS titleUIElementText.name is 'Choose a shipping method:'

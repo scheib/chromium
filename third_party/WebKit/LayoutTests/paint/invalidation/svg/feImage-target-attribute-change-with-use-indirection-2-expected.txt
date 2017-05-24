@@ -16,18 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGContainer use id='use'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGRect rect id='rect'",
-      "reason": "geometry"
-    },
-    {
-      "object": "LayoutSVGResourceFilterPrimitive feImage id='feimage'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "full"
     }

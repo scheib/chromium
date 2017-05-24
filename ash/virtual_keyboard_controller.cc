@@ -85,7 +85,6 @@ void VirtualKeyboardController::OnMaximizeModeStarted() {
   } else {
     UpdateKeyboardEnabled();
   }
-  keyboard::SetOverscrollEnabledWithAccessibilityKeyboard(true);
 }
 
 void VirtualKeyboardController::OnMaximizeModeEnded() {
@@ -94,7 +93,6 @@ void VirtualKeyboardController::OnMaximizeModeEnded() {
   } else {
     UpdateKeyboardEnabled();
   }
-  keyboard::SetOverscrollEnabledWithAccessibilityKeyboard(false);
 }
 
 void VirtualKeyboardController::OnTouchscreenDeviceConfigurationChanged() {

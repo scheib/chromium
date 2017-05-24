@@ -1,5 +1,0 @@
-This is a testharness.js-based test.
-FAIL Controlled resource loads assert_unreached: unexpected rejection: Cannot read property 'workerStart' of undefined Reached unreachable code
-FAIL Non-controlled resource loads Cannot read property 'workerStart' of undefined
-Harness: the test ran to completion.
-

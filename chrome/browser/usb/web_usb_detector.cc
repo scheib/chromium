@@ -13,9 +13,15 @@
 #include "chrome/browser/net/referrer.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/browser_tab_strip_tracker.h"
+#include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/scoped_tabbed_browser_displayer.h"
+#include "chrome/browser/ui/tab_contents/tab_contents_iterator.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/common/origin_util.h"
 #include "device/base/device_client.h"
 #include "device/base/features.h"
@@ -58,6 +64,8 @@ enum WebUsbNotificationClosed {
   WEBUSB_NOTIFICATION_CLOSED_BY_USER,
   // The user clicked on the notification.
   WEBUSB_NOTIFICATION_CLOSED_CLICKED,
+  // The user independently navigated to the landing page.
+  WEBUSB_NOTIFICATION_CLOSED_MANUAL_NAVIGATION,
   // Maximum value for the enum.
   WEBUSB_NOTIFICATION_CLOSED_MAX
 };
@@ -74,6 +82,21 @@ Browser* GetBrowser() {
   return browser_displayer.browser();
 }
 
+GURL GetActiveTabURL() {
+  Browser* browser = chrome::FindLastActiveWithProfile(
+      ProfileManager::GetLastUsedProfileAllowedByPolicy());
+  if (!browser)
+    return GURL();
+
+  TabStripModel* tab_strip_model = browser->tab_strip_model();
+  content::WebContents* web_contents =
+      tab_strip_model->GetWebContentsAt(tab_strip_model->active_index());
+  if (!web_contents)
+    return GURL();
+
+  return web_contents->GetURL();
+}
+
 void OpenURL(const GURL& url) {
   GetBrowser()->OpenURL(content::OpenURLParams(
       url, content::Referrer(), WindowOpenDisposition::NEW_FOREGROUND_TAB,
@@ -81,26 +104,63 @@ void OpenURL(const GURL& url) {
 }
 
 // Delegate for webusb notification
-class WebUsbNotificationDelegate : public message_center::NotificationDelegate {
+class WebUsbNotificationDelegate : public TabStripModelObserver,
+                                   public message_center::NotificationDelegate {
  public:
   WebUsbNotificationDelegate(const GURL& landing_page,
                              const std::string& notification_id)
-      : landing_page_(landing_page), notification_id_(notification_id) {}
+      : landing_page_(landing_page),
+        notification_id_(notification_id),
+        disposition_(WEBUSB_NOTIFICATION_CLOSED),
+        browser_tab_strip_tracker_(this, nullptr, nullptr) {
+    browser_tab_strip_tracker_.Init();
+  }
+
+  void ActiveTabChanged(content::WebContents* old_contents,
+                        content::WebContents* new_contents,
+                        int index,
+                        int reason) override {
+    if (new_contents->GetURL() == landing_page_) {
+      // If the disposition is not already set, go ahead and set it.
+      if (disposition_ == WEBUSB_NOTIFICATION_CLOSED)
+        disposition_ = WEBUSB_NOTIFICATION_CLOSED_MANUAL_NAVIGATION;
+      message_center::MessageCenter::Get()->RemoveNotification(
+          notification_id_, false /* by_user */);
+    }
+  }
 
   void Click() override {
-    clicked_ = true;
+    disposition_ = WEBUSB_NOTIFICATION_CLOSED_CLICKED;
+
+    // If the URL is already open, activate that tab.
+    content::WebContents* tab_to_activate = nullptr;
+    Browser* browser = nullptr;
+    for (TabContentsIterator it; !it.done(); it.Next()) {
+      if (it->GetVisibleURL() == landing_page_ &&
+          (!tab_to_activate ||
+           it->GetLastActiveTime() > tab_to_activate->GetLastActiveTime())) {
+        tab_to_activate = *it;
+        browser = it.browser();
+      }
+    }
+    if (tab_to_activate) {
+      TabStripModel* tab_strip_model = browser->tab_strip_model();
+      tab_strip_model->ActivateTabAt(
+          tab_strip_model->GetIndexOfWebContents(tab_to_activate), false);
+      browser->window()->Activate();
+      return;
+    }
+
+    // If the URL is not already open, open it in a new tab.
     OpenURL(landing_page_);
-    message_center::MessageCenter::Get()->RemoveNotification(
-        notification_id_, false /* by_user */);
   }
 
   void Close(bool by_user) override {
-    if (clicked_)
-      RecordNotificationClosure(WEBUSB_NOTIFICATION_CLOSED_CLICKED);
-    else if (by_user)
-      RecordNotificationClosure(WEBUSB_NOTIFICATION_CLOSED_BY_USER);
-    else
-      RecordNotificationClosure(WEBUSB_NOTIFICATION_CLOSED);
+    if (by_user)
+      disposition_ = WEBUSB_NOTIFICATION_CLOSED_BY_USER;
+    RecordNotificationClosure(disposition_);
+
+    browser_tab_strip_tracker_.StopObservingAndSendOnBrowserRemoved();
   }
 
  private:
@@ -108,7 +168,8 @@ class WebUsbNotificationDelegate : public message_center::NotificationDelegate {
 
   GURL landing_page_;
   std::string notification_id_;
-  bool clicked_ = false;
+  WebUsbNotificationClosed disposition_;
+  BrowserTabStripTracker browser_tab_strip_tracker_;
 
   DISALLOW_COPY_AND_ASSIGN(WebUsbNotificationDelegate);
 };
@@ -139,14 +200,15 @@ void WebUsbDetector::Initialize() {
 
 void WebUsbDetector::OnDeviceAdded(scoped_refptr<device::UsbDevice> device) {
   const base::string16& product_name = device->product_string();
-  if (product_name.empty()) {
+  if (product_name.empty())
     return;
-  }
 
   const GURL& landing_page = device->webusb_landing_page();
-  if (!landing_page.is_valid() || !content::IsOriginSecure(landing_page)) {
+  if (!landing_page.is_valid() || !content::IsOriginSecure(landing_page))
     return;
-  }
+
+  if (landing_page == GetActiveTabURL())
+    return;
 
   std::string notification_id = device->guid();
 
@@ -176,7 +238,6 @@ void WebUsbDetector::OnDeviceRemoved(scoped_refptr<device::UsbDevice> device) {
   std::string notification_id = device->guid();
   message_center::MessageCenter* message_center =
       message_center::MessageCenter::Get();
-  if (message_center->FindVisibleNotificationById(notification_id)) {
+  if (message_center->FindVisibleNotificationById(notification_id))
     message_center->RemoveNotification(notification_id, false /* by_user */);
-  }
 }

@@ -68,10 +68,14 @@ void CreateVirtualViewportLayers(Layer* root_layer,
 
   inner_viewport_scroll_layer->SetIsContainerForFixedPositionLayers(true);
   outer_scroll_layer->SetIsContainerForFixedPositionLayers(true);
-  host->RegisterViewportLayers(overscroll_elasticity_layer, page_scale_layer,
-                               inner_viewport_container_layer,
-                               outer_viewport_container_layer,
-                               inner_viewport_scroll_layer, outer_scroll_layer);
+  LayerTreeHost::ViewportLayers viewport_layers;
+  viewport_layers.overscroll_elasticity = overscroll_elasticity_layer;
+  viewport_layers.page_scale = page_scale_layer;
+  viewport_layers.inner_viewport_container = inner_viewport_container_layer;
+  viewport_layers.outer_viewport_container = outer_viewport_container_layer;
+  viewport_layers.inner_viewport_scroll = inner_viewport_scroll_layer;
+  viewport_layers.outer_viewport_scroll = outer_scroll_layer;
+  host->RegisterViewportLayers(viewport_layers);
 }
 
 void CreateVirtualViewportLayers(Layer* root_layer,

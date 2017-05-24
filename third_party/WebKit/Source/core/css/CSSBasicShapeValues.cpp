@@ -225,7 +225,7 @@ DEFINE_TRACE_AFTER_DISPATCH(CSSBasicShapeEllipseValue) {
 
 static String BuildPolygonString(const WindRule& wind_rule,
                                  const Vector<String>& points) {
-  ASSERT(!(points.size() % 2));
+  DCHECK(!(points.size() % 2));
 
   StringBuilder result;
   const char kEvenOddOpening[] = "polygon(evenodd, ";

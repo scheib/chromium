@@ -8,6 +8,7 @@
 #include "core/dom/DOMNodeIds.h"
 #include "core/dom/Element.h"
 #include "core/dom/ExceptionCode.h"
+#include "core/layout/LayoutObject.h"
 #include "platform/graphics/CompositorElementId.h"
 #include "platform/wtf/PtrUtil.h"
 
@@ -103,7 +104,8 @@ Element* ScrollState::CurrentNativeScrollingElement() {
 void ScrollState::SetCurrentNativeScrollingElement(Element* element) {
   element_ = element;
   data_->set_current_native_scrolling_element(CompositorElementIdFromDOMNodeId(
-      DOMNodeIds::IdForNode(element), CompositorElementIdNamespace::kScroll));
+      DOMNodeIds::IdForNode(element),
+      CompositorElementIdNamespace::kScrollState));
 }
 
 }  // namespace blink

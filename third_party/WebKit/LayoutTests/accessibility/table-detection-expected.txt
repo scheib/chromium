@@ -17,7 +17,7 @@ asdf	asdf
 This should not be a table because its cells do not have borders.
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 asdf	asdf
 
@@ -53,14 +53,14 @@ asdf	asdf
 This should not be a table because cells have different but no spacing.
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 asdf	asdf
 
 This should not be a table because cells have the same colors even though there is spacing.
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 asdf	asdf
 
@@ -74,14 +74,14 @@ asdf	asdf
 This should not be a table because it only has one valid cell (need more than one).
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 Contributions
 
 This should not be a table because it does not have enough cell borders or background colors
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 Politics
 Decision '08
@@ -109,7 +109,7 @@ asdf	asdf
 This should not be a table because cells have different borders.
 
 
-AXRole: AXGroup
+AXRole: AXGenericContainer
 
 asdf	asdf
 asdf	asdf

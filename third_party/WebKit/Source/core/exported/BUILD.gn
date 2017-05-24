@@ -29,6 +29,8 @@ blink_core_sources("exported") {
     "WebImageDecoder.cpp",
     "WebMemoryStatistics.cpp",
     "WebPerformance.cpp",
+    "WebPluginContainerBase.cpp",
+    "WebPluginContainerBase.h",
     "WebRange.cpp",
     "WebRenderTheme.cpp",
     "WebScriptController.cpp",

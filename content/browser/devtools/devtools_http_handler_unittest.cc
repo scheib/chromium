@@ -151,6 +151,7 @@ TEST_F(DevToolsHttpHandlerTest, TestServerSocketFailed) {
   std::unique_ptr<DevToolsSocketFactory> factory(
       new FailingServerSocketFactory(run_loop.QuitClosure(),
                                      run_loop_2.QuitClosure()));
+  LOG(INFO) << "Following error message is expected:";
   DevToolsAgentHost::StartRemoteDebuggingServer(
       std::move(factory), std::string(), base::FilePath(), base::FilePath(),
       std::string(), std::string());

@@ -13,6 +13,7 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
@@ -28,6 +29,7 @@
 #include "mojo/edk/embedder/named_platform_handle.h"
 #include "mojo/edk/embedder/named_platform_handle_utils.h"
 #include "mojo/edk/embedder/outgoing_broker_client_invitation.h"
+#include "mojo/edk/embedder/peer_connection.h"
 #include "mojo/edk/embedder/platform_channel_pair.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -47,6 +49,9 @@ const char kNamedPipeName[] = "named-pipe-name";
 const char kRunAsBrokerClient[] = "run-as-broker-client";
 
 const char kTestChildMessagePipeName[] = "test_pipe";
+
+// For use (and only valid) in a test child process:
+base::LazyInstance<PeerConnection>::Leaky g_child_peer_connection;
 
 template <typename Func>
 int RunClientFunction(Func handler, bool pass_pipe_ownership_to_main) {
@@ -160,8 +165,9 @@ ScopedMessagePipeHandle MultiprocessTestHelper::StartChildWithExtraSwitch(
     command_line.AppendSwitch(kRunAsBrokerClient);
   } else if (launch_type == LaunchType::PEER ||
              launch_type == LaunchType::NAMED_PEER) {
-    peer_token_ = mojo::edk::GenerateRandomToken();
-    pipe = ConnectToPeerProcess(std::move(server_handle), peer_token_);
+    peer_connection_ = base::MakeUnique<PeerConnection>();
+    pipe = peer_connection_->Connect(
+        ConnectionParams(TransportProtocol::kLegacy, std::move(server_handle)));
   }
 
   test_child_ =
@@ -193,9 +199,8 @@ int MultiprocessTestHelper::WaitForChildShutdown() {
 }
 
 void MultiprocessTestHelper::ClosePeerConnection() {
-  DCHECK(!peer_token_.empty());
-  ::mojo::edk::ClosePeerConnection(peer_token_);
-  peer_token_.clear();
+  DCHECK(peer_connection_);
+  peer_connection_.reset();
 }
 
 bool MultiprocessTestHelper::WaitForChildTestShutdown() {
@@ -224,11 +229,13 @@ void MultiprocessTestHelper::ChildSetup() {
     primordial_pipe = invitation->ExtractMessagePipe(kTestChildMessagePipeName);
   } else {
     if (named_pipe.is_valid()) {
-      primordial_pipe = ConnectToPeerProcess(CreateClientHandle(named_pipe));
+      primordial_pipe = g_child_peer_connection.Get().Connect(ConnectionParams(
+          TransportProtocol::kLegacy, CreateClientHandle(named_pipe)));
     } else {
-      primordial_pipe = ConnectToPeerProcess(
+      primordial_pipe = g_child_peer_connection.Get().Connect(ConnectionParams(
+          TransportProtocol::kLegacy,
           PlatformChannelPair::PassClientHandleFromParentProcess(
-              *base::CommandLine::ForCurrentProcess()));
+              *base::CommandLine::ForCurrentProcess())));
     }
   }
 }

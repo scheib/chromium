@@ -1,0 +1,14 @@
+
+package org.chromium.chromecast.shell;
+
+public class BuildConfig {
+
+  // If true, run receiver apps in a service instead of an activity.
+  public static final boolean DISPLAY_WEB_CONTENTS_IN_SERVICE =
+#if defined(_DISPLAY_WEB_CONTENTS_IN_SERVICE)
+    true;
+#else
+    false;
+#endif
+
+}

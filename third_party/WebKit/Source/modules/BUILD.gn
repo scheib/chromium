@@ -266,6 +266,7 @@ source_set("unit_tests") {
     "fetch/FetchHeaderListTest.cpp",
     "fetch/FetchResponseDataTest.cpp",
     "fetch/FormDataBytesConsumerTest.cpp",
+    "fetch/MultipartParserTest.cpp",
     "fetch/ReadableStreamBytesConsumerTest.cpp",
     "fetch/RequestTest.cpp",
     "fetch/ResponseTest.cpp",

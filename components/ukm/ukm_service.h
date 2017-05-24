@@ -20,6 +20,7 @@
 #include "components/ukm/ukm_reporting_service.h"
 #include "url/gurl.h"
 
+class ContextualSearchRankerLoggerImpl;
 class PluginInfoMessageFilter;
 class PrefRegistrySimple;
 class PrefService;
@@ -124,6 +125,7 @@ class UkmService {
   friend ::ukm::debug::DebugPage;
   friend autofill::AutofillMetrics;
   friend payments::JourneyLogger;
+  friend ContextualSearchRankerLoggerImpl;
   friend PluginInfoMessageFilter;
   friend UkmPageLoadMetricsObserver;
   friend translate::TranslateRankerImpl;

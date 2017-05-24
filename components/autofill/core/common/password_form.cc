@@ -245,6 +245,18 @@ std::ostream& operator<<(
     case PasswordForm::SubmissionIndicatorEvent::DOM_MUTATION_AFTER_XHR:
       os << "DOM_MUTATION_AFTER_XHR";
       break;
+    case PasswordForm::SubmissionIndicatorEvent::
+        PROVISIONALLY_SAVED_FORM_ON_START_PROVISIONAL_LOAD:
+      os << "PROVISIONALLY_SAVED_FORM_ON_START_PROVISIONAL_LOAD";
+      break;
+    case PasswordForm::SubmissionIndicatorEvent::
+        FILLED_FORM_ON_START_PROVISIONAL_LOAD:
+      os << "FILLED_FORM_ON_START_PROVISIONAL_LOAD";
+      break;
+    case PasswordForm::SubmissionIndicatorEvent::
+        FILLED_INPUT_ELEMENTS_ON_START_PROVISIONAL_LOAD:
+      os << "FILLED_INPUT_ELEMENTS_ON_START_PROVISIONAL_LOAD";
+      break;
     default:
       os << "NO_SUBMISSION";
       break;

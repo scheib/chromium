@@ -69,6 +69,9 @@ WebIDBCallbacksImpl::WebIDBCallbacksImpl(IDBRequest* request)
 WebIDBCallbacksImpl::~WebIDBCallbacksImpl() {
   if (request_) {
     probe::AsyncTaskCanceled(request_->GetExecutionContext(), this);
+#if DCHECK_IS_ON()
+    DCHECK_EQ(static_cast<WebIDBCallbacks*>(this), request_->WebCallbacks());
+#endif  // DCHECK_IS_ON()
     request_->WebCallbacksDestroyed();
   }
 }

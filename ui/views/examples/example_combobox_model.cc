@@ -9,9 +9,9 @@
 namespace views {
 namespace examples {
 
-ExampleComboboxModel::ExampleComboboxModel(const char** strings, int count)
-    : strings_(strings), count_(count) {
-}
+ExampleComboboxModel::ExampleComboboxModel(const char* const* strings,
+                                           int count)
+    : strings_(strings), count_(count) {}
 
 ExampleComboboxModel::~ExampleComboboxModel() {
 }

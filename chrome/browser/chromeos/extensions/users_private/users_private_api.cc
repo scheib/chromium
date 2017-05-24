@@ -104,7 +104,8 @@ UsersPrivateGetWhitelistedUsersFunction::Run() {
     const user_manager::User* user = user_manager->FindUser(account_id);
     api::users_private::User api_user;
     if (user) {
-      api_user.email = user->GetDisplayEmail();
+      api_user.email = email;
+      api_user.display_email = user->GetDisplayEmail();
       api_user.name = base::UTF16ToUTF8(user->GetDisplayName());
       api_user.is_owner =
           user->GetAccountId() == user_manager->GetOwnerAccountId();
@@ -112,6 +113,7 @@ UsersPrivateGetWhitelistedUsersFunction::Run() {
     } else {
       // User is unknown (i.e. not on device).
       api_user.email = email;
+      api_user.display_email = email;
       api_user.name = email;
       api_user.is_owner = false;
       api_user.is_supervised = false;

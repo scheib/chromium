@@ -99,6 +99,7 @@ source_set("browser") {
     "//media/gpu/ipc/client",
     "//media/midi",
     "//media/midi:mojo",
+    "//media/mojo:features",
     "//media/mojo/interfaces",
     "//media/mojo/services",
     "//mojo/common",
@@ -145,8 +146,8 @@ source_set("browser") {
     "//third_party/libyuv",
     "//third_party/re2",
     "//third_party/zlib",
-    "//third_party/zlib:compression_utils",
-    "//third_party/zlib:zip",
+    "//third_party/zlib/google:compression_utils",
+    "//third_party/zlib/google:zip",
     "//ui/accessibility",
     "//ui/accessibility:ax_gen",
     "//ui/base",
@@ -325,8 +326,6 @@ source_set("browser") {
     "appcache/appcache_navigation_handle.h",
     "appcache/appcache_navigation_handle_core.cc",
     "appcache/appcache_navigation_handle_core.h",
-    "appcache/appcache_network_service_handler.cc",
-    "appcache/appcache_network_service_handler.h",
     "appcache/appcache_policy.h",
     "appcache/appcache_quota_client.cc",
     "appcache/appcache_quota_client.h",
@@ -344,6 +343,8 @@ source_set("browser") {
     "appcache/appcache_storage_impl.h",
     "appcache/appcache_update_job.cc",
     "appcache/appcache_update_job.h",
+    "appcache/appcache_url_loader_factory.cc",
+    "appcache/appcache_url_loader_factory.h",
     "appcache/appcache_url_loader_job.cc",
     "appcache/appcache_url_loader_job.h",
     "appcache/appcache_url_loader_request.cc",
@@ -892,8 +893,6 @@ source_set("browser") {
     "loader/netlog_observer.h",
     "loader/null_resource_controller.cc",
     "loader/null_resource_controller.h",
-    "loader/power_save_block_resource_throttle.cc",
-    "loader/power_save_block_resource_throttle.h",
     "loader/redirect_to_file_resource_handler.cc",
     "loader/redirect_to_file_resource_handler.h",
     "loader/resource_buffer.cc",
@@ -935,6 +934,8 @@ source_set("browser") {
     "loader/upload_progress_tracker.h",
     "loader/url_loader_factory_impl.cc",
     "loader/url_loader_factory_impl.h",
+    "loader/wake_lock_resource_throttle.cc",
+    "loader/wake_lock_resource_throttle.h",
     "loader_delegate_impl.cc",
     "loader_delegate_impl.h",
     "mach_broker_mac.h",
@@ -2124,10 +2125,6 @@ source_set("browser") {
 
   if (is_linux) {
     deps += [ "//third_party/boringssl" ]
-  }
-
-  if (enable_mojo_media) {
-    configs += [ "//media/mojo/services:mojo_media_config" ]
   }
 
   if (use_ozone) {

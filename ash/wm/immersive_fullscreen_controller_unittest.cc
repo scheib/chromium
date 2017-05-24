@@ -13,7 +13,6 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/test/immersive_fullscreen_controller_test_api.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/env.h"

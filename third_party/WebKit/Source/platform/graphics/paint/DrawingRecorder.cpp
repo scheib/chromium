@@ -51,8 +51,8 @@ DrawingRecorder::DrawingRecorder(GraphicsContext& context,
   // bounds of the object during painting. Potentially expanding the cull rect
   // by a pixel or two also does not affect correctness, and is very unlikely to
   // matter for performance.
-  recording_bounds_ = EnclosingIntRect(float_cull_rect);
-  context.BeginRecording(recording_bounds_);
+  IntRect cull_rect = EnclosingIntRect(float_cull_rect);
+  context.BeginRecording(cull_rect);
 
 #if DCHECK_IS_ON()
   if (RuntimeEnabledFeatures::slimmingPaintStrictCullRectClippingEnabled()) {
@@ -66,9 +66,8 @@ DrawingRecorder::DrawingRecorder(GraphicsContext& context,
     // TODO(schenney) This is not the best place to do this. Ideally, we would
     // expand by one pixel in device (pixel) space, but to do that we would need
     // to add the verification mode to Skia.
-    IntRect clip_rect = recording_bounds_;
-    clip_rect.Inflate(1);
-    context.ClipRect(clip_rect, kNotAntiAliased, SkClipOp::kIntersect);
+    cull_rect.Inflate(1);
+    context.ClipRect(cull_rect, kNotAntiAliased, SkClipOp::kIntersect);
   }
 #endif
 }
@@ -100,8 +99,7 @@ DrawingRecorder::~DrawingRecorder() {
 #endif
 
   context_.GetPaintController().CreateAndAppend<DrawingDisplayItem>(
-      display_item_client_, display_item_type_, picture, recording_bounds_,
-      known_to_be_opaque_);
+      display_item_client_, display_item_type_, picture, known_to_be_opaque_);
 }
 
 }  // namespace blink

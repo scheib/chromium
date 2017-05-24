@@ -127,7 +127,7 @@ LayerImpl* RenderSurfaceImpl::MaskLayer() {
 }
 
 bool RenderSurfaceImpl::HasMask() const {
-  return OwningEffectNode()->mask_layer_id != EffectTree::kInvalidNodeId;
+  return OwningEffectNode()->mask_layer_id != Layer::INVALID_ID;
 }
 
 const FilterOperations& RenderSurfaceImpl::Filters() const {

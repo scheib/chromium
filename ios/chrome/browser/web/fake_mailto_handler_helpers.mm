@@ -20,6 +20,18 @@
 }
 @end
 
+@implementation FakeMailtoHandlerForTesting
+- (instancetype)init {
+  return [super initWithName:@"FakeMail" appStoreID:@"12345678"];
+}
+- (BOOL)isAvailable {
+  return NO;
+}
+- (NSString*)beginningScheme {
+  return @"fakemail:/compose?";
+}
+@end
+
 @implementation CountingMailtoURLRewriterObserver
 @synthesize changeCount = _changeCount;
 - (void)rewriterDidChange:(MailtoURLRewriter*)rewriter {

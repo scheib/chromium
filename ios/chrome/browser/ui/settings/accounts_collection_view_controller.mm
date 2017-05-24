@@ -482,7 +482,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
       presentingViewController:self.navigationController
          isPresentedOnSettings:YES
                    accessPoint:signin_metrics::AccessPoint::
-                                   ACCESS_POINT_SETTINGS];
+                                   ACCESS_POINT_SETTINGS
+                   promoAction:signin_metrics::PromoAction::
+                                   PROMO_ACTION_NO_SIGNIN_PROMO];
 
   // |_authenticationOperationInProgress| is reset when the signin interaction
   // controller is dismissed.

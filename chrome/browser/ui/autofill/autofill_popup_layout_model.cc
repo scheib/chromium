@@ -63,6 +63,7 @@ const struct {
     {"httpsInvalid", IDR_AUTOFILL_HTTPS_INVALID_WARNING},
     {"scanCreditCardIcon", IDR_AUTOFILL_CC_SCAN_NEW},
     {"settings", IDR_AUTOFILL_SETTINGS},
+    {"create", IDR_AUTOFILL_CREATE},
 #endif
 };
 
@@ -171,6 +172,7 @@ const gfx::FontList& AutofillPopupLayoutModel::GetValueFontListForRow(
     case POPUP_ITEM_ID_CLEAR_FORM:
     case POPUP_ITEM_ID_CREDIT_CARD_SIGNIN_PROMO:
     case POPUP_ITEM_ID_AUTOFILL_OPTIONS:
+    case POPUP_ITEM_ID_CREATE_HINT:
     case POPUP_ITEM_ID_SCAN_CREDIT_CARD:
     case POPUP_ITEM_ID_SEPARATOR:
     case POPUP_ITEM_ID_HTTP_NOT_SECURE_WARNING_MESSAGE:

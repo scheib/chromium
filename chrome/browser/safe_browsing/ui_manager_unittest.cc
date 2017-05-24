@@ -346,12 +346,13 @@ class TestSafeBrowsingBlockingPage : public SafeBrowsingBlockingPage {
             unsafe_resources,
             BaseSafeBrowsingErrorUI::SBErrorDisplayOptions(
                 BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
-                false,
-                false,
-                false,
-                false,
-                false,
-                BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources))) {
+                false,  // is_extended_reporting_opt_in_allowed
+                false,  // is_off_the_record
+                false,  // is_extended_reporting_enabled
+                false,  // is_scout_reporting_enabled
+                false,  // is_proceed_anyway_disabled
+                BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
+                "cpn_safe_browsing")) {  // help_center_article_link
     // Don't delay details at all for the unittest.
     SetThreatDetailsProceedDelayForTesting(0);
     DontCreateViewForTesting();

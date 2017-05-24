@@ -23,9 +23,9 @@ class ReadingListModel;
 
 // The time delay before non-initial button images are loaded.
 extern const int64_t kNonInitialImageAdditionDelayNanosec;
-// Notification when the tools menu is opened.
+// Notification that the tools menu has been requested to be shown.
 extern NSString* const kMenuWillShowNotification;
-// Notification when the tools menu is closed.
+// Notification that the tools menu is closed.
 extern NSString* const kMenuWillHideNotification;
 // Accessibility identifier of the toolbar view (for use by integration tests).
 extern NSString* const kToolbarIdentifier;

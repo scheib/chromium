@@ -11,6 +11,7 @@
 #include "base/format_macros.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
@@ -669,7 +670,7 @@ LoadState ClientSocketPoolBaseHelper::GetLoadState(
 std::unique_ptr<base::DictionaryValue>
 ClientSocketPoolBaseHelper::GetInfoAsValue(const std::string& name,
                                            const std::string& type) const {
-  std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
+  auto dict = base::MakeUnique<base::DictionaryValue>();
   dict->SetString("name", name);
   dict->SetString("type", type);
   dict->SetInteger("handed_out_socket_count", handed_out_socket_count_);
@@ -682,11 +683,11 @@ ClientSocketPoolBaseHelper::GetInfoAsValue(const std::string& name,
   if (group_map_.empty())
     return dict;
 
-  base::DictionaryValue* all_groups_dict = new base::DictionaryValue();
+  auto all_groups_dict = base::MakeUnique<base::DictionaryValue>();
   for (GroupMap::const_iterator it = group_map_.begin();
        it != group_map_.end(); it++) {
     const Group* group = it->second;
-    base::DictionaryValue* group_dict = new base::DictionaryValue();
+    auto group_dict = base::MakeUnique<base::DictionaryValue>();
 
     group_dict->SetInteger("pending_request_count",
                            group->pending_request_count());
@@ -698,7 +699,7 @@ ClientSocketPoolBaseHelper::GetInfoAsValue(const std::string& name,
 
     group_dict->SetInteger("active_socket_count", group->active_socket_count());
 
-    base::ListValue* idle_socket_list = new base::ListValue();
+    auto idle_socket_list = base::MakeUnique<base::ListValue>();
     std::list<IdleSocket>::const_iterator idle_socket;
     for (idle_socket = group->idle_sockets().begin();
          idle_socket != group->idle_sockets().end();
@@ -706,23 +707,23 @@ ClientSocketPoolBaseHelper::GetInfoAsValue(const std::string& name,
       int source_id = idle_socket->socket->NetLog().source().id;
       idle_socket_list->AppendInteger(source_id);
     }
-    group_dict->Set("idle_sockets", idle_socket_list);
+    group_dict->Set("idle_sockets", std::move(idle_socket_list));
 
-    base::ListValue* connect_jobs_list = new base::ListValue();
+    auto connect_jobs_list = base::MakeUnique<base::ListValue>();
     for (auto job = group->jobs().begin(); job != group->jobs().end(); job++) {
       int source_id = (*job)->net_log().source().id;
       connect_jobs_list->AppendInteger(source_id);
     }
-    group_dict->Set("connect_jobs", connect_jobs_list);
+    group_dict->Set("connect_jobs", std::move(connect_jobs_list));
 
     group_dict->SetBoolean("is_stalled", group->CanUseAdditionalSocketSlot(
                                              max_sockets_per_group_));
     group_dict->SetBoolean("backup_job_timer_is_running",
                            group->BackupJobTimerIsRunning());
 
-    all_groups_dict->SetWithoutPathExpansion(it->first, group_dict);
+    all_groups_dict->SetWithoutPathExpansion(it->first, std::move(group_dict));
   }
-  dict->Set("groups", all_groups_dict);
+  dict->Set("groups", std::move(all_groups_dict));
   return dict;
 }
 

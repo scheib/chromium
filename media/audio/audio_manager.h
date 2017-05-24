@@ -54,12 +54,8 @@ class MEDIA_EXPORT AudioManager {
   // The manager will use |audio_thread->GetWorkerTaskRunner()| for heavyweight
   // tasks. The |audio_thread->GetWorkerTaskRunner()| may be the same as
   // |audio_thread->GetTaskRunner()|.
-  //
-  // |file_task_runner| is used for audio debug recordings and is the task
-  // runner to do file output operations on.
   static std::unique_ptr<AudioManager> Create(
       std::unique_ptr<AudioThread> audio_thread,
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
       AudioLogFactory* audio_log_factory);
 
   // A convenience wrapper of AudioManager::Create for testing.
@@ -201,8 +197,7 @@ class MEDIA_EXPORT AudioManager {
 
   // Initializes output debug recording. Can be called on any thread; will post
   // to the audio thread if not called on it.
-  virtual void InitializeOutputDebugRecording(
-      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner) = 0;
+  virtual void InitializeOutputDebugRecording() = 0;
 
   // Returns true if the OS reports existence of audio devices. This does not
   // guarantee that the existing devices support all formats and sample rates.

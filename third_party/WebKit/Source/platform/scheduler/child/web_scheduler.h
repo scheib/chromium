@@ -100,6 +100,15 @@ class PLATFORM_EXPORT WebScheduler {
   virtual void RemovePendingNavigation(
       scheduler::RendererScheduler::NavigatingFrameType) = 0;
 
+  // Test helpers.
+
+  // Return a reference to an underlying RendererScheduler object.
+  // Can be null if there is no underlying RendererScheduler
+  // (e.g. worker threads).
+  virtual scheduler::RendererScheduler* GetRendererSchedulerForTest() {
+    return nullptr;
+  }
+
 #ifdef INSIDE_BLINK
   // Helpers for posting bound functions as tasks.
   typedef Function<void(double deadline_seconds)> IdleTask;

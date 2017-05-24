@@ -12,6 +12,10 @@
 #include "base/macros.h"
 #include "ui/views/widget/widget.h"
 
+namespace aura {
+class Window;
+}
+
 namespace ash {
 class ImeMenuTray;
 class LockScreenActionTray;
@@ -23,12 +27,11 @@ class SystemTray;
 class VirtualKeyboardTray;
 class WebNotificationTray;
 class WmShelf;
-class WmWindow;
 
 class ASH_EXPORT StatusAreaWidget : public views::Widget,
                                     public ShelfBackgroundAnimatorObserver {
  public:
-  StatusAreaWidget(WmWindow* status_container, WmShelf* wm_shelf);
+  StatusAreaWidget(aura::Window* status_container, WmShelf* wm_shelf);
   ~StatusAreaWidget() override;
 
   // Creates the SystemTray, WebNotificationTray and LogoutButtonTray.

@@ -33,6 +33,8 @@ enum class CredentialType {
   CREDENTIAL_TYPE_LAST = CREDENTIAL_TYPE_FEDERATED
 };
 
+enum class CredentialMediationRequirement { kSilent, kOptional, kRequired };
+
 std::string CredentialTypeToString(CredentialType value);
 std::ostream& operator<<(std::ostream& os, CredentialType value);
 

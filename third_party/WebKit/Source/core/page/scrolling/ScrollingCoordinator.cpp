@@ -356,13 +356,13 @@ static std::unique_ptr<WebScrollbarLayer> CreateScrollbarLayer(
     scrollbar_layer =
         Platform::Current()->CompositorSupport()->CreateOverlayScrollbarLayer(
             WebScrollbarImpl::Create(&scrollbar), painter, std::move(geometry));
-    scrollbar_layer->SetElementId(CompositorElementIdFromDOMNodeId(
+    scrollbar_layer->SetElementId(CompositorElementIdFromScrollbarId(
         NextScrollbarId(), CompositorElementIdNamespace::kScrollbar));
   } else {
     scrollbar_layer =
         Platform::Current()->CompositorSupport()->CreateScrollbarLayer(
             WebScrollbarImpl::Create(&scrollbar), painter, std::move(geometry));
-    scrollbar_layer->SetElementId(CompositorElementIdFromDOMNodeId(
+    scrollbar_layer->SetElementId(CompositorElementIdFromScrollbarId(
         NextScrollbarId(), CompositorElementIdNamespace::kScrollbar));
   }
   GraphicsLayer::RegisterContentsLayer(scrollbar_layer->Layer());
@@ -382,7 +382,7 @@ ScrollingCoordinator::CreateSolidColorScrollbarLayer(
       Platform::Current()->CompositorSupport()->CreateSolidColorScrollbarLayer(
           web_orientation, thumb_thickness, track_start,
           is_left_side_vertical_scrollbar);
-  scrollbar_layer->SetElementId(CompositorElementIdFromDOMNodeId(
+  scrollbar_layer->SetElementId(CompositorElementIdFromScrollbarId(
       NextScrollbarId(), CompositorElementIdNamespace::kScrollbar));
   GraphicsLayer::RegisterContentsLayer(scrollbar_layer->Layer());
   return scrollbar_layer;

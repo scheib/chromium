@@ -351,6 +351,7 @@ extern const char kBluetoothSubPage[];
 extern const char kDateTimeSubPage[];
 extern const char kDisplaySubPage[];
 extern const char kDeprecatedOptionsSearchSubPage[];
+extern const char kHelpSubPage[];
 extern const char kInternetSubPage[];
 extern const char kNetworkDetailSubPage[];
 extern const char kPowerSubPage[];

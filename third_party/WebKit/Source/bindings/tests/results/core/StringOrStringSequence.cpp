@@ -19,18 +19,18 @@ namespace blink {
 
 StringOrStringSequence::StringOrStringSequence() : m_type(SpecificTypeNone) {}
 
-String StringOrStringSequence::getAsString() const {
+const String& StringOrStringSequence::getAsString() const {
   DCHECK(isString());
   return m_string;
 }
 
-void StringOrStringSequence::setString(String value) {
+void StringOrStringSequence::setString(const String& value) {
   DCHECK(isNull());
   m_string = value;
   m_type = SpecificTypeString;
 }
 
-StringOrStringSequence StringOrStringSequence::fromString(String value) {
+StringOrStringSequence StringOrStringSequence::fromString(const String& value) {
   StringOrStringSequence container;
   container.setString(value);
   return container;

@@ -7,8 +7,11 @@
 #include <algorithm>
 
 #include "base/command_line.h"
+#include "base/feature_list.h"
 #include "base/i18n/case_conversion.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_params.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -17,6 +20,15 @@
 #include "components/autofill/core/common/autofill_switches.h"
 
 namespace autofill {
+
+const base::Feature kAutofillKeyboardAccessory{
+    "AutofillKeyboardAccessory", base::FEATURE_DISABLED_BY_DEFAULT};
+const char kAutofillKeyboardAccessoryAnimationDurationKey[] =
+    "animation_duration_millis";
+const char kAutofillKeyboardAccessoryLimitLabelWidthKey[] =
+    "should_limit_label_width";
+const char kAutofillKeyboardAccessoryHintKey[] =
+    "is_hint_shown_before_suggestion";
 
 namespace {
 
@@ -49,13 +61,40 @@ bool IsShowAutofillSignaturesEnabled() {
 
 bool IsKeyboardAccessoryEnabled() {
 #if defined(OS_ANDROID)
-  return base::CommandLine::ForCurrentProcess()->HasSwitch(
-             switches::kEnableAccessorySuggestionView) ||
-         (base::FieldTrialList::FindFullName("AutofillKeyboardAccessory") ==
-              "Enabled" &&
-          !base::CommandLine::ForCurrentProcess()->HasSwitch(
-              switches::kDisableAccessorySuggestionView));
+  return base::FeatureList::IsEnabled(kAutofillKeyboardAccessory);
 #else  // !defined(OS_ANDROID)
+  return false;
+#endif
+}
+
+unsigned int GetKeyboardAccessoryAnimationDuration() {
+#if defined(OS_ANDROID)
+  return base::GetFieldTrialParamByFeatureAsInt(
+      kAutofillKeyboardAccessory,
+      kAutofillKeyboardAccessoryAnimationDurationKey, 0);
+#else  // !defined(OS_ANDROID)
+  NOTREACHED();
+  return 0;
+#endif
+}
+
+bool ShouldLimitKeyboardAccessorySuggestionLabelWidth() {
+#if defined(OS_ANDROID)
+  return base::GetFieldTrialParamByFeatureAsBool(
+      kAutofillKeyboardAccessory, kAutofillKeyboardAccessoryLimitLabelWidthKey,
+      false);
+#else  // !defined(OS_ANDROID)
+  NOTREACHED();
+  return false;
+#endif
+}
+
+bool IsHintEnabledInKeyboardAccessory() {
+#if defined(OS_ANDROID)
+  return base::GetFieldTrialParamByFeatureAsBool(
+      kAutofillKeyboardAccessory, kAutofillKeyboardAccessoryHintKey, false);
+#else  // !defined(OS_ANDROID)
+  NOTREACHED();
   return false;
 #endif
 }

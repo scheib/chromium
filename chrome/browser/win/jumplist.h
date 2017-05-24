@@ -12,6 +12,7 @@
 #include <string>
 #include <utility>
 
+#include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
@@ -128,6 +129,8 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   explicit JumpList(Profile* profile);  // Use JumpListFactory instead
   ~JumpList() override;
 
+  enum class JumpListCategory { kMostVisited, kRecentlyClosed };
+
   // Adds a new ShellLinkItem for |tab| to |data| provided that doing so will
   // not exceed |max_items|.
   bool AddTab(const sessions::TabRestoreService::Tab& tab,
@@ -179,17 +182,24 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   // after requests storms have subsided.
   void DeferredTabRestoreServiceChanged();
 
-  // Creates at most |max_items| icon files in |icon_dir| for the
+  // Deletes icon files of |category| in |icon_dir| which are not in the cache
+  // anymore.
+  void DeleteIconFiles(const base::FilePath& icon_dir,
+                       JumpListCategory category);
+
+  // Creates at most |max_items| icon files of |category| in |icon_dir| for the
   // asynchrounously loaded icons stored in |item_list|.
   void CreateIconFiles(const base::FilePath& icon_dir,
                        const ShellLinkItemList& item_list,
-                       size_t max_items);
+                       size_t max_items,
+                       JumpListCategory category);
 
   // Updates icon files in |icon_dir|, which includes deleting old icons and
   // creating at most |slot_limit| new icons for |page_list|.
   void UpdateIconFiles(const base::FilePath& icon_dir,
                        const ShellLinkItemList& page_list,
-                       size_t slot_limit);
+                       size_t slot_limit,
+                       JumpListCategory category);
 
   // Updates the jumplist, once all the data has been fetched. This method calls
   // UpdateJumpList() to do most of the work.
@@ -216,7 +226,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   // Tracks FaviconService tasks.
   base::CancelableTaskTracker cancelable_task_tracker_;
 
-  // The Profile object is used to listen for events
+  // The Profile object is used to listen for events.
   Profile* profile_;
 
   // Lives on the UI thread.
@@ -239,6 +249,12 @@ class JumpList : public sessions::TabRestoreServiceObserver,
 
   // Holds data that can be accessed from multiple threads.
   scoped_refptr<base::RefCountedData<JumpListData>> jumplist_data_;
+
+  // The icon file paths of the most visited links and the recently closed links
+  // in the current jumplist, indexed by tab url, respectively.
+  // They may only be accessed on update_jumplist_task_runner_.
+  base::flat_map<std::string, base::FilePath> most_visited_icons_;
+  base::flat_map<std::string, base::FilePath> recently_closed_icons_;
 
   // Id of last favicon task. It's used to cancel current task if a new one
   // comes in before it finishes.

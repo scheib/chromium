@@ -1,6 +1,6 @@
 {
   'SEARCH': [
-    '../../../../testing/gtest',
+    '../../../../third_party/googletest/src/googletest',
   ],
   'DATA': [
     'src/gtest.cc',

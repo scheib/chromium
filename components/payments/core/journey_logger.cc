@@ -8,7 +8,6 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "components/autofill/core/browser/autofill_experiments.h"
 #include "components/ukm/ukm_entry_builder.h"
 #include "components/ukm/ukm_service.h"
 
@@ -116,6 +115,8 @@ void JourneyLogger::RecordJourneyStatsHistograms(
   DCHECK(!has_recorded_);
   has_recorded_ = true;
 
+  RecordCheckoutFlowMetrics();
+
   RecordSectionSpecificStats(completion_status);
 
   // Record the CanMakePayment metrics based on whether the transaction was
@@ -123,6 +124,23 @@ void JourneyLogger::RecordJourneyStatsHistograms(
   RecordCanMakePaymentStats(completion_status);
 
   RecordUrlKeyedMetrics(completion_status);
+}
+
+void JourneyLogger::RecordCheckoutFlowMetrics() {
+  UMA_HISTOGRAM_BOOLEAN("PaymentRequest.CheckoutFunnel.Initiated", true);
+
+  if (events_ & EVENT_SHOWN)
+    UMA_HISTOGRAM_BOOLEAN("PaymentRequest.CheckoutFunnel.Shown", true);
+
+  if (events_ & EVENT_PAY_CLICKED)
+    UMA_HISTOGRAM_BOOLEAN("PaymentRequest.CheckoutFunnel.PayClicked", true);
+
+  if (events_ & EVENT_RECEIVED_INSTRUMENT_DETAILS)
+    UMA_HISTOGRAM_BOOLEAN(
+        "PaymentRequest.CheckoutFunnel.ReceivedInstrumentDetails", true);
+
+  if (events_ & EVENT_SKIPPED_SHOW)
+    UMA_HISTOGRAM_BOOLEAN("PaymentRequest.CheckoutFunnel.SkippedShow", true);
 }
 
 void JourneyLogger::RecordSectionSpecificStats(
@@ -224,7 +242,7 @@ void JourneyLogger::RecordCanMakePaymentEffectOnCompletion(
 }
 
 void JourneyLogger::RecordUrlKeyedMetrics(CompletionStatus completion_status) {
-  if (!autofill::IsUkmLoggingEnabled() || !ukm_service_ || !url_.is_valid())
+  if (!ukm_service_ || !url_.is_valid())
     return;
 
   // Record the Checkout Funnel UKM.

@@ -125,33 +125,6 @@ class PreviewEliderLabel : public views::Label {
   DISALLOW_COPY_AND_ASSIGN(PreviewEliderLabel);
 };
 
-int ComputeWidestNameColumnViewWidth() {
-  // The name colums in each row should all have the same width, large enough to
-  // accomodate the longest piece of text they contain. Because of this, each
-  // row's GridLayout requires its first column to have a fixed width of the
-  // correct size. To measure the required size, layout a label with each
-  // section name, measure its width, then initialize |widest_column_width|
-  // with the largest value.
-  std::vector<int> section_names{
-      IDS_PAYMENT_REQUEST_ORDER_SUMMARY_SECTION_NAME,
-      IDS_PAYMENT_REQUEST_PAYMENT_METHOD_SECTION_NAME,
-      IDS_PAYMENT_REQUEST_SHIPPING_SECTION_NAME};
-
-  int widest_column_width = 0;
-
-  views::Label label(base::ASCIIToUTF16(""));
-  label.SetFontList(
-      label.font_list().DeriveWithWeight(gfx::Font::Weight::MEDIUM));
-  for (int name_id : section_names) {
-    label.SetText(l10n_util::GetStringUTF16(name_id));
-    widest_column_width = std::max(
-        label.GetPreferredSize().width(),
-        widest_column_width);
-  }
-
-  return widest_column_width;
-}
-
 std::unique_ptr<views::Button> CreatePaymentSheetRow(
     views::ButtonListener* listener,
     const base::string16& section_name,
@@ -159,8 +132,7 @@ std::unique_ptr<views::Button> CreatePaymentSheetRow(
     std::unique_ptr<views::View> extra_content_view,
     std::unique_ptr<views::View> trailing_button,
     bool clickable,
-    bool extra_trailing_inset,
-    int name_column_width) {
+    bool extra_trailing_inset) {
   const int trailing_inset = extra_trailing_inset
                                  ? kPaymentRequestRowHorizontalInsets +
                                        kPaymentRequestRowExtraRightInset
@@ -175,15 +147,12 @@ std::unique_ptr<views::Button> CreatePaymentSheetRow(
 
   views::ColumnSet* columns = layout->AddColumnSet(0);
   // A column for the section name.
-  columns->AddColumn(views::GridLayout::LEADING,
-                     views::GridLayout::LEADING,
-                     0,
-                     views::GridLayout::FIXED,
-                     name_column_width,
-                     0);
+  constexpr int kNameColumnWidth = 112;
+  columns->AddColumn(views::GridLayout::LEADING, views::GridLayout::LEADING, 0,
+                     views::GridLayout::FIXED, kNameColumnWidth, 0);
 
-  constexpr int kPaddingColumnsWidth = 25;
-  columns->AddPaddingColumn(0, kPaddingColumnsWidth);
+  constexpr int kPaddingAfterName = 32;
+  columns->AddPaddingColumn(0, kPaddingAfterName);
 
   // A column for the content.
   columns->AddColumn(views::GridLayout::FILL, views::GridLayout::LEADING,
@@ -192,6 +161,7 @@ std::unique_ptr<views::Button> CreatePaymentSheetRow(
   columns->AddColumn(views::GridLayout::TRAILING, views::GridLayout::CENTER,
                      0, views::GridLayout::USE_PREF, 0, 0);
 
+  constexpr int kPaddingColumnsWidth = 25;
   columns->AddPaddingColumn(0, kPaddingColumnsWidth);
   // A column for the trailing_button.
   columns->AddColumn(views::GridLayout::TRAILING, views::GridLayout::CENTER,
@@ -199,6 +169,7 @@ std::unique_ptr<views::Button> CreatePaymentSheetRow(
 
   layout->StartRow(0, 0);
   views::Label* name_label = new views::Label(section_name);
+  name_label->SetMultiLine(true);
   name_label->SetFontList(
       name_label->font_list().DeriveWithWeight(gfx::Font::Weight::MEDIUM));
   layout->AddView(name_label);
@@ -222,17 +193,53 @@ std::unique_ptr<views::Button> CreatePaymentSheetRow(
   return std::move(row);
 }
 
+std::unique_ptr<views::View> CreateInlineCurrencyAmountItem(
+    const base::string16& currency,
+    const base::string16& amount,
+    bool disabled_color,
+    bool bold) {
+  std::unique_ptr<views::View> item_amount_line =
+      base::MakeUnique<views::View>();
+  std::unique_ptr<views::GridLayout> item_amount_layout =
+      base::MakeUnique<views::GridLayout>(item_amount_line.get());
+  views::ColumnSet* item_amount_columns = item_amount_layout->AddColumnSet(0);
+  item_amount_columns->AddColumn(views::GridLayout::LEADING,
+                                 views::GridLayout::LEADING, 0,
+                                 views::GridLayout::USE_PREF, 0, 0);
+  item_amount_columns->AddColumn(views::GridLayout::TRAILING,
+                                 views::GridLayout::LEADING, 1,
+                                 views::GridLayout::USE_PREF, 0, 0);
+
+  std::unique_ptr<views::Label> currency_label =
+      bold ? CreateBoldLabel(currency)
+           : base::MakeUnique<views::Label>(currency);
+  if (disabled_color) {
+    currency_label->SetDisabledColor(
+        currency_label->GetNativeTheme()->GetSystemColor(
+            ui::NativeTheme::kColorId_LabelDisabledColor));
+    currency_label->SetEnabled(false);
+  }
+  std::unique_ptr<views::Label> amount_label =
+      bold ? CreateBoldLabel(amount) : base::MakeUnique<views::Label>(amount);
+  amount_label->SetMultiLine(true);
+  amount_label->SetAllowCharacterBreak(true);
+
+  item_amount_layout->StartRow(0, 0);
+  item_amount_layout->AddView(currency_label.release());
+  item_amount_layout->AddView(amount_label.release());
+
+  item_amount_line->SetLayoutManager(item_amount_layout.release());
+  return item_amount_line;
+}
+
 // A class used to build Payment Sheet Rows. Construct an instance of it, chain
 // calls to argument-setting functions, then call one of the CreateWith*
 // functions to create the row view.
 class PaymentSheetRowBuilder {
  public:
   PaymentSheetRowBuilder(views::ButtonListener* listener,
-                         const base::string16& section_name,
-                         int name_column_width)
-      : listener_(listener),
-        section_name_(section_name),
-        name_column_width_(name_column_width) {}
+                         const base::string16& section_name)
+      : listener_(listener), section_name_(section_name) {}
 
   PaymentSheetRowBuilder& Tag(PaymentSheetViewControllerTags tag) {
     tag_ = static_cast<int>(tag);
@@ -268,7 +275,7 @@ class PaymentSheetRowBuilder {
     std::unique_ptr<views::Button> section = CreatePaymentSheetRow(
         listener_, section_name_, std::move(content_view),
         std::move(extra_content_view), std::move(chevron),
-        /*clickable=*/true, /*extra_trailing_inset=*/true, name_column_width_);
+        /*clickable=*/true, /*extra_trailing_inset=*/true);
     section->set_tag(tag_);
     section->set_id(id_);
     return section;
@@ -333,53 +340,18 @@ class PaymentSheetRowBuilder {
     button->set_tag(tag_);
     button->set_id(id_);
     button->SetEnabled(button_enabled);
-    return CreatePaymentSheetRow(
-        listener_, section_name_, std::move(content_view), nullptr,
-        std::move(button), /*clickable=*/false,
-        /*extra_trailing_inset=*/false, name_column_width_);
+    return CreatePaymentSheetRow(listener_, section_name_,
+                                 std::move(content_view), nullptr,
+                                 std::move(button), /*clickable=*/false,
+                                 /*extra_trailing_inset=*/false);
   }
 
   views::ButtonListener* listener_;
   base::string16 section_name_;
-  int name_column_width_;
   int tag_;
   int id_;
   DISALLOW_COPY_AND_ASSIGN(PaymentSheetRowBuilder);
 };
-
-std::unique_ptr<views::View> CreateCheckingSpinnerView() {
-  std::unique_ptr<views::View> container = base::MakeUnique<views::View>();
-
-  std::unique_ptr<views::Throbber> throbber =
-      base::MakeUnique<views::Throbber>();
-  throbber->Start();
-  std::unique_ptr<views::GridLayout> layout =
-      base::MakeUnique<views::GridLayout>(container.get());
-  views::ColumnSet* throbber_columns = layout->AddColumnSet(0);
-  throbber_columns->AddPaddingColumn(0.5, 0);
-  throbber_columns->AddColumn(views::GridLayout::Alignment::CENTER,
-                              views::GridLayout::Alignment::TRAILING, 0,
-                              views::GridLayout::SizeType::USE_PREF, 0, 0);
-  throbber_columns->AddPaddingColumn(0.5, 0);
-
-  views::ColumnSet* label_columns = layout->AddColumnSet(1);
-  label_columns->AddPaddingColumn(0.5, 0);
-  label_columns->AddColumn(views::GridLayout::Alignment::CENTER,
-                           views::GridLayout::Alignment::LEADING, 0,
-                           views::GridLayout::SizeType::USE_PREF, 0, 0);
-  label_columns->AddPaddingColumn(0.5, 0);
-
-  layout->StartRow(0.5, 0);
-  layout->AddView(throbber.release());
-
-  layout->StartRow(0.5, 1);
-  layout->AddView(new views::Label(
-      l10n_util::GetStringUTF16(IDS_PAYMENTS_CHECKING_OPTION)));
-
-  container->SetLayoutManager(layout.release());
-
-  return container;
-}
 
 }  // namespace
 
@@ -387,10 +359,7 @@ PaymentSheetViewController::PaymentSheetViewController(
     PaymentRequestSpec* spec,
     PaymentRequestState* state,
     PaymentRequestDialogView* dialog)
-    : PaymentRequestSheetController(spec, state, dialog),
-      pay_button_(nullptr),
-      widest_name_column_view_width_(ComputeWidestNameColumnViewWidth()),
-      current_update_reason_(PaymentRequestSpec::UpdateReason::NONE) {
+    : PaymentRequestSheetController(spec, state, dialog) {
   spec->AddObserver(this);
   state->AddObserver(this);
 }
@@ -400,14 +369,7 @@ PaymentSheetViewController::~PaymentSheetViewController() {
   state()->RemoveObserver(this);
 }
 
-void PaymentSheetViewController::OnStartUpdating(
-    PaymentRequestSpec::UpdateReason reason) {
-  current_update_reason_ = reason;
-  UpdateContentView();
-}
-
 void PaymentSheetViewController::OnSpecUpdated() {
-  current_update_reason_ = PaymentRequestSpec::UpdateReason::NONE;
   UpdateContentView();
 }
 
@@ -423,8 +385,7 @@ PaymentSheetViewController::CreatePrimaryButton() {
           this, l10n_util::GetStringUTF16(IDS_PAYMENTS_PAY_BUTTON)));
   button->set_tag(static_cast<int>(PaymentRequestCommonTags::PAY_BUTTON_TAG));
   button->set_id(static_cast<int>(DialogViewID::PAY_BUTTON));
-  pay_button_ = button.get();
-  UpdatePayButtonState(state()->is_ready_to_pay());
+  button->SetEnabled(state()->is_ready_to_pay());
   return button;
 }
 
@@ -559,7 +520,7 @@ void PaymentSheetViewController::StyledLabelLinkClicked(
 }
 
 void PaymentSheetViewController::UpdatePayButtonState(bool enabled) {
-  pay_button_->SetEnabled(enabled);
+  primary_button()->SetEnabled(enabled);
 }
 
 // Creates the Order Summary row, which contains an "Order Summary" label,
@@ -579,7 +540,7 @@ PaymentSheetViewController::CreatePaymentSheetSummaryRow() {
   columns->AddColumn(views::GridLayout::LEADING, views::GridLayout::LEADING, 1,
                      views::GridLayout::USE_PREF, 0, 0);
   constexpr int kItemSummaryPriceFixedWidth = 96;
-  columns->AddColumn(views::GridLayout::TRAILING, views::GridLayout::LEADING, 0,
+  columns->AddColumn(views::GridLayout::FILL, views::GridLayout::LEADING, 0,
                      views::GridLayout::FIXED, kItemSummaryPriceFixedWidth,
                      kItemSummaryPriceFixedWidth);
 
@@ -592,27 +553,6 @@ PaymentSheetViewController::CreatePaymentSheetSummaryRow() {
   // there are more than 2 items in the details. The total label and amount
   // always follow.
   constexpr int kMaxNumberOfItemsShown = 2;
-  for (size_t i = 0; i < items.size() && i < kMaxNumberOfItemsShown; ++i) {
-    layout->StartRow(0, 0);
-    std::unique_ptr<views::Label> summary =
-        base::MakeUnique<views::Label>(base::UTF8ToUTF16(items[i]->label));
-    summary->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    layout->AddView(summary.release());
-
-    base::string16 item_amount;
-    if (is_mixed_currency) {
-      // If the payment request has items in different currencies, always
-      // display the currency code.
-      item_amount = l10n_util::GetStringFUTF16(
-          IDS_PAYMENT_REQUEST_ORDER_SUMMARY_SHEET_TOTAL_FORMAT,
-          base::UTF8ToUTF16(spec()->GetFormattedCurrencyCode(items[i]->amount)),
-          spec()->GetFormattedCurrencyAmount(items[i]->amount));
-    } else {
-      item_amount = spec()->GetFormattedCurrencyAmount(items[i]->amount);
-    }
-    layout->AddView(new views::Label(item_amount));
-  }
-
   int hidden_item_count = items.size() - kMaxNumberOfItemsShown;
   if (hidden_item_count > 0) {
     layout->StartRow(0, 0);
@@ -623,6 +563,33 @@ PaymentSheetViewController::CreatePaymentSheetSummaryRow() {
         ui::NativeTheme::kColorId_LabelDisabledColor));
     label->SetEnabled(false);
     layout->AddView(label.release());
+    if (is_mixed_currency) {
+      std::unique_ptr<views::Label> multiple_currency_label =
+          base::MakeUnique<views::Label>(l10n_util::GetStringUTF16(
+              IDS_PAYMENT_REQUEST_ORDER_SUMMARY_MULTIPLE_CURRENCY_INDICATOR));
+      multiple_currency_label->SetDisabledColor(
+          multiple_currency_label->GetNativeTheme()->GetSystemColor(
+              ui::NativeTheme::kColorId_LabelDisabledColor));
+      multiple_currency_label->SetEnabled(false);
+      layout->AddView(multiple_currency_label.release());
+    }
+  }
+
+  for (size_t i = 0; i < items.size() && i < kMaxNumberOfItemsShown; ++i) {
+    layout->StartRow(0, 0);
+    std::unique_ptr<views::Label> summary =
+        base::MakeUnique<views::Label>(base::UTF8ToUTF16(items[i]->label));
+    summary->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+    layout->AddView(summary.release());
+
+    layout->AddView(
+        CreateInlineCurrencyAmountItem(
+            is_mixed_currency
+                ? base::UTF8ToUTF16(
+                      spec()->GetFormattedCurrencyCode(items[i]->amount))
+                : base::string16(),
+            spec()->GetFormattedCurrencyAmount(items[i]->amount), true, false)
+            .release());
   }
 
   layout->StartRow(0, 0);
@@ -631,20 +598,18 @@ PaymentSheetViewController::CreatePaymentSheetSummaryRow() {
           .release());
 
   layout->AddView(
-      CreateBoldLabel(l10n_util::GetStringFUTF16(
-                          IDS_PAYMENT_REQUEST_ORDER_SUMMARY_SHEET_TOTAL_FORMAT,
-                          base::UTF8ToUTF16(spec()->GetFormattedCurrencyCode(
-                              spec()->details().total->amount)),
-                          spec()->GetFormattedCurrencyAmount(
-                              spec()->details().total->amount)))
+      CreateInlineCurrencyAmountItem(
+          base::UTF8ToUTF16(spec()->GetFormattedCurrencyCode(
+              spec()->details().total->amount)),
+          spec()->GetFormattedCurrencyAmount(spec()->details().total->amount),
+          false, true)
           .release());
 
   inline_summary->SetLayoutManager(layout.release());
 
   PaymentSheetRowBuilder builder(
-      this,
-      l10n_util::GetStringUTF16(IDS_PAYMENT_REQUEST_ORDER_SUMMARY_SECTION_NAME),
-      widest_name_column_view_width_);
+      this, l10n_util::GetStringUTF16(
+                IDS_PAYMENT_REQUEST_ORDER_SUMMARY_SECTION_NAME));
   builder.Tag(PaymentSheetViewControllerTags::SHOW_ORDER_SUMMARY_BUTTON)
       .Id(DialogViewID::PAYMENT_SHEET_SUMMARY_SECTION);
 
@@ -653,11 +618,6 @@ PaymentSheetViewController::CreatePaymentSheetSummaryRow() {
 
 std::unique_ptr<views::View>
 PaymentSheetViewController::CreateShippingSectionContent() {
-  if (current_update_reason_ ==
-      PaymentRequestSpec::UpdateReason::SHIPPING_ADDRESS) {
-    return CreateCheckingSpinnerView();
-  }
-
   autofill::AutofillProfile* profile = state()->selected_shipping_profile();
   if (!profile)
     return base::MakeUnique<views::Label>(base::string16());
@@ -687,8 +647,7 @@ PaymentSheetViewController::CreateShippingSectionContent() {
 std::unique_ptr<views::Button> PaymentSheetViewController::CreateShippingRow() {
   std::unique_ptr<views::Button> section;
   PaymentSheetRowBuilder builder(
-      this, GetShippingAddressSectionString(spec()->shipping_type()),
-      widest_name_column_view_width_);
+      this, GetShippingAddressSectionString(spec()->shipping_type()));
   builder.Tag(PaymentSheetViewControllerTags::SHOW_SHIPPING_BUTTON);
   if (state()->selected_shipping_profile()) {
     builder.Id(DialogViewID::PAYMENT_SHEET_SHIPPING_ADDRESS_SECTION);
@@ -748,10 +707,8 @@ PaymentSheetViewController::CreatePaymentMethodRow() {
   PaymentInstrument* selected_instrument = state()->selected_instrument();
 
   PaymentSheetRowBuilder builder(
-      this,
-      l10n_util::GetStringUTF16(
-          IDS_PAYMENT_REQUEST_PAYMENT_METHOD_SECTION_NAME),
-      widest_name_column_view_width_);
+      this, l10n_util::GetStringUTF16(
+                IDS_PAYMENT_REQUEST_PAYMENT_METHOD_SECTION_NAME));
   builder.Tag(PaymentSheetViewControllerTags::SHOW_PAYMENT_METHOD_BUTTON);
 
   if (selected_instrument) {
@@ -828,8 +785,7 @@ std::unique_ptr<views::Button>
 PaymentSheetViewController::CreateContactInfoRow() {
   PaymentSheetRowBuilder builder(
       this,
-      l10n_util::GetStringUTF16(IDS_PAYMENT_REQUEST_CONTACT_INFO_SECTION_NAME),
-      widest_name_column_view_width_);
+      l10n_util::GetStringUTF16(IDS_PAYMENT_REQUEST_CONTACT_INFO_SECTION_NAME));
   builder.Tag(PaymentSheetViewControllerTags::SHOW_CONTACT_INFO_BUTTON);
 
   if (state()->selected_contact_profile()) {
@@ -892,8 +848,7 @@ PaymentSheetViewController::CreateShippingOptionRow() {
   // is one. It's not possible to select an option without selecting an address
   // first.
   PaymentSheetRowBuilder builder(
-      this, GetShippingOptionSectionString(spec()->shipping_type()),
-      widest_name_column_view_width_);
+      this, GetShippingOptionSectionString(spec()->shipping_type()));
   builder.Tag(PaymentSheetViewControllerTags::SHOW_SHIPPING_OPTION_BUTTON);
 
   if (state()->selected_shipping_profile()) {
@@ -905,13 +860,10 @@ PaymentSheetViewController::CreateShippingOptionRow() {
     if (selected_option) {
       // 1.2 Show the selected shipping option.
       std::unique_ptr<views::View> option_row_content =
-          current_update_reason_ ==
-                  PaymentRequestSpec::UpdateReason::SHIPPING_OPTION
-              ? CreateCheckingSpinnerView()
-              : CreateShippingOptionLabel(
-                    selected_option,
-                    spec()->GetFormattedCurrencyAmount(selected_option->amount),
-                    /*emphasize_label=*/false);
+          CreateShippingOptionLabel(
+              selected_option,
+              spec()->GetFormattedCurrencyAmount(selected_option->amount),
+              /*emphasize_label=*/false);
       return builder.Id(DialogViewID::PAYMENT_SHEET_SHIPPING_OPTION_SECTION)
           .CreateWithChevron(std::move(option_row_content), nullptr);
     } else {

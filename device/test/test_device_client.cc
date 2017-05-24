@@ -18,10 +18,7 @@ namespace device {
 
 TestDeviceClient::TestDeviceClient() = default;
 
-TestDeviceClient::~TestDeviceClient() {
-  if (usb_service_)
-    usb_service_->Shutdown();
-}
+TestDeviceClient::~TestDeviceClient() = default;
 
 HidService* TestDeviceClient::GetHidService() {
 #if !defined(OS_ANDROID) && !defined(OS_IOS) && \

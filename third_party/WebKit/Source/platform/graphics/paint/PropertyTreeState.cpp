@@ -113,8 +113,9 @@ const PropertyTreeState* PropertyTreeStateIterator::Next() {
 #if DCHECK_IS_ON()
 
 String PropertyTreeState::ToTreeString() const {
-  return Transform()->ToTreeString() + "\n" + Clip()->ToTreeString() + "\n" +
-         Effect()->ToTreeString();
+  return "transform:\n" + (Transform() ? Transform()->ToTreeString() : "null") +
+         "\nclip:\n" + (Clip() ? Clip()->ToTreeString() : "null") +
+         "\neffect:\n" + (Effect() ? Effect()->ToTreeString() : "null");
 }
 
 #endif

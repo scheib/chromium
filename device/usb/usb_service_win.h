@@ -24,7 +24,6 @@ class UsbServiceWin : public DeviceMonitorWin::Observer, public UsbService {
   class BlockingTaskHelper;
 
   // device::UsbService implementation
-  void Shutdown() override;
   void GetDevices(const GetDevicesCallback& callback) override;
 
   // device::DeviceMonitorWin::Observer implementation

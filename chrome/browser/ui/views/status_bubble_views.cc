@@ -42,7 +42,6 @@
 
 #if defined(USE_ASH)
 #include "ash/wm/window_state.h"  // nogncheck
-#include "ash/wm/window_state_aura.h"  // nogncheck
 #endif
 
 #if defined(USE_AURA)

@@ -212,7 +212,8 @@ TEST_F('EditingTest', 'SingleCharacterLine', function() {
     ]);
 });
 
-TEST_F('EditingTest', 'RichTextMoveByLine', function() {
+// Fails flakily, see https://crbug.com/724847.
+TEST_F('EditingTest', 'DISABLED_RichTextMoveByLine', function() {
   editing.useRichText = true;
   var mockFeedback = this.createMockFeedback();
   this.runWithLoadedTree(function() {/*!

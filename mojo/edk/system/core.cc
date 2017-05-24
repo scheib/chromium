@@ -192,23 +192,13 @@ void Core::AcceptBrokerClientInvitation(ConnectionParams connection_params) {
       std::move(connection_params));
 }
 
-ScopedMessagePipeHandle Core::ConnectToPeerProcess(
-    ScopedPlatformHandle pipe_handle,
-    const std::string& peer_token) {
-  RequestContext request_context;
-  ports::PortRef port0, port1;
-  GetNodeController()->node()->CreatePortPair(&port0, &port1);
-  MojoHandle handle = AddDispatcher(new MessagePipeDispatcher(
-      GetNodeController(), port0, kUnknownPipeIdForDebug, 0));
-  ConnectionParams connection_params(TransportProtocol::kLegacy,
-                                     std::move(pipe_handle));
-  GetNodeController()->ConnectToPeer(std::move(connection_params), port1,
-                                     peer_token);
-  return ScopedMessagePipeHandle(MessagePipeHandle(handle));
+uint64_t Core::ConnectToPeer(ConnectionParams connection_params,
+                             const ports::PortRef& port) {
+  return GetNodeController()->ConnectToPeer(std::move(connection_params), port);
 }
 
-void Core::ClosePeerConnection(const std::string& peer_token) {
-  GetNodeController()->ClosePeerConnection(peer_token);
+void Core::ClosePeerConnection(uint64_t peer_connection_id) {
+  GetNodeController()->ClosePeerConnection(peer_connection_id);
 }
 
 void Core::SetMachPortProvider(base::PortProvider* port_provider) {

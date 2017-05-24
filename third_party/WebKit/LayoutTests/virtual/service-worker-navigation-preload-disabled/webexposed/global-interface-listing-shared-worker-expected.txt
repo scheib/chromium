@@ -499,7 +499,6 @@ Starting worker: resources/global-interface-listing.js
 [Worker]     method constructor
 [Worker]     method deleteDatabase
 [Worker]     method open
-[Worker]     method webkitGetDatabaseNames
 [Worker] interface IDBIndex
 [Worker]     attribute @@toStringTag
 [Worker]     getter keyPath
@@ -644,9 +643,11 @@ Starting worker: resources/global-interface-listing.js
 [Worker]     setter onmessageerror
 [Worker] interface NetworkInformation : EventTarget
 [Worker]     attribute @@toStringTag
+[Worker]     getter downlink
 [Worker]     getter downlinkMax
 [Worker]     getter onchange
 [Worker]     getter ontypechange
+[Worker]     getter rtt
 [Worker]     getter type
 [Worker]     method constructor
 [Worker]     setter onchange
@@ -851,6 +852,7 @@ Starting worker: resources/global-interface-listing.js
 [Worker]     method blob
 [Worker]     method clone
 [Worker]     method constructor
+[Worker]     method formData
 [Worker]     method json
 [Worker]     method text
 [Worker] interface Response
@@ -870,6 +872,7 @@ Starting worker: resources/global-interface-listing.js
 [Worker]     method blob
 [Worker]     method clone
 [Worker]     method constructor
+[Worker]     method formData
 [Worker]     method json
 [Worker]     method text
 [Worker] interface ServiceWorkerRegistration : EventTarget

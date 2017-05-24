@@ -7,7 +7,7 @@
 #include "base/logging.h"
 #include "base/mac/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
-#import "ios/clean/chrome/browser/ui/tab_collection/tab_collection_data_source.h"
+#import "ios/clean/chrome/browser/ui/tab_collection/tab_collection_item.h"
 #import "ios/clean/chrome/browser/ui/tab_collection/tab_collection_tab_cell.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -17,11 +17,14 @@
 @interface TabCollectionViewController ()<UICollectionViewDelegate,
                                           SessionCellDelegate>
 @property(nonatomic, readwrite) UICollectionView* tabs;
+@property(nonatomic, readwrite) NSMutableArray<TabCollectionItem*>* items;
+@property(nonatomic, assign) int selectedIndex;
 @end
 
 @implementation TabCollectionViewController
 @synthesize tabs = _tabs;
-@synthesize dataSource = _dataSource;
+@synthesize items = _items;
+@synthesize selectedIndex = _selectedIndex;
 
 #pragma mark - UIViewController
 
@@ -46,6 +49,8 @@
     [self.tabs.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
     [self.tabs.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
   ]];
+
+  [self selectItemAtIndex:self.selectedIndex];
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
@@ -82,7 +87,7 @@
 
 - (NSInteger)collectionView:(UICollectionView*)collectionView
      numberOfItemsInSection:(NSInteger)section {
-  return [self.dataSource numberOfTabs];
+  return static_cast<NSInteger>(self.items.count);
 }
 
 - (UICollectionViewCell*)collectionView:(UICollectionView*)collectionView
@@ -95,11 +100,10 @@
   cell.delegate = self;
   [cell setSessionType:TabSwitcherSessionType::REGULAR_SESSION];
   DCHECK_LE(indexPath.item, INT_MAX);
-  int item = static_cast<int>(indexPath.item);
-  [cell setAppearanceForTabTitle:[self.dataSource titleAtIndex:item]
+  int index = static_cast<int>(indexPath.item);
+  [cell setAppearanceForTabTitle:self.items[index].title
                          favicon:nil
                         cellSize:CGSizeZero];
-  [cell setSelected:(indexPath.item == [self.dataSource indexOfActiveTab])];
   return cell;
 }
 
@@ -134,22 +138,47 @@
 
 #pragma mark - TabCollectionConsumer methods
 
-- (void)insertItemAtIndex:(int)index {
-  [self.tabs insertItemsAtIndexPaths:@[ [NSIndexPath indexPathForItem:index
-                                                            inSection:0] ]];
+- (void)insertItem:(TabCollectionItem*)item atIndex:(int)index {
+  DCHECK_LE(static_cast<NSUInteger>(index), self.items.count);
+  [self.items insertObject:item atIndex:index];
+  [self.tabs insertItemsAtIndexPaths:@[ [self indexPathForIndex:index] ]];
 }
 
 - (void)deleteItemAtIndex:(int)index {
-  [self.tabs deleteItemsAtIndexPaths:@[ [NSIndexPath indexPathForItem:index
-                                                            inSection:0] ]];
+  DCHECK_LT(static_cast<NSUInteger>(index), self.items.count);
+  [self.items removeObjectAtIndex:index];
+  [self.tabs deleteItemsAtIndexPaths:@[ [self indexPathForIndex:index] ]];
 }
 
-- (void)reloadItemsAtIndexes:(NSIndexSet*)indexes {
-  NSMutableArray<NSIndexPath*>* indexPaths = [[NSMutableArray alloc] init];
-  [indexes enumerateIndexesUsingBlock:^(NSUInteger index, BOOL* _Nonnull stop) {
-    [indexPaths addObject:[NSIndexPath indexPathForItem:index inSection:0]];
-  }];
-  [self.tabs reloadItemsAtIndexPaths:indexPaths];
+- (void)moveItemFromIndex:(int)fromIndex toIndex:(int)toIndex {
+  TabCollectionItem* item = self.items[fromIndex];
+  [self.items removeObjectAtIndex:fromIndex];
+  [self.items insertObject:item atIndex:toIndex];
+  [self.tabs moveItemAtIndexPath:[self indexPathForIndex:fromIndex]
+                     toIndexPath:[self indexPathForIndex:toIndex]];
+}
+
+- (void)replaceItemAtIndex:(int)index withItem:(TabCollectionItem*)item {
+  [self.items removeObjectAtIndex:index];
+  [self.items insertObject:item atIndex:index];
+}
+
+- (void)selectItemAtIndex:(int)index {
+  self.selectedIndex = index;
+  [self.tabs selectItemAtIndexPath:[self indexPathForIndex:index]
+                          animated:YES
+                    scrollPosition:UITableViewScrollPositionNone];
+}
+
+- (void)populateItems:(NSArray<TabCollectionItem*>*)items {
+  self.items = [items mutableCopy];
+  [self.tabs reloadData];
+}
+
+#pragma mark - Private
+
+- (NSIndexPath*)indexPathForIndex:(int)index {
+  return [NSIndexPath indexPathForItem:index inSection:0];
 }
 
 @end

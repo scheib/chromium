@@ -157,8 +157,7 @@ StyleRareNonInheritedData::StyleRareNonInheritedData(
       content_(o.content_ ? o.content_->Clone() : nullptr),
       counter_directives_(o.counter_directives_ ? Clone(*o.counter_directives_)
                                                 : nullptr),
-      animations_(o.animations_ ? CSSAnimationData::Create(*o.animations_)
-                                : nullptr),
+      animations_(o.animations_ ? o.animations_->Clone() : nullptr),
       transitions_(o.transitions_ ? o.transitions_->Clone() : nullptr),
       box_shadow_(o.box_shadow_),
       box_reflect_(o.box_reflect_),

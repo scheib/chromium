@@ -13,10 +13,12 @@
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "chrome/browser/page_load_metrics/page_load_metrics_observer.h"
+#include "chrome/common/page_load_metrics/page_load_metrics.mojom.h"
 #include "chrome/common/page_load_metrics/page_load_timing.h"
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_data.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_binding_set.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "content/public/common/resource_type.h"
@@ -42,7 +44,8 @@ class PageLoadTracker;
 class MetricsWebContentsObserver
     : public content::WebContentsObserver,
       public content::WebContentsUserData<MetricsWebContentsObserver>,
-      public content::RenderWidgetHost::InputEventObserver {
+      public content::RenderWidgetHost::InputEventObserver,
+      public mojom::PageLoadMetrics {
  public:
   // TestingObserver allows tests to observe MetricsWebContentsObserver state
   // changes. Tests may use TestingObserver to wait until certain state changes,
@@ -50,6 +53,8 @@ class MetricsWebContentsObserver
   // have been observed.
   class TestingObserver {
    public:
+    enum class IPCType { LEGACY, MOJO };
+
     explicit TestingObserver(content::WebContents* web_contents);
     virtual ~TestingObserver();
 
@@ -59,6 +64,8 @@ class MetricsWebContentsObserver
     virtual void OnTimingUpdated(bool is_main_frame,
                                  const mojom::PageLoadTiming& timing,
                                  const mojom::PageLoadMetadata& metadata) {}
+
+    virtual void DidReceiveTimingUpdate(IPCType type) {}
 
    private:
     page_load_metrics::MetricsWebContentsObserver* observer_;
@@ -146,6 +153,15 @@ class MetricsWebContentsObserver
  private:
   friend class content::WebContentsUserData<MetricsWebContentsObserver>;
 
+  // page_load_metrics::mojom::PageLoadMetrics implementation.
+  void UpdateTiming(mojom::PageLoadTimingPtr timing,
+                    mojom::PageLoadMetadataPtr metadata) override;
+
+  // Called from legacy IPC.
+  void OnUpdateTimingOverIPC(content::RenderFrameHost* render_frame_host,
+                             const mojom::PageLoadTiming& timing,
+                             const mojom::PageLoadMetadata& metadata);
+
   void HandleFailedNavigationForTrackedLoad(
       content::NavigationHandle* navigation_handle,
       std::unique_ptr<PageLoadTracker> tracker);
@@ -213,6 +229,8 @@ class MetricsWebContentsObserver
   bool has_navigated_;
 
   base::ObserverList<TestingObserver> testing_observers_;
+  content::WebContentsFrameBindingSet<mojom::PageLoadMetrics>
+      page_load_metrics_binding_;
 
   DISALLOW_COPY_AND_ASSIGN(MetricsWebContentsObserver);
 };

@@ -1,6 +1,0 @@
-This is a testharness.js-based test.
-FAIL Casing of known headers assert_equals: expected "content-length: 0\r\n" but got "CONTENT-LENGTH: 0\r\n"
-PASS Casing of known headers 1 
-PASS Casing of known headers 2 
-Harness: the test ran to completion.
-

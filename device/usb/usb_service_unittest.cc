@@ -27,13 +27,12 @@ class UsbServiceTest : public ::testing::Test {
   UsbServiceTest()
       : scoped_task_environment_(
             base::test::ScopedTaskEnvironment::MainThreadType::UI),
-        io_thread_(base::TestIOThread::kAutoStart),
-        device_client_(new TestDeviceClient()) {}
+        io_thread_(base::TestIOThread::kAutoStart) {}
 
  protected:
   base::test::ScopedTaskEnvironment scoped_task_environment_;
   base::TestIOThread io_thread_;
-  std::unique_ptr<TestDeviceClient> device_client_;
+  TestDeviceClient device_client_;
 };
 
 void OnGetDevices(const base::Closure& quit_closure,
@@ -44,16 +43,11 @@ void OnGetDevices(const base::Closure& quit_closure,
   quit_closure.Run();
 }
 
-void OnOpen(scoped_refptr<UsbDeviceHandle>* output,
-            const base::Closure& quit_closure,
-            scoped_refptr<UsbDeviceHandle> input) {
-  *output = input;
-  quit_closure.Run();
-}
+}  // namespace
 
 TEST_F(UsbServiceTest, GetDevices) {
   // The USB service is not available on all platforms.
-  UsbService* service = device_client_->GetUsbService();
+  UsbService* service = DeviceClient::Get()->GetUsbService();
   if (service) {
     base::RunLoop loop;
     service->GetDevices(base::Bind(&OnGetDevices, loop.QuitClosure()));
@@ -65,7 +59,7 @@ TEST_F(UsbServiceTest, GetDevices) {
 TEST_F(UsbServiceTest, GetDevicesNewBackend) {
   base::test::ScopedFeatureList features;
   features.InitAndEnableFeature(device::kNewUsbBackend);
-  UsbService* service = device_client_->GetUsbService();
+  UsbService* service = DeviceClient::Get()->GetUsbService();
   if (service) {
     base::RunLoop loop;
     service->GetDevices(base::Bind(&OnGetDevices, loop.QuitClosure()));
@@ -96,27 +90,5 @@ TEST_F(UsbServiceTest, DisconnectAndReconnect) {
   ASSERT_TRUE(gadget->Disconnect());
   ASSERT_TRUE(gadget->Reconnect());
 }
-
-TEST_F(UsbServiceTest, Shutdown) {
-  if (!UsbTestGadget::IsTestEnabled())
-    return;
-
-  std::unique_ptr<UsbTestGadget> gadget =
-      UsbTestGadget::Claim(io_thread_.task_runner());
-  ASSERT_TRUE(gadget);
-
-  base::RunLoop loop;
-  scoped_refptr<UsbDeviceHandle> device_handle;
-  gadget->GetDevice()->Open(
-      base::Bind(&OnOpen, &device_handle, loop.QuitClosure()));
-  loop.Run();
-  ASSERT_TRUE(device_handle);
-
-  // Shut down the USB service while the device handle is still open.
-  device_client_.reset();
-  EXPECT_FALSE(device_handle->GetDevice());
-}
-
-}  // namespace
 
 }  // namespace device

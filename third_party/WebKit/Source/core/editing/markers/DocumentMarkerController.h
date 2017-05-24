@@ -77,13 +77,13 @@ class CORE_EXPORT DocumentMarkerController final
   void RepaintMarkers(
       DocumentMarker::MarkerTypes = DocumentMarker::AllMarkers());
   // Returns true if markers within a range are found.
-  bool SetMarkersActive(const EphemeralRange&, bool);
+  bool SetTextMatchMarkersActive(const EphemeralRange&, bool);
   // Returns true if markers within a range defined by a node, |startOffset| and
   // |endOffset| are found.
-  bool SetMarkersActive(Node*,
-                        unsigned start_offset,
-                        unsigned end_offset,
-                        bool);
+  bool SetTextMatchMarkersActive(Node*,
+                                 unsigned start_offset,
+                                 unsigned end_offset,
+                                 bool);
   bool HasMarkers(Node* node) const { return markers_.Contains(node); }
 
   // Returns a marker of one of the specified types that includes the specified
@@ -94,10 +94,10 @@ class CORE_EXPORT DocumentMarkerController final
       Node*,
       DocumentMarker::MarkerTypes = DocumentMarker::AllMarkers());
   DocumentMarkerVector Markers();
-  Vector<IntRect> RenderedRectsForMarkers(DocumentMarker::MarkerType);
+  Vector<IntRect> RenderedRectsForTextMatchMarkers();
   void UpdateMarkerRenderedRectIfNeeded(const Node&, RenderedDocumentMarker&);
-  void InvalidateRectsForAllMarkers();
-  void InvalidateRectsForMarkersInNode(const Node&);
+  void InvalidateRectsForAllTextMatchMarkers();
+  void InvalidateRectsForTextMatchMarkersInNode(const Node&);
 
   DECLARE_TRACE();
 

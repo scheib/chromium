@@ -178,10 +178,6 @@ KEYBOARD_EXPORT const GURL& GetOverrideContentUrl();
 // Logs the keyboard control event as a UMA stat.
 void LogKeyboardControlEvent(KeyboardControlEvent event);
 
-// Sets true if keyboard overscrolling is enabled with accessibility keyboard.
-KEYBOARD_EXPORT void SetOverscrollEnabledWithAccessibilityKeyboard(
-    bool enabled);
-
 }  // namespace keyboard
 
 #endif  // UI_KEYBOARD_KEYBOARD_UTIL_H_

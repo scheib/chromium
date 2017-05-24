@@ -117,6 +117,7 @@ class AURA_EXPORT Env : public ui::EventTarget,
   friend class EventInjector;
   friend class MusMouseLocationUpdater;
   friend class Window;
+  friend class WindowTreeClient;  // For call to WindowTreeClientDestroyed().
   friend class WindowTreeHost;
 
   explicit Env(Mode mode);
@@ -137,6 +138,8 @@ class AURA_EXPORT Env : public ui::EventTarget,
   // Invoked by WindowTreeHost when it is activated. Notifies observers.
   void NotifyHostActivated(WindowTreeHost* host);
 
+  void WindowTreeClientDestroyed(WindowTreeClient* client);
+
   // Overridden from ui::EventTarget:
   bool CanAcceptEvent(const ui::Event& event) override;
   ui::EventTarget* GetParentTarget() override;
@@ -151,7 +154,8 @@ class AURA_EXPORT Env : public ui::EventTarget,
   Mode mode_;
 
   // Intentionally not exposed publicly. Someday we might want to support
-  // multiple WindowTreeClients. Use EnvTestHelper in tests.
+  // multiple WindowTreeClients. Use EnvTestHelper in tests. This is set to null
+  // during shutdown.
   WindowTreeClient* window_tree_client_ = nullptr;
 
   base::ObserverList<EnvObserver> observers_;
@@ -179,6 +183,10 @@ class AURA_EXPORT Env : public ui::EventTarget,
 
   ui::ContextFactory* context_factory_;
   ui::ContextFactoryPrivate* context_factory_private_;
+
+  // This is set to true when the WindowTreeClient is destroyed. It triggers
+  // creating a different WindowPort implementation.
+  bool in_mus_shutdown_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(Env);
 };

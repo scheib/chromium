@@ -35,6 +35,26 @@ void SplitCodecsToVector(const std::string& codecs,
   GetMimeUtil()->SplitCodecsToVector(codecs, codecs_out, strip);
 }
 
+MEDIA_EXPORT bool ParseVideoCodecString(const std::string& mime_type,
+                                        const std::string& codec_id,
+                                        bool* ambiguous_codec_string,
+                                        VideoCodec* out_codec,
+                                        VideoCodecProfile* out_profile,
+                                        uint8_t* out_level,
+                                        VideoColorSpace* out_colorspace) {
+  return GetMimeUtil()->ParseVideoCodecString(
+      mime_type, codec_id, ambiguous_codec_string, out_codec, out_profile,
+      out_level, out_colorspace);
+}
+
+MEDIA_EXPORT bool ParseAudioCodecString(const std::string& mime_type,
+                                        const std::string& codec_id,
+                                        bool* ambiguous_codec_string,
+                                        AudioCodec* out_codec) {
+  return GetMimeUtil()->ParseAudioCodecString(
+      mime_type, codec_id, ambiguous_codec_string, out_codec);
+}
+
 void RemoveProprietaryMediaTypesAndCodecsForTests() {
   GetMimeUtil()->RemoveProprietaryMediaTypesAndCodecs();
 }

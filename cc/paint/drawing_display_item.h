@@ -17,8 +17,7 @@ namespace cc {
 class CC_PAINT_EXPORT DrawingDisplayItem : public DisplayItem {
  public:
   DrawingDisplayItem();
-  explicit DrawingDisplayItem(sk_sp<const PaintRecord> record,
-                              const SkRect& bounds);
+  explicit DrawingDisplayItem(sk_sp<const PaintRecord> record);
   explicit DrawingDisplayItem(const DrawingDisplayItem& item);
   ~DrawingDisplayItem() override;
 
@@ -26,7 +25,6 @@ class CC_PAINT_EXPORT DrawingDisplayItem : public DisplayItem {
   size_t OpCount() const;
 
   const sk_sp<const PaintRecord> picture;
-  SkRect bounds;
 };
 
 }  // namespace cc

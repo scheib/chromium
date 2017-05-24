@@ -273,9 +273,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionsLoadTest, Test) {
 
 #if defined(OS_CHROMEOS)
 
-// Flaky test crbug.com/716727
 IN_PROC_BROWSER_TEST_F(ExtensionsLoadTest,
-                       DISABLED_SigninProfileCommandLineExtensionsDontLoad) {
+                       SigninProfileCommandLineExtensionsDontLoad) {
   // The --load-extension command line flag should not be applied to the sign-in
   // profile.
   EXPECT_EQ(0, GetNonComponentEnabledExtensionCount(

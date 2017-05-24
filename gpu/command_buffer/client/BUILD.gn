@@ -35,6 +35,8 @@ source_set("client_sources") {
   visibility = [ "//gpu/*" ]
 
   sources = [
+    "client_discardable_manager.cc",
+    "client_discardable_manager.h",
     "cmd_buffer_helper.cc",
     "cmd_buffer_helper.h",
     "fenced_allocator.cc",

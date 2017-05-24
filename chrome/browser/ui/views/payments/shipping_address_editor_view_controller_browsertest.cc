@@ -6,6 +6,7 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ui/views/payments/editor_view_controller.h"
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "chrome/browser/ui/views/payments/validating_textfield.h"
@@ -90,8 +91,9 @@ class PaymentRequestShippingAddressEditorTest
   // in |textfield_text| if it's not null, and return true.
   bool GetEditorTextfieldValueIfExists(autofill::ServerFieldType type,
                                        base::string16* textfield_text) {
-    ValidatingTextfield* textfield = static_cast<ValidatingTextfield*>(
-        dialog_view()->GetViewByID(static_cast<int>(type)));
+    ValidatingTextfield* textfield =
+        static_cast<ValidatingTextfield*>(dialog_view()->GetViewByID(
+            EditorViewController::GetInputFieldViewId(type)));
     if (!textfield)
       return false;
     if (textfield_text)
@@ -152,9 +154,9 @@ class PaymentRequestShippingAddressEditorTest
   }
 
   std::string GetSelectedCountryCode() {
-    views::Combobox* country_combobox =
-        static_cast<views::Combobox*>(dialog_view()->GetViewByID(
-            static_cast<int>(autofill::ADDRESS_HOME_COUNTRY)));
+    views::Combobox* country_combobox = static_cast<views::Combobox*>(
+        dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
+            autofill::ADDRESS_HOME_COUNTRY)));
     DCHECK(country_combobox);
     int selected_country_row = country_combobox->GetSelectedRow();
     autofill::CountryComboboxModel* country_model =
@@ -316,9 +318,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
 
   SetCommonFields();
 
-  views::Combobox* country_combobox =
-      static_cast<views::Combobox*>(dialog_view()->GetViewByID(
-          static_cast<int>(autofill::ADDRESS_HOME_COUNTRY)));
+  views::Combobox* country_combobox = static_cast<views::Combobox*>(
+      dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
+          autofill::ADDRESS_HOME_COUNTRY)));
   ASSERT_NE(nullptr, country_combobox);
   ASSERT_EQ(0, country_combobox->GetSelectedRow());
   autofill::CountryComboboxModel* country_model =
@@ -336,9 +338,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
     // The editor updates asynchronously when the country changes.
     ResetEventObserver(DialogEvent::EDITOR_VIEW_UPDATED);
 
-    views::Combobox* region_combobox =
-        static_cast<views::Combobox*>(dialog_view()->GetViewByID(
-            static_cast<int>(autofill::ADDRESS_HOME_STATE)));
+    views::Combobox* region_combobox = static_cast<views::Combobox*>(
+        dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
+            autofill::ADDRESS_HOME_STATE)));
     autofill::RegionComboboxModel* region_model = nullptr;
     // Some countries don't have a state combobox.
     if (region_combobox) {
@@ -369,8 +371,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
     // available in this country.
     std::set<autofill::ServerFieldType> set_types;
     for (auto type : unset_types) {
-      ValidatingTextfield* textfield = static_cast<ValidatingTextfield*>(
-          dialog_view()->GetViewByID(static_cast<int>(type)));
+      ValidatingTextfield* textfield =
+          static_cast<ValidatingTextfield*>(dialog_view()->GetViewByID(
+              EditorViewController::GetInputFieldViewId(type)));
       if (textfield) {
         EXPECT_TRUE(textfield->text().empty()) << type;
         SetFieldTestValue(type);
@@ -382,8 +385,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
     }
 
     // Make sure the country combobox was properly reset to the chosen country.
-    country_combobox = static_cast<views::Combobox*>(dialog_view()->GetViewByID(
-        static_cast<int>(autofill::ADDRESS_HOME_COUNTRY)));
+    country_combobox = static_cast<views::Combobox*>(
+        dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
+            autofill::ADDRESS_HOME_COUNTRY)));
     DCHECK(country_combobox);
     EXPECT_EQ(country_index,
               static_cast<size_t>(country_combobox->GetSelectedRow()));
@@ -492,12 +496,14 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
   AddAutofillProfile(profile);
 
   InvokePaymentRequestUI();
+  SetRegionDataLoader(&test_region_data_loader_);
 
   // One shipping address is available, but it's not selected.
   PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
   EXPECT_EQ(1U, request->state()->shipping_profiles().size());
   EXPECT_EQ(nullptr, request->state()->selected_shipping_profile());
 
+  test_region_data_loader_.set_synchronous_callback(true);
   OpenShippingAddressSectionScreen();
 
   ResetEventObserver(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
@@ -545,6 +551,54 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
   EXPECT_EQ(1U, request->state()->shipping_profiles().size());
   EXPECT_EQ(request->state()->shipping_profiles().back(),
             request->state()->selected_shipping_profile());
+}
+
+IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
+                       FocusFirstInvalidField_Name) {
+  InvokePaymentRequestUI();
+  SetRegionDataLoader(&test_region_data_loader_);
+
+  test_region_data_loader_.set_synchronous_callback(true);
+  OpenShippingAddressEditorScreen();
+
+  // We know that the name field is always the first one in a shipping address.
+  views::Textfield* textfield =
+      static_cast<views::Textfield*>(dialog_view()->GetViewByID(
+          EditorViewController::GetInputFieldViewId(autofill::NAME_FULL)));
+  DCHECK(textfield);
+  EXPECT_TRUE(textfield->text().empty());
+  EXPECT_TRUE(textfield->invalid());
+  EXPECT_TRUE(textfield->HasFocus());
+}
+
+IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressEditorTest,
+                       FocusFirstInvalidField_NotName) {
+  // Add address with the name set, so that another view takes focus.
+  autofill::AutofillProfile profile;
+  profile.SetInfo(autofill::AutofillType(autofill::NAME_FULL),
+                  base::ASCIIToUTF16(kNameFull), "fr_CA");
+  AddAutofillProfile(profile);
+
+  InvokePaymentRequestUI();
+  SetRegionDataLoader(&test_region_data_loader_);
+  test_region_data_loader_.set_synchronous_callback(true);
+  OpenShippingAddressSectionScreen();
+  ResetEventObserver(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+                                DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
+
+  views::Textfield* textfield =
+      static_cast<views::Textfield*>(dialog_view()->GetViewByID(
+          EditorViewController::GetInputFieldViewId(autofill::NAME_FULL)));
+  DCHECK(textfield);
+  EXPECT_FALSE(textfield->text().empty());
+  EXPECT_FALSE(textfield->invalid());
+  EXPECT_FALSE(textfield->HasFocus());
+
+  // Since we can't easily tell which field is after name, let's just make sure
+  // that a view has focus. Unfortunately, we can't cast it to a specific type
+  // that we could query for validity (it could be either text or combobox).
+  EXPECT_NE(textfield->GetFocusManager()->GetFocusedView(), nullptr);
 }
 
 }  // namespace payments

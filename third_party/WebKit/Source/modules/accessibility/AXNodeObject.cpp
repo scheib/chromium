@@ -547,7 +547,7 @@ AccessibilityRole AXNodeObject::NativeAccessibilityRoleIgnoringAria() const {
     return kHeadingRole;
 
   if (isHTMLDivElement(*GetNode()))
-    return kDivRole;
+    return kGenericContainerRole;
 
   if (isHTMLMeterElement(*GetNode()))
     return kMeterRole;
@@ -635,16 +635,16 @@ AccessibilityRole AXNodeObject::NativeAccessibilityRoleIgnoringAria() const {
 
   // There should only be one banner/contentInfo per page. If header/footer are
   // being used within an article or section then it should not be exposed as
-  // whole page's banner/contentInfo but as a group role.
+  // whole page's banner/contentInfo but as a generic container role.
   if (GetNode()->HasTagName(headerTag)) {
     if (IsDescendantOfElementType(GetLandmarkRolesNotAllowed()))
-      return kGroupRole;
+      return kGenericContainerRole;
     return kBannerRole;
   }
 
   if (GetNode()->HasTagName(footerTag)) {
     if (IsDescendantOfElementType(GetLandmarkRolesNotAllowed()))
-      return kGroupRole;
+      return kGenericContainerRole;
     return kFooterRole;
   }
 
@@ -693,7 +693,7 @@ AccessibilityRole AXNodeObject::DetermineAccessibilityRole() {
     // The layout checks for focusability aren't critical here; a false
     // positive would be harmless.
     if (element->IsInCanvasSubtree() && element->SupportsFocus())
-      return kGroupRole;
+      return kGenericContainerRole;
   }
   return kUnknownRole;
 }
@@ -1047,10 +1047,20 @@ bool AXNodeObject::IsMeter() const {
 }
 
 bool AXNodeObject::IsMultiSelectable() const {
-  bool multiselectable = false;
-  if (HasAOMPropertyOrARIAAttribute(AOMBooleanProperty::kMultiselectable,
-                                    multiselectable)) {
-    return multiselectable;
+  switch (RoleValue()) {
+    case kGridRole:
+    case kTreeGridRole:
+    case kTreeRole:
+    case kListBoxRole:
+    case kTabListRole: {
+      bool multiselectable = false;
+      if (HasAOMPropertyOrARIAAttribute(AOMBooleanProperty::kMultiselectable,
+                                        multiselectable)) {
+        return multiselectable;
+      }
+    }
+    default:
+      break;
   }
 
   return isHTMLSelectElement(GetNode()) &&
@@ -1867,27 +1877,29 @@ String AXNodeObject::TextAlternative(bool recursive,
     return text_alternative;
 
   // Step 2F / 2G from: http://www.w3.org/TR/accname-aam-1.1
-  if (recursive || NameFromContents()) {
-    name_from = kAXNameFromContents;
-    if (name_sources) {
-      name_sources->push_back(NameSource(found_text_alternative));
-      name_sources->back().type = name_from;
-    }
-
+  if (in_aria_labelled_by_traversal || NameFromContents(recursive)) {
     Node* node = this->GetNode();
-    if (node && node->IsTextNode())
-      text_alternative = ToText(node)->wholeText();
-    else if (isHTMLBRElement(node))
-      text_alternative = String("\n");
-    else
-      text_alternative = TextFromDescendants(visited, false);
-
-    if (!text_alternative.IsEmpty()) {
+    if (!isHTMLSelectElement(node)) {  // Avoid option descendant text
+      name_from = kAXNameFromContents;
       if (name_sources) {
-        found_text_alternative = true;
-        name_sources->back().text = text_alternative;
-      } else {
-        return text_alternative;
+        name_sources->push_back(NameSource(found_text_alternative));
+        name_sources->back().type = name_from;
+      }
+
+      if (node && node->IsTextNode())
+        text_alternative = ToText(node)->wholeText();
+      else if (isHTMLBRElement(node))
+        text_alternative = String("\n");
+      else
+        text_alternative = TextFromDescendants(visited, false);
+
+      if (!text_alternative.IsEmpty()) {
+        if (name_sources) {
+          found_text_alternative = true;
+          name_sources->back().text = text_alternative;
+        } else {
+          return text_alternative;
+        }
       }
     }
   }
@@ -2017,19 +2029,6 @@ bool AXNodeObject::NameFromLabelElement() const {
   }
 
   return false;
-}
-
-bool AXNodeObject::NameFromContents() const {
-  Node* node = GetNode();
-  if (!node || !node->IsElementNode())
-    return AXObjectImpl::NameFromContents();
-  // AXObjectImpl::nameFromContents determines whether an element should take
-  // its name from its descendant contents based on role. However, <select> is a
-  // special case, as unlike a typical pop-up button it contains its own pop-up
-  // menu's contents, which should not be used as the name.
-  if (isHTMLSelectElement(node))
-    return false;
-  return AXObjectImpl::NameFromContents();
 }
 
 void AXNodeObject::GetRelativeBounds(

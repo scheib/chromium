@@ -14,6 +14,7 @@
 #include "components/password_manager/core/browser/http_password_store_migrator.h"
 #include "components/password_manager/core/browser/password_store.h"
 #include "components/password_manager/core/browser/password_store_consumer.h"
+#include "components/password_manager/core/browser/suppressed_https_form_fetcher.h"
 
 namespace password_manager {
 
@@ -23,13 +24,15 @@ class PasswordManagerClient;
 // with a particular origin.
 class FormFetcherImpl : public FormFetcher,
                         public PasswordStoreConsumer,
-                        public HttpPasswordStoreMigrator::Consumer {
+                        public HttpPasswordStoreMigrator::Consumer,
+                        public SuppressedHTTPSFormFetcher::Consumer {
  public:
   // |form_digest| describes what credentials need to be retrieved and
   // |client| serves the PasswordStore, the logging information etc.
   FormFetcherImpl(PasswordStore::FormDigest form_digest,
                   const PasswordManagerClient* client,
-                  bool should_migrate_http_passwords);
+                  bool should_migrate_http_passwords,
+                  bool should_query_suppressed_https_forms);
 
   ~FormFetcherImpl() override;
 
@@ -40,6 +43,9 @@ class FormFetcherImpl : public FormFetcher,
   const std::vector<InteractionsStats>& GetInteractionsStats() const override;
   const std::vector<const autofill::PasswordForm*>& GetFederatedMatches()
       const override;
+  const std::vector<const autofill::PasswordForm*>& GetSuppressedHTTPSForms()
+      const override;
+  bool DidCompleteQueryingSuppressedHTTPSForms() const override;
   void Fetch() override;
   std::unique_ptr<FormFetcher> Clone() override;
 
@@ -50,6 +56,10 @@ class FormFetcherImpl : public FormFetcher,
 
   // HttpPasswordStoreMigrator::Consumer:
   void ProcessMigratedForms(
+      std::vector<std::unique_ptr<autofill::PasswordForm>> forms) override;
+
+  // SuppressedHTTPSFormFetcher::Consumer:
+  void ProcessSuppressedHTTPSForms(
       std::vector<std::unique_ptr<autofill::PasswordForm>> forms) override;
 
  private:
@@ -71,9 +81,19 @@ class FormFetcherImpl : public FormFetcher,
   // Statistics for the current domain.
   std::vector<InteractionsStats> interactions_stats_;
 
+  // When |form_digest_.origin| is not secure, that is, its scheme is HTTP, this
+  // will be filled with credentials found for the HTTPS version of that origin.
+  std::vector<std::unique_ptr<autofill::PasswordForm>> suppressed_https_forms_;
+
+  // Whether querying |suppressed_https_forms_| was attempted and did complete
+  // at least once during the lifetime of this instance, regardless of whether
+  // there have been any results.
+  bool did_complete_querying_suppressed_https_forms_ = false;
+
   // Non-owning copies of the vectors above.
   std::vector<const autofill::PasswordForm*> weak_non_federated_;
   std::vector<const autofill::PasswordForm*> weak_federated_;
+  std::vector<const autofill::PasswordForm*> weak_suppressed_https_forms_;
 
   // Consumers of the fetcher, all are assumed to outlive |this|.
   std::set<FormFetcher::Consumer*> consumers_;
@@ -95,8 +115,16 @@ class FormFetcherImpl : public FormFetcher,
   // Indicates whether HTTP passwords should be migrated to HTTPS.
   const bool should_migrate_http_passwords_;
 
+  // Indicates whether to query |suppressed_https_forms_| on HTTP origins.
+  const bool should_query_suppressed_https_forms_;
+
   // Does the actual migration.
   std::unique_ptr<HttpPasswordStoreMigrator> http_migrator_;
+
+  // When |form_digest_.origin| is not secure, responsible for looking up
+  // credentials stored for the HTTPS counterpart of that origin. This happens
+  // asynchronously, without blocking Consumer::ProcessMatches.
+  std::unique_ptr<SuppressedHTTPSFormFetcher> suppressed_https_form_fetcher_;
 
   DISALLOW_COPY_AND_ASSIGN(FormFetcherImpl);
 };

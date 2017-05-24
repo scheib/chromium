@@ -39,6 +39,7 @@
 #include "core/animation/animatable/AnimatableDouble.h"
 #include "core/animation/animatable/AnimatableDoubleAndBool.h"
 #include "core/animation/animatable/AnimatableFilterOperations.h"
+#include "core/animation/animatable/AnimatableFontVariationSettings.h"
 #include "core/animation/animatable/AnimatableImage.h"
 #include "core/animation/animatable/AnimatableLength.h"
 #include "core/animation/animatable/AnimatableLengthBox.h"
@@ -300,6 +301,11 @@ static PassRefPtr<AnimatableValue> CreateFromFontStretch(
   return CreateFromDouble(FontStretchToDouble(font_stretch));
 }
 
+static PassRefPtr<AnimatableValue> CreateFromFontVariationSettings(
+    FontVariationSettings* settings) {
+  return AnimatableFontVariationSettings::Create(settings);
+}
+
 static PassRefPtr<AnimatableValue> CreateFromTransformProperties(
     PassRefPtr<TransformOperation> transform,
     double zoom,
@@ -446,6 +452,9 @@ PassRefPtr<AnimatableValue> CSSAnimatableValueFactory::Create(
                  : AnimatableUnknown::Create(CSSValueNone);
     case CSSPropertyFontStretch:
       return CreateFromFontStretch(style.GetFontStretch());
+    case CSSPropertyFontVariationSettings:
+      return CreateFromFontVariationSettings(
+          style.GetFontDescription().VariationSettings());
     case CSSPropertyFontWeight:
       return CreateFromFontWeight(style.GetFontWeight());
     case CSSPropertyHeight:

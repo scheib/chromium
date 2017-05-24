@@ -70,10 +70,13 @@ void SessionCertificatePolicyCacheImpl::UpdateCertificatePolicyCache(
   DCHECK_CURRENTLY_ON(WebThread::UI);
   DCHECK(cache.get());
   NSSet* allowed_certs = [NSSet setWithSet:allowed_certs_];
+  const scoped_refptr<web::CertificatePolicyCache> cache_copy = cache;
   web::WebThread::PostTask(
       web::WebThread::IO, FROM_HERE, base::BindBlockArc(^{
-        for (CRWSessionCertificateStorage* cert in allowed_certs)
-          cache->AllowCertForHost(cert.certificate, cert.host, cert.status);
+        for (CRWSessionCertificateStorage* cert in allowed_certs) {
+          cache_copy->AllowCertForHost(cert.certificate, cert.host,
+                                       cert.status);
+        }
       }));
 }
 

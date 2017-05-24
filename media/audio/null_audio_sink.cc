@@ -79,6 +79,10 @@ OutputDeviceInfo NullAudioSink::GetOutputDeviceInfo() {
   return OutputDeviceInfo(OUTPUT_DEVICE_STATUS_OK);
 }
 
+bool NullAudioSink::IsOptimizedForHardwareParameters() {
+  return false;
+}
+
 bool NullAudioSink::CurrentThreadIsRenderingThread() {
   return task_runner_->BelongsToCurrentThread();
 }

@@ -188,6 +188,7 @@ static CGFloat kHostInset = 5.f;
 - (void)clientConnected {
   HostViewController* hostViewController =
       [[HostViewController alloc] initWithClient:_client];
+  _client = nil;
   [self presentViewController:hostViewController animated:YES completion:nil];
 }
 

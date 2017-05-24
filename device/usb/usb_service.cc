@@ -43,6 +43,9 @@ void UsbService::Observer::OnDeviceRemovedCleanup(
 
 void UsbService::Observer::WillDestroyUsbService() {}
 
+// Declare storage for this constexpr.
+constexpr base::TaskTraits UsbService::kBlockingTaskTraits;
+
 // static
 std::unique_ptr<UsbService> UsbService::Create() {
 #if defined(OS_ANDROID)
@@ -64,17 +67,10 @@ std::unique_ptr<UsbService> UsbService::Create() {
 // static
 scoped_refptr<base::SequencedTaskRunner>
 UsbService::CreateBlockingTaskRunner() {
-  return base::CreateSequencedTaskRunnerWithTraits(
-      {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
-       base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN});
+  return base::CreateSequencedTaskRunnerWithTraits(kBlockingTaskTraits);
 }
 
 UsbService::~UsbService() {
-#if DCHECK_IS_ON()
-  DCHECK(did_shutdown_);
-#endif
-  for (const auto& map_entry : devices_)
-    map_entry.second->OnDisconnect();
   for (auto& observer : observer_list_)
     observer.WillDestroyUsbService();
 }
@@ -92,20 +88,6 @@ scoped_refptr<UsbDevice> UsbService::GetDevice(const std::string& guid) {
   if (it == devices_.end())
     return nullptr;
   return it->second;
-}
-
-void UsbService::Shutdown() {
-  for (const auto& map_entry : devices_) {
-    // Swap out this list as UsbDevice::HandleClosed() will try to modify it.
-    std::list<UsbDeviceHandle*> handles;
-    handles.swap(map_entry.second->handles());
-    for (auto* handle : handles)
-      handle->Close();
-  }
-#if DCHECK_IS_ON()
-  DCHECK(!did_shutdown_);
-  did_shutdown_ = true;
-#endif
 }
 
 void UsbService::GetDevices(const GetDevicesCallback& callback) {

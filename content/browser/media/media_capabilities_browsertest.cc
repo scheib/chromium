@@ -88,9 +88,9 @@ IN_PROC_BROWSER_TEST_F(MediaCapabilitiesTest, VideoDecodeTypes) {
 
   EXPECT_EQ(kSupported, CanDecodeVideo("'video/webm; codecs=\"vp8\"'"));
 
-  // TODO(chcunningham): Drop support for the old VP9 string. Only support
-  // the new vp09 format which provides critical profile information.
-  EXPECT_EQ(kSupported, CanDecodeVideo("'video/webm; codecs=\"vp9\"'"));
+  // Only support the new vp09 format which provides critical profile
+  // information.
+  EXPECT_EQ(kUnsupported, CanDecodeVideo("'video/webm; codecs=\"vp9\"'"));
   // Requires command line flag switches::kEnableNewVp9CodecString
   EXPECT_EQ(kSupported,
             CanDecodeVideo("'video/webm; codecs=\"vp09.00.10.08\"'"));

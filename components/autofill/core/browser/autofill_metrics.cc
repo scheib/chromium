@@ -793,8 +793,7 @@ bool AutofillMetrics::LogUkm(
     const GURL& url,
     const std::string& ukm_entry_name,
     const std::vector<std::pair<const char*, int>>& metrics) {
-  if (!IsUkmLoggingEnabled() || !ukm_service || !url.is_valid() ||
-      metrics.empty()) {
+  if (!ukm_service || !url.is_valid() || metrics.empty()) {
     return false;
   }
 
@@ -1035,7 +1034,7 @@ AutofillMetrics::FormInteractionsUkmLogger::FormInteractionsUkmLogger(
 
 void AutofillMetrics::FormInteractionsUkmLogger::OnFormsParsed(
     const GURL& url) {
-  if (!IsUkmLoggingEnabled() || ukm_service_ == nullptr)
+  if (ukm_service_ == nullptr)
     return;
 
   url_ = url;
@@ -1142,7 +1141,9 @@ void AutofillMetrics::FormInteractionsUkmLogger::LogFormSubmitted(
   builder->AddMetric(internal::kUKMAutofillFormSubmittedStateMetricName,
                      static_cast<int>(state));
   if (form_parsed_timestamp_.is_null())
-    DCHECK_EQ(state, NON_FILLABLE_FORM_OR_NEW_DATA);
+    DCHECK(state == NON_FILLABLE_FORM_OR_NEW_DATA ||
+           state == FILLABLE_FORM_AUTOFILLED_NONE_DID_NOT_SHOW_SUGGESTIONS)
+        << state;
   else
     builder->AddMetric(internal::kUKMMillisecondsSinceFormParsedMetricName,
                        MillisecondsSinceFormParsed());
@@ -1156,7 +1157,7 @@ void AutofillMetrics::FormInteractionsUkmLogger::UpdateSourceURL(
 }
 
 bool AutofillMetrics::FormInteractionsUkmLogger::CanLog() const {
-  return IsUkmLoggingEnabled() && ukm_service_ && url_.is_valid();
+  return ukm_service_ && url_.is_valid();
 }
 
 int64_t

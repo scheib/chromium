@@ -525,11 +525,7 @@ std::unique_ptr<StoragePartitionImpl> StoragePartitionImpl::Create(
         MakeRequest(&partition->network_context_), std::move(context_params));
 
     partition->url_loader_factory_getter_ = new URLLoaderFactoryGetter();
-    mojom::URLLoaderFactoryPtr network_factory;
-    partition->network_context_->CreateURLLoaderFactory(
-        MakeRequest(&network_factory), 0);
-    partition->url_loader_factory_getter_->Initialize(
-        std::move(network_factory));
+    partition->url_loader_factory_getter_->Initialize(partition.get());
   }
 
   return partition;

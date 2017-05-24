@@ -48,6 +48,7 @@ class UI_ANDROID_EXPORT DelegatedFrameHostAndroid
 
   void SubmitCompositorFrame(const cc::LocalSurfaceId& local_surface_id,
                              cc::CompositorFrame frame);
+  void DidNotProduceFrame(const cc::BeginFrameAck& ack);
 
   void DestroyDelegatedContent();
 
@@ -82,7 +83,6 @@ class UI_ANDROID_EXPORT DelegatedFrameHostAndroid
 
   // cc::ExternalBeginFrameSourceClient implementation.
   void OnNeedsBeginFrames(bool needs_begin_frames) override;
-  void OnDidFinishFrame(const cc::BeginFrameAck& ack) override;
 
   void CreateNewCompositorFrameSinkSupport();
 

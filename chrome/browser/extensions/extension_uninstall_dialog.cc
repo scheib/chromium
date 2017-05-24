@@ -126,6 +126,9 @@ void ExtensionUninstallDialog::OnImageLoaded(const std::string& extension_id,
     case ScopedTestDialogAutoConfirm::NONE:
       Show();
       break;
+    case ScopedTestDialogAutoConfirm::ACCEPT_AND_OPTION:
+      OnDialogClosed(CLOSE_ACTION_UNINSTALL_AND_REPORT_ABUSE);
+      break;
     case ScopedTestDialogAutoConfirm::ACCEPT:
       OnDialogClosed(CLOSE_ACTION_UNINSTALL);
       break;
@@ -163,21 +166,15 @@ void ExtensionUninstallDialog::OnDialogClosed(CloseAction action) {
   base::string16 error;
   switch (action) {
     case CLOSE_ACTION_UNINSTALL_AND_REPORT_ABUSE:
+      // If the extension specifies a custom uninstall page via
+      // chrome.runtime.setUninstallURL, then at uninstallation its uninstall
+      // page opens. To ensure that the CWS Report Abuse page is the active tab
+      // at uninstallation, HandleReportAbuse() is called after Uninstall().
+      success = Uninstall(&error);
       HandleReportAbuse();
-    // Fall through.
+      break;
     case CLOSE_ACTION_UNINSTALL: {
-      const Extension* current_extension =
-          ExtensionRegistry::Get(profile_)->GetExtensionById(
-              extension_->id(), ExtensionRegistry::EVERYTHING);
-      if (current_extension) {
-        success =
-            ExtensionSystem::Get(profile_)
-                ->extension_service()
-                ->UninstallExtension(extension_->id(), uninstall_reason_,
-                                     base::Bind(&base::DoNothing), &error);
-      } else {
-        error = base::ASCIIToUTF16(kExtensionRemovedError);
-      }
+      success = Uninstall(&error);
       break;
     }
     case CLOSE_ACTION_CANCELED:
@@ -186,8 +183,21 @@ void ExtensionUninstallDialog::OnDialogClosed(CloseAction action) {
     case CLOSE_ACTION_LAST:
       NOTREACHED();
   }
-
   delegate_->OnExtensionUninstallDialogClosed(success, error);
+}
+
+bool ExtensionUninstallDialog::Uninstall(base::string16* error) {
+  const Extension* current_extension =
+      ExtensionRegistry::Get(profile_)->GetExtensionById(
+          extension_->id(), ExtensionRegistry::EVERYTHING);
+  if (current_extension) {
+    return ExtensionSystem::Get(profile_)
+        ->extension_service()
+        ->UninstallExtension(extension_->id(), uninstall_reason_,
+                             base::Bind(&base::DoNothing), error);
+  }
+  *error = base::ASCIIToUTF16(kExtensionRemovedError);
+  return false;
 }
 
 void ExtensionUninstallDialog::HandleReportAbuse() {

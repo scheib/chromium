@@ -203,12 +203,6 @@ void NodeController::SendBrokerClientInvitation(
                      process_error_callback));
 }
 
-void NodeController::ClosePeerConnection(const std::string& peer_token) {
-  io_task_runner_->PostTask(
-      FROM_HERE, base::Bind(&NodeController::ClosePeerConnectionOnIOThread,
-                            base::Unretained(this), peer_token));
-}
-
 void NodeController::AcceptBrokerClientInvitation(
     ConnectionParams connection_params) {
   DCHECK(!GetConfiguration().is_broker_process);
@@ -239,16 +233,24 @@ void NodeController::AcceptBrokerClientInvitation(
                      base::Unretained(this), std::move(connection_params)));
 }
 
-void NodeController::ConnectToPeer(ConnectionParams connection_params,
-                                   const ports::PortRef& port,
-                                   const std::string& peer_token) {
-  ports::NodeName node_name;
-  GenerateRandomName(&node_name);
+uint64_t NodeController::ConnectToPeer(ConnectionParams connection_params,
+                                       const ports::PortRef& port) {
+  uint64_t id = 0;
+  {
+    base::AutoLock lock(peers_lock_);
+    id = next_peer_connection_id_++;
+  }
+  io_task_runner_->PostTask(FROM_HERE,
+                            base::Bind(&NodeController::ConnectToPeerOnIOThread,
+                                       base::Unretained(this), id,
+                                       base::Passed(&connection_params), port));
+  return id;
+}
+
+void NodeController::ClosePeerConnection(uint64_t peer_connection_id) {
   io_task_runner_->PostTask(
-      FROM_HERE,
-      base::Bind(&NodeController::ConnectToPeerOnIOThread,
-                 base::Unretained(this), base::Passed(&connection_params),
-                 node_name, port, peer_token));
+      FROM_HERE, base::Bind(&NodeController::ClosePeerConnectionOnIOThread,
+                            base::Unretained(this), peer_connection_id));
 }
 
 void NodeController::SetPortObserver(const ports::PortRef& port,
@@ -414,17 +416,19 @@ void NodeController::AcceptBrokerClientInvitationOnIOThread(
   bootstrap_parent_channel_->Start();
 }
 
-void NodeController::ConnectToPeerOnIOThread(ConnectionParams connection_params,
-                                             ports::NodeName token,
-                                             ports::PortRef port,
-                                             const std::string& peer_token) {
+void NodeController::ConnectToPeerOnIOThread(uint64_t peer_connection_id,
+                                             ConnectionParams connection_params,
+                                             ports::PortRef port) {
   DCHECK(io_task_runner_->RunsTasksOnCurrentThread());
 
   scoped_refptr<NodeChannel> channel = NodeChannel::Create(
       this, std::move(connection_params), io_task_runner_, {});
-  peer_connections_.insert(
-      {token, PeerConnection{channel, port, peer_token}});
-  peers_by_token_.insert({peer_token, token});
+
+  ports::NodeName token;
+  GenerateRandomName(&token);
+  peer_connections_.emplace(token,
+                            PeerConnection{channel, port, peer_connection_id});
+  peer_connections_by_id_.emplace(peer_connection_id, token);
 
   channel->SetRemoteNodeName(token);
   channel->Start();
@@ -433,11 +437,11 @@ void NodeController::ConnectToPeerOnIOThread(ConnectionParams connection_params,
 }
 
 void NodeController::ClosePeerConnectionOnIOThread(
-    const std::string& peer_token) {
+    uint64_t peer_connection_id) {
   RequestContext request_context(RequestContext::Source::SYSTEM);
-  auto peer = peers_by_token_.find(peer_token);
+  auto peer = peer_connections_by_id_.find(peer_connection_id);
   // The connection may already be closed.
-  if (peer == peers_by_token_.end())
+  if (peer == peer_connections_by_id_.end())
     return;
 
   // |peer| may be removed so make a copy of |name|.
@@ -567,7 +571,7 @@ void NodeController::DropPeer(const ports::NodeName& name,
 
   auto peer = peer_connections_.find(name);
   if (peer != peer_connections_.end()) {
-    peers_by_token_.erase(peer->second.peer_token);
+    peer_connections_by_id_.erase(peer->second.connection_id);
     ports_to_close.push_back(peer->second.local_port);
     peer_connections_.erase(peer);
   }
@@ -1298,18 +1302,18 @@ void NodeController::OnAcceptPeer(const ports::NodeName& from_node,
 
   scoped_refptr<NodeChannel> channel = std::move(it->second.channel);
   ports::PortRef local_port = it->second.local_port;
-  std::string peer_token = std::move(it->second.peer_token);
+  uint64_t peer_connection_id = it->second.connection_id;
   peer_connections_.erase(it);
   DCHECK(channel);
 
-  // If the peer connection is a self connection (which is used in tests),
-  // drop the channel to it and skip straight to merging the ports.
   if (name_ == peer_name) {
-    peers_by_token_.erase(peer_token);
+    // If the peer connection is a self connection (which is used in tests),
+    // drop the channel to it and skip straight to merging the ports.
+    peer_connections_by_id_.erase(peer_connection_id);
   } else {
-    peers_by_token_[peer_token] = peer_name;
-    peer_connections_.insert(
-        {peer_name, PeerConnection{nullptr, local_port, peer_token}});
+    peer_connections_by_id_[peer_connection_id] = peer_name;
+    peer_connections_.emplace(
+        peer_name, PeerConnection{nullptr, local_port, peer_connection_id});
     DVLOG(1) << "Node " << name_ << " accepted peer " << peer_name;
 
     AddPeer(peer_name, channel, false /* start_channel */);
@@ -1318,9 +1322,8 @@ void NodeController::OnAcceptPeer(const ports::NodeName& from_node,
   // We need to choose one side to initiate the port merge. It doesn't matter
   // who does it as long as they don't both try. Simple solution: pick the one
   // with the "smaller" port name.
-  if (local_port.name() < port_name) {
+  if (local_port.name() < port_name)
     node()->MergePorts(local_port, peer_name, port_name);
-  }
 }
 
 void NodeController::OnChannelError(const ports::NodeName& from_node,
@@ -1407,10 +1410,10 @@ NodeController::PeerConnection::PeerConnection(
 NodeController::PeerConnection::PeerConnection(
     scoped_refptr<NodeChannel> channel,
     const ports::PortRef& local_port,
-    const std::string& peer_token)
+    uint64_t connection_id)
     : channel(std::move(channel)),
       local_port(local_port),
-      peer_token(peer_token) {}
+      connection_id(connection_id) {}
 
 NodeController::PeerConnection::~PeerConnection() = default;
 

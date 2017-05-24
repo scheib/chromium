@@ -20,24 +20,24 @@ function testDataChannelGC() {
   pc1.addEventListener("icecandidate", iceCandidateHandler(pc2));
   pc2.addEventListener("icecandidate", iceCandidateHandler(pc1));
 
-  var probesOk = 0;
+  var messagesReceived = 0;
   var dc1 = pc1.createDataChannel(null);
   dc1.addEventListener("open", function(e) {
     console.log("dc1/open event");
-    var probe = 0;
+    var messagesToSend = 6;
+    var messagesSent = 0;
     var id = setInterval(function() {
-      console.log("dc1/time: probe #" + probe);
-      if (probe == 6) {
+      if (messagesReceived < messagesToSend) {
+        messagesSent++;
+        dc1.send("message #" + messagesSent);
+      } else if (messagesReceived == messagesToSend) {
         clearInterval(id);
-        assertEquals(6, probesOk);
         reportTestSuccess();
         return;
       }
-      dc1.send("probe #" + probe);
-      if (probe == 3) {
+      if (messagesSent == 3) {
         gc();  // Force garbage collection (requires: --js-flags="--expose-gc").
       }
-      probe++;
     }, 10);
   });
 
@@ -46,7 +46,7 @@ function testDataChannelGC() {
     var dc2 = e.channel;
     dc2.addEventListener("message", function(e) {
       console.log("dc2/message event: " + JSON.stringify(e.data));
-      probesOk++;
+      messagesReceived++;
     });
   });
 

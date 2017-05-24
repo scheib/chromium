@@ -493,7 +493,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   const ui::AXNode* root = tree.root();
   ASSERT_EQ(1, root->child_count());
   const ui::AXNode* textbox = root->ChildAtIndex(0);
-  EXPECT_EQ(true, GetBoolAttr(textbox, ui::AX_ATTR_CAN_SET_VALUE));
+  EXPECT_TRUE(textbox->data().HasAction(ui::AX_ACTION_SET_VALUE));
 }
 
 }  // namespace content

@@ -2134,9 +2134,13 @@ static BOOL ValueInRangeInclusive(CGFloat low, CGFloat value, CGFloat high) {
   [self rebuildLayoutWithAnimated:NO];
 }
 
-// TODO(jrg): for now this is brute force.
 - (void)nodeChanged:(BookmarkModel*)model
                node:(const BookmarkNode*)node {
+  // Invalidate the layout if the changed node is visible. This ensures
+  // the button is updated if the button offsets don't change but the
+  // title does.
+  if (nodeIdToButtonMap_.find(node->id()) != nodeIdToButtonMap_.end())
+    layout_ = {};
   [self loaded:model];
 }
 

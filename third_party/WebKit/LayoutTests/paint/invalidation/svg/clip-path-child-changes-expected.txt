@@ -16,10 +16,6 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "LayoutSVGPath path",
-      "reason": "subtree"
-    },
-    {
       "object": "LayoutSVGContainer g",
       "reason": "full"
     }

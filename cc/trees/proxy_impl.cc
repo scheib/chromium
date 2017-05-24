@@ -483,6 +483,11 @@ void ProxyImpl::DidFinishImplFrame() {
   layer_tree_host_impl_->DidFinishImplFrame();
 }
 
+void ProxyImpl::DidNotProduceFrame(const BeginFrameAck& ack) {
+  DCHECK(IsImplThread());
+  layer_tree_host_impl_->DidNotProduceFrame(ack);
+}
+
 void ProxyImpl::ScheduledActionSendBeginMainFrame(const BeginFrameArgs& args) {
   DCHECK(IsImplThread());
   unsigned int begin_frame_id = nextBeginFrameId++;

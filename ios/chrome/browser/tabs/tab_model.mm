@@ -708,7 +708,7 @@ void CleanCertificatePolicyCache(
 
   web::WebState::CreateParams createParams(_browserState);
   DeserializeWebStateList(
-      _webStateList.get(), window,
+      _webStateList.get(), window, webUsageEnabled_,
       base::BindRepeating(&web::WebState::CreateWithStorageSession,
                           createParams));
 

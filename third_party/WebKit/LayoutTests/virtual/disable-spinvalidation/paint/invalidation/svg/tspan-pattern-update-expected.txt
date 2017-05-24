@@ -1,0 +1,40 @@
+{
+  "layers": [
+    {
+      "name": "LayoutView #document",
+      "bounds": [800, 600],
+      "contentsOpaque": true,
+      "drawsContent": true,
+      "paintInvalidations": [
+        {
+          "object": "LayoutSVGTSpan tspan",
+          "rect": [8, 8, 300, 100],
+          "reason": "SVG resource change"
+        }
+      ]
+    }
+  ],
+  "objectPaintInvalidations": [
+    {
+      "object": "LayoutSVGResourcePattern pattern id='pat'",
+      "reason": "full"
+    },
+    {
+      "object": "LayoutSVGTSpan tspan",
+      "reason": "SVG resource change"
+    },
+    {
+      "object": "InlineFlowBox",
+      "reason": "SVG resource change"
+    },
+    {
+      "object": "LayoutSVGInlineText #text",
+      "reason": "SVG resource change"
+    },
+    {
+      "object": "InlineTextBox 'Y'",
+      "reason": "SVG resource change"
+    }
+  ]
+}
+

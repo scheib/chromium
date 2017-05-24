@@ -10,7 +10,6 @@
 #include "gpu/ipc/client/gpu_channel_host.h"
 #include "services/ui/display/screen_manager.h"
 #include "services/ui/public/interfaces/cursor/cursor_struct_traits.h"
-#include "services/ui/ws/display_client_compositor_frame_sink.h"
 #include "services/ui/ws/server_window.h"
 #include "ui/base/cursor/image_cursors.h"
 #include "ui/display/display.h"
@@ -262,13 +261,13 @@ void PlatformDisplayDefault::OnAcceleratedWidgetAvailable(
       std::move(compositor_frame_sink_client),
       mojo::MakeRequest(&display_private));
 
-  auto display_client_compositor_frame_sink =
-      base::MakeUnique<DisplayClientCompositorFrameSink>(
-          root_window_->frame_sink_id(), std::move(compositor_frame_sink),
-          std::move(display_private),
-          std::move(compositor_frame_sink_client_request));
-  frame_generator_ = base::MakeUnique<FrameGenerator>(
-      std::move(display_client_compositor_frame_sink));
+  frame_generator_ = base::MakeUnique<FrameGenerator>();
+  auto frame_sink_client_binding =
+      base::MakeUnique<CompositorFrameSinkClientBinding>(
+          frame_generator_.get(),
+          std::move(compositor_frame_sink_client_request),
+          std::move(compositor_frame_sink), std::move(display_private));
+  frame_generator_->Bind(std::move(frame_sink_client_binding));
   frame_generator_->OnWindowSizeChanged(root_window_->bounds().size());
   frame_generator_->SetDeviceScaleFactor(metrics_.device_scale_factor);
 }

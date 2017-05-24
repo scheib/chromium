@@ -95,22 +95,6 @@ enum ColumnFill { kColumnFillBalance, kColumnFillAuto };
 
 enum ColumnSpan { kColumnSpanNone = 0, kColumnSpanAll };
 
-// These have been defined in the order of their precedence for
-// border-collapsing. Do not change this order! This order also must match the
-// order in CSSValueKeywords.in.
-enum class EBorderStyle {
-  kNone,
-  kHidden,
-  kInset,
-  kGroove,
-  kOutset,
-  kRidge,
-  kDotted,
-  kDashed,
-  kSolid,
-  kDouble
-};
-
 enum OutlineIsAuto { kOutlineIsAutoOff = 0, kOutlineIsAutoOn };
 
 enum EMarginCollapse {
@@ -201,7 +185,7 @@ enum EUserDrag { DRAG_AUTO, DRAG_NONE, DRAG_ELEMENT };
 
 // CSS3 User Select Values
 
-enum EUserSelect { SELECT_NONE, SELECT_TEXT, SELECT_ALL };
+enum class EUserSelect { kNone, kText, kAll };
 
 // CSS3 Image Values
 enum ObjectFit {
@@ -214,14 +198,9 @@ enum ObjectFit {
 
 // Word Break Values. Matches WinIE and CSS3
 
-enum EWordBreak {
-  kNormalWordBreak,
-  kBreakAllWordBreak,
-  kKeepAllWordBreak,
-  kBreakWordBreak
-};
+enum class EWordBreak { kNormal, kBreakAll, kKeepAll, kBreakWord };
 
-enum EOverflowWrap { kNormalOverflowWrap, kBreakOverflowWrap };
+enum class EOverflowWrap { kNormal, kBreakWord };
 
 enum class LineBreak { kAuto, kLoose, kNormal, kStrict, kAfterWhiteSpace };
 
@@ -303,7 +282,7 @@ enum EBackfaceVisibility {
 
 enum ELineClampType { kLineClampLineCount, kLineClampPercentage };
 
-enum Hyphens { kHyphensNone, kHyphensManual, kHyphensAuto };
+enum class Hyphens { kNone, kManual, kAuto };
 
 enum class ESpeak {
   kNone,

@@ -21,7 +21,6 @@ class Widget;
 
 namespace ash {
 class MultiWindowResizeControllerTest;
-class WmWindow;
 class WorkspaceWindowResizer;
 
 // Two directions resizes happen in.
@@ -42,7 +41,7 @@ class ASH_EXPORT MultiWindowResizeController
 
   // If necessary, shows the resize widget. |window| is the window the mouse
   // is over, |component| the edge and |point| the location of the mouse.
-  void Show(WmWindow* window, int component, const gfx::Point& point);
+  void Show(aura::Window* window, int component, const gfx::Point& point);
 
   // Hides the resize widget.
   void Hide();
@@ -70,17 +69,17 @@ class ASH_EXPORT MultiWindowResizeController
     bool is_valid() const { return window1 && window2; }
 
     // The left/top window to resize.
-    WmWindow* window1;
+    aura::Window* window1;
 
     // Other window to resize.
-    WmWindow* window2;
+    aura::Window* window2;
 
     // Direction
     Direction direction;
 
     // Windows after |window2| that are to be resized. Determined at the time
     // the resize starts.
-    std::vector<WmWindow*> other_windows;
+    std::vector<aura::Window*> other_windows;
   };
 
   class ResizeMouseWatcherHost;
@@ -90,27 +89,28 @@ class ASH_EXPORT MultiWindowResizeController
 
   // Returns a ResizeWindows based on the specified arguments. Use is_valid()
   // to test if the return value is a valid multi window resize location.
-  ResizeWindows DetermineWindows(WmWindow* window,
+  ResizeWindows DetermineWindows(aura::Window* window,
                                  int window_component,
                                  const gfx::Point& point) const;
 
   // Variant of DetermineWindows() that uses the current location of the mouse
   // to determine the resize windows.
-  ResizeWindows DetermineWindowsFromScreenPoint(WmWindow* window) const;
+  ResizeWindows DetermineWindowsFromScreenPoint(aura::Window* window) const;
 
   // Finds a window by edge (one of the constants HitTestCompat.
-  WmWindow* FindWindowByEdge(WmWindow* window_to_ignore,
-                             int edge_want,
-                             int x_in_parent,
-                             int y_in_parent) const;
+  aura::Window* FindWindowByEdge(aura::Window* window_to_ignore,
+                                 int edge_want,
+                                 int x_in_parent,
+                                 int y_in_parent) const;
 
   // Returns the first window touching |window|.
-  WmWindow* FindWindowTouching(WmWindow* window, Direction direction) const;
+  aura::Window* FindWindowTouching(aura::Window* window,
+                                   Direction direction) const;
 
   // Places any windows touching |start| into |others|.
-  void FindWindowsTouching(WmWindow* start,
+  void FindWindowsTouching(aura::Window* start,
                            Direction direction,
-                           std::vector<WmWindow*>* others) const;
+                           std::vector<aura::Window*>* others) const;
 
   // Shows the resizer if the mouse is still at a valid location. This is called
   // from the |show_timer_|.
@@ -146,7 +146,7 @@ class ASH_EXPORT MultiWindowResizeController
   bool IsOverWindows(const gfx::Point& location_in_screen) const;
 
   // Returns true if |location_in_screen| is over |component| in |window|.
-  bool IsOverComponent(WmWindow* window,
+  bool IsOverComponent(aura::Window* window,
                        const gfx::Point& location_in_screen,
                        int component) const;
 

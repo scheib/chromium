@@ -12,6 +12,7 @@
 #include "modules/credentialmanager/CredentialManagerClient.h"
 #include "modules/credentialmanager/CredentialRequestOptions.h"
 #include "public/platform/WebCredential.h"
+#include "public/platform/WebCredentialMediationRequirement.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -30,7 +31,7 @@ class MockCredentialManagerClient : public WebCredentialManagerClient {
                void(const WebCredential&, NotificationCallbacks*));
   MOCK_METHOD1(DispatchRequireUserMediation, void(NotificationCallbacks*));
   MOCK_METHOD4(DispatchGet,
-               void(bool,
+               void(WebCredentialMediationRequirement,
                     bool,
                     const WebVector<WebURL>& federations,
                     RequestCallbacks*));

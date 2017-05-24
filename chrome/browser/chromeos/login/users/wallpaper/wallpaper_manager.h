@@ -13,6 +13,7 @@
 #include "base/macros.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observer.h"
 #include "chrome/browser/chromeos/customization/customization_wallpaper_downloader.h"
 #include "chrome/browser/chromeos/settings/cros_settings.h"
 #include "components/user_manager/user.h"
@@ -23,7 +24,10 @@
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
 #include "mojo/public/cpp/bindings/binding.h"
+#include "ui/aura/window_observer.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/wm/public/activation_change_observer.h"
+#include "ui/wm/public/activation_client.h"
 
 namespace chromeos {
 
@@ -31,7 +35,9 @@ class WallpaperManager
     : public wallpaper::WallpaperManagerBase,
       public ash::mojom::WallpaperPicker,
       public content::NotificationObserver,
-      public user_manager::UserManager::UserSessionStateObserver {
+      public user_manager::UserManager::UserSessionStateObserver,
+      public aura::client::ActivationChangeObserver,
+      public aura::WindowObserver {
  public:
   class PendingWallpaper;
 
@@ -94,6 +100,14 @@ class WallpaperManager
 
   // user_manager::UserManager::UserSessionStateObserver:
   void UserChangedChildStatus(user_manager::User* user) override;
+
+  // aura::client::ActivationChangeObserver:
+  void OnWindowActivated(ActivationReason reason,
+                         aura::Window* gained_active,
+                         aura::Window* lost_active) override;
+
+  // aura::WindowObserver:
+  void OnWindowDestroying(aura::Window* window) override;
 
  private:
   friend class TestApi;
@@ -215,6 +229,11 @@ class WallpaperManager
   PendingList loading_;
 
   content::NotificationRegistrar registrar_;
+
+  ScopedObserver<aura::client::ActivationClient,
+                 aura::client::ActivationChangeObserver>
+      activation_client_observer_;
+  ScopedObserver<aura::Window, aura::WindowObserver> window_observer_;
 
   base::WeakPtrFactory<WallpaperManager> weak_factory_;
 

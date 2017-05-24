@@ -58,6 +58,12 @@ cr.define('media_router_container_cast_mode_list', function() {
       var fakeCastModeListWithNonDefaultModesOnly = [];
 
       /**
+       * The list of CastModes to show with default mode forced.
+       * @type {!Array<!media_router.CastMode>}
+       */
+      var fakeCastModeListWithDefaultModeForced = [];
+
+      /**
        * The blocking issue to show.
        * @type {?media_router.Issue}
        */
@@ -92,6 +98,8 @@ cr.define('media_router_container_cast_mode_list', function() {
         fakeCastModeList = test_base.fakeCastModeList;
         fakeCastModeListWithNonDefaultModesOnly =
             test_base.fakeCastModeListWithNonDefaultModesOnly;
+        fakeCastModeListWithDefaultModeForced =
+            test_base.fakeCastModeListWithDefaultModeForced;
         fakeNonBlockingIssue = test_base.fakeNonBlockingIssue;
         fakeSinkList = test_base.fakeSinkList;
 
@@ -319,6 +327,40 @@ cr.define('media_router_container_cast_mode_list', function() {
               done();
             });
           });
+        });
+      });
+
+      // When a forced cast mode it set, it is used.
+      test('cast mode list respects forced mode', function(done) {
+        container.allSinks = [
+          new media_router.Sink('sink id 1', 'Sink 1', null, null,
+                                media_router.SinkIconType.CAST,
+                                media_router.SinkStatus.ACTIVE, 0x1),
+          new media_router.Sink('sink id 2', 'Sink 2', null, null,
+                                media_router.SinkIconType.CAST,
+                                media_router.SinkStatus.ACTIVE, 0x1 | 0x2),
+          new media_router.Sink('sink id 3', 'Sink 3', null, null,
+                                media_router.SinkIconType.CAST,
+                                media_router.SinkStatus.ACTIVE, 0x2)
+        ];
+        container.castModeList = fakeCastModeListWithDefaultModeForced;
+        MockInteractions.tap(container.$['container-header'].
+                             $['arrow-drop-icon']);
+        setTimeout(function() {
+          assertEquals(media_router.CastModeType.DEFAULT,
+                       container.shownCastModeValue_);
+          assertEquals('Cast google.com', container.headerText);
+          assertFalse(container.userHasSelectedCastMode_);
+
+          var sinkList =
+              container.shadowRoot.getElementById('sink-list')
+              .querySelectorAll('paper-item');
+
+          // The sink list contains only sinks compatible with DEFAULT mode.
+          assertEquals(2, sinkList.length);
+          checkElementText('Sink 1', sinkList[0]);
+          checkElementText('Sink 2', sinkList[1]);
+          done();
         });
       });
 

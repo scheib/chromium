@@ -24,7 +24,7 @@ will have an install warning.
 * [\_manifest\_features](https://chromium.googlesource.com/chromium/src/+/master/chrome/common/extensions/api/_manifest_features.json):
 Specifies the requirements for manifest entry availability. If an extension
 doesn't satisfy the requirements, the extension will fail to load with an error.
-* [\_behavior\_features](https://chromium.googlesource.com/chromium/src/+/master/chrome/common/extensions/api/_behavior_features.json):
+* [\_behavior\_features](https://chromium.googlesource.com/chromium/src/+/master/extensions/common/api/_behavior_features.json):
 Specifies the requirements for miscellaneous extension behaviors. This should
 typically not be used.
 

@@ -30,7 +30,7 @@
 #include "ppapi/shared_impl/ppapi_switches.h"  // nogncheck
 #endif
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
 #include "base/feature_list.h"
 #include "media/base/media_switches.h"
 #endif
@@ -145,7 +145,7 @@ void ShellContentRendererClient::DidInitializeWorkerContextOnWorkerThread(
   }
 }
 
-#if defined(ENABLE_MOJO_CDM)
+#if BUILDFLAG(ENABLE_MOJO_CDM)
 void ShellContentRendererClient::AddSupportedKeySystems(
     std::vector<std::unique_ptr<media::KeySystemProperties>>* key_systems) {
   if (!base::FeatureList::IsEnabled(media::kExternalClearKeyForTesting))

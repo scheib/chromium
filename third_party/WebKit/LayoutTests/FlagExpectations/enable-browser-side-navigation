@@ -25,6 +25,71 @@ Bug(718942) virtual/mojo-loading/http/tests/security/contentSecurityPolicy/1.1/f
 Bug(718942) virtual/mojo-loading/http/tests/security/contentSecurityPolicy/1.1/form-action-src-redirect-blocked.html [ Failure ]
 Bug(718942) virtual/off-main-thread-fetch/http/tests/misc/onload-detach-during-csp-frame-src-none.html [ Failure ]
 
+# Missing console warning about new lines in urls.
+# ```
+# CONSOLE WARNING: Resource requests whose URLs contain raw newline characters
+# are deprecated, and may be blocked in M60, around August 2017. Please remove
+# newlines from places like element attribute values in order to continue
+# loading those resources. See
+# https://www.chromestatus.com/features/5735596811091968 for more details.
+# ```
+# See https://crbug.com/723595
+Bug(723595) compositing/iframes/iframe-in-composited-layer.html [ Failure ]
+Bug(723595) fast/css/counters/counter-traverse-table-cell.html [ Failure ]
+Bug(723595) fast/dom/Element/offsetLeft-offsetTop-body-quirk.html [ Failure ]
+Bug(723595) fast/dom/Element/offsetLeft-offsetTop-html.html [ Failure ]
+Bug(723595) fast/events/drag-and-drop-autoscroll-inner-frame.html [ Failure ]
+Bug(723595) fast/events/resize-subframe.html [ Failure ]
+Bug(723595) fast/events/touch/gesture/long-press-focuses-frame.html [ Failure ]
+Bug(723595) fast/files/null-origin-string.html [ Failure ]
+Bug(723595) fast/frames/content-opacity-1.html [ Failure ]
+Bug(723595) fast/frames/frameset-style-recalc.html [ Failure ]
+Bug(723595) fast/frames/negative-remaining-length-crash.html [ Failure ]
+Bug(723595) fast/loader/simultaneous-reloads-assert.html [ Failure ]
+Bug(723595) fast/loader/stateobjects/pushstate-in-data-url-denied.html [ Failure ]
+Bug(723595) fast/spatial-navigation/snav-hidden-iframe-zero-size.html [ Failure ]
+Bug(723595) fast/spatial-navigation/snav-hidden-iframe.html [ Failure ]
+Bug(723595) fast/spatial-navigation/snav-iframe-nested.html [ Failure ]
+Bug(723595) fast/spatial-navigation/snav-iframe-no-focusable-content.html [ Failure ]
+Bug(723595) fast/spatial-navigation/snav-iframe-no-scrollable-content.html [ Failure ]
+Bug(723595) fast/spatial-navigation/snav-iframe-recursive-offset-parent.html [ Failure ]
+Bug(723595) fast/spatial-navigation/snav-iframe-with-offscreen-focusable-element.html [ Failure ]
+Bug(723595) fullscreen/full-screen-iframe-without-allow-attribute-allowed-from-parent.html [ Failure ]
+Bug(723595) http/tests/inspector/service-workers/service-workers-redundant.html [ Failure ]
+Bug(723595) http/tests/security/document-all.html [ Failure ]
+Bug(723595) http/tests/security/no-indexeddb-from-sandbox.html [ Failure ]
+Bug(723595) http/tests/security/no-popup-from-sandbox-top.html [ Failure ]
+Bug(723595) http/tests/security/no-popup-from-sandbox.html [ Failure ]
+Bug(723595) http/tests/security/popup-allowed-by-sandbox-is-sandboxed-control.html [ Failure ]
+Bug(723595) http/tests/security/popup-allowed-by-sandbox-is-sandboxed.html [ Failure ]
+Bug(723595) http/tests/security/popup-allowed-by-sandbox-when-allowed.html [ Failure ]
+Bug(723595) http/tests/security/sandboxed-opener-can-close-window.html [ Failure ]
+Bug(723595) http/tests/security/window-named-proto.html [ Failure ]
+Bug(723595) http/tests/security/window-named-valueOf.html [ Failure ]
+Bug(723595) http/tests/xmlhttprequest/access-control-basic-allow-access-control-origin-header-data-url.html [ Failure ]
+Bug(723595) plugins/createScriptableObject-before-start.html [ Failure ]
+Bug(723595) printing/subframes-percentage-height.html [ Failure ]
+Bug(723595) svg/custom/g-outside-svg.html [ Failure ]
+Bug(723595) virtual/android/fullscreen/full-screen-iframe-without-allow-attribute-allowed-from-parent.html [ Failure ]
+Bug(723595) virtual/disable-spinvalidation/compositing/iframes/iframe-in-composited-layer.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/document-all.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/no-indexeddb-from-sandbox.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/no-popup-from-sandbox-top.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/no-popup-from-sandbox.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/popup-allowed-by-sandbox-is-sandboxed-control.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/popup-allowed-by-sandbox-is-sandboxed.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/popup-allowed-by-sandbox-when-allowed.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/sandboxed-opener-can-close-window.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/window-named-proto.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/security/window-named-valueOf.html [ Failure ]
+Bug(723595) virtual/mojo-loading/http/tests/xmlhttprequest/access-control-basic-allow-access-control-origin-header-data-url.html [ Failure ]
+Bug(723595) virtual/off-main-thread-fetch/http/tests/inspector/service-workers/service-workers-redundant.html [ Failure ]
+Bug(723595) virtual/scroll_customization/fast/events/touch/gesture/long-press-focuses-frame.html [ Failure ]
+Bug(723595) virtual/threaded/printing/subframes-percentage-height.html [ Failure ]
+
+# PlzNavigate: Navigation requests upgraded via upgrade-insecure-requests will not get reported	
+# See https://crbug.com/713388
+Bug(713388) external/wpt/content-security-policy/securitypolicyviolation/upgrade-insecure-requests-reporting.https.html [ Timeout ]
 
 # ------------------------------------------------------------
 # These tests are correct with PlzNavigate but not without it

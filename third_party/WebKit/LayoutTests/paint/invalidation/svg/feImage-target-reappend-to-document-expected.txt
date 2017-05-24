@@ -25,20 +25,8 @@
       "reason": "disappeared"
     },
     {
-      "object": "LayoutSVGResourceFilter filter id='filter'",
-      "reason": "full"
-    },
-    {
       "object": "LayoutSVGRect rect",
       "reason": "full"
-    },
-    {
-      "object": "LayoutSVGResourceFilter filter id='filter'",
-      "reason": "full"
-    },
-    {
-      "object": "LayoutSVGResourceFilterPrimitive feImage id='feimage-green'",
-      "reason": "appeared"
     },
     {
       "object": "LayoutSVGRect rect",

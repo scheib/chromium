@@ -30,12 +30,8 @@ bool IsProfilerSupported() {
     return true;
   #endif
 #elif defined(OS_MACOSX)
-// Only run on canary for now.
-  #if defined(GOOGLE_CHROME_BUILD)
-  return chrome::GetChannel() == version_info::Channel::CANARY;
-  #else
-  return true;
-  #endif
+  // Disabled due to suspected CQ impact: crbug.com/723108#c23
+  return false;
 #else
   return false;
 #endif

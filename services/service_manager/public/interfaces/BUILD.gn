@@ -4,7 +4,10 @@
 
 import("//mojo/public/tools/bindings/mojom.gni")
 
-mojom("interfaces") {
+mojom_component("interfaces") {
+  output_prefix = "service_manager_mojom"
+  macro_prefix = "SERVICE_MANAGER_MOJOM"
+
   sources = [
     "connector.mojom",
     "interface_provider.mojom",
@@ -24,7 +27,9 @@ mojom("interfaces") {
   use_once_callback = false
 }
 
-mojom("constants") {
+mojom_component("constants") {
+  output_prefix = "service_manager_mojom_constants"
+  macro_prefix = "SERVICE_MANAGER_MOJOM_CONSTANTS"
   sources = [
     "constants.mojom",
   ]

@@ -27,8 +27,9 @@
 #include "ui/gl/gl_image.h"
 
 namespace gpu {
-namespace gles2 {
+class ServiceDiscardableManager;
 
+namespace gles2 {
 class GLES2Decoder;
 class GLStreamTextureImage;
 struct ContextState;
@@ -755,7 +756,8 @@ class GPU_EXPORT TextureManager : public base::trace_event::MemoryDumpProvider {
                  GLsizei max_3d_texture_size,
                  GLsizei max_array_texture_layers,
                  bool use_default_textures,
-                 ProgressReporter* progress_reporter);
+                 ProgressReporter* progress_reporter,
+                 ServiceDiscardableManager* discardable_manager);
   ~TextureManager() override;
 
   void AddFramebufferManager(FramebufferManager* framebuffer_manager);
@@ -896,6 +898,12 @@ class GPU_EXPORT TextureManager : public base::trace_event::MemoryDumpProvider {
 
   // Gets the texture info for the given texture.
   TextureRef* GetTexture(GLuint client_id) const;
+
+  // Takes the TextureRef for the given texture out of the texture manager.
+  scoped_refptr<TextureRef> TakeTexture(GLuint client_id);
+
+  // Returns a TextureRef to the texture manager.
+  void ReturnTexture(scoped_refptr<TextureRef> texture_ref);
 
   // Removes a texture info.
   void RemoveTexture(GLuint client_id);
@@ -1234,6 +1242,8 @@ class GPU_EXPORT TextureManager : public base::trace_event::MemoryDumpProvider {
   // preventing time-outs when destruction takes a long time. May be null when
   // using in-process command buffer.
   ProgressReporter* progress_reporter_;
+
+  ServiceDiscardableManager* discardable_manager_;
 
   DISALLOW_COPY_AND_ASSIGN(TextureManager);
 };

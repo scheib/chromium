@@ -16,7 +16,6 @@
 namespace android_webview {
 
 class AwBrowserContext;
-class JniDependencyFactory;
 
 class AwContentBrowserClient : public content::ContentBrowserClient {
  public:
@@ -26,7 +25,7 @@ class AwContentBrowserClient : public content::ContentBrowserClient {
   // Deprecated: use AwBrowserContext::GetDefault() instead.
   static AwBrowserContext* GetAwBrowserContext();
 
-  AwContentBrowserClient(JniDependencyFactory* native_factory);
+  explicit AwContentBrowserClient();
   ~AwContentBrowserClient() override;
 
   // Allows AwBrowserMainParts to initialize a BrowserContext at the right
@@ -106,8 +105,6 @@ class AwContentBrowserClient : public content::ContentBrowserClient {
                        bool* no_javascript_access) override;
   void ResourceDispatcherHostCreated() override;
   net::NetLog* GetNetLog() override;
-  void ClearCache(content::RenderFrameHost* rfh) override;
-  void ClearCookies(content::RenderFrameHost* rfh) override;
   base::FilePath GetDefaultDownloadDirectory() override;
   std::string GetDefaultDownloadName() override;
   void DidCreatePpapiPlugin(content::BrowserPpapiHost* browser_host) override;
@@ -139,8 +136,6 @@ class AwContentBrowserClient : public content::ContentBrowserClient {
   // Android WebView currently has a single global (non-off-the-record) browser
   // context.
   std::unique_ptr<AwBrowserContext> browser_context_;
-
-  JniDependencyFactory* native_factory_;
 
   DISALLOW_COPY_AND_ASSIGN(AwContentBrowserClient);
 };

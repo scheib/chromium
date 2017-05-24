@@ -11,6 +11,7 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
+#include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "crypto/encryptor.h"
 #include "crypto/symmetric_key.h"
@@ -655,7 +656,8 @@ CdmKeysInfo AesDecryptor::GenerateKeysInfoList(
     base::AutoLock auto_lock(key_map_lock_);
     for (const auto& item : key_map_) {
       if (item.second->Contains(session_id)) {
-        keys_info.push_back(new CdmKeyInformation(item.first, status, 0));
+        keys_info.push_back(
+            base::MakeUnique<CdmKeyInformation>(item.first, status, 0));
       }
     }
   }

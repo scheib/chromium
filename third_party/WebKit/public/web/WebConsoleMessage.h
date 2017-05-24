@@ -31,7 +31,7 @@
 #ifndef WebConsoleMessage_h
 #define WebConsoleMessage_h
 
-#include "../platform/WebString.h"
+#include "public/platform/WebString.h"
 
 namespace blink {
 

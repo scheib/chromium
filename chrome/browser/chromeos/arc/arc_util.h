@@ -32,7 +32,6 @@ enum FileSystemCompatibilityState : int32_t {
   // Migration has happend. New filesystem is in use.
   kFileSystemCompatible = 1,
   // Migration has happend, and a notification about the fact was already shown.
-  // TODO(kinaba): This value isn't yet used until crbug.com/711095 is done.
   kFileSystemCompatibleAndNotified = 2,
 
   // Existing code assumes that kFileSystemIncompatible is the only state

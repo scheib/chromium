@@ -33,7 +33,9 @@ class LockView : public views::WidgetDelegateView,
   ~LockView() override {}
 
   // Overridden from views::View:
-  gfx::Size GetPreferredSize() const override { return gfx::Size(500, 400); }
+  gfx::Size CalculatePreferredSize() const override {
+    return gfx::Size(500, 400);
+  }
 
  private:
   // Overridden from views::View:

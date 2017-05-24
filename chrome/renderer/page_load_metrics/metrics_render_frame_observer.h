@@ -19,6 +19,7 @@ class Timer;
 namespace page_load_metrics {
 
 class PageTimingMetricsSender;
+class PageTimingSender;
 
 // MetricsRenderFrameObserver observes RenderFrame notifications, and sends page
 // load timing information to the browser process over IPC. A
@@ -43,14 +44,15 @@ class MetricsRenderFrameObserver : public content::RenderFrameObserver {
   void FrameDetached() override;
 
  private:
-  // Will be null when we're not actively sending metrics.
-  std::unique_ptr<PageTimingMetricsSender> page_timing_metrics_sender_;
-
   void SendMetrics();
   virtual bool ShouldSendMetrics() const;
   virtual mojom::PageLoadTimingPtr GetTiming() const;
   virtual std::unique_ptr<base::Timer> CreateTimer() const;
+  virtual std::unique_ptr<PageTimingSender> CreatePageTimingSender();
   virtual bool HasNoRenderFrame() const;
+
+  // Will be null when we're not actively sending metrics.
+  std::unique_ptr<PageTimingMetricsSender> page_timing_metrics_sender_;
 
   DISALLOW_COPY_AND_ASSIGN(MetricsRenderFrameObserver);
 };

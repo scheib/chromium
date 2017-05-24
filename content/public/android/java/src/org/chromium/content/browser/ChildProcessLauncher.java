@@ -150,13 +150,12 @@ public class ChildProcessLauncher {
 
     @VisibleForTesting
     static ChildProcessConnection allocateBoundConnection(ChildSpawnData spawnData,
-            ChildProcessConnection.StartCallback startCallback, boolean forWarmUp) {
+            ChildProcessConnection.StartCallback startCallback, boolean queueIfNoneAvailable) {
         assert LauncherThread.runningOnLauncherThread();
         final Context context = spawnData.getContext();
         final boolean inSandbox = spawnData.isInSandbox();
         final ChildProcessCreationParams creationParams = spawnData.getCreationParams();
 
-        boolean queueIfNoneAvailable = !forWarmUp;
         ChildProcessConnection connection = allocateConnection(spawnData, queueIfNoneAvailable);
         if (connection != null) {
             boolean useStrongBinding = spawnData.isAlwaysInForeground();
@@ -382,8 +381,8 @@ public class ChildProcessLauncher {
                 ChildSpawnData spawnData = new ChildSpawnData(context, serviceBundle,
                         connectionBundle, launchCallback, childProcessCallback, inSandbox,
                         alwaysInForeground, creationParams);
-                allocatedConnection =
-                        allocateBoundConnection(spawnData, startCallback, false /* forWarmUp */);
+                allocatedConnection = allocateBoundConnection(
+                        spawnData, startCallback, true /* queueIfNoneAvailable */);
                 if (allocatedConnection == null) {
                     return false;
                 }

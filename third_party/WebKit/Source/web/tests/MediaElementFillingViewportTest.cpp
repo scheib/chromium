@@ -15,7 +15,12 @@ namespace blink {
 
 class MediaElementFillingViewportTest : public SimTest {
  protected:
-  MediaElementFillingViewportTest() { WebView().Resize(WebSize(640, 480)); }
+  MediaElementFillingViewportTest() {}
+
+  void SetUp() override {
+    SimTest::SetUp();
+    WebView().Resize(WebSize(640, 480));
+  }
 
   bool IsMostlyFillingViewport(HTMLMediaElement* element) {
     return element->mostly_filling_viewport_;

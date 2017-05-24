@@ -28,7 +28,7 @@
 #include "gpu/ipc/common/gpu_messages.h"
 #include "ipc/ipc_channel_handle.h"
 #include "ipc/message_filter.h"
-#include "services/resource_coordinator/public/interfaces/memory/constants.mojom.h"
+#include "services/resource_coordinator/public/interfaces/memory_instrumentation/constants.mojom.h"
 #include "services/service_manager/runner/common/client_util.h"
 
 namespace content {

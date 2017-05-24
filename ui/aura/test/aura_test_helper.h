@@ -60,6 +60,11 @@ class AuraTestHelper {
   // before SetUp().
   void EnableMusWithWindowTreeClient(WindowTreeClient* window_tree_client);
 
+  // Deletes the WindowTreeClient now. Normally the WindowTreeClient is deleted
+  // at the right time and there is no need to call this. This is provided for
+  // testing shutdown ordering.
+  void DeleteWindowTreeClient();
+
   // Creates and initializes (shows and sizes) the RootWindow for use in tests.
   void SetUp(ui::ContextFactory* context_factory,
              ui::ContextFactoryPrivate* context_factory_private);

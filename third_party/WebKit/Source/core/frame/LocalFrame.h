@@ -181,7 +181,7 @@ class CORE_EXPORT LocalFrame final : public Frame,
                    float maximum_shrink_ratio);
   bool ShouldUsePrintingLayout() const;
   FloatSize ResizePageRectsKeepingRatio(const FloatSize& original_size,
-                                        const FloatSize& expected_size);
+                                        const FloatSize& expected_size) const;
 
   bool InViewSourceMode() const;
   void SetInViewSourceMode(bool = true);

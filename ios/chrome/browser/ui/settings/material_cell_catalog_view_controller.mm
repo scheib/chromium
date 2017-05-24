@@ -13,6 +13,7 @@
 #import "ios/chrome/browser/ui/authentication/account_control_item.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_item.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_configurator.h"
+#import "ios/chrome/browser/ui/authentication/signin_promo_view_delegate.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view_mediator.h"
 #import "ios/chrome/browser/ui/autofill/cells/autofill_edit_item.h"
 #import "ios/chrome/browser/ui/autofill/cells/cvc_item.h"

@@ -18,7 +18,6 @@
 #include "ash/test/shell_test_api.h"
 #include "ash/wm/panels/panel_layout_manager.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/workspace/workspace_window_resizer.h"
@@ -1051,7 +1050,7 @@ TEST_F(WorkspaceControllerTest, TestRestoreToUserModifiedBounds) {
 
   // A user moved the window.
   std::unique_ptr<WindowResizer> resizer(
-      CreateWindowResizer(WmWindow::Get(window1.get()), gfx::Point(), HTCAPTION,
+      CreateWindowResizer(window1.get(), gfx::Point(), HTCAPTION,
                           aura::client::WINDOW_MOVE_SOURCE_MOUSE)
           .release());
   gfx::Point location = resizer->GetInitialLocation();

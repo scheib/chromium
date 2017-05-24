@@ -25,8 +25,8 @@ class ResourceChecker(object):
     """
     results = []
 
-    affected_files = self.input_api.change.AffectedFiles(
-        file_filter=self.file_filter, include_deletes=False)
+    affected_files = self.input_api.AffectedFiles(file_filter=self.file_filter,
+                                                  include_deletes=False)
 
     for f in affected_files:
       errors = []

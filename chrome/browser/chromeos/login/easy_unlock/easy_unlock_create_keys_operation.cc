@@ -353,6 +353,9 @@ void EasyUnlockCreateKeysOperation::OnGetSystemSalt(
       kEasyUnlockKeyMetaNameChallenge, device->challenge));
   key_def.provider_data.push_back(cryptohome::KeyDefinition::ProviderData(
       kEasyUnlockKeyMetaNameWrappedSecret, device->wrapped_secret));
+  key_def.provider_data.push_back(cryptohome::KeyDefinition::ProviderData(
+      kEasyUnlockKeyMetaNameSerializedBeaconSeeds,
+      device->serialized_beacon_seeds));
 
   // Add cryptohome key.
   const cryptohome::Identification id(user_context_.GetAccountId());

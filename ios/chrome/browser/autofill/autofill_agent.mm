@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "base/format_macros.h"
 #include "base/guid.h"
@@ -13,6 +14,7 @@
 #include "base/json/json_writer.h"
 #include "base/mac/foundation_util.h"
 #include "base/mac/scoped_block.h"
+#include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial.h"
 #include "base/strings/string16.h"
 #include "base/strings/sys_string_conversions.h"
@@ -860,8 +862,7 @@ void GetFormAndField(autofill::FormData* form,
     (const std::vector<autofill::FormStructure*>&)structure {
   base::DictionaryValue predictionData;
   for (autofill::FormStructure* form : structure) {
-    // |predictionData| will take ownership below.
-    base::DictionaryValue* formJSONData = new base::DictionaryValue;
+    auto formJSONData = base::MakeUnique<base::DictionaryValue>();
     autofill::FormData formData = form->ToFormData();
     for (const auto& field : *form) {
       autofill::AutofillType type(field->Type());
@@ -871,7 +872,7 @@ void GetFormAndField(autofill::FormData* form,
           base::UTF16ToUTF8(field->name), type.ToString());
     }
     predictionData.SetWithoutPathExpansion(base::UTF16ToUTF8(formData.name),
-                                           formJSONData);
+                                           std::move(formJSONData));
   }
   std::string dataString;
   base::JSONWriter::Write(predictionData, &dataString);

@@ -22,7 +22,6 @@ import org.chromium.base.annotations.CalledByNative;
 import org.chromium.chrome.browser.UrlConstants;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.base.WindowAndroid.PermissionCallback;
 
@@ -58,8 +57,6 @@ public class ChromeDownloadDelegate {
                 mTab = null;
             }
         });
-
-        nativeInit(tab.getWebContents());
     }
 
     /**
@@ -312,7 +309,4 @@ public class ChromeDownloadDelegate {
     protected Context getContext() {
         return mContext;
     }
-
-    private native void nativeInit(WebContents webContents);
-    private static native String nativeGetDownloadWarningText(String filename);
 }

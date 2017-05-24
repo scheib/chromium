@@ -449,7 +449,7 @@ Output.RULES = {
     dialog: {
       enter: '$nameFromNode $role $description'
     },
-    div: {
+    genericContainer: {
       enter: '$nameFromNode',
       speak: '$nameOrTextContent $description'
     },
@@ -501,7 +501,8 @@ Output.RULES = {
           '$description $state'
     },
     listItem: {
-      enter: '$role'
+      enter: '$name= $role $state $description',
+      speak: '$nameOrDescendants $earcon(LIST_ITEM) $role $state $description'
     },
     menu: {
       enter: '$name $role',

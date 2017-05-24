@@ -64,7 +64,7 @@ Non-hidden element inside dialog
   "ignored": false,
   "role": {
     "type": "internalRole",
-    "value": "Div"
+    "value": "GenericContainer"
   },
   "name": {
     "type": "computedString",

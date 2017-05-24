@@ -15,6 +15,7 @@
 #include "base/optional.h"
 #include "components/data_use_measurement/core/data_use_user_data.h"
 #include "components/image_fetcher/core/request_metadata.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/url_request/url_fetcher_delegate.h"
 #include "net/url_request/url_request.h"
 #include "url/gurl.h"
@@ -52,14 +53,18 @@ class ImageDataFetcher : public net::URLFetcherDelegate {
   // Fetches the raw image bytes from the given |image_url| and calls the given
   // |callback|. The callback is run even if fetching the URL fails. In case
   // of an error an empty string is passed to the callback.
-  void FetchImageData(const GURL& image_url,
-                      const ImageDataFetcherCallback& callback);
+  void FetchImageData(
+      const GURL& image_url,
+      const ImageDataFetcherCallback& callback,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation);
 
   // Like above, but lets the caller set a referrer.
-  void FetchImageData(const GURL& image_url,
-                      const ImageDataFetcherCallback& callback,
-                      const std::string& referrer,
-                      net::URLRequest::ReferrerPolicy referrer_policy);
+  void FetchImageData(
+      const GURL& image_url,
+      const ImageDataFetcherCallback& callback,
+      const std::string& referrer,
+      net::URLRequest::ReferrerPolicy referrer_policy,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation);
 
  private:
   struct ImageDataFetcherRequest;

@@ -46,7 +46,7 @@ test(function(t){
     assert_equals(axDescribedby.description, "Description 1");
     assert_equals(axDescribedby.descriptionFrom, "relatedElement");
     assert_equals(axDescribedby.descriptionElementCount(), 1);
-    assert_equals(axDescribedby.descriptionElementAtIndex(0).role, "AXRole: AXDiv");
+    assert_equals(axDescribedby.descriptionElementAtIndex(0).role, "AXRole: AXGenericContainer");
 }, "Button with aria-describedby referencing the id of another element.");
 </script>
 
@@ -80,7 +80,7 @@ test(function(t){
     assert_equals(axDescribedby3.descriptionFrom, "relatedElement");
     assert_equals(axDescribedby3.descriptionElementCount(), 2);
     assert_equals(axDescribedby3.descriptionElementAtIndex(0).role, "AXRole: AXButton");
-    assert_equals(axDescribedby3.descriptionElementAtIndex(1).role, "AXRole: AXDiv");
+    assert_equals(axDescribedby3.descriptionElementAtIndex(1).role, "AXRole: AXGenericContainer");
 }, "Button with aria-describedby referencing itself and the id of another element.");
 </script>
 
@@ -112,7 +112,7 @@ test(function(t){
     assert_equals(axDescribedby5.description, "");
     assert_equals(axDescribedby5.descriptionFrom, "relatedElement");
     assert_equals(axDescribedby5.descriptionElementCount(), 1);
-    assert_equals(axDescribedby5.descriptionElementAtIndex(0).role, "AXRole: AXDiv");
+    assert_equals(axDescribedby5.descriptionElementAtIndex(0).role, "AXRole: AXGenericContainer");
 }, "aria-describedby reference to element with no text.");
 </script>
 

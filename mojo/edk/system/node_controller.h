@@ -81,17 +81,17 @@ class NodeController : public ports::NodeDelegate,
       const std::vector<std::pair<std::string, ports::PortRef>>& attached_ports,
       const ProcessErrorCallback& process_error_callback);
 
-  // Close a connection to a peer associated with |peer_token|.
-  void ClosePeerConnection(const std::string& peer_token);
-
   // Connects this node to the process which invited it to be a broker client.
   void AcceptBrokerClientInvitation(ConnectionParams connection_params);
 
   // Connects this node to a peer node. On success, |port| will be merged with
-  // the corresponding port in the peer node.
-  void ConnectToPeer(ConnectionParams connection_params,
-                     const ports::PortRef& port,
-                     const std::string& peer_token);
+  // the corresponding port in the peer node. Returns an ID that can be used to
+  // later close the connection with a call to ClosePeerConnection().
+  uint64_t ConnectToPeer(ConnectionParams connection_params,
+                         const ports::PortRef& port);
+
+  // Close a connection to a peer associated with |peer_connection_id|.
+  void ClosePeerConnection(uint64_t peer_connection_id);
 
   // Sets a port's observer. If |observer| is null the port's current observer
   // is removed.
@@ -143,16 +143,16 @@ class NodeController : public ports::NodeDelegate,
     PeerConnection(PeerConnection&& other);
     PeerConnection(scoped_refptr<NodeChannel> channel,
                    const ports::PortRef& local_port,
-                   const std::string& peer_token);
+                   uint64_t connection_id);
     ~PeerConnection();
 
     PeerConnection& operator=(const PeerConnection& other);
     PeerConnection& operator=(PeerConnection&& other);
 
-
+    // NOTE: |channel| is null once the connection is fully established.
     scoped_refptr<NodeChannel> channel;
     ports::PortRef local_port;
-    std::string peer_token;
+    uint64_t connection_id;
   };
 
   void SendBrokerClientInvitationOnIOThread(
@@ -163,11 +163,10 @@ class NodeController : public ports::NodeDelegate,
   void AcceptBrokerClientInvitationOnIOThread(
       ConnectionParams connection_params);
 
-  void ConnectToPeerOnIOThread(ConnectionParams connection_params,
-                               ports::NodeName token,
-                               ports::PortRef port,
-                               const std::string& peer_token);
-  void ClosePeerConnectionOnIOThread(const std::string& node_name);
+  void ConnectToPeerOnIOThread(uint64_t peer_connection_id,
+                               ConnectionParams connection_params,
+                               ports::PortRef port);
+  void ClosePeerConnectionOnIOThread(uint64_t peer_connection_id);
 
   scoped_refptr<NodeChannel> GetPeerChannel(const ports::NodeName& name);
   scoped_refptr<NodeChannel> GetParentChannel();
@@ -260,11 +259,14 @@ class NodeController : public ports::NodeDelegate,
   const std::unique_ptr<ports::Node> node_;
   scoped_refptr<base::TaskRunner> io_task_runner_;
 
-  // Guards |peers_| and |pending_peer_messages_|.
+  // Guards |peers_|, |pending_peer_messages_|, and |next_peer_connection_id_|.
   base::Lock peers_lock_;
 
   // Channels to known peers, including parent and children, if any.
   NodeMap peers_;
+
+  // A unique ID generator for peer connections.
+  uint64_t next_peer_connection_id_ = 1;
 
   // Outgoing message queues for peers we've heard of but can't yet talk to.
   std::unordered_map<ports::NodeName, OutgoingMessageQueue>
@@ -334,12 +336,10 @@ class NodeController : public ports::NodeDelegate,
   // Channels to invitees during handshake.
   NodeMap pending_invitations_;
 
-  using PeerNodeMap =
-      std::unordered_map<ports::NodeName, PeerConnection>;
-  PeerNodeMap peer_connections_;
+  std::map<ports::NodeName, PeerConnection> peer_connections_;
 
   // Maps from peer token to node name, pending or not.
-  std::unordered_map<std::string, ports::NodeName> peers_by_token_;
+  std::unordered_map<uint64_t, ports::NodeName> peer_connections_by_id_;
 
   // Indicates whether this object should delete itself on IO thread shutdown.
   // Must only be accessed from the IO thread.

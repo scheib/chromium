@@ -24,7 +24,7 @@ void SpellCheckMarkerListImpl::Add(DocumentMarker* marker) {
 
   auto first_overlapping = std::lower_bound(
       markers_.begin(), markers_.end(), rendered_marker,
-      [](const Member<RenderedDocumentMarker>& marker_in_list,
+      [](const Member<DocumentMarker>& marker_in_list,
          const DocumentMarker* marker_to_insert) {
         return marker_in_list->EndOffset() < marker_to_insert->StartOffset();
       });
@@ -49,8 +49,8 @@ void SpellCheckMarkerListImpl::Clear() {
   markers_.clear();
 }
 
-const HeapVector<Member<RenderedDocumentMarker>>&
-SpellCheckMarkerListImpl::GetMarkers() const {
+const HeapVector<Member<DocumentMarker>>& SpellCheckMarkerListImpl::GetMarkers()
+    const {
   return markers_;
 }
 

@@ -98,9 +98,7 @@ void ManageProfileHandler::OnJavascriptDisallowed() {
 void ManageProfileHandler::OnProfileAvatarChanged(
     const base::FilePath& profile_path) {
   // This is necessary to send the potentially updated GAIA photo.
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("available-icons-changed"),
-                         *GetAvailableIcons());
+  FireWebUIListener("available-icons-changed", *GetAvailableIcons());
 }
 
 void ManageProfileHandler::HandleGetAvailableIcons(

@@ -11,6 +11,7 @@
 #include "platform/loader/fetch/AccessControlStatus.h"
 #include "platform/wtf/Allocator.h"
 #include "platform/wtf/Vector.h"
+#include "platform/wtf/text/TextPosition.h"
 #include "platform/wtf/text/WTFString.h"
 #include "v8/include/v8.h"
 
@@ -27,10 +28,12 @@ class CORE_EXPORT ScriptModule final {
   DISALLOW_NEW_EXCEPT_PLACEMENT_NEW();
 
  public:
-  static ScriptModule Compile(v8::Isolate*,
-                              const String& source,
-                              const String& file_name,
-                              AccessControlStatus);
+  static ScriptModule Compile(
+      v8::Isolate*,
+      const String& source,
+      const String& file_name,
+      AccessControlStatus,
+      const TextPosition& start_position = TextPosition::MinimumPosition());
 
   // TODO(kouhei): Remove copy ctor
   ScriptModule();

@@ -13,6 +13,7 @@
 #include "platform/loader/fetch/AccessControlStatus.h"
 #include "platform/weborigin/KURL.h"
 #include "platform/weborigin/ReferrerPolicy.h"
+#include "platform/wtf/text/TextPosition.h"
 #include "platform/wtf/text/WTFString.h"
 
 namespace blink {
@@ -103,7 +104,8 @@ class CORE_EXPORT Modulator : public GarbageCollectedFinalized<Modulator>,
 
   virtual ScriptModule CompileModule(const String& script,
                                      const String& url_str,
-                                     AccessControlStatus) = 0;
+                                     AccessControlStatus,
+                                     const TextPosition&) = 0;
 
   virtual ScriptValue InstantiateModule(ScriptModule) = 0;
 

@@ -198,7 +198,7 @@ void GLES2DecoderTestBase::InitDecoderWithCommandLine(
                        new ShaderTranslatorCache(gpu_preferences_),
                        new FramebufferCompletenessCache, feature_info,
                        normalized_init.bind_generates_resource, nullptr,
-                       nullptr, GpuFeatureInfo()));
+                       nullptr, GpuFeatureInfo(), &discardable_manager_));
   bool use_default_textures = normalized_init.bind_generates_resource;
 
   InSequence sequence;
@@ -2167,6 +2167,30 @@ void GLES2DecoderWithShaderTestBase::MockCommandBufferEngine::set_token(
 void GLES2DecoderWithShaderTestBase::SetUp() {
   GLES2DecoderTestBase::SetUp();
   SetupDefaultProgram();
+}
+
+void GLES2DecoderTestBase::DoInitializeDiscardableTextureCHROMIUM(
+    GLuint texture_id) {
+  scoped_refptr<gpu::Buffer> buffer =
+      engine_->GetSharedMemoryBuffer(kSharedMemoryId);
+  ClientDiscardableHandle handle(buffer, 0, kSharedMemoryId);
+
+  cmds::InitializeDiscardableTextureCHROMIUM cmd;
+  cmd.Init(texture_id, kSharedMemoryId, 0);
+  EXPECT_EQ(error::kNoError, ExecuteCmd(cmd));
+}
+
+void GLES2DecoderTestBase::DoUnlockDiscardableTextureCHROMIUM(
+    GLuint texture_id) {
+  cmds::UnlockDiscardableTextureCHROMIUM cmd;
+  cmd.Init(texture_id);
+  EXPECT_EQ(error::kNoError, ExecuteCmd(cmd));
+}
+
+void GLES2DecoderTestBase::DoLockDiscardableTextureCHROMIUM(GLuint texture_id) {
+  cmds::LockDiscardableTextureCHROMIUM cmd;
+  cmd.Init(texture_id);
+  EXPECT_EQ(error::kNoError, ExecuteCmd(cmd));
 }
 
 // Include the auto-generated part of this file. We split this because it means

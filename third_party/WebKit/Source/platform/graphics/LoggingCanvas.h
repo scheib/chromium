@@ -120,8 +120,8 @@ class LoggingCanvas : public InterceptingCanvasBase {
 };
 
 #ifndef NDEBUG
-String RecordAsDebugString(const PaintRecord*, const SkRect& bounds);
-void ShowPaintRecord(const PaintRecord*, const SkRect& bounds);
+String RecordAsDebugString(const PaintRecord*);
+void ShowPaintRecord(const PaintRecord*);
 #endif
 
 }  // namespace blink

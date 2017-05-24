@@ -95,6 +95,7 @@ class CONTENT_EXPORT ChildThreadImpl
   void RecordComputedAction(const std::string& action) override;
   ServiceManagerConnection* GetServiceManagerConnection() override;
   service_manager::Connector* GetConnector() override;
+  scoped_refptr<base::SingleThreadTaskRunner> GetIOTaskRunner() override;
 
   IPC::SyncChannel* channel() { return channel_.get(); }
 
@@ -192,7 +193,6 @@ class CONTENT_EXPORT ChildThreadImpl
   void OnChannelError() override;
 
   bool IsInBrowserProcess() const;
-  scoped_refptr<base::SingleThreadTaskRunner> GetIOTaskRunner();
 
  private:
   class ChildThreadMessageRouter : public IPC::MessageRouter {

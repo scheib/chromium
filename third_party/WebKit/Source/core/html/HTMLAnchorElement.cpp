@@ -360,15 +360,11 @@ void HTMLAnchorElement::HandleClick(Event* event) {
 
   if (hasAttribute(downloadAttr)) {
     request.SetRequestContext(WebURLRequest::kRequestContextDownload);
-    bool is_same_origin =
-        completed_url.ProtocolIsData() ||
-        GetDocument().GetSecurityOrigin()->CanRequest(completed_url);
-    const AtomicString& suggested_name =
-        (is_same_origin ? FastGetAttribute(downloadAttr) : g_null_atom);
     request.SetRequestorOrigin(SecurityOrigin::Create(GetDocument().Url()));
 
     frame->Loader().Client()->LoadURLExternally(
-        request, kNavigationPolicyDownload, suggested_name, false);
+        request, kNavigationPolicyDownload, FastGetAttribute(downloadAttr),
+        false);
   } else {
     request.SetRequestContext(WebURLRequest::kRequestContextHyperlink);
     FrameLoadRequest frame_request(&GetDocument(), request,

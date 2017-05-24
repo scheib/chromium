@@ -155,7 +155,7 @@ class WebNotificationItem : public views::View, public gfx::AnimationDelegate {
 
  protected:
   // Overridden from views::View:
-  gfx::Size GetPreferredSize() const override {
+  gfx::Size CalculatePreferredSize() const override {
     if (!animation_.get() || !animation_->is_animating())
       return kTrayItemOuterSize;
 

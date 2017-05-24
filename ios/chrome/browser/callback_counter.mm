@@ -4,6 +4,10 @@
 
 #include "ios/chrome/browser/callback_counter.h"
 
+#if !defined(__has_feature) || !__has_feature(objc_arc)
+#error "This file requires ARC support."
+#endif
+
 CallbackCounter::CallbackCounter(const FinalCallback& final_callback)
     : callback_count_(0U), final_callback_(final_callback) {
   DCHECK(!final_callback.is_null());

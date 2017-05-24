@@ -191,10 +191,12 @@ public abstract class ChromeFeatureList {
     public static final String SERVICE_WORKER_PAYMENT_APPS = "ServiceWorkerPaymentApps";
     public static final String TAB_REPARENTING = "TabReparenting";
     public static final String VIDEO_PERSISTENCE = "VideoPersistence";
+    public static final String VR_CUSTOM_TAB_BROWSING = "VrCustomTabBrowsing";
     public static final String VR_SHELL = "VrShell";
     public static final String WEB_PAYMENTS = "WebPayments";
     public static final String WEB_PAYMENTS_MODIFIERS = "WebPaymentsModifiers";
     public static final String WEB_PAYMENTS_SINGLE_APP_UI_SKIP = "WebPaymentsSingleAppUiSkip";
+    public static final String WEBVR_AUTOPRESENT = "WebVrAutopresent";
     public static final String WEBVR_CARDBOARD_SUPPORT = "WebVRCardboardSupport";
     public static final String XGEO_VISIBLE_NETWORKS = "XGEOVisibleNetworks";
 

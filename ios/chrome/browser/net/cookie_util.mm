@@ -12,7 +12,7 @@
 #import "base/mac/bind_objc_block.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
-#include "base/threading/sequenced_worker_pool.h"
+#include "base/task_scheduler/post_task.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/net/cookies/cookie_store_ios_persistent.h"
 #include "ios/web/public/web_thread.h"
@@ -44,8 +44,8 @@ scoped_refptr<net::SQLitePersistentCookieStore> CreatePersistentCookieStore(
   return scoped_refptr<net::SQLitePersistentCookieStore>(
       new net::SQLitePersistentCookieStore(
           path, web::WebThread::GetTaskRunnerForThread(web::WebThread::IO),
-          web::WebThread::GetBlockingPool()->GetSequencedTaskRunner(
-              web::WebThread::GetBlockingPool()->GetSequenceToken()),
+          base::CreateSequencedTaskRunnerWithTraits(
+              {base::MayBlock(), base::TaskPriority::BACKGROUND}),
           restore_old_session_cookies, crypto_delegate));
 }
 

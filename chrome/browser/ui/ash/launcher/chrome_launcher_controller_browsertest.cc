@@ -19,7 +19,6 @@
 #include "ash/shell_port.h"
 #include "ash/test/shelf_view_test_api.h"
 #include "ash/wm/window_state.h"
-#include "ash/wm/window_state_aura.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm_window.h"
 #include "base/macros.h"

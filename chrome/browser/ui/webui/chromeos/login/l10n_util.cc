@@ -24,8 +24,9 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task_runner_util.h"
-#include "base/threading/sequenced_worker_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task_scheduler/post_task.h"
+#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/customization/customization_document.h"
@@ -44,8 +45,6 @@ namespace chromeos {
 const char kMostRelevantLanguagesDivider[] = "MOST_RELEVANT_LANGUAGES_DIVIDER";
 
 namespace {
-
-const char kSequenceToken[] = "chromeos_login_l10n_util";
 
 std::unique_ptr<base::DictionaryValue> CreateInputMethodsEntry(
     const input_method::InputMethodDescriptor& method,
@@ -346,12 +345,11 @@ std::string CalculateSelectedLanguage(const std::string& requested_locale,
   return loaded_locale;
 }
 
-void ResolveLanguageListOnBlockingPool(
+void ResolveLanguageListInThreadPool(
     std::unique_ptr<chromeos::locale_util::LanguageSwitchResult>
         language_switch_result,
     const scoped_refptr<base::TaskRunner> task_runner,
     const UILanguageListResolvedCallback& resolved_callback) {
-  // DCHECK(task_runner->RunsTasksInCurrentSequence());
   base::ThreadRestrictions::AssertIOAllowed();
 
   std::string selected_language;
@@ -428,10 +426,11 @@ void ResolveUILanguageList(
     const UILanguageListResolvedCallback& callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  content::BrowserThread::GetBlockingPool()->PostTask(
-      FROM_HERE, base::Bind(&ResolveLanguageListOnBlockingPool,
-                            base::Passed(&language_switch_result),
-                            base::ThreadTaskRunnerHandle::Get(), callback));
+  base::PostTaskWithTraits(
+      FROM_HERE, {base::MayBlock()},
+      base::BindOnce(&ResolveLanguageListInThreadPool,
+                     base::Passed(&language_switch_result),
+                     base::SequencedTaskRunnerHandle::Get(), callback));
 }
 
 std::unique_ptr<base::ListValue> GetMinimalUILanguageList() {
@@ -578,21 +577,16 @@ std::unique_ptr<base::ListValue> GetAndActivateLoginKeyboardLayouts(
 void GetKeyboardLayoutsForLocale(
     const GetKeyboardLayoutsForLocaleCallback& callback,
     const std::string& locale) {
-  base::SequencedWorkerPool* worker_pool =
-      content::BrowserThread::GetBlockingPool();
-  scoped_refptr<base::SequencedTaskRunner> background_task_runner =
-      worker_pool->GetSequencedTaskRunnerWithShutdownBehavior(
-          worker_pool->GetNamedSequenceToken(kSequenceToken),
-          base::SequencedWorkerPool::SKIP_ON_SHUTDOWN);
-
   // Resolve |locale| on a background thread, then continue on the current
   // thread.
   std::string (*get_application_locale)(const std::string&, bool) =
       &l10n_util::GetApplicationLocale;
-  base::PostTaskAndReplyWithResult(
-      background_task_runner.get(), FROM_HERE,
-      base::Bind(get_application_locale, locale, false /* set_icu_locale */),
-      base::Bind(&GetKeyboardLayoutsForResolvedLocale, locale, callback));
+  base::PostTaskWithTraitsAndReplyWithResult(
+      FROM_HERE,
+      {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+      base::BindOnce(get_application_locale, locale,
+                     false /* set_icu_locale */),
+      base::BindOnce(&GetKeyboardLayoutsForResolvedLocale, locale, callback));
 }
 
 std::unique_ptr<base::DictionaryValue> GetCurrentKeyboardLayout() {

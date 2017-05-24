@@ -20,18 +20,18 @@ namespace blink {
 
 TestInterfaceGarbageCollectedOrString::TestInterfaceGarbageCollectedOrString() : m_type(SpecificTypeNone) {}
 
-String TestInterfaceGarbageCollectedOrString::getAsString() const {
+const String& TestInterfaceGarbageCollectedOrString::getAsString() const {
   DCHECK(isString());
   return m_string;
 }
 
-void TestInterfaceGarbageCollectedOrString::setString(String value) {
+void TestInterfaceGarbageCollectedOrString::setString(const String& value) {
   DCHECK(isNull());
   m_string = value;
   m_type = SpecificTypeString;
 }
 
-TestInterfaceGarbageCollectedOrString TestInterfaceGarbageCollectedOrString::fromString(String value) {
+TestInterfaceGarbageCollectedOrString TestInterfaceGarbageCollectedOrString::fromString(const String& value) {
   TestInterfaceGarbageCollectedOrString container;
   container.setString(value);
   return container;

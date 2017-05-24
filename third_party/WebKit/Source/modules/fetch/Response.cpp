@@ -430,6 +430,12 @@ String Response::MimeType() const {
   return response_->MimeType();
 }
 
+String Response::ContentType() const {
+  String result;
+  response_->HeaderList()->Get(HTTPNames::Content_Type, result);
+  return result;
+}
+
 String Response::InternalMIMEType() const {
   return response_->InternalMIMEType();
 }

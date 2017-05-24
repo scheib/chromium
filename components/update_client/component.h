@@ -64,12 +64,6 @@ class Component {
   // the update server has return a response containing an update.
   bool IsUpdateAvailable() const { return is_update_available_; }
 
-  // Returns true if a ping must be sent back to the server. As a general rule,
-  // a ping is sent only for server responses containing instructions to update.
-  bool CanPing() const {
-    return IsUpdateAvailable() || state() == ComponentState::kUninstalled;
-  }
-
   base::TimeDelta GetUpdateDuration() const;
 
   ComponentState state() const { return state_->state(); }
@@ -109,9 +103,7 @@ class Component {
   bool on_demand() const { return on_demand_; }
   void set_on_demand(bool on_demand) { on_demand_ = on_demand; }
 
-  const std::vector<CrxDownloader::DownloadMetrics>& download_metrics() const {
-    return download_metrics_;
-  }
+  const std::vector<std::string>& events() const { return events_; }
 
   const std::vector<GURL>& crx_diffurls() const { return crx_diffurls_; }
 
@@ -347,8 +339,7 @@ class Component {
   // by a downloader which can do bandwidth throttling on the client side.
   bool CanDoBackgroundDownload() const;
 
-  void AppendDownloadMetrics(
-      const std::vector<CrxDownloader::DownloadMetrics>& download_metrics);
+  void AppendEvent(const std::string& event);
 
   // Changes the component state and notifies the caller of the |Handle|
   // function that the handling of this component state is complete.
@@ -411,7 +402,8 @@ class Component {
   int diff_error_code_ = 0;
   int diff_extra_code1_ = 0;
 
-  std::vector<CrxDownloader::DownloadMetrics> download_metrics_;
+  // Contains the events which are serialized in the pings.
+  std::vector<std::string> events_;
 
   CallbackHandleComplete callback_handle_complete_;
   std::unique_ptr<State> state_;

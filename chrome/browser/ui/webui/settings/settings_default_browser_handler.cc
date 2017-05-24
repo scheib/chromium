@@ -101,9 +101,7 @@ void DefaultBrowserHandler::OnDefaultBrowserWorkerFinished(
       state == shell_integration::UNKNOWN_DEFAULT);
   dict.SetBoolean("isDisabledByPolicy", DefaultBrowserIsDisabledByPolicy());
 
-  CallJavascriptFunction("cr.webUIListenerCallback",
-                         base::Value("settings.updateDefaultBrowserState"),
-                         dict);
+  FireWebUIListener("settings.updateDefaultBrowserState", dict);
 }
 
 }  // namespace settings

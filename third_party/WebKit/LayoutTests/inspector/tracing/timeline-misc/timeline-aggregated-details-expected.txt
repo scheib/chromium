@@ -1,3 +1,6 @@
+Cleared ProductRegistryImpl
+Adding entry: *.google.com
+
 
 CallTree  Group by: None
   Function Call: 17.660  40.000
@@ -300,7 +303,7 @@ BottomUp  Group by: Domain
       x: 0.600  1.000
         Function Call: 0.600  1.000
           Function Call: 0.600  1.000
-  google.com — Google CDN: 0.215  0.215
+  google.com — Google: 0.215  0.215
     recursive_b: 0.110  0.114
       recursive_a: 0.110  0.114
         recursive_b: 0.008  0.008
@@ -379,7 +382,7 @@ BottomUp  Group by: Subdomain
       x: 0.600  1.000
         Function Call: 0.600  1.000
           Function Call: 0.600  1.000
-  www.google.com — Google CDN: 0.215  0.215
+  www.google.com — Google: 0.215  0.215
     recursive_b: 0.110  0.114
       recursive_a: 0.110  0.114
         recursive_b: 0.008  0.008
@@ -458,7 +461,7 @@ BottomUp  Group by: Product
       x: 0.600  1.000
         Function Call: 0.600  1.000
           Function Call: 0.600  1.000
-  Google CDN: 0.215  0.215
+  Google: 0.215  0.215
     recursive_b: 0.110  0.114
       recursive_a: 0.110  0.114
         recursive_b: 0.008  0.008

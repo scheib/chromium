@@ -10,13 +10,14 @@
 #include <string>
 
 #include "base/macros.h"
+#include "base/supports_user_data.h"
 #include "base/time/time.h"
 #include "url/gurl.h"
 
 namespace data_use_measurement {
 
 // Class to store total network data used by some entity.
-class DataUse {
+class DataUse : public base::SupportsUserData {
  public:
   enum class TrafficType {
     // Unknown type. URLRequests for arbitrary scheme such as blob, file,
@@ -37,11 +38,14 @@ class DataUse {
   };
 
   explicit DataUse(TrafficType traffic_type);
-  ~DataUse();
+  ~DataUse() override;
 
   // Merge data use from another instance.
+  // TODO(rajendrant): Check if the merge can be removed. Otherwise user data
+  // needs to support mergeability.
   void MergeFrom(const DataUse& other);
 
+  // Returns the page URL.
   const GURL& url() const { return url_; }
 
   void set_url(const GURL& url) { url_ = url; }

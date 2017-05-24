@@ -33,7 +33,7 @@
 #include "extensions/common/extension.h"
 
 #if defined(OS_CHROMEOS)
-#include "ash/public/cpp/ash_pref_names.h"
+#include "ash/public/cpp/ash_pref_names.h"  // nogncheck
 #include "chrome/browser/chromeos/ownership/owner_settings_service_chromeos.h"
 #include "chrome/browser/chromeos/ownership/owner_settings_service_chromeos_factory.h"
 #include "chrome/browser/chromeos/policy/browser_policy_connector_chromeos.h"
@@ -121,6 +121,10 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetWhitelistedKeys() {
       settings_private::PrefType::PREF_TYPE_STRING;
   (*s_whitelist)[::prefs::kDefaultCharset] =
       settings_private::PrefType::PREF_TYPE_STRING;
+#if defined(OS_MACOSX)
+  (*s_whitelist)[::prefs::kWebkitTabsToLinks] =
+      settings_private::PrefType::PREF_TYPE_BOOLEAN;
+#endif
 
   // On startup.
   (*s_whitelist)[::prefs::kRestoreOnStartup] =

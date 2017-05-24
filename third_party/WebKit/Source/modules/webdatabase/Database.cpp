@@ -239,7 +239,8 @@ Database::Database(DatabaseContext* database_context,
   context_thread_security_origin_ =
       database_context_->GetSecurityOrigin()->IsolatedCopy();
 
-  database_authorizer_ = DatabaseAuthorizer::Create(kInfoTableName);
+  database_authorizer_ =
+      DatabaseAuthorizer::Create(database_context, kInfoTableName);
 
   if (name_.IsNull())
     name_ = "";
