@@ -111,7 +111,7 @@ void matrixProjection(float width, float height,
 mat4 SS_T_GL;
 mat4 SS_T_GL_INV;
 
-mat4 mat4FromTranslationOrientation(double *translation, double *orientation) {
+mat4 mat4FromTranslationOrientation(const double *translation, const double *orientation) {
   vec3 translationV3 = vec3((float)translation[0],
   (float)translation[1], (float)translation[2]);
   quat orientationQ = quat((float)orientation[0], (float)orientation[1],
@@ -197,12 +197,9 @@ bool isPointInPolygon(const vec3 &point, const vec3* polygonPoints, int count) {
     return false;
   }
 
-  LOGE("POINT: (%f, %f, %f)", point.x, point.y, point.z);
-  LOGE("POLY");
   vec3 lastUp = vec3(0, 0, 0);
   for (int i = 0; i < count; ++i)
   {
-    LOGE("(%f, %f, %f", polygonPoints[i].x, polygonPoints[i].y, polygonPoints[i].z);
     vec3 v0 = point - polygonPoints[i];
     vec3 v1;
     if (i == count - 1)
@@ -226,8 +223,18 @@ bool isPointInPolygon(const vec3 &point, const vec3* polygonPoints, int count) {
 
     lastUp = up;
   }
-  LOGE("/POLY");
   return true;
+}
+
+mat4 getPlaneMatrixFromPlanePose(const TangoPoseData &pose) {
+  // Get the plane transform matrix.
+  mat4 planeMatrix = mat4FromTranslationOrientation(
+      pose.translation, pose.orientation);
+
+  // Plane is in the tango coordinates, so transform into GL coordinate space.
+  planeMatrix = SS_T_GL_INV * planeMatrix * SS_T_GL;
+
+  return planeMatrix;
 }
 
 } // End anonymous namespace
@@ -565,14 +572,8 @@ bool TangoHandler::hitTest(float x, float y, std::vector<Hit>& hits)
           continue;
         }
 
-        TangoPoseData planePose = planeData.pose;
-
         // Get the plane transform matrix.
-        mat4 planeMatrix = mat4FromTranslationOrientation(
-            planePose.translation, planePose.orientation);
-
-        // Plane is in the tango coordinates, so transform into GL coordinate space.
-        planeMatrix = SS_T_GL_INV * planeMatrix * SS_T_GL;
+        mat4 planeMatrix = getPlaneMatrixFromPlanePose(planeData.pose);
 
         // Get the plane center in world-space.
         vec3 planeCenter = vec3(planeData.center_x, 0, planeData.center_y);
@@ -592,33 +593,41 @@ bool TangoHandler::hitTest(float x, float y, std::vector<Hit>& hits)
         // Calculate the intersection point.
         vec3 planeIntersection = worldRayOrigin + (worldRayDirection * t);
 
+        /*
+        // TODO: re-enable bounding box check when we figure it out. Right now, it cuts out
+        // portions of the polygon, so you end up with the hit test being an intersection between the
+        // bounding box and polygon rather than just the polygon as expected.
+
+        // Do a bounding-box test (early-out).
         // Convert the intersection into plane-space.
-        mat4 planeMatrixInv = inverse(planeMatrix);
-        vec3 planeIntersectionLocal = transformVec3ByMat4(planeIntersection, planeMatrixInv);
+        mat4 yawMatrix = toMat4(angleAxis((float)planeData.yaw, vec3(0, 1, 0)));
+        mat4 planeMatrixInv = inverse(planeMatrix * yawMatrix);
+        vec3 planeIntersectionLocal = transformVec3ByMat4(
+            vec3(planeIntersection.x + planeData.center_x, planeIntersection.y, planeIntersection.z - planeData.center_y),
+            planeMatrixInv);
+        //vec3 rotatedBounds = transformVec3ByMat4(vec3(planeData.width, planeData.height, 0), yawMat);
 
         // Check if the intersection is outside of the extent of the plane.
-        if (abs(planeIntersectionLocal.x - planeData.center_x) > planeData.width) {
+        if (abs(planeIntersectionLocal.x) > planeData.width / 2) {
           continue;
         }
-        if (abs(planeIntersectionLocal.y - planeData.center_y) > planeData.height) {
+        if (abs(planeIntersectionLocal.y) > planeData.height / 2) {
           continue;
         }
+        */
 
-        /*
-        // TODO(lincolnfrog): enable polygon test when we figure out why the polygon is so bad.s
         // Transform all the points into world space using the plane matrix.
         vec3 polygonPoints[planeData.boundary_point_num];
         for (int i = 0; i < planeData.boundary_point_num; ++i) {
           polygonPoints[i] = transformVec3ByMat4(
-            vec3((float)planeData.boundary_polygon[i * 2], 0, (float)planeData.boundary_polygon[(i * 2) + 1]), 
+            vec3((float)planeData.boundary_polygon[i * 2], 0, -(float)planeData.boundary_polygon[(i * 2) + 1]),
             planeMatrix);
         }
-        
+
         if(!isPointInPolygon(planeIntersection, polygonPoints, planeData.boundary_point_num)) {
-          LOGE("%i Rejected (POLY)", planeData.id);
+          // The intersection point lies outside the plane polygon, so skip it.
           continue;
         }
-        */
 
         mat4 hitMatrix = translate(mat4(1.0f), planeIntersection);
         Hit hit;
@@ -637,14 +646,104 @@ bool TangoHandler::hitTest(float x, float y, std::vector<Hit>& hits)
       };
 
       std::sort(hits.begin(), hits.end(), sortFunc);
-
-      TangoPlaneData_free(planes, numberOfPlanes);
     }
+
+    TangoPlaneData_free(planes, numberOfPlanes);
 
     result = hits.size() > 0;
   }
 
   return result;
+}
+
+bool TangoHandler::getPlanes(std::vector<Plane>& planes) {
+  if (connected)
+  {
+    TangoPlaneData* planeDatas = 0;
+    size_t numberOfPlanes = 0;
+    TangoErrorType tangoResult = TangoService_Experimental_getPlanes(&planeDatas, &numberOfPlanes);
+    if (tangoResult == TANGO_SUCCESS)
+    {
+      if (numberOfPlanes == 0) {
+        return false;
+      }
+
+      int count = 0;
+      for (int i = 0; i < numberOfPlanes; i++) {
+        TangoPlaneData planeData = planeDatas[i];
+        if (planeData.is_valid && planeData.subsumed_by == -1) {
+          count++;
+        }
+      }
+      planes.resize(count);
+      count = 0;
+
+      // Gather all the planes.
+      for (int i = 0; i < numberOfPlanes; i++) {
+        TangoPlaneData planeData = planeDatas[i];
+
+        if (!planeData.is_valid) {
+          // This plane is no longer valid, so skip it.
+          continue;
+        }
+        if (planeData.subsumed_by != -1) {
+          // This plane has been subsumed by another plane, so skip it.
+          continue;
+        }
+
+        Plane plane;
+
+        // Set the plane's unique identifier.
+        plane.identifier = (long)planeData.id;
+
+        // Set the transform values from the transformed plane matrix.
+        mat4 planeMatrix = getPlaneMatrixFromPlanePose(planeData.pose);
+        mat4 yawMatrix = toMat4(angleAxis((float)planeData.yaw, vec3(0, 1, 0)));
+        planeMatrix = planeMatrix * yawMatrix;
+        const float* fM = value_ptr(planeMatrix);
+        for (int j = 0; j < 16; j++) {
+          plane.modelMatrix[j] = fM[j];
+        }
+
+        // Bake the center information into the plane matrix for simplicity.
+        plane.modelMatrix[12] += planeData.center_x;
+        // The y-value gets negated because we are moving from a left-handed to a right-handed coordinate system.
+        plane.modelMatrix[14] += -planeData.center_y;
+
+        // Set the extents.
+        plane.extent[0] = planeData.width;
+        plane.extent[1] = planeData.height;
+
+        // Create the vertices array.
+        plane.count = planeData.boundary_point_num;
+        plane.vertices.resize(plane.count * 3);
+
+        // Gather all the polygon vertices and add a y-value of zero.
+        for (int j = 0; j < plane.count; j++) {
+          // Create a vec3 representing each point and subtract the center value (since it is baked into the plane matrix).
+          vec3 vertex = vec3(
+              (float)planeData.boundary_polygon[j * 2] - planeData.center_x,
+              0,
+              // The y-value gets negated because we are moving from a left-handed to a right-handed coordinate system.
+              (float)-planeData.boundary_polygon[(j * 2) + 1] + planeData.center_y);
+          // Transform the points by the inverse yaw matrix since we combined the yaw with the plane matrix
+          // above and the yaw only applies to the bounding box.
+          vertex = transformVec3ByMat4(vertex, inverse(yawMatrix));
+          plane.vertices[j * 3] = vertex.x;
+          plane.vertices[(j * 3) + 1] = vertex.y;
+          plane.vertices[(j * 3) + 2] = vertex.z;
+        }
+
+        planes[count] = plane;
+        count++;
+      }
+    }
+
+    TangoPlaneData_free(planeDatas, numberOfPlanes);
+    return tangoResult == TANGO_SUCCESS;
+  }
+
+  return false;
 }
 
 void TangoHandler::resetPose()

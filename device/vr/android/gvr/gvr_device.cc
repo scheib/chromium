@@ -233,6 +233,11 @@ std::vector<mojom::VRHitPtr> GvrDevice::HitTest(float x, float y)
   return hits;
 }
 
+std::vector<mojom::VRPlanePtr> GvrDevice::GetPlanes() {
+  std::vector<mojom::VRPlanePtr> planes;
+  return planes;
+}
+
 void GvrDevice::RequestPresent(const base::Callback<void(bool)>& callback) {
   gvr_provider_->RequestPresent(callback);
 }

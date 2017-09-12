@@ -37,6 +37,7 @@ class VRStageParameters;
 class VRPose;
 class VRHit;
 class VRPassThroughCamera;
+class VRPlane;
 
 class WebGLRenderingContextBase;
 
@@ -67,6 +68,7 @@ class VRDisplay final : public EventTargetWithInlineData,
   void resetPose();
 
   HeapVector<Member<VRHit>> hitTest(float x, float y);
+  HeapVector<Member<VRPlane>> getPlanes();
   VRPassThroughCamera* getPassThroughCamera();
 
   double depthNear() const { return m_depthNear; }

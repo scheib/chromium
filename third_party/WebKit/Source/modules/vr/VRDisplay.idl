@@ -36,6 +36,7 @@ enum VREye {
     void resetPose();
     sequence<VRHit> hitTest(float x, float y);
     VRPassThroughCamera getPassThroughCamera();
+    sequence<VRPlane> getPlanes();
 
     attribute double depthNear;
     attribute double depthFar;

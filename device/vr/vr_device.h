@@ -28,6 +28,7 @@ class DEVICE_VR_EXPORT VRDevice {
   virtual void ResetPose() = 0;
   virtual mojom::VRPassThroughCameraPtr GetPassThroughCamera() = 0;
   virtual std::vector<mojom::VRHitPtr> HitTest(float x, float y) = 0;
+  virtual std::vector<mojom::VRPlanePtr> GetPlanes() = 0;
 
   virtual void RequestPresent(const base::Callback<void(bool)>& callback) = 0;
   virtual void SetSecureOrigin(bool secure_origin) = 0;

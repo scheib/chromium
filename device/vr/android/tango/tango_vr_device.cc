@@ -15,6 +15,7 @@
 using base::android::AttachCurrentThread;
 using tango_chromium::TangoHandler;
 using tango_chromium::Hit;
+using tango_chromium::Plane;
 
 const float RAD_2_DEG = 180.0 / M_PI;
 
@@ -210,6 +211,43 @@ std::vector<mojom::VRHitPtr> TangoVRDevice::HitTest(float x, float y)
     }
   }
   return mojomHits;
+}
+
+std::vector<mojom::VRPlanePtr> TangoVRDevice::GetPlanes() {
+  std::vector<mojom::VRPlanePtr> mojomPlanes;
+  if (TangoHandler::getInstance()->isConnected())
+  {
+    std::vector<Plane> planes;
+    if (TangoHandler::getInstance()->getPlanes(planes) && planes.size() > 0)
+    {
+      std::vector<Plane>::size_type size = planes.size();
+      mojomPlanes.resize(size);
+      for (std::vector<Plane>::size_type i = 0; i < size; i++)
+      {
+        mojomPlanes[i] = mojom::VRPlane::New();
+
+        mojomPlanes[i]->identifier = planes[i].identifier;
+
+        mojomPlanes[i]->modelMatrix.resize(16);
+        for (int j = 0; j < 16; j++)
+        {
+          mojomPlanes[i]->modelMatrix[j] = planes[i].modelMatrix[j];
+        }
+
+        mojomPlanes[i]->extent.resize(2);
+        for (int j = 0; j < 2; j++) {
+          mojomPlanes[i]->extent[j] = planes[i].extent[j];
+        }
+
+        mojomPlanes[i]->vertices.resize(planes[i].count * 3);
+        for (uint j = 0; j < planes[i].count * 3; j++) {
+          mojomPlanes[i]->vertices[j] = planes[i].vertices[j];
+        }
+        mojomPlanes[i]->count = planes[i].count;
+      }
+    }
+  }
+  return mojomPlanes;
 }
 
 void TangoVRDevice::RequestPresent(const base::Callback<void(bool)>& callback) {

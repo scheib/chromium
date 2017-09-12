@@ -273,6 +273,7 @@ modules_idl_files =
                     "vr/VRStageParameters.idl",
                     "vr/VRPassThroughCamera.idl",
                     "vr/VRHit.idl",
+                    "vr/VRPlane.idl",
                     "webaudio/AnalyserNode.idl",
                     "webaudio/AudioBuffer.idl",
                     "webaudio/AudioBufferCallback.idl",

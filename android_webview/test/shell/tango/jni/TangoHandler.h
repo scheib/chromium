@@ -44,6 +44,16 @@ public:
 	float modelMatrix[16];
 };
 
+class Plane
+{
+public:
+	long identifier;
+	float modelMatrix[16];
+	float extent[2];
+	std::vector<float> vertices;
+  uint count;
+};
+
 // TangoHandler provides functionality to communicate with the Tango Service.
 class TangoHandler {
 public:
@@ -68,6 +78,7 @@ public:
 	bool getPose(TangoPoseData* tangoPoseData);
 	bool getProjectionMatrix(float near, float far, float* projectionMatrix);
 	bool hitTest(float x, float y, std::vector<Hit>& hits);
+	bool getPlanes(std::vector<Plane>& planes);
 	void resetPose();
 
 	bool updateCameraIntrinsics();

@@ -58,6 +58,14 @@ struct VRPassThroughCamera {
   int64 orientation;
 };
 
+struct VRPlane {
+  int32 identifier;
+  array<float, 16> modelMatrix;
+  array<float, 2> extent;
+  array<float> vertices;
+  uint32 count;
+};
+
 struct VRStageParameters {
   array<float, 16> standingTransform;
   float sizeX;
@@ -109,6 +117,8 @@ interface VRDisplay {
   GetPassThroughCamera() => (VRPassThroughCamera? seeThroughCamera);
   [Sync]
   HitTest(float x, float y) => (array<VRHit> hits);
+  [Sync]
+  GetPlanes() => (array<VRPlane> planes);
 
   RequestPresent(bool secureOrigin) => (bool success);
   ExitPresent();

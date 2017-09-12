@@ -62,6 +62,15 @@ void VRDisplayImpl::GetPassThroughCamera(const GetPassThroughCameraCallback& cal
   callback.Run(device_->GetPassThroughCamera());
 }
 
+void VRDisplayImpl::GetPlanes(const GetPlanesCallback& callback) {
+  if (!device_->IsAccessAllowed(this)) {
+    callback.Run(std::vector<mojom::VRPlanePtr>());
+    return;
+  }
+
+  callback.Run(device_->GetPlanes());
+}
+
 void VRDisplayImpl::RequestPresent(bool secure_origin,
                                    const RequestPresentCallback& callback) {
   if (!device_->IsAccessAllowed(this)) {

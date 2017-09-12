@@ -25,6 +25,7 @@
 #include "modules/vr/VRStageParameters.h"
 #include "modules/vr/VRHit.h"
 #include "modules/vr/VRPassThroughCamera.h"
+#include "modules/vr/VRPlane.h"
 #include "modules/webgl/WebGLRenderingContextBase.h"
 #include "platform/Histogram.h"
 #include "platform/UserGestureIndicator.h"
@@ -154,6 +155,13 @@ void VRDisplay::disconnected() {
 
 bool VRDisplay::getFrameData(VRFrameData* frameData) {
   updatePose();
+  // TODO: figure out how to query and call event listeners.
+  // if (hasEventListener('onPlaneAdded')) {
+  //   planeDeltas = m_display->GetPlaneDeltas();
+  //   for (plane in planes) {
+  //     // check if plane has changed and fire events.
+  //   }
+  //}
 
   if (!m_framePose)
     return false;
@@ -206,12 +214,13 @@ void VRDisplay::resetPose() {
 HeapVector<Member<VRHit>> VRDisplay::hitTest(float x, float y) {
   HeapVector<Member<VRHit>> hits;
 
-  if (!m_display)
+  if (!m_display) {
     return hits;
+  }
 
   Vector<device::mojom::blink::VRHitPtr> hitPtrs;
   m_display->HitTest(x, y, &hitPtrs);
-  if (hitPtrs.size() > 0) 
+  if (hitPtrs.size() > 0)
   {
     hits.resize(hitPtrs.size());
     for (size_t i = 0; i < hitPtrs.size(); i++)
@@ -222,6 +231,28 @@ HeapVector<Member<VRHit>> VRDisplay::hitTest(float x, float y) {
     }
   }
   return hits;
+}
+
+HeapVector<Member<VRPlane>> VRDisplay::getPlanes() {
+  HeapVector<Member<VRPlane>> planes;
+
+  if (!m_display) {
+    return planes;
+  }
+
+  Vector<device::mojom::blink::VRPlanePtr> planePtrs;
+  m_display->GetPlanes(&planePtrs);
+  if (planePtrs.size() > 0)
+  {
+    planes.resize(planePtrs.size());
+    for (size_t i = 0; i < planePtrs.size(); i++)
+    {
+      VRPlane* plane = new VRPlane();
+      plane->setPlane(planePtrs[i]);
+      planes[i] = plane;
+    }
+  }
+  return planes;
 }
 
 VRPassThroughCamera* VRDisplay::getPassThroughCamera()

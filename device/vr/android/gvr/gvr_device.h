@@ -29,6 +29,7 @@ class GvrDevice : public VRDevice {
 
   mojom::VRPassThroughCameraPtr GetPassThroughCamera() override;
   std::vector<mojom::VRHitPtr> HitTest(float x, float y) override;
+  std::vector<mojom::VRPlanePtr> GetPlanes() override;
 
   void RequestPresent(const base::Callback<void(bool)>& callback) override;
   void SetSecureOrigin(bool secure_origin) override;
