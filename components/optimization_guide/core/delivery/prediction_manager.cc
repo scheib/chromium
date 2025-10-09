@@ -24,8 +24,10 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
 #include "base/uuid.h"
 #include "components/optimization_guide/core/delivery/model_info.h"
 #include "components/optimization_guide/core/delivery/model_provider_registry.h"
@@ -60,42 +62,6 @@ proto::ModelCacheKey GetModelCacheKey(const std::string& locale) {
   return model_cache_key;
 }
 
-// Util class for recording the construction and validation of a prediction
-// model. The result is recorded when it goes out of scope and its destructor is
-// called.
-class ScopedPredictionModelConstructionAndValidationRecorder {
- public:
-  explicit ScopedPredictionModelConstructionAndValidationRecorder(
-      proto::OptimizationTarget optimization_target)
-      : validation_start_time_(base::TimeTicks::Now()),
-        optimization_target_(optimization_target) {}
-
-  ~ScopedPredictionModelConstructionAndValidationRecorder() {
-    base::UmaHistogramBoolean(
-        "OptimizationGuide.IsPredictionModelValid." +
-            GetStringNameForOptimizationTarget(optimization_target_),
-        is_valid_);
-
-    // Only record the timing if the model is valid and was able to be
-    // constructed.
-    if (is_valid_) {
-      base::TimeDelta validation_latency =
-          base::TimeTicks::Now() - validation_start_time_;
-      base::UmaHistogramTimes(
-          "OptimizationGuide.PredictionModelValidationLatency." +
-              GetStringNameForOptimizationTarget(optimization_target_),
-          validation_latency);
-    }
-  }
-
-  void set_is_valid(bool is_valid) { is_valid_ = is_valid; }
-
- private:
-  bool is_valid_ = true;
-  const base::TimeTicks validation_start_time_;
-  const proto::OptimizationTarget optimization_target_;
-};
-
 void RecordModelUpdateVersion(const proto::ModelInfo& model_info) {
   base::UmaHistogramSparse(
       "OptimizationGuide.PredictionModelUpdateVersion." +
@@ -126,6 +92,8 @@ PredictionManager::PredictionManager(
       url_loader_factory_(url_loader_factory),
       optimization_guide_logger_(optimization_guide_logger),
       unzipper_factory_(std::move(unzipper_factory)),
+      default_model_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
+          {base::MayBlock(), base::TaskPriority::BEST_EFFORT})),
       prediction_model_fetch_timer_(
           local_state,
           base::BindRepeating(
@@ -150,11 +118,19 @@ PredictionManager::~PredictionManager() {
 void PredictionManager::AddObserverForOptimizationTargetModel(
     proto::OptimizationTarget optimization_target,
     const std::optional<proto::Any>& model_metadata,
+    scoped_refptr<base::SequencedTaskRunner> model_task_runner,
     OptimizationTargetModelObserver* observer) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  registry_.AddObserverForOptimizationTargetModel(optimization_target,
-                                                  model_metadata, observer);
+  // Set the target's task runner if none is already present. This has the
+  // effect of using the first registered model_task_runner for all model
+  // execution, if more than one observer gets registered (e.g. in the case of
+  // multiple profiles using the model).
+  optimization_target_model_task_runner_.emplace(optimization_target,
+                                                 model_task_runner);
+
+  registry_.AddObserverForOptimizationTargetModel(
+      optimization_target, model_metadata, model_task_runner, observer);
   base::UmaHistogramMediumTimes(
       "OptimizationGuide.PredictionManager.RegistrationTimeSinceServiceInit." +
           GetStringNameForOptimizationTarget(optimization_target),
@@ -201,10 +177,13 @@ void PredictionManager::SetPredictionModelDownloadManagerForTesting(
         prediction_model_download_manager) {
   prediction_model_download_manager_ =
       std::move(prediction_model_download_manager);
+  init_time_ = base::TimeTicks::Now();
 }
 
 void PredictionManager::FetchModels() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  TRACE_EVENT("optimization_guide", "PredictionManager::FetchModels");
 
   // The histogram that gets recorded here is used for integration tests that
   // pass in a model override. For simplicity, we place the recording of this
@@ -321,10 +300,22 @@ void PredictionManager::FetchModels() {
   prediction_model_fetch_timer_.SchedulePeriodicModelsFetch();
 }
 
+scoped_refptr<base::SequencedTaskRunner> PredictionManager::GetModelTaskRunner(
+    proto::OptimizationTarget optimization_target) {
+  const auto loc =
+      optimization_target_model_task_runner_.find(optimization_target);
+  return loc != optimization_target_model_task_runner_.end()
+             ? loc->second
+             : default_model_task_runner_;
+}
+
 void PredictionManager::OnModelsFetched(
     const std::vector<proto::ModelInfo> models_request_info,
     std::unique_ptr<proto::GetModelsResponse> get_models_response_data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  TRACE_EVENT("optimization_guide", "PredictionManager::OnModelsFetched");
+
   if (!get_models_response_data) {
     for (const auto& model_info : models_request_info) {
       ModelProviderRegistry::RecordLifecycleState(
@@ -392,6 +383,10 @@ bool PredictionManager::ShouldDownloadNewModel(
 void PredictionManager::StartModelDownload(
     proto::OptimizationTarget optimization_target,
     const GURL& download_url) {
+  TRACE_EVENT("optimization_guide", "PredictionManager::StartModelDownload",
+              "target",
+              GetStringNameForOptimizationTarget(optimization_target));
+
   if (download_url.is_valid()) {
     prediction_model_download_manager_->StartDownload(download_url,
                                                       optimization_target);
@@ -407,10 +402,6 @@ void PredictionManager::StartModelDownload(
       optimization_target, download_url.is_valid()
                                ? ModelDeliveryEvent::kDownloadServiceRequest
                                : ModelDeliveryEvent::kDownloadURLInvalid);
-  base::UmaHistogramBoolean(
-      "OptimizationGuide.PredictionManager.IsDownloadUrlValid." +
-          GetStringNameForOptimizationTarget(optimization_target),
-      download_url.is_valid());
 }
 
 void PredictionManager::MaybeDownloadOrUpdatePredictionModel(
@@ -440,6 +431,9 @@ void PredictionManager::UpdatePredictionModels(
         prediction_models) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  TRACE_EVENT("optimization_guide",
+              "PredictionManager::UpdatePredictionModels");
+
   std::set<proto::OptimizationTarget> received_optimization_targets;
   for (const auto& model : prediction_models) {
     auto optimization_target = model.model_info().optimization_target();
@@ -464,6 +458,7 @@ void PredictionManager::UpdatePredictionModels(
     // Load the model from the store to see whether it is valid or not.
     prediction_model_store_->LoadModel(
         optimization_target, model_cache_key_,
+        GetModelTaskRunner(optimization_target),
         base::BindOnce(&PredictionManager::MaybeDownloadOrUpdatePredictionModel,
                        ui_weak_ptr_factory_.GetWeakPtr(), optimization_target,
                        model));
@@ -492,6 +487,10 @@ void PredictionManager::OnModelReady(const base::FilePath& base_model_dir,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(model.model_info().has_version() &&
          model.model_info().has_optimization_target());
+
+  TRACE_EVENT("optimization_guide", "PredictionManager::OnModelReady", "target",
+              GetStringNameForOptimizationTarget(
+                  model.model_info().optimization_target()));
 
   auto overrides = PredictionModelOverrides::ParseFromCommandLine(
       base::CommandLine::ForCurrentProcess());
@@ -530,12 +529,18 @@ void PredictionManager::OnModelReady(const base::FilePath& base_model_dir,
 
 void PredictionManager::OnModelDownloadStarted(
     proto::OptimizationTarget optimization_target) {
+  TRACE_EVENT("optimization_guide", "PredictionManager::OnModelDownloadStarted",
+              "target",
+              GetStringNameForOptimizationTarget(optimization_target));
   ModelProviderRegistry::RecordLifecycleState(
       optimization_target, ModelDeliveryEvent::kModelDownloadStarted);
 }
 
 void PredictionManager::OnModelDownloadFailed(
     proto::OptimizationTarget optimization_target) {
+  TRACE_EVENT("optimization_guide", "PredictionManager::OnModelDownloadFailed",
+              "target",
+              GetStringNameForOptimizationTarget(optimization_target));
   ModelProviderRegistry::RecordLifecycleState(
       optimization_target, ModelDeliveryEvent::kModelDownloadFailure);
 }
@@ -551,6 +556,7 @@ PredictionManager::GetOnDeviceSupplementaryModelsInfoForWebUI() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::vector<proto::OptimizationTarget> supp_targets = {
       proto::OptimizationTarget::OPTIMIZATION_TARGET_TEXT_SAFETY,
+      proto::OptimizationTarget::OPTIMIZATION_TARGET_GENERALIZED_SAFETY,
       proto::OptimizationTarget::OPTIMIZATION_TARGET_LANGUAGE_DETECTION};
   base::flat_map<std::string, bool> supp_models_info;
   for (const auto target : supp_targets) {
@@ -568,15 +574,14 @@ void PredictionManager::OnPredictionModelsStored() {
 }
 
 void PredictionManager::MaybeInitializeModelDownloads(
-    PrefService* local_state,
-    download::BackgroundDownloadService* background_download_service) {
+    ProfileDownloadServiceTracker& download_service_tracker,
+    PrefService* local_state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   init_time_ = base::TimeTicks::Now();
-
   if (!prediction_model_download_manager_) {
     prediction_model_download_manager_ =
         std::make_unique<PredictionModelDownloadManager>(
-            local_state, background_download_service,
+            local_state, download_service_tracker,
             base::BindRepeating(
                 &PredictionManager::GetBaseModelDirForDownload,
                 // base::Unretained is safe here because the
@@ -635,6 +640,7 @@ void PredictionManager::LoadPredictionModels(
     }
     prediction_model_store_->LoadModel(
         optimization_target, model_cache_key_,
+        GetModelTaskRunner(optimization_target),
         base::BindOnce(&PredictionManager::OnLoadPredictionModel,
                        ui_weak_ptr_factory_.GetWeakPtr(), optimization_target,
                        /*record_availability_metrics=*/true));
@@ -691,6 +697,9 @@ void PredictionManager::RemoveModelFromStore(
 
 bool PredictionManager::ProcessAndStoreLoadedModel(
     const proto::PredictionModel& model) {
+  TRACE_EVENT("optimization_guide",
+              "PredictionManager::ProcessAndStoreLoadedModel");
+
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!model.model_info().has_optimization_target()) {
     return false;
@@ -708,11 +717,14 @@ bool PredictionManager::ProcessAndStoreLoadedModel(
     return false;
   }
 
-  ScopedPredictionModelConstructionAndValidationRecorder
-      prediction_model_recorder(optimization_target);
   std::unique_ptr<ModelInfo> model_info = ModelInfo::Create(model);
+
+  base::UmaHistogramBoolean(
+      "OptimizationGuide.IsPredictionModelValid." +
+          GetStringNameForOptimizationTarget(optimization_target),
+      !!model_info);
+
   if (!model_info) {
-    prediction_model_recorder.set_is_valid(false);
     return false;
   }
 
@@ -764,6 +776,11 @@ void PredictionManager::OverrideTargetModelForTesting(
   } else {
     registry_.RemoveModel(optimization_target);
   }
+}
+
+void PredictionManager::SetUrlLoaderFactoryForTesting(
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
+  url_loader_factory_ = url_loader_factory;
 }
 
 }  // namespace optimization_guide

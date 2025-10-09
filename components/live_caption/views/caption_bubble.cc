@@ -325,7 +325,35 @@ class CaptionBubbleFrameView : public views::BubbleFrameView {
 BEGIN_METADATA(CaptionBubbleFrameView)
 END_METADATA
 
-class CaptionBubbleLabelAXModeObserver;
+#if defined(NEED_FOCUS_FOR_ACCESSIBILITY)
+// A helper class to the CaptionBubbleLabel which observes AXMode changes and
+// updates the CaptionBubbleLabel focus behavior in response.
+// TODO(crbug.com/40756389): Implement a ui::AXModeObserver::OnAXModeRemoved
+// method which observes the removal of AXModes. Without that, the caption
+// bubble label will remain focusable once accessibility is enabled, even if
+// accessibility is later disabled.
+class CaptionBubbleLabelAXModeObserver : public ui::AXModeObserver {
+ public:
+  explicit CaptionBubbleLabelAXModeObserver(CaptionBubbleLabel* owner)
+      : owner_(owner) {
+    ax_mode_observation_.Observe(&ui::AXPlatform::GetInstance());
+  }
+
+  ~CaptionBubbleLabelAXModeObserver() override = default;
+
+  CaptionBubbleLabelAXModeObserver(const CaptionBubbleLabelAXModeObserver&) =
+      delete;
+  CaptionBubbleLabelAXModeObserver& operator=(
+      const CaptionBubbleLabelAXModeObserver&) = delete;
+
+  void OnAXModeAdded(ui::AXMode mode) override;
+
+ private:
+  raw_ptr<CaptionBubbleLabel> owner_;
+  base::ScopedObservation<ui::AXPlatform, ui::AXModeObserver>
+      ax_mode_observation_{this};
+};
+#endif
 
 // CaptionBubble implementation of Label. This class takes care of setting up
 // the accessible virtual views of the label in order to support braille
@@ -451,6 +479,12 @@ class CaptionBubbleLabel : public views::Label {
 BEGIN_METADATA(CaptionBubbleLabel)
 END_METADATA
 
+#if defined(NEED_FOCUS_FOR_ACCESSIBILITY)
+void CaptionBubbleLabelAXModeObserver::OnAXModeAdded(ui::AXMode mode) {
+  owner_->SetFocusBehaviorForAccessibility();
+}
+#endif
+
 class CaptionBubbleScrollView : public views::ScrollView {
   METADATA_HEADER(CaptionBubbleScrollView, views::ScrollView)
 
@@ -515,38 +549,6 @@ class ScrollLockButton : public views::MdTextButton {
 
 BEGIN_METADATA(ScrollLockButton)
 END_METADATA
-
-#if defined(NEED_FOCUS_FOR_ACCESSIBILITY)
-// A helper class to the CaptionBubbleLabel which observes AXMode changes and
-// updates the CaptionBubbleLabel focus behavior in response.
-// TODO(crbug.com/40756389): Implement a ui::AXModeObserver::OnAXModeRemoved
-// method which observes the removal of AXModes. Without that, the caption
-// bubble label will remain focusable once accessibility is enabled, even if
-// accessibility is later disabled.
-class CaptionBubbleLabelAXModeObserver : public ui::AXModeObserver {
- public:
-  explicit CaptionBubbleLabelAXModeObserver(CaptionBubbleLabel* owner)
-      : owner_(owner) {
-    ax_mode_observation_.Observe(&ui::AXPlatform::GetInstance());
-  }
-
-  ~CaptionBubbleLabelAXModeObserver() override = default;
-
-  CaptionBubbleLabelAXModeObserver(const CaptionBubbleLabelAXModeObserver&) =
-      delete;
-  CaptionBubbleLabelAXModeObserver& operator=(
-      const CaptionBubbleLabelAXModeObserver&) = delete;
-
-  void OnAXModeAdded(ui::AXMode mode) override {
-    owner_->SetFocusBehaviorForAccessibility();
-  }
-
- private:
-  raw_ptr<CaptionBubbleLabel> owner_;
-  base::ScopedObservation<ui::AXPlatform, ui::AXModeObserver>
-      ax_mode_observation_{this};
-};
-#endif
 
 CaptionBubble::CaptionBubble(
     CaptionBubbleSettings* caption_bubble_settings,
@@ -882,8 +884,8 @@ bool CaptionBubble::ShouldShowCloseButton() const {
   return false;
 }
 
-std::unique_ptr<views::NonClientFrameView>
-CaptionBubble::CreateNonClientFrameView(views::Widget* widget) {
+std::unique_ptr<views::FrameView> CaptionBubble::CreateFrameView(
+    views::Widget* widget) {
   std::vector<raw_ptr<views::View, VectorExperimental>> buttons = GetButtons();
   if (IsTranslateHeaderEnabled()) {
     caption_bubble_event_observer_ =
@@ -1402,8 +1404,7 @@ void CaptionBubble::SetBackgroundColor() {
   }
 
   views::BubbleDialogDelegateView::SetBackgroundColor(background_color);
-  GetWidget()->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark,
-                                    /*background_color=*/std::nullopt);
+  GetWidget()->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark);
 }
 
 void CaptionBubble::OnLanguageChanged(const std::string& display_language) {

@@ -39,6 +39,7 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/ash/app_mode/kiosk_cryptohome_remover.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
@@ -98,6 +99,7 @@ void BrowserWithTestWindowTest::SetUp() {
     ash_init.auto_create_prefs_services = false;
 
     ash_test_helper_->SetUp(std::move(ash_init));
+    OnAshTestHelperCreated();
   }
 #endif
 
@@ -114,7 +116,12 @@ void BrowserWithTestWindowTest::SetUp() {
 
 #if BUILDFLAG(IS_CHROMEOS)
   manager_ = std::make_unique<crosapi::CrosapiManager>();
-  kiosk_chrome_app_manager_ = std::make_unique<ash::KioskChromeAppManager>();
+  kiosk_cryptohome_remover_ = std::make_unique<ash::KioskCryptohomeRemover>(
+      TestingBrowserProcess::GetGlobal()->local_state());
+  kiosk_chrome_app_manager_ = std::make_unique<ash::KioskChromeAppManager>(
+      TestingBrowserProcess::GetGlobal()->local_state(),
+      TestingBrowserProcess::GetGlobal()->shared_url_loader_factory(),
+      kiosk_cryptohome_remover_.get());
 #endif
 
   // Subclasses can provide their own Profile name.
@@ -161,6 +168,7 @@ void BrowserWithTestWindowTest::TearDown() {
 #if BUILDFLAG(IS_CHROMEOS)
   manager_.reset();
   kiosk_chrome_app_manager_.reset();
+  kiosk_cryptohome_remover_.reset();
 #endif
 
   user_performance_tuning_manager_environment_.TearDown();
@@ -334,6 +342,8 @@ std::unique_ptr<Browser> BrowserWithTestWindowTest::CreateBrowser(
 }
 
 #if BUILDFLAG(IS_CHROMEOS)
+void BrowserWithTestWindowTest::OnAshTestHelperCreated() {}
+
 void BrowserWithTestWindowTest::LogIn(std::string_view email,
                                       const GaiaId& gaia_id) {
   const AccountId account_id = AccountId::FromUserEmailGaiaId(email, gaia_id);

@@ -1,5 +1,6 @@
 use super::{equivalent, Entries, IndexMapCore, RefMut};
 use crate::HashValue;
+use core::cmp::Ordering;
 use core::{fmt, mem};
 use hashbrown::hash_table;
 
@@ -226,8 +227,8 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
 
     /// Remove the key, value pair stored in the map for this entry, and return the value.
     ///
-    /// Like [`Vec::swap_remove`][crate::Vec::swap_remove], the pair is removed by swapping it with
-    /// the last element of the map and popping it off.
+    /// Like [`Vec::swap_remove`][alloc::vec::Vec::swap_remove], the pair is removed by swapping it
+    /// with the last element of the map and popping it off.
     /// **This perturbs the position of what used to be the last element!**
     ///
     /// Computes in **O(1)** time (average).
@@ -237,7 +238,7 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
 
     /// Remove the key, value pair stored in the map for this entry, and return the value.
     ///
-    /// Like [`Vec::remove`][crate::Vec::remove], the pair is removed by shifting all of the
+    /// Like [`Vec::remove`][alloc::vec::Vec::remove], the pair is removed by shifting all of the
     /// elements that follow it, preserving their relative order.
     /// **This perturbs the index of all of those elements!**
     ///
@@ -260,8 +261,8 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
 
     /// Remove and return the key, value pair stored in the map for this entry
     ///
-    /// Like [`Vec::swap_remove`][crate::Vec::swap_remove], the pair is removed by swapping it with
-    /// the last element of the map and popping it off.
+    /// Like [`Vec::swap_remove`][alloc::vec::Vec::swap_remove], the pair is removed by swapping it
+    /// with the last element of the map and popping it off.
     /// **This perturbs the position of what used to be the last element!**
     ///
     /// Computes in **O(1)** time (average).
@@ -272,7 +273,7 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
 
     /// Remove and return the key, value pair stored in the map for this entry
     ///
-    /// Like [`Vec::remove`][crate::Vec::remove], the pair is removed by shifting all of the
+    /// Like [`Vec::remove`][alloc::vec::Vec::remove], the pair is removed by shifting all of the
     /// elements that follow it, preserving their relative order.
     /// **This perturbs the index of all of those elements!**
     ///
@@ -402,6 +403,44 @@ impl<'a, K, V> VacantEntry<'a, K, V> {
         (i, self.shift_insert(i, value))
     }
 
+    /// Inserts the entry's key and the given value into the map at its ordered
+    /// position among keys sorted by `cmp`, and returns the new index and a
+    /// mutable reference to the value.
+    ///
+    /// If the existing keys are **not** already sorted, then the insertion
+    /// index is unspecified (like [`slice::binary_search`]), but the key-value
+    /// pair is inserted at that position regardless.
+    ///
+    /// Computes in **O(n)** time (average).
+    pub fn insert_sorted_by<F>(self, value: V, mut cmp: F) -> (usize, &'a mut V)
+    where
+        F: FnMut(&K, &V, &K, &V) -> Ordering,
+    {
+        let slice = crate::map::Slice::from_slice(self.map.entries);
+        let (Ok(i) | Err(i)) = slice.binary_search_by(|k, v| cmp(k, v, &self.key, &value));
+        (i, self.shift_insert(i, value))
+    }
+
+    /// Inserts the entry's key and the given value into the map at its ordered
+    /// position using a sort-key extraction function, and returns the new index
+    /// and a mutable reference to the value.
+    ///
+    /// If the existing keys are **not** already sorted, then the insertion
+    /// index is unspecified (like [`slice::binary_search`]), but the key-value
+    /// pair is inserted at that position regardless.
+    ///
+    /// Computes in **O(n)** time (average).
+    pub fn insert_sorted_by_key<B, F>(self, value: V, mut sort_key: F) -> (usize, &'a mut V)
+    where
+        B: Ord,
+        F: FnMut(&K, &V) -> B,
+    {
+        let search_key = sort_key(&self.key, &value);
+        let slice = crate::map::Slice::from_slice(self.map.entries);
+        let (Ok(i) | Err(i)) = slice.binary_search_by_key(&search_key, sort_key);
+        (i, self.shift_insert(i, value))
+    }
+
     /// Inserts the entry's key and the given value into the map at the given index,
     /// shifting others to the right, and returns a mutable reference to the value.
     ///
@@ -413,6 +452,17 @@ impl<'a, K, V> VacantEntry<'a, K, V> {
         self.map
             .shift_insert_unique(index, self.hash, self.key, value);
         &mut self.map.entries[index].value
+    }
+
+    /// Replaces the key at the given index with this entry's key, returning the
+    /// old key and an `OccupiedEntry` for that index.
+    ///
+    /// ***Panics*** if `index` is out of bounds.
+    ///
+    /// Computes in **O(1)** time (average).
+    #[track_caller]
+    pub fn replace_index(self, index: usize) -> (K, OccupiedEntry<'a, K, V>) {
+        self.map.replace_index_unique(index, self.hash, self.key)
     }
 }
 
@@ -481,8 +531,8 @@ impl<'a, K, V> IndexedEntry<'a, K, V> {
 
     /// Remove and return the key, value pair stored in the map for this entry
     ///
-    /// Like [`Vec::swap_remove`][crate::Vec::swap_remove], the pair is removed by swapping it with
-    /// the last element of the map and popping it off.
+    /// Like [`Vec::swap_remove`][alloc::vec::Vec::swap_remove], the pair is removed by swapping it
+    /// with the last element of the map and popping it off.
     /// **This perturbs the position of what used to be the last element!**
     ///
     /// Computes in **O(1)** time (average).
@@ -492,7 +542,7 @@ impl<'a, K, V> IndexedEntry<'a, K, V> {
 
     /// Remove and return the key, value pair stored in the map for this entry
     ///
-    /// Like [`Vec::remove`][crate::Vec::remove], the pair is removed by shifting all of the
+    /// Like [`Vec::remove`][alloc::vec::Vec::remove], the pair is removed by shifting all of the
     /// elements that follow it, preserving their relative order.
     /// **This perturbs the index of all of those elements!**
     ///
@@ -503,8 +553,8 @@ impl<'a, K, V> IndexedEntry<'a, K, V> {
 
     /// Remove the key, value pair stored in the map for this entry, and return the value.
     ///
-    /// Like [`Vec::swap_remove`][crate::Vec::swap_remove], the pair is removed by swapping it with
-    /// the last element of the map and popping it off.
+    /// Like [`Vec::swap_remove`][alloc::vec::Vec::swap_remove], the pair is removed by swapping it
+    /// with the last element of the map and popping it off.
     /// **This perturbs the position of what used to be the last element!**
     ///
     /// Computes in **O(1)** time (average).
@@ -514,7 +564,7 @@ impl<'a, K, V> IndexedEntry<'a, K, V> {
 
     /// Remove the key, value pair stored in the map for this entry, and return the value.
     ///
-    /// Like [`Vec::remove`][crate::Vec::remove], the pair is removed by shifting all of the
+    /// Like [`Vec::remove`][alloc::vec::Vec::remove], the pair is removed by shifting all of the
     /// elements that follow it, preserving their relative order.
     /// **This perturbs the index of all of those elements!**
     ///

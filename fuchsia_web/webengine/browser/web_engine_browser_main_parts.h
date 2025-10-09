@@ -22,6 +22,7 @@
 
 namespace base {
 class FuchsiaIntlProfileWatcher;
+class ProcessLifecycle;
 }
 
 namespace aura {
@@ -55,9 +56,11 @@ class FrameHostImpl final : public fuchsia::web::FrameHost {
   explicit FrameHostImpl(
       inspect::Node inspect_node,
       WebEngineDevToolsController* devtools_controller,
-      network::NetworkQualityTracker* network_quality_tracker)
+      network::NetworkQualityTracker* network_quality_tracker,
+      os_crypt_async::OSCryptAsync* os_crypt_async)
       : context_(
-            WebEngineBrowserContext::CreateIncognito(network_quality_tracker),
+            WebEngineBrowserContext::CreateIncognito(network_quality_tracker,
+                                                     os_crypt_async),
             std::move(inspect_node),
             devtools_controller) {}
   ~FrameHostImpl() override = default;
@@ -155,6 +158,12 @@ class WEB_ENGINE_EXPORT WebEngineBrowserMainParts
   std::unique_ptr<
       network::NetworkQualityTracker::RTTAndThroughputEstimatesObserver>
       network_quality_observer_;
+
+  std::unique_ptr<os_crypt_async::OSCryptAsync> os_crypt_async_;
+
+  // Allows the instance to respond gracefully to explicit teardown via the
+  // component framework.
+  std::unique_ptr<base::ProcessLifecycle> lifecycle_;
 
   base::OnceClosure quit_closure_;
 };

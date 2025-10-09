@@ -63,6 +63,8 @@ PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE_WITH_ATTRS(
     perfetto::Category("__metadata"),
     perfetto::Category("accessibility"),
     perfetto::Category("AccountFetcherService"),
+    perfetto::Category("actor").SetDescription(
+      "Events for the Actor component."),
     perfetto::Category("android.adpf"),
     perfetto::Category("android.ui.jank"),
     perfetto::Category("android_webview"),
@@ -154,6 +156,8 @@ PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE_WITH_ATTRS(
     perfetto::Category("input").SetTags("input"),
     perfetto::Category("input.scrolling").SetTags("input"),
     perfetto::Category("io"),
+    perfetto::Category("ip_protection").SetDescription(
+      "Traces for //components/ip_protection."),
     perfetto::Category("ipc").SetTags("ipc"),
     perfetto::Category("Java"),
     perfetto::Category("jni"),
@@ -189,6 +193,10 @@ PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE_WITH_ATTRS(
     perfetto::Category("omnibox"),
     perfetto::Category("oobe"),
     perfetto::Category("openscreen"),
+
+    perfetto::Category("optimization_guide").SetDescription(
+        "Includes events related to processing hints and machine learning "
+        "models by the Optimization Guide component."),
     perfetto::Category("ozone"),
     perfetto::Category("partition_alloc"),
     perfetto::Category("passwords"),
@@ -205,6 +213,9 @@ PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE_WITH_ATTRS(
         "to global async tracks."),
     perfetto::Category("performance_manager.cpu_metrics").SetDescription(
       "Events reporting cpu metrics computed in performance_manager"),
+    perfetto::Category("performance_manager.graph").SetDescription(
+      "Describes the performance manager graph structure with frames, pages, "
+      "processes, etc. and their properties.").SetTags("toplevel"),
     perfetto::Category("persistent_cache"),
     perfetto::Category("PlatformMalloc"),
     perfetto::Category("ppapi"),
@@ -253,6 +264,9 @@ PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE_WITH_ATTRS(
     perfetto::Category("viz").SetTags("rendering"),
     perfetto::Category("vk"),
     perfetto::Category("wakeup.flow").SetTags("scheduling"),
+    perfetto::Category("waap").SetDescription(
+      "Includes events related to WaaP (Webium-as-a-Product) UI experiments as "
+      "described in //chrome/browser/waap."),
     perfetto::Category("wayland"),
     perfetto::Category("webaudio").SetTags("audio"),
     perfetto::Category("webengine.fidl"),

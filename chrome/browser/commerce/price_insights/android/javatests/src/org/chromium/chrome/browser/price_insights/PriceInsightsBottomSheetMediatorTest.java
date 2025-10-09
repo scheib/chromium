@@ -32,8 +32,6 @@ import static org.chromium.chrome.browser.price_insights.PriceInsightsBottomShee
 import static org.chromium.chrome.browser.price_insights.PriceInsightsBottomSheetProperties.PRICE_TRACKING_TITLE;
 
 import android.app.Activity;
-import android.app.NotificationManager;
-import android.content.res.Resources;
 import android.view.View;
 import android.view.View.OnClickListener;
 
@@ -62,7 +60,6 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.browser_ui.notifications.NotificationFeatureMap;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.commerce.core.ShoppingService;
@@ -76,7 +73,6 @@ import org.chromium.ui.widget.ToastManager;
 import org.chromium.url.JUnitTestGURLs;
 
 import java.util.Arrays;
-import java.util.Optional;
 
 /** Tests for {@link PriceInsightsBottomSheetMediator}. */
 @Batch(Batch.UNIT_TESTS)
@@ -93,12 +89,9 @@ public class PriceInsightsBottomSheetMediatorTest {
     @Mock private Profile mMockProfile;
     @Mock private TabModelSelector mMockTabModelSelector;
     @Mock private ShoppingService mMockShoppingService;
-    @Mock private Resources mMockResources;
-    @Mock private BookmarkId mMockBookmarkId;
     @Mock private PriceInsightsDelegate mMockPriceInsightsDelegate;
     @Mock private ObservableSupplier<Boolean> mMockPriceTrackingStateSupplier;
     @Mock private View mMockPriceHistoryChart;
-    @Mock private NotificationManager mMockNotificationManager;
 
     private static final String PRODUCT_TITLE = "Testing Sneaker";
     private static final String PRICE_TRACKING_DISABLED_BUTTON_TEXT = "Track";
@@ -110,24 +103,24 @@ public class PriceInsightsBottomSheetMediatorTest {
     private static final String CATALOG_ATTRIBUTES = "Stainless steel, Espresso Bundle";
     private static final PriceInsightsInfo PRICE_INSIGHTS_INFO_SINGLE_CATALOG =
             new PriceInsightsInfo(
-                    Optional.empty(),
+                    null,
                     "USD",
-                    Optional.empty(),
-                    Optional.empty(),
-                    Optional.empty(),
+                    null,
+                    null,
+                    null,
                     Arrays.asList(new PricePoint("08-08-2024", 65000000L)),
-                    Optional.of(JUnitTestGURLs.EXAMPLE_URL),
+                    JUnitTestGURLs.EXAMPLE_URL,
                     0,
                     false);
     private static final PriceInsightsInfo PRICE_INSIGHTS_INFO_MULTIPLE_CATALOGS =
             new PriceInsightsInfo(
-                    Optional.empty(),
+                    null,
                     "USD",
-                    Optional.empty(),
-                    Optional.empty(),
-                    Optional.of(CATALOG_ATTRIBUTES),
+                    null,
+                    null,
+                    CATALOG_ATTRIBUTES,
                     Arrays.asList(new PricePoint("08-08-2024", 65000000L)),
-                    Optional.of(JUnitTestGURLs.EXAMPLE_URL),
+                    JUnitTestGURLs.EXAMPLE_URL,
                     0,
                     true);
 
@@ -331,16 +324,7 @@ public class PriceInsightsBottomSheetMediatorTest {
     }
 
     private void setShoppingServiceGetProductInfoForUrl() {
-        ProductInfo productInfo =
-                new ProductInfo(
-                        null,
-                        null,
-                        Optional.of(12345L),
-                        Optional.empty(),
-                        null,
-                        0,
-                        null,
-                        Optional.empty());
+        ProductInfo productInfo = new ProductInfo(null, null, 12345L, null, null, 0, null, null);
         doReturn(productInfo).when(mMockShoppingService).getAvailableProductInfoForUrl(any());
     }
 

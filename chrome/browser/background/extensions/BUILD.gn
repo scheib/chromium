@@ -55,7 +55,7 @@ source_set("impl") {
     "//chrome/app/theme:chrome_unscaled_resources_grit",
     "//chrome/browser:browser_process",
     "//chrome/browser:browser_public_dependencies",
-    "//chrome/browser/apps/app_service",
+    "//chrome/browser/apps/app_service:constants",
     "//chrome/browser/background",
     "//chrome/browser/extensions",
     "//chrome/browser/lifetime:termination_notification",
@@ -79,6 +79,10 @@ source_set("impl") {
   if (enable_glic) {
     deps += [ "//chrome/browser/glic" ]
   }
+
+  if (!is_chromeos) {
+    deps += [ "//chrome/browser/web_applications/extensions" ]
+  }
 }
 
 source_set("unit_tests") {
@@ -96,6 +100,7 @@ source_set("unit_tests") {
     "//chrome/browser/background",
     "//chrome/browser/status_icons",
     "//chrome/test:test_support",
+    "//components/custom_handlers:test_support",
     "//components/policy/core/common:test_support",
     "//components/sync_preferences",
     "//content/public/browser",

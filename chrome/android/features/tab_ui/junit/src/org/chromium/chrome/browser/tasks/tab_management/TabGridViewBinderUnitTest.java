@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.tasks.tab_management;
 import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -15,6 +16,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,7 +26,6 @@ import static org.mockito.Mockito.when;
 import static org.chromium.ui.test.util.MockitoHelper.doCallback;
 
 import android.content.Context;
-import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Matrix;
@@ -66,6 +67,7 @@ import org.chromium.chrome.browser.tab_ui.TabThumbnailView;
 import org.chromium.chrome.browser.tasks.tab_management.TabActionButtonData.TabActionButtonType;
 import org.chromium.chrome.browser.tasks.tab_management.TabListMediator.ShoppingPersistedTabDataFetcher;
 import org.chromium.chrome.browser.tasks.tab_management.TabProperties.TabActionState;
+import org.chromium.chrome.browser.tasks.tab_management.TabProperties.TabCardHighlightState;
 import org.chromium.components.browser_ui.util.motion.MotionEventInfo;
 import org.chromium.components.browser_ui.util.motion.OnPeripheralClickListener;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -87,7 +89,6 @@ public final class TabGridViewBinderUnitTest {
     @Mock private ViewStub mTabCardLabelStub;
     @Mock private TabCardLabelView mTabCardLabelView;
     @Mock private ImageView mActionButton;
-    @Mock private TypedArray mTypedArray;
     @Mock private TabFavicon mTabFavicon;
     @Mock private PriceCardView mPriceCardView;
     @Mock private Drawable mDrawable;
@@ -508,12 +509,67 @@ public final class TabGridViewBinderUnitTest {
     }
 
     @Test
+    public void testBindHighlightState() {
+        mModel.set(TabProperties.HIGHLIGHT_STATE, TabCardHighlightState.NOT_HIGHLIGHTED);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.HIGHLIGHT_STATE);
+        verify(mViewGroup).setIsHighlighted(TabCardHighlightState.NOT_HIGHLIGHTED, false);
+
+        mModel.set(TabProperties.HIGHLIGHT_STATE, TabCardHighlightState.TO_BE_HIGHLIGHTED);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.HIGHLIGHT_STATE);
+        verify(mViewGroup).setIsHighlighted(TabCardHighlightState.TO_BE_HIGHLIGHTED, false);
+
+        mModel.set(TabProperties.HIGHLIGHT_STATE, TabCardHighlightState.HIGHLIGHTED);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.HIGHLIGHT_STATE);
+        verify(mViewGroup).setIsHighlighted(TabCardHighlightState.HIGHLIGHTED, false);
+
+        mModel.set(TabProperties.HIGHLIGHT_STATE, TabCardHighlightState.NOT_HIGHLIGHTED);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.HIGHLIGHT_STATE);
+        verify(mViewGroup, times(2)).setIsHighlighted(TabCardHighlightState.NOT_HIGHLIGHTED, false);
+    }
+
+    @Test
+    public void testBindHighlightState_updateTransientState() {
+        mModel.set(TabProperties.HIGHLIGHT_STATE, TabCardHighlightState.TO_BE_HIGHLIGHTED);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.HIGHLIGHT_STATE);
+        verify(mViewGroup).setIsHighlighted(TabCardHighlightState.TO_BE_HIGHLIGHTED, false);
+        assertThat(
+                mModel.get(TabProperties.HIGHLIGHT_STATE),
+                equalTo(TabCardHighlightState.HIGHLIGHTED));
+    }
+
+    @Test
     @EnableFeatures(ChromeFeatureList.MEDIA_INDICATORS_ANDROID)
     public void testMediaIndicator() {
         mModel.set(TabProperties.MEDIA_INDICATOR, MediaState.AUDIBLE);
         TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.MEDIA_INDICATOR);
-
         verify(mViewGroup).setMediaIndicator(eq(MediaState.AUDIBLE));
+
+        mModel.set(TabProperties.MEDIA_INDICATOR, MediaState.MUTED);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.MEDIA_INDICATOR);
+        verify(mViewGroup).setMediaIndicator(eq(MediaState.MUTED));
+
+        mModel.set(TabProperties.MEDIA_INDICATOR, MediaState.NONE);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.MEDIA_INDICATOR);
+        verify(mViewGroup).setMediaIndicator(eq(MediaState.NONE));
+    }
+
+    @Test
+    public void testBindContextClickListener() {
+        TabActionListener listener = mock();
+        mModel.set(TabProperties.TAB_CONTEXT_CLICK_LISTENER, listener);
+
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.TAB_CONTEXT_CLICK_LISTENER);
+
+        verify(mViewGroup).setContextClickable(true);
+        ArgumentCaptor<View.OnContextClickListener> captor =
+                ArgumentCaptor.forClass(View.OnContextClickListener.class);
+        verify(mViewGroup).setOnContextClickListener(captor.capture());
+        assertNotNull(captor.getValue());
+
+        mModel.set(TabProperties.TAB_CONTEXT_CLICK_LISTENER, null);
+        TabGridViewBinder.bindTab(mModel, mViewGroup, TabProperties.TAB_CONTEXT_CLICK_LISTENER);
+        verify(mViewGroup).setContextClickable(false);
+        verify(mViewGroup).setOnContextClickListener(eq(null));
     }
 
     private void assertImageMatrix(

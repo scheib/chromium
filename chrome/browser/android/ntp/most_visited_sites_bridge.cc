@@ -42,8 +42,8 @@ using base::android::ScopedJavaLocalRef;
 using ntp_tiles::MostVisitedSites;
 using ntp_tiles::NTPTilesVector;
 using ntp_tiles::SectionType;
-using ntp_tiles::TileTitleSource;
 using ntp_tiles::TileSource;
+using ntp_tiles::TileTitleSource;
 using ntp_tiles::TileVisualType;
 
 namespace {
@@ -97,7 +97,6 @@ void JavaHomepageClient::QueryHomepageTitle(TitleCallback title_callback) {
   // and the callback will not be called. Therefore, base::Unretained works.
   history_service->QueryURL(
       url,
-      /*want_visits=*/false,
       base::BindOnce(&JavaHomepageClient::OnTitleEntryFound,
                      base::Unretained(this), std::move(title_callback)),
       &task_tracker_);
@@ -179,7 +178,9 @@ MostVisitedSitesBridge::MostVisitedSitesBridge(Profile* profile,
     : most_visited_(ChromeMostVisitedSitesFactory::NewForProfile(profile)),
       profile_(profile) {
   DCHECK(!profile->IsOffTheRecord());
-  most_visited_->EnableCustomLinks(enable_custom_links);
+  most_visited_->EnableTileTypes(
+      ntp_tiles::MostVisitedSites::EnableTileTypesOptions().with_custom_links(
+          enable_custom_links));
 }
 
 MostVisitedSitesBridge::~MostVisitedSitesBridge() = default;

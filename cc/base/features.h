@@ -14,7 +14,6 @@
 
 namespace features {
 
-CC_BASE_EXPORT BASE_DECLARE_FEATURE(kAlignSurfaceLayerImplToPixelGrid);
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(kComputeRasterTranslateForExternalScale);
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(kSynchronizedScrolling);
 
@@ -58,10 +57,6 @@ CC_BASE_EXPORT BASE_DECLARE_FEATURE(kClearCanvasResourcesInBackground);
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(kWaitForLateScrollEvents);
 CC_BASE_EXPORT extern const base::FeatureParam<double>
     kWaitForLateScrollEventsDeadlineRatio;
-
-// When enabled we stop always pushing PictureLayerImpl properties on
-// tree Activation. See crbug.com/40335690.
-CC_BASE_EXPORT BASE_DECLARE_FEATURE(kDontAlwaysPushPictureLayerImpls);
 
 // When enabled, image quality settings will be preserved in the discardable
 // image map.
@@ -155,6 +150,10 @@ CC_BASE_EXPORT BASE_DECLARE_FEATURE(kInitImageDecodeLastUseTime);
 // frame production to 60Hz.
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(kThrottleMainFrameTo60Hz);
 
+// When main frame production is throttled, whether the throttling should be
+// paused for some duration after an urgent main frame request is processed.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kBoostFrameRateForUrgentMainFrame);
+
 // We only want to test the feature value if the client satisfies an eligibility
 // criteria, as testing the value enters the client into an experimental group,
 // and we only want the groups (including control) to only contain eligibilie
@@ -208,7 +207,7 @@ CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(double, kCubicBezierY1);
 CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(double, kCubicBezierX2);
 CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(double, kCubicBezierY2);
 CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(base::TimeDelta,
-                                          kMaxAnimtionDuration);
+                                          kMaxAnimationDuration);
 
 // When enabled, slim will receive CompositorFrameSink messages directly without
 // the intermediate IO-thread hop.
@@ -219,8 +218,34 @@ CC_BASE_EXPORT BASE_DECLARE_FEATURE(kSlimDirectReceiverIpc);
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(
     kOverscrollBehaviorRespectedOnAllScrollContainers);
 
+// When enabled, the overscroll effect will display on non-root scrollers.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kOverscrollEffectOnNonRootScrollers);
+
 // A kill switch in case skipping finish causes unexpected issues.
 CC_BASE_EXPORT BASE_DECLARE_FEATURE(kSkipFinishDuringReleaseLayerTreeFrameSink);
+
+// When enabled, the V4 scroll jank metric will be emitted.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kScrollJankV4Metric);
+CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(
+    double,
+    kScrollJankV4MetricStabilityCorrection);
+CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(double,
+                                          kScrollJankV4MetricDiscountFactor);
+CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(
+    double,
+    kScrollJankV4MetricFastScrollContinuityThreshold);
+CC_BASE_EXPORT BASE_DECLARE_FEATURE_PARAM(
+    double,
+    kScrollJankV4MetricFlingContinuityThreshold);
+
+// When enabled, the V1/V4 per-scroll jank metric will be emitted at the end of
+// a scroll (as opposed to at the beginning of the next scroll).
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kEmitPerScrollJankV1MetricAtEndOfScroll);
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kEmitPerScrollJankV4MetricAtEndOfScroll);
+
+// When enabled, AsyncLayerTreeFrameSink will generate its own BeginFrameArgs
+// when auto_needs_begin_frame_ is enabled.
+CC_BASE_EXPORT BASE_DECLARE_FEATURE(kManualBeginFrame);
 
 }  // namespace features
 

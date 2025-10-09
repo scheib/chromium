@@ -13,16 +13,15 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/expected.h"
-#include "build/build_config.h"
-#include "chrome/browser/actor/actor_task.h"
 #include "chrome/browser/actor/aggregated_journal.h"
-#include "chrome/browser/actor/task_id.h"
-#include "chrome/browser/page_content_annotations/multi_source_page_context_fetcher.h"
+#include "chrome/common/actor/action_result.h"
+#include "chrome/common/actor/task_id.h"
+#include "chrome/common/actor_webui.mojom.h"
 #include "chrome/common/buildflags.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/optimization_guide/proto/features/actions_data.pb.h"
-#include "components/optimization_guide/proto/features/model_prototyping.pb.h"
+#include "components/password_manager/core/browser/actor_login/actor_login_types.h"
 #include "components/tabs/public/tab_interface.h"
+#include "ui/gfx/image/image.h"
 #include "url/gurl.h"
 
 class Profile;
@@ -31,11 +30,16 @@ namespace content {
 class BrowserContext;
 }  // namespace content
 
+namespace page_content_annotations {
+struct FetchPageContextResult;
+}  // namespace page_content_annotations
+
 namespace actor {
 namespace ui {
 class ActorUiStateManagerInterface;
 }
 
+class ActorTask;
 class ToolRequest;
 
 // This class owns all ActorTasks for a given profile. ActorTasks are kept in
@@ -70,26 +74,19 @@ class ActorKeyedService : public KeyedService {
   void ResetForTesting();
 
   // Starts a new task with an execution engine and returns the new task's id.
-  TaskId CreateTask();
+  // `options`, when provided, contains information used to initialize the
+  // task.
+  TaskId CreateTask(webui::mojom::TaskOptionsPtr options = nullptr);
 
   // Executes the given ToolRequest actions using the execution engine for the
   // given task id.
   using PerformActionsCallback = base::OnceCallback<void(
       mojom::ActionResultCode /*result_code*/,
       std::optional<size_t> /*index_of_failing_action*/,
-      std::vector<optimization_guide::proto::
-                      ScriptToolResult> /* script_tool_results */)>;
+      std::vector<ActionResultWithLatencyInfo> /* action_results */)>;
   void PerformActions(TaskId task_id,
                       std::vector<std::unique_ptr<ToolRequest>>&& actions,
                       PerformActionsCallback callback);
-
-  // TODO(crbug.com/411462297): DEPRECATED - to be replaced with PerformActions.
-  // Executes an actor action.
-  void ExecuteAction(
-      TaskId task_id,
-      std::vector<std::unique_ptr<ToolRequest>>&& actions,
-      base::OnceCallback<void(optimization_guide::proto::BrowserActionResult)>
-          callback);
 
   // Stops a task by its ID, `success` determines if the task was finished
   // successfully or ended early.
@@ -99,18 +96,20 @@ class ActorKeyedService : public KeyedService {
   // exist.
   ActorTask* GetTask(TaskId task_id);
 
-  // TODO(crbug.com/411462297): This is a temporary shim to allow removing
-  // GlicActorController's notion of "current task". Eventually all actions will
-  // supply a task id.
-  ActorTask* GetMostRecentTask();
-
   // The associated journal for the associated profile.
   AggregatedJournal& GetJournal() LIFETIME_BOUND { return journal_; }
 
   // The associated ActorUiStateManager for the associated profile.
   ui::ActorUiStateManagerInterface* GetActorUiStateManager();
 
-  bool IsAnyTaskActingOnTab(const tabs::TabInterface& tab) const;
+  // Returns true if there is a task that is actively (i.e. not paused) acting
+  // in the given `tab`.
+  bool IsActiveOnTab(const tabs::TabInterface& tab) const;
+
+  // Returns the id of an ActorTask which has the given tab in its set. Returns
+  // a null TaskId if no task has `tab`. Note: a returned task may be paused.
+  TaskId GetTaskFromTab(const tabs::TabInterface& tab) const;
+
   Profile* GetProfile();
 
   using TabObservationResult = base::expected<
@@ -130,41 +129,68 @@ class ActorKeyedService : public KeyedService {
 
   void NotifyTaskStateChanged(const ActorTask& task);
 
+  // Allows the subscribers to get notified when a credential selection prompt
+  // is requested.
+  using CredentialSelectedCallback = base::RepeatingCallback<void(
+      webui::mojom::SelectCredentialDialogResponsePtr)>;
+  using RequestToShowCredentialSelectionDialogSubscriberCallback =
+      base::RepeatingCallback<void(
+          TaskId,
+          const base::flat_map<std::string, gfx::Image>& icons,
+          const std::vector<actor_login::Credential>&,
+          CredentialSelectedCallback)>;
+  base::CallbackListSubscription
+  AddRequestToShowCredentialSelectionDialogSubscriberCallback(
+      RequestToShowCredentialSelectionDialogSubscriberCallback callback);
+
+  // Notifies the subscribers that a credential selection prompt is requested
+  // for the given task.
+  void NotifyRequestToShowCredentialSelectionDialog(
+      TaskId task_id,
+      const base::flat_map<std::string, gfx::Image>& icons,
+      const std::vector<actor_login::Credential>& credentials);
+
+  // Callback for when a credential is selected.
+  void OnCredentialSelected(
+      TaskId request_task_id,
+      webui::mojom::SelectCredentialDialogResponsePtr response);
+
+  using UserConfirmationDialogCallback = base::RepeatingCallback<void(
+      webui::mojom::UserConfirmationDialogResponsePtr)>;
+  using RequestToShowUserConfirmationDialogSubscriberCallback =
+      base::RepeatingCallback<void(const std::optional<url::Origin>&,
+                                   const std::optional<int32_t>,
+                                   UserConfirmationDialogCallback)>;
+
+  base::CallbackListSubscription
+  AddRequestToShowUserConfirmationDialogSubscriberCallback(
+      RequestToShowUserConfirmationDialogSubscriberCallback callback);
+
+  // Notifies the subscribers that the browser is requesting user confirmation
+  // for the actor to continue.
+  void NotifyRequestToShowUserConfirmationDialog(
+      TaskId task_id,
+      const std::optional<url::Origin>& navigation_origin,
+      const std::optional<int32_t> download_id);
+
+  void OnUserConfirmationDialogDecision(
+      TaskId request_task_id,
+      webui::mojom::UserConfirmationDialogResponsePtr response);
+
   // Returns the acting task for web_contents. Returns nullptr if acting task
   // does not exist.
   const ActorTask* GetActingActorTaskForWebContents(
       content::WebContents* web_contents);
 
- private:
-  // Called when the actor coordinator has finished an action which required
-  // task creation.
-  void OnActionFinished(
-      base::OnceCallback<void(optimization_guide::proto::BrowserActionResult)>
-          callback,
-      TaskId task_id,
-      actor::mojom::ActionResultPtr action_result,
-      std::optional<size_t> index_of_failed_action,
-      std::vector<optimization_guide::proto::ScriptToolResult>
-          script_tool_results);
+  base::WeakPtr<ActorKeyedService> GetWeakPtr();
 
+ private:
   // The callback used for ExecutorEngine::Act.
   void OnActionsFinished(
       PerformActionsCallback callback,
       actor::mojom::ActionResultPtr action_result,
       std::optional<size_t> index_of_failed_action,
-      std::vector<optimization_guide::proto::ScriptToolResult>
-          script_tool_results);
-
-  void ConvertToBrowserActionResult(
-      base::OnceCallback<void(optimization_guide::proto::BrowserActionResult)>
-          callback,
-      TaskId task_id,
-      int32_t tab_id,
-      const GURL& url,
-      actor::mojom::ActionResultPtr action_result,
-      std::vector<optimization_guide::proto::ScriptToolResult>
-          script_tool_results,
-      TabObservationResult context_result);
+      std::vector<ActionResultWithLatencyInfo> action_results);
 
   // Needs to be declared before the tasks, as they will indirectly have a
   // reference to it. This ensures the correct destruction order.
@@ -181,8 +207,13 @@ class ActorKeyedService : public KeyedService {
   base::RepeatingCallbackList<void(const ActorTask&)>
       tab_state_change_callback_list_;
 
-  // TODO(crbug.com/411462297): Remove
-  TaskId last_created_task_id_;
+  base::RepeatingCallbackList<
+      RequestToShowCredentialSelectionDialogSubscriberCallback::RunType>
+      request_to_show_credential_selection_dialog_callback_list_;
+
+  base::RepeatingCallbackList<
+      RequestToShowUserConfirmationDialogSubscriberCallback::RunType>
+      request_to_show_user_confirmation_dialog_callback_list_;
 
   // Owns this.
   raw_ptr<Profile> profile_;

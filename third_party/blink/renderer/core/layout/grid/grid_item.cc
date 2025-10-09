@@ -59,8 +59,6 @@ AxisEdge AxisEdgeFromItemPosition(GridTrackSizingDirection track_direction,
     //
     // TODO(almaher): Update alignment logic if needed once we resolve on
     // https://github.com/w3c/csswg-drafts/issues/10275.
-    //
-    // TODO(almaher): We need more masonry alignment tests.
     return parent_grid_style.MasonryTrackSizingDirection() == track_direction;
   })();
 
@@ -315,6 +313,17 @@ void GridItemData::SetAlignmentFallback(
             ? AxisEdge::kStart
             : AxisEdge::kEnd;
   }
+}
+
+void GridItemData::UpdateSpan(
+    const GridSpan& span,
+    GridTrackSizingDirection track_direction,
+    wtf_size_t start_offset,
+    const GridLayoutTrackCollection& track_collection) {
+  resolved_position.SetSpan(span, track_direction);
+  MaybeTranslateSpan(start_offset, track_direction);
+  ResetPlacementIndices();
+  ComputeSetIndices(track_collection);
 }
 
 void GridItemData::ComputeSetIndices(

@@ -9,6 +9,7 @@
 #include <string_view>
 #include <utility>
 
+#include "base/byte_count.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
@@ -34,6 +35,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "http_request_info.h"
 #include "net/base/cache_type.h"
@@ -358,7 +360,7 @@ struct HttpCache::PendingOp {
   PendingOp() = default;
   ~PendingOp() = default;
 
-  raw_ptr<disk_cache::Entry, AcrossTasksDanglingUntriaged> entry = nullptr;
+  raw_ptr<disk_cache::Entry> entry = nullptr;
   bool entry_opened = false;  // rather than created.
 
   std::unique_ptr<disk_cache::Backend> backend;
@@ -446,10 +448,7 @@ HttpCache::HttpCache(
   if (base::FeatureList::IsEnabled(features::kHttpCacheNoVarySearch)) {
     size_t max_entries = features::kHttpCacheNoVarySearchCacheMaxEntries.Get();
     if (max_entries) {
-      // TODO(https://crbug.com/382394774): Make
-      // kHttpCacheNoVarySearchCacheMaxEntries be a size_t param.
-      no_vary_search_cache_ =
-          std::make_unique<NoVarySearchCache>(static_cast<size_t>(max_entries));
+      no_vary_search_cache_ = std::make_unique<NoVarySearchCache>(max_entries);
     }
   }
   HttpNetworkSession* session = network_layer_->GetSession();
@@ -551,6 +550,8 @@ void HttpCache::OnExternalCacheHit(
     return;
   }
 
+  TRACE_EVENT("net", "HttpCache::OnExternalCacheHit");
+
   HttpRequestInfo request_info;
   request_info.url = url;
   request_info.method = http_method;
@@ -573,8 +574,7 @@ void HttpCache::OnExternalCacheHit(
 
   OnExternalCacheHitForRequest(request_info);
 
-  if (no_vary_search_cache_ &&
-      features::kHttpCacheNoVarySearchApplyToExternalHits.Get()) {
+  if (no_vary_search_cache_) {
     auto result = no_vary_search_cache_->Lookup(request_info);
     if (result) {
       // Do this in addition to, rather than instead of, the URL passed to the
@@ -1353,10 +1353,13 @@ HttpCache::ParallelWritingPattern HttpCache::CanTransactionJoinExistingWriters(
   if (transaction->mode() == Transaction::READ) {
     return PARALLEL_WRITING_NOT_JOIN_READ_ONLY;
   }
-  if (transaction->GetResponseInfo()->headers &&
-      transaction->GetResponseInfo()->headers->GetContentLength() >
-          disk_cache_->MaxFileSize()) {
-    return PARALLEL_WRITING_NOT_JOIN_TOO_BIG_FOR_CACHE;
+  if (transaction->GetResponseInfo()->headers) {
+    std::optional<base::ByteCount> content_length =
+        transaction->GetResponseInfo()->headers->GetContentLength();
+    if (content_length &&
+        content_length->InBytes() > disk_cache_->MaxFileSize()) {
+      return PARALLEL_WRITING_NOT_JOIN_TOO_BIG_FOR_CACHE;
+    }
   }
   return PARALLEL_WRITING_JOIN;
 }
@@ -1564,7 +1567,7 @@ void HttpCache::OnIOComplete(int result, PendingOp* pending_op) {
         pending_op->entry->Doom();
       }
 
-      pending_op->entry->Close();
+      pending_op->entry.ExtractAsDangling()->Close();
       pending_op->entry = nullptr;
       try_restart_requests = true;
     }

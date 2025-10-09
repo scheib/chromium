@@ -22,7 +22,6 @@ import org.chromium.chrome.browser.password_manager.PasswordManagerHelper;
 import org.chromium.chrome.browser.password_manager.PasswordStoreBridge;
 import org.chromium.chrome.browser.pwd_check_wrapper.PasswordCheckControllerFactory;
 import org.chromium.components.browser_ui.settings.SettingsCustomTabLauncher;
-import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.sync.SyncService;
 import org.chromium.ui.modaldialog.ModalDialogManager;
@@ -60,9 +59,8 @@ public class SafetyCheckCoordinator implements DefaultLifecycleObserver, SafetyC
             SafetyCheckSettingsFragment settingsFragment,
             SafetyCheckUpdatesDelegate updatesClient,
             SafetyCheckBridge bridge,
-            ObservableSupplier<ModalDialogManager> modalDialogManagerSupplier,
+            ObservableSupplier<@Nullable ModalDialogManager> modalDialogManagerSupplier,
             @Nullable SyncService syncService,
-            PrefService prefService,
             PasswordStoreBridge passwordStoreBridge,
             PasswordManagerHelper passwordManagerHelper,
             SettingsCustomTabLauncher settingsCustomTabLauncher) {
@@ -72,7 +70,6 @@ public class SafetyCheckCoordinator implements DefaultLifecycleObserver, SafetyC
                 bridge,
                 modalDialogManagerSupplier,
                 syncService,
-                prefService,
                 passwordStoreBridge,
                 passwordManagerHelper,
                 settingsCustomTabLauncher);
@@ -82,9 +79,8 @@ public class SafetyCheckCoordinator implements DefaultLifecycleObserver, SafetyC
             SafetyCheckSettingsFragment settingsFragment,
             SafetyCheckUpdatesDelegate updatesClient,
             SafetyCheckBridge bridge,
-            ObservableSupplier<ModalDialogManager> modalDialogManagerSupplier,
+            ObservableSupplier<@Nullable ModalDialogManager> modalDialogManagerSupplier,
             @Nullable SyncService syncService,
-            PrefService prefService,
             PasswordStoreBridge passwordStoreBridge,
             PasswordManagerHelper passwordManagerHelper,
             SettingsCustomTabLauncher settingsCustomTabLauncher) {
@@ -128,7 +124,6 @@ public class SafetyCheckCoordinator implements DefaultLifecycleObserver, SafetyC
                                                     mUpdatesClient,
                                                     bridge,
                                                     syncService,
-                                                    prefService,
                                                     new Handler(),
                                                     passwordStoreBridge,
                                                     new PasswordCheckControllerFactory(),

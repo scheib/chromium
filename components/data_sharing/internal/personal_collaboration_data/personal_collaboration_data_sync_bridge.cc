@@ -6,11 +6,15 @@
 
 #include <optional>
 
+#include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/uuid.h"
+#include "components/data_sharing/public/personal_collaboration_data/personal_collaboration_data_service.h"
 #include "components/sync/base/collaboration_id.h"
 #include "components/sync/base/deletion_origin.h"
+#include "components/sync/model/client_tag_based_data_type_processor.h"
 #include "components/sync/model/conflict_resolution.h"
 #include "components/sync/model/entity_change.h"
 #include "components/sync/model/in_memory_metadata_change_list.h"
@@ -24,6 +28,40 @@
 
 namespace data_sharing::personal_collaboration_data {
 namespace {
+
+PersonalCollaborationDataService::SpecificsType GetSpecificsTypeFromSpecifics(
+    const sync_pb::SharedTabGroupAccountDataSpecifics& specifics) {
+  if (specifics.has_shared_tab_details()) {
+    return PersonalCollaborationDataService::SpecificsType::kSharedTabSpecifics;
+  } else if (specifics.has_shared_tab_group_details()) {
+    return PersonalCollaborationDataService::SpecificsType::
+        kSharedTabGroupSpecifics;
+  }
+  return PersonalCollaborationDataService::SpecificsType::kUnknown;
+}
+
+// Returns the client tag for this specifics object. Note that
+// SharedTabGroupAccountDataSpecifics uses the client tag as a storage key.
+std::string CreateClientTagFromSpecifics(
+    const sync_pb::SharedTabGroupAccountDataSpecifics& specifics) {
+  CHECK(specifics.has_guid());
+  CHECK(specifics.has_collaboration_id());
+
+  PersonalCollaborationDataService::SpecificsType specifics_type =
+      GetSpecificsTypeFromSpecifics(specifics);
+
+  // Special case tab and tab group since previous data were stored without a
+  // namespace.
+  if (specifics_type == PersonalCollaborationDataService::SpecificsType::
+                            kSharedTabSpecifics ||
+      specifics_type == PersonalCollaborationDataService::SpecificsType::
+                            kSharedTabGroupSpecifics) {
+    return specifics.guid() + "|" + specifics.collaboration_id();
+  }
+
+  return base::NumberToString(static_cast<int>(specifics_type)) + "|" +
+         specifics.guid() + "|" + specifics.collaboration_id();
+}
 
 // Trim specifics for use in TrimAllSupportedFieldsFromRemoteSpecifics.
 // LINT.IfChange(TrimSpecifics)
@@ -63,6 +101,7 @@ sync_pb::SharedTabGroupAccountDataSpecifics TrimSpecifics(
 
 // Create new EntityData object to contain specifics for writing changes.
 std::unique_ptr<syncer::EntityData> CreateEntityDataFromSpecifics(
+    const std::string& storage_key,
     const sync_pb::SharedTabGroupAccountDataSpecifics& specifics) {
   auto entity_data = std::make_unique<syncer::EntityData>();
   *entity_data->specifics.mutable_shared_tab_group_account_data() = specifics;
@@ -113,7 +152,7 @@ void PersonalCollaborationDataSyncBridge::AddObserver(Observer* observer) {
 
   // If the observer is added late and missed the init signal, send the signal
   // now.
-  if (is_initialized_) {
+  if (IsInitialized()) {
     observer->OnInitialized();
   }
 }
@@ -137,7 +176,6 @@ PersonalCollaborationDataSyncBridge::MergeFullSyncData(
   // Since this data type is controlled along with shared tab group data,
   // there will never be any shared tab groups in the model, therefore no
   // data to merge, when this data type is enabled.
-
   return ApplyIncrementalSyncChanges(std::move(metadata_change_list),
                                      std::move(entity_change_list));
 }
@@ -147,6 +185,7 @@ PersonalCollaborationDataSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_change_list) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  MaybeNotifyObserversInitialized();
 
   std::unique_ptr<syncer::DataTypeStore::WriteBatch> batch =
       store_->CreateWriteBatch();
@@ -165,7 +204,7 @@ PersonalCollaborationDataSyncBridge::ApplyIncrementalSyncChanges(
 
         specifics_[storage_key] = specifics;
         batch->WriteData(storage_key, specifics.SerializeAsString());
-        for (auto& observer : observers_) {
+        for (Observer& observer : observers_) {
           observer.OnEntityAddedOrUpdatedFromSync(storage_key, specifics);
         }
         break;
@@ -173,7 +212,7 @@ PersonalCollaborationDataSyncBridge::ApplyIncrementalSyncChanges(
       case syncer::EntityChange::ACTION_DELETE:
         specifics_.erase(storage_key);
         batch->DeleteData(storage_key);
-        for (auto& observer : observers_) {
+        for (Observer& observer : observers_) {
           observer.OnEntityRemovedFromSync(storage_key);
         }
         break;
@@ -198,8 +237,8 @@ PersonalCollaborationDataSyncBridge::GetDataForCommit(
   auto batch = std::make_unique<syncer::MutableDataBatch>();
   for (const std::string& storage_key : storage_keys) {
     if (specifics_.contains(storage_key)) {
-      batch->Put(storage_key,
-                 CreateEntityDataFromSpecifics(specifics_[storage_key]));
+      batch->Put(storage_key, CreateEntityDataFromSpecifics(
+                                  storage_key, specifics_[storage_key]));
     }
   }
   return batch;
@@ -211,31 +250,34 @@ PersonalCollaborationDataSyncBridge::GetAllDataForDebugging() {
 
   auto batch = std::make_unique<syncer::MutableDataBatch>();
   for (const auto& [storage_key, specifics] : specifics_) {
-    batch->Put(storage_key, CreateEntityDataFromSpecifics(specifics));
+    batch->Put(storage_key,
+               CreateEntityDataFromSpecifics(storage_key, specifics));
   }
   return batch;
 }
 
 std::string PersonalCollaborationDataSyncBridge::GetClientTag(
     const syncer::EntityData& entity_data) const {
-  // Client tags are not computed from the specifics.
-  NOTREACHED();
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return CreateClientTagFromSpecifics(
+      entity_data.specifics.shared_tab_group_account_data());
 }
 
 std::string PersonalCollaborationDataSyncBridge::GetStorageKey(
     const syncer::EntityData& entity_data) const {
-  // Storage keys are not computed from the specifics.
-  NOTREACHED();
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return CreateClientTagFromSpecifics(
+      entity_data.specifics.shared_tab_group_account_data());
 }
 
 bool PersonalCollaborationDataSyncBridge::SupportsGetClientTag() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return false;
+  return true;
 }
 
 bool PersonalCollaborationDataSyncBridge::SupportsGetStorageKey() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return false;
+  return true;
 }
 
 void PersonalCollaborationDataSyncBridge::ApplyDisableSyncChanges(
@@ -255,6 +297,11 @@ bool PersonalCollaborationDataSyncBridge::IsEntityDataValid(
       entity_data.specifics.shared_tab_group_account_data();
   if (!base::Uuid::ParseCaseInsensitive(specifics.guid()).is_valid() ||
       specifics.collaboration_id().empty()) {
+    return false;
+  }
+
+  if (GetSpecificsTypeFromSpecifics(specifics) ==
+      PersonalCollaborationDataService::SpecificsType::kUnknown) {
     return false;
   }
 
@@ -323,7 +370,7 @@ syncer::ConflictResolution PersonalCollaborationDataSyncBridge::ResolveConflict(
 
 bool PersonalCollaborationDataSyncBridge::IsInitialized() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_initialized_;
+  return is_initialized_ && change_processor()->IsTrackingMetadata();
 }
 
 std::optional<sync_pb::SharedTabGroupAccountDataSpecifics>
@@ -332,6 +379,17 @@ PersonalCollaborationDataSyncBridge::GetSpecificsForStorageKey(
   return specifics_.contains(storage_key)
              ? std::make_optional<>(specifics_.at(storage_key))
              : std::nullopt;
+}
+
+std::optional<sync_pb::SharedTabGroupAccountDataSpecifics>
+PersonalCollaborationDataSyncBridge::GetTrimmedRemoteSpecifics(
+    const std::string& storage_key) const {
+  sync_pb::EntitySpecifics specifics =
+      change_processor()->GetPossiblyTrimmedRemoteSpecifics(storage_key);
+  if (specifics.has_shared_tab_group_account_data()) {
+    return specifics.shared_tab_group_account_data();
+  }
+  return std::nullopt;
 }
 
 const std::unordered_map<std::string,
@@ -344,12 +402,27 @@ PersonalCollaborationDataSyncBridge::GetAllSpecifics() const {
 void PersonalCollaborationDataSyncBridge::CreateOrUpdateSpecifics(
     const std::string& storage_key,
     const sync_pb::SharedTabGroupAccountDataSpecifics& specifics) {
-  if (!is_initialized_ || !change_processor()->IsTrackingMetadata()) {
-    // Ignore any changes before the model is successfully initialized.
-    return;
-  }
+  CHECK(IsInitialized());
+  WriteEntityToSync(storage_key,
+                    CreateEntityDataFromSpecifics(storage_key, specifics));
+}
 
-  WriteEntityToSync(storage_key, CreateEntityDataFromSpecifics(specifics));
+void PersonalCollaborationDataSyncBridge::RemoveSpecifics(
+    const std::string& storage_key) {
+  CHECK(IsInitialized());
+  std::unique_ptr<syncer::DataTypeStore::WriteBatch> batch =
+      store_->CreateWriteBatch();
+
+  // Remove the entity from in-memory cache, storage, and sync.
+  specifics_.erase(storage_key);
+  batch->DeleteData(storage_key);
+  change_processor()->Delete(storage_key, syncer::DeletionOrigin::Unspecified(),
+                             batch->GetMetadataChangeList());
+  store_->CommitWriteBatch(
+      std::move(batch),
+      base::BindOnce(
+          &PersonalCollaborationDataSyncBridge::OnDataTypeStoreCommit,
+          weak_ptr_factory_.GetWeakPtr()));
 }
 
 void PersonalCollaborationDataSyncBridge::OnStoreCreated(
@@ -390,10 +463,8 @@ void PersonalCollaborationDataSyncBridge::OnReadAllDataAndMetadata(
   }
 
   is_initialized_ = true;
-  for (auto& observer : observers_) {
-    observer.OnInitialized();
-  }
   change_processor()->ModelReadyToSync(std::move(metadata_batch));
+  MaybeNotifyObserversInitialized();
 }
 
 void PersonalCollaborationDataSyncBridge::OnDataTypeStoreCommit(
@@ -402,6 +473,15 @@ void PersonalCollaborationDataSyncBridge::OnDataTypeStoreCommit(
 
   if (error) {
     change_processor()->ReportError(*error);
+  }
+}
+
+void PersonalCollaborationDataSyncBridge::MaybeNotifyObserversInitialized() {
+  if (IsInitialized() && !notified_observers_initialized_) {
+    notified_observers_initialized_ = true;
+    for (Observer& observer : observers_) {
+      observer.OnInitialized();
+    }
   }
 }
 

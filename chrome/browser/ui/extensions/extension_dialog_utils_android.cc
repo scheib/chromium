@@ -6,14 +6,21 @@
 
 #include <utility>
 
+#include "content/public/browser/web_contents.h"
 #include "ui/android/modal_dialog_wrapper.h"
 #include "ui/base/models/dialog_model.h"
 
+void ShowModalDialog(gfx::NativeWindow parent,
+                     std::unique_ptr<ui::DialogModel> dialog_model) {
+  ui::ModalDialogWrapper::ShowTabModal(std::move(dialog_model), parent);
+}
+
 void ShowDialog(gfx::NativeWindow parent,
-                const extensions::ExtensionId& extension_id,
+                const extensions::ExtensionId& /* extension_id */,
                 std::unique_ptr<ui::DialogModel> dialog_model) {
-  ShowDialog(parent, std::vector<extensions::ExtensionId>{extension_id},
-             std::move(dialog_model));
+  // We ignore `extension_id` as dialogs are never anchored to the extension
+  // action button on Android for UX reasons.
+  ShowModalDialog(parent, std::move(dialog_model));
 }
 
 void ShowDialog(gfx::NativeWindow parent,
@@ -21,5 +28,11 @@ void ShowDialog(gfx::NativeWindow parent,
                 std::unique_ptr<ui::DialogModel> dialog_model) {
   // We ignore `extension_ids` as dialogs are never anchored to the extension
   // action button on Android for UX reasons.
-  ui::ModalDialogWrapper::ShowTabModal(std::move(dialog_model), parent);
+  ShowModalDialog(parent, std::move(dialog_model));
+}
+
+void ShowWebModalDialog(content::WebContents* web_contents,
+                        std::unique_ptr<ui::DialogModel> dialog_model) {
+  ShowModalDialog(web_contents->GetTopLevelNativeWindow(),
+                  std::move(dialog_model));
 }

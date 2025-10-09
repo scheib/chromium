@@ -198,7 +198,8 @@ void SetViewHiddenIfNecessary(UIView* view, BOOL hidden) {
     return;
   }
 
-  if ([_placeholderView superview] == _containerStackView) {
+  if (_placeholderView && [_placeholderView superview] == _containerStackView) {
+    [_containerStackView removeArrangedSubview:_placeholderView];
     [_placeholderView removeFromSuperview];
   }
 
@@ -237,17 +238,6 @@ void SetViewHiddenIfNecessary(UIView* view, BOOL hidden) {
        !self.contextualPanelEntrypointView.hidden) ||
       (self.badgeView && !self.badgeView.hidden) ||
       (self.readerModeChipView && !self.readerModeChipView.hidden);
-
-  if (base::FeatureList::IsEnabled(kLensOverlayPriceInsightsCounterfactual)) {
-    // Show the lens overlay entrypoint only when the price insights entrypoint
-    // should have been shown.
-    BOOL placeholderVisible = _contextualPanelEntrypointShouldBeVisible &&
-                              (self.badgeView && self.badgeView.hidden);
-    placeholderHidden = !placeholderVisible;
-    if (placeholderVisible) {
-      SetViewHiddenIfNecessary(self.contextualPanelEntrypointView, YES);
-    }
-  }
 
   if (!_placeholderView || placeholderHidden == _placeholderView.hidden) {
     return;

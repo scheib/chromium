@@ -17,11 +17,28 @@ BASE_DECLARE_FEATURE(kEnhancedCalendar);
 // Returns true if enhanced calendar is enabled.
 bool IsEnhancedCalendarEnabled();
 
+// Feature flag controlling the proactive suggestions framework.
+BASE_DECLARE_FEATURE(kProactiveSuggestionsFramework);
+
+// Returns true if the proactive suggestions framework is enabled.
+bool IsProactiveSuggestionsFrameworkEnabled();
+
 // Feature flag controlling the page action menu.
 BASE_DECLARE_FEATURE(kPageActionMenu);
 
 // Returns true if the page action menu is enabled.
 bool IsPageActionMenuEnabled();
+
+// Feature flag controlling the Ask Gemini chip.
+BASE_DECLARE_FEATURE(kAskGeminiChip);
+
+// Returns true if the Ask Gemini chip is enabled.
+bool IsAskGeminiChipEnabled();
+
+// Returns true if a snackbar should be shown when a site is eligible for Ask
+// Gemini.
+bool IsAskGeminiSnackbarEnabled();
+extern const char kAskGeminiChipUseSnackbar[];
 
 // Feature flag controlling the cross-tab floaty chat persistence.
 BASE_DECLARE_FEATURE(kGeminiCrossTab);
@@ -45,6 +62,7 @@ enum class BWGPromoConsentVariations {
   kDoublePage = 2,
   kSkipConsent = 3,
   kForceFRE = 4,
+  kSkipNewUserDelay = 5,
 };
 extern const char kBWGPromoConsentParams[];
 
@@ -53,6 +71,10 @@ BWGPromoConsentVariations BWGPromoConsentVariationsParam();
 
 // Returns YES if the promo should be forced.
 bool ShouldForceBWGPromo();
+
+// Returns YES if the Chrome FRE recency check should be skipped when evaluating
+// whether to show the Gemini on-navigation promo.
+bool ShouldSkipBWGPromoNewUserDelay();
 
 // Feature flag to enable BWG Promo Consent.
 BASE_DECLARE_FEATURE(kBWGPromoConsent);
@@ -94,5 +116,29 @@ bool IsGeminiAvailableForManagedAccounts();
 
 // Feature flag to show the AI Hub new badge.
 BASE_DECLARE_FEATURE(kAIHubNewBadge);
+
+// Whether the Gemini consent pref should be deleted on account change.
+bool ShouldDeleteGeminiConsentPref();
+
+// Feature flag to delete the Gemini consent pref.
+BASE_DECLARE_FEATURE(kDeleteGeminiConsentPref);
+
+// Feature flag to enable smart tab grouping.
+BASE_DECLARE_FEATURE(kSmartTabGrouping);
+
+// Returns true if smart tab grouping is enabled.
+bool IsSmartTabGroupingEnabled();
+
+// Returns true if tab context persisting is enabled.
+bool IsPersistTabContextEnabled();
+
+// Feature flag to persist tab context.
+BASE_DECLARE_FEATURE(kPersistTabContext);
+
+// Feature flag for the automatic Gemini promo shown on navigation.
+BASE_DECLARE_FEATURE(kGeminiNavigationPromo);
+
+// Returns true if the Gemini navigation promo is enabled.
+bool IsGeminiNavigationPromoEnabled();
 
 #endif  // IOS_CHROME_BROWSER_INTELLIGENCE_FEATURES_FEATURES_H_

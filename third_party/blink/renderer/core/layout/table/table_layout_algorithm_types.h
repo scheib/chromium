@@ -86,7 +86,6 @@ class CORE_EXPORT TableTypes {
              is_table_fixed == other.is_table_fixed &&
              is_mergeable == other.is_mergeable;
     }
-    bool operator!=(const Column& other) const { return !(*this == other); }
 
     // These members are initialized from <col> and <colgroup>, then they
     // accumulate data from |CellInlineConstraint|s.
@@ -222,7 +221,7 @@ class CORE_EXPORT TableTypes {
                                bool treat_as_tbody);
 
   // Columns are cached by LayoutTable, and need to be RefCounted.
-  typedef base::RefCountedData<WTF::Vector<Column>> Columns;
+  typedef base::RefCountedData<Vector<Column>> Columns;
   // Inline constraints are optional because we need to distinguish between an
   // empty cell, and a non-existent cell.
   using CellInlineConstraints = Vector<std::optional<CellInlineConstraint>>;
@@ -283,7 +282,6 @@ class TableGroupedChildrenIterator {
   TableGroupedChildrenIterator& operator--();
   BlockNode operator*() const;
   bool operator==(const TableGroupedChildrenIterator& rhs) const;
-  bool operator!=(const TableGroupedChildrenIterator& rhs) const;
   // True if section should be treated as tbody
   bool TreatAsTBody() const { return current_section_ == kBody; }
 

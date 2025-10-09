@@ -15,13 +15,13 @@
 #include "base/memory/unsafe_shared_memory_pool.h"
 #include "base/task/single_thread_task_runner.h"
 #include "gpu/command_buffer/client/gpu_command_buffer_client_export.h"
+#include "gpu/command_buffer/client/internal/mappable_buffer.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_trace_utils.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "gpu/ipc/common/exported_shared_image.mojom-forward.h"
 #include "gpu/ipc/common/gpu_memory_buffer_handle_info.h"
-#include "gpu/ipc/common/gpu_memory_buffer_impl.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkPixmap.h"
 #include "third_party/skia/include/gpu/ganesh/GrTypes.h"
@@ -63,7 +63,7 @@ enum MailboxFlags : uint32_t;
 class SharedImageInterface;
 class ClientSharedImageInterface;
 class GpuChannelSharedImageInterface;
-class GpuMemoryBufferImpl;
+class MappableBuffer;
 class InterfaceBase;
 class RasterScopedAccess;
 struct SharedImageInfo;
@@ -94,42 +94,46 @@ class GPU_COMMAND_BUFFER_CLIENT_EXPORT ClientSharedImage
   // plane.
   class GPU_COMMAND_BUFFER_CLIENT_EXPORT ScopedMapping {
    public:
-    virtual ~ScopedMapping() = default;
+    ScopedMapping(const gfx::Size& size, viz::SharedImageFormat format);
+    ~ScopedMapping();
 
-    virtual base::span<uint8_t> GetMemoryForPlane(
-        const uint32_t plane_index) = 0;
+    base::span<uint8_t> GetMemoryForPlane(const uint32_t plane_index);
 
     SkPixmap GetSkPixmapForPlane(const uint32_t plane_index,
                                  SkImageInfo sk_image_info);
 
     // Returns plane stride.
-    virtual size_t Stride(const uint32_t plane_index) = 0;
+    size_t Stride(const uint32_t plane_index);
 
     // Returns the size of the buffer.
-    virtual gfx::Size Size() = 0;
+    gfx::Size Size();
 
     // Returns whether the underlying resource is shared memory.
-    virtual bool IsSharedMemory() = 0;
+    bool IsSharedMemory();
 
    private:
     friend class ClientSharedImage;
 
     static std::unique_ptr<ScopedMapping> Create(
         SharedImageMetadata metadata_,
-        base::WritableSharedMemoryMapping* mapping);
-    static std::unique_ptr<ScopedMapping> Create(
-        SharedImageMetadata metadata_,
-        GpuMemoryBufferImpl* gpu_memory_buffer,
+        MappableBuffer* mappable_buffer,
         bool is_already_mapped);
     static void StartCreateAsync(
         SharedImageMetadata metadata_,
-        GpuMemoryBufferImpl* gpu_memory_buffer,
+        MappableBuffer* mappable_buffer,
         base::OnceCallback<void(std::unique_ptr<ScopedMapping>)> result_cb);
     static void FinishCreateAsync(
         SharedImageMetadata metadata_,
-        GpuMemoryBufferImpl* gpu_memory_buffer,
+        MappableBuffer* mappable_buffer,
         base::OnceCallback<void(std::unique_ptr<ScopedMapping>)> result_cb,
         bool success);
+
+    bool Init(MappableBuffer* mappable_buffer, bool is_already_mapped);
+
+    // RAW_PTR_EXCLUSION: Performance reasons (based on analysis of MotionMark).
+    RAW_PTR_EXCLUSION MappableBuffer* buffer_ = nullptr;
+    gfx::Size size_;
+    viz::SharedImageFormat format_;
   };
 
   // `sii_holder` must not be null.
@@ -319,15 +323,15 @@ class GPU_COMMAND_BUFFER_CLIENT_EXPORT ClientSharedImage
   ~ClientSharedImage();
 
   // static
-  std::unique_ptr<GpuMemoryBufferImpl> CreateGpuMemoryBufferImplFromHandle(
+  std::unique_ptr<MappableBuffer> CreateMappableBufferFromHandle(
       gfx::GpuMemoryBufferHandle handle,
       const gfx::Size& size,
-      gfx::BufferFormat format,
+      viz::SharedImageFormat format,
       gfx::BufferUsage usage,
       gpu::SharedImageUsageSet si_usage,
-      GpuMemoryBufferImpl::CopyNativeBufferToShMemCallback
+      MappableBuffer::CopyNativeBufferToShMemCallback
           copy_native_buffer_to_shmem_callback =
-              GpuMemoryBufferImpl::CopyNativeBufferToShMemCallback(),
+              MappableBuffer::CopyNativeBufferToShMemCallback(),
       scoped_refptr<base::UnsafeSharedMemoryPool> pool = nullptr);
 
   // This constructor is used only when importing an owned ClientSharedImage,
@@ -395,8 +399,7 @@ class GPU_COMMAND_BUFFER_CLIENT_EXPORT ClientSharedImage
   SyncToken creation_sync_token_;
   SyncToken destruction_sync_token_;
 
-  std::unique_ptr<GpuMemoryBufferImpl> gpu_memory_buffer_;
-  base::WritableSharedMemoryMapping shared_memory_mapping_;
+  std::unique_ptr<MappableBuffer> mappable_buffer_;
   std::optional<gfx::BufferUsage> buffer_usage_;
   scoped_refptr<SharedImageInterfaceHolder> sii_holder_;
 

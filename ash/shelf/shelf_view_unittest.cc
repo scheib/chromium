@@ -13,7 +13,6 @@
 #include "ash/accessibility/accessibility_controller.h"
 #include "ash/app_list/test/app_list_test_helper.h"
 #include "ash/app_list/views/app_list_view.h"
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/display/screen_orientation_controller_test_api.h"
@@ -124,7 +123,7 @@ gfx::ImageSkia CreateImageSkiaIcon(SkColor color) {
 }
 
 int64_t GetPrimaryDisplayId() {
-  return display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  return display::Screen::Get()->GetPrimaryDisplay().id();
 }
 
 void ExpectFocused(views::View* view) {
@@ -2506,8 +2505,7 @@ void ExpectWithinOnePixel(int a, int b) {
 }
 
 TEST_P(LtrRtlShelfViewTest, IconCenteringTest) {
-  const display::Display display =
-      display::Screen::GetScreen()->GetPrimaryDisplay();
+  const display::Display display = display::Screen::Get()->GetPrimaryDisplay();
   const int screen_width = display.bounds().width();
   const int screen_center = screen_width / 2;
 
@@ -4175,17 +4173,7 @@ TEST_F(ShelfViewDeskButtonTest, VisibilityMetrics) {
   histogram_tester.ExpectTotalCount(kDeskButtonHiddenHistogramName, 1);
 }
 
-class ShelfViewPromiseAppTest : public ShelfViewTest {
- public:
-  ShelfViewPromiseAppTest() = default;
-  ShelfViewPromiseAppTest(const ShelfViewPromiseAppTest&) = delete;
-  ShelfViewPromiseAppTest& operator=(const ShelfViewPromiseAppTest&) = delete;
-  ~ShelfViewPromiseAppTest() override = default;
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_{
-      ash::features::kPromiseIcons};
-};
+using ShelfViewPromiseAppTest = ShelfViewTest;
 
 TEST_F(ShelfViewPromiseAppTest, UpdateProgressOnPromiseIcon) {
   // Add platform app button.

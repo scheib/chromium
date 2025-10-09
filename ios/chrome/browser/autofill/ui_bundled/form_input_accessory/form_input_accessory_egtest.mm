@@ -68,21 +68,16 @@ constexpr NSString* kExampleBackupPassword = @"backup password";
 
 // Matcher for the autofill password suggestion chip in the keyboard accessory.
 id<GREYMatcher> KeyboardAccessoryPasswordSuggestion(NSString* realm) {
-  if ([AutofillAppInterface isKeyboardAccessoryUpgradeEnabled]) {
-    NSString* chip_text = kExampleUsername;
-    if ([ChromeEarlGrey isIPadIdiom]) {
-      // On iPad, the suggestion text is an attributed string containing the
-      // signon realm on the 2nd line.
-      chip_text = [NSString stringWithFormat:@"%@\n%@", chip_text, realm];
-    }
-    return grey_allOf(grey_text(chip_text),
-                      grey_ancestor(grey_accessibilityID(
-                          kFormInputAccessoryViewAccessibilityID)),
-                      nil);
+  NSString* chip_text = kExampleUsername;
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    // On iPad, the suggestion text is an attributed string containing the
+    // signon realm on the 2nd line.
+    chip_text = [NSString stringWithFormat:@"%@\n%@", chip_text, realm];
   }
-
-  return grey_accessibilityLabel(
-      [NSString stringWithFormat:@"%@ ••••••••", kExampleUsername]);
+  return grey_allOf(grey_text(chip_text),
+                    grey_ancestor(grey_accessibilityID(
+                        kFormInputAccessoryViewAccessibilityID)),
+                    nil);
 }
 
 // Matcher for the autofill backup password suggestion chip in the keyboard
@@ -106,8 +101,7 @@ id<GREYMatcher> KeyboardAccessoryCreditCardSuggestion() {
 
   NSString* username = base::SysUTF16ToNSString(card.GetInfo(
       autofill::CREDIT_CARD_NAME_FULL, l10n_util::GetLocaleOverride()));
-  if ([AutofillAppInterface isKeyboardAccessoryUpgradeEnabled] &&
-      [ChromeEarlGrey isIPadIdiom]) {
+  if ([ChromeEarlGrey isIPadIdiom]) {
     // On iPad, the suggestion text is an attributed string containing the
     // obfuscated credit card on the 2nd line.
     NSString* network = base::SysUTF16ToNSString(
@@ -123,8 +117,7 @@ id<GREYMatcher> KeyboardAccessoryAddressSuggestion(
     autofill::FieldType field_type) {
   autofill::AutofillProfile profile = autofill::test::GetFullProfile();
   NSString* value = base::SysUTF16ToNSString(profile.GetRawInfo(field_type));
-  if ([AutofillAppInterface isKeyboardAccessoryUpgradeEnabled] &&
-      [ChromeEarlGrey isIPadIdiom]) {
+  if ([ChromeEarlGrey isIPadIdiom]) {
     // On iPad, the suggestion text is an attributed string containing the
     // street address on the 2nd line.
     NSString* street_address = base::SysUTF16ToNSString(
@@ -141,8 +134,7 @@ id<GREYMatcher> KeyboardAccessoryNameSuggestion() {
   autofill::AutofillProfile profile = autofill::test::GetFullProfile();
   NSString* name =
       base::SysUTF16ToNSString(profile.GetRawInfo(autofill::NAME_FULL));
-  if ([AutofillAppInterface isKeyboardAccessoryUpgradeEnabled] &&
-      [ChromeEarlGrey isIPadIdiom]) {
+  if ([ChromeEarlGrey isIPadIdiom]) {
     // On iPad, the suggestion text is an attributed string containing the state
     // on the 2nd line.
     NSString* state = base::SysUTF16ToNSString(
@@ -272,7 +264,6 @@ void SlowlyTypeText(NSString* text) {
   AppLaunchConfiguration config;
   config.features_disabled.push_back(
       autofill::features::test::kAutofillServerCommunication);
-  config.features_enabled.push_back(kIOSKeyboardAccessoryUpgradeForIPad);
   if ([self isRunningTest:@selector(testFillXframeCreditCardForm)] ||
       [self isRunningTest:@selector(testFillXframeCreditCardFormThrottled)] ||
       [self isRunningTest:@selector
@@ -296,6 +287,13 @@ void SlowlyTypeText(NSString* text) {
         autofill::features::kAutofillEnableSupportForHomeAndWork);
     config.iph_feature_enabled =
         feature_engagement::kIPHAutofillHomeWorkProfileSuggestionFeature.name;
+  }
+
+  if ([self isRunningTest:@selector(testAccountNameEmailIPH)]) {
+    config.features_enabled.push_back(
+        autofill::features::kAutofillEnableSupportForNameAndEmail);
+    config.iph_feature_enabled =
+        feature_engagement::kIPHAutofillAccountNameEmailSuggestionFeature.name;
   }
 
   if ([self isRunningTest:@selector(testReFillAddressFieldsOnForm)]) {
@@ -817,13 +815,6 @@ id<GREYMatcher> PaymentsBottomSheetUseKeyboardButton() {
 // when the fix for the payment sheet across iframes is enabled. This makes sure
 // that crbug.com/417449733 doesn't occur.
 - (void)testFillXframeCreditCardForm_WithPaymentSheetFix {
-// TODO(crbug.com/435607096): Re-enable the test on iOS26.
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
-  if (iOS26_OR_ABOVE()) {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
-  }
-#endif
-
   // Mock reauth so it allows filling sensitive information without the need for
   // real authentication.
   [AutofillAppInterface setUpMockReauthenticationModule];
@@ -955,12 +946,10 @@ id<GREYMatcher> PaymentsBottomSheetUseKeyboardButton() {
 
   [self loadAddressPage];
 
-#if TARGET_OS_SIMULATOR
   // Synchronization off because the tap on element 'kFormZip' completes only
   // after the IPH has already disappeared. This leads to a subsequent error
   // when trying to verify that the IPH appeared.
   ScopedSynchronizationDisabler disabler;
-#endif
 
   [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
       performAction:chrome_test_util::TapWebElementWithId(kFormZip)];
@@ -969,6 +958,30 @@ id<GREYMatcher> PaymentsBottomSheetUseKeyboardButton() {
       IDS_AUTOFILL_IPH_HOME_AND_WORK_ACCOUNT_PROFILE_SUGGESTION));
 
   // Ensure the Home and Work suggestion IPH appears.
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:iph_chip];
+}
+
+// Tests the IPH feature for account name and email profile.
+- (void)testAccountNameEmailIPH {
+  // Delete the profile that is added on `-setUp`.
+  [AutofillAppInterface clearProfilesStore];
+  // Store one address.
+  [AutofillAppInterface saveExampleAccountNameEmailProfile];
+
+  [self loadAddressPage];
+
+  // Synchronization off because the tap on element 'kFormZip' completes only
+  // after the IPH has already disappeared. This leads to a subsequent error
+  // when trying to verify that the IPH appeared.
+  ScopedSynchronizationDisabler disabler;
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
+      performAction:chrome_test_util::TapWebElementWithId(kFormZip)];
+
+  id<GREYMatcher> iph_chip = grey_text(
+      l10n_util::GetNSString(IDS_AUTOFILL_IPH_ACCOUNT_NAME_EMAIL_SUGGESTION));
+
+  // Ensure the Name and Email suggestion IPH appears.
   [ChromeEarlGrey waitForUIElementToAppearWithMatcher:iph_chip];
 }
 
@@ -1001,11 +1014,9 @@ id<GREYMatcher> PaymentsBottomSheetUseKeyboardButton() {
 // Tests that the manual fill button title is hidden in compact mode (tablets
 // only).
 - (void)testManualFillButtonTitleIsHiddenInCompactMode {
-  if (![ChromeEarlGrey areMultipleWindowsSupported] ||
-      ![AutofillAppInterface isKeyboardAccessoryUpgradeEnabled]) {
+  if (![ChromeEarlGrey areMultipleWindowsSupported]) {
     EARL_GREY_TEST_SKIPPED(
-        @"Skipped for iPhone (the manual fill button has no title on iPhone) "
-        @"or when the Keyboard Accessory Upgrade feature is disabled.");
+        @"Skipped for iPhone (the manual fill button has no title on iPhone)");
   }
   if (@available(iOS 19.0, *)) {
     // TODO(crbug.com/427699033): Re-enable test on iOS 26.

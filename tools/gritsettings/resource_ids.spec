@@ -97,6 +97,12 @@
     "includes": [2200],
     "structures": [2220],
   },
+  "chrome/browser/actor/resources/internal/browser_resources.grd": {
+    "structures": [2230],
+  },
+  "chrome/browser/actor/resources/browser_resources.grd": {
+    "structures": [2230],
+  },
   "chrome/browser/dev_ui_browser_resources.grd": {
     "includes": [2240],
   },
@@ -244,10 +250,6 @@
     "META": {"sizes": {"includes": [20],}},
     "includes": [3100],
   },
-  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/chromeos/borealis_motd/resources.grd": {
-    "META": {"sizes": {"includes": [3],}},
-    "includes": [3110],
-  },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/chromeos/cloud_upload/resources.grd": {
     "META": {"sizes": {"includes": [50]}},
     "includes": [3120],
@@ -384,6 +386,10 @@
     "META": {"sizes": {"includes": [15]}},
     "includes": [3760],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/contextual_tasks/resources.grd": {
+    "META": {"sizes": {"includes": [10]}},
+    "includes": [3770],
+  },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/data_sharing/resources.grd": {
    "META": {"sizes": {"includes": [20]}},
     "includes": [3780],
@@ -509,7 +515,7 @@
     "includes": [4380],
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/new_tab_footer/resources.grd": {
-    "META": {"sizes": {"includes": [10]}},
+    "META": {"sizes": {"includes": [15]}},
     "includes": [4390],
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/new_tab_page/resources.grd": {
@@ -580,6 +586,10 @@
     "META": {"sizes": {"includes": [20]}},
     "includes": [4660],
   },
+   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/reload_button/resources.grd": {
+    "META": {"sizes": {"includes": [10]}},
+    "includes": [4670],
+  },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/sandbox_internals/resources.grd": {
     "META": {"sizes": {"includes": [5],}},
     "includes": [4680],
@@ -597,7 +607,7 @@
     "includes": [4720],
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/settings/resources.grd": {
-    "META": {"sizes": {"includes": [500],}},
+    "META": {"sizes": {"includes": [600],}},
     "includes": [4740],
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/settings_shared/resources.grd": {
@@ -637,7 +647,7 @@
     "includes": [4860],
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/side_panel/read_anything/resources.grd": {
-    "META": {"sizes": {"includes": [50],}},
+    "META": {"sizes": {"includes": [75],}},
     "includes": [4880],
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/side_panel/reading_list/code_cache_resources.grd": {
@@ -695,6 +705,10 @@
     "META": {"sizes": {"includes": [40]}},
     "includes": [5060],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/tab_strip_api/resources.grd": {
+    "META": {"sizes": {"includes": [15]}},
+    "includes": [5065],
+  },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/tts_engine/resources.grd": {
     "META": {"sizes": {"includes": [20]}},
     "includes": [5070],
@@ -751,6 +765,10 @@
     "META": {"sizes": {"includes": [5]}},
     "includes": [5260],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/notifications_internals/resources.grd": {
+    "META": {"sizes": {"includes": [5]}},
+    "includes": [5270],
+  },
   # END chrome/ WebUI resources section
 
   # START chrome/ miscellaneous section.
@@ -791,6 +809,10 @@
     "META": {"sizes": {"includes": [45],}},
     "includes" : [5740],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chromeos/ash/experiences/guest_os/borealis/motd/resources/resources.grd": {
+    "META": {"sizes": {"includes": [3],}},
+    "includes": [5750],
+   },
   "chromeos/ash/resources/ash_resources.grd": {
     "includes": [5780],
   },
@@ -1074,10 +1096,10 @@
   # plus_addresses_internal_strings.grd and plus_addresses_strings.grd must
   # share the same id because they define the same strings, but only one of them
   # is built depending on whether src_internal is available.
-  "components/plus_addresses/resources/internal/strings/plus_addresses_internal_strings.grd": {
+  "components/plus_addresses/core/browser/resources/internal/strings/plus_addresses_internal_strings.grd": {
     "messages": [7160],
   },
-  "components/plus_addresses/resources/strings/plus_addresses_strings.grd": {
+  "components/plus_addresses/core/browser/resources/strings/plus_addresses_strings.grd": {
     "messages": [7160],
   },
   # components/policy/resources/policy_templates.grd and
@@ -1101,9 +1123,6 @@
   },
   "components/resources/dev_ui_components_resources.grd": {
     "includes": [7260],
-  },
-  "components/search_engine_descriptions_strings.grd": {
-    "messages": [7280],
   },
   "<(SHARED_INTERMEDIATE_DIR)/components/autofill/core/browser/autofill_and_password_manager_internals/resources.grd": {
     "META": {"sizes": {"includes": [5]}},
@@ -1564,6 +1583,10 @@
 
   "third_party/search_engines_data/resources_internal/search_engines_scaled_resources.grd": {
     "structures": [10100],
+  },
+
+  "third_party/search_engines_data/resources_internal/search_engine_descriptions_strings.grd": {
+    "messages": [10120],
   },
 
   # END "everything else" section.

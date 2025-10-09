@@ -161,10 +161,6 @@ class FormFieldData {
     return {host_frame(), host_form_id()};
   }
 
-  // TODO(crbug.com/40183094): This function is deprecated. Use
-  // FormFieldData::DeepEqual() instead.
-  bool SameFieldAs(const FormFieldData& field) const;
-
   // Returns true for all of textfield-looking types: text, password,
   // search, email, url, and number. It must work the same way as Blink function
   // WebInputElement::IsTextField(), and it returns false if |*this| represents
@@ -191,7 +187,7 @@ class FormFieldData {
     return is_focusable() && role() != RoleAttribute::kPresentation;
   }
 
-  // NOTE: Update `SameFieldAs()` and `FormFieldDataAndroid::SimilarFieldAs()`
+  // NOTE: Update `DeepEqual()` and `FormFieldDataAndroid::SimilarFieldAs()`
   // if needed when adding new a member.
 
   // The name by which autofill knows this field. This is generally either the
@@ -300,11 +296,13 @@ class FormFieldData {
   void set_aria_description(std::u16string aria_description) {
     aria_description_ = std::move(aria_description);
   }
+  const std::u16string& nonce() const { return nonce_; }
+  void set_nonce(std::u16string nonce) { nonce_ = std::move(nonce); }
 
   // A unique identifier of the containing frame. This value is not serialized
   // because LocalFrameTokens must not be leaked to other renderer processes.
   // It is not persistent between page loads and therefore not used in
-  // comparison in SameFieldAs().
+  // comparison in DeepEqual().
   const LocalFrameToken& host_frame() const { return host_frame_; }
   void set_host_frame(LocalFrameToken host_frame) {
     host_frame_ = std::move(host_frame);
@@ -497,6 +495,7 @@ class FormFieldData {
   std::u16string css_classes_;
   std::u16string aria_label_;
   std::u16string aria_description_;
+  std::u16string nonce_;
   LocalFrameToken host_frame_;
   FieldRendererId renderer_id_;
   FormRendererId host_form_id_;
@@ -508,7 +507,7 @@ class FormFieldData {
   bool is_user_edited_ = false;
   CheckStatus check_status_ = CheckStatus::kNotCheckable;
   bool is_focusable_ = true;
-  bool is_visible_ = true;  // See `features::kAutofillDetectFieldVisibility`.
+  bool is_visible_ = true;
   bool should_autocomplete_ = true;
   RoleAttribute role_ = RoleAttribute::kOther;
   base::i18n::TextDirection text_direction_ = base::i18n::UNKNOWN_DIRECTION;

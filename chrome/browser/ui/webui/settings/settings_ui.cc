@@ -72,6 +72,7 @@
 #include "chrome/browser/ui/webui/settings/protocol_handlers_handler.h"
 #include "chrome/browser/ui/webui/settings/reset_settings_handler.h"
 #include "chrome/browser/ui/webui/settings/safety_hub_handler.h"
+#include "chrome/browser/ui/webui/settings/saved_info_handler.h"
 #include "chrome/browser/ui/webui/settings/search_engines_handler.h"
 #include "chrome/browser/ui/webui/settings/settings_clear_browsing_data_handler.h"
 #include "chrome/browser/ui/webui/settings/settings_localized_strings_provider.h"
@@ -157,7 +158,6 @@
 #include "chrome/browser/ui/webui/ash/settings/pages/people/account_manager_ui_handler.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/grit/browser_resources.h"
-#include "chromeos/ash/components/account_manager/account_manager_facade_factory.h"
 #include "chromeos/ash/components/account_manager/account_manager_factory.h"
 #include "chromeos/ash/components/login/auth/password_visibility_utils.h"
 #include "chromeos/ash/components/phonehub/phone_hub_manager.h"
@@ -259,6 +259,7 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
   AddSettingsPageUIHandler(
       std::make_unique<SecurityKeysBioEnrollmentHandler>());
   AddSettingsPageUIHandler(std::make_unique<PasswordManagerHandler>());
+  AddSettingsPageUIHandler(std::make_unique<SavedInfoHandler>(profile));
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
   AddSettingsPageUIHandler(std::make_unique<PasskeysHandler>());
 #endif
@@ -348,10 +349,6 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
       "enableKeyboardLockPrompt",
       base::FeatureList::IsEnabled(permissions::features::kKeyboardLockPrompt));
 
-  html_source->AddBoolean(
-      "enableLinkedServicesSetting",
-      base::FeatureList::IsEnabled(features::kLinkedServicesSetting));
-
 #if BUILDFLAG(ENABLE_COMPOSE)
   const bool compose_enabled = ComposeEnabling::IsEnabledForProfile(profile);
   const bool compose_visible = ComposeEnabling::IsSettingVisible(profile);
@@ -367,6 +364,12 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
       "enableComposeProactiveNudge",
       compose_enabled && base::FeatureList::IsEnabled(
                              compose::features::kEnableComposeProactiveNudge));
+
+#if BUILDFLAG(ENABLE_GLIC)
+  html_source->AddBoolean(
+      "showGeminiPersonalContextLink",
+      base::FeatureList::IsEnabled(features::kGlicPersonalContext));
+#endif  //  BUILDFLAG(ENABLE_GLIC)
 
 #if BUILDFLAG(IS_CHROMEOS)
   const bool download_bubble_controlled_by_pref = false;
@@ -392,6 +395,15 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
           ->GetPaymentsAutofillClient()
           ->GetPaymentsDataManager()
           .ShouldShowBnplSettings());
+
+  html_source->AddBoolean("enableBlockV8OptimizerOnUnfamiliarSites",
+                          base::FeatureList::IsEnabled(
+                              content_settings::features::
+                                  kBlockV8OptimizerOnUnfamiliarSitesSetting));
+
+  html_source->AddBoolean("enableYourSavedInfoSettingsPage",
+                          base::FeatureList::IsEnabled(
+                              autofill::features::kYourSavedInfoSettingsPage));
 
   AddSettingsPageUIHandler(std::make_unique<AboutHandler>(profile));
   AddSettingsPageUIHandler(std::make_unique<ResetSettingsHandler>(profile));
@@ -494,11 +506,11 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
       performance_manager::user_tuning::IsBatterySaverModeManagedByOS());
 
   html_source->AddBoolean(
-      "autoPictureInPictureEnabled",
+      "enableAutoPictureInPicture",
       base::FeatureList::IsEnabled(
           blink::features::kMediaSessionEnterPictureInPicture));
 
-  html_source->AddBoolean("capturedSurfaceControlEnabled",
+  html_source->AddBoolean("enableCapturedSurfaceControl",
                           base::FeatureList::IsEnabled(
                               features::kCapturedSurfaceControlKillswitch));
 
@@ -557,9 +569,6 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
   html_source->AddBoolean("showGlicSettings", show_glic_section);
   html_source->AddBoolean("glicDisallowedByAdmin", glic_disallowed_by_admin);
 
-  const bool use_is_setting_visible = base::FeatureList::IsEnabled(
-      optimization_guide::features::kAiSettingsPageEnterpriseDisabledUi);
-
   const auto& autofill_client =
       *autofill::ContentAutofillClient::FromWebContents(
           web_ui->GetWebContents());
@@ -570,18 +579,12 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
           autofill::AutofillAiAction::kListEntityInstancesInSettings));
   std::pair<const std::string_view, bool> optimization_guide_features[] = {
       {"showTabOrganizationControl",
-       use_is_setting_visible
-           ? TabOrganizationUtils::GetInstance()->IsSettingVisible(profile)
-           : TabOrganizationUtils::GetInstance()->IsEnabled(profile)},
-      {"showComposeControl",
-       use_is_setting_visible ? compose_visible : compose_enabled},
+       TabOrganizationUtils::GetInstance()->IsSettingVisible(profile)},
+      {"showComposeControl", compose_visible},
       {"showHistorySearchControl",
        history_embeddings::IsHistoryEmbeddingsSettingVisible(profile)},
-      {"showCompareControl",
-       use_is_setting_visible ? commerce::IsProductSpecificationsSettingVisible(
-                                    shopping_service->GetAccountChecker())
-                              : commerce::CanFetchProductSpecificationsData(
-                                    shopping_service->GetAccountChecker())},
+      {"showCompareControl", commerce::IsProductSpecificationsSettingVisible(
+                                 shopping_service->GetAccountChecker())},
       {"showPasswordChangeControl",
        PasswordChangeServiceFactory::GetForProfile(profile) &&
            PasswordChangeServiceFactory::GetForProfile(profile)
@@ -606,9 +609,6 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
                           show_glic_section || show_ai_features_section);
   html_source->AddBoolean("showAiPageAiFeatureSection",
                           show_ai_features_section);
-  html_source->AddBoolean(
-      "enableAiSettingsInPrivacyGuide",
-      optimization_guide::features::IsPrivacyGuideAiSettingsEnabled());
 
   // Delete Browsing Data
   html_source->AddBoolean(
@@ -624,11 +624,9 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
       base::FeatureList::IsEnabled(
           autofill::features::kAutofillEnableSupportForHomeAndWork));
 
-#if !BUILDFLAG(IS_CHROMEOS)
   html_source->AddBoolean(
       "replaceSyncPromosWithSignInPromos",
       base::FeatureList::IsEnabled(syncer::kReplaceSyncPromosWithSignInPromos));
-#endif  // !BUILDFLAG(IS_CHROMEOS)
 
   TryShowHatsSurveyWithTimeout();
 }
@@ -648,7 +646,8 @@ void SettingsUI::InitBrowserSettingsWebUIHandlers() {
         factory->GetAccountManager(profile->GetPath().value());
     DCHECK(account_manager);
     auto* account_manager_facade =
-        ash::GetAccountManagerFacade(profile->GetPath().value());
+        ash::AccountManagerFactory::Get()->GetAccountManagerFacade(
+            profile->GetPath().value());
     DCHECK(account_manager_facade);
 
     web_ui()->AddMessageHandler(

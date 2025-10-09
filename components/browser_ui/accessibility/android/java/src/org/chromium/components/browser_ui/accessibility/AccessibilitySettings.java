@@ -41,11 +41,13 @@ public class AccessibilitySettings extends PreferenceFragmentCompat
     public static final String PREF_CAPTIONS = "captions";
     public static final String PREF_ZOOM_INFO = "zoom_info";
     public static final String PREF_IMAGE_DESCRIPTIONS = "image_descriptions";
+    public static final String PREF_CARET_BROWSING = "caret_browsing";
 
     private PageZoomPreference mPageZoomDefaultZoomPref;
     private ChromeSwitchPreference mPageZoomIncludeOSAdjustment;
     private ChromeSwitchPreference mPageZoomAlwaysShowPref;
     private ChromeSwitchPreference mForceEnableZoomPref;
+    private ChromeSwitchPreference mCaretBrowsingPref;
     private ChromeSwitchPreference mJumpStartOmnibox;
     private AccessibilitySettingsDelegate mDelegate;
     private double mPageZoomLatestDefaultZoomPrefValue;
@@ -72,14 +74,23 @@ public class AccessibilitySettings extends PreferenceFragmentCompat
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
         SettingsUtils.addPreferencesFromResource(this, R.xml.accessibility_preferences);
 
-        mPageZoomDefaultZoomPref = findPreference(PREF_PAGE_ZOOM_DEFAULT_ZOOM);
+        // TODO(crbug.com/439911511): Add PageZoomPreference directly to the xml file instead.
+        // Create the page zoom preference.
+        if (mDelegate.shouldUseSlider()) {
+            mPageZoomDefaultZoomPref = new PageZoomSliderPreference(getContext(), null);
+        } else {
+            mPageZoomDefaultZoomPref = new PageZoomSeekbarPreference(getContext(), null);
+        }
+        mPageZoomDefaultZoomPref.setKey(PREF_PAGE_ZOOM_DEFAULT_ZOOM);
+        mPageZoomDefaultZoomPref.setOrder(-1);
+        getPreferenceScreen().addPreference(mPageZoomDefaultZoomPref);
+
         mPageZoomAlwaysShowPref = findPreference(PREF_PAGE_ZOOM_ALWAYS_SHOW);
-        mPageZoomIncludeOSAdjustment =
-                findPreference(PREF_PAGE_ZOOM_INCLUDE_OS_ADJUSTMENT);
+        mPageZoomIncludeOSAdjustment = findPreference(PREF_PAGE_ZOOM_INCLUDE_OS_ADJUSTMENT);
 
         // Set the initial values for the page zoom settings, and set change listeners.
         mPageZoomDefaultZoomPref.setInitialValue(
-                PageZoomUtils.getDefaultZoomAsSeekBarValue(mDelegate.getBrowserContextHandle()));
+                PageZoomUtils.getDefaultZoomAsBarValue(mDelegate.getBrowserContextHandle()));
         mPageZoomDefaultZoomPref.setOnPreferenceChangeListener(this);
         mPageZoomAlwaysShowPref.setChecked(PageZoomUtils.shouldShowZoomMenuItem());
         mPageZoomAlwaysShowPref.setOnPreferenceChangeListener(this);
@@ -144,9 +155,18 @@ public class AccessibilitySettings extends PreferenceFragmentCompat
             mPageZoomIncludeOSAdjustment.setVisible(false);
         }
 
-        Preference imageDescriptionsPreference =
-                findPreference(PREF_IMAGE_DESCRIPTIONS);
+        Preference imageDescriptionsPreference = findPreference(PREF_IMAGE_DESCRIPTIONS);
         imageDescriptionsPreference.setVisible(mDelegate.shouldShowImageDescriptionsSetting());
+
+        // Caret Browsing Settings
+        mCaretBrowsingPref = findPreference(PREF_CARET_BROWSING);
+
+        if (ContentFeatureList.sAndroidCaretBrowsing.isEnabled()) {
+            mCaretBrowsingPref.setChecked(mDelegate.isCaretBrowsingEnabled());
+            mCaretBrowsingPref.setOnPreferenceChangeListener(this);
+        } else {
+            mCaretBrowsingPref.setVisible(false);
+        }
     }
 
     @Override
@@ -173,8 +193,8 @@ public class AccessibilitySettings extends PreferenceFragmentCompat
                     readerModeEnabled);
         } else if (PREF_PAGE_ZOOM_DEFAULT_ZOOM.equals(preference.getKey())) {
             mPageZoomLatestDefaultZoomPrefValue =
-                    PageZoomUtils.convertSeekBarValueToZoomLevel((Integer) newValue);
-            PageZoomUtils.setDefaultZoomBySeekBarValue(
+                    PageZoomUtils.convertBarValueToZoomLevel((Integer) newValue);
+            PageZoomUtils.setDefaultZoomByBarValue(
                     mDelegate.getBrowserContextHandle(), (Integer) newValue);
         } else if (PREF_PAGE_ZOOM_ALWAYS_SHOW.equals(preference.getKey())) {
             PageZoomUtils.setShouldAlwaysShowZoomMenuItem((Boolean) newValue);
@@ -182,6 +202,8 @@ public class AccessibilitySettings extends PreferenceFragmentCompat
             // TODO(mschillaci): Implement the override behavior for OS level.
         } else if (OmniboxFeatures.KEY_JUMP_START_OMNIBOX.equals(preference.getKey())) {
             OmniboxFeatures.setJumpStartOmniboxEnabled((Boolean) newValue);
+        } else if (PREF_CARET_BROWSING.equals(preference.getKey())) {
+            mDelegate.setCaretBrowsingEnabled((Boolean) newValue);
         }
         return true;
     }

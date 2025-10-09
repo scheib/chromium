@@ -28,7 +28,7 @@
 #include "chrome/browser/permissions/permission_actions_history_factory.h"
 #include "chrome/browser/permissions/permission_decision_auto_blocker_factory.h"
 #include "chrome/browser/permissions/permission_revocation_request.h"
-#include "chrome/browser/permissions/prediction_service/prediction_based_permission_ui_selector.h"
+#include "chrome/browser/permissions/prediction_service/permissions_ai_ui_selector.h"
 #include "chrome/browser/permissions/pref_based_quiet_permission_ui_selector.h"
 #include "chrome/browser/permissions/quiet_notification_permission_ui_config.h"
 #include "chrome/browser/permissions/system/system_permission_settings.h"
@@ -74,12 +74,17 @@
 #include "components/subresource_filter/content/browser/subresource_filter_profile_context.h"
 #include "components/unified_consent/pref_names.h"
 #include "components/version_info/version_info.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/buildflags/buildflags.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/origin.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/actor/actor_keyed_service.h"
+#endif
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/android/resource_mapper.h"
@@ -117,8 +122,6 @@
 
 namespace {
 
-using PreviewParametersForHats =
-    permissions::PermissionHatsTriggerHelper::PreviewParametersForHats;
 using permissions::PermissionPromptDisposition;
 using permissions::PermissionPromptDispositionReason;
 using permissions::PermissionRequest;
@@ -173,7 +176,7 @@ bool IsPermissionSetByAdministator(
 }
 
 #if !BUILDFLAG(IS_ANDROID)
-// TODO(crbug.com/412616723): Support Android
+// Infobar exists only on Desktop platforms.
 bool ShouldShowInfobarOnPromptResolved(
     content::WebContents* web_contents,
     const PermissionRequest* request,
@@ -389,7 +392,7 @@ void ChromePermissionsClient::TriggerPromptHatsSurveyIfEnabled(
         pepc_prompt_position,
     ContentSetting initial_permission_status,
     base::OnceCallback<void()> hats_shown_callback,
-    std::optional<PreviewParametersForHats> preview_parameters) {
+    PromptOptions prompt_options) {
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
   std::optional<GURL> recorded_gurl =
@@ -409,7 +412,7 @@ void ChromePermissionsClient::TriggerPromptHatsSurveyIfEnabled(
           permissions::PermissionHatsTriggerHelper::
               GetOneTimePromptsDecidedBucket(profile->GetPrefs()),
           recorded_gurl, pepc_prompt_position, initial_permission_status,
-          preview_parameters);
+          prompt_options);
 
   if (!permissions::PermissionHatsTriggerHelper::
           ArePromptTriggerCriteriaSatisfied(prompt_parameters)) {
@@ -469,7 +472,7 @@ ChromePermissionsClient::CreatePermissionUiSelectors(
 #endif
   selectors.emplace_back(std::make_unique<PrefBasedQuietPermissionUiSelector>(
       Profile::FromBrowserContext(browser_context)));
-  selectors.emplace_back(std::make_unique<PredictionBasedPermissionUiSelector>(
+  selectors.emplace_back(std::make_unique<PermissionsAiUiSelector>(
       Profile::FromBrowserContext(browser_context)));
   return selectors;
 }
@@ -488,8 +491,6 @@ void ChromePermissionsClient::OnPromptResolved(
   permissions::RequestType request_type = request->request_type();
   const GURL& origin = request->requesting_origin();
   PermissionRequestGestureType gesture_type = request->GetGestureType();
-  std::optional<PreviewParametersForHats> preview_parameters =
-      request->get_preview_parameters();
 
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
@@ -523,11 +524,14 @@ void ChromePermissionsClient::OnPromptResolved(
   }
 
 #if !BUILDFLAG(IS_ANDROID)
-  // TODO(crbug.com/412616723): Support Android
+  // Infobar exists only on Desktop platforms.
   if (base::FeatureList::IsEnabled(
           permissions::features::kPermissionPromiseLifetimeModulation)) {
-    if (ShouldShowInfobarOnPromptResolved(web_contents, request,
-                                          quiet_ui_reason, action)) {
+    bool should_show_infobar = ShouldShowInfobarOnPromptResolved(
+        web_contents, request, quiet_ui_reason, action);
+    permissions::PermissionUmaUtil::RecordPageReloadInfoBarShown(
+        should_show_infobar);
+    if (should_show_infobar) {
       ShowInfobar(web_contents);
     }
   }
@@ -546,7 +550,7 @@ void ChromePermissionsClient::OnPromptResolved(
       std::make_optional(prompt_display_duration), /*is_post_prompt=*/true,
       web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin().GetURL(),
       pepc_prompt_position, initial_permission_status, base::DoNothing(),
-      preview_parameters);
+      request->prompt_options());
 }
 
 std::optional<bool>
@@ -832,4 +836,21 @@ bool ChromePermissionsClient::IsSystemDenied(ContentSettingsType type) const {
 bool ChromePermissionsClient::CanPromptSystemPermission(
     ContentSettingsType type) const {
   return system_permission_settings::CanPrompt(type);
+}
+
+bool ChromePermissionsClient::IsActorOperatingOnWebContents(
+    content::WebContents* web_contents) const {
+#if !BUILDFLAG(IS_ANDROID)
+  auto* actor_service =
+      actor::ActorKeyedService::Get(web_contents->GetBrowserContext());
+  if (!actor_service) {
+    return false;
+  }
+
+  const auto* tab_interface =
+      tabs::TabInterface::MaybeGetFromContents(web_contents);
+  return tab_interface && actor_service->IsActiveOnTab(*tab_interface);
+#else
+  return false;
+#endif
 }

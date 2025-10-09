@@ -43,8 +43,6 @@
 #include "third_party/blink/renderer/core/events/text_event.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
-#include "third_party/blink/renderer/core/html/forms/html_option_element.h"
-#include "third_party/blink/renderer/core/html/forms/html_select_element.h"
 #include "third_party/blink/renderer/core/html/forms/text_control_inner_elements.h"
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/core/html_names.h"
@@ -56,6 +54,7 @@
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -218,21 +217,6 @@ void TextFieldInputType::SetValue(const String& sanitized_value,
 void TextFieldInputType::HandleKeydownEvent(KeyboardEvent& event) {
   if (!GetElement().IsFocused())
     return;
-
-  if (RuntimeEnabledFeatures::SelectAccessibilityReparentInputEnabled() ||
-      RuntimeEnabledFeatures::SelectAccessibilityNestedInputEnabled()) {
-    if (auto* select = GetElement().FirstAncestorSelectElement()) {
-      if (AtomicString(event.key()) == keywords::kArrowDown) {
-        if (auto* option =
-                select->GetOptionList().FirstKeyboardFocusableOption()) {
-          option->Focus();
-          event.SetDefaultHandled();
-          return;
-        }
-      }
-    }
-  }
-
   if (ChromeClient* chrome_client = GetChromeClient()) {
     chrome_client->HandleKeyboardEventOnTextField(GetElement(), event);
     return;
@@ -291,7 +275,8 @@ void TextFieldInputType::ForwardEvent(Event& event) {
           if (PaintLayerScrollableArea* inner_scrollable_area =
                   inner_layer->GetScrollableArea()) {
             inner_scrollable_area->SetScrollOffset(
-                ScrollOffset(0, 0), mojom::blink::ScrollType::kProgrammatic);
+                ScrollOffset(0, 0), mojom::blink::ScrollType::kProgrammatic,
+                cc::ScrollSourceType::kAbsoluteScroll);
           }
         }
       }
@@ -526,12 +511,17 @@ void TextFieldInputType::HandleBeforeTextInsertedEvent(
     GetElement().GetDocument().UpdateStyleAndLayout(
         DocumentUpdateReason::kEditing);
 
-    selection_length = GetElement()
-                           .GetDocument()
-                           .GetFrame()
-                           ->Selection()
-                           .SelectedText()
-                           .length();
+    FrameSelection& selection =
+        GetElement().GetDocument().GetFrame()->Selection();
+    Element* editable_element =
+        selection.RootEditableElementOrDocumentElement();
+    // If the root editable element of the selection is not a descendant of the
+    // focused element, we don't need to take account of the selection length.
+    if (!RuntimeEnabledFeatures::DelegatesFocusTextControlInputFixEnabled() ||
+        (editable_element &&
+         editable_element->IsDescendantOrShadowDescendantOf(&GetElement()))) {
+      selection_length = selection.SelectedText().length();
+    }
   }
   DCHECK_GE(old_length, selection_length);
 

@@ -75,6 +75,7 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/core/scheduler/task_attribution_util.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer_view.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
@@ -300,11 +301,11 @@ XMLHttpRequest::State XMLHttpRequest::readyState() const {
 String XMLHttpRequest::responseText(ExceptionState& exception_state) {
   if (response_type_code_ != kResponseTypeDefault &&
       response_type_code_ != V8XMLHttpRequestResponseType::Enum::kText) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "The value is only accessible if the "
-                                      "object's 'responseType' is '' or 'text' "
-                                      "(was '" +
-                                          responseType().AsString() + "').");
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidStateError,
+        StrCat({"The value is only accessible if the object's 'responseType' "
+                "is '' or 'text' (was '",
+                responseType().AsStringView(), "')."}));
     return String();
   }
   if (error_ || (state_ != kLoading && state_ != kDone))
@@ -341,11 +342,11 @@ void XMLHttpRequest::InitResponseDocument() {
 Document* XMLHttpRequest::responseXML(ExceptionState& exception_state) {
   if (response_type_code_ != kResponseTypeDefault &&
       response_type_code_ != V8XMLHttpRequestResponseType::Enum::kDocument) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "The value is only accessible if the "
-                                      "object's 'responseType' is '' or "
-                                      "'document' (was '" +
-                                          responseType().AsString() + "').");
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidStateError,
+        StrCat({"The value is only accessible if the object's 'responseType' "
+                "is '' or 'document' (was '",
+                responseType().AsStringView(), "')."}));
     return nullptr;
   }
 
@@ -505,7 +506,8 @@ void XMLHttpRequest::setResponseType(
       GetExecutionContext() && GetExecutionContext()->IsWindow();
   // 1. If the current global object is not a Window object and the given value
   // is "document", then return.
-  if (!is_window && response_type == "document") {
+  if (!is_window &&
+      response_type == V8XMLHttpRequestResponseType::Enum::kDocument) {
     return;
   }
 
@@ -582,8 +584,9 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
       else
         action = XMLHttpRequestProgressEventThrottle::kFlush;
     }
-    std::optional<scheduler::TaskAttributionTracker::TaskScope>
-        task_attribution_scope = MaybeCreateTaskAttributionScope();
+    std::optional<scheduler::TaskAttributionTracker::TaskScope> task_scope(
+        SetCurrentTaskStateIfTopLevel(task_state_, GetExecutionContext(),
+                                      TaskScopeType::kXMLHttpRequest));
     progress_event_throttle_->DispatchReadyStateChangeEvent(
         Event::Create(event_type_names::kReadystatechange), action);
   }
@@ -1011,10 +1014,7 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
   if (async_) {
     CHECK(!execution_context.IsContextDestroyed());
     if (world_ && world_->IsMainWorld()) {
-      if (auto* tracker = scheduler::TaskAttributionTracker::From(
-              execution_context.GetIsolate())) {
-        task_state_ = tracker->CurrentTaskState();
-      }
+      task_state_ = CaptureCurrentTaskState(&execution_context);
     }
     async_task_context_.Schedule(&execution_context, "XMLHttpRequest.send");
     DispatchProgressEvent(event_type_names::kLoadstart, 0, 0);
@@ -1278,9 +1278,10 @@ void XMLHttpRequest::DispatchProgressEvent(const AtomicString& type,
   uint64_t total =
       length_computable ? static_cast<uint64_t>(expected_length) : 0;
 
-  std::optional<scheduler::TaskAttributionTracker::TaskScope>
-      task_attribution_scope = MaybeCreateTaskAttributionScope();
   ExecutionContext* context = GetExecutionContext();
+  std::optional<scheduler::TaskAttributionTracker::TaskScope> task_scope(
+      SetCurrentTaskStateIfTopLevel(task_state_, context,
+                                    TaskScopeType::kXMLHttpRequest));
   probe::AsyncTask async_task(
       context, &async_task_context_,
       type == event_type_names::kLoadend ? nullptr : "progress", async_);
@@ -1309,8 +1310,8 @@ void XMLHttpRequest::HandleDidCancel() {
 
   pending_abort_event_ = PostCancellableTask(
       *GetExecutionContext()->GetTaskRunner(TaskType::kNetworking), FROM_HERE,
-      WTF::BindOnce(&XMLHttpRequest::HandleRequestError, WrapPersistent(this),
-                    DOMExceptionCode::kAbortError, event_type_names::kAbort));
+      BindOnce(&XMLHttpRequest::HandleRequestError, WrapPersistent(this),
+               DOMExceptionCode::kAbortError, event_type_names::kAbort));
 }
 
 void XMLHttpRequest::HandleRequestError(DOMExceptionCode exception_code,
@@ -2077,31 +2078,6 @@ void XMLHttpRequest::Trace(Visitor* visitor) const {
 
 bool XMLHttpRequest::HasRequestHeaderForTesting(AtomicString name) const {
   return request_headers_.Contains(name);
-}
-
-std::optional<scheduler::TaskAttributionTracker::TaskScope>
-XMLHttpRequest::MaybeCreateTaskAttributionScope() {
-  if (!task_state_ || !GetExecutionContext() ||
-      GetExecutionContext()->IsContextDestroyed()) {
-    return std::nullopt;
-  }
-  // `task_state_` being non-null implies that task tracking is enabled and this
-  // object is associated with the main world.
-  auto* tracker = scheduler::TaskAttributionTracker::From(
-      GetExecutionContext()->GetIsolate());
-  CHECK(tracker);
-
-  // Don't create a new (nested) task scope if we're still in the parent task,
-  // otherwise we risk clobbering other propagated task state.
-  //
-  // TODO(crbug.com/1439971): Make this safe to do or move the logic into the
-  // task attribution implementation.
-  if (tracker->CurrentTaskState() == task_state_.Get()) {
-    return std::nullopt;
-  }
-  return tracker->CreateTaskScope(
-      task_state_,
-      scheduler::TaskAttributionTracker::TaskScopeType::kXMLHttpRequest);
 }
 
 std::ostream& operator<<(std::ostream& ostream, const XMLHttpRequest* xhr) {

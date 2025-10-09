@@ -334,8 +334,8 @@ TEST_F(TestLauncherTest, RepeatTest) {
   command_line->AppendSwitchASCII("gtest_repeat", "2");
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .Times(2)
-      .WillRepeatedly(::testing::DoAll(OnTestResult(
-          &test_launcher, "Test.firstTest", TestResult::TEST_SUCCESS)));
+      .WillRepeatedly(OnTestResult(&test_launcher, "Test.firstTest",
+                                   TestResult::TEST_SUCCESS));
   EXPECT_TRUE(test_launcher.Run(command_line.get()));
 }
 
@@ -347,12 +347,12 @@ TEST_F(TestLauncherTest, RunningMultipleIterationsUntilFailure) {
   command_line->AppendSwitchASCII("gtest_repeat", "4");
   command_line->AppendSwitch("gtest_break_on_failure");
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
-      .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.firstTest",
-                                              TestResult::TEST_SUCCESS)))
-      .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.firstTest",
-                                              TestResult::TEST_SUCCESS)))
-      .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.firstTest",
-                                              TestResult::TEST_FAILURE)));
+      .WillOnce(OnTestResult(&test_launcher, "Test.firstTest",
+                             TestResult::TEST_SUCCESS))
+      .WillOnce(OnTestResult(&test_launcher, "Test.firstTest",
+                             TestResult::TEST_SUCCESS))
+      .WillOnce(OnTestResult(&test_launcher, "Test.firstTest",
+                             TestResult::TEST_FAILURE));
   EXPECT_FALSE(test_launcher.Run(command_line.get()));
 }
 
@@ -503,8 +503,8 @@ TEST_F(TestLauncherTest, DoesRunFilteredTests) {
                                  testing::ElementsAreArray(tests_names.cbegin(),
                                                            tests_names.cend()),
                                  _, _))
-      .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.secondTest",
-                                              TestResult::TEST_SUCCESS)));
+      .WillOnce(OnTestResult(&test_launcher, "Test.secondTest",
+                             TestResult::TEST_SUCCESS));
   EXPECT_TRUE(test_launcher.Run(command_line.get()));
 }
 
@@ -574,8 +574,8 @@ TEST_F(TestLauncherTest, EnforceRunTestsInExactPositiveFilter) {
                                  testing::ElementsAreArray(tests_names.cbegin(),
                                                            tests_names.cend()),
                                  _, _))
-      .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.firstTest",
-                                              TestResult::TEST_SUCCESS)));
+      .WillOnce(OnTestResult(&test_launcher, "Test.firstTest",
+                             TestResult::TEST_SUCCESS));
   EXPECT_TRUE(test_launcher.Run(command_line.get()));
 }
 
@@ -1010,7 +1010,7 @@ TEST_F(ResultWatcherTest, PollCompletesSlowly) {
   EXPECT_CALL(result_watcher, WaitWithTimeout(_))
       .Times(10)
       .WillRepeatedly(DoAll(
-          Invoke([&](TimeDelta timeout) {
+          [&](TimeDelta timeout) {
             task_environment.AdvanceClock(timeout);
             // Append a result with "time" (duration) as 40.000s and
             // "timestamp" (test start) as `Now()` - 45s.
@@ -1037,7 +1037,7 @@ TEST_F(ResultWatcherTest, PollCompletesSlowly) {
                           TimeFormatAsIso8601(Time::Now() - Seconds(5)).c_str(),
                           "\" />\n"}));
             }
-          }),
+          },
           ReturnPointee(&done)));
 
   ASSERT_TRUE(result_watcher.PollUntilDone(Seconds(45)));
@@ -1095,13 +1095,14 @@ TEST_F(ResultWatcherTest, RetryIncompleteResultRead) {
   bool done = false;
   EXPECT_CALL(result_watcher, WaitWithTimeout(_))
       .Times(5)
-      .WillRepeatedly(DoAll(Invoke([&](TimeDelta timeout) {
-                              task_environment.AdvanceClock(timeout);
-                              // Don't bother writing the rest of the file when
-                              // this test completes.
-                              done = ++attempts >= 5;
-                            }),
-                            ReturnPointee(&done)));
+      .WillRepeatedly(DoAll(
+          [&](TimeDelta timeout) {
+            task_environment.AdvanceClock(timeout);
+            // Don't bother writing the rest of the file when
+            // this test completes.
+            done = ++attempts >= 5;
+          },
+          ReturnPointee(&done)));
 
   Time start = Time::Now();
   ASSERT_TRUE(result_watcher.PollUntilDone(Seconds(45)));

@@ -4,11 +4,15 @@
 
 package org.chromium.chrome.browser.tasks.tab_management.pinned_tabs_strip;
 
+import static org.chromium.ui.interpolators.Interpolators.STANDARD_INTERPOLATOR;
+
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.util.Size;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -17,23 +21,28 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
+import androidx.core.widget.ImageViewCompat;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.tab_ui.TabCardThemeUtil;
 import org.chromium.chrome.browser.tab_ui.TabListFaviconProvider.TabFavicon;
 import org.chromium.chrome.browser.tab_ui.TabListFaviconProvider.TabFaviconFetcher;
-import org.chromium.components.tab_groups.TabGroupColorId;
+import org.chromium.ui.animation.AnimationHandler;
 
 /** View for a pinned tab strip item. */
 @NullMarked
 public class PinnedTabStripItemView extends FrameLayout {
+    private static final int WIDTH_ANIMATION_DURATION_MS = 400;
+
     private @Nullable ImageView mFavicon;
     private @Nullable TextView mTitle;
     private @Nullable ImageView mTrailingIcon;
+    private final AnimationHandler mWidthAnimationHandler;
 
     public PinnedTabStripItemView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
+        mWidthAnimationHandler = new AnimationHandler();
     }
 
     @Override
@@ -112,14 +121,46 @@ public class PinnedTabStripItemView extends FrameLayout {
      * @param size The {@link Size} of the tab grid card.
      */
     void setGridCardSize(@Nullable Size size) {
-        LayoutParams layoutParams = (LayoutParams) getLayoutParams();
         if (size == null) return;
-        if (size.getWidth() != -1) {
-            layoutParams.width = size.getWidth();
+
+        updateHeight(size.getHeight());
+
+        int targetWidth = size.getWidth();
+        int startWidth = getWidth();
+
+        // If the view is not laid out yet or width is the same, just set the width.
+        if (startWidth == 0 || startWidth == targetWidth) {
+            updateWidth(targetWidth);
+            return;
         }
-        if (size.getHeight() != -1) {
-            layoutParams.height = size.getHeight();
-        }
+
+        ValueAnimator animator = ValueAnimator.ofInt(startWidth, targetWidth);
+        animator.setDuration(WIDTH_ANIMATION_DURATION_MS);
+        animator.setInterpolator(STANDARD_INTERPOLATOR);
+        animator.addUpdateListener(
+                animation -> {
+                    updateWidth((int) animation.getAnimatedValue());
+                });
+        mWidthAnimationHandler.startAnimation(animator);
+    }
+
+    AnimationHandler getWidthAnimationHandlerForTesting() {
+        return mWidthAnimationHandler;
+    }
+
+    private void updateWidth(int width) {
+        if (width <= 0) return;
+        ViewGroup.LayoutParams layoutParams = getLayoutParams();
+        if (layoutParams.width == width) return;
+        layoutParams.width = width;
+        setLayoutParams(layoutParams);
+    }
+
+    private void updateHeight(int height) {
+        if (height <= 0) return;
+        ViewGroup.LayoutParams layoutParams = getLayoutParams();
+        if (layoutParams.width == height) return;
+        layoutParams.height = height;
         setLayoutParams(layoutParams);
     }
 
@@ -128,22 +169,30 @@ public class PinnedTabStripItemView extends FrameLayout {
      *
      * @param isSelected Whether the tab is selected.
      * @param isIncognito Whether the tab is incognito.
-     * @param colorId The {@link TabGroupColorId} for the tab group color.
      */
-    void setSelected(boolean isSelected, boolean isIncognito, @TabGroupColorId int colorId) {
+    void setSelected(boolean isSelected, boolean isIncognito) {
         Context context = getContext();
         getBackground().mutate();
 
         final @ColorInt int backgroundColor =
                 TabCardThemeUtil.getCardViewBackgroundColor(
-                        context, isIncognito, isSelected, colorId);
+                        context, isIncognito, isSelected, /* colorId= */ null);
         ViewCompat.setBackgroundTintList(
                 this,
                 TabCardThemeUtil.getCardViewBackgroundColorStateList(
                         context, isIncognito, backgroundColor));
 
-        if (mTitle == null) return;
-        mTitle.setTextColor(
-                TabCardThemeUtil.getTitleTextColor(context, isIncognito, isSelected, colorId));
+        if (mTitle != null) {
+            mTitle.setTextColor(
+                    TabCardThemeUtil.getTitleTextColor(
+                            context, isIncognito, isSelected, /* colorId= */ null));
+        }
+
+        if (mTrailingIcon != null) {
+            ImageViewCompat.setImageTintList(
+                    mTrailingIcon,
+                    TabCardThemeUtil.getActionButtonTintList(
+                            context, isIncognito, isSelected, /* colorId= */ null));
+        }
     }
 }

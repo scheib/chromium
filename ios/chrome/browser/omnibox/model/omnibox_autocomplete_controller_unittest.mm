@@ -17,6 +17,7 @@
 #import "components/omnibox/browser/fake_autocomplete_provider_client.h"
 #import "components/omnibox/browser/omnibox_client.h"
 #import "components/omnibox/browser/omnibox_popup_selection.h"
+#import "components/omnibox/browser/omnibox_pref_names.h"
 #import "components/omnibox/browser/search_provider.h"
 #import "components/omnibox/browser/test_omnibox_client.h"
 #import "components/open_from_clipboard/fake_clipboard_recent_content.h"
@@ -187,7 +188,8 @@ class OmniboxAutocompleteControllerTest : public PlatformTest {
   // Application pref service.
   std::unique_ptr<TestingPrefServiceSimple> local_state_;
   TestOmniboxAutocompleteController* controller_;
-  raw_ptr<MockAutocompleteController> autocomplete_controller_;
+  raw_ptr<MockAutocompleteController, DanglingUntriaged>
+      autocomplete_controller_;
   std::unique_ptr<TestOmniboxClient> omnibox_client_;
   raw_ptr<FakeClipboardRecentContent> clipboard_;
   std::unique_ptr<OmniboxTextModel> omnibox_text_model_;
@@ -290,11 +292,11 @@ TEST_F(OmniboxAutocompleteControllerTest, RequestResultPartVisible) {
 
 // Tests that omnibox position update is forwarded to autocompleteController.
 TEST_F(OmniboxAutocompleteControllerTest, OmniboxPositionUpdates) {
-  local_state_->SetBoolean(prefs::kBottomOmnibox, true);
+  local_state_->SetBoolean(omnibox::kIsOmniboxInBottomPosition, true);
   EXPECT_EQ(autocomplete_controller_->omnibox_position,
             metrics::OmniboxEventProto::BOTTOM_POSITION);
 
-  local_state_->SetBoolean(prefs::kBottomOmnibox, false);
+  local_state_->SetBoolean(omnibox::kIsOmniboxInBottomPosition, false);
   EXPECT_EQ(autocomplete_controller_->omnibox_position,
             metrics::OmniboxEventProto::TOP_POSITION);
 }

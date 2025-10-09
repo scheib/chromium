@@ -24,7 +24,6 @@
 #include "skia/ext/codec_utils.h"
 #include "skia/ext/font_utils.h"
 #include "skia/ext/skia_utils_base.h"
-#include "third_party/skia/include/codec/SkPngDecoder.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkFontMgr.h"
 #include "third_party/skia/include/core/SkImage.h"
@@ -57,28 +56,44 @@
 
 namespace {
 
-// Table 333 in PDF 32000-1:2008 spec, section 14.8.4.2
+// Table 364 in PDF 32000-2:2020 spec, section 14.8.4.3
 const char kPDFStructureTypeDocument[] = "Document";
-const char kPDFStructureTypeParagraph[] = "P";
+
+// Table 365 in PDF 32000-2:2020 spec, section 14.8.4.4
 const char kPDFStructureTypeDiv[] = "Div";
+const char kPDFStructureTypeAside[] = "Aside";
+const char kPDFStructureTypeNonStruct[] = "NonStruct";
+
+// Table 366 in PDF 32000-2:2020 spec, section 14.8.4.5
+const char kPDFStructureTypeParagraph[] = "P";
 const char kPDFStructureTypeHeading[] = "H";
-const char kPDFStructureTypeLink[] = "Link";
-const char kPDFStructureTypeList[] = "L";
+
+// Table 368 in PDF 32000-2:2020 spec, section 14.8.4.7.2
 const char kPDFStructureTypeListItemLabel[] = "Lbl";
+const char kPDFStructureTypeEmphasis[] = "Em";
+const char kPDFStructureTypeStrong[] = "Strong";
+const char kPDFStructureTypeLink[] = "Link";
+
+// Table 370 in PDF 32000-2:2020 spec, section 14.8.4.8.2
+const char kPDFStructureTypeList[] = "L";
 const char kPDFStructureTypeListItemBody[] = "LI";
+
+// Table 371 in PDF 32000-2:2020 spec, section 14.8.4.8.3
 const char kPDFStructureTypeTable[] = "Table";
 const char kPDFStructureTypeTableRow[] = "TR";
 const char kPDFStructureTypeTableHeader[] = "TH";
 const char kPDFStructureTypeTableCell[] = "TD";
-const char kPDFStructureTypeFigure[] = "Figure";
-const char kPDFStructureTypeNonStruct[] = "NonStruct";
 
-// Standard attribute owners from PDF 32000-1:2008 spec, section 14.8.5.2
-// (Attribute owners are kind of like "categories" for structure node
-// attributes.)
+// Table 373 in PDF 32000-2:2020 spec, section 14.8.4.8.5
+const char kPDFStructureTypeFigure[] = "Figure";
+
+// Standard attribute owners from Table 376 PDF 32000-2:2020 spec,
+// section 14.8.5.2 (Attribute owners are kind of like "categories"
+// for structure node attributes.)
 const char kPDFTableAttributeOwner[] = "Table";
 
-// Table Attributes from PDF 32000-1:2008 spec, section 14.8.5.7
+// Table Attributes from tabl 384 in PDF 32000-2:2020 spec,
+// section 14.8.5.7
 const char kPDFTableCellColSpanAttribute[] = "ColSpan";
 const char kPDFTableCellHeadersAttribute[] = "Headers";
 const char kPDFTableCellRowSpanAttribute[] = "RowSpan";
@@ -87,7 +102,7 @@ const char kPDFTableHeaderScopeColumn[] = "Column";
 const char kPDFTableHeaderScopeRow[] = "Row";
 
 SkString GetHeadingStructureType(int heading_level) {
-  // From Table 333 in PDF 32000-1:2008 spec, section 14.8.4.2,
+  // From Table 366 in PDF 32000-2:2020 spec, section 14.8.4.5,
   // "H1"..."H6" are valid structure types.
   if (heading_level >= 1 && heading_level <= 6)
     return SkString(base::StringPrintf("H%d", heading_level).c_str());
@@ -137,12 +152,21 @@ bool RecursiveBuildStructureTree(const ui::AXNode* ax_node,
     case ax::mojom::Role::kGenericContainer:
       tag->fTypeString = kPDFStructureTypeDiv;
       break;
+    case ax::mojom::Role::kComplementary:
+      tag->fTypeString = kPDFStructureTypeAside;
+      break;
     case ax::mojom::Role::kHeading:
       tag->fTypeString = GetHeadingStructureType(ax_node->GetIntAttribute(
           ax::mojom::IntAttribute::kHierarchicalLevel));
       break;
     case ax::mojom::Role::kLink:
       tag->fTypeString = kPDFStructureTypeLink;
+      break;
+    case ax::mojom::Role::kEmphasis:
+      tag->fTypeString = kPDFStructureTypeEmphasis;
+      break;
+    case ax::mojom::Role::kStrong:
+      tag->fTypeString = kPDFStructureTypeStrong;
       break;
     case ax::mojom::Role::kList:
       tag->fTypeString = kPDFStructureTypeList;
@@ -153,7 +177,9 @@ bool RecursiveBuildStructureTree(const ui::AXNode* ax_node,
     case ax::mojom::Role::kListItem:
       tag->fTypeString = kPDFStructureTypeListItemBody;
       break;
+    case ax::mojom::Role::kGrid:
     case ax::mojom::Role::kTable:
+    case ax::mojom::Role::kTreeGrid:
       tag->fTypeString = kPDFStructureTypeTable;
       break;
     case ax::mojom::Role::kRow:
@@ -171,7 +197,8 @@ bool RecursiveBuildStructureTree(const ui::AXNode* ax_node,
                                   kPDFTableHeaderScopeAttribute,
                                   kPDFTableHeaderScopeRow);
       break;
-    case ax::mojom::Role::kCell: {
+    case ax::mojom::Role::kCell:
+    case ax::mojom::Role::kGridCell: {
       tag->fTypeString = kPDFStructureTypeTableCell;
 
       // Append an attribute consisting of the string IDs of all of the

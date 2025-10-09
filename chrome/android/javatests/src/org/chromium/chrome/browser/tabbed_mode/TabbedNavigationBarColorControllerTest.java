@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.tabbed_mode;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -63,14 +65,14 @@ import org.chromium.chrome.test.transit.ChromeTransitTestRules;
 import org.chromium.chrome.test.transit.FreshCtaTransitTestRule;
 import org.chromium.chrome.test.transit.page.WebPageStation;
 import org.chromium.chrome.test.util.ChromeTabUtils;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeSystemBarColorHelper;
-import org.chromium.components.browser_ui.edge_to_edge.WindowSystemBarColorHelper;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.browser_ui.widget.scrim.ScrimManager;
 import org.chromium.components.browser_ui.widget.scrim.ScrimProperties;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.test.util.DOMUtils;
 import org.chromium.ui.base.DeviceFormFactor;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeSystemBarColorHelper;
+import org.chromium.ui.edge_to_edge.WindowSystemBarColorHelper;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.test.util.DeviceRestriction;
 
@@ -373,7 +375,7 @@ public class TabbedNavigationBarColorControllerTest {
     }
 
     private void testNavBarColorAnimationsDisabled() {
-        assert mTabbedNavigationBarColorController != null;
+        assertThat(mTabbedNavigationBarColorController).isNotNull();
 
         // Create spies from real instances and inject the spies back.
         EdgeToEdgeSystemBarColorHelper spyEdgeToEdgeSystemBarColorHelper =
@@ -400,7 +402,7 @@ public class TabbedNavigationBarColorControllerTest {
     }
 
     private void testNavBarColorAnimations() {
-        assert mTabbedNavigationBarColorController != null;
+        assertThat(mTabbedNavigationBarColorController).isNotNull();
 
         // Create spies from real instances and inject the spies back.
         EdgeToEdgeSystemBarColorHelper spyEdgeToEdgeSystemBarColorHelper =

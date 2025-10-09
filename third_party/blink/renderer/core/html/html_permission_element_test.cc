@@ -34,6 +34,8 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
@@ -261,6 +263,7 @@ class TestPermissionService : public PermissionService {
                      HasPermissionCallback) override {}
   void RegisterPageEmbeddedPermissionControl(
       Vector<PermissionDescriptorPtr> permissions,
+      mojom::blink::EmbeddedPermissionRequestDescriptorPtr descriptor,
       mojo::PendingRemote<mojom::blink::EmbeddedPermissionControlClient>
           pending_client) override {
     if (pepc_registered_callback_) {
@@ -269,10 +272,9 @@ class TestPermissionService : public PermissionService {
     }
 
     if (should_defer_registered_callback_) {
-      pepc_registered_callback_ = WTF::BindOnce(
+      pepc_registered_callback_ = BindOnce(
           &TestPermissionService::RegisterPageEmbeddedPermissionControlInternal,
-          base::Unretained(this), std::move(permissions),
-          std::move(pending_client));
+          Unretained(this), std::move(permissions), std::move(pending_client));
       return;
     }
 
@@ -291,8 +293,8 @@ class TestPermissionService : public PermissionService {
             : initial_statuses_;
     client_ = mojo::Remote<mojom::blink::EmbeddedPermissionControlClient>(
         std::move(pending_client));
-    client_.set_disconnect_handler(base::BindOnce(
-        &TestPermissionService::OnMojoDisconnect, base::Unretained(this)));
+    client_.set_disconnect_handler(
+        BindOnce(&TestPermissionService::OnMojoDisconnect, Unretained(this)));
     client_->OnEmbeddedPermissionControlRegistered(/*allowed=*/true,
                                                    std::move(statuses));
   }
@@ -304,7 +306,8 @@ class TestPermissionService : public PermissionService {
   }
 
   void RequestPageEmbeddedPermission(
-      EmbeddedPermissionRequestDescriptorPtr permissions,
+      Vector<PermissionDescriptorPtr> permissions,
+      EmbeddedPermissionRequestDescriptorPtr descriptor,
       RequestPageEmbeddedPermissionCallback) override {}
   void RequestPermission(PermissionDescriptorPtr permission,
                          bool user_gesture,
@@ -397,8 +400,7 @@ class RegistrationWaiter {
   void PostDelayedTask() {
     base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
-        WTF::BindOnce(&RegistrationWaiter::VerifyRegistration,
-                      base::Unretained(this)),
+        BindOnce(&RegistrationWaiter::VerifyRegistration, Unretained(this)),
         base::Milliseconds(100));
   }
   void VerifyRegistration() {
@@ -474,10 +476,11 @@ class DeferredChecker {
 
   void CheckClickingEnabledAfterDelay(base::TimeDelta time,
                                       bool expected_enabled) {
+    test::RunPendingTasks();
     base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
-        WTF::BindOnce(&DeferredChecker::CheckClickingEnabled,
-                      base::Unretained(this), expected_enabled),
+        BindOnce(&DeferredChecker::CheckClickingEnabled, Unretained(this),
+                 expected_enabled),
         time);
     run_loop_ = std::make_unique<base::RunLoop>();
     run_loop_->Run();
@@ -495,8 +498,8 @@ class DeferredChecker {
     size_t current_size = ConsoleMessages().size();
     base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
-        WTF::BindOnce(&DeferredChecker::CheckConsoleMessagesSize,
-                      base::Unretained(this), current_size),
+        BindOnce(&DeferredChecker::CheckConsoleMessagesSize, Unretained(this),
+                 current_size),
         time);
     run_loop_ = std::make_unique<base::RunLoop>();
     run_loop_->Run();
@@ -1081,7 +1084,7 @@ TEST_F(HTMLPermissionElementSimTest, BlockedByPermissionsPolicy) {
     CreatePermissionElement(*first_child_frame->GetFrame()->GetDocument(),
                             permission);
     permission_service()->set_pepc_registered_callback(
-        base::BindOnce(&NotReachedForPEPCRegistered));
+        BindOnce(&NotReachedForPEPCRegistered));
     base::RunLoop().RunUntilIdle();
     // Should console log a error message due to PermissionsPolicy
     auto& first_console_messages =
@@ -1499,7 +1502,7 @@ TEST_F(HTMLPermissionElementFencedFrameTest, NotAllowedInFencedFrame) {
     // otherwise the next testing binder will fail.
     permission_element->GetPermissionService();
     permission_service()->set_pepc_registered_callback(
-        base::BindOnce(&NotReachedForPEPCRegistered));
+        BindOnce(&NotReachedForPEPCRegistered));
     base::RunLoop().RunUntilIdle();
   }
 }
@@ -1544,7 +1547,7 @@ TEST_F(HTMLPermissionElementSimTest, BlockedByMissingFrameAncestorsCSP) {
     CreatePermissionElement(*first_child_frame->GetFrame()->GetDocument(),
                             permission);
     permission_service()->set_pepc_registered_callback(
-        base::BindOnce(&NotReachedForPEPCRegistered));
+        BindOnce(&NotReachedForPEPCRegistered));
     base::RunLoop().RunUntilIdle();
     // Should console log a error message due to missing 'frame-ancestors' CSP
     auto& first_console_messages =

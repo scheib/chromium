@@ -36,6 +36,7 @@
 #include "content/browser/renderer_host/navigation_policy_container_builder.h"
 #include "content/browser/renderer_host/navigation_throttle_registry_impl.h"
 #include "content/browser/renderer_host/navigation_type.h"
+#include "content/browser/renderer_host/process_selection_deferring_condition_runner.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/scoped_view_transition_resources.h"
 #include "content/browser/security/coop/cross_origin_opener_policy_status.h"
@@ -445,6 +446,7 @@ class CONTENT_EXPORT NavigationRequest
   bool IsSignedExchangeInnerResponse() override;
   bool HasPrefetchedAlternativeSubresourceSignedExchange() override;
   bool WasResponseCached() override;
+  bool NetworkAccessed() override;
   const std::string& GetHrefTranslate() override;
   const std::optional<blink::Impression>& GetImpression() override;
   const std::optional<blink::LocalFrameToken>& GetInitiatorFrameToken()
@@ -1490,10 +1492,12 @@ class CONTENT_EXPORT NavigationRequest
   // the content::Page and subsequent blink::Pages. Subframes should not use
   // this accessor, but instead should use `PageImpl::canvas_noise_token()` to
   // get the canvas noise token.
-  std::optional<uint64_t> canvas_noise_token() {
+  std::optional<blink::NoiseToken> canvas_noise_token() {
     CHECK(IsInMainFrame());
     return canvas_noise_token_;
   }
+
+  bool is_ad_tagged() const { return is_ad_tagged_; }
 
   // Called when the browser process is about to process beforeunload handlers
   // for this navigation, including sending an IPC to the renderer process to
@@ -1695,6 +1699,12 @@ class CONTENT_EXPORT NavigationRequest
   // is not derived from a prerendered page, the default-consturcted null
   // value will be returned.
   PrerenderHostId GetPrerenderHostId() const;
+
+  // Checks whether the navigation request contains active view transition
+  // resources.
+  bool HasViewTransitionResources() const {
+    return !!view_transition_resources_;
+  }
 
  private:
   friend class NavigationRequestTest;
@@ -2643,6 +2653,21 @@ class CONTENT_EXPORT NavigationRequest
   // details.
   std::unique_ptr<CommitDeferringConditionRunner> commit_deferrer_;
 
+  // A navigation gets assigned to a renderer process at two points during a
+  // navigation. However we may not have all of the process selection criteria
+  // resolved before the final selection is made. This
+  // `ProcessSelectionDeferringConditionRunner` lets us start checks early,
+  // restart checks on redirects, and provides an interface to finalize results
+  // after the response is received but before the final process selection is
+  // made. If the results are not ready at that time, the navigation is deferred
+  // until all conditions are resolved.
+  //
+  // `ProcessSelectionDeferringConditions` are not checked for prerendered page
+  // activations because those destinations have previously been assigned to a
+  // process.
+  std::unique_ptr<ProcessSelectionDeferringConditionRunner>
+      process_selection_deferrer_;
+
   // Indicates whether the navigation changed which NavigationEntry is current.
   bool subframe_entry_committed_ = false;
 
@@ -3291,7 +3316,7 @@ class CONTENT_EXPORT NavigationRequest
       EarlyRenderFrameHostSwapType::kNone;
 
   // Whether the embedder indicated this navigation is being used for
-  // advertising porpoises.
+  // advertising purposes.
   bool is_ad_tagged_ = false;
 
   // This is the origin to commit value calculated at request time for data: URL
@@ -3347,7 +3372,7 @@ class CONTENT_EXPORT NavigationRequest
 
   // The token value for canvas noising. This should only be set on main frame
   // navigations that subsequently set the token value on the page.
-  std::optional<uint64_t> canvas_noise_token_ = std::nullopt;
+  std::optional<blink::NoiseToken> canvas_noise_token_ = std::nullopt;
 
   // For NavigationRequests not in a prerendered page, the value will be the
   // default-constructed null value.

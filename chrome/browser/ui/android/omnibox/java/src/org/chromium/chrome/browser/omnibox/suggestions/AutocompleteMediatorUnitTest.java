@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -51,8 +52,8 @@ import org.robolectric.shadows.ShadowPausedSystemClock;
 import org.chromium.base.ActivityState;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
@@ -62,9 +63,9 @@ import org.chromium.chrome.browser.omnibox.DeferredIMEWindowInsetApplicationCall
 import org.chromium.chrome.browser.omnibox.LocationBarDataProvider;
 import org.chromium.chrome.browser.omnibox.OmniboxMetrics;
 import org.chromium.chrome.browser.omnibox.UrlBarEditingTextStateProvider;
+import org.chromium.chrome.browser.omnibox.navattach.NavigationAttachmentsCoordinator;
+import org.chromium.chrome.browser.omnibox.navattach.NavigationFulfillmentType;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
-import org.chromium.chrome.browser.omnibox.suggestions.action.OmniboxActionFactoryImpl;
-import org.chromium.chrome.browser.omnibox.suggestions.action.OmniboxAnswerAction;
 import org.chromium.chrome.browser.omnibox.suggestions.header.HeaderProcessor;
 import org.chromium.chrome.browser.omnibox.test.R;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -98,8 +99,8 @@ import org.chromium.url.JUnitTestGURLs;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 /** Tests for {@link AutocompleteMediator}. */
@@ -144,6 +145,7 @@ public class AutocompleteMediatorUnitTest {
     private @Mock AutocompleteCoordinator.OmniboxSuggestionsVisualStateObserver
             mVisualStateObserver;
     private @Mock DeferredIMEWindowInsetApplicationCallback mDeferredImeCallback;
+    private @Mock NavigationAttachmentsCoordinator mNavigationAttachmentsCoordinator;
     private @Captor ArgumentCaptor<OmniboxLoadUrlParams> mOmniboxLoadUrlParamsCaptor;
 
     private PropertyModel mListModel;
@@ -152,7 +154,7 @@ public class AutocompleteMediatorUnitTest {
     private AutocompleteResult mAutocompleteResult;
     private ModelList mSuggestionModels;
     private ObservableSupplierImpl<TabWindowManager> mTabWindowManagerSupplier;
-    private Supplier<@ControlsPosition Integer> mToolbarPositionSupplier;
+    private ObservableSupplier<@ControlsPosition Integer> mToolbarPositionSupplier;
     private Context mContext;
 
     // Interface abstracting calls to CachedZeroSuggestionsManager, making interactions with that
@@ -166,6 +168,7 @@ public class AutocompleteMediatorUnitTest {
     // CachedZeroSuggestionsManager shadow that helps us intercept interactions with manager's
     // static methods.
     @Implements(CachedZeroSuggestionsManager.class)
+    @SuppressWarnings("DirectInvocationOnMock")
     public static class ShadowCachedSuggestionsManager {
         public static CachedZeroSuggestionsManagerCalls mock =
                 mock(CachedZeroSuggestionsManagerCalls.class);
@@ -190,7 +193,7 @@ public class AutocompleteMediatorUnitTest {
         LargeIconBridgeJni.setInstanceForTesting(mLargeIconBridgeJniMock);
         OmniboxActionFactoryJni.setInstanceForTesting(mActionFactoryJni);
         AutocompleteControllerJni.setInstanceForTesting(mControllerJniMock);
-        mToolbarPositionSupplier = () -> ControlsPosition.TOP;
+        mToolbarPositionSupplier = new ObservableSupplierImpl(ControlsPosition.TOP);
 
         lenient().doReturn(mAutocompleteController).when(mControllerJniMock).getForProfile(any());
 
@@ -201,6 +204,7 @@ public class AutocompleteMediatorUnitTest {
                         .build();
 
         mTabWindowManagerSupplier = new ObservableSupplierImpl<>();
+        lenient().doAnswer(inv -> Collections.emptyList().iterator()).when(mTabModel).iterator();
         lenient().doReturn(mInsetObserver).when(mWindowAndroid).getInsetObserver();
         lenient().doReturn(mWindow).when(mWindowAndroid).getWindow();
         lenient().doReturn(mDecorView).when(mWindow).getDecorView();
@@ -229,6 +233,7 @@ public class AutocompleteMediatorUnitTest {
                         mEmbedder,
                         mWindowAndroid,
                         mDeferredImeCallback,
+                        mNavigationAttachmentsCoordinator,
                         false);
         mMediator
                 .getDropdownItemViewInfoListBuilderForTest()
@@ -261,7 +266,7 @@ public class AutocompleteMediatorUnitTest {
         setUpLocationBarDataProvider(
                 JUnitTestGURLs.NTP_URL, "New Tab Page", PageClassification.NTP_VALUE);
 
-        mMediator.setOmniboxSuggestionsVisualStateObserver(Optional.of(mVisualStateObserver));
+        mMediator.setOmniboxSuggestionsVisualStateObserver(mVisualStateObserver);
         mMediator.onTopResumedActivityChanged(true);
     }
 
@@ -700,6 +705,7 @@ public class AutocompleteMediatorUnitTest {
 
     @Test
     @SmallTest
+    @SuppressWarnings("DirectInvocationOnMock")
     public void onSuggestionsReceived_sendsOnSuggestionsChanged() {
         mMediator.onNativeInitialized();
         mMediator.onOmniboxSessionStateChange(true);
@@ -1014,6 +1020,7 @@ public class AutocompleteMediatorUnitTest {
 
     @Test
     @SmallTest
+    @SuppressWarnings("DirectInvocationOnMock")
     public void switchToTab_invalidTabModelAssociation() {
         mMediator.setAutocompleteProfile(mProfile);
 
@@ -1045,6 +1052,7 @@ public class AutocompleteMediatorUnitTest {
         doReturn(ActivityState.RESUMED).when(mMockWindowAndroid).getActivityState();
         doReturn(mTabModel).when(mTabManager).getTabModelForTab(any());
         doReturn(1).when(mTabModel).getCount();
+        doAnswer(inv -> List.of(mTab).iterator()).when(mTabModel).iterator();
         doReturn(mTab).when(mTabModel).getTabAt(anyInt());
         assertTrue(mMediator.maybeSwitchToTab(null));
     }
@@ -1674,23 +1682,6 @@ public class AutocompleteMediatorUnitTest {
     }
 
     @Test
-    public void onOmniboxAnswerActionClicked() {
-        mMediator.setAutocompleteProfile(mProfile);
-        mMediator.onNativeInitialized();
-        mMediator.onOmniboxSessionStateChange(true);
-        OmniboxAnswerAction answerAction =
-                (OmniboxAnswerAction)
-                        OmniboxActionFactoryImpl.get()
-                                .buildOmniboxAnswerAction(123L, "7 day forecast", "7 day forecast");
-
-        mMediator.onSuggestionsReceived(
-                AutocompleteResult.fromCache(mSuggestionsList, null), /* isFinal= */ true);
-        mMediator.onOmniboxActionClicked(answerAction, 0);
-
-        verify(mAutocompleteDelegate).loadUrl(mOmniboxLoadUrlParamsCaptor.capture());
-    }
-
-    @Test
     @SmallTest
     @EnableFeatures(OmniboxFeatureList.ANIMATE_SUGGESTIONS_LIST_APPEARANCE)
     public void onOmniboxSessionStateChange_attachesImeCallback() {
@@ -1754,5 +1745,36 @@ public class AutocompleteMediatorUnitTest {
         when(mTextStateProvider.wasLastEditPaste()).thenReturn(true);
         mMediator.onSuggestionClicked(match, 0, url);
         verify(mAutocompleteDelegate).maybeShowDefaultBrowserPromo();
+    }
+
+    @Test
+    @SmallTest
+    public void loadTypedOmniboxText_aimUrl() {
+        mMediator.setAutocompleteProfile(mProfile);
+        mMediator.onNativeInitialized();
+        mMediator.onOmniboxSessionStateChange(true);
+        when(mTextStateProvider.getTextWithoutAutocomplete()).thenReturn("test");
+        when(mTextStateProvider.getTextWithAutocomplete()).thenReturn("test");
+        ObservableSupplierImpl<Integer> supplier = new ObservableSupplierImpl<>();
+        supplier.set(NavigationFulfillmentType.AI_MODE);
+        when(mNavigationAttachmentsCoordinator.getNavigationFulfillmentTypeSupplier())
+                .thenReturn(supplier);
+        GURL url = JUnitTestGURLs.BLUE_2;
+        when(mNavigationAttachmentsCoordinator.getAimUrl("test")).thenReturn(url);
+
+        AutocompleteMatch defaultMatch =
+                AutocompleteMatchBuilder.searchWithType(OmniboxSuggestionType.SEARCH_SUGGEST)
+                        .setDisplayText("test suggestion")
+                        .setInlineAutocompletion("")
+                        .setAllowedToBeDefaultMatch(true)
+                        .setUrl(JUnitTestGURLs.GOOGLE_URL)
+                        .build();
+        mSuggestionsList.add(0, defaultMatch);
+        mMediator.onSuggestionsReceived(AutocompleteResult.fromCache(mSuggestionsList, null), true);
+
+        mMediator.loadTypedOmniboxText(123L, false);
+
+        verify(mAutocompleteDelegate).loadUrl(mOmniboxLoadUrlParamsCaptor.capture());
+        assertEquals(mOmniboxLoadUrlParamsCaptor.getValue().url, url.getSpec());
     }
 }

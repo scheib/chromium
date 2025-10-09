@@ -51,6 +51,7 @@
 #include "third_party/blink/public/common/metrics/document_update_reason.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/css/preferred_contrast.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/frame/color_scheme.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/page/page.mojom-blink-forward.h"
@@ -236,6 +237,7 @@ class ResizeObserver;
 class Resource;
 class ResourceFetcher;
 class RootScrollerController;
+class RouteMap;
 class SVGDocumentExtensions;
 class SVGUseElement;
 class ScriptElementBase;
@@ -677,6 +679,15 @@ class CORE_EXPORT Document : public ContainerNode,
     return HaveScriptBlockingStylesheetsLoaded();
   }
 
+  // Returns true if the document is prerendering and its trigger asks it to
+  // block script execution until prerender activation, and turns false upon
+  // activation where we anyway no longer want to block script execution; see
+  // `UnblockScriptExecutionForPrerenderActivation`. Note that it never starts
+  // to block or unblock script execution in the middle of execution, since
+  // the field is set to true when initializing `this` instance and set to false
+  // only once (upon activation).
+  bool IsScriptBlockedUntilPrerenderActivation() const;
+
   bool IsForExternalHandler() const { return is_for_external_handler_; }
 
   StyleEngine& GetStyleEngine() const {
@@ -684,7 +695,12 @@ class CORE_EXPORT Document : public ContainerNode,
     return *style_engine_.Get();
   }
 
+  void UpdateForcedColors();
+  bool InForcedColorsMode() const;
+  bool InDarkMode();
+
   mojom::blink::PreferredColorScheme GetPreferredColorScheme() const;
+  mojom::blink::PreferredContrast GetPreferredContrast() const;
 
   void ScheduleUseShadowTreeUpdate(SVGUseElement&);
   void UnscheduleUseShadowTreeUpdate(SVGUseElement&);
@@ -1433,6 +1449,9 @@ class CORE_EXPORT Document : public ContainerNode,
   V8HTMLOrSVGScriptElement* currentScriptForBinding() const;
   void PushCurrentScript(ScriptElementBase*);
   void PopCurrentScript(ScriptElementBase*);
+  bool IsCurrentScriptStackEmpty() const {
+    return current_script_stack_.empty();
+  }
 
   void SetTransformSource(std::unique_ptr<TransformSource>);
   TransformSource* GetTransformSource() const {
@@ -1709,12 +1728,18 @@ class CORE_EXPORT Document : public ContainerNode,
     return all_open_dialogs_;
   }
 
+  HeapLinkedHashSet<Member<Element>>& ElementsWithInterest() {
+    return elements_with_interest_;
+  }
+
   // https://crbug.com/1453291
   // The DOM Parts API:
   // https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md.
   DocumentPartRoot& getPartRoot();
   DocumentPartRoot& EnsureDocumentPartRoot();
   bool DOMPartsInUse() const { return document_part_root_ != nullptr; }
+
+  RouteMap* routeMap();
 
   // A non-null template_document_host_ implies that |this| was created by
   // EnsureTemplateDocument().
@@ -1728,6 +1753,12 @@ class CORE_EXPORT Document : public ContainerNode,
   void DidChangeFormRelatedElementDynamically(HTMLElement*,
                                               WebFormRelatedChangeType);
 
+  // Please familiarize yourself with http://goo.gle/devtools-console-policy
+  // prior to adding new console messages, and make sure that you understand the
+  // implications on the developer experience. A good console message should be
+  // actionable and relevant to what the developer is currently doing. Using the
+  // DevTools Console panel as a means to advertise best practices or Chromium
+  // agendas has shown to be counterproductive.
   void AddConsoleMessage(ConsoleMessage* message,
                          bool discard_duplicates = false) const;
 
@@ -1972,10 +2003,6 @@ class CORE_EXPORT Document : public ContainerNode,
   bool IsAnimatedPropertyCounted(CSSPropertyID property) const;
   void ClearUseCounterForTesting(mojom::WebFeature);
   void ClearWebDXFeatureCounterForTesting(mojom::blink::WebDXFeature);
-
-  void UpdateForcedColors();
-  bool InForcedColorsMode() const;
-  bool InDarkMode();
 
   const ui::ColorProvider* GetColorProviderForPainting(
       mojom::blink::ColorScheme color_scheme) const;
@@ -2238,6 +2265,12 @@ class CORE_EXPORT Document : public ContainerNode,
 
   // WidgetCreationObserver implementation
   void OnLocalRootWidgetCreated() override;
+
+  // https://dom.spec.whatwg.org/#effective-global-custom-element-registry
+  // A document's effective global custom element registry is its own registry
+  // if the registry is global, otherwise the effective global registry is
+  // nullptr.
+  CustomElementRegistry* EffectiveGlobalCustomElementRegistry() const;
 
  protected:
   void ClearXMLVersion() { xml_version_ = String(); }
@@ -2542,6 +2575,11 @@ class CORE_EXPORT Document : public ContainerNode,
                                      ExceptionState& exception_state);
 
   bool CanThrottleFrameRate();
+
+  // Called upon prerender activation.
+  // Note that not all prerendering pages block script execution; prerendering
+  // pages' triggers can determine whether or not to block scripts.
+  void UnblockScriptExecutionForPrerenderActivation();
 
   // Mutable because the token is lazily-generated on demand if no token is
   // explicitly set.
@@ -2899,6 +2937,10 @@ class CORE_EXPORT Document : public ContainerNode,
 
   // The ordered list of currently-open dialogs, in order they were opened.
   HeapLinkedHashSet<Member<HTMLDialogElement>> all_open_dialogs_;
+
+  // The ordered list of elements that currently have interest (via
+  // `interestfor`), in the order they were opened.
+  HeapLinkedHashSet<Member<Element>> elements_with_interest_;
 
   Member<DocumentPartRoot> document_part_root_;
 

@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_repeat_style_value.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
+#include "third_party/blink/renderer/core/css/css_value_pair.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_token.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_token_stream.h"
 #include "third_party/blink/renderer/core/css/parser/css_property_parser.h"
@@ -542,6 +543,9 @@ CSSValue* ConsumeFontFeatureSettings(CSSParserTokenStream&,
                                      const CSSParserContext&);
 CSSValue* ConsumeFontVariationSettings(CSSParserTokenStream&,
                                        const CSSParserContext&);
+CSSValue* ConsumeFontLanguageOverrideString(CSSParserTokenStream&);
+CSSValue* ConsumeFontLanguageOverride(CSSParserTokenStream&,
+                                      const CSSParserContext&);
 CSSIdentifierValue* ConsumeFontVariantCSS21(CSSParserTokenStream&);
 CSSIdentifierValue* ConsumeFontTechIdent(CSSParserTokenStream&);
 CSSIdentifierValue* ConsumeFontFormatIdent(CSSParserTokenStream&);
@@ -554,7 +558,7 @@ CSSValue* ConsumeGridTrackList(CSSParserTokenStream&,
                                const CSSParserContext&,
                                TrackListType,
                                bool is_masonry_shorthand = false);
-bool ParseGridTemplateAreasRow(const WTF::String& grid_row_names,
+bool ParseGridTemplateAreasRow(const String& grid_row_names,
                                NamedGridAreaMap&,
                                const wtf_size_t row_count,
                                wtf_size_t& column_count);
@@ -682,7 +686,17 @@ bool ShouldLowerCaseCounterStyleNameOnParse(const AtomicString&,
                                             const CSSParserContext&);
 
 // https://drafts.csswg.org/css-anchor-position-1/#typedef-position-area
-CSSValue* ConsumePositionArea(CSSParserTokenStream&);
+CSSValue* ConsumePositionArea(CSSParserTokenStream&,
+                              bool allow_any_keyword = false);
+
+// https://drafts.csswg.org/css-anchor-position-2/#anchored
+CSSValue* ConsumeAnchoredFallbackQueryValue(CSSParserTokenStream&,
+                                            const CSSParserContext&);
+
+// https://github.com/w3c/csswg-drafts/issues/12610
+inline CSSValue* ConsumePositionAreaQueryValue(CSSParserTokenStream& stream) {
+  return ConsumePositionArea(stream, /*allow_any_keyword=*/true);
+}
 
 // position-area can take one or two keywords. If the second is omitted, either
 // the first is repeated, or the second is span-all. This method returns true if
@@ -692,6 +706,11 @@ bool IsRepeatedPositionAreaValue(CSSValueID value_id);
 // https://drafts.csswg.org/css-animations-2/#animation-trigger
 CSSValue* ConsumeSingleTimelineTriggerName(CSSParserTokenStream& stream,
                                            const CSSParserContext& context);
+
+// https://drafts.csswg.org/css-animations-2/#animation-trigger
+CSSValue* ConsumeSingleAnimationTriggerAttachment(
+    CSSParserTokenStream& stream,
+    const CSSParserContext& context);
 
 // Template implementations are at the bottom of the file for readability.
 
@@ -794,6 +813,28 @@ CSSValue* ConsumePositionLonghand(CSSParserTokenStream& stream,
   }
   return ConsumeLengthOrPercent(stream, context,
                                 CSSPrimitiveValue::ValueRange::kAll);
+}
+
+template <CSSValueID start, CSSValueID end>
+CSSValue* ConsumeBackgroundPositionLonghand(CSSParserTokenStream& stream,
+                                            const CSSParserContext& context) {
+  if (!RuntimeEnabledFeatures::SideRelativeBackgroundPositionEnabled()) {
+    return ConsumePositionLonghand<start, end>(stream, context);
+  }
+
+  CSSIdentifierValue* origin =
+      css_parsing_utils::ConsumeIdent<start, end, CSSValueID::kCenter>(stream);
+  if (origin && origin->GetValueID() == CSSValueID::kCenter) {
+    return origin;
+  }
+  CSSValue* offset = css_parsing_utils::ConsumeLengthOrPercent(
+      stream, context, CSSPrimitiveValue::ValueRange::kAll);
+  if (origin && offset) {
+    // When both origin and offset are specified, convert to a pair.
+    return MakeGarbageCollected<CSSValuePair>(
+        origin, offset, CSSValuePair::kDropIdenticalValues);
+  }
+  return origin ? origin : offset;
 }
 
 inline bool AtIdent(const CSSParserToken& token, const char* ident) {

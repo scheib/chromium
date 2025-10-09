@@ -23,7 +23,7 @@
   return self;
 }
 
-- (void)configureCell:(TableViewCell*)tableCell
+- (void)configureCell:(LegacyTableViewCell*)tableCell
            withStyler:(ChromeTableViewStyler*)styler {
   [super configureCell:tableCell withStyler:styler];
 
@@ -36,7 +36,7 @@
 }
 
 - (NSString*)uniqueIdentifier {
-  return self.URL ? base::SysUTF8ToNSString(self.URL.gurl.host()) : @"";
+  return self.URL ? base::SysUTF8ToNSString(self.URL.gurl.GetHost()) : @"";
 }
 
 #pragma mark - Private

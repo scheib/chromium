@@ -8,12 +8,14 @@ mojom("mojom") {
   generate_java = true
   sources = [
     "core.mojom",
+    "core_test.mojom",
     "data_types.mojom",
   ]
 
   public_deps = [
     "//mojo/public/mojom/base",
     "//services/network/public/mojom:mojom_network_param",
+    "//url/mojom:url_mojom_gurl"
   ]
   cpp_typemaps = [
     {
@@ -25,6 +27,7 @@ mojom("mojom") {
         {
           mojom = "ip_protection.mojom.BlindSignedAuthToken"
           cpp = "::ip_protection::BlindSignedAuthToken"
+          move_only = true
         },
         {
           mojom = "ip_protection.mojom.GeoHint"
@@ -45,6 +48,10 @@ mojom("mojom") {
         {
           mojom = "ip_protection.mojom.TryGetProbabilisticRevealTokensOutcome"
           cpp = "::ip_protection::TryGetProbabilisticRevealTokensOutcome"
+        },
+        {
+          mojom = "ip_protection.mojom.IpProxyStatus"
+          cpp = "::ip_protection::IpProxyStatus"
         },
       ]
       traits_headers =

@@ -9,6 +9,7 @@
 
 #include <wrl/implements.h>
 
+#include <cstdint>
 #include <string>
 
 #include "base/gtest_prod_util.h"
@@ -86,7 +87,8 @@ class Elevator
           IElevatorChrome,
           IElevatorChromeBeta,
           IElevatorChromeDev,
-          IElevatorChromeCanary> {
+          IElevatorChromeCanary,
+          IFastRundown> {
  public:
   // Failure codes.
   static constexpr HRESULT kErrorCouldNotObtainCallingProcess =

@@ -49,13 +49,13 @@
 #import "ios/chrome/browser/shared/public/commands/tab_strip_last_tab_dragged_alert_command.h"
 #import "ios/chrome/browser/tab_switcher/tab_strip/coordinator/tab_strip_mediator_delegate.h"
 #import "ios/chrome/browser/tab_switcher/tab_strip/coordinator/tab_strip_mediator_utils.h"
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/swift.h"
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/tab_strip_tab_item.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_collection_drag_drop_metrics.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_grid/tab_groups/tab_group_sync_service_observer_bridge.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_group_action_type.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_group_item.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_snapshot_and_favicon_configurator.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/swift.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/tab_strip_tab_item.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_utils.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_params.h"
@@ -262,6 +262,10 @@ NSMutableArray<TabStripItemIdentifier*>* CreateItemIdentifiers(
 // The consumer for this object.
 @property(nonatomic, weak) id<TabStripConsumer> consumer;
 
+// The WebStateList that this mediator listens for any changes on the total
+// number of Webstates.
+@property(nonatomic, assign) WebStateList* webStateList;
+
 @end
 
 @implementation TabStripMediator {
@@ -442,6 +446,11 @@ NSMutableArray<TabStripItemIdentifier*>* CreateItemIdentifiers(
   }
 }
 
+- (void)setBrowser:(Browser*)browser {
+  _browser = browser;
+  self.webStateList = browser->GetWebStateList();
+}
+
 - (void)deleteSavedGroupWithID:(const base::Uuid&)savedID {
   _tabGroupSyncService->RemoveGroup(savedID);
 }
@@ -504,34 +513,7 @@ NSMutableArray<TabStripItemIdentifier*>* CreateItemIdentifiers(
 
 #pragma mark - Public properties
 
-- (void)setWebStateList:(WebStateList*)webStateList {
-  if (_webStateList) {
-    [self removeWebStateObservations];
-    _webStateListFaviconObserver.reset();
-    _webStateList->RemoveObserver(_webStateListObserver.get());
-  }
 
-  _webStateList = webStateList;
-
-  if (_webStateList) {
-    DCHECK_GE(_webStateList->count(), 0);
-    _webStateListObserver = std::make_unique<WebStateListObserverBridge>(self);
-    _webStateList->AddObserver(_webStateListObserver.get());
-
-    _webStateListFaviconObserver =
-        std::make_unique<WebStateListFaviconDriverObserver>(_webStateList,
-                                                            self);
-
-    _webStateObserver = std::make_unique<web::WebStateObserverBridge>(self);
-    [self addWebStateObservations];
-
-    // `fetchMessages` depends on the web state list to obtain a group that is
-    // corresponded to a message.
-    [self fetchMessages];
-  }
-
-  [self populateConsumerItems];
-}
 
 #pragma mark - WebStateListObserving
 
@@ -1441,7 +1423,7 @@ NSMutableArray<TabStripItemIdentifier*>* CreateItemIdentifiers(
   }
 
   const TabGroup* group = itemIdentifier.tabGroupItem.tabGroup;
-  tab_groups::CollaborationId collaborationID =
+  syncer::CollaborationId collaborationID =
       tab_groups::utils::GetTabGroupCollabID(group, _tabGroupSyncService);
   if (collaborationID->empty()) {
     return nil;
@@ -1905,7 +1887,7 @@ NSMutableArray<TabStripItemIdentifier*>* CreateItemIdentifiers(
                  sharedTabGroup:(const TabGroup*)group {
   CHECK(_collaborationService);
 
-  const tab_groups::CollaborationId collabId =
+  const syncer::CollaborationId collabId =
       tab_groups::utils::GetTabGroupCollabID(group, _tabGroupSyncService);
   CHECK(!collabId->empty());
   const data_sharing::GroupId groupId = data_sharing::GroupId(collabId.value());
@@ -1940,6 +1922,34 @@ NSMutableArray<TabStripItemIdentifier*>* CreateItemIdentifiers(
   // TODO(crbug.com/393073658):
   // - Unblock the screen.
   // - Show an error if needed.
+}
+
+- (void)setWebStateList:(WebStateList*)webStateList {
+  if (_webStateList) {
+    [self removeWebStateObservations];
+    _webStateListFaviconObserver.reset();
+    _webStateList->RemoveObserver(_webStateListObserver.get());
+  }
+
+  _webStateList = webStateList;
+
+  if (_webStateList) {
+    DCHECK_GE(_webStateList->count(), 0);
+    _webStateListObserver = std::make_unique<WebStateListObserverBridge>(self);
+    _webStateList->AddObserver(_webStateListObserver.get());
+
+    _webStateListFaviconObserver =
+        std::make_unique<WebStateListFaviconDriverObserver>(_browser, self);
+
+    _webStateObserver = std::make_unique<web::WebStateObserverBridge>(self);
+    [self addWebStateObservations];
+
+    // `fetchMessages` depends on the web state list to obtain a group that is
+    // corresponded to a message.
+    [self fetchMessages];
+  }
+
+  [self populateConsumerItems];
 }
 
 @end

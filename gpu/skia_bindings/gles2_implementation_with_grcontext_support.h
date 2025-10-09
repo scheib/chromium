@@ -19,9 +19,7 @@ class GLES2ImplementationWithGrContextSupport
       gpu::gles2::GLES2CmdHelper* helper,
       scoped_refptr<gpu::gles2::ShareGroup> share_group,
       gpu::TransferBufferInterface* transfer_buffer,
-      bool bind_generates_resource,
       bool lose_context_when_out_of_memory,
-      bool support_client_side_arrays,
       gpu::GpuControl* gpu_control);
 
   ~GLES2ImplementationWithGrContextSupport() override;
@@ -64,8 +62,6 @@ class GLES2ImplementationWithGrContextSupport
   // internally invoke texture deletion, so they too may affect the texture
   // binding.
   void BindTexture(GLenum target, GLuint texture) override;
-  void UnlockDiscardableTextureCHROMIUM(GLuint texture) override;
-  bool LockDiscardableTextureCHROMIUM(GLuint texture) override;
   void DeleteTextures(GLsizei n, const GLuint* textures) override;
   void ActiveTexture(GLenum texture) override;
 

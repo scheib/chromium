@@ -15,6 +15,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewStub;
 import android.view.Window;
+import android.widget.FrameLayout;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.VisibleForTesting;
@@ -28,7 +29,6 @@ import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeStateProvider;
 import org.chromium.components.browser_ui.widget.ContextMenuDialog;
 import org.chromium.components.embedder_support.contextmenu.ChipDelegate;
 import org.chromium.components.embedder_support.contextmenu.ChipRenderParams;
@@ -41,6 +41,10 @@ import org.chromium.content_public.browser.Visibility;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeStateProvider;
+import org.chromium.ui.listmenu.ListMenuFlyoutController;
+import org.chromium.ui.listmenu.ListMenuFlyoutController.FlyoutHandler;
+import org.chromium.ui.listmenu.ListMenuFlyoutController.FlyoutPopupEntry;
 import org.chromium.ui.listmenu.ListMenuUtils;
 import org.chromium.ui.listmenu.ListMenuUtils.AccessibilityListObserver;
 import org.chromium.ui.modelutil.LayoutViewBuilder;
@@ -51,6 +55,7 @@ import org.chromium.ui.widget.AnchoredPopupWindow;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -59,7 +64,7 @@ import java.util.Set;
  * and the header component.
  */
 @NullMarked
-public class ContextMenuCoordinator implements ContextMenuUi {
+public class ContextMenuCoordinator implements ContextMenuUi, FlyoutHandler<ContextMenuDialog> {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({ContextMenuItemType.HEADER, ContextMenuItemType.CONTEXT_MENU_ITEM_WITH_ICON_BUTTON})
@@ -70,17 +75,24 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         int CONTEXT_MENU_ITEM_WITH_ICON_BUTTON = 7;
     }
 
+    private Activity mActivity;
+    private WindowAndroid mWindowAndroid;
     private WebContents mWebContents;
     private WebContentsObserver mWebContentsObserver;
     private @Nullable ContextMenuChipController mChipController;
     private ContextMenuHeaderCoordinator mHeaderCoordinator;
 
-    private ContextMenuListView mListView;
+    private final List<ContextMenuListView> mListViews;
     private final float mTopContentOffsetPx;
-    private ContextMenuDialog mDialog;
+
+    // A list of dialogs, paired with the parent `ListItem` if the dialog is a flyout.
+    private final List<FlyoutPopupEntry<ContextMenuDialog>> mDialogs;
+
     private Runnable mOnMenuClosed;
     private final ContextMenuNativeDelegate mNativeDelegate;
     private final boolean mIsCustomItemPresent;
+    private boolean mUsePopupWindow;
+    private boolean mRemovingPopups;
 
     /**
      * Constructor that also sets the content offset.
@@ -106,6 +118,8 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         mTopContentOffsetPx = topContentOffsetPx;
         mNativeDelegate = nativeDelegate;
         mIsCustomItemPresent = isCustomItemPresent;
+        mDialogs = new ArrayList<>();
+        mListViews = new ArrayList<>();
     }
 
     @Override
@@ -130,7 +144,7 @@ public class ContextMenuCoordinator implements ContextMenuUi {
 
     @Override
     public void dismiss() {
-        dismissDialog();
+        dismissDialogs();
     }
 
     // Calculate true top content offset to be used to compute the AnchorRect used by
@@ -197,30 +211,31 @@ public class ContextMenuCoordinator implements ContextMenuUi {
             final Runnable onMenuShown,
             final Runnable onMenuClosed,
             @Nullable ChipDelegate chipDelegate) {
+        mWindowAndroid = window;
         mOnMenuClosed = onMenuClosed;
+
         Activity activity = window.getActivity().get();
         assert activity != null;
+        mActivity = activity;
 
-        final boolean isDragDropEnabled = ContextMenuUtils.isDragDropEnabled(activity);
-        final boolean usePopupWindow =
-                isDragDropEnabled
-                        || ContextMenuUtils.isMouseOrHighlightPopup(params);
+        final boolean isDragDropEnabled = ContextMenuUtils.isDragDropEnabled(mActivity);
+        mUsePopupWindow = isDragDropEnabled || ContextMenuUtils.isMouseOrHighlightPopup(params);
 
         final View layout =
-                LayoutInflater.from(activity)
+                LayoutInflater.from(mActivity)
                         .inflate(R.layout.context_menu_fullscreen_container, null);
 
         // Calculate the Rect used to display the context menu dialog.
         Rect contextMenuRect =
                 ContextMenuUtils.getContextMenuAnchorRect(
-                        activity,
+                        mActivity,
                         assertNonNull(window.getWindow()),
                         webContents,
                         params,
                         topContentOffset(mTopContentOffsetPx, window),
-                        usePopupWindow,
+                        mUsePopupWindow,
                         layout);
-        boolean shouldRemoveScrim = ContextMenuUtils.isPopupSupported(activity);
+        boolean shouldRemoveScrim = ContextMenuUtils.isPopupSupported(mActivity);
 
         int dialogTopMarginPx = ContextMenuDialog.NO_CUSTOM_MARGIN;
         int dialogBottomMarginPx = ContextMenuDialog.NO_CUSTOM_MARGIN;
@@ -229,14 +244,15 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         if (params.isImage()
                 && chipDelegate != null
                 && chipDelegate.isChipSupported()
-                && !usePopupWindow) {
+                && !mUsePopupWindow) {
             View chipAnchorView = layout.findViewById(R.id.context_menu_chip_anchor_point);
             mChipController =
-                    new ContextMenuChipController(activity, chipAnchorView, () -> dismiss());
+                    new ContextMenuChipController(mActivity, chipAnchorView, () -> dismiss());
             chipDelegate.getChipRenderParams(
                     (chipRenderParams) -> {
+                        assert mDialogs.size() > 0;
                         if (chipDelegate.isValidChipRenderParams(chipRenderParams)
-                                && mDialog.isShowing()) {
+                                && mDialogs.get(0).popupWindow.isShowing()) {
                             assert chipRenderParams != null;
                             assumeNonNull(mChipController).showChip(chipRenderParams);
                         }
@@ -247,22 +263,26 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         }
 
         final View menu =
-                usePopupWindow
-                        ? LayoutInflater.from(activity).inflate(R.layout.context_menu, null)
+                mUsePopupWindow
+                        ? LayoutInflater.from(mActivity).inflate(R.layout.context_menu, null)
                         : ((ViewStub) layout.findViewById(R.id.context_menu_stub)).inflate();
         Integer popupMargin =
                 params.getOpenedFromHighlight()
-                        ? activity.getResources()
+                        ? mActivity
+                                .getResources()
                                 .getDimensionPixelSize(R.dimen.context_menu_small_lateral_margin)
                         : null;
         Integer desiredPopupContentWidth = null;
         if (isDragDropEnabled) {
             desiredPopupContentWidth =
-                    activity.getResources()
+                    mActivity
+                            .getResources()
                             .getDimensionPixelSize(R.dimen.context_menu_popup_max_width);
         } else if (params.getOpenedFromHighlight()) {
             desiredPopupContentWidth =
-                    activity.getResources().getDimensionPixelSize(R.dimen.context_menu_small_width);
+                    mActivity
+                            .getResources()
+                            .getDimensionPixelSize(R.dimen.context_menu_small_width);
         }
 
         // When drag and drop is enabled, context menu will be dismissed by web content when drag
@@ -273,35 +293,43 @@ public class ContextMenuCoordinator implements ContextMenuUi {
                         ? assumeNonNull(webContents.getViewAndroidDelegate()).getContainerView()
                         : null;
 
-        mDialog =
+        ContextMenuDialog dialog =
                 createContextMenuDialog(
-                        activity,
+                        mActivity,
                         layout,
                         menu,
-                        usePopupWindow,
+                        mUsePopupWindow,
+                        /* isFlyout= */ false,
                         shouldRemoveScrim,
                         dialogTopMarginPx,
                         dialogBottomMarginPx,
                         popupMargin,
                         desiredPopupContentWidth,
                         dragDispatchingTargetView,
-                        contextMenuRect);
-        mDialog.setOnShowListener(dialogInterface -> onMenuShown.run());
-        mDialog.setOnDismissListener(
+                        contextMenuRect,
+                        /* onDismissCallback= */ null);
+        dialog.setOnShowListener(dialogInterface -> onMenuShown.run());
+        dialog.setOnDismissListener(
                 (dialogInterface) -> {
                     mOnMenuClosed.run();
+                    dismissDialogs();
                 });
 
         mWebContents = webContents;
         mHeaderCoordinator =
                 new ContextMenuHeaderCoordinator(
-                        activity,
+                        mActivity,
                         params,
                         Profile.fromWebContents(mWebContents),
                         mNativeDelegate,
                         mIsCustomItemPresent);
         ContextMenuMediator mediator =
-                new ContextMenuMediator(activity, mHeaderCoordinator, onItemClicked, this::dismiss);
+                new ContextMenuMediator(
+                        mActivity,
+                        mHeaderCoordinator,
+                        onItemClicked,
+                        this::dismiss,
+                        mUsePopupWindow);
 
         // The Integer here specifies the {@link ListItemType}.
         ModelList listItems =
@@ -310,38 +338,135 @@ public class ContextMenuCoordinator implements ContextMenuUi {
                         // Resource header is shown for link-type resources so that users can
                         // preview the page before initiating any actions. This is not needed for
                         // actions performed on the current page.
-                        /* hasHeader= */ !params.getOpenedFromHighlight() && !params.isPage());
+                        /* hasHeader= */ !params.getOpenedFromHighlight() && !params.isPage(),
+                        new ListMenuFlyoutController(this));
 
         ModelListAdapter adapter = createAdapter(listItems);
 
-        mListView = menu.findViewById(R.id.context_menu_list_view);
-        mListView.setAdapter(adapter);
+        ContextMenuListView listView = menu.findViewById(R.id.context_menu_list_view);
+        listView.setAdapter(adapter);
 
-        mListView.setItemsCanFocus(true);
+        listView.setItemsCanFocus(true);
         // Set the fading edge for context menu. This is guarded by drag and drop feature flag, but
         // ideally this could be enabled for all forms of context menu.
         if (isDragDropEnabled) {
-            mListView.setVerticalFadingEdgeEnabled(true);
-            mListView.setFadingEdgeLength(
-                    activity.getResources()
+            listView.setVerticalFadingEdgeEnabled(true);
+            listView.setFadingEdgeLength(
+                    mActivity
+                            .getResources()
                             .getDimensionPixelSize(R.dimen.context_menu_fading_edge_size));
         }
+        mListViews.add(listView);
+
         listItems.addObserver(
-                new AccessibilityListObserver(mListView, /* headerModelList= */ null, listItems));
+                new AccessibilityListObserver(
+                        listView,
+                        /* headerView= */ null,
+                        listView,
+                        /* headerModelList= */ null,
+                        listItems));
         mWebContentsObserver =
                 new WebContentsObserver(mWebContents) {
                     @Override
                     public void navigationEntryCommitted(LoadCommittedDetails details) {
-                        dismissDialog();
+                        dismissDialogs();
                     }
 
                     @Override
                     public void onVisibilityChanged(@Visibility int visibility) {
-                        if (visibility != Visibility.VISIBLE) dismissDialog();
+                        if (visibility != Visibility.VISIBLE) dismissDialogs();
                     }
                 };
 
-        mDialog.show();
+        dialog.show();
+
+        assert mDialogs.size() == 0;
+        mDialogs.add(new FlyoutPopupEntry(null, dialog));
+    }
+
+    @Override
+    public List<FlyoutPopupEntry<ContextMenuDialog>> getFlyoutWindows() {
+        return mDialogs;
+    }
+
+    @Override
+    public void removeFlyoutWindows(int clearFromIndex) {
+        if (clearFromIndex >= mDialogs.size()) {
+            return;
+        }
+
+        // We want to avoid the dismiss listener calling this method when the dismissal
+        // originates from this method, to avoid loops.
+        mRemovingPopups = true;
+
+        for (int i = clearFromIndex; i < mDialogs.size(); i++) {
+            mDialogs.get(i).popupWindow.dismiss();
+        }
+
+        mRemovingPopups = false;
+
+        mDialogs.subList(clearFromIndex, mDialogs.size()).clear();
+        mListViews.subList(clearFromIndex, mListViews.size()).clear();
+    }
+
+    @Override
+    public void addFlyoutWindow(ListItem item, View view, int levelOfHoveredItem) {
+        assert view != null;
+        assert mUsePopupWindow;
+
+        final View menu = LayoutInflater.from(mActivity).inflate(R.layout.context_menu, null);
+        ModelList listItems = ListMenuUtils.getModelListSubtree(item);
+        ModelListAdapter adapter = createAdapter(listItems);
+
+        ContextMenuListView listView = menu.findViewById(R.id.context_menu_list_view);
+        listView.setAdapter(adapter);
+        listView.setItemsCanFocus(true);
+        listView.setIsFlyout(true);
+        mListViews.add(listView);
+
+        ContextMenuDialog dialog =
+                createContextMenuDialog(
+                        mActivity,
+                        new FrameLayout(mActivity),
+                        menu,
+                        mUsePopupWindow,
+                        /* isFlyout= */ true,
+                        /* shouldRemoveScrim= */ true,
+                        ContextMenuDialog.NO_CUSTOM_MARGIN,
+                        ContextMenuDialog.NO_CUSTOM_MARGIN,
+                        /* popupMargin= */ null,
+                        /* desiredPopupContentWidth= */ null,
+                        /* dragDispatchingTargetView= */ null,
+                        calculateFlyoutAnchorRect(mActivity, mWindowAndroid, view),
+                        () -> {
+                            if (!mRemovingPopups) {
+                                removeFlyoutWindows(levelOfHoveredItem + 1);
+                            }
+                        });
+
+        dialog.show();
+        mDialogs.add(new FlyoutPopupEntry(item, dialog));
+    }
+
+    private static Rect calculateFlyoutAnchorRect(
+            Activity activity, WindowAndroid windowAndroid, View itemView) {
+        int[] result = new int[2];
+        itemView.getLocationOnScreen(result);
+
+        int[] rootCoordinates = new int[2];
+        activity.getWindow().getDecorView().getLocationOnScreen(rootCoordinates);
+
+        int verticalOffset = (int) topContentOffset(0, windowAndroid);
+        int horizontalOverlap =
+                activity.getResources()
+                        .getDimensionPixelSize(
+                                R.dimen.context_menu_flyout_popup_horizontal_overlap);
+
+        return new Rect(
+                result[0] - rootCoordinates[0] + horizontalOverlap,
+                result[1] - rootCoordinates[1] + verticalOffset,
+                result[0] - rootCoordinates[0] + itemView.getWidth() - horizontalOverlap,
+                result[1] - rootCoordinates[1] + verticalOffset);
     }
 
     /**
@@ -352,6 +477,7 @@ public class ContextMenuCoordinator implements ContextMenuUi {
      * @param layout The inflated context menu layout that will house the context menu.
      * @param menuView The inflated view that contains the list view.
      * @param isPopup Whether the context menu is being shown in a {@link AnchoredPopupWindow}.
+     * @param isPopup Whether the window is a flyout popup.
      * @param topMarginPx An explicit top margin for the dialog, or -1 to use default defined in
      *     XML.
      * @param bottomMarginPx An explicit bottom margin for the dialog, or -1 to use default defined
@@ -371,13 +497,15 @@ public class ContextMenuCoordinator implements ContextMenuUi {
             View layout,
             View menuView,
             boolean isPopup,
+            boolean isFlyout,
             boolean shouldRemoveScrim,
             int topMarginPx,
             int bottomMarginPx,
             @Nullable Integer popupMargin,
             @Nullable Integer desiredPopupContentWidth,
             @Nullable View dragDispatchingTargetView,
-            Rect rect) {
+            Rect rect,
+            @Nullable Runnable onDismissCallback) {
         // TODO(sinansahin): Refactor ContextMenuDialog as well.
         final ContextMenuDialog dialog =
                 new ContextMenuDialog(
@@ -388,30 +516,34 @@ public class ContextMenuCoordinator implements ContextMenuUi {
                         layout,
                         menuView,
                         isPopup,
+                        isFlyout,
                         shouldRemoveScrim,
                         popupMargin,
                         desiredPopupContentWidth,
                         dragDispatchingTargetView,
                         rect,
-                        EdgeToEdgeUtils.isEdgeToEdgeEverywhereEnabled());
+                        EdgeToEdgeUtils.isEdgeToEdgeEverywhereEnabled(),
+                        onDismissCallback);
         dialog.setContentView(layout);
 
         return dialog;
     }
 
-    private void dismissDialog() {
+    private void dismissDialogs() {
         if (mWebContentsObserver != null) {
             mWebContentsObserver.observe(null);
         }
         if (mChipController != null) {
             mChipController.dismissChipIfShowing();
         }
-        mDialog.dismiss();
+        removeFlyoutWindows(0);
     }
 
     Callback<ChipRenderParams> getChipRenderParamsCallbackForTesting(ChipDelegate chipDelegate) {
         return (chipRenderParams) -> {
-            if (chipDelegate.isValidChipRenderParams(chipRenderParams) && mDialog.isShowing()) {
+            assert mDialogs.size() > 0;
+            if (chipDelegate.isValidChipRenderParams(chipRenderParams)
+                    && mDialogs.get(0).popupWindow.isShowing()) {
                 assumeNonNull(mChipController).showChip(chipRenderParams);
             }
         };
@@ -473,22 +605,36 @@ public class ContextMenuCoordinator implements ContextMenuUi {
 
     @VisibleForTesting
     ListItem getItem(int index) {
-        return (ListItem) mListView.getAdapter().getItem(index);
+        return getItem(0, index);
+    }
+
+    @VisibleForTesting
+    ListItem getItem(int popupLevel, int index) {
+        assert popupLevel < mListViews.size();
+        return (ListItem) mListViews.get(popupLevel).getAdapter().getItem(index);
     }
 
     @VisibleForTesting
     public int getCount() {
-        return mListView.getAdapter().getCount();
+        return getCount(0);
+    }
+
+    @VisibleForTesting
+    public int getCount(int popupLevel) {
+        assert popupLevel < mListViews.size();
+        return mListViews.get(popupLevel).getAdapter().getCount();
     }
 
     @VisibleForTesting
     public @Nullable ListItem findItem(int id) {
-        for (int i = 0; i < getCount(); i++) {
-            final ListItem item = getItem(i);
-            // If the item is a title/divider, its model does not have MENU_ID as key.
-            if (item.model.getAllSetProperties().contains(MENU_ITEM_ID)
-                    && item.model.get(MENU_ITEM_ID) == id) {
-                return item;
+        for (int i = 0; i < mListViews.size(); i++) {
+            for (int j = 0; j < getCount(i); j++) {
+                final ListItem item = getItem(i, j);
+                // If the item is a title/divider, its model does not have MENU_ID as key.
+                if (item.model.getAllSetProperties().contains(MENU_ITEM_ID)
+                        && item.model.get(MENU_ITEM_ID) == id) {
+                    return item;
+                }
             }
         }
         return null;
@@ -511,16 +657,16 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         return adapter;
     }
 
-    public ContextMenuDialog getDialogForTest() {
-        return mDialog;
+    public List<FlyoutPopupEntry<ContextMenuDialog>> getDialogsForTest() {
+        return mDialogs;
     }
 
     public ContextMenuHeaderCoordinator getHeaderCoordinatorForTest() {
         return mHeaderCoordinator;
     }
 
-    public ContextMenuListView getListViewForTest() {
-        return mListView;
+    public List<ContextMenuListView> getListViewsForTest() {
+        return mListViews;
     }
 
     public WebContentsObserver getWebContentsObserverForTesting() {

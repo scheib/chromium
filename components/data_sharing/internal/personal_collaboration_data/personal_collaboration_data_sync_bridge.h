@@ -32,8 +32,8 @@ class PersonalCollaborationDataSyncBridge : public syncer::DataTypeSyncBridge {
     Observer& operator=(const Observer&) = delete;
     ~Observer() override = default;
 
-    // Called when the bridge(database) has been loaded. Will be called
-    // immediately if the bridge has already initialized.
+    // Called when the bridge(database) has been loaded and is syncing. Will be
+    // called immediately if the bridge has already initialized.
     virtual void OnInitialized() {}
 
     // Called when specifics have changed.
@@ -86,12 +86,14 @@ class PersonalCollaborationDataSyncBridge : public syncer::DataTypeSyncBridge {
       const std::string& storage_key,
       const syncer::EntityData& remote_data) const override;
 
-  // Returns whether the sync bridge has initialized by reading data
-  // from the on-disk store.
+  // Returns whether the sync bridge has initialized and is syncing.
   bool IsInitialized() const;
 
   std::optional<sync_pb::SharedTabGroupAccountDataSpecifics>
   GetSpecificsForStorageKey(const std::string& storage_key) const;
+
+  std::optional<sync_pb::SharedTabGroupAccountDataSpecifics>
+  GetTrimmedRemoteSpecifics(const std::string& storage_key) const;
 
   const std::unordered_map<std::string,
                            sync_pb::SharedTabGroupAccountDataSpecifics>&
@@ -101,6 +103,10 @@ class PersonalCollaborationDataSyncBridge : public syncer::DataTypeSyncBridge {
   void CreateOrUpdateSpecifics(
       const std::string& storage_key,
       const sync_pb::SharedTabGroupAccountDataSpecifics& specifics);
+
+  // Delete an entity from sync. Also deletes from local storage and in-memory
+  // cache.
+  void RemoveSpecifics(const std::string& storage_key);
 
  private:
   // Loads the data already stored in the DataTypeStore.
@@ -121,9 +127,7 @@ class PersonalCollaborationDataSyncBridge : public syncer::DataTypeSyncBridge {
   void WriteEntityToSync(const std::string& storage_key,
                          std::unique_ptr<syncer::EntityData> entity);
 
-  // Delete an entity from sync. Also deletes from local storage and in-memory
-  // cache.
-  void RemoveEntitySpecifics(const std::string& storage_key);
+  void MaybeNotifyObserversInitialized();
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -132,6 +136,9 @@ class PersonalCollaborationDataSyncBridge : public syncer::DataTypeSyncBridge {
 
   // Set to true once data is loaded from disk into the in-memory cache.
   bool is_initialized_ = false;
+
+  // Set to true once observers have been notified of initialization.
+  bool notified_observers_initialized_ = false;
 
   // In-memory data cache of specifics, keyed by its storage key.
   std::unordered_map<std::string, sync_pb::SharedTabGroupAccountDataSpecifics>

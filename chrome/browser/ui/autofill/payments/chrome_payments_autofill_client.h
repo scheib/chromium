@@ -9,6 +9,7 @@
 #include <optional>
 #include <vector>
 
+#include "base/functional/callback.h"
 #include "base/memory/raw_ref.h"
 #include "components/autofill/core/browser/data_model/payments/credit_card.h"
 #include "components/autofill/core/browser/payments/autofill_error_dialog_context.h"
@@ -46,8 +47,6 @@ class AutofillOfferData;
 class AutofillOfferManager;
 class AutofillSaveCardBottomSheetBridge;
 class AutofillSaveIbanBottomSheetBridge;
-class BnplTosControllerImpl;
-struct BnplTosModel;
 class CardUnmaskAuthenticationSelectionDialogControllerImpl;
 struct CardUnmaskChallengeOption;
 class CardUnmaskOtpInputDialogControllerImpl;
@@ -73,10 +72,10 @@ namespace payments {
 
 struct BnplIssuerContext;
 class BnplStrategy;
+class BnplUiDelegate;
 class MandatoryReauthManager;
 class MultipleRequestPaymentsNetworkInterface;
 class PaymentsWindowManager;
-class SelectBnplIssuerDialogControllerImpl;
 
 // Chrome implementation of PaymentsAutofillClient. Used for Chrome Desktop
 // and Clank. Owned by the ChromeAutofillClient. Created lazily in the
@@ -103,13 +102,7 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
   AutofillSaveCardBottomSheetBridge*
   GetOrCreateAutofillSaveCardBottomSheetBridge() override;
   AutofillSaveIbanBottomSheetBridge*
-  GetOrCreateAutofillSaveIbanBottomSheetBridge();
-  void ConfirmAccountNameFixFlow(
-      base::OnceCallback<void(const std::u16string&)> callback) override;
-  void ConfirmExpirationDateFixFlow(
-      const CreditCard& card,
-      base::OnceCallback<void(const std::u16string&, const std::u16string&)>
-          callback) override;
+  GetOrCreateAutofillSaveIbanBottomSheetBridge() override;
 #else   // !BUILDFLAG(IS_ANDROID)
   void ShowWebauthnOfferDialog(
       WebauthnDialogCallback offer_dialog_callback) override;
@@ -119,8 +112,17 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
   bool CloseWebauthnDialog() override;
   void HideVirtualCardEnrollBubbleAndIconIfVisible() override;
 #endif  // BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
+  void ConfirmAccountNameFixFlow(
+      base::OnceCallback<void(const std::u16string&)> callback) override;
+  void ConfirmExpirationDateFixFlow(
+      const CreditCard& card,
+      base::OnceCallback<void(const std::u16string&, const std::u16string&)>
+          callback) override;
+#endif
   bool HasCreditCardScanFeature() const override;
   void ScanCreditCard(CreditCardScanCallback callback) override;
+  bool LocalCardSaveIsSupported() override;
   void ShowSaveCreditCardLocally(const CreditCard& card,
                                  SaveCreditCardOptions options,
                                  LocalSaveCardPromptCallback callback) override;
@@ -159,6 +161,12 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
       const CardUnmaskChallengeOption& challenge_option,
       base::WeakPtr<OtpUnmaskDelegate> delegate) override;
   void OnUnmaskOtpVerificationResult(OtpUnmaskResult unmask_result) override;
+  void ShowUnmaskAuthenticatorSelectionDialog(
+      const std::vector<CardUnmaskChallengeOption>& challenge_options,
+      base::OnceCallback<void(const std::string&)>
+          confirm_unmask_challenge_option_callback,
+      base::OnceClosure cancel_unmasking_closure) override;
+  void DismissUnmaskAuthenticatorSelectionDialog(bool server_success) override;
   PaymentsNetworkInterface* GetPaymentsNetworkInterface() override;
   MultipleRequestPaymentsNetworkInterface*
   GetMultipleRequestPaymentsNetworkInterface() override;
@@ -168,35 +176,27 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
       const CreditCard& card,
       const CardUnmaskPromptOptions& card_unmask_prompt_options,
       base::WeakPtr<CardUnmaskDelegate> delegate) override;
-  void ShowUnmaskAuthenticatorSelectionDialog(
-      const std::vector<CardUnmaskChallengeOption>& challenge_options,
-      base::OnceCallback<void(const std::string&)>
-          confirm_unmask_challenge_option_callback,
-      base::OnceClosure cancel_unmasking_closure) override;
-  void DismissUnmaskAuthenticatorSelectionDialog(bool server_success) override;
   void OnUnmaskVerificationResult(PaymentsRpcResult result) override;
-  void ShowBnplTos(BnplTosModel bnpl_tos_model,
-                   base::OnceClosure accept_callback,
-                   base::OnceClosure cancel_callback) override;
-  void CloseBnplTos() override;
   VirtualCardEnrollmentManager* GetVirtualCardEnrollmentManager() override;
   CreditCardCvcAuthenticator& GetCvcAuthenticator() override;
   CreditCardOtpAuthenticator* GetOtpAuthenticator() override;
   CreditCardRiskBasedAuthenticator* GetRiskBasedAuthenticator() override;
+  bool IsRiskBasedAuthEffectivelyAvailable() const override;
+  bool IsMandatoryReauthEnabled() override;
   void ShowMandatoryReauthOptInPrompt(
       base::OnceClosure accept_mandatory_reauth_callback,
       base::OnceClosure cancel_mandatory_reauth_callback,
       base::RepeatingClosure close_mandatory_reauth_callback) override;
+  void ShowMandatoryReauthOptInConfirmation() override;
   IbanManager* GetIbanManager() override;
   IbanAccessManager* GetIbanAccessManager() override;
-  void ShowMandatoryReauthOptInConfirmation() override;
+  MerchantPromoCodeManager* GetMerchantPromoCodeManager() override;
+  void OpenPromoCodeOfferDetailsURL(const GURL& url) override;
+  AutofillOfferManager* GetAutofillOfferManager() override;
   void UpdateOfferNotification(
       const AutofillOfferData& offer,
       const OfferNotificationOptions& options) override;
   void DismissOfferNotification() override;
-  void OpenPromoCodeOfferDetailsURL(const GURL& url) override;
-  MerchantPromoCodeManager* GetMerchantPromoCodeManager() override;
-  AutofillOfferManager* GetAutofillOfferManager() override;
   bool ShowTouchToFillCreditCard(
       base::WeakPtr<TouchToFillDelegate> delegate,
       base::span<const Suggestion> suggestions) override;
@@ -206,12 +206,22 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
   bool ShowTouchToFillLoyaltyCard(
       base::WeakPtr<TouchToFillDelegate> delegate,
       std::vector<autofill::LoyaltyCard> loyalty_cards_to_suggest) override;
+  bool UpdateTouchToFillBnplPaymentMethod(
+      std::optional<uint64_t> extracted_amount,
+      bool is_amount_supported_by_any_issuer) override;
+  bool ShowTouchToFillProgress(base::OnceClosure cancel_callback) override;
+  bool ShowTouchToFillBnplIssuers(
+      base::WeakPtr<TouchToFillDelegate> delegate,
+      base::span<const BnplIssuerContext> bnpl_issuer_contexts) override;
+  bool ShowTouchToFillError(base::WeakPtr<TouchToFillDelegate> delegate,
+                            const AutofillErrorDialogContext& context) override;
   void HideTouchToFillPaymentMethod() override;
+  PaymentsDataManager& GetPaymentsDataManager() final;
   std::unique_ptr<webauthn::InternalAuthenticator>
   CreateCreditCardInternalAuthenticator(AutofillDriver* driver) override;
   payments::MandatoryReauthManager* GetOrCreatePaymentsMandatoryReauthManager()
       override;
-  PaymentsDataManager& GetPaymentsDataManager() final;
+  payments::SaveAndFillManager* GetSaveAndFillManager() override;
   void ShowCreditCardLocalSaveAndFillDialog(
       CardSaveAndFillDialogCallback callback) override;
   void ShowCreditCardUploadSaveAndFillDialog(
@@ -219,16 +229,11 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
       CardSaveAndFillDialogCallback callback) override;
   void ShowCreditCardSaveAndFillPendingDialog() override;
   void HideCreditCardSaveAndFillDialog() override;
-  payments::SaveAndFillManager* GetSaveAndFillManager() override;
-  void ShowSelectBnplIssuerDialog(
-      std::vector<BnplIssuerContext> bnpl_issuer_context,
-      std::string app_locale,
-      base::OnceCallback<void(BnplIssuer)> selected_issuer_callback,
-      base::OnceClosure cancel_callback) override;
-  void DismissSelectBnplIssuerDialog() override;
   bool IsTabModalPopupDeprecated() const override;
-  bool IsRiskBasedAuthEffectivelyAvailable() const override;
   BnplStrategy* GetBnplStrategy() override;
+  BnplUiDelegate* GetBnplUiDelegate() override;
+
+  // Begin ChromePaymentsAutofillClient-specific section.
 
 #if BUILDFLAG(IS_ANDROID)
   // The AutofillMessageController is used to show a message notification
@@ -239,18 +244,13 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
 #endif
 
   AutofillProgressDialogControllerImpl*
-  AutofillProgressDialogControllerForTesting() {
-    return autofill_progress_dialog_controller_.get();
-  }
+  AutofillProgressDialogControllerForTesting();
 
   std::unique_ptr<CardUnmaskPromptControllerImpl>
-  ExtractCardUnmaskControllerForTesting() {
-    return std::move(unmask_controller_);
-  }
+  ExtractCardUnmaskControllerForTesting();
+
   void SetCardUnmaskControllerForTesting(
-      std::unique_ptr<CardUnmaskPromptControllerImpl> test_controller) {
-    unmask_controller_ = std::move(test_controller);
-  }
+      std::unique_ptr<CardUnmaskPromptControllerImpl> test_controller);
 
 #if BUILDFLAG(IS_ANDROID)
   void SetAutofillSaveCardBottomSheetBridgeForTesting(
@@ -267,8 +267,8 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
   void SetTouchToFillPaymentMethodControllerForTesting(
       std::unique_ptr<TouchToFillPaymentMethodController>
           touch_to_fill_payment_method_controller);
-
 #endif
+
   void SetRiskDataForTesting(const std::string& risk_data);
 
   void SetCachedRiskDataLoadedCallbackForTesting(
@@ -344,8 +344,6 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
   std::unique_ptr<CardUnmaskAuthenticationSelectionDialogControllerImpl>
       card_unmask_authentication_selection_controller_;
 
-  std::unique_ptr<BnplTosControllerImpl> bnpl_tos_controller_;
-
   std::unique_ptr<IbanAccessManager> iban_access_manager_;
 
   std::unique_ptr<payments::MandatoryReauthManager>
@@ -356,13 +354,15 @@ class ChromePaymentsAutofillClient : public PaymentsAutofillClient,
 
   std::unique_ptr<SaveAndFillManager> save_and_fill_manager_;
 
-  std::unique_ptr<SelectBnplIssuerDialogControllerImpl>
-      select_bnpl_issuer_dialog_controller_;
-
   // The BnplStrategy used to determine the next step in a BNPL flow depending
   // on the platform.
-  // Lazily initialized: access only through GetBnplStrategy().
+  // Lazily initialized: access only through `GetBnplStrategy()`.
   std::unique_ptr<BnplStrategy> bnpl_strategy_;
+
+  // The BnplUiDelegate used to handle the UI in the BNPL flow depending on the
+  // platform.
+  // Lazily initialized: access only through `GetBnplUiDelegate()`.
+  std::unique_ptr<BnplUiDelegate> bnpl_ui_delegate_;
 
   // Used to cache client side risk data. The cache is invalidated when the
   // chrome browser tab is closed.

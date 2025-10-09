@@ -58,8 +58,6 @@ class CreditCardFormEventLogger : public FormEventLoggerBase {
   virtual void OnBnplSuggestionShown();
 
   // Invoked when `suggestions` are successfully fetched.
-  // `with_offer` indicates whether an offer is attached to any of the
-  // suggestion in the list.
   // `with_cvc` indicates whether CVC is saved in any of the suggestion in
   // the list.
   // `with_card_info_retrieval_enrolled` indicates whether at least one of the
@@ -70,7 +68,6 @@ class CreditCardFormEventLogger : public FormEventLoggerBase {
   // a non-empty product description or art image, and whether they are shown.
   void OnDidFetchSuggestion(
       const std::vector<Suggestion>& suggestions,
-      bool with_offer,
       bool with_cvc,
       bool with_card_info_retrieval_enrolled,
       bool is_virtual_card_standalone_cvc_field,
@@ -153,7 +150,6 @@ class CreditCardFormEventLogger : public FormEventLoggerBase {
 
  protected:
   // FormEventLoggerBase pure-virtual overrides.
-  void RecordPollSuggestions() override;
   void RecordParseForm() override;
   void RecordShowSuggestions() override;
 
@@ -179,9 +175,6 @@ class CreditCardFormEventLogger : public FormEventLoggerBase {
   bool DoesCardHaveOffer(const CreditCard& credit_card);
   // Returns whether the shown suggestions included a virtual credit card.
   bool DoSuggestionsIncludeVirtualCard();
-  // Checks whether the current website is relevant for BNPL for any known BNPL
-  // provider, according to the optimization guide.
-  bool IsEligibleForBnpl();
 
   size_t server_record_type_count_ = 0;
   size_t local_record_type_count_ = 0;
@@ -256,6 +249,8 @@ class CreditCardFormEventLogger : public FormEventLoggerBase {
 
   AutofillMetrics::PaymentsSigninState signin_state_for_metrics_ =
       AutofillMetrics::PaymentsSigninState::kUnknown;
+
+  AutofillTriggerSource trigger_source_ = AutofillTriggerSource::kNone;
 
   // Weak references.
   raw_ptr<PersonalDataManager> personal_data_manager_;

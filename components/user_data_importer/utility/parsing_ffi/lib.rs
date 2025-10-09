@@ -103,6 +103,7 @@ mod ffi {
 
         fn new_archive(zip_filename: &[u8]) -> Box<ResultOfZipFileArchive>;
 
+        #[cfg(target_family = "unix")]
         unsafe fn parse_stable_portability_history(
             owned_fd: i32,
             history_callback: UniquePtr<StablePortabilityHistoryCallbackFromRust>,
@@ -127,16 +128,6 @@ unsafe fn parse_stable_portability_history(
     // SAFETY: Safety requirements are propagated from our caller.
     let file = unsafe { fs::File::from_raw_fd(owned_fd) };
     history::parse_stable_portability_history(file, history_callback, history_size_threshold)
-}
-
-#[cfg(not(unix))]
-#[allow(unused)]
-fn parse_stable_portability_history(
-    owned_fd: i32,
-    history_callback: cxx::UniquePtr<ffi::StablePortabilityHistoryCallbackFromRust>,
-    history_size_threshold: usize,
-) {
-    unreachable!("This function should not be used on non-POSIX")
 }
 
 fn new_archive(zip_filename: &[u8]) -> Box<ResultOfZipFileArchive> {

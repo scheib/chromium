@@ -4,8 +4,12 @@
 
 #include "content/browser/renderer_host/navigation_transitions/navigation_transition_utils.h"
 
+#include "base/memory/scoped_refptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
+#include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "content/browser/compositor/surface_utils.h"
 #include "content/browser/renderer_host/frame_tree.h"
@@ -15,10 +19,13 @@
 #include "content/browser/renderer_host/navigation_transitions/navigation_entry_screenshot_cache.h"
 #include "content/browser/renderer_host/navigation_transitions/navigation_transition_config.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
+#include "content/public/common/content_features.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "ui/gfx/animation/animation.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "content/browser/renderer_host/compositor_impl_android.h"
+#include "content/browser/renderer_host/render_widget_host_view_android.h"
 #include "ui/android/view_android.h"
 #include "ui/android/window_android.h"
 #endif
@@ -80,7 +87,7 @@ bool SupportsETC1NonPowerOfTwo(const NavigationRequest& navigation_request) {
   return static_cast<CompositorImpl*>(compositor)->SupportsETC1NonPowerOfTwo();
 #else
   return false;
-#endif
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 // Returns the first entry that matches `destination_token`. Returns null if no
@@ -134,9 +141,6 @@ void CacheScreenshotImpl(base::WeakPtr<NavigationControllerImpl> controller,
   }
 
   if (bitmap_copy.drawsNothing()) {
-    // The GPU is not able to produce a valid bitmap. This is an error case.
-    LOG(ERROR) << "Cannot generate a valid bitmap for entry "
-               << entry->GetURL();
     if (entry) {
       entry->navigation_transition_data().set_cache_hit_or_miss_reason(
           is_copied_from_embedder
@@ -157,6 +161,64 @@ void CacheScreenshotImpl(base::WeakPtr<NavigationControllerImpl> controller,
   cache->SetScreenshot(std::move(navigation_request), std::move(screenshot),
                        is_copied_from_embedder);
 }
+
+#if BUILDFLAG(IS_ANDROID)
+void CacheScreenshotSharedImageImpl(
+    base::WeakPtr<NavigationControllerImpl> controller,
+    base::WeakPtr<NavigationRequest> navigation_request,
+    scoped_refptr<viz::RasterContextProvider> raster_context_provider,
+    NavigationTransitionData::UniqueId screenshot_id,
+    bool is_copied_from_embedder,
+    int copy_output_request_sequence,
+    bool supports_etc_non_power_of_two,
+    scoped_refptr<gpu::ClientSharedImage> shared_image) {
+  if (!controller) {
+    // The tab was destroyed by the time we receive the shared image from the
+    // GPU.
+    return;
+  }
+  TRACE_EVENT("content", "CacheScreenshotSharedImageImpl");
+  base::UmaHistogramBoolean(
+      "Navigation.GestureTransition.Screenshot.SharedImageReceived",
+      !!shared_image);
+  if (!shared_image) {
+    // This might happen if the surface is deleted before the CopyOutputRequest
+    // is satisfied. The histogram above will measure how often this happens in
+    // practice.
+    // TODO(crbug.com/441541036): Fix scoping of surface and add a proper cache
+    // miss reason in the navigation entry.
+    CacheScreenshotImpl(controller, navigation_request, screenshot_id,
+                        is_copied_from_embedder, copy_output_request_sequence,
+                        supports_etc_non_power_of_two, SkBitmap());
+    return;
+  }
+
+  int entry_index =
+      NavigationTransitionUtils::FindEntryIndexForNavigationTransitionID(
+          controller.get(), screenshot_id);
+  NavigationEntryImpl* entry = controller->GetEntryAtIndex(entry_index);
+  if (!entry ||
+      entry->navigation_transition_data().copy_output_request_sequence() !=
+          copy_output_request_sequence) {
+    // The entry has changed state since this request occurred so ignore it.
+    return;
+  }
+
+  auto& screenshot_callback = GetTestScreenshotCallback();
+  auto bound_screenshot_callback =
+      screenshot_callback
+          ? base::BindRepeating(screenshot_callback, entry_index)
+          : NavigationEntryScreenshot::ScreenshotCallback();
+
+  auto screenshot = std::make_unique<NavigationEntryScreenshot>(
+      std::move(shared_image), screenshot_id, supports_etc_non_power_of_two,
+      std::move(raster_context_provider), bound_screenshot_callback);
+  NavigationEntryScreenshotCache* cache =
+      controller->GetNavigationEntryScreenshotCache();
+  cache->SetScreenshot(std::move(navigation_request), std::move(screenshot),
+                       is_copied_from_embedder);
+}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 // We only want to capture screenshots for navigation entries reachable via
 // session history navigations. Namely, we don't capture for navigations where
@@ -447,25 +509,53 @@ bool NavigationTransitionUtils::
   const gfx::Size output_size = g_output_size_for_test;
 
 #if BUILDFLAG(IS_ANDROID)
-  static_cast<RenderWidgetHostViewBase*>(rwhv)
-      ->CopyFromExactSurfaceWithIpcDelay(
-          /*src_rect=*/gfx::Rect(), output_size,
-          base::BindOnce(
+  if (base::FeatureList::IsEnabled(
+          features::kBackForwardTransitionsCrossDocSharedImage)) {
+    auto* rwhva = static_cast<RenderWidgetHostViewAndroid*>(rwhv);
+    auto context_provider = rwhva->GetRasterContextProvider();
+    if (!context_provider) {
+      InvokeTestCallbackForNoScreenshot(navigation_request);
+      last_committed_entry->navigation_transition_data()
+          .set_cache_hit_or_miss_reason(
+              CacheHitOrMissReason::kNoRootWindowOrCompositor);
+      return false;
+    }
+    rwhva->CopySharedImageFromExactSurface(
+        /*src_rect=*/gfx::Rect(), output_size,
+        base::BindOnce(
+            &CacheScreenshotSharedImageImpl, navigation_controller.GetWeakPtr(),
+            navigation_request.GetWeakPtr(), context_provider,
+            last_committed_entry->navigation_transition_data().unique_id(),
+            /*is_copied_from_embedder=*/false, request_sequence,
+            SupportsETC1NonPowerOfTwo(navigation_request)));
+  } else {
+    static_cast<RenderWidgetHostViewBase*>(rwhv)
+        ->CopyFromExactSurfaceWithIpcDelay(
+            /*src_rect=*/gfx::Rect(), output_size,
+            base::BindOnce([](const viz::CopyOutputBitmapWithMetadata& result) {
+              return result.bitmap;
+            })
+                .Then(base::BindOnce(
+                    &CacheScreenshotImpl, navigation_controller.GetWeakPtr(),
+                    navigation_request.GetWeakPtr(),
+                    last_committed_entry->navigation_transition_data()
+                        .unique_id(),
+                    /*is_copied_from_embedder=*/false, request_sequence,
+                    SupportsETC1NonPowerOfTwo(navigation_request))),
+            NavigationTransitionConfig::ScreenshotSendResultDelay());
+  }
+#else
+  static_cast<RenderWidgetHostViewBase*>(rwhv)->CopyFromExactSurface(
+      /*src_rect=*/gfx::Rect(), output_size,
+      base::BindOnce([](const viz::CopyOutputBitmapWithMetadata& result) {
+        return result.bitmap;
+      })
+          .Then(base::BindOnce(
               &CacheScreenshotImpl, navigation_controller.GetWeakPtr(),
               navigation_request.GetWeakPtr(),
               last_committed_entry->navigation_transition_data().unique_id(),
               /*is_copied_from_embedder=*/false, request_sequence,
-              SupportsETC1NonPowerOfTwo(navigation_request)),
-          NavigationTransitionConfig::ScreenshotSendResultDelay());
-#else
-  static_cast<RenderWidgetHostViewBase*>(rwhv)->CopyFromExactSurface(
-      /*src_rect=*/gfx::Rect(), output_size,
-      base::BindOnce(
-          &CacheScreenshotImpl, navigation_controller.GetWeakPtr(),
-          navigation_request.GetWeakPtr(),
-          last_committed_entry->navigation_transition_data().unique_id(),
-          /*is_copied_from_embedder=*/false, request_sequence,
-          SupportsETC1NonPowerOfTwo(navigation_request)));
+              SupportsETC1NonPowerOfTwo(navigation_request))));
 #endif
 
   ++g_num_copy_requests_issued_for_testing;

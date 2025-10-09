@@ -7,7 +7,10 @@
 
 #include "chrome/browser/extensions/window_controller.h"
 #include "chrome/browser/extensions/window_controller_list_observer.h"
+#include "extensions/buildflags/buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 class MockWindowControllerListObserver final
@@ -19,6 +22,10 @@ class MockWindowControllerListObserver final
   MOCK_METHOD(void, OnWindowControllerAdded, (WindowController*), (override));
   MOCK_METHOD(void, OnWindowControllerRemoved, (WindowController*), (override));
   MOCK_METHOD(void, OnWindowBoundsChanged, (WindowController*), (override));
+  MOCK_METHOD(void,
+              OnWindowFocusChanged,
+              (WindowController*, bool),
+              (override));
 };
 }  // namespace extensions
 

@@ -22,7 +22,6 @@
 #include "components/password_manager/core/browser/password_manager_util.h"
 #include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/browser/password_sync_util.h"
-#include "components/password_manager/core/browser/split_stores_and_local_upm.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -113,7 +112,8 @@ void LeakDetectionDelegate::OnLeakDetectionDone(bool is_leaked,
   affiliations::AffiliationService* affiliation_service =
       client_->GetAffiliationService();
   if (affiliation_service &&
-      base::FeatureList::IsEnabled(features::kImprovedPasswordChangeService)) {
+      base::FeatureList::IsEnabled(
+          features::kFetchChangePasswordUrlForPasswordChange)) {
     affiliation_service->PrefetchChangePasswordURL(
         url, base::BindOnce(barrier_callback, std::nullopt));
   } else {

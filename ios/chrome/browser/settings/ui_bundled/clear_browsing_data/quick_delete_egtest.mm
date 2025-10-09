@@ -4,6 +4,7 @@
 
 #import <XCTest/XCTest.h>
 
+#import "base/ios/ios_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "base/test/metrics/histogram_tester.h"
@@ -14,14 +15,12 @@
 #import "components/signin/internal/identity_manager/account_capabilities_constants.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/sync/base/command_line_switches.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/autofill/ui_bundled/autofill_app_interface.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/recent_tabs/ui_bundled/recent_tabs_constants.h"
-#import "ios/chrome/browser/settings/ui_bundled/cells/clear_browsing_data_constants.h"
-#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/clear_browsing_data_ui_constants.h"
-#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/features.h"
+#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/quick_delete_constants.h"
 #import "ios/chrome/browser/settings/ui_bundled/password/password_settings_app_interface.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
@@ -280,7 +279,6 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config;
   config.relaunch_policy = NoForceRelaunchAndResetState;
-  config.features_enabled.push_back(kIOSQuickDelete);
   config.additional_args.push_back(std::string("--") +
                                    syncer::kSyncShortNudgeDelayForTest);
   config.features_enabled.push_back(
@@ -293,7 +291,6 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 - (void)relaunchAppWithInactiveTabsTestMode {
   AppLaunchConfiguration config;
   config.relaunch_policy = ForceRelaunchByCleanShutdown;
-  config.features_enabled.push_back(kIOSQuickDelete);
   config.additional_args.push_back("-InactiveTabsTestMode");
   config.additional_args.push_back("true");
   [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
@@ -571,12 +568,6 @@ NSString* CapitalizeFirstLetter(NSString* string) {
                      IDS_IOS_CLEAR_BROWSING_DATA_TIME_RANGE_SELECTOR_TITLE))]
       performAction:grey_tap()];
 
-  // TODO(crbug.com/428928323): Investigate why the keyboard appears and remove
-  // this workaround when it's not needed anymore.
-  // On iOS 26, the keyboard appears when the 'Time Range' button is tapped and
-  // it hides the elements behind. Close the keyboard by typing a return key.
-  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
-
   // Tap on the last 15 minutes option on the popup menu.
   [[EarlGrey
       selectElementWithMatcher:
@@ -621,7 +612,15 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 }
 
 // Tests that the browsing data summary is updated when the time range changes.
-- (void)testSummaryUpdatesWhenTimeRangeChanges {
+// TODO(crbug.com/443704367): Test disabled on simulator.
+#if TARGET_OS_SIMULATOR
+#define MAYBE_testSummaryUpdatesWhenTimeRangeChanges \
+  DISABLED_testSummaryUpdatesWhenTimeRangeChanges
+#else
+#define MAYBE_testSummaryUpdatesWhenTimeRangeChanges \
+  testSummaryUpdatesWhenTimeRangeChanges
+#endif
+- (void)MAYBE_testSummaryUpdatesWhenTimeRangeChanges {
   // Set pref to the last hour.
   [ChromeEarlGrey
       setIntegerValue:static_cast<int>(browsing_data::TimePeriod::LAST_HOUR)
@@ -731,8 +730,15 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 // row when browsing history is selected as a data type to be deleted and when
 // the user syncs history. It also tests that the history entries get deleted
 // when the deletion of browsing data is selected.
-// TODO(crbug.com/433322022): Re-enable this test once flakiness is fixed.
-- (void)DISABLED_testBrowsingHistoryForDeletionWithHistorySync {
+// TODO(crbug.com/433322022): Re-enable test on device.
+#if TARGET_OS_SIMULATOR
+#define MAYBE_testBrowsingHistoryForDeletionWithHistorySync \
+  testBrowsingHistoryForDeletionWithHistorySync
+#else
+#define MAYBE_testBrowsingHistoryForDeletionWithHistorySync \
+  DISABLED_testBrowsingHistoryForDeletionWithHistorySync
+#endif
+- (void)MAYBE_testBrowsingHistoryForDeletionWithHistorySync {
   // Sign in and enable history sync.
   [self signInAndEnableHistorySync];
 
@@ -1034,10 +1040,13 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 // also tests that the tabs in tab groups get closed when the deletion of tabs
 // is selected.
 - (void)testTabsForDeletionInTabGroup {
-  if (@available(iOS 17, *)) {
-  } else if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_SKIPPED(@"Only available on iOS 17+ on iPad.");
+  // TODO(crbug.com/446597022): Re-enable the test on iOS26 device.
+#if !TARGET_OS_SIMULATOR
+  if (base::ios::IsRunningOnIOS26OrLater()) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26 and on device.");
   }
+#endif
+
   // Set pref to close tabs.
   [ChromeEarlGrey setBoolValue:true
                    forUserPref:browsing_data::prefs::kCloseTabs];
@@ -1083,7 +1092,8 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 // tabs should include tabs in all windows, not just the ones where quick delete
 // is triggered from. It also tests that the tabs in both windows get closed
 // when the deletion of tabs is selected.
-- (void)testTabsForDeletionInMultiwindow {
+// TODO(crbug.com/358141981): Deflake the test.
+- (void)FLAKY_testTabsForDeletionInMultiwindow {
   if (![ChromeEarlGrey areMultipleWindowsSupported]) {
     EARL_GREY_TEST_DISABLED(@"Multiple windows can't be opened.");
   }
@@ -1577,7 +1587,15 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 
 // Tests the footer search history link is opened correctly and metrics are
 // recorded in the corrresponding histogram bucket.
-- (void)testOpenSearchHistoryMyActivityFooterLink {
+// TODO(crbug.com/443704367): Test disabled on simulator.
+#if TARGET_OS_SIMULATOR
+#define MAYBE_testOpenSearchHistoryMyActivityFooterLink \
+  DISABLED_testOpenSearchHistoryMyActivityFooterLink
+#else
+#define MAYBE_testOpenSearchHistoryMyActivityFooterLink \
+  testOpenSearchHistoryMyActivityFooterLink
+#endif
+- (void)MAYBE_testOpenSearchHistoryMyActivityFooterLink {
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   // Sign in is required to show the footer.
   [self signIn];
@@ -1604,7 +1622,7 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 
   // Check that my activity link was opened.
   GREYAssertEqual(std::string(kMyActivityURL),
-                  [ChromeEarlGrey webStateVisibleURL].host(),
+                  [ChromeEarlGrey webStateVisibleURL].GetHost(),
                   @"Did not navigate to the search activity url.");
 
   // Assert that the metrics are populated.
@@ -1643,7 +1661,7 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 
   // Check that my activity link was opened.
   GREYAssertEqual(std::string(kMyActivityURL),
-                  [ChromeEarlGrey webStateVisibleURL].host(),
+                  [ChromeEarlGrey webStateVisibleURL].GetHost(),
                   @"Did not navigate to the search activity url.");
 
   // Assert that the metrics are populated.
@@ -1693,7 +1711,15 @@ NSString* CapitalizeFirstLetter(NSString* string) {
 
 // Tests that a user in the `ConsentLevel::kSignin` state will remain signed in
 // after clearing their browsing history.
-- (void)testUserSignedInWhenClearingBrowsingData {
+// TODO(crbug.com/443704367): Test disabled on simulator.
+#if TARGET_OS_SIMULATOR
+#define MAYBE_testUserSignedInWhenClearingBrowsingData \
+  DISABLED_testUserSignedInWhenClearingBrowsingData
+#else
+#define MAYBE_testUserSignedInWhenClearingBrowsingData \
+  testUserSignedInWhenClearingBrowsingData
+#endif
+- (void)MAYBE_testUserSignedInWhenClearingBrowsingData {
   FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
 

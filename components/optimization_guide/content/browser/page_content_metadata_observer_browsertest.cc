@@ -6,6 +6,7 @@
 
 #include "base/test/bind.h"
 #include "base/test/test_future.h"
+#include "build/build_config.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
@@ -75,8 +76,8 @@ class PageContentMetadataObserverBrowserTest
             base::Unretained(this)));
   }
 
-  void OnMetaTagsChanged(const blink::mojom::PageMetadata& page_metadata) {
-    page_metadata_ = page_metadata.Clone();
+  void OnMetaTagsChanged(blink::mojom::PageMetadataPtr page_metadata) {
+    page_metadata_ = std::move(page_metadata);
     // This may be called multiple times in some tests, but TestFuture handles
     // this gracefully.
     callback_waiter_.SetValue(true);
@@ -132,8 +133,10 @@ IN_PROC_BROWSER_TEST_F(PageContentMetadataObserverBrowserTest, NoMetaTags) {
   EXPECT_FALSE(callback_waiter_.IsReady());
 }
 
+// TODO(crbug.com/440240260): This test flakes frequently on debug / arm64
+// builders.
 IN_PROC_BROWSER_TEST_F(PageContentMetadataObserverBrowserTest,
-                       MetaTagsAreObservedInMultipleFrames) {
+                       DISABLED_MetaTagsAreObservedInMultipleFrames) {
   ASSERT_TRUE(LoadPage(
       https_server()->GetURL("a.com", "/meta_tags_in_multiple_frames.html")));
   CreateObserver();
@@ -273,8 +276,9 @@ IN_PROC_BROWSER_TEST_F(PageContentMetadataObserverBrowserTest,
   // The observer should be notified of the change.
   ASSERT_TRUE(callback_waiter_.Wait());
 
-  // The metadata should now be empty.
-  EXPECT_EQ(page_metadata()->frame_metadata.size(), 0u);
+  // The metadata should now contain one frame with no meta tags.
+  EXPECT_EQ(page_metadata()->frame_metadata.size(), 1u);
+  EXPECT_EQ(page_metadata()->frame_metadata[0]->meta_tags.size(), 0u);
 }
 
 IN_PROC_BROWSER_TEST_F(PageContentMetadataObserverBrowserTest,

@@ -147,7 +147,8 @@ std::string GetIndexableText(const base::FilePath& metadata_file_local_path) {
     return indexable_text;
   }
 
-  std::optional<base::Value> value(base::JSONReader::Read(file_content));
+  std::optional<base::Value> value(base::JSONReader::Read(
+      file_content, base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   if (!value) {
     return indexable_text;
   }
@@ -197,10 +198,7 @@ const std::string BuildRequestBody(
   contentHints.Set(kDriveRequestIndexableTextKey, indexable_text);
   root.Set(kDriveRequestContentHintsKey, std::move(contentHints));
 
-  std::string request_body;
-  base::JSONWriter::Write(std::move(root), &request_body);
-
-  return request_body;
+  return base::WriteJson(root).value_or("");
 }
 
 // Returns a valid pending screencast from `container_absolute_path`.  A valid

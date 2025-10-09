@@ -4,6 +4,7 @@
 
 #import "base/strings/stringprintf.h"
 #import "components/feature_engagement/public/feature_constants.h"
+#import "components/omnibox/browser/omnibox_pref_names.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
@@ -18,6 +19,7 @@
 #import "net/test/embedded_test_server/request_handler_util.h"
 
 namespace {
+
 // The page height of test pages. This must be big enough to triger fullscreen.
 const int kPageHeightEM = 200;
 
@@ -30,6 +32,14 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
       "<p style='height:%dem'>test1</p><p>test2</p>", kPageHeightEM));
   return result;
 }
+
+// Returns the Contextual Panel's entrypoint view GREY matcher.
+id<GREYMatcher> ContextualPanelEntrypointImageViewMatcher() {
+  return grey_allOf(
+      grey_accessibilityID(@"ContextualPanelEntrypointImageViewAXID"),
+      grey_interactable(), nil);
+}
+
 }  // namespace
 
 @interface ContextualPanelTestCase : ChromeTestCase
@@ -39,7 +49,8 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
 
 - (void)setUp {
   [super setUp];
-  [ChromeEarlGrey resetDataForLocalStatePref:prefs::kBottomOmnibox];
+  [ChromeEarlGrey
+      resetDataForLocalStatePref:omnibox::kIsOmniboxInBottomPosition];
 
   self.testServer->RegisterRequestHandler(base::BindRepeating(
       &net::test_server::HandlePrefixedRequest, "/long-fullscreen",
@@ -51,7 +62,8 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
 
 - (void)tearDownHelper {
   [super tearDownHelper];
-  [ChromeEarlGrey resetDataForLocalStatePref:prefs::kBottomOmnibox];
+  [ChromeEarlGrey
+      resetDataForLocalStatePref:omnibox::kIsOmniboxInBottomPosition];
 }
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
@@ -83,9 +95,11 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
 - (void)testOpenContextualPanel {
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/defaultresponse")];
 
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      ContextualPanelEntrypointImageViewMatcher()];
+
   [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   @"ContextualPanelEntrypointImageViewAXID")]
+      selectElementWithMatcher:ContextualPanelEntrypointImageViewMatcher()]
       performAction:grey_tap()];
 
   // Check that the contextual panel opened up.
@@ -158,9 +172,11 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
 
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/defaultresponse")];
 
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      ContextualPanelEntrypointImageViewMatcher()];
+
   [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   @"ContextualPanelEntrypointImageViewAXID")]
+      selectElementWithMatcher:ContextualPanelEntrypointImageViewMatcher()]
       performAction:grey_tap()];
 
   // Check that the contextual panel opened up.
@@ -184,9 +200,11 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
 - (void)testCloseLastTabWithPanelOpen {
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/defaultresponse")];
 
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      ContextualPanelEntrypointImageViewMatcher()];
+
   [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   @"ContextualPanelEntrypointImageViewAXID")]
+      selectElementWithMatcher:ContextualPanelEntrypointImageViewMatcher()]
       performAction:grey_tap()];
 
   // Check that the contextual panel opened up.
@@ -211,15 +229,24 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
 // controller (full iPad layout) and the panel's custom sheet component (other
 // window open/iPhone-style layout).
 - (void)testContexutalPaneliPadMultiwindow {
+  if (@available(iOS 19.0, *)) {
+    // TODO(crbug.com/427699033): Re-enable test on iOS 26.
+    // Fails because it assumes a window will be compact after creating a new
+    // window.
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
+  }
+
   if (![ChromeEarlGrey areMultipleWindowsSupported]) {
     EARL_GREY_TEST_DISABLED(@"Multiple windows can't be opened.");
   }
 
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/defaultresponse")];
 
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      ContextualPanelEntrypointImageViewMatcher()];
+
   [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   @"ContextualPanelEntrypointImageViewAXID")]
+      selectElementWithMatcher:ContextualPanelEntrypointImageViewMatcher()]
       performAction:grey_tap()];
 
   // Check that the contextual panel opened up.
@@ -260,9 +287,11 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
 
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/long-fullscreen")];
 
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      ContextualPanelEntrypointImageViewMatcher()];
+
   [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   @"ContextualPanelEntrypointImageViewAXID")]
+      selectElementWithMatcher:ContextualPanelEntrypointImageViewMatcher()]
       performAction:grey_tap()];
 
   // Check that the contextual panel opened up.
@@ -277,7 +306,8 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
   [ChromeEarlGreyUI waitForToolbarVisible:NO];
 
   // Enable bottom omnibox.
-  [ChromeEarlGrey setBoolValue:YES forLocalStatePref:prefs::kBottomOmnibox];
+  [ChromeEarlGrey setBoolValue:YES
+             forLocalStatePref:omnibox::kIsOmniboxInBottomPosition];
   [ChromeEarlGreyUI waitForToolbarVisible:YES];
 
   // Make sure that panel can still be closed.
@@ -342,9 +372,11 @@ std::unique_ptr<net::test_server::HttpResponse> GetLongResponseForFullscreen(
   // Open a page wth a text field.
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/simple_login_form.html")];
 
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      ContextualPanelEntrypointImageViewMatcher()];
+
   [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   @"ContextualPanelEntrypointImageViewAXID")]
+      selectElementWithMatcher:ContextualPanelEntrypointImageViewMatcher()]
       performAction:grey_tap()];
 
   // Check that the contextual panel opened up.

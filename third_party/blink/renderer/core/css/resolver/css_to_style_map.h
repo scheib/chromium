@@ -138,9 +138,12 @@ class CSSToStyleMap {
   static TimelineOffsetOrAuto MapAnimationTimelineTriggerExitRangeEnd(
       StyleResolverState&,
       const CSSValue&);
-  static StyleTimeline MapAnimationTimelineTriggerTimeline(StyleResolverState&,
-                                                           const CSSValue&);
+  static StyleTimeline MapAnimationTimelineTriggerSource(StyleResolverState&,
+                                                         const CSSValue&);
   static std::optional<Vector<AtomicString>> MapAnimationTriggerNames(
+      StyleResolverState&,
+      const CSSValue&);
+  static Member<StyleTriggerAttachmentVector> MapAnimationTriggerAttachments(
       StyleResolverState&,
       const CSSValue&);
 };

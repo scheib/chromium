@@ -4,6 +4,8 @@
 
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 
+#include <sstream>
+
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
@@ -25,7 +27,7 @@ std::string GetOriginName(ProfileKeepAliveOrigin origin) {
 
 }  // namespace
 
-ScopedProfileKeepAlive::ScopedProfileKeepAlive(const Profile* profile,
+ScopedProfileKeepAlive::ScopedProfileKeepAlive(Profile* profile,
                                                ProfileKeepAliveOrigin origin)
     : profile_(profile->GetWeakPtr()), origin_(origin) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -63,7 +65,7 @@ ScopedProfileKeepAlive::~ScopedProfileKeepAlive() {
 
 // static
 void ScopedProfileKeepAlive::RemoveKeepAliveOnUIThread(
-    base::WeakPtr<const Profile> profile,
+    base::WeakPtr<Profile> profile,
     ProfileKeepAliveOrigin origin) {
   SCOPED_CRASH_KEY_STRING32("ProfileKeepAlive", "origin",
                             GetOriginName(origin));

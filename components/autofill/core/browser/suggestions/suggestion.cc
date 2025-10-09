@@ -70,6 +70,8 @@ std::string_view ConvertIconToPrintableString(Suggestion::Icon icon) {
       return "kEmail";
     case Suggestion::Icon::kError:
       return "kError";
+    case Suggestion::Icon::kFlight:
+      return "kFlight";
     case Suggestion::Icon::kGlobe:
       return "kGlobe";
     case Suggestion::Icon::kGoogle:
@@ -219,7 +221,7 @@ Suggestion::PlusAddressPayload::~PlusAddressPayload() = default;
 
 Suggestion::AutofillAiPayload::AutofillAiPayload() = default;
 
-Suggestion::AutofillAiPayload::AutofillAiPayload(base::Uuid guid)
+Suggestion::AutofillAiPayload::AutofillAiPayload(EntityInstance::EntityId guid)
     : guid(std::move(guid)) {}
 
 Suggestion::AutofillAiPayload::AutofillAiPayload(const AutofillAiPayload&) =
@@ -270,8 +272,11 @@ Suggestion::AutofillProfilePayload::CreateJavaObject() const {
 Suggestion::IdentityCredentialPayload::IdentityCredentialPayload() = default;
 Suggestion::IdentityCredentialPayload::IdentityCredentialPayload(
     GURL configURL,
-    std::string account_id)
-    : config_url(std::move(configURL)), account_id(std::move(account_id)) {}
+    std::string account_id,
+    const std::map<FieldType, std::u16string>& fields)
+    : config_url(std::move(configURL)),
+      account_id(std::move(account_id)),
+      fields(fields) {}
 
 Suggestion::IdentityCredentialPayload::IdentityCredentialPayload(
     const IdentityCredentialPayload&) = default;

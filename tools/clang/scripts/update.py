@@ -39,12 +39,11 @@ import zlib
 # These fields are written by //tools/clang/scripts/upload_revision.py, and
 # should not be changed manually.
 # They are also read by build/config/compiler/BUILD.gn.
-CLANG_REVISION = 'llvmorg-21-init-16348-gbd809ffb'
-CLANG_SUB_REVISION = 17
+CLANG_REVISION = 'llvmorg-22-init-8940-g4d4cb757'
+CLANG_SUB_REVISION = 84
 
 PACKAGE_VERSION = '%s-%s' % (CLANG_REVISION, CLANG_SUB_REVISION)
-# TODO(crbug.com/432036065): Bump to 22 in next Clang roll.
-RELEASE_VERSION = '21'
+RELEASE_VERSION = '22'
 
 CDS_URL = os.environ.get('CDS_CLANG_BUCKET_OVERRIDE',
     'https://commondatastorage.googleapis.com/chromium-browser-clang')
@@ -59,9 +58,20 @@ STAMP_FILENAME = 'cr_build_revision'
 STAMP_FILE = os.path.normpath(os.path.join(LLVM_BUILD_DIR, STAMP_FILENAME))
 OLD_STAMP_FILE = os.path.normpath(
     os.path.join(LLVM_BUILD_DIR, '..', STAMP_FILENAME))
+FORCE_HEAD_REVISION_FILENAME = 'force_head_revision'
 FORCE_HEAD_REVISION_FILE = os.path.normpath(
-    os.path.join(LLVM_BUILD_DIR, '..', 'force_head_revision'))
+    os.path.join(LLVM_BUILD_DIR, '..', FORCE_HEAD_REVISION_FILENAME))
 
+
+def RmFile(file, must_exist=True):
+  """Delete the named file. If must_exist is True,
+     raise an exception if the file doesn't exist."""
+  print(f"Removing {file}")
+  try:
+    os.remove(file)
+  except FileNotFoundError as e:
+    if must_exist:
+      raise e
 
 def RmTree(dir):
   """Delete dir."""
@@ -88,12 +98,17 @@ def ReadStampFile(path):
     return ''
 
 
-def WriteStampFile(s, path):
-  """Write s to the stamp file."""
+def WriteStampFile(s, path, preserve_hash_files=False):
+  """Write s to the stamp file. To tell gcs the directory is locally modified,
+     also delete any gcs hash files (.*_hash) in the stamp files' directory,
+     if they exist"""
   EnsureDirExists(os.path.dirname(path))
   with open(path, 'w') as f:
     f.write(s)
     f.write('\n')
+  if not preserve_hash_files:
+    for file in glob.glob(os.path.join(os.path.dirname(path), ".*_hash")):
+      RmFile(file)
 
 
 def DownloadUrl(url, output_file):
@@ -235,7 +250,10 @@ def DownloadAndUnpackClangWinRuntime(output_dir):
     sys.exit(1)
 
 
-def UpdatePackage(package_name, host_os, dir=LLVM_BUILD_DIR):
+def UpdatePackage(package_name,
+                  host_os,
+                  preserve_gcs_signature,
+                  dir=LLVM_BUILD_DIR):
   stamp_file = None
   package_file = None
 
@@ -296,7 +314,7 @@ def UpdatePackage(package_name, host_os, dir=LLVM_BUILD_DIR):
     # libraries, and llvm-symbolizer.exe (needed in asan builds).
     DownloadAndUnpackClangWinRuntime(dir)
 
-  WriteStampFile(expected_stamp, stamp_file)
+  WriteStampFile(expected_stamp, stamp_file, preserve_gcs_signature)
   return 0
 
 
@@ -332,12 +350,14 @@ def main():
   parser.add_argument('--print-clang-version', action='store_true',
                       help=('Print current clang release version (e.g. 9.0.0) '
                             'and exit.'))
+  parser.add_argument('--preserve-gcs-signature',
+                      action='store_true',
+                      help='By default, this script removes gcs hash files '
+                      'so that third_party/llvm-build is clobbered on the next'
+                      'run of gclient sync. This disables that, so that the'
+                      'directory will be preserved when syncing. Useful for'
+                      'local development.')
   args = parser.parse_args()
-
-  # TODO(crbug.com/432036065): Remove in next Clang roll.
-  if args.llvm_force_head_revision:
-    global RELEASE_VERSION
-    RELEASE_VERSION = '22'
 
   if args.print_clang_version:
     print(RELEASE_VERSION)
@@ -372,7 +392,8 @@ def main():
     print('--llvm-force-head-revision can only be used for --print-revision')
     return 1
 
-  return UpdatePackage(args.package, args.host_os, output_dir)
+  return UpdatePackage(args.package, args.host_os, args.preserve_gcs_signature,
+                       output_dir)
 
 
 if __name__ == '__main__':

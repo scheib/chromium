@@ -1031,7 +1031,9 @@ WizardController::CreateScreens() {
     append(std::make_unique<FjordTouchControllerScreen>(
         oobe_ui->GetView<FjordTouchControllerScreenHandler>()->AsWeakPtr()));
     append(std::make_unique<FjordStationSetupScreen>(
-        oobe_ui->GetView<FjordStationSetupScreenHandler>()->AsWeakPtr()));
+        oobe_ui->GetView<FjordStationSetupScreenHandler>()->AsWeakPtr(),
+        base::BindRepeating(&WizardController::OnFjordStationSetupScreenExit,
+                            weak_factory_.GetWeakPtr())));
   }
 
   return result;
@@ -1518,14 +1520,17 @@ void WizardController::OnGaiaScreenExit(GaiaScreen::Result result) {
         }
       }
 
+      GetScreen<GaiaScreen>()->Reset();
       // If a default redirection to third party IdP is set we can hide the
       // dialog.
       const bool gaia_page_defaults_to_saml = IsGaiaPageDefaultsToSAML();
-      if ((LoginDisplayHost::default_host()->HasUserPods() &&
-           !wizard_context_->is_user_creation_enabled) ||
-          (!LoginDisplayHost::default_host()->HasUserPods() &&
-           gaia_page_defaults_to_saml)) {
-        GetScreen<GaiaScreen>()->Reset();
+      const bool no_previous_screen =
+          LoginDisplayHost::default_host()->HasUserPods() &&
+          !wizard_context_->is_user_creation_enabled;
+      const bool new_user_saml_redirect =
+          !LoginDisplayHost::default_host()->HasUserPods() &&
+          gaia_page_defaults_to_saml;
+      if (no_previous_screen || new_user_saml_redirect) {
         LoginDisplayHost::default_host()->HideOobeDialog(
             gaia_page_defaults_to_saml);
       } else {
@@ -2881,6 +2886,29 @@ void WizardController::OnAppLaunchSplashScreenExit() {
   NOTIMPLEMENTED();
 }
 
+void WizardController::OnFjordStationSetupScreenExit() {
+  OnScreenExit(FjordStationSetupScreenView::kScreenId, kDefaultExitReason);
+  auto app = KioskController::Get().GetAutoLaunchApp();
+  if (app.has_value()) {
+    AutoLaunchKioskApp(app.value());
+    return;
+  }
+
+  NOTREACHED() << "Expected a kiosk app to be available";
+}
+
+bool WizardController::ExitFjordTouchControllerScreen() {
+  if (current_screen()->screen_id() ==
+      FjordTouchControllerScreenView::kScreenId) {
+    OnScreenExit(FjordTouchControllerScreenView::kScreenId, kDefaultExitReason);
+    ShowFjordStationSetupScreen();
+    return true;
+  }
+
+  LOG(ERROR) << "Can't exit: Fjord touch controller screen is not showing.";
+  return false;
+}
+
 void WizardController::OnOobeFlowFinished() {
   if (GetLoginDisplayHost()
           ->GetWizardContext()
@@ -3311,7 +3339,8 @@ void WizardController::AdvanceToScreen(OobeScreenId screen_id) {
              screen_id == ThemeSelectionScreenView::kScreenId ||
              screen_id == SamlConfirmPasswordView::kScreenId ||
              screen_id == LocalStateErrorScreenView::kScreenId ||
-             screen_id == QuickStartView::kScreenId) {
+             screen_id == QuickStartView::kScreenId ||
+             screen_id == FjordStationSetupScreenView::kScreenId) {
     SetCurrentScreen(GetScreen(screen_id));
   } else {
     NOTREACHED();

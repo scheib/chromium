@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/autofill/address_bubbles_controller.h"
 
+#include "base/test/with_feature_override.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/browser.h"
@@ -25,12 +26,16 @@ using ::testing::_;
 using ::testing::Property;
 using profile_ref = base::optional_ref<const AutofillProfile>;
 
-class AddressBubblesControllerBrowserTest : public InProcessBrowserTest {
+class AddressBubblesControllerBrowserTest
+    : public InProcessBrowserTest,
+      public base::test::WithFeatureOverride {
  public:
-  AddressBubblesControllerBrowserTest() {
+  AddressBubblesControllerBrowserTest(): base::test::WithFeatureOverride(
+            features::kAutofillShowBubblesBasedOnPriorities) {
     scoped_features_.InitAndEnableFeature(
         autofill::features::kAutofillAddressUserDeclinedSaveSurvey);
   }
+
   AddressBubblesControllerBrowserTest(
       const AddressBubblesControllerBrowserTest&) = delete;
   AddressBubblesControllerBrowserTest& operator=(
@@ -43,6 +48,8 @@ class AddressBubblesControllerBrowserTest : public InProcessBrowserTest {
     side_panel_coordinator()->SetNoDelaysForTesting(true);
     side_panel_coordinator()->DisableAnimationsForTesting();
   }
+
+  bool IsBubbleManagerEnabled() const { return GetParam(); }
 
  protected:
   base::test::ScopedFeatureList scoped_features_;
@@ -60,15 +67,15 @@ class AddressBubblesControllerBrowserTest : public InProcessBrowserTest {
   }
 };
 
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        DialogAcceptedInvokesCallback) {
   AutofillProfile profile = test::GetFullProfile();
   base::MockCallback<AutofillClient::AddressProfileSavePromptCallback> callback;
 
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
 
   EXPECT_CALL(callback,
               Run(AutofillClient::AddressPromptUserDecision::kAccepted,
@@ -79,8 +86,11 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
 
 // This is testing that the callback is invoked when the dialog is triggered in
 // the side panel. It covers the regression found in crbug.com/401068467.
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        DialogAcceptedInvokesCallbackForSidePanel) {
+  if (IsBubbleManagerEnabled()) {
+    GTEST_SKIP() << "Bubble Manager is incompatible with side panel";
+  }
   content::WebContents* side_panel_web_contents =
       side_panel_coordinator()->GetWebContentsForTest(
           SidePanelEntry::Id::kReadingList);
@@ -90,8 +100,8 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
 
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       side_panel_web_contents, profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
 
   EXPECT_CALL(callback,
               Run(AutofillClient::AddressPromptUserDecision::kAccepted,
@@ -101,14 +111,14 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
                        std::nullopt);
 }
 
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        DialogCancelledInvokesCallback) {
   AutofillProfile profile = test::GetFullProfile();
   base::MockCallback<AutofillClient::AddressProfileSavePromptCallback> callback;
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
 
   EXPECT_CALL(callback,
               Run(AutofillClient::AddressPromptUserDecision::kDeclined,
@@ -118,7 +128,7 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
 }
 
 #if !BUILDFLAG(IS_ANDROID)
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        DeclinedSaveTriggersSurvey) {
   MockHatsService* mock_hats_service = static_cast<MockHatsService*>(
       HatsServiceFactory::GetInstance()->SetTestingFactoryAndUse(
@@ -127,8 +137,8 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
   base::MockCallback<AutofillClient::AddressProfileSavePromptCallback> callback;
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), empty_profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/false, /*user_has_any_profile_saved=*/false,
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
 
   EXPECT_CALL(
       *mock_hats_service,
@@ -142,7 +152,7 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
       AutofillClient::AddressPromptUserDecision::kDeclined, std::nullopt);
 }
 
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        DeclinedSaveWithProfileDoesNotTriggerSurvey) {
   MockHatsService* mock_hats_service = static_cast<MockHatsService*>(
       HatsServiceFactory::GetInstance()->SetTestingFactoryAndUse(
@@ -150,8 +160,8 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
   base::MockCallback<AutofillClient::AddressProfileSavePromptCallback> callback;
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), test::GetFullProfile(), /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/false, /*user_has_any_profile_saved=*/true,
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/true, callback.Get());
 
   EXPECT_CALL(
       *mock_hats_service,
@@ -164,7 +174,7 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
       AutofillClient::AddressPromptUserDecision::kDeclined, std::nullopt);
 }
 
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        AcceptedSaveDoesNotTriggerSurvey) {
   MockHatsService* mock_hats_service = static_cast<MockHatsService*>(
       HatsServiceFactory::GetInstance()->SetTestingFactoryAndUse(
@@ -173,8 +183,8 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
   base::MockCallback<AutofillClient::AddressProfileSavePromptCallback> callback;
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), empty_profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/false, /*user_has_any_profile_saved=*/false,
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
 
   EXPECT_CALL(
       *mock_hats_service,
@@ -192,14 +202,14 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
 // This is testing that closing all tabs (which effectively destroys the web
 // contents) will trigger the save callback with kIgnored decions if the users
 // hasn't interacted with the prompt already.
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        WebContentsDestroyedInvokesCallback) {
   AutofillProfile profile = test::GetFullProfile();
   base::MockCallback<AutofillClient::AddressProfileSavePromptCallback> callback;
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
 
   TabStripModel* tab_strip_model = browser()->tab_strip_model();
   CHECK_EQ(1, tab_strip_model->count());
@@ -225,12 +235,13 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
 }
 
 // This is testing that the bubble is visible and active when shown.
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        BubbleShouldBeVisibleByDefault) {
   AutofillProfile profile = test::GetFullProfile();
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{},
       /*callback=*/base::DoNothing());
 
   // Bubble is visible and active
@@ -241,13 +252,14 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
 // This is testing that when a second prompt comes while another prompt is
 // shown, the controller will ignore it, and inform the backend that the second
 // prompt has been auto declined.
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        SecondPromptWillBeAutoDeclinedWhileFirstIsVisible) {
   AutofillProfile profile = test::GetFullProfile();
 
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{},
       /*callback=*/base::DoNothing());
 
   // Second prompt should be auto declined.
@@ -257,22 +269,22 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
                   Property(&profile_ref::has_value, false)));
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
 }
 
 // This is testing that when a second prompt comes while another prompt is in
 // progress but not shown, the controller will inform the backend that the first
 // process is ignored.
-IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
+IN_PROC_BROWSER_TEST_P(AddressBubblesControllerBrowserTest,
                        FirstHiddenPromptWillBeIgnoredWhenSecondPromptArrives) {
   AutofillProfile profile = test::GetFullProfile();
 
   base::MockCallback<AutofillClient::AddressProfileSavePromptCallback> callback;
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
-      callback.Get());
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{}, callback.Get());
   tab_controller()->OnBubbleClosed();
 
   // When second prompt comes, the first one will be ignored.
@@ -280,8 +292,11 @@ IN_PROC_BROWSER_TEST_F(AddressBubblesControllerBrowserTest,
                             Property(&profile_ref::has_value, false)));
   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
       tab_web_contents(), profile, /*original_profile=*/nullptr,
-      /*is_migration_to_account=*/{}, /*user_has_any_profile_saved=*/{},
+      AutofillClient::SaveAddressBubbleType::kSave,
+      /*user_has_any_profile_saved=*/{},
       /*callback=*/base::DoNothing());
 }
+
+INSTANTIATE_FEATURE_OVERRIDE_TEST_SUITE(AddressBubblesControllerBrowserTest);
 
 }  // namespace autofill

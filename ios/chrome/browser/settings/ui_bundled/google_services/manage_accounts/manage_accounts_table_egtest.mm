@@ -4,10 +4,11 @@
 
 #import <UIKit/UIKit.h>
 
+#import "base/ios/ios_util.h"
 #import "base/test/ios/wait_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_matchers.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_matchers.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_feature.h"
 #import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/manage_accounts_table_view_controller_constants.h"
@@ -15,6 +16,7 @@
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/browser/signin/model/test_constants.h"
+#import "ios/chrome/browser/signin/model/test_constants_utils.h"
 #import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
@@ -43,8 +45,6 @@ using chrome_test_util::SettingsSignInRowMatcher;
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config = [super appConfigurationForTestCase];
-
-  config.features_enabled.push_back(kIdentityDiscAccountMenu);
 
   if ([self isRunningTest:@selector
             (testReloadOnRemoveSecondaryAccountInOtherProfile)]) {
@@ -284,22 +284,23 @@ using chrome_test_util::SettingsSignInRowMatcher;
   [SigninEarlGrey signinWithFakeIdentity:fakeIdentity];
   [self openAccountsListFromSettings];
 
-  // Tap on "Add Account".
-  [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   kSettingsAccountsTableViewAddAccountCellId)]
-      performAction:grey_tap()];
+  for (NSString* cancelButtonId in
+           signin::FakeSystemIdentityManagerStaySignedOutButtons()) {
+    // Tap on "Add Account".
+    [[EarlGrey
+        selectElementWithMatcher:
+            grey_accessibilityID(kSettingsAccountsTableViewAddAccountCellId)]
+        performAction:grey_tap()];
+    // Checks the Fake authentication view is shown
+    [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                            kFakeAuthActivityViewIdentifier)]
+        assertWithMatcher:grey_sufficientlyVisible()];
+    // Close the SSO view controller.
+    id<GREYMatcher> matcher = grey_allOf(grey_accessibilityID(cancelButtonId),
+                                         grey_sufficientlyVisible(), nil);
+    [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
+  }
 
-  // Checks the Fake authentication view is shown
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kFakeAuthActivityViewIdentifier)]
-      assertWithMatcher:grey_sufficientlyVisible()];
-
-  // Close the SSO view controller.
-  id<GREYMatcher> matcher =
-      grey_allOf(grey_accessibilityID(kFakeAuthCancelButtonIdentifier),
-                 grey_sufficientlyVisible(), nil);
-  [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
   [ChromeEarlGreyUI waitForAppToIdle];
 }
 

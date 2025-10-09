@@ -13,6 +13,7 @@
 #include "components/security_interstitials/content/settings_page_helper.h"
 #include "components/security_interstitials/content/stateful_ssl_host_state_delegate.h"
 #include "components/security_interstitials/core/metrics_helper.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
 
 // static
@@ -60,7 +61,7 @@ void HttpsOnlyModeControllerClient::Proceed() {
     web_contents_->SetAlwaysSendSubresourceNotifications();
 
     state->AllowHttpForHost(
-        request_url_.host(),
+        request_url_.GetHost(),
         web_contents_->GetPrimaryMainFrame()->GetStoragePartition());
   }
   auto* tab_helper = HttpsOnlyModeTabHelper::FromWebContents(web_contents_);

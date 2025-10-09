@@ -194,6 +194,7 @@ constexpr char kOpCosTypeName[] = "cos";
 constexpr char kOpExpTypeName[] = "exp";
 constexpr char kOpFloorTypeName[] = "floor";
 constexpr char kOpIdentityTypeName[] = "identity";
+constexpr char kOpRoundEvenTypeName[] = "round";
 constexpr char kOpSignTypeName[] = "sign";
 constexpr char kOpSinTypeName[] = "sin";
 constexpr char kOpTanTypeName[] = "tan";
@@ -863,8 +864,7 @@ bool Supports(const SupportedTensors& supported_tensors,
       MILDataTypeToOperandType(operand_info.mil_data_type);
   const uint32_t rank = operand_info.dimensions.size();
   return supported_tensors.data_types.Has(data_type) &&
-         supported_tensors.ranks.min <= rank &&
-         rank <= supported_tensors.ranks.max;
+         supported_tensors.ranks.Supports(rank);
 }
 
 bool SupportsAll(const SupportedTensors& supported_tensors,
@@ -1173,13 +1173,13 @@ ContextProperties GraphBuilderCoreml::GetContextProperties() {
       InputOperandLayout::kNchw, Resample2DAxes::kChannelsFirst,
       BatchNormalizationAxis::kChannelsFirst,
       /*tensor_byte_length_limit=*/kTensorByteLengthLimit,
-      {/*input=*/kFloatsAndInt32,
-       /*constant=*/kConstantSupportedDataTypes,
+      {/*input=*/{kFloatsAndInt32, kMaxRank},
+       /*constant=*/{kConstantSupportedDataTypes, kMaxRank},
        // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.reduction.reduce_argmax
        /*arg_min_max_input=*/
        {arg_min_max_input_supported_data_types, kNonScalarMaxRank},
        /*arg_min_max_output=*/
-       kArgMinMaxOutputSupportedDataTypes,
+       {kArgMinMaxOutputSupportedDataTypes, kMaxRank},
        // TODO(crbug.com/338529225): Support ND input.
        // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.normalization.batch_norm
        /*batch_normalization_input=*/{DataTypeConstraint::kFloat16To32, {3, 5}},
@@ -1233,6 +1233,12 @@ ContextProperties GraphBuilderCoreml::GetContextProperties() {
        {DataTypeConstraint::kUint8, kMaxRank},
        /*logical_not_input=*/
        {DataTypeConstraint::kUint8, kMaxRank},
+       // IsNaN is emulated by not_equal.
+       /*is_nan_input=*/
+       {DataTypeConstraint::kFloat16To32, kMaxRank},
+       // IsInfinite is emulated by abs and equal.
+       /*is_infinite_input=*/
+       {DataTypeConstraint::kFloat16To32, kMaxRank},
        /*logical_output=*/DataTypeConstraint::kUint8,
        /*abs_input=*/{kFloatsAndInt32, kMaxRank},
        /*ceil_input=*/
@@ -1251,6 +1257,8 @@ ContextProperties GraphBuilderCoreml::GetContextProperties() {
        // Polyfilled with add and mul.
        /*neg_input=*/{kFloatsAndInt32, kMaxRank},
        /*reciprocal_input=*/
+       {DataTypeConstraint::kFloat16To32, kMaxRank},
+       /*round_even_input=*/
        {DataTypeConstraint::kFloat16To32, kMaxRank},
        /*sign_input=*/
        {kFloatsAndInt32, kMaxRank},
@@ -1284,6 +1292,8 @@ ContextProperties GraphBuilderCoreml::GetContextProperties() {
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(3)},
        /*gru_bias=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
+       /*gru_output_sequence=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(4)},
        /*gru_cell_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
        /*gru_cell_bias=*/
@@ -1309,6 +1319,8 @@ ContextProperties GraphBuilderCoreml::GetContextProperties() {
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(3)},
        /*lstm_bias=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
+       /*lstm_output_sequence=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(4)},
        // LstmCell is implemented with lstm, they should have the same
        // constraints.
        /*lstm_cell_input=*/
@@ -1823,6 +1835,8 @@ GraphBuilderCoreml::AddInput(
   auto* mutable_description = ml_model_.mutable_description();
   auto* feature_description = mutable_description->add_input();
   const mojom::Operand& operand = GetOperand(input_id);
+  CHECK(
+      context_properties_.data_type_limits.input.Supports(operand.descriptor));
   RETURN_IF_ERROR(PopulateFeatureDescription(input_id, *feature_description));
 
   CoreML::Specification::MILSpec::NamedValueType& input =
@@ -1849,6 +1863,9 @@ GraphBuilderCoreml::AddOutput(OperandId output_id) {
   CHECK(id_to_operand_info_map().contains(output_id));
   auto* mutable_description = ml_model_.mutable_description();
   auto* feature_description = mutable_description->add_output();
+  const mojom::Operand& operand = GetOperand(output_id);
+  CHECK(context_properties_.data_type_limits.output().Supports(
+      operand.descriptor));
   RETURN_IF_ERROR(PopulateFeatureDescription(output_id, *feature_description));
   return base::ok();
 }
@@ -1990,7 +2007,7 @@ GraphBuilderCoreml::AddOperationForArgMinMax(
 
   const OperandInfo& output_operand_info =
       GetOperandInfo(operation.output_operand_id);
-  CHECK(context_properties_.data_type_limits.arg_min_max_output.Has(
+  CHECK(context_properties_.data_type_limits.arg_min_max_output.data_types.Has(
       MILDataTypeToOperandType(output_operand_info.mil_data_type)));
 
   OperandId input_operand_id = operation.input_operand_id;
@@ -3001,6 +3018,15 @@ GraphBuilderCoreml::AddOperationForElementwiseUnary(
       return AddUnaryOperation(kOpIdentityTypeName, input_operand_id,
                                output_operand_id, block);
     }
+    case mojom::ElementWiseUnary::Kind::kRoundEven: {
+      CHECK(
+          context_properties_.data_type_limits.round_even_input.data_types.Has(
+              input_operand_data_type));
+      // TODO: crbug.com/439346653: Emulate roundEven when device type is not
+      // CPU.
+      return AddUnaryOperation(kOpRoundEvenTypeName, input_operand_id,
+                               output_operand_id, block);
+    }
     case mojom::ElementWiseUnary::Kind::kSign: {
       CHECK(context_properties_.data_type_limits.sign_input.data_types.Has(
           input_operand_data_type));
@@ -3049,6 +3075,38 @@ GraphBuilderCoreml::AddOperationForElementwiseUnary(
       return AddUnaryFloatsOperationWithEpsilon(
           kOpLogTypeName, input_operand_id, output_operand_id,
           /*epsilon=*/0, block);
+    }
+    case mojom::ElementWiseUnary::Kind::kIsNaN: {
+      CHECK(context_properties_.data_type_limits.is_nan_input.data_types.Has(
+          input_operand_data_type));
+      // IsNaN is not supported in CoreML. This is emulated with:
+      // not_equal(a, a).
+      return AddOperationForElementwiseBinary(
+          /*lhs_operand=*/input_operand_id,
+          /*rhs_operand=*/input_operand_id,
+          /*output_operand_id=*/output_operand_id,
+          mojom::ElementWiseBinary::Kind::kNotEqual, block);
+    }
+    case mojom::ElementWiseUnary::Kind::kIsInfinite: {
+      CHECK(
+          context_properties_.data_type_limits.is_infinite_input.data_types.Has(
+              input_operand_data_type));
+      // IsInfinite is not supported in CoreML. This is emulated with:
+      // equal(abs(a), Infinity).
+      ASSIGN_OR_RETURN(
+          OperandId abs_operand_id,
+          GenerateInternalOperandInfo(input_operand_info.mil_data_type,
+                                      input_operand_info.dimensions));
+      RETURN_IF_ERROR(AddOperationForElementwiseUnary(
+          mojom::ElementWiseUnary::Kind::kAbs, input_operand_id, abs_operand_id,
+          block));
+      return AddOperationForElementwiseBinary(
+          /*lhs_operand=*/abs_operand_id,
+          /*rhs_operand=*/
+          CreateFloatValue(input_data_type,
+                           std::numeric_limits<float>::infinity()),
+          /*output_operand_id=*/output_operand_id,
+          mojom::ElementWiseBinary::Kind::kEqual, block);
     }
     case mojom::ElementWiseUnary::Kind::kNeg: {
       CHECK(context_properties_.data_type_limits.neg_input.data_types.Has(
@@ -5134,10 +5192,8 @@ GraphBuilderCoreml::AddOperationForReshape(
       MILDataTypeToOperandType(input_operand_info.mil_data_type)));
 
   const OperandInfo& output_operand_info = GetOperandInfo(output_operand_id);
-  if (output_operand_info.dimensions.size() > 5) {
-    return NewNotSupportedError(
-        "Unsupported rank for reshape. It should be between 0 to 5.");
-  }
+  CHECK(context_properties_.data_type_limits.reshape_input.ranks.Supports(
+      output_operand_info.dimensions.size()));
 
   CoreML::Specification::MILSpec::Operation* op = block.add_operations();
   op->set_type(kOpReshapeTypeName);
@@ -5714,10 +5770,6 @@ GraphBuilderCoreml::PopulateFeatureDescription(
     }
   }
 
-  if (operand.descriptor.shape().size() > 5) {
-    return NewNotSupportedError(
-        "Unsupported rank for input. It should be between 0 to 5.");
-  }
   feature_description.mutable_name()->assign(
       GetOperandInfo(operand_id).external_coreml_name);
   return base::ok();

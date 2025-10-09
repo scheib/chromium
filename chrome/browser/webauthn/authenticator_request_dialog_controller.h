@@ -21,7 +21,7 @@
 #include "chrome/browser/webauthn/authenticator_request_dialog_model.h"
 #include "chrome/browser/webauthn/authenticator_transport.h"
 #include "chrome/browser/webauthn/observable_authenticator_list.h"
-#include "chrome/browser/webauthn/password_credential_controller.h"
+#include "chrome/browser/webauthn/password_credential_fetcher.h"
 #include "components/webauthn/core/browser/passkey_model.h"
 #include "components/webauthn/core/browser/passkey_model_change.h"
 #include "content/public/browser/authenticator_request_client_delegate.h"
@@ -107,7 +107,7 @@ class AuthenticatorRequestDialogController
   // Valid action when at step: kNotStarted.
   void StartFlow(device::FidoRequestHandlerBase::TransportAvailabilityInfo
                      transport_availability,
-                 PasswordCredentialController::PasswordCredentials passwords);
+                 PasswordCredentialFetcher::PasswordCredentials passwords);
 
   // Starts a modal WebAuthn flow (i.e. what you normally get if you call
   // WebAuthn with no mediation parameter) from a conditional request.
@@ -123,6 +123,9 @@ class AuthenticatorRequestDialogController
   // Valid action when at step: kNotStarted.
   void StartGuidedFlowForMostLikelyTransportOrShowMechanismSelection();
 
+  // Starts a flow for `transport`. Returns `true` if it started a flow, `false`
+  // if it didn't and the mechanism selection screen should be shown instead.
+  // This should only be called if `priority_mechanism_index_` is unset.
   bool StartGuidedFlowForHint(AuthenticatorTransport transport);
 
   // Proceeds straight to the platform authenticator prompt. If `type` is
@@ -400,8 +403,9 @@ class AuthenticatorRequestDialogController
   // kCableActivate.
   void StartGuidedFlowForTransport(AuthenticatorTransport transport);
 
-  // Starts the flow for adding an unlisted phone by showing a QR code.
-  void StartGuidedFlowForAddPhone();
+  // Starts the hybrid flow. This flow starts with showing a QR code. In some
+  // cases it can also display the user a message to insert a security key.
+  void StartHybridFlow();
 
   // Displays a resident-key warning if needed and then calls
   // |HideDialogAndDispatchToNativeWindowsApi|.
@@ -487,7 +491,7 @@ class AuthenticatorRequestDialogController
   device::FidoRequestHandlerBase::TransportAvailabilityInfo
       transport_availability_;
 
-  PasswordCredentialController::PasswordCredentials passwords_;
+  PasswordCredentialFetcher::PasswordCredentials passwords_;
 
   content::AuthenticatorRequestClientDelegate::AccountPreselectedCallback
       account_preselected_callback_;
@@ -504,15 +508,6 @@ class AuthenticatorRequestDialogController
 
   base::OnceCallback<void(device::AuthenticatorGetAssertionResponse)>
       selection_callback_;
-
-  // cable_extension_provided_ indicates whether the request included a caBLE
-  // extension.
-  bool cable_extension_provided_ = false;
-
-  // cable_device_ready_ is true if a CTAP-level request has been sent to a
-  // caBLE device. At this point we assume that any transport errors are
-  // cancellations on the device, not networking errors.
-  bool cable_device_ready_ = false;
 
   // cable_connecting_sheet_timer_ is started when we start displaying
   // the "connecting..." sheet for a caBLE connection. To avoid flashing the UI,
@@ -553,11 +548,6 @@ class AuthenticatorRequestDialogController
   // starting the current request was made. Any later successful completion will
   // only be recorded if a start event was recorded first.
   bool did_record_macos_start_histogram_ = false;
-
-  // is_active_profile_authenticator_user_ is true if the current profile has
-  // recently used the platform authenticator on macOS that saves credentials
-  // into the profile.
-  bool is_active_profile_authenticator_user_ = false;
 
   // has_icloud_drive_enabled_ is true if the current system has iCloud Drive
   // enabled. This is used as an approximation for whether iCloud Keychain

@@ -11,6 +11,7 @@
 
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -52,21 +53,13 @@
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/signin/identity_test_environment_profile_adaptor.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/browser_window.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/api/identity.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chrome/test/base/ui_test_utils.h"
 #include "components/crx_file/id_util.h"
-#include "components/guest_view/browser/guest_view_base.h"
-#include "components/guest_view/browser/guest_view_manager_delegate.h"
-#include "components/guest_view/browser/guest_view_manager_factory.h"
-#include "components/guest_view/browser/test_guest_view_manager.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/prefs/pref_service.h"
@@ -79,6 +72,8 @@
 #include "components/signin/public/identity_manager/accounts_mutator.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
+#include "components/sync/base/command_line_switches.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/user_selectable_type.h"
 #include "components/sync/service/sync_service.h"
 #include "components/sync/service/sync_user_settings.h"
@@ -92,6 +87,7 @@
 #include "extensions/browser/api_test_utils.h"
 #include "extensions/browser/extension_function_dispatcher.h"
 #include "extensions/browser/pref_names.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/api/oauth2.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_features.h"
@@ -108,11 +104,22 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/idle/idle.h"
-#include "ui/base/idle/scoped_set_idle_state.h"
 #include "ui/gfx/geometry/rect.h"
+#include "url/gurl.h"
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/browser_window.h"
+#include "chrome/test/base/ui_test_utils.h"
+#include "components/guest_view/browser/guest_view_base.h"
+#include "components/guest_view/browser/guest_view_manager_delegate.h"
+#include "components/guest_view/browser/guest_view_manager_factory.h"
+#include "components/guest_view/browser/test_guest_view_manager.h"
+#include "ui/base/idle/scoped_set_idle_state.h"
 #include "ui/views/widget/any_widget_observer.h"
 #include "ui/views/window/dialog_delegate.h"
-#include "url/gurl.h"
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/ash/net/network_portal_detector_test_impl.h"
@@ -129,6 +136,8 @@
 #include "components/user_manager/user_manager.h"
 #endif
 
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
+
 using extensions::ExtensionsAPIClient;
 using testing::_;
 using testing::Return;
@@ -142,9 +151,13 @@ namespace utils = api_test_utils;
 
 using api::oauth2::OAuth2Info;
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 const char kAccessToken[] = "auth_token";
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
 const char kExtensionId[] = "ext_id";
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 const char kGetAuthTokenResultHistogramName[] =
     "Signin.Extensions.GetAuthTokenResult";
 const char kGetAuthTokenResultAfterConsentApprovedHistogramName[] =
@@ -152,6 +165,7 @@ const char kGetAuthTokenResultAfterConsentApprovedHistogramName[] =
 
 const char kLaunchWebAuthFlowResultHistogramName[] =
     "Signin.Extensions.LaunchWebAuthFlowResult";
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_CHROMEOS)
 void InitNetwork() {
@@ -244,6 +258,7 @@ class AsyncExtensionBrowserTest : public ExtensionBrowserTest {
       async_function_runners_;
 };
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 class TestHangOAuth2MintTokenFlow : public OAuth2MintTokenFlow {
  public:
   TestHangOAuth2MintTokenFlow()
@@ -364,9 +379,11 @@ void SimulateCustomUrlRedirect(const std::string& redirect_url,
             content::EvalJs(auth_web_contents, "window.location.replace(\"" +
                                                    redirect_url + "\");"));
 }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 }  // namespace
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 class FakeGetAuthTokenFunction : public IdentityGetAuthTokenFunction {
  public:
   FakeGetAuthTokenFunction()
@@ -583,6 +600,7 @@ class MockQueuedMintRequest : public IdentityMintRequestQueue::Request {
  public:
   MOCK_METHOD1(StartMintToken, void(IdentityMintRequestQueue::MintType));
 };
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 class IdentityTestWithSignin : public AsyncExtensionBrowserTest {
  public:
@@ -827,8 +845,17 @@ IN_PROC_BROWSER_TEST_F(IdentityGetProfileUserInfoFunctionTest,
       "test@example.com", signin::ConsentLevel::kSignin);
   std::optional<api::identity::ProfileUserInfo> info =
       RunGetProfileUserInfoWithEmail();
-  EXPECT_TRUE(info->email.empty());
-  EXPECT_TRUE(info->id.empty());
+  // The account is only returned if extensions are syncing. Whether or not
+  // extensions sync upon sign-in depends on
+  // `kReplaceSyncPromosWithSignInPromos`.
+  if (base::FeatureList::IsEnabled(
+          syncer::kReplaceSyncPromosWithSignInPromos)) {
+    EXPECT_EQ("test@example.com", info->email);
+    EXPECT_EQ("gaia_id_for_test_example.com", info->id);
+  } else {
+    EXPECT_TRUE(info->email.empty());
+    EXPECT_TRUE(info->id.empty());
+  }
 }
 
 IN_PROC_BROWSER_TEST_F(IdentityGetProfileUserInfoFunctionTest,
@@ -849,16 +876,15 @@ IN_PROC_BROWSER_TEST_F(IdentityGetProfileUserInfoFunctionTest,
 class IdentityGetProfileUserInfoFunctionNoSyncServiceTest
     : public IdentityGetProfileUserInfoFunctionTest {
  public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    IdentityGetProfileUserInfoFunctionTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitch(syncer::kDisableSync);
+  }
+
   void SetUpBrowserContextKeyedServices(
       content::BrowserContext* context) override {
     IdentityGetProfileUserInfoFunctionTest::SetUpBrowserContextKeyedServices(
         context);
-    SyncServiceFactory::GetInstance()->SetTestingFactory(
-        context,
-        base::BindOnce(
-            [](content::BrowserContext*) -> std::unique_ptr<KeyedService> {
-              return nullptr;
-            }));
   }
 };
 
@@ -939,18 +965,28 @@ IN_PROC_BROWSER_TEST_P(
       "test@example.com", signin::ConsentLevel::kSignin);
   std::optional<api::identity::ProfileUserInfo> info =
       RunGetProfileUserInfoWithAccountStatus();
+
   // The unconsented (Sync off) primary account is returned conditionally,
   // depending on the accountStatus parameter.
   if (account_status() == "ANY") {
     EXPECT_EQ("test@example.com", info->email);
     EXPECT_EQ("gaia_id_for_test_example.com", info->id);
   } else {
-    // accountStatus is SYNC or unspecified.
-    EXPECT_TRUE(info->email.empty());
-    EXPECT_TRUE(info->id.empty());
+    // accountStatus is SYNC or unspecified. In this case, the account is only
+    // returned if extensions are syncing. Whether or not extensions sync upon
+    // sign-in depends on `syncer::kReplaceSyncPromosWithSignInPromos`.
+    if (base::FeatureList::IsEnabled(
+            syncer::kReplaceSyncPromosWithSignInPromos)) {
+      EXPECT_EQ("test@example.com", info->email);
+      EXPECT_EQ("gaia_id_for_test_example.com", info->id);
+    } else {
+      EXPECT_TRUE(info->email.empty());
+      EXPECT_TRUE(info->id.empty());
+    }
   }
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 class GetAuthTokenFunctionTest
     : public IdentityTestWithSignin,
       public signin::IdentityManager::DiagnosticsObserver {
@@ -3979,15 +4015,13 @@ IN_PROC_BROWSER_TEST_F(LaunchWebAuthFlowFunctionTestWithBrowserTab,
   function->SetLaunchWebAuthFlowDelegateForTesting(
       std::make_unique<TestDelegate>());
 
-  ui_test_utils::BrowserChangeObserver browser_opened(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  ui_test_utils::BrowserCreatedObserver browser_opened;
 
   std::string args =
       "[{\"interactive\": true, \"url\": \"" + auth_url.spec() + "\"}]";
   RunFunctionAsync(function.get(), args);
 
   Browser* popup_browser = browser_opened.Wait();
-
   gfx::Rect bounds = popup_browser->window()->GetBounds();
   EXPECT_EQ(bounds.x(), TestDelegate::kTestBounds.x());
   EXPECT_EQ(bounds.y(), TestDelegate::kTestBounds.y());
@@ -4246,6 +4280,7 @@ IN_PROC_BROWSER_TEST_F(ClearAllCachedAuthTokensFunctionTest,
   EXPECT_EQ(IdentityTokenCacheValue::CACHE_STATUS_NOTFOUND,
             id_api()->token_cache()->GetToken(token_key).status());
 }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 class OnSignInChangedEventTest : public IdentityTestWithSignin {
  protected:

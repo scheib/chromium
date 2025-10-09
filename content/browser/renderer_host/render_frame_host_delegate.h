@@ -20,7 +20,6 @@
 #include "content/browser/webui/web_ui_impl.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/javascript_dialog_manager.h"
-#include "content/public/browser/media_player_watch_time.h"
 #include "content/public/browser/media_stream_request.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/select_audio_output_request.h"
@@ -56,7 +55,7 @@
 #include "ui/base/window_open_disposition.h"
 
 #if BUILDFLAG(IS_WIN)
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
@@ -68,10 +67,6 @@
 #endif
 
 class GURL;
-
-namespace IPC {
-class Message;
-}
 
 namespace gfx {
 class Rect;
@@ -164,10 +159,6 @@ class CONTENT_EXPORT RenderFrameHostDelegate {
   using ClipboardPasteData = content::ClipboardPasteData;
   using ClipboardEndpoint = content::ClipboardEndpoint;
   using ClipboardMetadata = ui::ClipboardMetadata;
-
-  // This is used to give the delegate a chance to filter IPC messages.
-  virtual bool OnMessageReceived(RenderFrameHostImpl* render_frame_host,
-                                 const IPC::Message& message);
 
   // Notification from the renderer host that a suspicious navigation of the
   // main frame has been blocked. Allows the delegate to provide some UI to let

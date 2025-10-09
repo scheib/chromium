@@ -56,7 +56,8 @@ class CC_EXPORT CompositorFrameReportingController {
 
   CompositorFrameReportingController(bool should_report_histograms,
                                      bool should_report_ukm,
-                                     int layer_tree_host_id);
+                                     int layer_tree_host_id,
+                                     bool is_trees_in_viz_client);
   virtual ~CompositorFrameReportingController();
 
   CompositorFrameReportingController(
@@ -88,7 +89,9 @@ class CC_EXPORT CompositorFrameReportingController {
       const viz::FrameTimingDetails& details);
   void OnStoppedRequestingBeginFrames();
 
-  void NotifyReadyToCommit(std::unique_ptr<BeginMainFrameMetrics> details);
+  // Virtual to stub out CFRC in Viz for TreesInViz.
+  virtual void NotifyReadyToCommit(
+      std::unique_ptr<BeginMainFrameMetrics> details);
 
   void InitializeUkmManager(std::unique_ptr<ukm::UkmRecorder> recorder);
   void SetSourceId(ukm::SourceId source_id);
@@ -157,6 +160,10 @@ class CC_EXPORT CompositorFrameReportingController {
     return next_activate_has_invalidation_;
   }
 
+  void set_trees_in_viz_client_for_testing(bool new_value) {
+    is_trees_in_viz_client_ = new_value;
+  }
+
  private:
   using SmoothThread = CompositorFrameReporter::SmoothThread;
   using SmoothEffectDrivingThread =
@@ -196,6 +203,7 @@ class CC_EXPORT CompositorFrameReportingController {
 
   const bool should_report_histograms_;
   const int layer_tree_host_id_;
+  bool is_trees_in_viz_client_;
 
   viz::BeginFrameId last_submitted_frame_id_;
 

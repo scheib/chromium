@@ -33,14 +33,14 @@ enum UIDisplayDisposition {
   AUTOMATIC_WITH_PASSWORD_PENDING = 0,
   MANUAL_WITH_PASSWORD_PENDING = 1,
   MANUAL_MANAGE_PASSWORDS = 2,
-  MANUAL_BLOCKLISTED_OBSOLETE = 3,  // obsolete.
+  // Deprecated: MANUAL_BLOCKLISTED = 3,
   AUTOMATIC_GENERATED_PASSWORD_CONFIRMATION = 4,
-  AUTOMATIC_CREDENTIAL_REQUEST_OBSOLETE = 5,  // obsolete
+  // Deprecated: AUTOMATIC_CREDENTIAL_REQUEST = 5,
   AUTOMATIC_SIGNIN_TOAST = 6,
   MANUAL_WITH_PASSWORD_PENDING_UPDATE = 7,
   AUTOMATIC_WITH_PASSWORD_PENDING_UPDATE = 8,
   MANUAL_GENERATED_PASSWORD_CONFIRMATION = 9,
-  AUTOMATIC_SAVE_UNSYNCED_CREDENTIALS_LOCALLY = 10,
+  // Deprecated: AUTOMATIC_SAVE_UNSYNCED_CREDENTIALS_LOCALLY = 10,
   AUTOMATIC_COMPROMISED_CREDENTIALS_REMINDER = 11,
   AUTOMATIC_MOVE_TO_ACCOUNT_STORE = 12,
   MANUAL_BIOMETRIC_AUTHENTICATION_FOR_FILLING = 13,
@@ -77,13 +77,13 @@ enum UIDismissalReason {
   CLICKED_CANCEL = 2,
   CLICKED_NEVER = 3,
   CLICKED_MANAGE = 4,
-  CLICKED_DONE_OBSOLETE = 5,         // obsolete
-  CLICKED_UNBLOCKLIST_OBSOLETE = 6,  // obsolete.
-  CLICKED_OK_OBSOLETE = 7,           // obsolete
-  CLICKED_CREDENTIAL_OBSOLETE = 8,   // obsolete.
+  // Deprecated: CLICKED_DONE = 5,
+  // Deprecated: CLICKED_UNBLOCKLIST = 6,
+  // Deprecated: CLICKED_OK = 7,
+  // Deprecated: CLICKED_CREDENTIAL = 8,
   AUTO_SIGNIN_TOAST_TIMEOUT = 9,
-  AUTO_SIGNIN_TOAST_CLICKED_OBSOLETE = 10,  // obsolete.
-  CLICKED_BRAND_NAME_OBSOLETE = 11,         // obsolete.
+  // Deprecated: AUTO_SIGNIN_TOAST_CLICKED = 10,
+  // Deprecated: CLICKED_BRAND_NAME = 11,
   CLICKED_PASSWORDS_DASHBOARD = 12,
   CLICKED_MANAGE_PASSWORD = 13,
   CLICKED_GOT_IT = 14,
@@ -377,7 +377,12 @@ enum class PasswordDropdownSelectedOption {
   kWebAuthn = 6,
   // User selected the "Sign in with another device" button.
   kWebAuthnSignInWithAnotherDevice = 7,
-  kMaxValue = kWebAuthnSignInWithAnotherDevice
+  // Backup password saved during the APC flow.
+  kBackupPassword = 8,
+  // "Trouble signing in" disclaimer, displayed when trying to log in with APC
+  // password.
+  kTroubleSigningIn = 9,
+  kMaxValue = kTroubleSigningIn
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -529,19 +534,6 @@ enum class SubmittedFormType {
   kResetPassword = 4,
   kSingleUsername = 5,
   kMaxValue = kSingleUsername,
-};
-
-// Represents different user interactions related to shared password
-// notification bubble. These values are persisted to logs. Entries should not
-// be renumbered and numeric values should never be reused. Always keep this
-// enum in sync with the corresponding
-// PasswordManager.SharedPasswordsNotificationInteractions in enums.xml.
-enum class SharedPasswordsNotificationBubbleInteractions {
-  kNotificationDisplayed = 0,
-  kGotItButtonClicked = 1,
-  kManagePasswordsButtonClicked = 2,
-  kCloseButtonClicked = 3,
-  kMaxValue = kCloseButtonClicked,
 };
 
 // Represents the result of processing an incoming password sharing invitation.
@@ -736,8 +728,11 @@ void LogPasswordDropdownShown(
     const std::vector<autofill::Suggestion>& suggestions);
 
 // Log the type of the password dropdown suggestion when chosen.
-void LogPasswordDropdownItemSelected(PasswordDropdownSelectedOption type,
-                                     bool off_the_record);
+void LogPasswordSuggestionSelected(PasswordDropdownSelectedOption type,
+                                   bool off_the_record);
+
+// Logs only PasswordManager.PasswordDropdownItemSelected metric.
+void LogPasswordDropdownItemSelected(PasswordDropdownSelectedOption type);
 
 // Log a password successful submission event.
 void LogPasswordSuccessfulSubmissionIndicatorEvent(
@@ -806,10 +801,6 @@ void LogPasswordNoteActionInSettings(PasswordNoteAction action);
 void LogUserInteractionsInPasswordManagementBubble(
     PasswordManagementBubbleInteractions
         password_management_bubble_interaction);
-
-// Log the user interaction events in the shared passwords notification bubble.
-void LogUserInteractionsInSharedPasswordsNotificationBubble(
-    SharedPasswordsNotificationBubbleInteractions interaction);
 
 // Log the result of processing an incoming password sharing invitation.
 void LogProcessIncomingPasswordSharingInvitationResult(

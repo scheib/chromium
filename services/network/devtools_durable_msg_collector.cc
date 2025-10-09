@@ -4,8 +4,6 @@
 
 #include "services/network/devtools_durable_msg_collector.h"
 
-#include "services/network/devtools_durable_msg_collector_config.h"
-
 namespace network {
 
 DevtoolsDurableMessageCollector::DevtoolsDurableMessageCollector(
@@ -18,12 +16,18 @@ DevtoolsDurableMessageCollector::DevtoolsDurableMessageCollector(
                           base::Unretained(this)));
 }
 
-DevtoolsDurableMessageCollector::~DevtoolsDurableMessageCollector() = default;
+DevtoolsDurableMessageCollector::~DevtoolsDurableMessageCollector() {
+  // DevtoolsDurableMessage destructor calls back into this class via
+  // WillRemoveBytes(). Explicitly clear the map to avoid a destruction
+  // ordering bug.
+  request_id_to_message_map_.clear();
+}
 
 void DevtoolsDurableMessageCollector::Configure(
-    const DevtoolsDurableMessageCollectorConfig& params) {
+    mojom::NetworkDurableMessageConfigPtr mojo_config) {
   max_buffer_size_ =
-      std::max(max_buffer_size_, static_cast<int64_t>(params.max_storage_size));
+      std::max(max_buffer_size_,
+               static_cast<int64_t>(mojo_config->http_storage_max_size));
 }
 
 void DevtoolsDurableMessageCollector::Retrieve(
@@ -32,10 +36,8 @@ void DevtoolsDurableMessageCollector::Retrieve(
   auto message = request_id_to_message_map_.find(devtools_request_id);
   if (message != request_id_to_message_map_.end() &&
       message->second->is_complete()) {
-    mojo_base::BigBuffer retrieved_message(message->second->byte_size());
-    CHECK(message->second->CopyTo(retrieved_message));
     return std::move(callback).Run(
-        std::make_optional(std::move(retrieved_message)));
+        std::make_optional(message->second->Retrieve()));
   }
 
   return std::move(callback).Run(std::nullopt);

@@ -12,6 +12,7 @@
 #include "content/public/browser/web_contents.h"
 
 #if BUILDFLAG(ENABLE_GLIC)
+#include "chrome/browser/glic/public/glic_keyed_service.h"
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
 #endif
 
@@ -115,7 +116,7 @@ void GlicNudgeController::SetNudgeActivityCallbackForTesting() {
 void GlicNudgeController::OnActiveTabChanged(
     BrowserWindowInterface* browser_interface) {
   if (delegate_ && delegate_->GetIsShowingGlicNudge()) {
-    delegate_->OnTriggerGlicNudgeUI(std::string());
+    delegate_->OnHideGlicNudgeUI();
     OnNudgeActivity(tabs::GlicNudgeActivity::kNudgeIgnoredActiveTabChanged);
   }
 }

@@ -282,8 +282,10 @@ void LayoutTable::RemoveChild(LayoutObject* child) {
   LayoutBlock::RemoveChild(child);
 }
 
-void LayoutTable::StyleDidChange(StyleDifference diff,
-                                 const ComputedStyle* old_style) {
+void LayoutTable::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
   // StyleDifference handles changes in table-layout, border-spacing.
   if (old_style) {
@@ -297,7 +299,7 @@ void LayoutTable::StyleDidChange(StyleDifference diff,
     if (borders_changed || collapse_changed)
       GridBordersChanged();
   }
-  LayoutBlock::StyleDidChange(diff, old_style);
+  LayoutBlock::StyleDidChange(diff, old_style, style_change_context);
 }
 
 LayoutBox* LayoutTable::CreateAnonymousBoxWithSameTypeAs(
@@ -312,7 +314,7 @@ PhysicalRect LayoutTable::OverflowClipRect(
   NOT_DESTROYED();
   PhysicalRect clip_rect;
   if (StyleRef().BorderCollapse() == EBorderCollapse::kCollapse) {
-    clip_rect = PhysicalRect(location, Size());
+    clip_rect = PhysicalRect(location, StitchedSize());
     const auto overflow_clip = GetOverflowClipAxes();
     gfx::Rect infinite_rect = InfiniteIntRect();
     if ((overflow_clip & kOverflowClipX) == kNoOverflowClip) {
@@ -339,7 +341,7 @@ PhysicalRect LayoutTable::OverflowClipRect(
   while (child) {
     if (child->IsTableCaption()) {
       // If there are captions, we cannot clip to content box.
-      clip_rect.Unite(PhysicalRect(location, Size()));
+      clip_rect.Unite(PhysicalRect(location, StitchedSize()));
       break;
     }
     child = child->NextSiblingBox();

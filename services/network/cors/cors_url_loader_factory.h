@@ -160,6 +160,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CorsURLLoaderFactory final
   mojo::PendingRemote<mojom::DevToolsObserver> GetDevToolsObserver(
       ResourceRequest& resource_request) const;
 
+  // Returns whether this factory is used in the multi-network CCT workflow.
+  bool IsMultiNetworkCCTWorkFlow() const;
+
   template <class T>
   void OnLoaderCreated(
       std::unique_ptr<T> loader,
@@ -208,6 +211,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CorsURLLoaderFactory final
   const bool require_cross_site_request_for_cookies_;
   const net::CookieSettingOverrides factory_cookie_setting_overrides_;
   const net::CookieSettingOverrides devtools_cookie_setting_overrides_;
+  const bool is_main_frame_origin_recently_accessed_;
 
   // Relative order of `network_loader_factory_` and `loaders_` matters -
   // URLLoaderFactory needs to live longer than URLLoaders created using the

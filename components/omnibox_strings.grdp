@@ -356,6 +356,12 @@
   <message name="IDS_OMNIBOX_ACTION_IN_SUGGEST_AIM_CONTENTS" desc="The button hover tooltip text to describe action.">
     Open AI Mode with this suggestion.
   </message>
+  <message name="IDS_OMNIBOX_ACTION_IN_SUGGEST_TAB_SWITCH_HINT" desc="Label for Omnibox Action button that switches to another tab" meaning="Length: 12em">
+    Switch to this tab
+  </message>
+  <message name="IDS_OMNIBOX_ACTION_IN_SUGGEST_TAB_SWITCH_CONTENTS" desc="The button hover tooltip text to describe action.">
+    Switch to this tab.
+  </message>
   <message name="IDS_OMNIBOX_ACTION_IN_SUGGEST_WEBSITE_HINT" desc="Label for Omnibox Action button that opens the POI website." meaning="Length: 12em">
     Website
   </message>
@@ -461,6 +467,13 @@
   </message>
   <message name="IDS_ACC_REMOVE_SUGGESTION_BUTTON" desc="Announcement when remove suggestion button is focused.">
     Remove Suggestion button, press Enter to remove this suggestion
+  </message>
+  <!-- Accessibility labels for the omnibox AI Mode button. -->
+  <message name="IDS_ACC_AI_MODE_PLACEHOLDER_TEXT" desc="Announcement when omnibox text field is empty and AI Mode is available.">
+    Press tab then enter to ask AI Mode
+  </message>
+  <message name="IDS_ACC_AI_MODE_BUTTON_FOCUSED" desc="Announcement when AI Mode button is focused.">
+    AI Mode button, press Enter to ask AI Mode
   </message>
 
   <!-- Accessibility announcements made for the Chrome tip IPH suggestions sometimes shown at the bottom of the Omnibox -->
@@ -618,6 +631,7 @@
   <message name="IDS_OMNIBOX_HUB_HISTORY_HEADER" desc="The header for the history suggestions section.">
     History
   </message>
-
-
+  <message name="IDS_OMNIBOX_HUB_TYPED_MATCH_HEADER" desc="The header for the typed match suggestions section.">
+    Tabs and tab groups
+  </message>
 </grit-part>

@@ -342,7 +342,6 @@ class TestingProfile : public Profile {
   sync_preferences::TestingPrefServiceSyncable* GetTestingPrefService();
 
   // content::BrowserContext
-  base::FilePath GetPath() override;
   base::FilePath GetPath() const override;
   base::Time GetCreationTime() const override;
   std::unique_ptr<content::ZoomLevelDelegate> CreateZoomLevelDelegate(
@@ -387,7 +386,6 @@ class TestingProfile : public Profile {
   Profile* GetOriginalProfile() override;
   const Profile* GetOriginalProfile() const override;
   bool IsChild() const override;
-  bool AllowsBrowserWindows() const override;
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   void SetExtensionSpecialStoragePolicy(
       scoped_refptr<ExtensionSpecialStoragePolicy>
@@ -503,8 +501,6 @@ class TestingProfile : public Profile {
   raw_ptr<TestingProfile> original_profile_ = nullptr;
 
   bool guest_session_ = false;
-
-  bool allows_browser_windows_ = true;
 
   bool is_new_profile_ = false;
 

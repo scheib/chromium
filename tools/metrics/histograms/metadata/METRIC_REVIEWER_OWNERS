@@ -132,6 +132,7 @@ julietlevesque@google.com
 bhartmire@google.com
 # crostini
 drmasquatch@google.com
+uekawa@chromium.org
 # cryptohome
 jorgelo@chromium.org
 hcyang@google.com
@@ -325,7 +326,6 @@ drubery@chromium.org
 thefrog@chromium.org
 xinghuilu@chromium.org
 # payment
-rouslan@chromium.org
 smcgruer@chromium.org
 # performance_controls
 agale@chromium.org
@@ -494,6 +494,8 @@ hcyang@google.com
 schenney@chromium.org
 # web_rtc
 kron@chromium.org
+# windows
+koretadaniel@chromium.org
 # xr
 alcooper@chromium.org
 # Custom: not in any subdirectory

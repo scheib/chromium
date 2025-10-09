@@ -30,8 +30,13 @@ bool IsUnrestrictedOAuth2Scopes(const std::string& scope) {
       GaiaConstants::kGoogleUserInfoProfile,
 
       // Required to fetch the ManagedAccounsSigninRestriction policy during
-      //sign in.
+      // sign in.
       GaiaConstants::kSecureConnectOAuth2Scope,
+
+      // TODO(crbug.com/446152335): Consider wrapping this in
+      // `ENABLE_PDF_SAVE_TO_DRIVE` build flag.
+      // Required for save to Drive.
+      GaiaConstants::kDriveOAuth2Scope,
 
       // TODO(b/321900823): Fix tests and move below scopes to require the
       // browser to be signed in.
@@ -116,6 +121,9 @@ bool IsUnconsentedSignedInOAuth2Scopes(const std::string& scope) {
       // Required by Omnibox / EnterpriseSearchAggregatorSuggestionsService.
       GaiaConstants::kDiscoveryEngineCompleteQueryOAuth2Scope,
 
+      // Required by Access Code Cast.
+      GaiaConstants::kDiscoveryOAuth2Scope,
+
       // Used by AdvancedProtectionStatusManager, as well as internally by the
       // identity system.
       GaiaConstants::kOAuth1LoginScope,
@@ -127,8 +135,17 @@ bool IsUnconsentedSignedInOAuth2Scopes(const std::string& scope) {
       // Used by DevTools GenAI features
       GaiaConstants::kAidaOAuth2Scope,
 
+      // Used by DevTools Google Developer Program features
+      GaiaConstants::kGdpOAuth2Scope,
+
       // Required for certain Gemini features.
       GaiaConstants::kGeminiOAuth2Scope,
+
+      // Used by private webstore extension API.
+      GaiaConstants::kWebstoreOAuth2Scope,
+
+      // Required for Save to Drive and ChromeOS.
+      GaiaConstants::kDriveOAuth2Scope,
 
     // Required by ChromeOS only.
 #if BUILDFLAG(IS_CHROMEOS)
@@ -137,7 +154,6 @@ bool IsUnconsentedSignedInOAuth2Scopes(const std::string& scope) {
       GaiaConstants::kCastBackdropOAuth2Scope,
       GaiaConstants::kClearCutOAuth2Scope,
       GaiaConstants::kClientChannelOAuth2Scope,
-      GaiaConstants::kDriveOAuth2Scope,
       GaiaConstants::kExperimentsAndConfigsOAuth2Scope,
       GaiaConstants::kGCMGroupServerOAuth2Scope,
       GaiaConstants::kNearbyDevicesOAuth2Scope,

@@ -328,8 +328,7 @@ class PLATFORM_EXPORT UrlIndex {
       UrlData::CorsMode cors_mode,
       UrlData::CacheMode cache_lookup_mode);
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level);
 
   raw_ptr<ResourceFetchContext> fetch_context_;
   using UrlDataMap = HashMap<UrlData::KeyType, scoped_refptr<UrlData>>;
@@ -340,7 +339,10 @@ class PLATFORM_EXPORT UrlIndex {
   // Currently only changed for testing purposes.
   const int block_shift_;
 
-  base::MemoryPressureListener memory_pressure_listener_;
+  // Must be async, because it runs on the renderer's main thread, which is not
+  // the process's main thread in --single-process mode.
+  base::AsyncMemoryPressureListenerRegistration
+      memory_pressure_listener_registration_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
   base::WeakPtrFactory<UrlIndex> weak_factory_{this};

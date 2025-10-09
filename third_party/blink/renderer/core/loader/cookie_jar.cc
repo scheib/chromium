@@ -60,9 +60,7 @@ bool ContainsTruncatingChar(UChar c) {
 // for all APIs. There are 2 parameters for each API that influence how long the
 // delay is, `factor` and `offset`. If the actual time taken is `elapsed` then
 // the delay will be `elapsed * factor + offset`.
-BASE_FEATURE(kCookieJarAblation,
-             "CookieJarAblation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kCookieJarAblation, base::FEATURE_DISABLED_BY_DEFAULT);
 BASE_FEATURE_PARAM(double,
                    kCookieJarAblationDelayFactor,
                    &kCookieJarAblation,
@@ -106,8 +104,8 @@ void CookieJar::SetCookie(const String& value) {
         document_->GetExecutionContext()->GetStorageAccessApiStatus(),
         get_version_shared_memory, is_ad_tagged, apply_devtools_overrides,
         value,
-        WTF::BindOnce(&CookieJar::OnSetCookieResponse, WrapWeakPersistent(this),
-                      cookie_url, apply_devtools_overrides));
+        BindOnce(&CookieJar::OnSetCookieResponse, WrapWeakPersistent(this),
+                 cookie_url, apply_devtools_overrides));
   } else {
     if (!backend_->SetCookieFromString(
             cookie_url, document_->SiteForCookies(),

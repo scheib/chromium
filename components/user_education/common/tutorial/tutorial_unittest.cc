@@ -46,7 +46,8 @@ DEFINE_LOCAL_CUSTOM_ELEMENT_EVENT_TYPE(kCustomEventType1);
 
 const char kTestElementName1[] = "ELEMENT_NAME_1";
 
-const ui::ElementContext kTestContext1(1);
+constexpr auto kTestContext1 =
+    ui::ElementContext::CreateFakeContextForTesting(1);
 
 const TutorialIdentifier kTestTutorial1{"kTestTutorial1"};
 const TutorialIdentifier kTestTutorial2{"kTestTutorial2"};
@@ -67,11 +68,10 @@ class TestTutorialService : public TutorialService {
   }
 };
 
-class ScopedTestTutorialState : public user_education::ScopedTutorialState {
+class ScopedTestTutorialState : public ScopedTutorialState {
  public:
   explicit ScopedTestTutorialState(ui::test::TestElement* element)
-      : user_education::ScopedTutorialState(element->context()),
-        element_(element) {
+      : ScopedTutorialState(element->context()), element_(element) {
     element_->Show();
   }
   ~ScopedTestTutorialState() override { element_->Hide(); }
@@ -194,8 +194,7 @@ TEST_F(TutorialTest, TutorialBuilder) {
 }
 
 TEST_F(TutorialTest, RegisterTutorial) {
-  std::unique_ptr<TutorialRegistry> registry =
-      std::make_unique<TutorialRegistry>();
+  auto registry = std::make_unique<TutorialRegistry>();
 
   {
     TutorialDescription description;
@@ -206,15 +205,13 @@ TEST_F(TutorialTest, RegisterTutorial) {
     registry->AddTutorial(kTestTutorial1, std::move(description));
   }
 
-  std::unique_ptr<HelpBubbleFactoryRegistry> bubble_factory_registry =
-      std::make_unique<HelpBubbleFactoryRegistry>();
+  auto bubble_factory_registry = std::make_unique<HelpBubbleFactoryRegistry>();
 
   registry->GetTutorialIdentifiers();
 }
 
 TEST_F(TutorialTest, RegisterMultipleTutorials) {
-  std::unique_ptr<TutorialRegistry> registry =
-      std::make_unique<TutorialRegistry>();
+  auto registry = std::make_unique<TutorialRegistry>();
 
   const auto step = TutorialDescription::BubbleStep(kTestIdentifier1)
                         .SetBubbleBodyText(IDS_OK);
@@ -234,8 +231,7 @@ TEST_F(TutorialTest, RegisterMultipleTutorials) {
 }
 
 TEST_F(TutorialTest, RegisterSameTutorialTwice) {
-  std::unique_ptr<TutorialRegistry> registry =
-      std::make_unique<TutorialRegistry>();
+  auto registry = std::make_unique<TutorialRegistry>();
 
   const auto step = TutorialDescription::BubbleStep(kTestIdentifier1)
                         .SetBubbleBodyText(IDS_OK);
@@ -254,8 +250,7 @@ TEST_F(TutorialTest, RegisterSameTutorialTwice) {
 }
 
 TEST_F(TutorialTest, RegisterTutorialsWithAndWithoutHistograms) {
-  std::unique_ptr<TutorialRegistry> registry =
-      std::make_unique<TutorialRegistry>();
+  auto registry = std::make_unique<TutorialRegistry>();
 
   const auto step = TutorialDescription::BubbleStep(kTestIdentifier1)
                         .SetBubbleBodyText(IDS_OK);
@@ -279,10 +274,8 @@ TEST_F(TutorialTest, RegisterTutorialsWithAndWithoutHistograms) {
 }
 
 TEST_F(TutorialTest, RegisterSameTutorialInMultipleRegistries) {
-  std::unique_ptr<TutorialRegistry> registry1 =
-      std::make_unique<TutorialRegistry>();
-  std::unique_ptr<TutorialRegistry> registry2 =
-      std::make_unique<TutorialRegistry>();
+  auto registry1 = std::make_unique<TutorialRegistry>();
+  auto registry2 = std::make_unique<TutorialRegistry>();
 
   const auto step = TutorialDescription::BubbleStep(kTestIdentifier1)
                         .SetBubbleBodyText(IDS_OK);
@@ -348,11 +341,10 @@ TEST_F(TutorialTest, MultipleInteractionTutorialRuns) {
   element_3.Show();
 
   // Configure `next` callback to trigger `kCustomEventType1` on current anchor.
-  ON_CALL(next, Run).WillByDefault(
-      testing::Invoke([](ui::TrackedElement* current_anchor) {
-        ui::ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
-            current_anchor, kCustomEventType1);
-      }));
+  ON_CALL(next, Run).WillByDefault([](ui::TrackedElement* current_anchor) {
+    ui::ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
+        current_anchor, kCustomEventType1);
+  });
 
   // Build the tutorial `description`.
   TutorialDescription description;
@@ -650,8 +642,8 @@ TEST_F(TutorialTest, SingleStepRestartTutorialCanRestartMultipleTimes) {
                         aborted.Get(), restarted.Get());
   ClearEventQueue();
 
-  const int restarted_times = 3;
-  for (int i = 0; i < restarted_times; ++i) {
+  constexpr int kRestartedTimes = 3;
+  for (int i = 0; i < kRestartedTimes; ++i) {
     EXPECT_ASYNC_CALL_IN_SCOPE(
         restarted, Run,
         ClickRestartButton(service.currently_displayed_bubble_for_testing()));
@@ -773,7 +765,7 @@ TEST_F(TutorialTest, MultiStepRestartTutorialWithDismissAfterRestart) {
   ClearEventQueue();
 
   EXPECT_TRUE(service.IsRunningTutorial());
-  EXPECT_TRUE(service.currently_displayed_bubble_for_testing() != nullptr);
+  EXPECT_TRUE(service.currently_displayed_bubble_for_testing());
 
   EXPECT_ASYNC_CALL_IN_SCOPE(
       completed, Run,
@@ -821,8 +813,8 @@ TEST_F(TutorialTest, MultiStepRestartTutorialCanRestartMultipleTimes) {
                         aborted.Get(), restarted.Get());
   ClearEventQueue();
 
-  const int restarted_times = 3;
-  for (int i = 0; i < restarted_times; ++i) {
+  constexpr int kRestartedTimes = 3;
+  for (int i = 0; i < kRestartedTimes; ++i) {
     element_2.Show();
     ClearEventQueue();
     element_3.Show();
@@ -835,7 +827,7 @@ TEST_F(TutorialTest, MultiStepRestartTutorialCanRestartMultipleTimes) {
   }
 
   EXPECT_TRUE(service.IsRunningTutorial());
-  EXPECT_TRUE(service.currently_displayed_bubble_for_testing() != nullptr);
+  EXPECT_TRUE(service.currently_displayed_bubble_for_testing());
 
   EXPECT_ASYNC_CALL_IN_SCOPE(
       completed, Run,
@@ -984,8 +976,7 @@ TEST_F(TutorialTest, NoTimeoutIfBubbleShowing) {
 }
 
 TEST_F(TutorialTest, RegisterTutorialWithCreate) {
-  std::unique_ptr<TutorialRegistry> registry =
-      std::make_unique<TutorialRegistry>();
+  auto registry = std::make_unique<TutorialRegistry>();
 
   {
     auto description = TutorialDescription::Create<kHistogramName1>(
@@ -997,15 +988,13 @@ TEST_F(TutorialTest, RegisterTutorialWithCreate) {
     registry->AddTutorial(kTestTutorial1, std::move(description));
   }
 
-  std::unique_ptr<HelpBubbleFactoryRegistry> bubble_factory_registry =
-      std::make_unique<HelpBubbleFactoryRegistry>();
+  auto bubble_factory_registry = std::make_unique<HelpBubbleFactoryRegistry>();
 
   EXPECT_TRUE(registry->IsTutorialRegistered(kTestTutorial1));
 }
 
 TEST_F(TutorialTest, RegisterTutorialWithCreateFromVector) {
-  std::unique_ptr<TutorialRegistry> registry =
-      std::make_unique<TutorialRegistry>();
+  auto registry = std::make_unique<TutorialRegistry>();
 
   {
     TutorialDescription::Step first_step =
@@ -1026,8 +1015,7 @@ TEST_F(TutorialTest, RegisterTutorialWithCreateFromVector) {
     registry->AddTutorial(kTestTutorial1, std::move(description));
   }
 
-  std::unique_ptr<HelpBubbleFactoryRegistry> bubble_factory_registry =
-      std::make_unique<HelpBubbleFactoryRegistry>();
+  auto bubble_factory_registry = std::make_unique<HelpBubbleFactoryRegistry>();
 
   EXPECT_TRUE(registry->IsTutorialRegistered(kTestTutorial1));
 }
@@ -1054,8 +1042,8 @@ TEST_F(TutorialTest, SetupTemporaryStateCallback) {
       TutorialDescription::BubbleStep(kTestIdentifier1)
           .SetBubbleBodyText(IDS_OK));
   description.temporary_state_callback = base::BindRepeating(
-      [](ui::test::TestElement* element, ui::ElementContext context)
-          -> std::unique_ptr<user_education::ScopedTutorialState> {
+      [](ui::test::TestElement* element,
+         ui::ElementContext context) -> std::unique_ptr<ScopedTutorialState> {
         return base::WrapUnique(new ScopedTestTutorialState(element));
       },
       base::Unretained(&element_2));
@@ -1094,8 +1082,8 @@ TEST_F(TutorialTest, CleanupTemporaryStateOnAbort) {
       TutorialDescription::BubbleStep(kTestIdentifier1)
           .SetBubbleBodyText(IDS_OK));
   description.temporary_state_callback = base::BindRepeating(
-      [](ui::test::TestElement* element, ui::ElementContext context)
-          -> std::unique_ptr<user_education::ScopedTutorialState> {
+      [](ui::test::TestElement* element,
+         ui::ElementContext context) -> std::unique_ptr<ScopedTutorialState> {
         return base::WrapUnique(new ScopedTestTutorialState(element));
       },
       base::Unretained(&element_2));

@@ -88,11 +88,10 @@ public class HubToolbarMediator {
                     Pane pane = mPaneManager.getFocusedPaneSupplier().get();
                     if (pane == null) return;
 
-                    // Only show the search box visuals in the tab switcher and incognito panes.
+                    // Only show the search box visuals in the tab switcher, incognito and
+                    // potentially tab groups panes.
                     @PaneId int focusedPaneId = pane.getPaneId();
-                    if (focusedPaneId != PaneId.TAB_SWITCHER
-                            && focusedPaneId != PaneId.INCOGNITO_TAB_SWITCHER
-                            && maybeExcludeHubSearchForTabGroupsPane(focusedPaneId)) {
+                    if (shouldOmitFocusedPaneForHubSearch(focusedPaneId)) {
                         mPropertyModel.set(APPLY_DELAY_FOR_SEARCH_BOX_ANIMATION, true);
                         mPropertyModel.set(SEARCH_BOX_VISIBLE, false);
                         mPropertyModel.set(SEARCH_LOUPE_VISIBLE, false);
@@ -125,6 +124,8 @@ public class HubToolbarMediator {
     private final Callback<Pane> mOnFocusedPaneChange = this::onFocusedPaneChange;
     private final Callback<Boolean> mOnHubSearchEnabledStateChange =
             this::onHubSearchEnabledStateChange;
+    private final Callback<Boolean> mOnSearchBoxVisibilityChange =
+            this::onSearchBoxVisibilityChange;
     private final Callback<@Nullable Tab> mOnCurrentTabChange = this::onCurrentTabChange;
 
     private @Nullable PaneButtonLookup mPaneButtonLookup;
@@ -164,6 +165,7 @@ public class HubToolbarMediator {
             mRemoveReferenceButtonObservers.add(() -> supplier.removeObserver(observer));
 
             pane.getHubSearchEnabledStateSupplier().addObserver(mOnHubSearchEnabledStateChange);
+            pane.getHubSearchBoxVisibilitySupplier().addObserver(mOnSearchBoxVisibilityChange);
         }
         ObservableSupplier<Pane> focusedPaneSupplier = paneManager.getFocusedPaneSupplier();
         focusedPaneSupplier.addObserver(mOnFocusedPaneChange);
@@ -173,7 +175,7 @@ public class HubToolbarMediator {
 
         mPropertyModel.set(SEARCH_LISTENER, this::onSearchClicked);
         mPropertyModel.set(BACK_BUTTON_LISTENER, exitHubRunnable);
-        mPropertyModel.set(BACK_BUTTON_ENABLED, mCurrentTabSupplier.hasValue());
+        mPropertyModel.set(BACK_BUTTON_ENABLED, mCurrentTabSupplier.get() != null);
         mCurrentTabSupplier.addObserver(mOnCurrentTabChange);
 
         // Fire an event for the original setup.
@@ -193,6 +195,7 @@ public class HubToolbarMediator {
             @Nullable Pane pane = mPaneManager.getPaneForId(paneId);
             if (pane == null) continue;
             pane.getHubSearchEnabledStateSupplier().removeObserver(mOnHubSearchEnabledStateChange);
+            pane.getHubSearchBoxVisibilitySupplier().removeObserver(mOnSearchBoxVisibilityChange);
         }
     }
 
@@ -223,6 +226,14 @@ public class HubToolbarMediator {
             }
         }
         return INVALID_PANE_SWITCHER_INDEX;
+    }
+
+    private void onSearchBoxVisibilityChange(Boolean shouldShow) {
+        int screenWidthDp = mContext.getResources().getConfiguration().screenWidthDp;
+        boolean isTablet = HubUtils.isScreenWidthTablet(screenWidthDp);
+        shouldShow = !isTablet && shouldShow;
+
+        mPropertyModel.set(SEARCH_BOX_VISIBLE, shouldShow);
     }
 
     private void onReferenceButtonChange(@PaneId int paneId, @Nullable DisplayButtonData current) {
@@ -294,8 +305,6 @@ public class HubToolbarMediator {
         boolean enabled = hubSearchEnabledState == null ? true : hubSearchEnabledState;
         mPropertyModel.set(HUB_SEARCH_ENABLED_STATE, enabled);
 
-        // TODO(crbug.com/436529097): Decouple the search loupe from the menu button container on
-        // the tab groups pane so it can be displayed.
         mPropertyModel.set(MENU_BUTTON_VISIBLE, focusedPane.getMenuButtonVisible());
 
         boolean isIncognito = focusedPaneId == PaneId.INCOGNITO_TAB_SWITCHER;
@@ -322,6 +331,12 @@ public class HubToolbarMediator {
     }
 
     private void onSearchClicked() {
+        @PaneId int focusedPaneId = mPaneManager.getFocusedPaneSupplier().get().getPaneId();
+        // Due to animations when switching between focused panes, there is exists a possibility for
+        // race conditions which can cause clicks to register or allows them to be registered when
+        // toggling panes. This logic filters out clicks unless the pane is hub search eligible.
+        if (shouldOmitFocusedPaneForHubSearch(focusedPaneId)) return;
+
         mSearchActivityClient.requestOmniboxForResult(
                 mSearchActivityClient
                         .newIntentBuilder()
@@ -370,8 +385,17 @@ public class HubToolbarMediator {
                 "Android.HubSearch.SearchBoxEntrypointV2", action, HubSearchEntrypoint.NUM_ENTRIES);
     }
 
+    private boolean shouldOmitFocusedPaneForHubSearch(@PaneId int focusedPaneId) {
+        return focusedPaneId != PaneId.TAB_SWITCHER
+                && focusedPaneId != PaneId.INCOGNITO_TAB_SWITCHER
+                && maybeExcludeHubSearchForTabGroupsPane(focusedPaneId);
+    }
+
     private boolean maybeExcludeHubSearchForTabGroupsPane(@PaneId int focusedPaneId) {
-        if (!OmniboxFeatures.sAndroidHubSearchTabGroups.isEnabled()) return true;
+        if (!OmniboxFeatures.sAndroidHubSearchTabGroups.isEnabled()
+                || !OmniboxFeatures.sAndroidHubSearchEnableOnTabGroupsPane.getValue()) {
+            return true;
+        }
 
         return focusedPaneId != PaneId.TAB_GROUPS;
     }

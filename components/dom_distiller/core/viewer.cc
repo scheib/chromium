@@ -15,6 +15,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/strings/to_string.h"
 #include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "components/dom_distiller/core/distilled_page_prefs.h"
@@ -70,6 +71,12 @@ const char kMonospaceCssClass[] = "monospace";
 std::string GetVersionedCss() {
 #if BUILDFLAG(IS_ANDROID)
   if (base::FeatureList::IsEnabled(dom_distiller::kReaderModeDistillInApp)) {
+    return ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
+        IDR_DISTILLER_NEW_CSS);
+  }
+#endif
+#if BUILDFLAG(IS_IOS)
+  if (base::FeatureList::IsEnabled(dom_distiller::kEnableReaderModeNewCss)) {
     return ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
         IDR_DISTILLER_NEW_CSS);
   }
@@ -245,24 +252,21 @@ const std::string GetErrorPageJs() {
 
 const std::string GetSetTitleJs(std::string title) {
 #if BUILDFLAG(IS_IOS)
-  base::Value suffixValue("");
+  base::Value suffix_value("");
 #else  // Desktop and Android.
   std::string suffix(
       l10n_util::GetStringUTF8(IDS_DOM_DISTILLER_VIEWER_TITLE_SUFFIX));
-  base::Value suffixValue(" - " + suffix);
+  base::Value suffix_value(" - " + suffix);
 #endif
-  base::Value titleValue(title);
-  std::string suffixJs;
-  base::JSONWriter::Write(suffixValue, &suffixJs);
-  std::string titleJs;
-  base::JSONWriter::Write(titleValue, &titleJs);
-  return "setTitle(" + titleJs + ", " + suffixJs + ");";
+  base::Value title_value(title);
+  std::string suffix_js = base::WriteJson(suffix_value).value_or("");
+  std::string title_js = base::WriteJson(title_value).value_or("");
+  return "setTitle(" + title_js + ", " + suffix_js + ");";
 }
 
 const std::string GetSetTextDirectionJs(const std::string& direction) {
   base::Value value(direction);
-  std::string output;
-  base::JSONWriter::Write(value, &output);
+  std::string output = base::WriteJson(value).value_or("");
   return "setTextDirection(" + output + ");";
 }
 
@@ -295,8 +299,9 @@ const std::string GetUnsafeArticleContentJs(
 }
 
 const std::string GetAddToPageJs(const std::string& unsafe_content) {
-  std::string output(EnsureNonEmptyContent(unsafe_content));
-  base::JSONWriter::Write(base::Value(output), &output);
+  std::string output =
+      base::WriteJson(base::Value(EnsureNonEmptyContent(unsafe_content)))
+          .value_or("");
   return "addToPage(" + output + ");";
 }
 
@@ -312,9 +317,39 @@ const std::string GetLoadingImage() {
       IDR_DISTILLER_LOADING_IMAGE);
 }
 
+static std::string GetMinPinchZoomScale() {
+  float min_scale = kMinFontScaleAndroidCCT;
+#if BUILDFLAG(IS_ANDROID)
+  // Make the minimum pinch zoom value to be 1.0 for distillation in app to
+  // align with prefs UI.
+  if (base::FeatureList::IsEnabled(kReaderModeDistillInApp)) {
+    min_scale = kMinFontScaleAndroidInApp;
+  }
+#endif
+  return base::NumberToString(min_scale);
+}
+
+static std::string GetMaxPinchZoomScale() {
+  float max_scale = kMaxFontScaleAndroidCCT;
+#if BUILDFLAG(IS_ANDROID)
+  // Make the maximum pinch zoom value to be 2.5 for distillation in app to
+  // align with prefs UI.
+  if (base::FeatureList::IsEnabled(kReaderModeDistillInApp)) {
+    max_scale = kMaxFontScaleAndroidInApp;
+  }
+#endif
+  return base::NumberToString(max_scale);
+}
+
 const std::string GetJavaScript() {
-  return ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
-      IDR_DOM_DISTILLER_VIEWER_JS);
+  std::string js =
+      ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
+          IDR_DOM_DISTILLER_VIEWER_JS);
+  base::ReplaceFirstSubstringAfterOffset(&js, 0, "$MIN_SCALE",
+                                         GetMinPinchZoomScale());
+  base::ReplaceFirstSubstringAfterOffset(&js, 0, "$MAX_SCALE",
+                                         GetMaxPinchZoomScale());
+  return js;
 }
 
 std::unique_ptr<ViewerHandle> CreateViewRequest(
@@ -360,8 +395,10 @@ const std::string GetDistilledPageFontFamilyJs(mojom::FontFamily font_family) {
   return "useFontFamily('" + GetJsFontFamily(font_family) + "');";
 }
 
-const std::string GetDistilledPageFontScalingJs(float scaling) {
-  return "useFontScaling(" + base::NumberToString(scaling) + ");";
+const std::string GetDistilledPageFontScalingJs(float scaling,
+                                                bool restore_center) {
+  return "useFontScaling(" + base::NumberToString(scaling) + ", " +
+         base::ToString(restore_center) + ");";
 }
 
 const std::string SetDistilledPageBaseFontSize(float baseFontSize) {

@@ -18,6 +18,7 @@ namespace device {
 class OpenXrPlaneManager {
  public:
   virtual ~OpenXrPlaneManager();
+  virtual mojom::XRPlaneDetectionDataPtr GetDetectedPlanesData();
 };
 
 }  // namespace device

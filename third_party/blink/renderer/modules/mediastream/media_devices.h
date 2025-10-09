@@ -71,6 +71,25 @@ enum class AudioOutputSelectionResult {
   kMaxValue = kNotSupported
 };
 
+enum class EnumerateDevicesFirstStateOnContextDestroyed {
+  kFailed = 0,
+  kSuccessfulNeverGetUserMedia = 1,
+  kSuccessfulAfterGetUserMedia = 2,
+  kSuccessfulFollowedByGetUserMedia = 3,
+  kMaxValue = kSuccessfulFollowedByGetUserMedia
+};
+
+enum class EnumerateDevicesGetUserMediaInteraction {
+  kFailedEnumerateDevicesFirst = 0,
+  kSuccessfulEnumerateDevicesFirst = 1,
+  kGetUserMediaFirst = 2,
+  kFailedEnumerateDevicesThenGetUserMedia = 3,
+  kSuccessfulEnumerateDevicesThenGetUserMedia = 4,
+  kGetUserMediaThenFailedEnumerateDevices = 5,
+  kGetUserMediaThenSuccessfulEnumerateDevices = 6,
+  kMaxValue = kGetUserMediaThenSuccessfulEnumerateDevices
+};
+
 class MODULES_EXPORT MediaDevices final
     : public EventTarget,
       public ActiveScriptWrappable<MediaDevices>,
@@ -144,6 +163,9 @@ class MODULES_EXPORT MediaDevices final
   void SetDispatcherHostForTesting(
       mojo::PendingRemote<mojom::blink::MediaDevicesDispatcherHost>);
 
+  void ReportSuccessfulGetUserMedia();
+  void ReportCompletedEnumerateDevices(bool is_successful);
+
   void Trace(Visitor*) const override;
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(devicechange, kDevicechange)
@@ -204,9 +226,9 @@ class MODULES_EXPORT MediaDevices final
   void EnqueueMicrotaskToCloseFocusWindowOfOpportunity(const String&,
                                                        CaptureController*);
   void CloseFocusWindowOfOpportunity(const String&, CaptureController*);
-
-  void ResolveRestrictionTargetPromise(Element* element, const WTF::String& id);
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+
+  void ResolveRestrictionTargetPromise(Element* element, const String& id);
 
   bool MayProduceSubCaptureTarget(ScriptState* script_state,
                                   Element* element,
@@ -216,7 +238,7 @@ class MODULES_EXPORT MediaDevices final
   // Callbacks for receiving a message from the browser process with
   // the base::Token which is backing a SubCaptureTarget (either CropTarget
   // or RestrictionTarget).
-  void ResolveCropTargetPromise(Element* element, const WTF::String& id);
+  void ResolveCropTargetPromise(Element* element, const String& id);
 
   SEQUENCE_CHECKER(sequence_checker_);
   // True if the associated execution context is alive and valid, reset
@@ -233,13 +255,11 @@ class MODULES_EXPORT MediaDevices final
                                               IDLSequence<MediaDeviceInfo>>>>
       enumerate_device_requests_;
 
-#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
   using ElementToRestrictionTargetResolverMap =
       HeapHashMap<Member<Element>,
                   Member<ScriptPromiseResolver<RestrictionTarget>>>;
 
   ElementToRestrictionTargetResolverMap restriction_target_resolvers_;
-#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 
   using ElementToCropTargetResolverMap =
       HeapHashMap<Member<Element>, Member<ScriptPromiseResolver<CropTarget>>>;
@@ -267,6 +287,23 @@ class MODULES_EXPORT MediaDevices final
 
   bool starting_observation_ = false;
   Vector<Vector<WebMediaDeviceInfo>> current_device_infos_;
+
+  enum class FirstEnumerateDevicesState {
+    kNoEnumeration,
+    kFailed,
+    kSuccessful
+  };
+
+  enum class FirstGetUserMediaState {
+    kNoGetUserMedia,
+    kBeforeEnumerateDevices,
+    kAfterEnumerateDevices,
+  };
+
+  FirstEnumerateDevicesState first_ed_state_ =
+      FirstEnumerateDevicesState::kNoEnumeration;
+  FirstGetUserMediaState first_gum_state_ =
+      FirstGetUserMediaState::kNoGetUserMedia;
 };
 
 }  // namespace blink

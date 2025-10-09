@@ -15,7 +15,7 @@
 #include "url/gurl.h"
 
 class AccountId;
-class Browser;
+class BrowserWindowInterface;
 
 namespace aura {
 class Window;
@@ -41,6 +41,13 @@ class BrowserController {
     // of the browser (the instance still exists but we shouldn't allow
     // arbitrary operations).
     virtual void OnLastBrowserClosed() {}
+
+    // Called when a browser is created.
+    // Note: When invoking BrowserController::ForEachBrowser in
+    // OnBrowserCreated, the new browser will show up for
+    // kAscendingCreationTime but not yet for kAscendingActivationTime.
+    // TODO(crbug.com/369688254): Revisit this behavior.
+    virtual void OnBrowserCreated(BrowserDelegate* browser) {}
   };
 
   // See CreateWebApp below.
@@ -72,9 +79,9 @@ class BrowserController {
   // Returns the corresponding delegate, possibly creating it first.
   // Returns nullptr for a nullptr input.
   // NOTE: This function is here only temporarily to facilitate transitioning
-  // code from Browser to BrowserDelegate incrementally. See also
+  // code from BrowserWindowInterface to BrowserDelegate incrementally. See also
   // BrowserDelegate::GetBrowser.
-  virtual BrowserDelegate* GetDelegate(Browser* browser) = 0;
+  virtual BrowserDelegate* GetDelegate(BrowserWindowInterface* bwi) = 0;
 
   // Returns (the delegate for) the most recently used browser that still
   // exists. Returns nullptr if there's none.

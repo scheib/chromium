@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.compositor.overlays.strip.reorder;
 
+import static org.chromium.build.NullUtil.assertNonNull;
+import static org.chromium.build.NullUtil.assumeNonNull;
 import static org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutUtils.ANIM_TAB_MOVE_MS;
 import static org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutUtils.ANIM_TAB_SLIDE_OUT_MS;
 import static org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutUtils.TAB_GROUP_BOTTOM_INDICATOR_WIDTH_OFFSET;
@@ -14,14 +16,12 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.view.View;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
 import org.chromium.base.MathUtils;
 import org.chromium.base.Token;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.base.supplier.Supplier;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.compositor.overlays.strip.AnimationHost;
 import org.chromium.chrome.browser.compositor.overlays.strip.ScrollDelegate;
 import org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutGroupTitle;
@@ -42,8 +42,10 @@ import org.chromium.ui.base.LocalizationUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 /** Base class for {@link ReorderStrategy} implementations. */
+@NullMarked
 abstract class ReorderStrategyBase implements ReorderStrategy {
 
     // Constants
@@ -60,7 +62,7 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
     protected final TabModel mModel;
     protected final TabGroupModelFilter mTabGroupModelFilter;
     protected final View mContainerView;
-    protected final ObservableSupplierImpl<Token> mGroupIdToHideSupplier;
+    protected final ObservableSupplierImpl<@Nullable Token> mGroupIdToHideSupplier;
     protected final Supplier<Float> mTabWidthSupplier;
     private final Supplier<Long> mLastReorderScrollTimeSupplier;
 
@@ -72,7 +74,7 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
             TabModel model,
             TabGroupModelFilter tabGroupModelFilter,
             View containerView,
-            ObservableSupplierImpl<Token> groupIdToHideSupplier,
+            ObservableSupplierImpl<@Nullable Token> groupIdToHideSupplier,
             Supplier<Float> tabWidthSupplier,
             Supplier<Long> lastReorderScrollTimeSupplier) {
         // TODO(crbug.com/409392603): Investigate splitting this class even further.
@@ -123,14 +125,17 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
             StripLayoutView[] stripViews,
             StripLayoutGroupTitle[] groupTitles,
             List<StripLayoutTab> interactingTabs,
-            StripLayoutGroupTitle groupTitleToAnimate,
+            @Nullable StripLayoutGroupTitle groupTitleToAnimate,
             boolean towardEnd,
             @ActionType int actionType) {
         // Exit reorder mode if the dialog will show. Tab drag and drop is cancelled elsewhere.
         Runnable beforeSyncDialogRunnable =
                 () -> mReorderDelegate.stopReorderMode(stripViews, groupTitles);
-        Runnable onSuccess =
-                () -> RecordUserAction.record("MobileToolbarReorderTab.TabRemovedFromGroup");
+        String userAction =
+                interactingTabs.size() > 1
+                        ? "MobileToolbarReorderTab.TabsRemovedFromGroup"
+                        : "MobileToolbarReorderTab.TabRemovedFromGroup";
+        Runnable onSuccess = () -> RecordUserAction.record(userAction);
 
         List<Integer> tabIds = new ArrayList<>();
         for (StripLayoutTab stripTab : interactingTabs) {
@@ -142,9 +147,10 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
         // will hide the indicators for the interacting tab group until the user confirms the next
         // action. e.g delete tab group when user confirms the delete, or restore indicators back on
         // strip when user cancel the delete.
+        Token groupId = assertNonNull(tabs.get(0).getTabGroupId());
         StripTabModelActionListener listener =
                 new StripTabModelActionListener(
-                        tabs.get(0).getTabGroupId(),
+                        groupId,
                         actionType,
                         mGroupIdToHideSupplier,
                         mContainerView,
@@ -181,8 +187,9 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
             StripLayoutGroupTitle groupTitle,
             boolean isMovingOutOfGroup,
             boolean throughGroupTitle,
-            @NonNull List<Animator> animators) {
-        float effectiveTabWidth = StripLayoutUtils.getEffectiveTabWidth(mTabWidthSupplier);
+            List<Animator> animators) {
+        float effectiveTabWidth =
+                StripLayoutUtils.getEffectiveTabWidth(mTabWidthSupplier, /* isPinned= */ false);
         float endWidth =
                 StripLayoutUtils.calculateBottomIndicatorWidth(
                         groupTitle,
@@ -208,7 +215,7 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
             StripLayoutView stripView,
             StripLayoutGroupTitle[] groupTitles,
             boolean shouldHaveTrailingMargin,
-            @NonNull List<Animator> animationList) {
+            List<Animator> animationList) {
         final StripLayoutGroupTitle groupTitle;
         if (stripView instanceof StripLayoutTab stripTab) {
             final Tab tab = mModel.getTabById(stripTab.getTabId());
@@ -233,26 +240,31 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
      */
     private void setTrailingMarginForView(
             StripLayoutView stripView,
-            StripLayoutGroupTitle groupTitle,
+            @Nullable StripLayoutGroupTitle groupTitle,
             boolean shouldHaveTrailingMargin,
-            @NonNull List<Animator> animationList) {
+            List<Animator> animationList) {
         // Avoid triggering updates if trailing margin isn't actually changing.
-        float halfTabWidth = StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier);
-        float trailingMargin = shouldHaveTrailingMargin ? halfTabWidth : 0f;
+        float trailingMargin =
+                shouldHaveTrailingMargin
+                        ? StripLayoutUtils.getHalfTabWidth(
+                                mTabWidthSupplier, TabStripDragHandler.isDraggingPinnedItem())
+                        : 0f;
         if (stripView.getTrailingMargin() == trailingMargin) return;
 
         // Update group title bottom indicator width if needed.
         boolean isExpandedGroup = groupTitle != null && !groupTitle.isCollapsed();
         boolean shouldAnimateBottomIndicator =
-                !shouldHaveTrailingMargin || TabStripDragHandler.canMergeIntoGroupOnDrop();
+                !shouldHaveTrailingMargin || TabStripDragHandler.isDraggingUnpinnedTab();
         if (isExpandedGroup && shouldAnimateBottomIndicator) {
+            assumeNonNull(groupTitle);
             float startWidth = groupTitle.getBottomIndicatorWidth();
             float endWidth =
                     StripLayoutUtils.calculateBottomIndicatorWidth(
                                     groupTitle,
                                     StripLayoutUtils.getNumOfTabsInGroup(
                                             mTabGroupModelFilter, groupTitle),
-                                    StripLayoutUtils.getEffectiveTabWidth(mTabWidthSupplier))
+                                    StripLayoutUtils.getEffectiveTabWidth(
+                                            mTabWidthSupplier, /* isPinned= */ false))
                             + trailingMargin;
 
             animationList.add(
@@ -279,7 +291,7 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
     private void resetTabGroupMargins(
             StripLayoutGroupTitle[] groupTitles,
             StripLayoutView[] stripViews,
-            @NonNull List<Animator> animationList) {
+            List<Animator> animationList) {
         // TODO(crbug.com/372546700): Investigate only resetting first and last margin, as we now
         //  don't use trailing margins to demarcate tab group bounds.
         for (int i = 0; i < stripViews.length; i++) {
@@ -300,19 +312,19 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
      */
     protected void setEdgeMarginsForReorder(StripLayoutTab[] stripTabs) {
         float marginWidth =
-                StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier)
+                StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier, /* isPinned= */ false)
                         * StripLayoutUtils.REORDER_OVERLAP_SWITCH_PERCENTAGE;
 
         // 1. Set the start margin. Update the scroll offset to prevent any apparent movement.
         StripLayoutTab firstTab = stripTabs[0];
         boolean firstTabIsInGroup =
-                mTabGroupModelFilter.isTabInTabGroup(mModel.getTabById(firstTab.getTabId()));
+                mTabGroupModelFilter.isTabInTabGroup(mModel.getTabByIdChecked(firstTab.getTabId()));
         if (firstTabIsInGroup) mScrollDelegate.setReorderStartMargin(marginWidth);
 
         // 2. Set the trailing margin.
         StripLayoutTab lastTab = stripTabs[stripTabs.length - 1];
         boolean lastTabIsInGroup =
-                mTabGroupModelFilter.isTabInTabGroup(mModel.getTabById(lastTab.getTabId()));
+                mTabGroupModelFilter.isTabInTabGroup(mModel.getTabByIdChecked(lastTab.getTabId()));
         lastTab.setTrailingMargin((lastTabIsInGroup && !lastTab.isCollapsed()) ? marginWidth : 0.f);
 
         // 3. Ensure the second-to-last tab doesn't have a trailing margin after reorder.
@@ -365,7 +377,7 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
     }
 
     protected void updateTabAttachState(
-            StripLayoutTab tab, boolean attached, @NonNull List<Animator> animationList) {
+            StripLayoutTab tab, boolean attached, List<Animator> animationList) {
         float startValue =
                 attached
                         ? StripLayoutTabDelegate.FOLIO_DETACHED_BOTTOM_MARGIN_DP
@@ -412,15 +424,18 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
     // Threshold helpers
     // ============================================================================================
 
-    /** Returns the threshold to swap the interacting views with an adjacent tab. */
-    protected float getTabSwapThreshold() {
-        return StripLayoutUtils.getEffectiveTabWidth(mTabWidthSupplier)
+    /**
+     * @param isPinned Whether the tab is pinned.
+     * @return The threshold to swap the interacting views with an adjacent tab.
+     */
+    protected float getTabSwapThreshold(boolean isPinned) {
+        return StripLayoutUtils.getEffectiveTabWidth(mTabWidthSupplier, isPinned)
                 * StripLayoutUtils.REORDER_OVERLAP_SWITCH_PERCENTAGE;
     }
 
     /** Returns the threshold to drag into a group. */
     protected float getDragInThreshold() {
-        return StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier)
+        return StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier, /* isPinned= */ false)
                 * StripLayoutUtils.REORDER_OVERLAP_SWITCH_PERCENTAGE;
     }
 
@@ -431,7 +446,7 @@ abstract class ReorderStrategyBase implements ReorderStrategy {
      */
     protected float getDragOutThreshold(StripLayoutGroupTitle groupTitle, boolean towardEnd) {
         float dragOutThreshold =
-                StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier)
+                StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier, /* isPinned= */ false)
                         * StripLayoutUtils.REORDER_OVERLAP_SWITCH_PERCENTAGE;
         return dragOutThreshold + (towardEnd ? 0 : groupTitle.getWidth());
     }

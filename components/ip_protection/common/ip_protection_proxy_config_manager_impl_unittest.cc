@@ -14,15 +14,17 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/strings/to_string.h"
+#include "base/notreached.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "components/content_settings/core/common/content_settings.h"
 #include "components/ip_protection/common/ip_protection_core.h"
 #include "components/ip_protection/common/ip_protection_data_types.h"
 #include "components/ip_protection/common/ip_protection_proxy_config_fetcher.h"
 #include "components/ip_protection/common/ip_protection_proxy_config_manager.h"
 #include "components/ip_protection/common/ip_protection_telemetry.h"
+#include "ip_protection_data_types.h"
 #include "net/base/features.h"
 #include "net/base/network_anonymization_key.h"
 #include "net/base/proxy_chain.h"
@@ -92,6 +94,7 @@ class MockIpProtectionProxyConfigFetcher
 class MockIpProtectionCore : public IpProtectionCore {
  public:
   MOCK_METHOD(void, GeoObserved, (const std::string& geo_id), (override));
+  MOCK_METHOD(void, RecordTokenDemand, (size_t chain_index), (override));
 
   // Dummy implementations for functions not tested in this file.
   bool IsMdlPopulated() override { return false; }
@@ -126,6 +129,11 @@ class MockIpProtectionCore : public IpProtectionCore {
       const GURL& request_url) override {
     return false;
   }
+  IpProxyStatus GetIpProxyStatus() override {
+    return IpProxyStatus::kUnavailable;
+  }
+  bool IsProxyBypassed() override { return false; }
+  void SetBypassProxy(bool bypass_proxy) override {}
 };
 
 class IpProtectionProxyConfigManagerImplTest : public testing::Test {

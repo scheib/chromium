@@ -8,7 +8,9 @@
 #include <optional>
 
 #include "base/check.h"
+#include "base/notreached.h"
 #include "components/autofill/core/browser/data_model/valuables/loyalty_card.h"
+#include "components/autofill/core/browser/webdata/autofill_ai/entity_sync_util.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/autofill/core/browser/webdata/valuables/valuables_sync_util.h"
 #include "components/sync/base/data_type.h"
@@ -21,6 +23,9 @@
 
 namespace autofill {
 namespace {
+
+using ValuableDatabaseOperationResult =
+    ValuableSyncBridge::ValuableDatabaseOperationResult;
 
 // The address of this variable is used as the user data key.
 static const int kAutofillValuableSyncBridgeUserDataKey = 0;
@@ -52,6 +57,59 @@ bool AreAutofillLoyaltyCardSpecificsValid(
          HasEmptyOrValidProgramLogo(specifics);
 }
 
+bool IsSyncWalletFlightReservationsEnabled() {
+  return base::FeatureList::IsEnabled(syncer::kSyncWalletFlightReservations);
+}
+
+bool IsSyncWalletVehicleRegistrationsEnabled() {
+  return base::FeatureList::IsEnabled(syncer::kSyncWalletVehicleRegistrations);
+}
+
+// Returns if the entity `change` should be uploaded to AUTOFILL_VALUABLE.
+bool ShouldUploadEntityChange(const EntityInstanceChange& change) {
+  switch (change.data_model()->record_type()) {
+    case EntityInstance::RecordType::kLocal:
+      // Local entities are not uploaded as AUTOFILL_VALUABLE.
+      return false;
+    case EntityInstance::RecordType::kServerWallet:
+      return true;
+  }
+  NOTREACHED();
+}
+
+// Handles delete request for a valuable with the corresponding `storage_key` as
+// id. As during delete request the valuable type is not available, the function
+// tries to delete the valuable from the corresponding table using only the
+// `storage_key`.
+ValuableDatabaseOperationResult HandleDeleteRequest(
+    const std::string& storage_key,
+    ValuablesTable* valuables_table,
+    EntityTable* entity_table) {
+  if (std::optional<LoyaltyCard> loyalty_card =
+          valuables_table->GetLoyaltyCardById(ValuableId(storage_key))) {
+    if (!valuables_table->RemoveLoyaltyCard(loyalty_card->id())) {
+      return ValuableDatabaseOperationResult::kDatabaseError;
+    }
+    return ValuableDatabaseOperationResult::kDataChanged;
+  }
+
+  if (!IsSyncWalletFlightReservationsEnabled() &&
+      !IsSyncWalletVehicleRegistrationsEnabled()) {
+    return ValuableDatabaseOperationResult::kNoChange;
+  }
+
+  if (entity_table->EntityInstanceExists(
+          EntityInstance::EntityId(storage_key))) {
+    if (!entity_table->RemoveEntityInstance(
+            EntityInstance::EntityId(storage_key))) {
+      return ValuableDatabaseOperationResult::kDatabaseError;
+    }
+    return ValuableDatabaseOperationResult::kDataChanged;
+  }
+
+  return ValuableDatabaseOperationResult::kNoChange;
+}
+
 }  // namespace
 
 ValuableSyncBridge::ValuableSyncBridge(
@@ -66,6 +124,12 @@ ValuableSyncBridge::ValuableSyncBridge(
          syncer::ModelError::Type::kAutofillValuableFailedToLoadDatabase});
     return;
   }
+
+  if (IsSyncWalletFlightReservationsEnabled() ||
+      IsSyncWalletVehicleRegistrationsEnabled()) {
+    scoped_observation_.Observe(web_data_backend_.get());
+  }
+
   LoadMetadata();
 }
 
@@ -93,7 +157,8 @@ syncer::DataTypeSyncBridge* ValuableSyncBridge::FromWebDataService(
 }
 
 bool ValuableSyncBridge::SupportsIncrementalUpdates() const {
-  // This type does not support incremental updates server side.
+  // TODO(crbug.com/): Enable support for incremental updates behind a kill
+  // switch.
   return false;
 }
 
@@ -121,10 +186,82 @@ std::optional<syncer::ModelError>
 ValuableSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_changes) {
-  // This bridge does not support incremental updates, so whenever this is
-  // called, the change list should be empty.
-  CHECK(entity_changes.empty())
-      << "Received an unsupported incremental update.";
+  // Although the `AUTOFILL_VALUABLE` type does not support incremental update
+  // on the server, it has been implemented as a workaround to
+  // crbug.com/40668179.
+  if (!SupportsIncrementalUpdates()) {
+    CHECK(entity_changes.empty())
+        << "Received an unsupported incremental update.";
+    return std::nullopt;
+  }
+
+  std::unique_ptr<sql::Transaction> transaction =
+      web_data_backend_->GetDatabase()->AcquireTransaction();
+  ValuableDatabaseOperationResult db_operation_result =
+      ValuableDatabaseOperationResult::kNoChange;
+
+  for (const std::unique_ptr<syncer::EntityChange>& change : entity_changes) {
+    const syncer::EntityData& entity_data = change->data();
+
+    switch (change->type()) {
+      case syncer::EntityChange::ACTION_ADD:
+      case syncer::EntityChange::ACTION_UPDATE: {
+        const sync_pb::AutofillValuableSpecifics& specifics =
+            entity_data.specifics.autofill_valuable();
+        switch (specifics.valuable_data_case()) {
+          case sync_pb::AutofillValuableSpecifics::kLoyaltyCard: {
+            const LoyaltyCard loyalty_card =
+                CreateAutofillLoyaltyCardFromSpecifics(specifics);
+            if (!GetValuablesTable()->AddOrUpdateLoyaltyCard(loyalty_card)) {
+              db_operation_result =
+                  ValuableDatabaseOperationResult::kDatabaseError;
+              break;
+            }
+            break;
+          }
+          case sync_pb::AutofillValuableSpecifics::kVehicleRegistration:
+          case sync_pb::AutofillValuableSpecifics::kFlightReservation:
+            if (std::optional<EntityInstance> entity =
+                    CreateEntityInstanceFromSpecifics(specifics)) {
+              if (!GetEntityTable()->AddOrUpdateEntityInstance(*entity)) {
+                db_operation_result =
+                    ValuableDatabaseOperationResult::kDatabaseError;
+              }
+            }
+            break;
+          case sync_pb::AutofillValuableSpecifics::VALUABLE_DATA_NOT_SET:
+            break;
+        }
+        break;
+      }
+      case syncer::EntityChange::ACTION_DELETE:
+        if (HandleDeleteRequest(change->storage_key(), GetValuablesTable(),
+                                GetEntityTable()) ==
+            ValuableDatabaseOperationResult::kDatabaseError) {
+          db_operation_result = ValuableDatabaseOperationResult::kDatabaseError;
+        }
+
+        break;
+    }
+  }
+
+  if (db_operation_result == ValuableDatabaseOperationResult::kDatabaseError) {
+    return syncer::ModelError(
+        FROM_HERE,
+        syncer::ModelError::Type::kAutofillValuableFailedToWriteToDatabase);
+  }
+
+  web_data_backend_->CommitChanges();
+  if (transaction && !transaction->Commit()) {
+    return syncer::ModelError(
+        FROM_HERE,
+        syncer::ModelError::Type::kAutofillValuableFailedToWriteToDatabase);
+  }
+
+  if (!entity_changes.empty()) {
+    web_data_backend_->NotifyOnAutofillChangedBySync(syncer::AUTOFILL_VALUABLE);
+  }
+
   return std::nullopt;
 }
 
@@ -134,13 +271,48 @@ std::unique_ptr<syncer::MutableDataBatch> ValuableSyncBridge::GetData() {
     const std::string& id = card.id().value();
     batch->Put(id, CreateEntityDataFromLoyaltyCard(card));
   }
+
+  if (!base::FeatureList::IsEnabled(syncer::kSyncMoveValuablesToProfileDb)) {
+    return batch;
+  }
+
+  const bool is_sync_flight_reservations_enabled =
+      IsSyncWalletFlightReservationsEnabled();
+
+  const bool is_sync_vehicle_registrations_enabled =
+      IsSyncWalletVehicleRegistrationsEnabled();
+
+  for (const EntityInstance& instance : GetEntityTable()->GetEntityInstances(
+           EntityInstance::RecordType::kServerWallet)) {
+    if (instance.type().name() == EntityTypeName::kFlightReservation &&
+        is_sync_flight_reservations_enabled) {
+      const std::string& id = instance.guid().value();
+      batch->Put(id, CreateEntityDataFromEntityInstance(instance));
+    }
+    if (instance.type().name() == EntityTypeName::kVehicle &&
+        is_sync_vehicle_registrations_enabled) {
+      const std::string& id = instance.guid().value();
+      batch->Put(id, CreateEntityDataFromEntityInstance(instance));
+    }
+  }
+
   return batch;
 }
 
 std::unique_ptr<syncer::DataBatch> ValuableSyncBridge::GetDataForCommit(
     StorageKeyList storage_keys) {
-  // This type never commits to the server.
-  NOTREACHED();
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  auto batch = std::make_unique<syncer::MutableDataBatch>();
+  absl::flat_hash_set<std::string> keys_set(storage_keys.begin(),
+                                            storage_keys.end());
+  std::unique_ptr<syncer::DataBatch> all_data = GetData();
+  while (all_data->HasNext()) {
+    syncer::KeyAndData item = all_data->Next();
+    if (keys_set.contains(item.first)) {
+      batch->Put(item.first, std::move(item.second));
+    }
+  }
+  return batch;
 }
 
 std::unique_ptr<syncer::DataBatch>
@@ -163,13 +335,14 @@ bool ValuableSyncBridge::IsEntityDataValid(
   switch (autofill_valuable.valuable_data_case()) {
     case sync_pb::AutofillValuableSpecifics::kLoyaltyCard:
       return AreAutofillLoyaltyCardSpecificsValid(autofill_valuable);
+    case sync_pb::AutofillValuableSpecifics::kFlightReservation:
+      // TODO(crbug.com/436547381): Add stronger validation for flight
+      // reservation.
+      return IsSyncWalletFlightReservationsEnabled();
     case sync_pb::AutofillValuableSpecifics::kVehicleRegistration:
-      // TODO(crbug.com/436547381): Add stronger vehicle registration.
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
-      return base::FeatureList::IsEnabled(syncer::kSyncWalletPublicPasses);
-#else
-      return false;
-#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+      // TODO(crbug.com/436547381): Add stronger validation for vehicle
+      // registration.
+      return IsSyncWalletVehicleRegistrationsEnabled();
     case sync_pb::AutofillValuableSpecifics::VALUABLE_DATA_NOT_SET:
       // Ignore new entry types that the client doesn't know about.
       return false;
@@ -260,12 +433,69 @@ void ValuableSyncBridge::LoadMetadata() {
   change_processor()->ModelReadyToSync(std::move(batch));
 }
 
+ValuableDatabaseOperationResult ValuableSyncBridge::SetLoyaltyCards(
+    std::vector<LoyaltyCard> loyalty_cards) {
+  const bool valuables_data_changed = AreAnyItemsDifferent(
+      GetValuablesTable()->GetLoyaltyCards(), loyalty_cards);
+
+  if (!valuables_data_changed) {
+    return ValuableDatabaseOperationResult::kNoChange;
+  }
+
+  if (!GetValuablesTable()->SetLoyaltyCards(std::move(loyalty_cards))) {
+    return ValuableDatabaseOperationResult::kDatabaseError;
+  }
+
+  return ValuableDatabaseOperationResult::kDataChanged;
+}
+
+ValuableDatabaseOperationResult ValuableSyncBridge::SetEntities(
+    std::vector<EntityInstance> entities) {
+  if (!base::FeatureList::IsEnabled(syncer::kSyncMoveValuablesToProfileDb)) {
+    return ValuableDatabaseOperationResult::kNoChange;
+  }
+
+  EntityTable* entity_table = GetEntityTable();
+  // No updates are necessary if both the local and the server list of entities
+  // are empty.
+  if (entities.empty() &&
+      entity_table
+          ->GetEntityInstances(EntityInstance::RecordType::kServerWallet)
+          .empty()) {
+    return ValuableDatabaseOperationResult::kNoChange;
+  }
+  bool success = entity_table->DeleteEntityInstances(
+      EntityInstance::RecordType::kServerWallet);
+
+  const bool is_sync_wallet_flight_reservations_enabled =
+      IsSyncWalletFlightReservationsEnabled();
+
+  const bool is_sync_wallet_vehicle_registrations_enabled =
+      IsSyncWalletVehicleRegistrationsEnabled();
+
+  for (const EntityInstance& entity : entities) {
+    if (entity.type().name() == EntityTypeName::kVehicle &&
+        is_sync_wallet_vehicle_registrations_enabled) {
+      success &= entity_table->AddOrUpdateEntityInstance(entity);
+    }
+
+    if (entity.type().name() == EntityTypeName::kFlightReservation &&
+        is_sync_wallet_flight_reservations_enabled) {
+      success &= entity_table->AddOrUpdateEntityInstance(entity);
+    }
+  }
+
+  return success ? ValuableDatabaseOperationResult::kDataChanged
+                 : ValuableDatabaseOperationResult::kDatabaseError;
+}
+
 std::optional<syncer::ModelError> ValuableSyncBridge::SetSyncData(
     const syncer::EntityChangeList& entity_data) {
   std::unique_ptr<sql::Transaction> transaction =
       web_data_backend_->GetDatabase()->AcquireTransaction();
 
   std::vector<LoyaltyCard> loyalty_cards;
+  std::vector<EntityInstance> entities;
   for (const std::unique_ptr<syncer::EntityChange>& change : entity_data) {
     switch (change->type()) {
       case syncer::EntityChange::ACTION_ADD: {
@@ -279,8 +509,12 @@ std::optional<syncer::ModelError> ValuableSyncBridge::SetSyncData(
                 CreateAutofillLoyaltyCardFromSpecifics(autofill_valuable));
             break;
           }
+          case sync_pb::AutofillValuableSpecifics::kFlightReservation:
           case sync_pb::AutofillValuableSpecifics::kVehicleRegistration:
-            // TODO(crbug.com/436547381): Handle vehicle registration.
+            if (std::optional<EntityInstance> entity =
+                    CreateEntityInstanceFromSpecifics(autofill_valuable)) {
+              entities.push_back(std::move(*entity));
+            }
             break;
           case sync_pb::AutofillValuableSpecifics::VALUABLE_DATA_NOT_SET:
             // Ignore new entry types that the client doesn't know about.
@@ -299,14 +533,20 @@ std::optional<syncer::ModelError> ValuableSyncBridge::SetSyncData(
     }
   }
 
-  const bool valuables_data_changed = AreAnyItemsDifferent(
-      GetValuablesTable()->GetLoyaltyCards(), loyalty_cards);
+  const ValuableDatabaseOperationResult set_loyalty_cards_result =
+      SetLoyaltyCards(std::move(loyalty_cards));
+  const ValuableDatabaseOperationResult set_entities_result =
+      SetEntities(std::move(entities));
 
-  if (valuables_data_changed &&
-      !GetValuablesTable()->SetLoyaltyCards(std::move(loyalty_cards))) {
+  const bool set_valuables_error =
+      set_loyalty_cards_result ==
+          ValuableDatabaseOperationResult::kDatabaseError ||
+      set_entities_result == ValuableDatabaseOperationResult::kDatabaseError;
+
+  if (set_valuables_error) {
     return syncer::ModelError(
         FROM_HERE,
-        syncer::ModelError::Type::kAutofillValuableFailedToSetLoyaltyCards);
+        syncer::ModelError::Type::kAutofillValuableFailedToWriteToDatabase);
   }
 
   // Commits changes through CommitChanges(...) or through the scoped
@@ -316,10 +556,49 @@ std::optional<syncer::ModelError> ValuableSyncBridge::SetSyncData(
   if (transaction) {
     transaction->Commit();
   }
+
+  const bool valuables_data_changed =
+      set_loyalty_cards_result ==
+          ValuableDatabaseOperationResult::kDataChanged ||
+      set_entities_result == ValuableDatabaseOperationResult::kDataChanged;
+
   if (valuables_data_changed) {
     web_data_backend_->NotifyOnAutofillChangedBySync(syncer::AUTOFILL_VALUABLE);
   }
   return std::nullopt;
+}
+
+void ValuableSyncBridge::EntityInstanceChanged(
+    const EntityInstanceChange& change) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsSyncWalletFlightReservationsEnabled() &&
+      !IsSyncWalletVehicleRegistrationsEnabled()) {
+    return;
+  }
+
+  if (!ShouldUploadEntityChange(change)) {
+    return;
+  }
+
+  CHECK(change_processor()->IsTrackingMetadata());
+
+  std::unique_ptr<syncer::MetadataChangeList> metadata_change_list =
+      CreateMetadataChangeList();
+
+  switch (change.type()) {
+    case EntityInstanceChange::ADD:
+    case EntityInstanceChange::UPDATE:
+      CHECK(change.data_model());
+      change_processor()->Put(
+          *change.key(),
+          CreateEntityDataFromEntityInstance(*change.data_model()),
+          metadata_change_list.get());
+      break;
+    case EntityInstanceChange::REMOVE:
+    case EntityInstanceChange::HIDE_IN_AUTOFILL:
+      // Removing valuables is not supported from the client.
+      NOTREACHED();
+  }
 }
 
 ValuablesTable* ValuableSyncBridge::GetValuablesTable() {

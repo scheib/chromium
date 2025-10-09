@@ -52,6 +52,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/anchor_element_metrics_sender.h"
+#include "third_party/blink/renderer/core/html/anchor_element_utils.h"
 #include "third_party/blink/renderer/core/html/html_image_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html_names.h"
@@ -83,41 +84,6 @@
 namespace blink {
 
 namespace {
-
-// The download attribute specifies a filename, and an excessively long one can
-// crash the browser process. Filepaths probably can't be longer than 4096
-// characters, but this is enough to prevent the browser process from becoming
-// unresponsive or crashing.
-const int kMaxDownloadAttrLength = 1000000;
-
-// Note: Here it covers download originated from clicking on <a download> link
-// that results in direct download. Features in this method can also be logged
-// from browser for download due to navigations to non-web-renderable content.
-bool ShouldInterveneDownloadByFramePolicy(LocalFrame* frame) {
-  bool should_intervene_download = false;
-  Document& document = *(frame->GetDocument());
-  UseCounter::Count(document, WebFeature::kDownloadPrePolicyCheck);
-  bool has_gesture = LocalFrame::HasTransientUserActivation(frame);
-  if (!has_gesture) {
-    UseCounter::Count(document, WebFeature::kDownloadWithoutUserGesture);
-  }
-  if (frame->IsAdFrame()) {
-    UseCounter::Count(document, WebFeature::kDownloadInAdFrame);
-    if (!has_gesture) {
-      UseCounter::Count(document,
-                        WebFeature::kDownloadInAdFrameWithoutUserGesture);
-      should_intervene_download = true;
-    }
-  }
-  if (frame->DomWindow()->IsSandboxed(
-          network::mojom::blink::WebSandboxFlags::kDownloads)) {
-    UseCounter::Count(document, WebFeature::kDownloadInSandbox);
-    should_intervene_download = true;
-  }
-  if (!should_intervene_download)
-    UseCounter::Count(document, WebFeature::kDownloadPostPolicyCheck);
-  return should_intervene_download;
-}
 
 void EmitDidAnchorElementReceiveMouseEvent(
     HTMLAnchorElementBase& anchor_element,
@@ -284,8 +250,17 @@ void HTMLAnchorElementBase::AttributeChanged(
     return;
   if (params.name != html_names::kHrefAttr)
     return;
-  if (!IsLink() && AdjustedFocusedElementInTreeScope() == this)
+  if (RuntimeEnabledFeatures::LinkBlurImprovementEnabled()) {
+    if (!IsLink() && AdjustedFocusedElementInTreeScope() == this) {
+      // Removing the href attribute might make this element no longer
+      // focusable, but other attributes like tabindex can keep it focusable.
+      // Style and layout are needed in order to check focusability.
+      GetDocument().UpdateStyleAndLayoutTree();
+      GetDocument().ClearFocusedElementIfNeeded();
+    }
+  } else if (!IsLink() && AdjustedFocusedElementInTreeScope() == this) {
     blur();
+  }
 }
 
 void HTMLAnchorElementBase::ParseAttribute(
@@ -619,19 +594,11 @@ void HTMLAnchorElementBase::NavigateToHyperlink(
   }
 }
 
-Element* HTMLAnchorElementBase::InterestForElement() const {
-  if (!RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled(
-          GetDocument().GetExecutionContext())) {
-    return nullptr;
-  }
+bool HTMLAnchorElementBase::IsValidInterestInvoker(Element& target) const {
+  DCHECK(RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled());
   // Anchor elements that don't have the `href` attribute are not interactive,
   // so they can't support `interestfor`.
-  if (!IsInTreeScope() || !IsLink()) {
-    return nullptr;
-  }
-
-  return GetElementAttributeResolvingReferenceTarget(
-      html_names::kInterestforAttr);
+  return IsLink();
 }
 
 void HTMLAnchorElementBase::HandleClick(MouseEvent& event) {
@@ -683,54 +650,16 @@ void HTMLAnchorElementBase::HandleClick(MouseEvent& event) {
   if (FastHasAttribute(html_names::kDownloadAttr) &&
       navigation_policy != kNavigationPolicyDownload &&
       window->GetSecurityOrigin()->CanReadContent(completed_url)) {
-    if (ShouldInterveneDownloadByFramePolicy(frame))
-      return;
-
     String download_attr =
         static_cast<String>(FastGetAttribute(html_names::kDownloadAttr));
-    if (download_attr.length() > kMaxDownloadAttrLength) {
-      AddConsoleMessage(
-          mojom::blink::ConsoleMessageSource::kRendering,
-          mojom::blink::ConsoleMessageLevel::kError,
-          String::Format("Download attribute for anchor element is too long. "
-                         "Max: %d, given: %d",
-                         kMaxDownloadAttrLength, download_attr.length()));
-      return;
-    }
 
-    auto* params = MakeGarbageCollected<NavigateEventDispatchParams>(
-        completed_url, NavigateEventType::kCrossDocument,
-        WebFrameLoadType::kStandard);
-    if (event.isTrusted())
-      params->involvement = UserNavigationInvolvement::kActivation;
-    params->download_filename = download_attr;
-    params->source_element = this;
-    if (window->navigation()->DispatchNavigateEvent(params) !=
-        NavigationApi::DispatchResult::kContinue) {
-      return;
-    }
-    // A download will never notify blink about its completion. Tell the
-    // NavigationApi that the navigation was dropped, so that it doesn't
-    // leave the frame thinking it is loading indefinitely.
-    window->navigation()->InformAboutCanceledNavigation(
-        CancelNavigationReason::kDropped);
-
-    request.SetSuggestedFilename(download_attr);
-    request.SetRequestContext(mojom::blink::RequestContextType::DOWNLOAD);
-    request.SetRequestorOrigin(window->GetSecurityOrigin());
-    network::mojom::ReferrerPolicy referrer_policy =
-        request.GetReferrerPolicy();
-    if (referrer_policy == network::mojom::ReferrerPolicy::kDefault)
-      referrer_policy = window->GetReferrerPolicy();
-    Referrer referrer = SecurityPolicy::GenerateReferrer(
-        referrer_policy, completed_url, window->OutgoingReferrer());
-    request.SetReferrerString(referrer.referrer);
-    request.SetReferrerPolicy(referrer.referrer_policy);
-    frame->DownloadURL(request, network::mojom::blink::RedirectMode::kManual);
+    AnchorElementUtils::HandleDownloadAttribute(
+        this, download_attr, completed_url, window, event.isTrusted(),
+        std::move(request));
     return;
   }
 
-  base::OnceClosure navigate_closure = WTF::BindOnce(
+  base::OnceClosure navigate_closure = blink::BindOnce(
       &HTMLAnchorElementBase::NavigateToHyperlink, WrapWeakPersistent(this),
       std::move(request), navigation_policy, event.isTrusted(),
       event.PlatformTimeStamp(), std::move(completed_url));
@@ -855,10 +784,10 @@ Element* HTMLAnchorElement::ScrollTargetElement() const {
 PaintLayerScrollableArea*
 HTMLAnchorElement::AncestorScrollableAreaOfScrollTargetElement() const {
   Element* scroll_target = ScrollTargetElement();
-  if (!scroll_target || !scroll_target->GetLayoutBox()) {
+  if (!scroll_target || !scroll_target->GetLayoutObject()) {
     return nullptr;
   }
-  for (LayoutBox* parent_box = scroll_target->GetLayoutBox()->ParentBox();
+  for (LayoutBox* parent_box = scroll_target->GetLayoutObject()->EnclosingBox();
        parent_box; parent_box = parent_box->ParentBox()) {
     if (ScrollableArea* scrollable_area =
             scroll_into_view_util::GetScrollableAreaForLayoutBox(

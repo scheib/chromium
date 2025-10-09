@@ -46,9 +46,9 @@
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/point.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
+#include "ui/native_theme/mock_os_settings_provider.h"
 #include "ui/native_theme/native_theme.h"
-#include "ui/native_theme/test_native_theme.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/buildflags.h"
 #include "ui/views/controls/button/label_button.h"
@@ -56,7 +56,7 @@
 #include "ui/views/event_monitor.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/style/platform_style.h"
-#include "ui/views/test/configurable_test_frame_view.h"
+#include "ui/views/test/configurable_test_native_frame_view.h"
 #include "ui/views/test/mock_drag_controller.h"
 #include "ui/views/test/mock_native_widget.h"
 #include "ui/views/test/native_widget_factory.h"
@@ -140,8 +140,8 @@ ui::GestureEvent CreateTestGestureEvent(const ui::GestureEventDetails& details,
   return ui::GestureEvent(x, y, 0, base::TimeTicks(), details);
 }
 
-std::unique_ptr<NativeFrameView> CreateMinimumSizeFrameView(Widget* frame) {
-  auto frame_view = std::make_unique<ConfigurableTestFrameView>(frame);
+std::unique_ptr<NativeFrameView> CreateMinimumSizeFrameView(Widget* widget) {
+  auto frame_view = std::make_unique<ConfigurableTestNativeFrameView>(widget);
   frame_view->set_minimum_size(gfx::Size(300, 400));
   return std::move(frame_view);
 }
@@ -359,40 +359,10 @@ TEST_F(WidgetWithCustomParamsTest, NamePropagatedFromContentsViewClassName) {
   EXPECT_EQ(contents->GetClassName(), widget->GetName());
 }
 
-namespace {
-
-class TestView : public View {
-  METADATA_HEADER(TestView, View)
-
- public:
-  ~TestView() override = default;
-
-  void OnThemeChanged() override {
-    View::OnThemeChanged();
-    auto* native_theme = GetNativeTheme();
-    if (native_theme && native_theme->user_color()) {
-      user_color_ = *native_theme->user_color();
-    }
-  }
-
-  SkColor user_color() const { return user_color_; }
-
- private:
-  SkColor user_color_ = SK_ColorWHITE;
-};
-
-BEGIN_METADATA(TestView)
-END_METADATA
-
-}  // namespace
-
 class WidgetColorModeTest : public WidgetTest {
  public:
   static constexpr SkColor kLightColor = SK_ColorWHITE;
   static constexpr SkColor kDarkColor = SK_ColorBLACK;
-
-  WidgetColorModeTest() = default;
-  ~WidgetColorModeTest() override = default;
 
   void SetUp() override {
     WidgetTest::SetUp();
@@ -408,6 +378,11 @@ class WidgetColorModeTest : public WidgetTest {
     WidgetTest::TearDown();
   }
 
+ protected:
+  ui::MockOsSettingsProvider& os_settings_provider() {
+    return os_settings_provider_;
+  }
+
  private:
   static void AddColor(ui::ColorProvider* provider,
                        const ui::ColorProviderKey& key) {
@@ -416,44 +391,39 @@ class WidgetColorModeTest : public WidgetTest {
         key.color_mode == ui::ColorProviderKey::ColorMode::kDark ? kDarkColor
                                                                  : kLightColor};
   }
+
+  ui::MockOsSettingsProvider os_settings_provider_;
 };
 
 TEST_F(WidgetColorModeTest, ColorModeOverride_NoOverride) {
-  ui::TestNativeTheme test_theme;
   std::unique_ptr<Widget> widget = base::WrapUnique(
       CreateTopLevelPlatformWidget(Widget::InitParams::CLIENT_OWNS_WIDGET));
-  test_theme.SetDarkMode(true);
-  widget->SetNativeThemeForTest(&test_theme);
+  os_settings_provider().SetPreferredColorScheme(
+      ui::NativeTheme::PreferredColorScheme::kDark);
 
-  widget->SetColorModeOverride(std::nullopt, std::nullopt);
+  widget->SetColorModeOverride(std::nullopt);
   // Verify that we resolve the dark color when we don't override color mode.
   EXPECT_EQ(kDarkColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
 }
 
 TEST_F(WidgetColorModeTest, ColorModeOverride_DarkOverride) {
-  ui::TestNativeTheme test_theme;
   std::unique_ptr<Widget> widget = base::WrapUnique(
       CreateTopLevelPlatformWidget(Widget::InitParams::CLIENT_OWNS_WIDGET));
-  test_theme.SetDarkMode(false);
-  widget->SetNativeThemeForTest(&test_theme);
 
-  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark,
-                               std::nullopt);
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark);
   // Verify that we resolve the light color even though the theme is dark.
   EXPECT_EQ(kDarkColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
 }
 
 TEST_F(WidgetColorModeTest, ColorModeOverride_LightOverride) {
-  ui::TestNativeTheme test_theme;
   std::unique_ptr<Widget> widget = base::WrapUnique(
       CreateTopLevelPlatformWidget(Widget::InitParams::CLIENT_OWNS_WIDGET));
-  test_theme.SetDarkMode(true);
-  widget->SetNativeThemeForTest(&test_theme);
+  os_settings_provider().SetPreferredColorScheme(
+      ui::NativeTheme::PreferredColorScheme::kDark);
 
-  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight,
-                               std::nullopt);
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight);
   // Verify that we resolve the light color even though the theme is dark.
   EXPECT_EQ(kLightColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
@@ -461,11 +431,10 @@ TEST_F(WidgetColorModeTest, ColorModeOverride_LightOverride) {
 
 TEST_F(WidgetColorModeTest, ChildInheritsColorMode_NoOverrides) {
   // Create the parent widget and set the native theme to dark.
-  ui::TestNativeTheme test_theme;
   std::unique_ptr<Widget> widget = base::WrapUnique(
       CreateTopLevelPlatformWidget(Widget::InitParams::CLIENT_OWNS_WIDGET));
-  test_theme.SetDarkMode(true);
-  widget->SetNativeThemeForTest(&test_theme);
+  os_settings_provider().SetPreferredColorScheme(
+      ui::NativeTheme::PreferredColorScheme::kDark);
 
   // Create the child widget.
   std::unique_ptr<Widget> widget_child =
@@ -474,16 +443,16 @@ TEST_F(WidgetColorModeTest, ChildInheritsColorMode_NoOverrides) {
 
   // Ensure neither has an override set. The child should inherit the color mode
   // of the parent.
-  widget->SetColorModeOverride(std::nullopt, std::nullopt);
-  widget_child->SetColorModeOverride(std::nullopt, std::nullopt);
+  widget->SetColorModeOverride(std::nullopt);
+  widget_child->SetColorModeOverride(std::nullopt);
   EXPECT_EQ(kDarkColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
   EXPECT_EQ(kDarkColor,
             widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
 
-  // Set the parent's native theme to light. The child should inherit the color
-  // mode of the parent.
-  test_theme.SetDarkMode(false);
+  // Set the OS to light. The child should inherit the color mode of the parent.
+  os_settings_provider().SetPreferredColorScheme(
+      ui::NativeTheme::PreferredColorScheme::kLight);
   EXPECT_EQ(kLightColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
   EXPECT_EQ(kLightColor,
@@ -492,11 +461,10 @@ TEST_F(WidgetColorModeTest, ChildInheritsColorMode_NoOverrides) {
 
 TEST_F(WidgetColorModeTest, ChildInheritsColorMode_Overrides) {
   // Create the parent widget and set the native theme to dark.
-  ui::TestNativeTheme test_theme;
   std::unique_ptr<Widget> widget = base::WrapUnique(
       CreateTopLevelPlatformWidget(Widget::InitParams::CLIENT_OWNS_WIDGET));
-  test_theme.SetDarkMode(true);
-  widget->SetNativeThemeForTest(&test_theme);
+  os_settings_provider().SetPreferredColorScheme(
+      ui::NativeTheme::PreferredColorScheme::kDark);
 
   // Create the child widget.
   std::unique_ptr<Widget> widget_child =
@@ -505,8 +473,8 @@ TEST_F(WidgetColorModeTest, ChildInheritsColorMode_Overrides) {
 
   // Ensure neither has an override set. The child should inherit the color mode
   // of the parent.
-  widget->SetColorModeOverride(std::nullopt, std::nullopt);
-  widget_child->SetColorModeOverride(std::nullopt, std::nullopt);
+  widget->SetColorModeOverride(std::nullopt);
+  widget_child->SetColorModeOverride(std::nullopt);
   EXPECT_EQ(kDarkColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
   EXPECT_EQ(kDarkColor,
@@ -514,15 +482,13 @@ TEST_F(WidgetColorModeTest, ChildInheritsColorMode_Overrides) {
 
   // Set the parent's override to light, then back to dark. the child should
   // follow the parent's overridden color mode.
-  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight,
-                               std::nullopt);
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight);
   EXPECT_EQ(kLightColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
   EXPECT_EQ(kLightColor,
             widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
 
-  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark,
-                               std::nullopt);
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark);
   EXPECT_EQ(kDarkColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
   EXPECT_EQ(kDarkColor,
@@ -530,8 +496,7 @@ TEST_F(WidgetColorModeTest, ChildInheritsColorMode_Overrides) {
 
   // Override the child's color mode to light. The parent should continue to
   // report a dark color mode.
-  widget_child->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight,
-                                     std::nullopt);
+  widget_child->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight);
   EXPECT_EQ(kDarkColor,
             widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
   EXPECT_EQ(kLightColor,
@@ -1405,9 +1370,8 @@ TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, CloseWithReason) {
   widget()->CloseWithReason(Widget::ClosedReason::kUnspecified);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
-       CreateNonClientFrameView) {
-  widget()->CreateNonClientFrameView();
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, CreateFrameView) {
+  widget()->CreateFrameView();
 }
 
 TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Deactivate) {
@@ -1739,8 +1703,7 @@ TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeFocus) {
 }
 
 TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeThemeUpdated) {
-  ui::TestNativeTheme theme;
-  widget()->OnNativeThemeUpdated(&theme);
+  widget()->OnNativeThemeUpdated(ui::NativeTheme::GetInstanceForNativeUi());
 }
 
 TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
@@ -3864,7 +3827,7 @@ bool RunGetNativeThemeFromDestructor(Widget::InitParams params,
   // Destroyed by CloseNow() below.
   WidgetTest::WidgetAutoclosePtr widget(new Widget);
   // Deletes itself when the Widget is destroyed.
-  params.delegate = new GetNativeThemeFromDestructorView;
+  params.delegate = new GetNativeThemeFromDestructorView();
   if (!is_first_run) {
     params.native_widget =
         CreatePlatformNativeWidgetImpl(widget.get(), kStubCapture, nullptr);
@@ -5035,8 +4998,9 @@ TEST_F(DesktopWidgetTest, MAYBE_DeleteInSetFullscreen) {
 TEST_F(WidgetTest, FullscreenFrameLayout) {
   WidgetAutoclosePtr widget(CreateTopLevelPlatformWidget());
 
-  auto frame_view = std::make_unique<ConfigurableTestFrameView>(widget.get());
-  ConfigurableTestFrameView* frame = frame_view.get();
+  auto frame_view =
+      std::make_unique<ConfigurableTestNativeFrameView>(widget.get());
+  ConfigurableTestNativeFrameView* frame = frame_view.get();
   widget->non_client_view()->SetFrameView(std::move(frame_view));
 
   widget->Maximize();
@@ -5845,8 +5809,8 @@ TEST_F(WidgetTest, NativeWidgetNotifiedOfWidgetDestructionForClientOwnsWidget) {
 
   auto native_widget =
       std::make_unique<testing::NiceMock<MockNativeWidget>>(widget.get());
-  ON_CALL(*native_widget, CreateNonClientFrameView).WillByDefault([]() {
-    return std::make_unique<NonClientFrameView>();
+  ON_CALL(*native_widget, CreateFrameView).WillByDefault([]() {
+    return std::make_unique<FrameView>();
   });
   params.native_widget = native_widget.get();
   widget->Init(std::move(params));
@@ -5874,9 +5838,10 @@ class WidgetSetAspectRatioTest
     widget_ = std::make_unique<Widget>();
     Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
     native_widget_ = std::make_unique<MockNativeWidget>(widget());
-    ON_CALL(*native_widget(), CreateNonClientFrameView).WillByDefault([this]() {
+    ON_CALL(*native_widget(), CreateFrameView).WillByDefault([this]() {
       auto frame_view_with_fixed_margin =
-          std::make_unique<test::ConfigurableTestFrameView>(widget_.get());
+          std::make_unique<test::ConfigurableTestNativeFrameView>(
+              widget_.get());
       frame_view_with_fixed_margin->set_client_view_margin(margin());
       return frame_view_with_fixed_margin;
     });
@@ -6417,6 +6382,36 @@ TEST_F(WidgetTest, ReplaceClientContentsView) {
   EXPECT_NE(client_view.get(), widget->GetClientContentsView());
   auto* client_view_ptr = widget->SetClientContentsView(std::move(client_view));
   EXPECT_EQ(client_view_ptr, widget->GetClientContentsView());
+}
+
+// Ensure that view accelerators unregistered when closing a chid widget.
+TEST_F(WidgetTest, ClosingChildWidgetUnregisterAccelerators) {
+  auto parent_widget = base::WrapUnique<Widget>(
+      CreateTopLevelNativeWidget(Widget::InitParams::CLIENT_OWNS_WIDGET));
+  parent_widget->SetBounds({100, 100, 100, 100});
+  parent_widget->Show();
+
+  auto child_widget = std::make_unique<Widget>();
+  Widget::InitParams params = CreateParams(
+      Widget::InitParams::CLIENT_OWNS_WIDGET, Widget::InitParams::TYPE_WINDOW);
+  params.parent = parent_widget->GetNativeView();
+  params.child = true;
+  child_widget->Init(std::move(params));
+  child_widget->Show();
+  ASSERT_EQ(child_widget->GetFocusManager(), parent_widget->GetFocusManager());
+
+  auto* focus_manager = parent_widget->GetFocusManager();
+  ui::Accelerator accelerator(ui::VKEY_F10,
+                              ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN);
+  ASSERT_FALSE(focus_manager->IsAcceleratorRegistered(accelerator));
+  View* view =
+      child_widget->GetContentsView()->AddChildView(std::make_unique<View>());
+  view->AddAccelerator(accelerator);
+  ASSERT_EQ(view->GetFocusManager(), parent_widget->GetFocusManager());
+
+  ASSERT_TRUE(focus_manager->IsAcceleratorRegistered(accelerator));
+  child_widget.reset();
+  EXPECT_FALSE(focus_manager->IsAcceleratorRegistered(accelerator));
 }
 
 }  // namespace views::test

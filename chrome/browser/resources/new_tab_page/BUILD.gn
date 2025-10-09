@@ -13,9 +13,9 @@ grd_prefix = "new_tab_page"
 
 build_webui("build") {
   icons_html_files = [
-    "modules/v2/icons.html",
-    "modules/v2/most_relevant_tab_resumption/icons.html",
-    "modules/v2/tab_groups/icons.html",
+    "modules/icons.html",
+    "modules/most_relevant_tab_resumption/icons.html",
+    "modules/tab_groups/icons.html",
     "ntp_promo/ntp_promo_icons.html",
   ]
 
@@ -26,16 +26,16 @@ build_webui("build") {
 
   extra_grdp_files = [
     "$target_gen_dir/icons/resources.grdp",
-    "$target_gen_dir/modules/v2/authentication/icons/resources.grdp",
-    "$target_gen_dir/modules/v2/calendar/icons/resources.grdp",
-    "$target_gen_dir/modules/v2/tab_groups/icons/resources.grdp",
+    "$target_gen_dir/modules/authentication/icons/resources.grdp",
+    "$target_gen_dir/modules/calendar/icons/resources.grdp",
+    "$target_gen_dir/modules/tab_groups/icons/resources.grdp",
   ]
 
   extra_grdp_deps = [
     "icons:build_grdp",
-    "modules/v2/authentication/icons:build_grdp",
-    "modules/v2/calendar/icons:build_grdp",
-    "modules/v2/tab_groups/icons:build_grdp",
+    "modules/authentication/icons:build_grdp",
+    "modules/calendar/icons:build_grdp",
+    "modules/tab_groups/icons:build_grdp",
   ]
 
   if (optimize_webui) {
@@ -57,7 +57,10 @@ build_webui("build") {
     "//chrome/browser/ui/webui/new_tab_page:mojo_bindings_ts__generator",
     "//chrome/browser/ui/webui/new_tab_page/ntp_promo:mojo_bindings_ts__generator",
     "//chrome/browser/ui/webui/ntp_microsoft_auth:shared_ts__generator",
+    "//chrome/browser/ui/webui/side_panel/customize_chrome:mojo_bindings_ts__generator",
+    "//components/ntp_tiles:mojo_bindings_ts__generator",
     "//components/omnibox/composebox:mojo_bindings_ts__generator",
+    "//components/tab_groups/public/mojom:mojo_bindings_ts__generator",
     "//ui/webui/resources/cr_components/composebox:mojo_bindings_ts__generator",
   ]
   mojo_files = [
@@ -75,8 +78,11 @@ build_webui("build") {
     "$root_gen_dir/chrome/browser/ui/webui/ntp_microsoft_auth/ntp_microsoft_auth_shared_ui.mojom-webui.ts",
     "$root_gen_dir/chrome/browser/ui/webui/customize_buttons/customize_buttons.mojom-webui.ts",
     "$root_gen_dir/ui/webui/resources/cr_components/composebox/composebox.mojom-webui.ts",
+    "$root_gen_dir/chrome/browser/ui/webui/side_panel/customize_chrome/customize_chrome.mojom-webui.ts",
     "$root_gen_dir/chrome/browser/ui/webui/new_tab_page/ntp_promo/ntp_promo.mojom-webui.ts",
     "$root_gen_dir/components/omnibox/composebox/composebox_query.mojom-webui.ts",
+    "$root_gen_dir/components/ntp_tiles/tile_type.mojom-webui.ts",
+    "$root_gen_dir/components/tab_groups/public/mojom/tab_group_types.mojom-webui.ts",
   ]
 
   if (!is_official_build) {

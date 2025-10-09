@@ -23,8 +23,9 @@ class ChromeAimEligibilityService : public AimEligibilityService {
  public:
   ChromeAimEligibilityService(
       PrefService& pref_service,
-      TemplateURLService& template_url_service,
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
+      TemplateURLService* template_url_service,
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+      signin::IdentityManager* identity_manager);
   ~ChromeAimEligibilityService() override;
 
   // AimEligibilityService:

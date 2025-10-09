@@ -876,12 +876,13 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(decrypted_keys.cross_user_sharing_private_key().at(0).version(), 0);
   std::vector<uint8_t> raw_private_key(private_key_proto.begin(),
                                        private_key_proto.end());
-  std::optional<syncer::CrossUserSharingPublicPrivateKeyPair> private_key =
-      syncer::CrossUserSharingPublicPrivateKeyPair::CreateByImport(
-          raw_private_key);
-  EXPECT_TRUE(private_key.has_value());
+  std::optional<base::span<uint8_t, X25519_PRIVATE_KEY_LEN>> fixed_private_key =
+      base::span(raw_private_key).to_fixed_extent<X25519_PRIVATE_KEY_LEN>();
+  ASSERT_TRUE(fixed_private_key);
+
+  syncer::CrossUserSharingPublicPrivateKeyPair private_key(*fixed_private_key);
   EXPECT_THAT(specifics.cross_user_sharing_public_key().x25519_public_key(),
-              testing::ElementsAreArray(private_key->GetRawPublicKey()));
+              testing::ElementsAreArray(private_key.GetRawPublicKey()));
 }
 
 IN_PROC_BROWSER_TEST_F(
@@ -984,12 +985,13 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(decrypted_keys.cross_user_sharing_private_key().at(0).version(), 0);
   std::vector<uint8_t> raw_private_key(private_key_proto.begin(),
                                        private_key_proto.end());
-  std::optional<syncer::CrossUserSharingPublicPrivateKeyPair> private_key =
-      syncer::CrossUserSharingPublicPrivateKeyPair::CreateByImport(
-          raw_private_key);
-  EXPECT_TRUE(private_key.has_value());
+  std::optional<base::span<uint8_t, X25519_PRIVATE_KEY_LEN>> fixed_private_key =
+      base::span(raw_private_key).to_fixed_extent<X25519_PRIVATE_KEY_LEN>();
+  ASSERT_TRUE(fixed_private_key);
+
+  syncer::CrossUserSharingPublicPrivateKeyPair private_key(*fixed_private_key);
   EXPECT_THAT(specifics.cross_user_sharing_public_key().x25519_public_key(),
-              testing::ElementsAreArray(private_key->GetRawPublicKey()));
+              testing::ElementsAreArray(private_key.GetRawPublicKey()));
 }
 
 IN_PROC_BROWSER_TEST_F(
@@ -1247,7 +1249,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientNigoriWithWebApiTest,
 
 #if !BUILDFLAG(IS_CHROMEOS)
   // Verify the profile-menu error string is empty.
-  EXPECT_FALSE(GetAvatarSyncErrorType(GetProfile(0)).has_value());
+  EXPECT_EQ(GetAvatarSyncErrorType(GetProfile(0)), AvatarSyncErrorType::kNone);
 #endif  // !BUILDFLAG(IS_CHROMEOS)
 }
 
@@ -1535,7 +1537,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientNigoriWithWebApiTest,
 
 #if !BUILDFLAG(IS_CHROMEOS)
   // Verify the profile-menu error string is empty.
-  EXPECT_FALSE(GetAvatarSyncErrorType(GetProfile(0)).has_value());
+  EXPECT_EQ(GetAvatarSyncErrorType(GetProfile(0)), AvatarSyncErrorType::kNone);
 #endif  // !BUILDFLAG(IS_CHROMEOS)
 }
 
@@ -1901,7 +1903,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientNigoriWithWebApiTest,
 
 #if !BUILDFLAG(IS_CHROMEOS)
   // Verify the profile-menu error string is empty.
-  EXPECT_FALSE(GetAvatarSyncErrorType(GetProfile(0)).has_value());
+  EXPECT_EQ(GetAvatarSyncErrorType(GetProfile(0)), AvatarSyncErrorType::kNone);
 #endif  // !BUILDFLAG(IS_CHROMEOS)
 
   histogram_tester.ExpectUniqueSample(
@@ -2303,7 +2305,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientNigoriWithWebApiTest,
 
   // PASSWORDS should become active and the error should disappear.
   EXPECT_TRUE(PasswordSyncActiveChecker(GetSyncService(0)).Wait());
-  EXPECT_FALSE(GetAvatarSyncErrorType(GetProfile(0)).has_value());
+  EXPECT_EQ(GetAvatarSyncErrorType(GetProfile(0)), AvatarSyncErrorType::kNone);
 }
 
 IN_PROC_BROWSER_TEST_F(
@@ -2351,7 +2353,7 @@ IN_PROC_BROWSER_TEST_F(
                   .Wait());
 
   // The error should have disappeared.
-  EXPECT_FALSE(GetAvatarSyncErrorType(GetProfile(0)).has_value());
+  EXPECT_EQ(GetAvatarSyncErrorType(GetProfile(0)), AvatarSyncErrorType::kNone);
 
   histogram_tester.ExpectUniqueSample(
       "Sync.TrustedVaultRecoverabilityDegradedOnStartup",

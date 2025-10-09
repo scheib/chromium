@@ -25,7 +25,6 @@ using base::test::RunOnceCallback;
 using base::test::RunOnceCallbackRepeatedly;
 using testing::_;
 using testing::DoAll;
-using testing::Invoke;
 using ObjectHandle = kcer::SessionChapsClient::ObjectHandle;
 using AttributeId = kcer::HighLevelChapsClient::AttributeId;
 using testing::UnorderedElementsAre;
@@ -1084,7 +1083,7 @@ TEST_F(KcerTokenImplTest, ImportKeyRsaRetryToCreatePubKey) {
 
   EXPECT_CALL(chaps_client_, CreateObject)
       .Times(2 * kDefaultAttempts)
-      .WillRepeatedly(Invoke(fake_create_objects));
+      .WillRepeatedly(fake_create_objects);
 
   std::optional<std::vector<uint8_t>> key = ReadPemFileReturnDer(
       net::GetTestCertsDirectory().AppendASCII("client_1_old.key"));
@@ -1388,7 +1387,7 @@ TEST_F(KcerTokenImplTest, ImportKeyEcRetryToCreatePubKey) {
 
   EXPECT_CALL(chaps_client_, CreateObject)
       .Times(2 * kDefaultAttempts)
-      .WillRepeatedly(Invoke(fake_create_objects));
+      .WillRepeatedly(fake_create_objects);
 
   std::optional<std::vector<uint8_t>> key = ReadPemFileReturnDer(
       net::GetTestCertsDirectory().AppendASCII("key_usage_p256.key"));
@@ -1655,7 +1654,7 @@ TEST_F(KcerTokenImplTest, ImportCertFromBytesRetryToSearchForKey) {
 
   EXPECT_CALL(chaps_client_, FindObjects)
       .Times(2 * kDefaultAttempts)
-      .WillRepeatedly(Invoke(fake_find_objects));
+      .WillRepeatedly(fake_find_objects);
 
   base::test::TestFuture<base::expected<void, Error>> waiter;
   token_.ImportCertFromBytes(CertDer(cert.value()), waiter.GetCallback());
@@ -1689,7 +1688,7 @@ TEST_F(KcerTokenImplTest, ImportCertFromBytesRetryToCreateCert) {
 
   EXPECT_CALL(chaps_client_, FindObjects)
       .Times(2 * kDefaultAttempts)
-      .WillRepeatedly(Invoke(fake_find_objects));
+      .WillRepeatedly(fake_find_objects);
   EXPECT_CALL(chaps_client_, CreateObject)
       .WillRepeatedly(RunOnceCallbackRepeatedly<2>(
           ObjectHandle(0), chromeos::PKCS11_CKR_SESSION_CLOSED));
@@ -2355,7 +2354,7 @@ TEST_F(KcerTokenImplTest, ListKeysRetryFindEcOnSessionError) {
 
   EXPECT_CALL(chaps_client_, FindObjects)
       .Times(2 * kDefaultAttempts)
-      .WillRepeatedly(Invoke(fake_find_objects));
+      .WillRepeatedly(fake_find_objects);
 
   base::test::TestFuture<base::expected<std::vector<PublicKey>, Error>> waiter;
   token_.ListKeys(waiter.GetCallback());
@@ -2385,7 +2384,7 @@ TEST_F(KcerTokenImplTest, ListKeysRetryGetEcOnSessionError) {
 
   EXPECT_CALL(chaps_client_, FindObjects)
       .Times(2 * kDefaultAttempts)
-      .WillRepeatedly(Invoke(fake_find_objects));
+      .WillRepeatedly(fake_find_objects);
 
   EXPECT_CALL(chaps_client_, GetAttributeValue)
       .Times(kDefaultAttempts)
@@ -2804,7 +2803,7 @@ TEST_F(KcerTokenImplTest, SignRsaSha1Success) {
       chaps_client_,
       Sign(pkcs11_slot_id_, chromeos::PKCS11_CKM_RSA_PKCS,
            std::vector<uint8_t>(), expected_key_handle, expected_digest, _))
-      .WillOnce(DoAll(RunOnceCallback<5>(result_signature_bytes, result_code)));
+      .WillOnce(RunOnceCallback<5>(result_signature_bytes, result_code));
 
   base::test::TestFuture<base::expected<Signature, Error>> sign_waiter;
   token_.Sign(PrivateKeyHandle(public_key), signing_scheme, data_to_sign,
@@ -2849,7 +2848,7 @@ TEST_F(KcerTokenImplTest, SignRsaSha256Success) {
       chaps_client_,
       Sign(pkcs11_slot_id_, chromeos::PKCS11_CKM_RSA_PKCS,
            std::vector<uint8_t>(), expected_key_handle, expected_digest, _))
-      .WillOnce(DoAll(RunOnceCallback<5>(result_signature_bytes, result_code)));
+      .WillOnce(RunOnceCallback<5>(result_signature_bytes, result_code));
 
   base::test::TestFuture<base::expected<Signature, Error>> sign_waiter;
   token_.Sign(PrivateKeyHandle(public_key), signing_scheme, data_to_sign,
@@ -2895,7 +2894,7 @@ TEST_F(KcerTokenImplTest, SignRsaPssSha256Success) {
       chaps_client_,
       Sign(pkcs11_slot_id_, chromeos::PKCS11_CKM_RSA_PKCS_PSS,
            expected_mechanism_param, expected_key_handle, expected_digest, _))
-      .WillOnce(DoAll(RunOnceCallback<5>(result_signature_bytes, result_code)));
+      .WillOnce(RunOnceCallback<5>(result_signature_bytes, result_code));
 
   base::test::TestFuture<base::expected<Signature, Error>> sign_waiter;
   token_.Sign(PrivateKeyHandle(public_key), signing_scheme, data_to_sign,
@@ -2949,7 +2948,7 @@ TEST_F(KcerTokenImplTest, SignEcSha256) {
   EXPECT_CALL(chaps_client_, Sign(pkcs11_slot_id_, chromeos::PKCS11_CKM_ECDSA,
                                   std::vector<uint8_t>(), expected_key_handle,
                                   expected_digest, _))
-      .WillOnce(DoAll(RunOnceCallback<5>(result_chaps_signature, result_code)));
+      .WillOnce(RunOnceCallback<5>(result_chaps_signature, result_code));
 
   base::test::TestFuture<base::expected<Signature, Error>> sign_waiter;
   token_.Sign(PrivateKeyHandle(public_key), signing_scheme, data_to_sign,
@@ -3075,7 +3074,7 @@ TEST_F(KcerTokenImplTest, SignRsaPkcs1RawSuccess) {
       chaps_client_,
       Sign(pkcs11_slot_id_, chromeos::PKCS11_CKM_RSA_PKCS,
            std::vector<uint8_t>(), expected_key_handle, digest.value(), _))
-      .WillOnce(DoAll(RunOnceCallback<5>(result_signature_bytes, result_code)));
+      .WillOnce(RunOnceCallback<5>(result_signature_bytes, result_code));
 
   base::test::TestFuture<base::expected<Signature, Error>> sign_waiter;
   token_.SignRsaPkcs1Raw(PrivateKeyHandle(public_key), digest,

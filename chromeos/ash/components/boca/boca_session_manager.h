@@ -20,6 +20,7 @@
 #include "base/timer/timer.h"
 #include "base/types/expected.h"
 #include "chromeos/ash/components/boca/babelorca/soda_installer.h"
+#include "chromeos/ash/components/boca/invalidations/invalidation_service_delegate.h"
 #include "chromeos/ash/components/boca/notifications/boca_notification_handler.h"
 #include "chromeos/ash/components/boca/proto/session.pb.h"
 #include "chromeos/ash/components/boca/session_api/session_client_impl.h"
@@ -53,12 +54,17 @@ class SessionManager;
 
 namespace ash::boca {
 
+class ScreenPresenterFactory;
+class StudentScreenPresenter;
+class TeacherScreenPresenter;
+
 class BocaSessionManager
     : public chromeos::network_config::CrosNetworkConfigObserver,
       public signin::IdentityManager::Observer,
       public user_manager::UserManager::UserSessionStateObserver,
       public session_manager::SessionManagerObserver,
-      public remoting::ClientStatusObserver {
+      public remoting::ClientStatusObserver,
+      public InvalidationServiceDelegate {
  public:
   using SessionCaptionInitializer =
       base::RepeatingCallback<void(base::OnceCallback<void(bool)>)>;
@@ -169,6 +175,8 @@ class BocaSessionManager
     // order changed in the vector too.
     virtual void OnConsumerActivityUpdated(
         const std::map<std::string, ::boca::StudentStatus>& activities);
+
+    virtual void OnReceiverInvalidation();
   };
   // CrosNetworkConfigObserver
   void OnNetworkStateChanged(
@@ -238,9 +246,28 @@ class BocaSessionManager
 
   // Calls the `SpotlightRemotingClientManager` to try and stop an existing
   // session and then free up any remaining resources.
-  void EndSpotlightSession();
+  virtual void EndSpotlightSession(base::OnceClosure on_stopped_callback);
 
   virtual std::string GetDeviceRobotEmail();
+
+  // InvalidationServiceDelegate:
+  void UploadToken(
+      const std::string& fcm_token,
+      base::OnceCallback<void(bool)> on_token_uploaded_cb) override;
+  void OnInvalidationReceived(const std::string& payload) override;
+
+  void SetScreenPresenterFactory(
+      std::unique_ptr<ScreenPresenterFactory> screen_presenter_factory);
+
+  // virtual for testing.
+  // Could be nullptr.
+  // Do not store returned pointer.
+  virtual StudentScreenPresenter* GetStudentScreenPresenter();
+  // Could be nullptr.
+  // Do not store returned pointer.
+  virtual TeacherScreenPresenter* GetTeacherScreenPresenter();
+  virtual std::optional<std::string> GetStudentActiveDeviceId(
+      std::string_view student_id);
 
   base::ObserverList<Observer>& observers() { return observers_; }
 
@@ -294,6 +321,10 @@ class BocaSessionManager
 
   void CloseAllCaptions();
 
+  void OnTokenUploadResult(
+      base::OnceCallback<void(bool)> on_token_uploaded_cb,
+      base::expected<bool, google_apis::ApiErrorCode> result);
+
   const bool is_producer_;
   base::OnceClosure end_session_callback_for_testing_;
   base::TimeDelta in_session_polling_interval_;
@@ -341,6 +372,9 @@ class BocaSessionManager
   bool is_local_caption_enabled_ = false;
   SessionCaptionInitializer session_caption_initializer_;
   net::BackoffEntry student_heartbeat_retry_backoff_;
+  std::unique_ptr<ScreenPresenterFactory> screen_presenter_factory_;
+  std::unique_ptr<StudentScreenPresenter> student_screen_presenter_;
+  std::unique_ptr<TeacherScreenPresenter> teacher_screen_presenter_;
   base::ScopedObservation<session_manager::SessionManager,
                           session_manager::SessionManagerObserver>
       session_manager_observation_{this};

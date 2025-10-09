@@ -30,6 +30,7 @@
 #include "net/base/features.h"
 #include "net/base/hex_utils.h"
 #include "net/base/ip_endpoint.h"
+#include "net/base/load_timing_internal_info.h"
 #include "net/base/network_anonymization_key.h"
 #include "net/base/proxy_delegate.h"
 #include "net/base/proxy_server.h"
@@ -573,6 +574,11 @@ TEST_P(SpdyNetworkTransactionTest, Get) {
   EXPECT_THAT(out.rv, IsOk());
   EXPECT_EQ("HTTP/1.1 200", out.status_line);
   EXPECT_EQ("hello!", out.response_data);
+
+  LoadTimingInternalInfo load_timing_internal;
+  helper.trans()->PopulateLoadTimingInternalInfo(&load_timing_internal);
+  EXPECT_THAT(load_timing_internal.session_source,
+              ::testing::Optional(SessionSource::kNew));
 }
 
 TEST_P(SpdyNetworkTransactionTest, SetPriority) {
@@ -681,6 +687,11 @@ TEST_P(SpdyNetworkTransactionTest, SetPriorityOnExistingStream) {
   ASSERT_TRUE(response2->headers);
   EXPECT_EQ(HttpConnectionInfo::kHTTP2, response2->connection_info);
   EXPECT_EQ("HTTP/1.1 200", response2->headers->GetStatusLine());
+
+  LoadTimingInternalInfo load_timing_internal;
+  trans2.PopulateLoadTimingInternalInfo(&load_timing_internal);
+  EXPECT_THAT(load_timing_internal.session_source,
+              ::testing::Optional(SessionSource::kExisting));
 }
 
 // Create two requests: a lower priority one first, then a higher priority one.
@@ -1026,6 +1037,32 @@ TEST_P(SpdyNetworkTransactionTest, ThreeGets) {
   EXPECT_THAT(out.rv, IsOk());
   EXPECT_EQ("HTTP/1.1 200", out.status_line);
   EXPECT_EQ("hello!hello!", out.response_data);
+
+  // Check whether transactions used a new or an existing session. For
+  // HappyEyeballsV3, all transactions are considered using a new session
+  // because they are managed together in the HttpStreamPool. This would be a
+  // reasonable behavior. However, the non-HEv3 path, i.e., HttpStreamFactory,
+  // doesn't manage these transactions (HttpStreamFactory::JobControllers)
+  // together so the first transaction is considered using a new session and
+  // subsequent transactions are considered using an existing session.
+  //
+  // TODO(crbug.com/441134585): Consider fixing this inconsistency by updating
+  // the non-HEv3 path.
+  auto get_session_source = [&](const HttpNetworkTransaction& trans) {
+    LoadTimingInternalInfo load_timing_internal;
+    trans.PopulateLoadTimingInternalInfo(&load_timing_internal);
+    CHECK(load_timing_internal.session_source.has_value());
+    return *load_timing_internal.session_source;
+  };
+  if (HappyEyeballsV3Enabled()) {
+    EXPECT_EQ(get_session_source(trans1), SessionSource::kNew);
+    EXPECT_EQ(get_session_source(trans2), SessionSource::kNew);
+    EXPECT_EQ(get_session_source(trans3), SessionSource::kNew);
+  } else {
+    EXPECT_EQ(get_session_source(trans1), SessionSource::kNew);
+    EXPECT_EQ(get_session_source(trans2), SessionSource::kExisting);
+    EXPECT_EQ(get_session_source(trans3), SessionSource::kExisting);
+  }
 }
 
 TEST_P(SpdyNetworkTransactionTest, TwoGetsLateBinding) {
@@ -3036,7 +3073,7 @@ TEST_P(SpdyNetworkTransactionTest, SocketTagChangeSessionTagWithDnsAliases) {
   GURL url = request_.url;
   std::set<std::string> dns_aliases({"alias1", "alias2", "alias3"});
   helper.session_deps()->host_resolver->rules()->AddIPLiteralRuleWithDnsAliases(
-      url.host(), "127.0.0.1", dns_aliases);
+      url.GetHost(), "127.0.0.1", dns_aliases);
 
   spdy::SpdySerializedFrame req1(
       spdy_util_.ConstructSpdyGet(url.spec().c_str(), 1, DEFAULT_PRIORITY));
@@ -3073,7 +3110,7 @@ TEST_P(SpdyNetworkTransactionTest, SocketTagChangeSessionTagWithDnsAliases) {
 
   // A new SPDY session should have been created.
   EXPECT_EQ(1u, helper.GetSpdySessionCount());
-  SpdySessionKey key1(HostPortPair(url.host(), 443), PRIVACY_MODE_DISABLED,
+  SpdySessionKey key1(HostPortPair(url.GetHost(), 443), PRIVACY_MODE_DISABLED,
                       ProxyChain::Direct(), SessionUsage::kDestination,
                       socket_tag_1, NetworkAnonymizationKey(),
                       SecureDnsPolicy::kAllow,
@@ -3096,7 +3133,7 @@ TEST_P(SpdyNetworkTransactionTest, SocketTagChangeSessionTagWithDnsAliases) {
   request2.load_flags = 0;
   request2.traffic_annotation =
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
-  SpdySessionKey key2(HostPortPair(url.host(), 443), PRIVACY_MODE_DISABLED,
+  SpdySessionKey key2(HostPortPair(url.GetHost(), 443), PRIVACY_MODE_DISABLED,
                       ProxyChain::Direct(), SessionUsage::kDestination,
                       socket_tag_2, NetworkAnonymizationKey(),
                       SecureDnsPolicy::kAllow,
@@ -3166,9 +3203,9 @@ TEST_P(SpdyNetworkTransactionTest,
   std::set<std::string> dns_aliases2({"example.net", "example.com"});
 
   helper.session_deps()->host_resolver->rules()->AddIPLiteralRuleWithDnsAliases(
-      url1.host(), "127.0.0.1", dns_aliases1);
+      url1.GetHost(), "127.0.0.1", dns_aliases1);
   helper.session_deps()->host_resolver->rules()->AddIPLiteralRuleWithDnsAliases(
-      url2.host(), "127.0.0.1", dns_aliases2);
+      url2.GetHost(), "127.0.0.1", dns_aliases2);
 
   spdy::SpdySerializedFrame req1(
       spdy_util_.ConstructSpdyGet(url1.spec().c_str(), 1, DEFAULT_PRIORITY));
@@ -3224,7 +3261,7 @@ TEST_P(SpdyNetworkTransactionTest,
 
   // A new SPDY session should have been created.
   EXPECT_EQ(1u, helper.GetSpdySessionCount());
-  SpdySessionKey key1(HostPortPair(url1.host(), 443), PRIVACY_MODE_DISABLED,
+  SpdySessionKey key1(HostPortPair(url1.GetHost(), 443), PRIVACY_MODE_DISABLED,
                       ProxyChain::Direct(), SessionUsage::kDestination,
                       socket_tag_1, NetworkAnonymizationKey(),
                       SecureDnsPolicy::kAllow,
@@ -3243,7 +3280,7 @@ TEST_P(SpdyNetworkTransactionTest,
   request2.load_flags = 0;
   request2.traffic_annotation =
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
-  SpdySessionKey key2(HostPortPair(url2.host(), 443), PRIVACY_MODE_DISABLED,
+  SpdySessionKey key2(HostPortPair(url2.GetHost(), 443), PRIVACY_MODE_DISABLED,
                       ProxyChain::Direct(), SessionUsage::kDestination,
                       socket_tag_1, NetworkAnonymizationKey(),
                       SecureDnsPolicy::kAllow,
@@ -3289,7 +3326,7 @@ TEST_P(SpdyNetworkTransactionTest,
   request3.load_flags = 0;
   request3.traffic_annotation =
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
-  SpdySessionKey key3(HostPortPair(url2.host(), 443), PRIVACY_MODE_DISABLED,
+  SpdySessionKey key3(HostPortPair(url2.GetHost(), 443), PRIVACY_MODE_DISABLED,
                       ProxyChain::Direct(), SessionUsage::kDestination,
                       socket_tag_2, NetworkAnonymizationKey(),
                       SecureDnsPolicy::kAllow,
@@ -3338,7 +3375,7 @@ TEST_P(SpdyNetworkTransactionTest,
   request4.load_flags = 0;
   request4.traffic_annotation =
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
-  SpdySessionKey key4(HostPortPair(url1.host(), 443), PRIVACY_MODE_DISABLED,
+  SpdySessionKey key4(HostPortPair(url1.GetHost(), 443), PRIVACY_MODE_DISABLED,
                       ProxyChain::Direct(), SessionUsage::kDestination,
                       socket_tag_2, NetworkAnonymizationKey(),
                       SecureDnsPolicy::kAllow,

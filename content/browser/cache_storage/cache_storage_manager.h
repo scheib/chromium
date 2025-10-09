@@ -179,8 +179,7 @@ class CONTENT_EXPORT CacheStorageManager
   bool IsMemoryBacked() const { return profile_path_.empty(); }
 
   // MemoryPressureListener callback
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level);
+  void OnMemoryPressure(base::MemoryPressureLevel level);
 
 #if DCHECK_IS_ON()
   bool CacheStoragePathIsUnique(const base::FilePath& path);
@@ -208,7 +207,8 @@ class CONTENT_EXPORT CacheStorageManager
   const base::WeakPtr<CacheStorageDispatcherHost>
       cache_storage_dispatcher_host_;
 
-  std::unique_ptr<base::AsyncMemoryPressureListener> memory_pressure_listener_;
+  std::unique_ptr<base::AsyncMemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

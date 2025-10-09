@@ -14,6 +14,7 @@
 #import "ios/chrome/browser/content_suggestions/ui_bundled/set_up_list/set_up_list_item_view.h"
 #import "ios/chrome/browser/ntp/model/set_up_list_item_type.h"
 #import "ios/chrome/browser/ntp/model/set_up_list_prefs.h"
+#import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_color_palette.h"
 #import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
@@ -55,16 +56,15 @@ using set_up_list_prefs::SetUpListItemState;
   return ntp_home::DiscoverHeaderLabel();
 }
 
-+ (void)disableSetUpList {
-  set_up_list_prefs::DisableSetUpList(
-      chrome_test_util::GetOriginalProfile()->GetPrefs());
++ (void)disableTipsCards {
+  chrome_test_util::GetOriginalProfile()->GetPrefs()->SetBoolean(
+      prefs::kHomeCustomizationMagicStackTipsEnabled, false);
 }
 
 + (void)resetSetUpListPrefs {
   PrefService* localState = GetApplicationContext()->GetLocalState();
   PrefService* prefService = chrome_test_util::GetOriginalProfile()->GetPrefs();
-  prefService->SetBoolean(prefs::kHomeCustomizationMagicStackSetUpListEnabled,
-                          true);
+  prefService->SetBoolean(prefs::kHomeCustomizationMagicStackTipsEnabled, true);
   SetUpListItemState unknown = SetUpListItemState::kUnknown;
   set_up_list_prefs::SetItemState(localState,
                                   SetUpListItemType::kDefaultBrowser, unknown);
@@ -87,8 +87,12 @@ using set_up_list_prefs::SetUpListItemState;
       .complete;
 }
 
-+ (NSString*)setUpListTitle {
-  return content_suggestions::SetUpListTitleString();
++ (NewTabPageColorPalette*)currentBackgroundColor {
+  return ntp_home::CurrentBackgroundColor();
+}
+
++ (BOOL)hasBackgroundImage {
+  return ntp_home::HasBackgroundImage();
 }
 
 @end

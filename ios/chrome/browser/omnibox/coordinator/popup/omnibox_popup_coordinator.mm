@@ -69,8 +69,8 @@
   OmniboxDebuggerMediator* _omniboxDebuggerMediator;
   /// The omnibox image fetcher.
   OmniboxImageFetcher* _omniboxImageFetcher;
-  // Whether it's the lens overlay managing this popup.
-  BOOL _isLensOverlay;
+  /// The context in which the omnibox is presented.
+  OmniboxPresentationContext _presentationContext;
 }
 
 #pragma mark - Public
@@ -81,15 +81,17 @@
                         (AutocompleteController*)autocompleteController
              omniboxAutocompleteController:
                  (OmniboxAutocompleteController*)omniboxAutocompleteController
-                             isLensOverlay:(BOOL)isLensOverlay {
+                       presentationContext:
+                           (OmniboxPresentationContext)presentationContext {
   self = [super initWithBaseViewController:nil browser:browser];
   if (self) {
     DCHECK(autocompleteController);
     _autocompleteController = autocompleteController;
-    _popupViewController = [[OmniboxPopupViewController alloc] init];
+    _popupViewController = [[OmniboxPopupViewController alloc]
+        initWithPresentationContext:presentationContext];
     _KeyboardDelegate = _popupViewController;
     _omniboxAutocompleteController = omniboxAutocompleteController;
-    _isLensOverlay = isLensOverlay;
+    _presentationContext = presentationContext;
   }
   return self;
 }
@@ -155,7 +157,7 @@
                  popupViewController:self.popupViewController
                    layoutGuideCenter:LayoutGuideCenterForBrowser(self.browser)
                            incognito:isIncognito
-                       isLensOverlay:_isLensOverlay];
+                 presentationContext:_presentationContext];
 
   if (experimental_flags::IsOmniboxDebuggingEnabled()) {
     [self setupDebug];
@@ -164,9 +166,15 @@
 
 - (void)stop {
   [_omniboxDebuggerMediator disconnect];
+  _omniboxDebuggerMediator = nil;
 
   [self.sharingCoordinator stop];
   self.sharingCoordinator = nil;
+
+  self.popupViewController = nil;
+  self.mediator = nil;
+  self.autocompleteController = nullptr;
+  _omniboxImageFetcher = nil;
 }
 
 - (BOOL)isOpen {

@@ -12,7 +12,7 @@
 #include "components/autofill/core/browser/foundations/test_autofill_client.h"
 #include "components/autofill/core/browser/suggestions/suggestion.h"
 #include "components/autofill/core/common/autofill_test_utils.h"
-#include "content/public/browser/webid/federated_auth_autofill_source.h"
+#include "content/public/browser/webid/autofill_source.h"
 #include "content/public/browser/webid/identity_request_dialog_controller.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -26,11 +26,10 @@ using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 
-class MockFederatedAuthAutofillSource
-    : public content::FederatedAuthAutofillSource {
+class MockAutofillSource : public content::webid::AutofillSource {
  public:
-  MockFederatedAuthAutofillSource() = default;
-  ~MockFederatedAuthAutofillSource() override = default;
+  MockAutofillSource() = default;
+  ~MockAutofillSource() override = default;
 
   MOCK_METHOD(const std::optional<std::vector<IdentityRequestAccountPtr>>,
               GetAutofillSuggestions,
@@ -96,7 +95,7 @@ class ContentIdentityCredentialDelegateTest : public ::testing::Test {
 
 TEST_F(ContentIdentityCredentialDelegateTest, NoPendingRequest) {
   ContentIdentityCredentialDelegate delegate(base::BindLambdaForTesting([]() {
-    content::FederatedAuthAutofillSource* result = nullptr;
+    content::webid::AutofillSource* result = nullptr;
     return result;
   }));
   test_api(form()).SetFieldTypes({EMAIL_ADDRESS});
@@ -106,11 +105,11 @@ TEST_F(ContentIdentityCredentialDelegateTest, NoPendingRequest) {
 }
 
 TEST_F(ContentIdentityCredentialDelegateTest, NoAccounts) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -123,11 +122,11 @@ TEST_F(ContentIdentityCredentialDelegateTest, NoAccounts) {
 }
 
 TEST_F(ContentIdentityCredentialDelegateTest, EmptyAccounts) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -142,22 +141,15 @@ TEST_F(ContentIdentityCredentialDelegateTest, EmptyAccounts) {
 }
 
 TEST_F(ContentIdentityCredentialDelegateTest, UnsupportedFieldType) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
-  IdentityRequestAccountPtr account = CreateTestAccount();
-  // The delegated flow requires an IdP with a specific format.
-  account->identity_provider->format = blink::mojom::Format::kSdJwt;
-  account->identity_provider->disclosure_fields = {
-      content::IdentityRequestDialogDisclosureField::kEmail};
-  std::vector<IdentityRequestAccountPtr> accounts = {account};
-
-  EXPECT_CALL(mock, GetAutofillSuggestions).WillOnce(Return(accounts));
+  EXPECT_CALL(mock, GetAutofillSuggestions).Times(0);
 
   test_api(form()).SetFieldTypes({UNKNOWN_TYPE});
   std::vector<Suggestion> suggestions = delegate.GetVerifiedAutofillSuggestions(
@@ -166,11 +158,11 @@ TEST_F(ContentIdentityCredentialDelegateTest, UnsupportedFieldType) {
 }
 
 TEST_F(ContentIdentityCredentialDelegateTest, GetVerifiedEmailRequest) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -215,11 +207,11 @@ TEST_F(ContentIdentityCredentialDelegateTest, GetVerifiedEmailRequest) {
 }
 
 TEST_F(ContentIdentityCredentialDelegateTest, SuggestPhoneNumbers) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -265,11 +257,11 @@ TEST_F(ContentIdentityCredentialDelegateTest, SuggestPhoneNumbers) {
 
 TEST_F(ContentIdentityCredentialDelegateTest,
        GetSuggestionForFieldThatWasntRequested) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -291,11 +283,11 @@ TEST_F(ContentIdentityCredentialDelegateTest,
 
 TEST_F(ContentIdentityCredentialDelegateTest,
        GetSuggestionForFieldThatRequestedButIsUnavailable) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -322,11 +314,11 @@ TEST_F(ContentIdentityCredentialDelegateTest,
 
 TEST_F(ContentIdentityCredentialDelegateTest,
        GetSuggestionsForDelegatedCredentialAvailableForSignUp) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -361,11 +353,11 @@ TEST_F(ContentIdentityCredentialDelegateTest,
 
 TEST_F(ContentIdentityCredentialDelegateTest,
        GetSuggestionsForPasswordUnavailableForSignUp) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -384,11 +376,11 @@ TEST_F(ContentIdentityCredentialDelegateTest,
 
 TEST_F(ContentIdentityCredentialDelegateTest,
        GetSuggestionsForPasswordAvailableForSignIn) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 
@@ -420,11 +412,11 @@ TEST_F(ContentIdentityCredentialDelegateTest,
 }
 
 TEST_F(ContentIdentityCredentialDelegateTest, GetProvidedNameRequest) {
-  MockFederatedAuthAutofillSource mock;
+  MockAutofillSource mock;
 
   ContentIdentityCredentialDelegate delegate(
       base::BindLambdaForTesting([&mock]() {
-        content::FederatedAuthAutofillSource* result = &mock;
+        content::webid::AutofillSource* result = &mock;
         return result;
       }));
 

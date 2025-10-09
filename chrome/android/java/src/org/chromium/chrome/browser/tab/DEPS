@@ -61,6 +61,8 @@ include_rules = [
   "+chrome/browser/tabmodel/android/java/src/org/chromium/chrome/browser/tabmodel/TabGroupModelFilter.java",
   "+chrome/browser/ui/messages/android/java/src/org/chromium/chrome/browser/ui/messages/snackbar/SnackbarManager.java",
   "+chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/TabObscuringHandler.java",
+  "+chrome/browser/url_constants/android/java/src/org/chromium/chrome/browser/url_constants/UrlConstantResolver.java",
+  "+chrome/browser/url_constants/android/java/src/org/chromium/chrome/browser/url_constants/UrlConstantResolverFactory.java",
   "+chrome/browser/util/android/java/src/org/chromium/chrome/browser/util/WindowFeatures.java",
   "+chrome/browser/feature_engagement/java/src/org/chromium/chrome/browser/feature_engagement/TrackerFactory.java",
   "+chrome/browser/flags",
@@ -126,6 +128,7 @@ specific_include_rules = {
     "+chrome/browser/util/android/java/src/org/chromium/chrome/browser/util/UrlConstants.java",
     "+chrome/browser/ui/android/pdf/java/src/org/chromium/chrome/browser/pdf/PdfUtils.java",
     "+chrome/browser/ui/android/pdf/java/src/org/chromium/chrome/browser/pdf/PdfInfo.java",
+    "+chrome/android/java/src/org/chromium/chrome/browser/compositor/overlays/strip/StripLayoutUtils.java",
 
     "-components",
     "+components/android_autofill/browser/java/src/org/chromium/components/autofill",
@@ -134,6 +137,7 @@ specific_include_rules = {
     "+components/embedder_support/android/java/src/org/chromium/components/embedder_support/delegate",
     "+components/embedder_support/android/java/src/org/chromium/components/embedder_support/util",
     "+components/embedder_support/android/java/src/org/chromium/components/embedder_support/view",
+    "+components/embedder_support/android/java/src/org/chromium/components/embedder_support/virtual_structure",
     "+components/url_formatter/android",
     "+components/navigation_interception/android/java/src/org/chromium/components/navigation_interception",
     "+components/prefs/android/java/src/org/chromium/components/prefs/PrefService.java",
@@ -143,7 +147,7 @@ specific_include_rules = {
     "+components/version_info/android",
   ],
   'PageContentProtoViewStructureBuilder\.java':[
-    "+chrome/browser/optimization_guide/android/java/src/org/chromium/chrome/browser/optimization_guide/PageContentProtoProviderBridge.java",
+    "+components/optimization_guide/content/browser/android/java/src/org/chromium/components/optimization_guide/content/PageContentProtoProviderBridge.java",
   ],
   'TabStateBrowserControlsVisibilityDelegate\.java': [
     "+chrome/browser/util/android/java/src/org/chromium/chrome/browser/util/ChromeAccessibilityUtil.java",

@@ -85,15 +85,13 @@ class SessionSyncServiceMockForRecentTabsTableCoordinator
 };
 
 std::unique_ptr<KeyedService>
-BuildMockSessionSyncServiceForRecentTabsTableCoordinator(
-    web::BrowserState* context) {
+BuildMockSessionSyncServiceForRecentTabsTableCoordinator(ProfileIOS* profile) {
   return std::make_unique<
       testing::NiceMock<SessionSyncServiceMockForRecentTabsTableCoordinator>>();
 }
 
 // Returns a TestSyncService.
-std::unique_ptr<KeyedService> BuildFakeSyncServiceFactory(
-    web::BrowserState* context) {
+std::unique_ptr<KeyedService> BuildFakeSyncServiceFactory(ProfileIOS* profile) {
   return std::make_unique<syncer::TestSyncService>();
 }
 
@@ -127,7 +125,7 @@ class GlobalIdMapperMock : public syncer::GlobalIdMapper {
 
   MOCK_METHOD1(AddGlobalIdChangeObserver,
                void(syncer::GlobalIdChange callback));
-  MOCK_METHOD1(GetLatestGlobalId, int64_t(int64_t global_id));
+  MOCK_CONST_METHOD1(GetLatestGlobalId, int64_t(int64_t global_id));
 };
 
 class RecentTabsTableCoordinatorTest : public BlockCleanupTest {

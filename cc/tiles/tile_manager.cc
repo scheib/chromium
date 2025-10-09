@@ -49,7 +49,6 @@
 #include "cc/tiles/tile_priority.h"
 #include "cc/tiles/tile_task_manager.h"
 #include "cc/tiles/tiles_with_resource_iterator.h"
-#include "components/viz/common/resources/resource_sizes.h"
 #include "components/viz/common/traced_value.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "ui/gfx/geometry/axis_transform2d.h"
@@ -420,10 +419,6 @@ void TileManager::FinishTasksAndCleanUp() {
   tile_task_manager_->CheckForCompletedTasks();
 
   tile_task_manager_ = nullptr;
-  // The TaskGraph holds onto the TileTasks, so we need to clear it to avoid
-  // dangling pointers from TileTasks to other objects. One example is
-  // DidFinishRunningAllTilesTask::pending_raster_queries_.
-  graph_.Reset();
   resource_pool_ = nullptr;
   pending_raster_queries_ = nullptr;
   more_tiles_need_prepare_check_notifier_.Cancel();
@@ -1243,8 +1238,6 @@ void TileManager::ScheduleTasks(PrioritizedWorkToSchedule work_to_schedule) {
 
   size_t priority = kTileTaskPriorityBase;
 
-  graph_.Reset();
-
   scoped_refptr<TileTask> required_for_activation_done_task =
       CreateTaskSetFinishedTask(
           &TileManager::DidFinishRunningTileTasksRequiredForActivation);
@@ -1415,6 +1408,11 @@ void TileManager::ScheduleTasks(PrioritizedWorkToSchedule work_to_schedule) {
   checker_image_tracker_.ScheduleImageDecodeQueue(
       std::move(work_to_schedule.checker_image_decode_queue));
 
+  // Clear the graph structure after scheduling to prevent edges from outliving
+  // nodes when completed tasks are collected, addressing dangling raw_ptr in
+  // TaskGraph::Edge. The TaskGraphRunner holds necessary state post-schedule.
+  graph_.Reset();
+
   did_check_for_completed_tasks_since_last_schedule_tasks_ = false;
 
   TRACE_EVENT_INSTANT("cc", "ScheduledTasksState",
@@ -1568,7 +1566,7 @@ scoped_refptr<TileTask> TileManager::CreateRasterTask(
   settings->image_to_current_frame_index =
       std::move(image_id_to_current_frame_index);
   if (use_gpu_rasterization_) {
-    settings->raster_mode = PlaybackImageProvider::RasterMode::kOop;
+    settings->raster_mode = PlaybackImageProvider::RasterMode::kGpu;
   }
 
   PlaybackImageProvider image_provider(

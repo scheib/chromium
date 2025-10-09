@@ -155,6 +155,12 @@ class CORE_EXPORT Event : public ScriptWrappable {
   void SetCurrentTarget(EventTarget* current_target) {
     current_target_ = current_target;
   }
+  void SetInvocationTargetInShadowTree(bool is_in_shadow_tree) {
+    invocation_target_in_shadow_tree_ = is_in_shadow_tree;
+  }
+  bool invocationTargetInShadowTree() const {
+    return invocation_target_in_shadow_tree_;
+  }
 
   // This callback is invoked when an event listener has been dispatched
   // at the current target. It should only be used to influence UMA metrics
@@ -243,6 +249,7 @@ class CORE_EXPORT Event : public ScriptWrappable {
   virtual bool IsErrorEvent() const;
 
   virtual bool IsPatchEvent() const;
+  virtual bool IsRouteEvent() const;
 
   bool PropagationStopped() const {
     return propagation_stopped_ || immediate_propagation_stopped_;
@@ -344,7 +351,7 @@ class CORE_EXPORT Event : public ScriptWrappable {
   // retargeted against currentTarget(). Otherwise, it is retargeted against
   // target().  target() may be null after event dispatch to prevent leaking,
   // and in that case, this method will return null as well.
-  Element* Retarget(const Element* element) const;
+  Element* Retarget(Element* element) const;
 
  private:
   AtomicString type_;
@@ -372,6 +379,8 @@ class CORE_EXPORT Event : public ScriptWrappable {
   bool fire_only_non_capture_listeners_at_target_ : 1;
 
   bool copy_event_path_from_underlying_event_ : 1;
+
+  bool invocation_target_in_shadow_tree_ : 1;
 
   PassiveMode handling_passive_;
   PhaseType event_phase_;

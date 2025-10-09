@@ -35,6 +35,7 @@
 <translation id="1249250836236328755">Žanr</translation>
 <translation id="1254593899333212300">Izravna internetska veza</translation>
 <translation id="1272293450992660632">PIN-ovi se ne podudaraju</translation>
+<translation id="1279040297980392566">Čeka se dovršetak skeniranja, pokušajte ponovno kasnije</translation>
 <translation id="1280820357415527819">Traženje mobilnih mreža</translation>
 <translation id="1293556467332435079">Datoteke</translation>
 <translation id="1297922636971898492">Google disk trenutačno nije dostupan. Prijenos će se automatski ponovo pokrenuti kada Google disk opet postane dostupan.</translation>
@@ -787,7 +788,7 @@
 <translation id="7075931588889865715">tajlandski s tipkovnicom TIS 820-2531</translation>
 <translation id="708278670402572152">Prekinite vezu da biste omogućili pretraživanje</translation>
 <translation id="7086590977277044826">tamilski s tipkovnicom InScript</translation>
-<translation id="7088615885725309056">Starije</translation>
+<translation id="7088615885725309056">Starija</translation>
 <translation id="7103992300314999525">makedonski</translation>
 <translation id="7104338189998813914">Pojavio se problem s pristupanjem vašem OneDrive računu</translation>
 <translation id="7106346894903675391">Kupite još prostora za pohranu...</translation>
@@ -1078,6 +1079,7 @@
 <translation id="9213073329713032541">Instalacija je uspješno pokrenuta.</translation>
 <translation id="9219103736887031265">Slike</translation>
 <translation id="9219908252191632183">Površina Mjeseca</translation>
+<translation id="931652069802536959">Mreža je blokirana pravilima</translation>
 <translation id="938470336146445890">Instalirajte korisnički certifikat.</translation>
 <translation id="939736085109172342">Nova mapa</translation>
 <translation id="943972244133411984">Izmijenio</translation>

@@ -28,6 +28,7 @@
 #include "content/public/browser/presentation_observer.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
+#include "media/base/picture_in_picture_events_info.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/media_session/public/mojom/audio_focus.mojom.h"
@@ -132,6 +133,7 @@ class MediaSessionImpl : public MediaSession,
   // WebContentsObserver implementation
   void WebContentsDestroyed() override;
   void RenderFrameDeleted(RenderFrameHost* rfh) override;
+  void PrimaryPageChanged(content::Page& page) override;
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
   void OnWebContentsFocused(RenderWidgetHost*) override;
   void OnWebContentsLostFocus(RenderWidgetHost*) override;
@@ -545,15 +547,26 @@ class MediaSessionImpl : public MediaSession,
   CONTENT_EXPORT void SetShouldThrottleDurationUpdateForTest(
       bool should_throttle);
 
-  // Returns true if there exists a single normal "playing" player with picture
-  // in picture available, false otherwise.
-  bool CouldEnterBrowserInitiatedAutomaticPictureInPicture() const;
+  // True if `routed_service_` exists and either the camera or microphone are
+  // currently actively used, false otherwise.
+  bool IsActivelyUsingCameraOrMicrophone() const;
+
+  // Returns true if we can enter browser initiated automatic
+  // picture-in-picture, false otherwise.
+  bool CanEnterBrowserInitiatedAutomaticPictureInPicture() const;
 
   // Automatically enter picture-in-picture from a non-user source (e.g. in
   // reaction to content being hidden), if the EnterAutoPictureInPicture action
   // is registered by the browser (the user did not provide an
   // `enterpictureinpicture` action handler).
-  void MaybeEnterBrowserInitiatedAutomaticPictureInPicture() const;
+  void MaybeEnterBrowserInitiatedAutomaticPictureInPicture();
+
+  // Notifies a player of the last known auto picture-in-picture information.
+  // This is used to keep newly added players updated with the latest
+  // information.
+  void NotifyPlayerOfAutoPictureInPictureInfo(
+      MediaSessionPlayerObserver* observer,
+      int player_id);
 
   // Duration update allowance is inscreasing by 1 every 20 seconds, and
   // capped at 3. Every duration updates will consume 1 allowance, and
@@ -712,6 +725,10 @@ class MediaSessionImpl : public MediaSession,
   // changes often enough to be considered live. See
   // `MaybeGuardDurationUpdate()` for details on duration changes.
   bool is_considered_live_ = false;
+
+  // The last auto picture-in-picture information that was sent to players.
+  std::optional<media::PictureInPictureEventsInfo::AutoPipInfo>
+      last_auto_picture_in_picture_info_;
 
   base::WeakPtrFactory<MediaSessionImpl> weak_factory_{this};
 

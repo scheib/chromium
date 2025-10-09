@@ -28,6 +28,7 @@ import android.app.Activity;
 import android.text.method.PasswordTransformationMethod;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.StringRes;
@@ -57,7 +58,7 @@ import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAcce
 import org.chromium.chrome.browser.keyboard_accessory.button_group_component.KeyboardAccessoryButtonGroupView;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData.AccessorySheetData;
-import org.chromium.chrome.browser.keyboard_accessory.data.PropertyProvider;
+import org.chromium.chrome.browser.keyboard_accessory.data.Provider;
 import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AddressAccessorySheetCoordinator;
 import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.CreditCardAccessorySheetCoordinator;
 import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.PasswordAccessorySheetCoordinator;
@@ -72,7 +73,6 @@ import org.chromium.net.test.EmbeddedTestServer;
 import org.chromium.net.test.ServerCertificate;
 import org.chromium.ui.DropdownPopupWindowInterface;
 import org.chromium.ui.test.util.ViewUtils;
-import org.chromium.ui.widget.ChromeImageButton;
 
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -256,8 +256,7 @@ public class ManualFillingTestHelper {
         pollUiThread(
                 () -> {
                     Activity activity = mActivityTestRule.getActivity();
-                    return !getKeyboard()
-                            .isSoftKeyboardShowing(activity, activity.getCurrentFocus());
+                    return !getKeyboard().isSoftKeyboardShowing(activity.getCurrentFocus());
                 });
     }
 
@@ -278,7 +277,6 @@ public class ManualFillingTestHelper {
                             mActivityTestRule
                                     .getKeyboardDelegate()
                                     .isKeyboardShowing(
-                                            mActivityTestRule.getActivity(),
                                             mActivityTestRule.getActivity().getTabsView());
                     Criteria.checkThat(isKeyboardShowing, Matchers.is(true));
                 });
@@ -524,7 +522,7 @@ public class ManualFillingTestHelper {
                 for (int buttonIndex = 0;
                         buttonIndex < buttonGroupView.getButtons().size();
                         buttonIndex++) {
-                    final ChromeImageButton button = buttonGroupView.getButtons().get(buttonIndex);
+                    final ImageButton button = buttonGroupView.getButtons().get(buttonIndex);
                     if (descriptionToMatch.equals(button.getContentDescription())) {
                         PostTask.runOrPostTask(TaskTraits.UI_DEFAULT, button::performClick);
                         return;
@@ -622,8 +620,8 @@ public class ManualFillingTestHelper {
     // --------------------------------------------
 
     public void addGenerationButton() {
-        PropertyProvider<KeyboardAccessoryData.Action[]> generationActionProvider =
-                new PropertyProvider<>(AccessoryAction.GENERATE_PASSWORD_AUTOMATIC);
+        Provider<KeyboardAccessoryData.Action[]> generationActionProvider =
+                new Provider<>(AccessoryAction.GENERATE_PASSWORD_AUTOMATIC);
         getManualFillingCoordinator()
                 .registerActionProvider(mWebContentsRef.get(), generationActionProvider);
         ThreadUtils.runOnUiThreadBlocking(
@@ -647,8 +645,7 @@ public class ManualFillingTestHelper {
     public void registerSheetDataProvider(@AccessoryTabType int tabType) {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
-                    PropertyProvider<AccessorySheetData> sheetDataProvider =
-                            new PropertyProvider<>();
+                    Provider<AccessorySheetData> sheetDataProvider = new Provider<>();
                     getManualFillingCoordinator()
                             .registerSheetDataProvider(
                                     mWebContentsRef.get(), tabType, sheetDataProvider);

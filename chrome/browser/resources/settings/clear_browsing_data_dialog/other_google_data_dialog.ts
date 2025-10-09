@@ -142,6 +142,14 @@ export class SettingsOtherGoogleDataDialogElement extends
   private onGeminiAppsActivityClick_() {
     OpenWindowProxyImpl.getInstance().openUrl(
         loadTimeData.getString('myActivityGeminiAppsUrl'));
+
+    this.metricsBrowserProxy_.recordAction(
+        'Settings.DeleteBrowsingData.GeminiAppsActivityLinkClick');
+  }
+
+  private onGeminiPersonalContextClick_() {
+    OpenWindowProxyImpl.getInstance().openUrl(
+        loadTimeData.getString('geminiPersonalContextUrl'));
   }
 
   private shouldShowMyActivityLink_() {

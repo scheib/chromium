@@ -42,6 +42,7 @@
 #include "components/subresource_filter/core/mojom/subresource_filter.mojom.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/global_routing_id.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/reload_type.h"
 #include "content/public/browser/render_frame_host.h"
@@ -65,9 +66,6 @@
 namespace page_load_metrics {
 
 namespace {
-
-using RectId = PageAdDensityTracker::RectId;
-using RectType = PageAdDensityTracker::RectType;
 
 #define ADS_HISTOGRAM(suffix, hist_macro, visibility, value)        \
   switch (visibility) {                                             \
@@ -194,6 +192,7 @@ AdsPageLoadMetricsObserver::CreateIfNeeded(
     heavy_ad_intervention::HeavyAdService* heavy_ad_service,
     history::HistoryService* history_service,
     const ApplicationLocaleGetter& application_locale_getter,
+    bool is_in_foreground,
     bool is_incognito) {
   // TODO(bokan): ContentSubresourceFilterThrottleManager is now associated
   // with a FrameTree. When AdsPageLoadMetricsObserver becomes aware of MPArch
@@ -206,7 +205,7 @@ AdsPageLoadMetricsObserver::CreateIfNeeded(
 
   return std::make_unique<AdsPageLoadMetricsObserver>(
       heavy_ad_service, history_service, application_locale_getter,
-      is_incognito);
+      is_in_foreground, is_incognito);
 }
 
 // static
@@ -272,6 +271,7 @@ AdsPageLoadMetricsObserver::AdsPageLoadMetricsObserver(
     heavy_ad_intervention::HeavyAdService* heavy_ad_service,
     history::HistoryService* history_service,
     const ApplicationLocaleGetter& application_locale_getter,
+    bool is_in_foreground,
     bool is_incognito,
     base::TickClock* clock,
     heavy_ad_intervention::HeavyAdBlocklist* blocklist)
@@ -285,7 +285,7 @@ AdsPageLoadMetricsObserver::AdsPageLoadMetricsObserver(
       heavy_ad_threshold_noise_provider_(
           std::make_unique<HeavyAdThresholdNoiseProvider>(
               heavy_ad_privacy_mitigations_enabled_ /* use_noise */)),
-      page_ad_density_tracker_(clock),
+      page_ad_density_tracker_(is_in_foreground, clock),
       is_incognito_(is_incognito) {
   // Manual setting of the heavy ad blocklist should be used only as a
   // convenience for tests that don't create HeavyAdService.
@@ -624,6 +624,18 @@ void AdsPageLoadMetricsObserver::OnDidFinishSubFrameNavigation(
   ProcessOngoingNavigationResource(navigation_handle);
 }
 
+AdsPageLoadMetricsObserver::ObservePolicy AdsPageLoadMetricsObserver::OnHidden(
+    const mojom::PageLoadTiming& timing) {
+  page_ad_density_tracker_.OnHidden();
+  return CONTINUE_OBSERVING;
+}
+
+AdsPageLoadMetricsObserver::ObservePolicy
+AdsPageLoadMetricsObserver::OnShown() {
+  page_ad_density_tracker_.OnShown();
+  return CONTINUE_OBSERVING;
+}
+
 void AdsPageLoadMetricsObserver::FrameReceivedUserActivation(
     content::RenderFrameHost* render_frame_host) {
   FrameTreeData* ancestor_data =
@@ -714,35 +726,9 @@ void AdsPageLoadMetricsObserver::MediaStartedPlaying(
 void AdsPageLoadMetricsObserver::OnMainFrameIntersectionRectChanged(
     content::RenderFrameHost* render_frame_host,
     const gfx::Rect& main_frame_intersection_rect) {
-  content::FrameTreeNodeId frame_tree_node_id =
-      render_frame_host->GetFrameTreeNodeId();
   if (render_frame_host->IsInPrimaryMainFrame()) {
     page_ad_density_tracker_.UpdateMainFrameRect(main_frame_intersection_rect);
-    return;
   }
-
-  // If the frame whose size has changed is the root of the ad ancestry chain,
-  // then update it.
-  FrameTreeData* ancestor_data = FindFrameData(frame_tree_node_id);
-  if (ancestor_data &&
-      frame_tree_node_id == ancestor_data->root_frame_tree_node_id()) {
-    RectId rect_id = RectId(RectType::kIFrame, frame_tree_node_id.value());
-
-    // Only add frames if they are visible.
-    if (!ancestor_data->is_display_none()) {
-      page_ad_density_tracker_.RemoveRect(
-          rect_id,
-          /*recalculate_viewport_density=*/false);
-      page_ad_density_tracker_.AddRect(rect_id, main_frame_intersection_rect,
-                                       /*recalculate_density=*/true);
-    } else {
-      page_ad_density_tracker_.RemoveRect(
-          rect_id,
-          /*recalculate_viewport_density=*/true);
-    }
-  }
-
-  CheckForAdDensityViolation();
 }
 
 void AdsPageLoadMetricsObserver::OnMainFrameViewportRectChanged(
@@ -751,10 +737,11 @@ void AdsPageLoadMetricsObserver::OnMainFrameViewportRectChanged(
       main_frame_viewport_rect);
 }
 
-void AdsPageLoadMetricsObserver::OnMainFrameImageAdRectsChanged(
-    const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) {
-  page_ad_density_tracker_.UpdateMainFrameImageAdRects(
-      main_frame_image_ad_rects);
+void AdsPageLoadMetricsObserver::OnMainFrameAdRectsChanged(
+    const base::flat_map<int, gfx::Rect>& main_frame_ad_rects) {
+  page_ad_density_tracker_.UpdateMainFrameAdRects(main_frame_ad_rects);
+
+  CheckForAdDensityViolation();
 }
 
 // TODO(crbug.com/40727873): Evaluate imposing width requirements
@@ -974,8 +961,8 @@ void AdsPageLoadMetricsObserver::RecordPageResourceTotalHistograms(
 
   auto* ukm_recorder = ukm::UkmRecorder::Get();
 
-  // AdPageLoadCustomSampling3 is recorded on all pages
-  ukm::builders::AdPageLoadCustomSampling3 custom_sampling_builder(source_id);
+  // AdPageLoadCustomSampling4 is recorded on all pages
+  ukm::builders::AdPageLoadCustomSampling4 custom_sampling_builder(source_id);
 
   page_ad_density_tracker_.Finalize();
 
@@ -1470,14 +1457,26 @@ void AdsPageLoadMetricsObserver::MaybeTriggerHeavyAdIntervention(
   issue->details->heavy_ad_issue_details = std::move(heavy_ad_details);
   render_frame_host->ReportInspectorIssue(std::move(issue));
 
-  // Report to all child frames that will be unloaded. Once all reports are
-  // queued, the frame will be unloaded. Because the IPC messages are ordered
-  // wrt to each frames unload, we do not need to wait before loading the
-  // error page. Reports will be added to ReportingObserver queues
-  // synchronously when the IPC message is handled, which guarantees they will
-  // be available in the the unload handler.
+  // Report to the embedder frame and all child frames that will be unloaded.
+  // Once all reports are queued, the frame will be unloaded. Because the IPC
+  // messages are ordered wrt to each frames unload, we do not need to wait
+  // before loading the error page. Reports will be added to ReportingObserver
+  // queues synchronously when the IPC message is handled, which guarantees they
+  // will be available in the the unload handler.
   std::string report_message =
       GetHeavyAdReportMessage(*frame_data, action == HeavyAdAction::kUnload);
+
+  static constexpr char kReportId[] = "HeavyAdIntervention";
+
+  if (base::FeatureList::IsEnabled(
+          heavy_ad_intervention::features::
+              kHeavyAdInterventionSendReportToEmbedder)) {
+    if (auto* parent = render_frame_host->GetParent()) {
+      parent->SendInterventionReport(kReportId, report_message,
+                                     /*child_frame=*/render_frame_host);
+    }
+  }
+
   render_frame_host->ForEachRenderFrameHostWithAction(
       [&report_message,
        &page = render_frame_host->GetPage()](content::RenderFrameHost* frame) {
@@ -1486,9 +1485,9 @@ void AdsPageLoadMetricsObserver::MaybeTriggerHeavyAdIntervention(
         if (&page != &frame->GetPage()) {
           return content::RenderFrameHost::FrameIterationAction::kSkipChildren;
         }
-        static constexpr char kReportId[] = "HeavyAdIntervention";
         if (frame->IsRenderFrameLive()) {
-          frame->SendInterventionReport(kReportId, report_message);
+          frame->SendInterventionReport(kReportId, report_message,
+                                        /*child_frame=*/nullptr);
         }
         return content::RenderFrameHost::FrameIterationAction::kContinue;
       });
@@ -1496,7 +1495,7 @@ void AdsPageLoadMetricsObserver::MaybeTriggerHeavyAdIntervention(
   // Report intervention to the blocklist.
   if (auto* blocklist = GetHeavyAdBlocklist()) {
     blocklist->AddEntry(
-        GetDelegate().GetWebContents()->GetLastCommittedURL().host(),
+        GetDelegate().GetWebContents()->GetLastCommittedURL().GetHost(),
         true /* opt_out */,
         static_cast<int>(
             heavy_ad_intervention::HeavyAdBlocklistType::kHeavyAdOnlyType));
@@ -1559,7 +1558,7 @@ bool AdsPageLoadMetricsObserver::IsBlocklisted(bool report) {
       heavy_ads_blocklist_reason_ == blocklist::BlocklistReason::kAllowed) {
     std::vector<blocklist::BlocklistReason> passed_reasons;
     heavy_ads_blocklist_reason_ = blocklist->IsLoadedAndAllowed(
-        GetDelegate().GetWebContents()->GetLastCommittedURL().host(),
+        GetDelegate().GetWebContents()->GetLastCommittedURL().GetHost(),
         static_cast<int>(
             heavy_ad_intervention::HeavyAdBlocklistType::kHeavyAdOnlyType),
         false /* opt_out */, &passed_reasons);
@@ -1611,11 +1610,6 @@ void AdsPageLoadMetricsObserver::CleanupDeletedFrame(
 
   if (record_metrics) {
     RecordPerFrameMetrics(*frame_data, GetDelegate().GetPageUkmSourceId());
-  }
-
-  if (update_density_tracker) {
-    page_ad_density_tracker_.RemoveRect(RectId(RectType::kIFrame, id.value()),
-                                        /*recalculate_viewport_density=*/true);
   }
 }
 

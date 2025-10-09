@@ -8,6 +8,7 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/threading/sequence_bound.h"
 #include "components/password_manager/core/browser/import/password_importer.h"
+#include "components/prefs/pref_service.h"
 #include "components/user_data_importer/utility/bookmark_parser.h"
 #include "components/user_data_importer/utility/importer_metrics_recorder.h"
 #include "components/user_data_importer/utility/parsing_ffi/lib.rs.h"
@@ -64,6 +65,7 @@ class SafariDataImporter {
                      bookmarks::BookmarkModel* bookmark_model,
                      ReadingListModel* reading_list_model,
                      syncer::SyncService* sync_service,
+                     PrefService* pref_service,
                      std::unique_ptr<BookmarkParser> bookmark_parser,
                      std::string app_locale);
   ~SafariDataImporter();
@@ -211,6 +213,9 @@ class SafariDataImporter {
   // history service to import them.
   void ImportHistoryEntries(std::vector<SafariHistoryEntry> history_entries);
 
+  // Invoked if parsing of history fails. Forwards the results to `client_`.
+  void OnHistoryImportFailed();
+
   // Invoked once parsing of history is completed. Forwards the results to
   // `client_`.
   void OnHistoryImportCompleted();
@@ -226,6 +231,9 @@ class SafariDataImporter {
   // Imports bookmarks and reading list entries from pending data into the
   // corresponding BookmarkModel and ReadingListModel.
   void ContinueImportBookmarks();
+
+  // Invoked when all import processing tasks have concluded. Logs metrics.
+  void OnImportComplete();
 
   // Objects used by this importer to do work (esp. parsing)
 
@@ -259,6 +267,10 @@ class SafariDataImporter {
 
   // Stores pointer to `SyncService` instance.
   raw_ptr<syncer::SyncService> sync_service_;
+
+  // The PrefService that this instance uses to read and write preferences.
+  // Must outlive this instance.
+  raw_ptr<PrefService> pref_service_ = nullptr;
 
   // Internal state
 

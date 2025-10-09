@@ -14,8 +14,8 @@
 #import "components/segmentation_platform/public/constants.h"
 #import "components/segmentation_platform/public/features.h"
 #import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/content_suggestions_constants.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/magic_stack/magic_stack_constants.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/new_tab_page_app_interface.h"
@@ -130,6 +130,7 @@ void TapMagicStackEditButton() {
             (testMagicStackCompactedSetUpListCompleteAllItems)]) {
     config.features_disabled.push_back(kContentPushNotifications);
   }
+
   return config;
 }
 
@@ -154,7 +155,7 @@ void TapMagicStackEditButton() {
 
 - (void)setUp {
   [super setUp];
-  [NewTabPageAppInterface disableSetUpList];
+  [NewTabPageAppInterface disableTipsCards];
 }
 
 - (void)tearDownHelper {
@@ -247,9 +248,7 @@ void TapMagicStackEditButton() {
 
   // Check the snack bar notifying the user that an element has been removed is
   // displayed.
-  [[EarlGrey
-      selectElementWithMatcher:
-          grey_accessibilityID(@"MDCSnackbarMessageTitleAutomationIdentifier")]
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::SnackbarViewMatcher()]
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Tap on undo.
@@ -379,11 +378,12 @@ void TapMagicStackEditButton() {
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Turn off the Set Up list toggle.
-  [[EarlGrey selectElementWithMatcher:
-                 grey_allOf(grey_kindOfClassName(@"UISwitch"),
-                            grey_ancestor(grey_accessibilityID(
-                                kCustomizationToggleSetUpListIdentifier)),
-                            nil)] performAction:grey_turnSwitchOn(NO)];
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(
+                                   grey_kindOfClassName(@"UISwitch"),
+                                   grey_ancestor(grey_accessibilityID(
+                                       kCustomizationToggleTipsIdentifier)),
+                                   nil)] performAction:grey_turnSwitchOn(NO)];
 
   // Dismiss the menu.
   [[EarlGrey
@@ -398,9 +398,8 @@ void TapMagicStackEditButton() {
       performAction:grey_swipeFastInDirection(kGREYDirectionRight)];
 
   // Assert Set Up List is not there. If it is, it is always the first module.
-  [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   [NewTabPageAppInterface setUpListTitle])]
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          set_up_list::kSetUpListContainerID)]
       assertWithMatcher:grey_notVisible()];
 }
 
@@ -408,14 +407,14 @@ void TapMagicStackEditButton() {
 // card from the Magic Stack.
 - (void)testMagicStackLongPressHide {
   [self prepareToTestSetUpListInMagicStack];
-  NSString* setupListTitle =
-      l10n_util::GetNSString(IDS_IOS_SET_UP_LIST_TIPS_TITLE);
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(setupListTitle)]
+
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          set_up_list::kSetUpListContainerID)]
       performAction:grey_longPress()];
 
   NSString* setupListHideTitle = l10n_util::GetNSStringF(
       IDS_IOS_SET_UP_LIST_HIDE_MODULE_CONTEXT_MENU_DESCRIPTION,
-      l10n_util::GetStringUTF16(IDS_IOS_SET_UP_LIST_TIPS_TITLE));
+      l10n_util::GetStringUTF16(IDS_IOS_MAGIC_STACK_TIP_TITLE));
   [[EarlGrey
       selectElementWithMatcher:
           grey_allOf(chrome_test_util::ContextMenuItemWithAccessibilityLabel(
@@ -427,7 +426,9 @@ void TapMagicStackEditButton() {
   if (iOS26_OR_ABOVE()) {
     ConditionBlock condition = ^{
       NSError* error = nil;
-      [[EarlGrey selectElementWithMatcher:grey_accessibilityID(setupListTitle)]
+      [[EarlGrey
+          selectElementWithMatcher:grey_accessibilityID(
+                                       set_up_list::kSetUpListContainerID)]
           assertWithMatcher:grey_notVisible()
                       error:&error];
       return error == nil;
@@ -436,7 +437,8 @@ void TapMagicStackEditButton() {
                                                             condition),
                @"Timeout waiting for the Set Up List card to dismissing.");
   } else {
-    [[EarlGrey selectElementWithMatcher:grey_accessibilityID(setupListTitle)]
+    [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                            set_up_list::kSetUpListContainerID)]
         assertWithMatcher:grey_notVisible()];
   }
 }

@@ -20,6 +20,9 @@
 #import "ios/chrome/common/credential_provider/constants.h"
 #import "ios/chrome/common/credential_provider/credential.h"
 #import "ios/chrome/common/credential_provider/multi_store_credential_store.h"
+#import "ios/chrome/common/credential_provider/passkey_keychain_provider_bridge.h"
+#import "ios/chrome/common/credential_provider/ui/passkey_welcome_screen_strings.h"
+#import "ios/chrome/common/credential_provider/ui/passkey_welcome_screen_view_controller.h"
 #import "ios/chrome/common/credential_provider/user_defaults_credential_store.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/confirmation_alert/confirmation_alert_action_handler.h"
@@ -28,8 +31,8 @@
 #import "ios/chrome/credential_provider_extension/account_verification_provider.h"
 #import "ios/chrome/credential_provider_extension/font_provider.h"
 #import "ios/chrome/credential_provider_extension/metrics_util.h"
-#import "ios/chrome/credential_provider_extension/passkey_keychain_provider_bridge.h"
 #import "ios/chrome/credential_provider_extension/passkey_request_details.h"
+#import "ios/chrome/credential_provider_extension/passkey_welcome_screen_util.h"
 #import "ios/chrome/credential_provider_extension/reauthentication_handler.h"
 #import "ios/chrome/credential_provider_extension/ui/consent_coordinator.h"
 #import "ios/chrome/credential_provider_extension/ui/create_navigation_item_title_view.h"
@@ -39,7 +42,6 @@
 #import "ios/chrome/credential_provider_extension/ui/generic_error_view_controller.h"
 #import "ios/chrome/credential_provider_extension/ui/multi_profile_passkey_creation_view_controller.h"
 #import "ios/chrome/credential_provider_extension/ui/passkey_error_alert_view_controller.h"
-#import "ios/chrome/credential_provider_extension/ui/passkey_welcome_screen_view_controller.h"
 #import "ios/chrome/credential_provider_extension/ui/stale_credentials_view_controller.h"
 #import "ios/components/credential_provider_extension/password_util.h"
 
@@ -61,8 +63,6 @@ BOOL HasSavedPasskeys(NSArray<id<Credential>>* credentials) {
   return passkey_credential_index != NSNotFound;
 }
 
-}  // namespace
-
 enum class PasskeyCreationEligibility {
   kCanCreate,
   kCanCreateWithUserInteraction,
@@ -73,6 +73,14 @@ enum class PasskeyCreationEligibility {
   kUnsupportedAlgorithm,
   kExcludedPasskey,
 };
+
+enum class PasskeyUserVerificationStatus {
+  kNotRequired,
+  kRequired,
+  kCompleted
+};
+
+}  // namespace
 
 @interface CredentialProviderViewController () <
     ConfirmationAlertActionHandler,
@@ -125,15 +133,17 @@ enum class PasskeyCreationEligibility {
 @property(nonatomic, strong)
     PasskeyKeychainProviderBridge* passkeyKeychainProviderBridge;
 
+// Indicates the status of user verification (required, completed, or not
+// needed) for the current passkey flow. Uninitialized and/or stale if the user
+// is not currently in a passkey flow.
+@property(nonatomic, assign)
+    PasskeyUserVerificationStatus userVerificationStatus;
+
 @end
 
 @implementation CredentialProviderViewController {
   // Information about a passkey credential request.
   PasskeyRequestDetails* _passkeyRequestDetails;
-
-  // Stores whether or not user verification should be performed for passkey
-  // creation or assertion.
-  BOOL _userVerificationRequired;
 }
 
 + (void)initialize {
@@ -582,7 +592,7 @@ enum class PasskeyCreationEligibility {
 #pragma mark - PasskeyKeychainProviderBridgeDelegate
 
 - (void)performUserVerificationIfNeeded:(ProceduralBlock)completion {
-  if (!_userVerificationRequired) {
+  if (_userVerificationStatus != PasskeyUserVerificationStatus::kRequired) {
     completion();
     return;
   }
@@ -618,6 +628,10 @@ enum class PasskeyCreationEligibility {
   [self createAndPresentPasskeyWelcomeScreenForPurpose:
             PasskeyWelcomeScreenPurpose::kReauthenticate
                                    primaryButtonAction:reauthenticateBlock];
+}
+
+- (void)providerDidCompleteReauthentication {
+  _userVerificationStatus = PasskeyUserVerificationStatus::kCompleted;
 }
 
 #pragma mark - PasskeyWelcomeScreenViewControllerDelegate
@@ -754,8 +768,17 @@ enum class PasskeyCreationEligibility {
                          withCompletionHandler:
                              (void (^)(ReauthenticationResult))
                                  completionHandler {
+  __weak __typeof__(self) weakSelf = self;
+  auto handlerWrapper = ^(ReauthenticationResult result) {
+    if (result == ReauthenticationResult::kSuccess) {
+      weakSelf.userVerificationStatus =
+          PasskeyUserVerificationStatus::kCompleted;
+    }
+    completionHandler(result);
+  };
+
   [self.reauthenticationHandler verifyUserToAccessPasskeys:(BOOL)forPasskeys
-                                     withCompletionHandler:completionHandler
+                                     withCompletionHandler:handlerWrapper
                            presentReminderOnViewController:self];
 }
 
@@ -1067,9 +1090,22 @@ enum class PasskeyCreationEligibility {
 - (void)createPasskeyWithDetails:(PasskeyRequestDetails*)passkeyRequestDetails
                             gaia:(NSString*)gaia
            securityDomainSecrets:(NSArray<NSData*>*)securityDomainSecrets {
+  if (!securityDomainSecrets.count) {
+    [self exitWithErrorCode:ASExtensionErrorCodeFailed];
+    return;
+  }
+
+  BOOL didCompleteUserVerification =
+      _userVerificationStatus == PasskeyUserVerificationStatus::kCompleted;
+
+  if (passkeyRequestDetails.userVerificationRequired) {
+    CHECK(didCompleteUserVerification, base::NotFatalUntil::M144);
+  }
+
   ASPasskeyRegistrationCredential* passkeyRegistrationCredential =
       [passkeyRequestDetails createPasskeyForGaia:gaia
-                            securityDomainSecrets:securityDomainSecrets];
+                            securityDomainSecrets:securityDomainSecrets
+                      didCompleteUserVerification:didCompleteUserVerification];
   if (passkeyRegistrationCredential) {
     [self completeRegistrationRequestWithSelectedPasskeyCredential:
               passkeyRegistrationCredential];
@@ -1103,9 +1139,22 @@ enum class PasskeyCreationEligibility {
     passkeyAssertionWithCredential:(id<Credential>)credential
              passkeyRequestDetails:(PasskeyRequestDetails*)passkeyRequestDetails
              securityDomainSecrets:(NSArray<NSData*>*)securityDomainSecrets {
-  ASPasskeyAssertionCredential* passkeyCredential =
-      [passkeyRequestDetails assertPasskeyCredential:credential
-                               securityDomainSecrets:securityDomainSecrets];
+  if (!securityDomainSecrets.count) {
+    [self exitWithErrorCode:ASExtensionErrorCodeFailed];
+    return;
+  }
+
+  BOOL didCompleteUserVerification =
+      _userVerificationStatus == PasskeyUserVerificationStatus::kCompleted;
+
+  if (passkeyRequestDetails.userVerificationRequired) {
+    CHECK(didCompleteUserVerification, base::NotFatalUntil::M144);
+  }
+
+  ASPasskeyAssertionCredential* passkeyCredential = [passkeyRequestDetails
+          assertPasskeyCredential:credential
+            securityDomainSecrets:securityDomainSecrets
+      didCompleteUserVerification:didCompleteUserVerification];
   [self userSelectedPasskey:passkeyCredential];
 }
 
@@ -1122,7 +1171,14 @@ enum class PasskeyCreationEligibility {
                                       completion {
   // Store `userVerificationRequired` here as it will be needed at a later stage
   // in the process of fetching the security domain secret.
-  _userVerificationRequired = userVerificationRequired;
+  if (userVerificationRequired) {
+    _userVerificationStatus = PasskeyUserVerificationStatus::kRequired;
+    // Since UV is required, do not allow a previous reauth to be reused.
+    self.lastSuccessfulReauthTime = nil;
+  } else {
+    _userVerificationStatus = PasskeyUserVerificationStatus::kNotRequired;
+  }
+
   [self.passkeyKeychainProviderBridge
       fetchSecurityDomainSecretForGaia:gaia
                             credential:credential
@@ -1197,7 +1253,7 @@ enum class PasskeyCreationEligibility {
   // Google Password Manager PIN, so no need to also do a device
   // reauthentication before showing the UI.
   if (purpose != PasskeyWelcomeScreenPurpose::kReauthenticate &&
-      _userVerificationRequired) {
+      _userVerificationStatus == PasskeyUserVerificationStatus::kRequired) {
     __weak __typeof(self) weakSelf = self;
     action = ^{
       [weakSelf
@@ -1215,11 +1271,6 @@ enum class PasskeyCreationEligibility {
   } else {
     action = primaryButtonAction;
   }
-  // Now that the need to perform a device reauthentication has been evaluated
-  // and handled, set `_userVerificationRequired` to `NO` so that the user won't
-  // be asked to reauthenticate at a later time in the process of handling the
-  // passkey request.
-  _userVerificationRequired = NO;
 
   NSString* userEmail;
   if (purpose == PasskeyWelcomeScreenPurpose::kEnroll) {
@@ -1234,9 +1285,10 @@ enum class PasskeyCreationEligibility {
       [[PasskeyWelcomeScreenViewController alloc]
                    initForPurpose:purpose
           navigationItemTitleView:self.passkeyNavigationItemTitleView
-                        userEmail:userEmail
                          delegate:self
-              primaryButtonAction:action];
+              primaryButtonAction:action
+                          strings:GetPasskeyWelcomeScreenStrings(purpose,
+                                                                 userEmail)];
   [self.passkeyNavigationController pushViewController:welcomeScreen
                                               animated:NO];
   [self.presentingView presentViewController:self.passkeyNavigationController

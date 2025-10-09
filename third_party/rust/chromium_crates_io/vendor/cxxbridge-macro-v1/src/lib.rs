@@ -6,25 +6,33 @@
     clippy::inherent_to_string,
     clippy::items_after_statements,
     clippy::match_bool,
+    clippy::match_like_matches_macro,
     clippy::match_same_arms,
     clippy::needless_lifetimes,
     clippy::needless_pass_by_value,
     clippy::nonminimal_bool,
     clippy::redundant_else,
     clippy::ref_option,
+    clippy::similar_names,
     clippy::single_match_else,
     clippy::struct_field_names,
     clippy::too_many_arguments,
     clippy::too_many_lines,
     clippy::toplevel_ref_arg,
-    clippy::uninlined_format_args
+    clippy::uninlined_format_args,
+    clippy::wrong_self_convention
 )]
+#![cfg_attr(test, allow(dead_code, unfulfilled_lint_expectations))]
 #![allow(unknown_lints, mismatched_lifetime_syntaxes)]
 
+mod attrs;
+mod cfg;
 mod derive;
 mod expand;
 mod generics;
 mod syntax;
+#[cfg(test)]
+mod tests;
 mod tokens;
 mod type_id;
 

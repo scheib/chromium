@@ -10,6 +10,7 @@ import static org.chromium.build.NullUtil.assumeNonNull;
 import android.content.Context;
 
 import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
@@ -27,7 +28,6 @@ import org.chromium.components.sync.SyncService;
 import org.chromium.ui.base.WindowAndroid;
 
 import java.util.List;
-import java.util.Optional;
 
 /** Coordinator for displaying the send tab to self feature. */
 @NullMarked
@@ -82,12 +82,13 @@ public class SendTabToSelfCoordinator {
         }
 
         private void notifyAndDestroyIfDone() {
-            Optional</*@EntryPointDisplayReason*/ Integer> displayReason =
+            @EntryPointDisplayReason
+            Integer displayReason =
                     SendTabToSelfAndroidBridge.getEntryPointDisplayReason(mProfile, mUrl);
             // The model is starting up, keep waiting.
-            if (!displayReason.isPresent()) return;
+            if (displayReason == null) return;
 
-            switch (displayReason.get()) {
+            switch (displayReason) {
                 case EntryPointDisplayReason.OFFER_SIGN_IN:
                     return;
                 case EntryPointDisplayReason.INFORM_NO_TARGET_DEVICE:
@@ -138,7 +139,7 @@ public class SendTabToSelfCoordinator {
     }
 
     private final Context mContext;
-    private final WindowAndroid mWindowAndroid;
+    private final @Nullable WindowAndroid mWindowAndroid;
     private final String mUrl;
     private final String mTitle;
     private final BottomSheetController mController;
@@ -147,7 +148,7 @@ public class SendTabToSelfCoordinator {
 
     public SendTabToSelfCoordinator(
             Context context,
-            WindowAndroid windowAndroid,
+            @Nullable WindowAndroid windowAndroid,
             String url,
             String title,
             BottomSheetController controller,
@@ -163,12 +164,13 @@ public class SendTabToSelfCoordinator {
     }
 
     public void show() {
-        Optional</*@EntryPointDisplayReason*/ Integer> displayReason =
+        @EntryPointDisplayReason
+        Integer displayReason =
                 SendTabToSelfAndroidBridge.getEntryPointDisplayReason(mProfile, mUrl);
-        assert displayReason.isPresent();
+        assert displayReason != null;
 
         MetricsRecorder.recordCrossDeviceTabJourney();
-        switch (displayReason.get()) {
+        switch (displayReason) {
             case EntryPointDisplayReason.INFORM_NO_TARGET_DEVICE:
                 mController.requestShowContent(
                         new NoTargetDeviceBottomSheetContent(mContext, mProfile), true);
@@ -185,18 +187,20 @@ public class SendTabToSelfCoordinator {
                 {
                     AccountPickerBottomSheetStrings strings =
                             new AccountPickerBottomSheetStrings.Builder(
-                                            R.string
-                                                    .signin_account_picker_bottom_sheet_title_for_send_tab_to_self)
-                                    .setSubtitleStringId(
-                                            R.string
-                                                    .signin_account_picker_bottom_sheet_subtitle_for_send_tab_to_self)
-                                    .setDismissButtonStringId(R.string.cancel)
+                                            mContext.getString(
+                                                    R.string
+                                                            .signin_account_picker_bottom_sheet_title_for_send_tab_to_self))
+                                    .setSubtitleString(
+                                            mContext.getString(
+                                                    R.string
+                                                            .signin_account_picker_bottom_sheet_subtitle_for_send_tab_to_self))
+                                    .setDismissButtonString(mContext.getString(R.string.cancel))
                                     .build();
                     var identityManager =
                             IdentityServicesProvider.get().getIdentityManager(mProfile);
                     var signinManager = IdentityServicesProvider.get().getSigninManager(mProfile);
                     new AccountPickerBottomSheetCoordinator(
-                            mWindowAndroid,
+                            assertNonNull(mWindowAndroid),
                             assertNonNull(identityManager),
                             assertNonNull(signinManager),
                             mController,

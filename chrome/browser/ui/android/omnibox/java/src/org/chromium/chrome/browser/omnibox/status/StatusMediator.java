@@ -19,7 +19,6 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.merchant_viewer.MerchantTrustSignalsCoordinator;
@@ -40,7 +39,7 @@ import org.chromium.components.browser_ui.settings.SettingsUtils;
 import org.chromium.components.browser_ui.site_settings.ContentSettingsResources;
 import org.chromium.components.browser_ui.site_settings.SiteSettingsUtil;
 import org.chromium.components.browser_ui.util.DrawableUtils;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.content_settings.CookieBlocking3pcdStatus;
 import org.chromium.components.content_settings.CookieControlsBridge;
@@ -55,6 +54,8 @@ import org.chromium.content_public.browser.BrowserContextHandle;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
+
+import java.util.function.Supplier;
 
 /** Contains the controller logic of the Status component. */
 @NullMarked
@@ -204,8 +205,9 @@ public class StatusMediator
             mMerchantTrustSignalsCoordinatorSupplier.get().setOmniboxIconController(null);
         }
 
-        if (mTemplateUrlServiceSupplier.hasValue()) {
-            mTemplateUrlServiceSupplier.get().removeObserver(this);
+        var templateUrlService = mTemplateUrlServiceSupplier.get();
+        if (templateUrlService != null) {
+            templateUrlService.removeObserver(this);
         }
         if (mCookieControlsBridge != null) {
             mCookieControlsBridge.destroy();
@@ -570,7 +572,7 @@ public class StatusMediator
             return true;
         }
 
-        return (isNtpVisible() || isIncognitoNtpVisible()) && mProfileSupplier.hasValue();
+        return (isNtpVisible() || isIncognitoNtpVisible()) && mProfileSupplier.get() != null;
     }
 
     /** Returns status icon resource for the user-selected default search engine. */
@@ -642,7 +644,7 @@ public class StatusMediator
     public void onDialogResult(
             WindowAndroid window,
             @ContentSettingsType.EnumType int[] permissions,
-            @ContentSettingValues int result) {
+            @ContentSetting int result) {
         if (window != mWindowAndroid) {
             return;
         }
@@ -734,8 +736,9 @@ public class StatusMediator
     }
 
     private void startIph() {
-        if (!mProfileSupplier.hasValue()) return;
-        mPageInfoIphController.onPermissionDialogShown(mProfileSupplier.get(), getIphTimeout());
+        Profile profile = mProfileSupplier.get();
+        if (profile == null) return;
+        mPageInfoIphController.onPermissionDialogShown(profile, getIphTimeout());
     }
 
     void setStoreIconController() {
@@ -852,9 +855,9 @@ public class StatusMediator
 
     public void onUrlChanged(boolean isTabChanging) {
         var currentTab = mLocationBarDataProvider.getTab();
-        if (mProfileSupplier.hasValue() && currentTab != null) {
+        Profile profile = mProfileSupplier.get();
+        if (profile != null && currentTab != null) {
             WebContents webContents = currentTab.getWebContents();
-            Profile profile = mProfileSupplier.get();
 
             if (webContents != null && profile != null) {
                 BrowserContextHandle originalBrowserContext =

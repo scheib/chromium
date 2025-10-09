@@ -24,6 +24,7 @@
 #include "components/variations/net/variations_http_headers.h"
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
+#include "net/http/http_response_headers.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -167,7 +168,9 @@ GURL AddLensOverlaySuggestInputsDataToEndpointUrl(
   bool send_vit = false;
 
   if (search_terms_args.page_classification ==
-      metrics::OmniboxEventProto::CONTEXTUAL_SEARCHBOX) {
+          metrics::OmniboxEventProto::CONTEXTUAL_SEARCHBOX ||
+      search_terms_args.page_classification ==
+          metrics::OmniboxEventProto::NTP_COMPOSEBOX) {
     send_request_and_session_ids =
         lens_overlay_suggest_inputs
             ->send_gsession_vsrid_for_contextual_suggest();
@@ -277,6 +280,13 @@ GURL RemoteSuggestionsService::EndpointUrl(
       // Append `client=chrome-multimodal` for the multimodal lens searchbox.
       url = net::AppendOrReplaceQueryParameter(url, "client",
                                                "chrome-multimodal");
+      break;
+    }
+    case metrics::OmniboxEventProto::NTP_COMPOSEBOX: {
+      if (search_terms_args.lens_overlay_suggest_inputs.has_value()) {
+        url = net::AppendOrReplaceQueryParameter(url, "client",
+                                                 "chrome-contextual");
+      }
       break;
     }
     default:

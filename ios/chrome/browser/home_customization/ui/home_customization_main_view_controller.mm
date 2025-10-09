@@ -4,22 +4,32 @@
 
 #import "ios/chrome/browser/home_customization/ui/home_customization_main_view_controller.h"
 
+#import "base/apple/foundation_util.h"
+#import "base/metrics/histogram_functions.h"
+#import "base/metrics/user_metrics.h"
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/home_customization/model/background_customization_configuration.h"
-#import "ios/chrome/browser/home_customization/model/background_customization_configuration_item.h"
+#import "ios/chrome/browser/home_customization/ui/background_collection_configuration.h"
+#import "ios/chrome/browser/home_customization/ui/background_customization_configuration.h"
+#import "ios/chrome/browser/home_customization/ui/home_customization_accessibility_identifiers.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_background_cell.h"
+#import "ios/chrome/browser/home_customization/ui/home_customization_background_configuration_mutator.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_background_picker_cell.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_collection_configurator.h"
-#import "ios/chrome/browser/home_customization/ui/home_customization_color_palette_provider.h"
+#import "ios/chrome/browser/home_customization/ui/home_customization_enterprise_policy_cell.h"
+#import "ios/chrome/browser/home_customization/ui/home_customization_framing_coordinates.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_mutator.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_search_engine_logo_mediator_provider.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_toggle_cell.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_view_controller_protocol.h"
 #import "ios/chrome/browser/home_customization/utils/home_customization_constants.h"
+#import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_color_palette.h"
+#import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_image_background_trait.h"
+#import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_trait.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/custom_ui_trait_accessor.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
 
@@ -46,19 +56,32 @@
   // Registration for the background picker cell.
   UICollectionViewCellRegistration* _backgroundPickerCellRegistration;
 
-  // Contains the options the HomeCustomizationBackgroundCell will use to set a
-  // background on the NTP.
-  NSMutableDictionary<NSString*, id<BackgroundCustomizationConfiguration>>*
-      _backgroundCustomizationConfigurationMap;
+  // Collection of backgrounds to display in the collection view.
+  BackgroundCollectionConfiguration* _backgroundCollectionConfiguration;
+
+  // Registration for the enterprise management info cell.
+  UICollectionViewCellRegistration* _enterprisePolicyCellRegistration;
 
   // The id of the selected background cell.
   NSString* _selectedBackgroundId;
+
+  // The number of times a background is selected from the recently used
+  // section.
+  int _recentBackgroundClickCount;
 }
 
 // Synthesized from HomeCustomizationViewControllerProtocol.
 @synthesize collectionView = _collectionView;
 @synthesize diffableDataSource = _diffableDataSource;
 @synthesize page = _page;
+
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    self.backgroundCustomizationUserInteractionEnabled = YES;
+  }
+  return self;
+}
 
 - (void)viewDidLoad {
   [super viewDidLoad];
@@ -78,7 +101,17 @@
   // the UISheetPresentationController which presents it.
   self.view = _collectionView;
 
+  _collectionView.accessibilityIdentifier =
+      kHomeCustomizationMainViewAccessibilityIdentifier;
+
   [_collectionConfigurator configureNavigationBar];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+  base::UmaHistogramCounts10000(
+      "IOS.HomeCustomization.Background.RecentlyUsed.ClickCount",
+      _recentBackgroundClickCount);
+  [super viewWillDisappear:animated];
 }
 
 #pragma mark - Private
@@ -98,7 +131,8 @@
              cell.mutator = weakSelf.mutator;
            }];
 
-  if (IsNTPBackgroundCustomizationEnabled()) {
+  if (IsNTPBackgroundCustomizationEnabled() &&
+      !self.customizationDisabledByPolicy) {
     _backgroundCellRegistration = [UICollectionViewCellRegistration
         registrationWithCellClass:[HomeCustomizationBackgroundCell class]
              configurationHandler:^(HomeCustomizationBackgroundCell* cell,
@@ -116,6 +150,19 @@
                                     NSString* itemIdentifier) {
                cell.mutator = weakSelf.mutator;
                cell.delegate = weakSelf.backgroundPickerPresentationDelegate;
+               cell.accessibilityLabel = l10n_util::GetNSString(
+                   IDS_IOS_HOME_CUSTOMIZATION_BACKGROUND_PICKER_ACCESSIBILITY_LABEL);
+             }];
+  }
+
+  if (IsNTPBackgroundCustomizationEnabled() &&
+      self.customizationDisabledByPolicy) {
+    _enterprisePolicyCellRegistration = [UICollectionViewCellRegistration
+        registrationWithCellClass:[HomeCustomizationEnterprisePolicyCell class]
+             configurationHandler:^(HomeCustomizationEnterprisePolicyCell* cell,
+                                    NSIndexPath* indexPath,
+                                    NSString* itemIdentifier) {
+               [cell configureCellWithMutator:weakSelf.mutator];
              }];
   }
 }
@@ -126,15 +173,12 @@
   NSDiffableDataSourceSnapshot<CustomizationSection*, NSString*>* snapshot =
       [[NSDiffableDataSourceSnapshot alloc] init];
 
-  if (IsNTPBackgroundCustomizationEnabled()) {
+  if (IsNTPBackgroundCustomizationEnabled() &&
+      !self.customizationDisabledByPolicy) {
     // Create background customization section and add items to it.
     [snapshot
         appendSectionsWithIdentifiers:@[ kCustomizationSectionBackground ]];
-    [snapshot appendItemsWithIdentifiers:
-                  [self identifiersForBackgroundCells:
-                            _backgroundCustomizationConfigurationMap]
-               intoSectionWithIdentifier:kCustomizationSectionBackground];
-    [snapshot appendItemsWithIdentifiers:@[ kBackgroundPickerCellIdentifier ]
+    [snapshot appendItemsWithIdentifiers:[self identifiersForBackgroundCells]
                intoSectionWithIdentifier:kCustomizationSectionBackground];
   }
 
@@ -144,6 +188,15 @@
   [snapshot
       appendItemsWithIdentifiers:[self identifiersForToggleMap:self.toggleMap]
        intoSectionWithIdentifier:kCustomizationSectionMainToggles];
+
+  if (IsNTPBackgroundCustomizationEnabled() &&
+      self.customizationDisabledByPolicy) {
+    // Create an enterprise section with a message to users.
+    [snapshot
+        appendSectionsWithIdentifiers:@[ kCustomizationSectionEnterprise ]];
+    [snapshot appendItemsWithIdentifiers:@[ kEnterpriseCellIdentifier ]
+               intoSectionWithIdentifier:kCustomizationSectionEnterprise];
+  }
 
   return snapshot;
 }
@@ -164,6 +217,9 @@
       [self.diffableDataSource.snapshot
           indexOfSectionIdentifier:kCustomizationSectionBackground];
 
+  NSInteger enterpriseIdentifier = [self.diffableDataSource.snapshot
+      indexOfSectionIdentifier:kCustomizationSectionEnterprise];
+
   if (sectionIndex == mainTogglesIdentifier) {
     return [_collectionConfigurator
         verticalListSectionForLayoutEnvironment:layoutEnvironment];
@@ -171,6 +227,9 @@
     CHECK(IsNTPBackgroundCustomizationEnabled());
     return [_collectionConfigurator
         backgroundCellSectionForLayoutEnvironment:layoutEnvironment];
+  } else if (sectionIndex == enterpriseIdentifier) {
+    return [_collectionConfigurator
+        verticalListSectionForLayoutEnvironment:layoutEnvironment];
   }
   return nil;
 }
@@ -199,6 +258,12 @@
                                            forIndexPath:indexPath
                                                    item:itemIdentifier];
     }
+  } else if (kCustomizationSectionEnterprise == section) {
+    return [_collectionView
+        dequeueConfiguredReusableCellWithRegistration:
+            _enterprisePolicyCellRegistration
+                                         forIndexPath:indexPath
+                                                 item:itemIdentifier];
   }
   return nil;
 }
@@ -216,7 +281,24 @@
     return nil;
   }
 
+  id<BackgroundCustomizationConfiguration> configuration =
+      _backgroundCollectionConfiguration.configurations[itemIdentifier];
+  // Don't allow deletion for the default entry.
+  if (configuration.backgroundStyle ==
+      HomeCustomizationBackgroundStyle::kDefault) {
+    return [UIContextMenuConfiguration configurationWithIdentifier:nil
+                                                   previewProvider:nil
+                                                    actionProvider:nil];
+  }
+
   __weak __typeof(self) weakSelf = self;
+
+  // The currently selected background should have the menu item visible but
+  // disabled.
+  UIMenuElementAttributes actionAttributes =
+      ([collectionView.indexPathsForSelectedItems containsObject:indexPath])
+          ? UIMenuElementAttributesDisabled
+          : UIMenuElementAttributesDestructive;
 
   return [UIContextMenuConfiguration
       configurationWithIdentifier:indexPath
@@ -238,8 +320,7 @@
                                        handleDeleteBackgroundActionAtIndexPath:
                                            indexPath];
                                  }];
-                     deleteAction.attributes =
-                         UIMenuElementAttributesDestructive;
+                     deleteAction.attributes = actionAttributes;
 
                      return [UIMenu menuWithTitle:@""
                                          children:@[ deleteAction ]];
@@ -254,6 +335,7 @@
       [self.diffableDataSource itemIdentifierForIndexPath:indexPath];
 
   return [section isEqualToString:kCustomizationSectionBackground] &&
+         self.backgroundCustomizationUserInteractionEnabled &&
          ![itemIdentifier isEqualToString:kBackgroundPickerCellIdentifier];
 }
 
@@ -262,10 +344,30 @@
   NSString* itemIdentifier =
       [self.diffableDataSource itemIdentifierForIndexPath:indexPath];
 
-  id<BackgroundCustomizationConfiguration> backgroundConfiguration =
-      _backgroundCustomizationConfigurationMap[itemIdentifier];
+  // Prevent background updates when a user clicks on an already selected cell.
+  if (_selectedBackgroundId == itemIdentifier) {
+    return;
+  }
 
-  [self.mutator applyBackgroundForConfiguration:backgroundConfiguration];
+  _selectedBackgroundId = itemIdentifier;
+
+  id<BackgroundCustomizationConfiguration> backgroundConfiguration =
+      _backgroundCollectionConfiguration.configurations[itemIdentifier];
+
+  [self.customizationMutator
+      applyBackgroundForConfiguration:backgroundConfiguration];
+
+  _recentBackgroundClickCount += 1;
+
+  if (backgroundConfiguration.backgroundStyle ==
+      HomeCustomizationBackgroundStyle::kDefault) {
+    base::RecordAction(base::UserMetricsAction(
+        "IOS.HomeCustomization.Background.ResetDefault.Tapped"));
+    return;
+  }
+
+  base::RecordAction(base::UserMetricsAction(
+      "IOS.HomeCustomization.Background.RecentlyUsed.Tapped"));
 }
 
 - (void)collectionView:(UICollectionView*)collectionView
@@ -281,18 +383,53 @@
   }
 
   id<BackgroundCustomizationConfiguration> backgroundConfiguration =
-      _backgroundCustomizationConfigurationMap[itemIdentifier];
+      _backgroundCollectionConfiguration.configurations[itemIdentifier];
 
-  if (backgroundConfiguration &&
-      !backgroundConfiguration.thumbnailURL.is_empty()) {
-    [self.mutator
+  if (!backgroundConfiguration) {
+    return;
+  }
+
+  HomeCustomizationBackgroundCell* backgroundCell =
+      base::apple::ObjCCast<HomeCustomizationBackgroundCell>(cell);
+
+  if (!cell) {
+    return;
+  }
+
+  if (backgroundConfiguration.backgroundStyle ==
+      HomeCustomizationBackgroundStyle::kPreset) {
+    void (^imageHandler)(UIImage*, NSError*) =
+        ^(UIImage* image, NSError* error) {
+          if (!error) {
+            // TODO(crbug.com/444505682): Handle error loading thumbnail image.
+          }
+          [backgroundCell updateBackgroundImage:image framingCoordinates:nil];
+        };
+    [self.customizationMutator
         fetchBackgroundCustomizationThumbnailURLImage:backgroundConfiguration
                                                           .thumbnailURL
-                                           completion:^(UIImage* image) {
-                                             [(HomeCustomizationBackgroundCell*)
-                                                     cell
-                                                 updateBackgroundImage:image];
-                                           }];
+                                           completion:imageHandler];
+  } else if (backgroundConfiguration.backgroundStyle ==
+             HomeCustomizationBackgroundStyle::kUserUploaded) {
+    HomeCustomizationFramingCoordinates* framingCoordinates =
+        backgroundConfiguration.userUploadedFramingCoordinates;
+    __weak __typeof(self) weakSelf = self;
+    void (^imageHandler)(UIImage*, UserUploadedImageError) = ^(
+        UIImage* image, UserUploadedImageError error) {
+      [weakSelf handleLoadedUserUploadedImage:image
+                           framingCoordinates:framingCoordinates
+                               backgroundCell:backgroundCell];
+      if (!image) {
+        base::UmaHistogramEnumeration(
+            "IOS.HomeCustomization.Background.RecentlyUsed."
+            "ImageUserUploadedFetchError",
+            error);
+      }
+    };
+    [self.customizationMutator
+        fetchBackgroundCustomizationUserUploadedImage:backgroundConfiguration
+                                                          .userUploadedImagePath
+                                           completion:imageHandler];
   }
 }
 
@@ -314,14 +451,16 @@
   [_diffableDataSource applySnapshot:snapshot animatingDifferences:YES];
 }
 
-- (void)populateBackgroundCustomizationConfigurations:
-            (NSMutableDictionary<NSString*,
-                                 id<BackgroundCustomizationConfiguration>>*)
-                backgroundCustomizationConfigurationMap
-                                 selectedBackgroundId:
-                                     (NSString*)selectedBackgroundId {
-  _backgroundCustomizationConfigurationMap =
-      backgroundCustomizationConfigurationMap;
+#pragma mark - HomeCustomizationBackgroundConfigurationConsumer
+
+- (void)setBackgroundCollectionConfigurations:
+            (NSArray<BackgroundCollectionConfiguration*>*)
+                backgroundCollectionConfigurations
+                         selectedBackgroundId:(NSString*)selectedBackgroundId {
+  CHECK(backgroundCollectionConfigurations.count == 1);
+
+  _backgroundCollectionConfiguration =
+      backgroundCollectionConfigurations.firstObject;
   _selectedBackgroundId = selectedBackgroundId;
 
   // Recreate the snapshot with the new items to take into account all the
@@ -331,9 +470,8 @@
 
   // Reconfigure all present items to ensure that they are updated in case their
   // content changed.
-  [snapshot reconfigureItemsWithIdentifiers:
-                [self identifiersForBackgroundCells:
-                          _backgroundCustomizationConfigurationMap]];
+  [snapshot
+      reconfigureItemsWithIdentifiers:[self identifiersForBackgroundCells]];
 
   [_diffableDataSource applySnapshot:snapshot animatingDifferences:YES];
 }
@@ -342,13 +480,28 @@
 
 // Returns an array of identifiers for the background options, which can be used
 // by the snapshot.
-- (NSArray<NSString*>*)identifiersForBackgroundCells:
-    (NSMutableDictionary<NSString*, id<BackgroundCustomizationConfiguration>>*)
-        backgroundCustomizationConfigurationMap {
+- (NSArray<NSString*>*)identifiersForBackgroundCells {
   NSMutableArray<NSString*>* identifiers = [[NSMutableArray alloc] init];
-  for (NSString* key in backgroundCustomizationConfigurationMap) {
+
+  NSUInteger indexAfterDefault = 0;
+
+  for (NSString* key in _backgroundCollectionConfiguration.configurationOrder) {
+    id<BackgroundCustomizationConfiguration> configuration =
+        _backgroundCollectionConfiguration.configurations[key];
+    if (!configuration) {
+      continue;
+    }
+
     [identifiers addObject:key];
+
+    if (configuration.backgroundStyle ==
+        HomeCustomizationBackgroundStyle::kDefault) {
+      indexAfterDefault = identifiers.count;
+    }
   }
+
+  [identifiers insertObject:kBackgroundPickerCellIdentifier
+                    atIndex:indexAfterDefault];
 
   return [identifiers copy];
 }
@@ -374,26 +527,24 @@
                     atIndexPath:(NSIndexPath*)indexPath
              withItemIdentifier:(NSString*)itemIdentifier {
   id<BackgroundCustomizationConfiguration> backgroundConfiguration =
-      _backgroundCustomizationConfigurationMap[itemIdentifier];
+      _backgroundCollectionConfiguration.configurations[itemIdentifier];
 
-  if (![backgroundConfiguration
-          isKindOfClass:[BackgroundCustomizationConfigurationItem class]]) {
-    return;
-  }
-  BackgroundCustomizationConfigurationItem* configurationItem =
-      static_cast<BackgroundCustomizationConfigurationItem*>(
-          backgroundConfiguration);
+  CustomUITraitAccessor* traitAccessor =
+      [[CustomUITraitAccessor alloc] initWithMutableTraits:cell.traitOverrides];
+  [traitAccessor
+      setObjectForNewTabPageTrait:backgroundConfiguration.colorPalette];
+
+  BOOL hasBackgroundImage =
+      !backgroundConfiguration.thumbnailURL.is_empty() ||
+      backgroundConfiguration.userUploadedImagePath.length > 0;
+  [traitAccessor setBoolForNewTabPageImageBackgroundTrait:hasBackgroundImage];
 
   SearchEngineLogoMediator* searchEngineLogoMediator =
       [self.searchEngineLogoMediatorProvider
           provideSearchEngineLogoMediatorForKey:itemIdentifier];
-  NewTabPageColorPalette* colorPalette = [self.colorPaletteProvider
-      provideColorPaletteFromSeedColor:backgroundConfiguration.backgroundColor
-                          colorVariant:configurationItem.colorVariant];
 
   [cell configureWithBackgroundOption:backgroundConfiguration
-             searchEngineLogoMediator:searchEngineLogoMediator
-                         colorPalette:colorPalette];
+             searchEngineLogoMediator:searchEngineLogoMediator];
 
   if ([itemIdentifier isEqualToString:_selectedBackgroundId]) {
     [self.collectionView
@@ -417,9 +568,57 @@
   }
 
   NSDiffableDataSourceSnapshot* snapshot = [self.diffableDataSource snapshot];
-  [self.mutator deleteBackgroundFromRecentlyUsedAtIndex:indexPath.item];
+  [self.customizationMutator
+      deleteBackgroundFromRecentlyUsed:_backgroundCollectionConfiguration
+                                           .configurations[identifier]];
   [snapshot deleteItemsWithIdentifiers:@[ identifier ]];
-  [_backgroundCustomizationConfigurationMap removeObjectForKey:identifier];
+  [_backgroundCollectionConfiguration.configurations
+      removeObjectForKey:identifier];
+  [_backgroundCollectionConfiguration.configurationOrder
+      removeObject:identifier];
   [self.diffableDataSource applySnapshot:snapshot animatingDifferences:YES];
 }
+
+// Handles a loaded user-uploaded image, including optimizations for displaying
+// large images in the small menu thumbnails.
+//
+// TODO(crbug.com/441181385): Improve optimization logic. Some possible options:
+// - Cache prepared image so scrolling the carousel doesn't take time to re-load
+// image.
+// - pre-crop larger images, possibly to a square around the framing
+// coordinates, as highly zoomed in images look even worse when made into a low
+// resolution thumbnail.
+// - pick thumbnail sized based on a combination of view size and frame size.
+- (void)handleLoadedUserUploadedImage:(UIImage*)image
+                   framingCoordinates:
+                       (HomeCustomizationFramingCoordinates*)framingCoordinates
+                       backgroundCell:
+                           (HomeCustomizationBackgroundCell*)backgroundCell {
+  // This thumnail size gives a good balance between quality and responsiveness.
+  CGFloat thumbnailDimension =
+      3 * MAX(self.view.bounds.size.width, self.view.bounds.size.height);
+  CGSize thumbnailSize = CGSize(thumbnailDimension, thumbnailDimension);
+  CGFloat originalImageHeight = image.size.height;
+
+  void (^thumbnailHandler)(UIImage*) = ^(UIImage* preparedImage) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      // Scale the framing coordinates down to the size of the prepared image.
+      CGFloat scale = preparedImage.size.height / originalImageHeight;
+      CGRect visibleRect = framingCoordinates.visibleRect;
+      CGRect scaledVisibleRect = CGRectMake(
+          visibleRect.origin.x * scale, visibleRect.origin.y * scale,
+          visibleRect.size.width * scale, visibleRect.size.height * scale);
+      HomeCustomizationFramingCoordinates* newFramingCoordinates =
+          [[HomeCustomizationFramingCoordinates alloc]
+              initWithVisibleRect:scaledVisibleRect];
+
+      [backgroundCell updateBackgroundImage:preparedImage
+                         framingCoordinates:newFramingCoordinates];
+    });
+  };
+
+  [image prepareThumbnailOfSize:thumbnailSize
+              completionHandler:thumbnailHandler];
+}
+
 @end

@@ -17,6 +17,7 @@
 #include "components/autofill/core/browser/data_model/payments/iban.h"
 #include "components/autofill/core/browser/foundations/autofill_client.h"
 #include "components/autofill/core/browser/payments/payments_autofill_client.h"
+#include "components/autofill/core/browser/ui/payments/payments_ui_closed_reasons.h"
 #include "content/public/browser/web_contents_user_data.h"
 
 namespace autofill {
@@ -102,6 +103,7 @@ class IbanBubbleControllerImpl
   GetConfirmationUiParams() const override;
 
   // BubbleControllerBase:
+  bool CanBeReshown() const override;
   BubbleType GetBubbleType() const override;
   base::WeakPtr<BubbleControllerBase> GetBubbleControllerBaseWeakPtr() override;
 
@@ -114,7 +116,7 @@ class IbanBubbleControllerImpl
   explicit IbanBubbleControllerImpl(content::WebContents* web_contents);
 
   // AutofillBubbleControllerBase:
-  PageActionIconType GetPageActionIconType() override;
+  std::optional<PageActionIconType> GetPageActionIconType() override;
   void DoShowBubble() override;
   using AutofillBubbleControllerBase::HideBubble;
 
@@ -123,13 +125,28 @@ class IbanBubbleControllerImpl
 
   Profile* GetProfile();
 
+  // Sets up the controller's state for a local IBAN save prompt.
+  void SetupLocalSave(Iban iban,
+                      payments::PaymentsAutofillClient::SaveIbanPromptCallback
+                          save_iban_prompt_callback);
+
+  // Sets up the controller's state for an upload-to-server IBAN save prompt.
+  void SetupUploadSave(Iban iban,
+                       LegalMessageLines legal_message_lines,
+                       payments::PaymentsAutofillClient::SaveIbanPromptCallback
+                           save_iban_prompt_callback);
+
   // Displays omnibox icon only.
   void ShowIconOnly();
 
   // Returns true iff the bubble for upload save is showing or has been shown.
   bool IsUploadSave() const override;
+
   // Returns empty vector if no legal message should be shown.
   const LegalMessageLines& GetLegalMessageLines() const override;
+
+  // Logs metrics when the bubble is closed.
+  void LogBubbleCloseMetrics(PaymentsUiClosedReason reason);
 
   // Observer for when a bubble is created. Initialized only during tests.
   raw_ptr<ObserverForTest> observer_for_testing_ = nullptr;

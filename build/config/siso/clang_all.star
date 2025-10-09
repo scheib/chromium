@@ -59,30 +59,6 @@ def __filegroups(ctx):
                 "clang_rt.profile*.lib",
             ],
         },
-        "third_party/cronet_android_mainline_clang/linux-amd64:headers": {
-            "type": "glob",
-            "includes": [
-                "*.h",
-                "*.modulemap",
-                "bin/clang*",
-            ],
-        },
-        "third_party/cronet_android_mainline_clang/linux-amd64:link": {
-            "type": "glob",
-            "includes": [
-                "bin/clang*",
-                "bin/ld.lld",
-                "bin/lld",
-                "bin/llvm-nm",
-                "bin/llvm-objcopy",
-                "bin/llvm-readelf",
-                "bin/llvm-readobj",
-                "bin/llvm-strip",
-                "*.so",
-                "*.so.*",
-                "*.a",
-            ],
-        },
     }
     if win_sdk.enabled(ctx):
         fg.update(win_sdk.filegroups(ctx))
@@ -121,6 +97,7 @@ def __input_deps(ctx):
             "build/win/segment_heap.manifest",
             "remoting/host/win/dpi_aware.manifest",
             "third_party/llvm-build/Release+Asserts/bin/lld",
+            "tools/win/DebugVisualizers/absl.natvis",
             "tools/win/DebugVisualizers/blink.natvis",
             "tools/win/DebugVisualizers/chrome.natvis",
         ],
@@ -133,6 +110,7 @@ def __input_deps(ctx):
             "build/win/segment_heap.manifest",
             "remoting/host/win/dpi_aware.manifest",
             "third_party/llvm-build/Release+Asserts/bin/lld.exe",
+            "tools/win/DebugVisualizers/absl.natvis",
             "tools/win/DebugVisualizers/blink.natvis",
             "tools/win/DebugVisualizers/chrome.natvis",
         ],

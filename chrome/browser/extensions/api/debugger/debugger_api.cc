@@ -29,6 +29,7 @@
 #include "base/strings/string_view_util.h"
 #include "base/types/optional_util.h"
 #include "base/values.h"
+#include "chrome/browser/extensions/api/debugger/extension_dev_tools_infobar_delegate.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/lifetime/termination_notification.h"
@@ -67,8 +68,6 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
-#include "chrome/browser/extensions/api/debugger/extension_dev_tools_infobar_delegate.h"
-#include "chrome/browser/ui/browser.h"
 #endif
 
 #if BUILDFLAG(ENABLE_GUEST_VIEW)
@@ -142,8 +141,8 @@ void DebuggeeFromDebuggerSession(Debuggee& dst, const DebuggerSession& src) {
 #if BUILDFLAG(ENABLE_PDF)
 // Returns whether `url` is the URL for the built-in PDF extension.
 bool IsPdfExtensionUrl(const GURL& url) {
-  return url.scheme() == kExtensionScheme &&
-         url.host() == extension_misc::kPdfExtensionId;
+  return url.GetScheme() == kExtensionScheme &&
+         url.GetHost() == extension_misc::kPdfExtensionId;
 }
 #endif  // BUILDFLAG(ENABLE_PDF)
 
@@ -481,8 +480,6 @@ bool ExtensionDevToolsClientHost::Attach() {
     return false;
   }
 
-// TODO(crbug.com/405218860): Port infobars to desktop Android.
-#if BUILDFLAG(ENABLE_EXTENSIONS)
   // We allow policy-installed extensions to circumvent the normal
   // infobar warning. See crbug.com/693621.
   const bool suppress_infobar =
@@ -496,7 +493,6 @@ bool ExtensionDevToolsClientHost::Attach() {
         base::BindOnce(&ExtensionDevToolsClientHost::InfoBarDestroyed,
                        base::Unretained(this)));
   }
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   if (extension_service_worker_id_) {
     ProcessManager* process_manager = ProcessManager::Get(profile_);
@@ -563,9 +559,7 @@ void ExtensionDevToolsClientHost::SendMessageToBackend(
     protocol_request.Set("sessionId", session_id.value());
   }
 
-  std::string json;
-  base::JSONWriter::Write(protocol_request, &json);
-
+  std::string json = base::WriteJson(protocol_request).value_or("");
   agent_host_->DispatchProtocolMessage(this, base::as_byte_span(json));
 }
 
@@ -908,9 +902,7 @@ ExtensionFunction::ResponseAction DebuggerSendCommandFunction::Run() {
 
 void DebuggerSendCommandFunction::SendResponseBody(base::Value response) {
   if (base::Value* error_body = response.GetDict().Find("error")) {
-    std::string error;
-    base::JSONWriter::Write(*error_body, &error);
-    Respond(Error(std::move(error)));
+    Respond(Error(base::WriteJson(*error_body).value_or("")));
     return;
   }
 
@@ -960,13 +952,13 @@ base::Value::Dict SerializeTarget(scoped_refptr<DevToolsAgentHost> host) {
     if (tab_id != api::tabs::TAB_ID_NONE) {
       dictionary.Set(kTargetTabIdField, tab_id);
     } else {
-      dictionary.Set(kTargetExtensionIdField, host->GetURL().host());
+      dictionary.Set(kTargetExtensionIdField, host->GetURL().GetHost());
     }
     target_type = kTargetTypePage;
 // TODO(crbug.com/405218860): Support background pages on desktop Android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   } else if (type == ChromeDevToolsManagerDelegate::kTypeBackgroundPage) {
-    dictionary.Set(kTargetExtensionIdField, host->GetURL().host());
+    dictionary.Set(kTargetExtensionIdField, host->GetURL().GetHost());
     target_type = kTargetTypeBackgroundPage;
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
   } else if (type == DevToolsAgentHost::kTypeServiceWorker ||

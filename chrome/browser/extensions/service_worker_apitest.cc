@@ -42,7 +42,6 @@
 #include "chrome/browser/notifications/notification_permission_context.h"
 #include "chrome/browser/notifications/stub_notification_display_service.h"
 #include "chrome/browser/push_messaging/push_messaging_app_identifier.h"
-#include "chrome/browser/push_messaging/push_messaging_features.h"
 #include "chrome/browser/push_messaging/push_messaging_service_factory.h"
 #include "chrome/browser/push_messaging/push_messaging_service_impl.h"
 #include "chrome/browser/ui/browser.h"
@@ -55,6 +54,7 @@
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/gcm_driver/fake_gcm_profile_service.h"
 #include "components/gcm_driver/instance_id/fake_gcm_driver_for_instance_id.h"
+#include "components/push_messaging/push_messaging_features.h"
 #include "components/version_info/channel.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/console_message.h"
@@ -801,7 +801,8 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerBasedBackgroundTest, EarlyEventDispatch) {
   auto event = std::make_unique<Event>(
       events::FOR_TEST, api::test::OnMessage::kEventName,
       std::move(
-          base::JSONReader::Read(R"([{"data": "hello", "lastMessage": true}])")
+          base::JSONReader::Read(R"([{"data": "hello", "lastMessage": true}])",
+                                 base::JSON_PARSE_CHROMIUM_EXTENSIONS)
               .value()
               .GetList()),
       profile());
@@ -895,10 +896,10 @@ class ServiceWorkerPushMessagingTest : public ServiceWorkerTest {
         profile(), url.DeprecatedGetOriginAsURL(), CONTENT_SETTING_ALLOW);
   }
 
-  PushMessagingAppIdentifier GetAppIdentifierForServiceWorkerRegistration(
+  push_messaging::AppIdentifier GetAppIdentifierForServiceWorkerRegistration(
       int64_t service_worker_registration_id,
       const GURL& origin) {
-    PushMessagingAppIdentifier app_identifier =
+    push_messaging::AppIdentifier app_identifier =
         PushMessagingAppIdentifier::FindByServiceWorker(
             profile(), origin, service_worker_registration_id);
 
@@ -1914,7 +1915,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerPushMessagingTest, OnPush) {
   EXPECT_TRUE(content::ExecJs(web_contents->GetPrimaryMainFrame(), kScript));
   EXPECT_TRUE(ready_listener.WaitUntilSatisfied());
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL, extension_url);
   ASSERT_EQ(app_identifier.app_id(), gcm_driver()->last_gettoken_app_id());
   EXPECT_EQ("1234567890", gcm_driver()->last_gettoken_authorized_entity());
@@ -2207,6 +2208,47 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerBasedBackgroundTest, TabsOnUpdatedSplit) {
   }
 }
 
+IN_PROC_BROWSER_TEST_F(ServiceWorkerBasedBackgroundTest,
+                       UnloadSplitModeExtensionStopsWorkers) {
+  Browser* browser_incognito =
+      OpenURLOffTheRecord(profile(), GURL("about:blank"));
+  ASSERT_TRUE(browser_incognito);
+
+  TestExtensionDir test_dir;
+  test_dir.WriteManifest(R"({
+    "name": "Incognito Test Extension",
+    "version": "0.1",
+    "manifest_version": 3,
+    "background": {"service_worker": "worker.js"},
+    "incognito": "split"
+  })");
+
+  test_dir.WriteFile(FILE_PATH_LITERAL("worker.js"),
+                     R"(// Intentionally left blank.)");
+
+  const Extension* extension =
+      LoadExtension(test_dir.UnpackedPath(), {.allow_in_incognito = true});
+  ASSERT_TRUE(extension);
+
+  std::vector<WorkerId> regular_workers =
+      ProcessManager::Get(profile())->GetAllWorkersIdsForTesting();
+  content::BrowserContext* incognito_context = browser_incognito->profile();
+  std::vector<WorkerId> incognito_workers =
+      ProcessManager::Get(incognito_context)->GetAllWorkersIdsForTesting();
+  EXPECT_EQ(regular_workers.size(), 1ul);
+  EXPECT_EQ(incognito_workers.size(), 1ul);
+
+  // Ensure unloading the extension stops both workers.
+  UnloadExtension(extension->id());
+
+  regular_workers =
+      ProcessManager::Get(profile())->GetAllWorkersIdsForTesting();
+  incognito_workers =
+      ProcessManager::Get(incognito_context)->GetAllWorkersIdsForTesting();
+  EXPECT_EQ(regular_workers.size(), 0ul);
+  EXPECT_EQ(incognito_workers.size(), 0ul);
+}
+
 // Test extension with OnInstalled listener can be successfully updated when,
 // 1) Was allowed in incognito.
 // 2) An incognito window was open.
@@ -2328,12 +2370,12 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerBasedBackgroundTest,
   EXPECT_EQ(1, observer.GetCompletedCount(extension->url()));
 }
 
-// Tests that a worker that failed to start due to 'install' error, clears its
-// PendingTasks correctly. Also tests that subsequent tasks are properly
-// cleared.
+// Tests that a worker that failed to start due to 'install' error, runs its
+// PendingTasks with a null context and clears them correctly.
 // Regression test for https://crbug.com/1019161.
+// See also https://crbug.com/371011217.
 IN_PROC_BROWSER_TEST_F(ServiceWorkerBasedBackgroundTest,
-                       WorkerStartFailureClearsPendingTasks) {
+                       WorkerStartFailureRunsPendingTasksWithNullContext) {
   content::ServiceWorkerContext* context = GetServiceWorkerContext();
 
   const ExtensionId test_extension_id("iegclhlplifhodhkoafiokenjoapiobj");
@@ -2380,10 +2422,20 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerBasedBackgroundTest,
   ServiceWorkerTaskQueue* service_worker_task_queue =
       ServiceWorkerTaskQueue::Get(profile());
   base::HistogramTester histograms;
+
+  // Set up a task that verifies it runs with a null context upon failure.
+  base::RunLoop task_run_loop;
+  auto pending_task = base::BindLambdaForTesting(
+      [&](std::unique_ptr<LazyContextTaskQueue::ContextInfo> context_info) {
+        EXPECT_FALSE(context_info);
+        task_run_loop.Quit();
+      });
+
   // Adding a pending task to ServiceWorkerTaskQueue will try to start the
   // worker that failed during installation before. This enables us to ensure
-  // that this pending task is cleared on failure.
-  service_worker_task_queue->AddPendingTask(context_id, base::DoNothing());
+  // that this pending task is run on failure.
+  service_worker_task_queue->AddPendingTask(context_id,
+                                            std::move(pending_task));
 
   // Since the worker rejects installation, it will fail to start now. Ensure
   // that the queue sees pending tasks while the error is observed.
@@ -2393,8 +2445,8 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerBasedBackgroundTest,
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kErrorNotFound,
             failed_data.status_code);
 
-  // Ensure DidStartWorkerFail finished clearing tasks.
-  base::RunLoop().RunUntilIdle();
+  // Wait for the pending task to be executed and cleared.
+  task_run_loop.Run();
 
   histograms.ExpectUniqueSample(
       "Extensions.ServiceWorkerBackground.StartWorkerStatus", /*sample=*/false,

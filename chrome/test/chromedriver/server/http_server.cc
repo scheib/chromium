@@ -47,8 +47,7 @@ bool IsMatch(const std::string& system_host, const std::string& hostname) {
 }
 
 void GetCanonicalHostName(std::vector<std::string>* canonical_host_names) {
-  struct addrinfo hints, *info = nullptr, *p;
-  UNSAFE_TODO(memset(&hints, 0, sizeof(hints)));
+  struct addrinfo hints = {}, *info = nullptr, *p;
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_CANONNAME;
@@ -75,7 +74,7 @@ bool HostIsSafeToServe(GURL host_url,
                        std::string host_header_value,
                        const std::vector<net::IPAddress>& whitelisted_ips,
                        const std::vector<std::string>& allowed_origins) {
-  auto host = host_url.host();
+  auto host = host_url.GetHost();
   // Check if the origin is in the allowed origins.
   for (const std::string& allowed_origin : allowed_origins) {
     if (allowed_origin == kAnyHostPattern) {

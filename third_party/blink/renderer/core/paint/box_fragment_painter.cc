@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/core/paint/fieldset_painter.h"
 #include "third_party/blink/renderer/core/paint/fragment_painter.h"
 #include "third_party/blink/renderer/core/paint/frame_set_painter.h"
+#include "third_party/blink/renderer/core/paint/gap_decorations_painter.h"
 #include "third_party/blink/renderer/core/paint/inline_box_fragment_painter.h"
 #include "third_party/blink/renderer/core/paint/mathml_painter.h"
 #include "third_party/blink/renderer/core/paint/object_painter.h"
@@ -390,31 +391,6 @@ bool ShouldDelegatePaintingToViewTransition(const PhysicalBoxFragment& fragment,
     case PaintPhase::kMask:
       return false;
   }
-}
-
-BoxSide BoxSideFromGridDirection(const ComputedStyle& style,
-                                 GridTrackSizingDirection direction) {
-  BoxSide box_side;
-
-  if (style.IsHorizontalWritingMode()) {
-    if (style.IsLeftToRightDirection()) {
-      box_side = direction == kForColumns ? BoxSide::kLeft : BoxSide::kTop;
-    } else {
-      box_side = direction == kForColumns ? BoxSide::kRight : BoxSide::kBottom;
-    }
-  } else {
-    // Vertical Writing Mode.
-    const auto writing_direction = style.GetWritingDirection();
-    if (writing_direction.InlineEnd() == PhysicalDirection::kDown) {
-      // Top to Bottom.
-      box_side = direction == kForColumns ? BoxSide::kTop : BoxSide::kLeft;
-    } else {
-      // Bottom to Top.
-      box_side = direction == kForColumns ? BoxSide::kBottom : BoxSide::kRight;
-    }
-  }
-
-  return box_side;
 }
 
 }  // anonymous namespace
@@ -1044,7 +1020,7 @@ void BoxFragmentPainter::PaintFloatingItems(const PaintInfo& paint_info,
 }
 
 void BoxFragmentPainter::PaintFloatingChildren(
-    const PhysicalFragment& container,
+    const PhysicalBoxFragment& container,
     const PaintInfo& paint_info) {
   DCHECK(container.HasFloatingDescendantsForPaint());
   const PaintInfo* local_paint_info = &paint_info;
@@ -1082,26 +1058,30 @@ void BoxFragmentPainter::PaintFloatingChildren(
     if (!child_fragment.HasFloatingDescendantsForPaint())
       continue;
 
-    if (child_fragment.HasNonVisibleOverflow()) {
-      // We need to properly visit this fragment for painting, rather than
-      // jumping directly to its children (which is what we normally do when
-      // looking for floats), in order to set up the clip rectangle.
-      BoxFragmentPainter(To<PhysicalBoxFragment>(child_fragment))
-          .Paint(*local_paint_info);
+    const auto* box_child_fragment =
+        DynamicTo<PhysicalBoxFragment>(&child_fragment);
+    if (!box_child_fragment) {
       continue;
     }
 
-    if (child_fragment.IsFragmentainerBox()) {
+    if (box_child_fragment->HasNonVisibleOverflow()) {
+      // We need to properly visit this fragment for painting, rather than
+      // jumping directly to its children (which is what we normally do when
+      // looking for floats), in order to set up the clip rectangle.
+      BoxFragmentPainter(*box_child_fragment).Paint(*local_paint_info);
+      continue;
+    }
+
+    if (box_child_fragment->IsFragmentainerBox()) {
       // This is a fragmentainer, and when node inside a fragmentation context
       // paints multiple block fragments, we need to distinguish between them
-      // somehow, for paint caching to work. Therefore, establish a display item
-      // scope here.
-      unsigned identifier = FragmentainerUniqueIdentifier(
-          To<PhysicalBoxFragment>(child_fragment));
+      // somehow, for paint caching to work. Therefore, establish a display
+      // item scope here.
+      unsigned identifier = FragmentainerUniqueIdentifier(*box_child_fragment);
       ScopedDisplayItemFragment scope(paint_info.context, identifier);
-      PaintFloatingChildren(child_fragment, *local_paint_info);
+      PaintFloatingChildren(*box_child_fragment, *local_paint_info);
     } else {
-      PaintFloatingChildren(child_fragment, *local_paint_info);
+      PaintFloatingChildren(*box_child_fragment, *local_paint_info);
     }
   }
 
@@ -1111,21 +1091,18 @@ void BoxFragmentPainter::PaintFloatingChildren(
   // inline formatting context when fragmented, we should only have to one of
   // these things; either walk the inline items, OR walk the box fragment
   // children (above).
-  if (const PhysicalBoxFragment* box =
-          DynamicTo<PhysicalBoxFragment>(&container)) {
-    if (const FragmentItems* items = box->Items()) {
-      InlineCursor cursor(*box, *items);
-      PaintFloatingItems(*local_paint_info, &cursor);
-      return;
-    }
-    if (inline_box_cursor_) {
-      DCHECK(box->IsInlineBox());
-      InlineCursor descendants = inline_box_cursor_->CursorForDescendants();
-      PaintFloatingItems(*local_paint_info, &descendants);
-      return;
-    }
-    DCHECK(!box->IsInlineBox());
+  if (const FragmentItems* items = container.Items()) {
+    InlineCursor cursor(container, *items);
+    PaintFloatingItems(*local_paint_info, &cursor);
+    return;
   }
+  if (inline_box_cursor_) {
+    DCHECK(container.IsInlineBox());
+    InlineCursor descendants = inline_box_cursor_->CursorForDescendants();
+    PaintFloatingItems(*local_paint_info, &descendants);
+    return;
+  }
+  DCHECK(!container.IsInlineBox());
 }
 
 void BoxFragmentPainter::PaintFloats(const PaintInfo& paint_info) {
@@ -1426,237 +1403,21 @@ void BoxFragmentPainter::PaintGapDecorations(
   // rows, or the rows over the columns. The default is to paint the rows over
   // the columns.
   if (paint_order == EGapRuleOverlap::kColumnOverRow) {
-    PaintGaps(kForRows, *final_paint_info, paint_rect, *gap_geometry);
-    PaintGaps(kForColumns, *final_paint_info, paint_rect, *gap_geometry);
+    if (RuntimeEnabledFeatures::CSSGapDecorationEnabled()) {
+      GapDecorationsPainter(box_fragment_)
+          .Paint(kForRows, *final_paint_info, paint_rect, *gap_geometry);
+      GapDecorationsPainter(box_fragment_)
+          .Paint(kForColumns, *final_paint_info, paint_rect, *gap_geometry);
+    }
+
     return;
   }
 
-  PaintGaps(kForColumns, *final_paint_info, paint_rect, *gap_geometry);
-  PaintGaps(kForRows, *final_paint_info, paint_rect, *gap_geometry);
-}
-
-void BoxFragmentPainter::PaintGaps(GridTrackSizingDirection track_direction,
-                                   const PaintInfo& paint_info,
-                                   const PhysicalRect& paint_rect,
-                                   const GapGeometry& gap_geometry) {
-  const ComputedStyle& style = box_fragment_.Style();
-
-  WritingModeConverter converter(style.GetWritingDirection(),
-                                 box_fragment_.Size());
-  AutoDarkMode auto_dark_mode(
-      PaintAutoDarkMode(style, DarkModeFilter::ElementRole::kBackground));
-  BoxSide box_side = BoxSideFromGridDirection(style, track_direction);
-
-  GapDataList<StyleColor> rule_colors;
-  GapDataList<EBorderStyle> rule_styles;
-  GapDataList<int> rule_widths;
-  RuleBreak rule_break;
-  Length rule_outset;
-
-  if (track_direction == kForColumns) {
-    rule_colors = style.ColumnRuleColor();
-    rule_styles = style.ColumnRuleStyle();
-    rule_widths = style.ColumnRuleWidth();
-    rule_break = style.ColumnRuleBreak();
-    rule_outset = style.ColumnRuleOutset();
-  } else {
-    rule_colors = style.RowRuleColor();
-    rule_styles = style.RowRuleStyle();
-    rule_widths = style.RowRuleWidth();
-    rule_break = style.RowRuleBreak();
-    rule_outset = style.RowRuleOutset();
-  }
-
-  // Determines if the `end_index` should advance when determining pairs for gap
-  // decorations. For `kSpanningItem` rule break, decorations break only at "T"
-  // intersections, so we simply check that the intersection isn't blocked
-  // after. For `kIntersection` rule break, decorations break at both "T" and
-  // "cross" intersections, so we also need to check that the corresponding
-  // intersection in the cross direction is flanked by spanning items.
-  // https://drafts.csswg.org/css-gaps-1/#determine-pairs-of-gap-decoration-endpoints
-  auto ShouldMoveIntersectionEndForward =
-      [&](wtf_size_t end_index, const GapIntersectionList intersections,
-          wtf_size_t gap_index) {
-        if (rule_break == RuleBreak::kSpanningItem) {
-          return !intersections[end_index].is_blocked_after;
-        } else {
-          CHECK_EQ(rule_break, RuleBreak::kIntersection);
-
-          if (gap_geometry.GetContainerType() ==
-              GapGeometry::ContainerType::kFlex) {
-            // For flex, intersections will never be blocked before or after by
-            // other items, due to the absence of spanners. Therefore, we can
-            // break at each intersection point.
-            return false;
-          }
-
-          if (intersections[end_index].is_blocked_after) {
-            return false;
-          }
-
-          const auto cross_gaps =
-              track_direction == kForColumns
-                  ? gap_geometry.GetGapIntersections(kForRows)
-                  : gap_geometry.GetGapIntersections(kForColumns);
-
-          // The following logic is only valid for grid containers.
-          if (gap_geometry.GetContainerType() !=
-              GapGeometry::ContainerType::kGrid) {
-            return false;
-          }
-          // Get the matching intersection in the cross direction by
-          // swapping the indices. This transpose allows us determine if the
-          // intersection is flanked by spanning items on opposing sides.
-          // `end_index` should move forward if there are adjacent spanners in
-          // the cross direction since that intersection won't form a T or cross
-          // intersection.
-          auto cross_direction_intersection =
-              cross_gaps[end_index - 1][gap_index + 1];
-          bool has_adjacent_spanners =
-              cross_direction_intersection.is_blocked_before &&
-              cross_direction_intersection.is_blocked_after;
-
-          return has_adjacent_spanners;
-        }
-      };
-
-  // Adjusts the (start, end) intersection pair to ensure that the gap
-  // decorations are painted correctly based on `rule_break`.
-  auto AdjustIntersectionIndexPair =
-      [&](wtf_size_t& start, wtf_size_t& end,
-          const GapIntersectionList intersections, wtf_size_t gap_index) {
-        wtf_size_t num_intersections = intersections.size();
-        // If rule_break is `kNone`, cover the entire intersection range.
-        if (rule_break == RuleBreak::kNone) {
-          start = 0;
-          end = num_intersections - 1;
-          return;
-        }
-
-        // `start` should be the first intersection point that is not blocked
-        // after.
-        while (start < num_intersections &&
-               intersections[start].is_blocked_after) {
-          start += 1;
-        }
-
-        // If `start` is the last intersection point, there are no gaps to
-        // paint.
-        if (start == num_intersections - 1) {
-          return;
-        }
-
-        end = start + 1;
-
-        // Advance `end` based on the rule_break type.
-        while (
-            end < num_intersections - 1 &&
-            ShouldMoveIntersectionEndForward(end, intersections, gap_index)) {
-          end += 1;
-        }
-      };
-
-  LayoutUnit cross_gutter_width = track_direction == kForRows
-                                      ? gap_geometry.GetInlineGapSize()
-                                      : gap_geometry.GetBlockGapSize();
-
-  const auto gaps = gap_geometry.GetGapIntersections(track_direction);
-  auto width_iterator =
-      GapDataListIterator<int>(rule_widths.GetGapDataList(), gaps.size());
-  auto style_iterator = GapDataListIterator<EBorderStyle>(
-      rule_styles.GetGapDataList(), gaps.size());
-  auto color_iterator = GapDataListIterator<StyleColor>(
-      rule_colors.GetGapDataList(), gaps.size());
-
-  for (wtf_size_t gap_index = 0; gap_index < gaps.size(); ++gap_index) {
-    LayoutUnit inline_start;
-    LayoutUnit inline_size;
-    LayoutUnit block_start;
-    LayoutUnit block_size;
-
-    wtf_size_t start = 0;
-    const auto gap = gaps[gap_index];
-    CHECK(!gap.empty());
-    const auto num_intersections = gap.size();
-
-    StyleColor rule_color = color_iterator.Next();
-    Color resolved_rule_color = style.VisitedDependentGapColor(
-        rule_color, style, /*is_column_rule=*/track_direction == kForColumns);
-    EBorderStyle rule_style =
-        ComputedStyle::CollapsedBorderStyle(style_iterator.Next());
-    LayoutUnit rule_thickness = LayoutUnit(width_iterator.Next());
-
-    // Gap decorations are painted relative to (start, end) pairs of gap
-    // intersection points in the center of the corresponding gap and parallel
-    // to its edges.
-    while (start < num_intersections - 1) {
-      wtf_size_t end = start;
-      AdjustIntersectionIndexPair(start, end, gap, gap_index);
-
-      if (start >= end) {
-        // Break because there are no gaps to paint.
-        break;
-      }
-
-      // The cross gutter size is used to determine the "crossing gap width" at
-      // intersection points. The crossing gap width of an intersection point is
-      // defined as:
-      // * `0` if the intersection is at the content edge of the container.
-      // * The cross gutter size if it is an intersection with another gap.
-      // https://drafts.csswg.org/css-gaps-1/#crossing-gap-width
-      LayoutUnit start_width = gap[start].is_at_edge_of_container
-                                   ? LayoutUnit()
-                                   : cross_gutter_width;
-      LayoutUnit end_width =
-          gap[end].is_at_edge_of_container ? LayoutUnit() : cross_gutter_width;
-
-      // Outset values are used to offset the end points of gap decorations.
-      // Percentage values are resolved against the crossing gap width of the
-      // intersection point.
-      // https://drafts.csswg.org/css-gaps-1/#propdef-column-rule-outset
-      const LayoutUnit start_outset = ValueForLength(rule_outset, start_width);
-      const LayoutUnit end_outset = ValueForLength(rule_outset, end_width);
-
-      // Compute the gap decorations offset as half of the `crossing_gap_width`
-      // minus the outset.
-      // https://drafts.csswg.org/css-gaps-1/#compute-the-offset
-      LayoutUnit decoration_start_offset =
-          LayoutUnit(start_width / 2.0f) - start_outset;
-      LayoutUnit decoration_end_offset =
-          LayoutUnit(end_width / 2.0f) - end_outset;
-
-      if (track_direction == kForColumns) {
-        // For columns, paint a vertical strip at the center of the gap.
-        const LayoutUnit center = gap[start].inline_offset;
-        inline_start = center - (rule_thickness / 2);
-        inline_size = rule_thickness;
-
-        // Compute the block positions using the computed offsets.
-        block_start = gap[start].block_offset + decoration_start_offset;
-        block_size =
-            gap[end].block_offset - block_start - decoration_end_offset;
-      } else {
-        // For rows, paint a horizontal strip at the center of the gap.
-        const LayoutUnit center = gap[start].block_offset;
-        block_start = center - (rule_thickness / 2);
-        block_size = rule_thickness;
-
-        // Compute the inline positions using the computed offsets.
-        inline_start = gap[start].inline_offset + decoration_start_offset;
-        inline_size =
-            gap[end].inline_offset - inline_start - decoration_end_offset;
-      }
-
-      const LogicalRect gap_logical(inline_start, block_start, inline_size,
-                                    block_size);
-      PhysicalRect gap_rect = converter.ToPhysical(gap_logical);
-      gap_rect.offset += paint_rect.offset;
-
-      BoxBorderPainter::DrawBoxSide(
-          paint_info.context, ToPixelSnappedRect(gap_rect), box_side,
-          resolved_rule_color, rule_style, auto_dark_mode);
-      start = end;
-    }
+  if (RuntimeEnabledFeatures::CSSGapDecorationEnabled()) {
+    GapDecorationsPainter(box_fragment_)
+        .Paint(kForColumns, *final_paint_info, paint_rect, *gap_geometry);
+    GapDecorationsPainter(box_fragment_)
+        .Paint(kForRows, *final_paint_info, paint_rect, *gap_geometry);
   }
 }
 
@@ -2959,7 +2720,7 @@ bool BoxFragmentPainter::HitTestItemsChildren(
 
 bool BoxFragmentPainter::HitTestFloatingChildren(
     const HitTestContext& hit_test,
-    const PhysicalFragment& container,
+    const PhysicalBoxFragment& container,
     const PhysicalOffset& accumulated_offset) {
   DCHECK_EQ(hit_test.phase, HitTestPhase::kFloat);
   DCHECK(container.HasFloatingDescendantsForPaint());
@@ -2987,35 +2748,42 @@ bool BoxFragmentPainter::HitTestFloatingChildren(
 
     const PhysicalOffset child_offset = accumulated_offset + child.offset;
 
-    if (child_fragment.IsFloating()) {
-      if (HitTestAllPhasesInFragment(To<PhysicalBoxFragment>(child_fragment),
-                                     hit_test.location, child_offset,
-                                     hit_test.result)) {
+    const auto* box_child_fragment =
+        DynamicTo<PhysicalBoxFragment>(&child_fragment);
+    if (!box_child_fragment) {
+      continue;
+    }
+    if (box_child_fragment->IsFloating()) {
+      if (HitTestAllPhasesInFragment(*box_child_fragment, hit_test.location,
+                                     child_offset, hit_test.result)) {
         return true;
       }
       continue;
     }
 
-    if (child_fragment.IsPaintedAtomically())
+    if (box_child_fragment->IsPaintedAtomically()) {
       continue;
+    }
 
-    if (!child_fragment.HasFloatingDescendantsForPaint())
+    if (!box_child_fragment->HasFloatingDescendantsForPaint()) {
       continue;
+    }
 
-    if (child_fragment.HasNonVisibleOverflow()) {
+    if (box_child_fragment->HasNonVisibleOverflow()) {
       // We need to properly visit this fragment for hit-testing, rather than
       // jumping directly to its children (which is what we normally do when
       // looking for floats), in order to set up the clip rectangle.
-      if (NodeAtPointInFragment(To<PhysicalBoxFragment>(child_fragment),
-                                hit_test.location, child_offset,
-                                HitTestPhase::kFloat, hit_test.result)) {
+      if (NodeAtPointInFragment(*box_child_fragment, hit_test.location,
+                                child_offset, HitTestPhase::kFloat,
+                                hit_test.result)) {
         return true;
       }
       continue;
     }
 
-    if (HitTestFloatingChildren(hit_test, child_fragment, child_offset))
+    if (HitTestFloatingChildren(hit_test, *box_child_fragment, child_offset)) {
       return true;
+    }
   }
   return false;
 }

@@ -8,7 +8,7 @@
     clippy::unit_cmp
 )]
 
-use cxx::{SharedPtr, UniquePtr};
+use cxx::{CxxVector, SharedPtr, UniquePtr};
 use cxx_test_suite::module::ffi2;
 use cxx_test_suite::{cast, ffi, R};
 use std::cell::Cell;
@@ -95,8 +95,8 @@ fn test_c_return() {
         enm @ ffi::AEnum::AAVal => assert_eq!(0, enm.repr),
         _ => assert!(false),
     }
-    match ffi::c_return_nested_ns_enum(0) {
-        enm @ ffi::ABEnum::ABAVal => assert_eq!(0, enm.repr),
+    match ffi::c_return_nested_ns_enum(2021) {
+        enm @ ffi::ABEnum::ABCVal => assert_eq!(i32::MIN, enm.repr),
         _ => assert!(false),
     }
 }
@@ -275,12 +275,14 @@ fn test_c_method_calls() {
     assert_eq!(2026, ffi::C::c_static_method());
 
     let val = 42;
-    let mut array = ffi::Array {
+    let mut array = ffi::WithArray {
         a: [0, 0, 0, 0],
         b: ffi::Buffer::default(),
     };
     array.c_set_array(val);
     assert_eq!(array.a.len() as i32 * val, array.r_get_array_sum());
+
+    R(2020).c_member_function_on_rust_type();
 }
 
 #[test]
@@ -323,6 +325,31 @@ fn test_unique_to_shared_ptr_null() {
 }
 
 #[test]
+fn test_shared_ptr_from_raw() {
+    let shared = unsafe { SharedPtr::<ffi::C>::from_raw(ptr::null_mut()) };
+    assert!(shared.is_null());
+}
+
+#[test]
+#[should_panic = "tests::Undefined is not destructible"]
+fn test_shared_ptr_from_raw_undefined() {
+    unsafe { SharedPtr::<ffi::Undefined>::from_raw(ptr::null_mut()) };
+}
+
+#[test]
+#[should_panic = "tests::Private is not destructible"]
+fn test_shared_ptr_from_raw_private() {
+    unsafe { SharedPtr::<ffi::Private>::from_raw(ptr::null_mut()) };
+}
+
+#[test]
+#[should_panic = "tests::Unmovable is not move constructible"]
+fn test_vector_reserve_unmovable() {
+    let mut vector = CxxVector::<ffi::Unmovable>::new();
+    vector.pin_mut().reserve(10);
+}
+
+#[test]
 fn test_c_ns_method_calls() {
     let unique_ptr = ffi2::ns_c_return_unique_ptr_ns();
 
@@ -335,6 +362,11 @@ fn test_enum_representations() {
     assert_eq!(0, ffi::Enum::AVal.repr);
     assert_eq!(2020, ffi::Enum::BVal.repr);
     assert_eq!(2021, ffi::Enum::LastVal.repr);
+}
+
+#[test]
+fn test_enum_default() {
+    assert_eq!(ffi::Enum::BVal, ffi::Enum::default());
 }
 
 #[test]

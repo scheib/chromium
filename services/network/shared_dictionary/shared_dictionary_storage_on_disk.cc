@@ -17,6 +17,7 @@
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/trace_id_helper.h"
 #include "base/types/expected.h"
+#include "components/url_pattern/simple_url_pattern_matcher.h"
 #include "net/base/io_buffer.h"
 #include "services/network/public/cpp/request_destination.h"
 #include "services/network/public/mojom/shared_dictionary_error.mojom.h"
@@ -24,7 +25,6 @@
 #include "services/network/shared_dictionary/shared_dictionary_manager_on_disk.h"
 #include "services/network/shared_dictionary/shared_dictionary_on_disk.h"
 #include "services/network/shared_dictionary/shared_dictionary_writer_on_disk.h"
-#include "services/network/shared_dictionary/simple_url_pattern_matcher.h"
 #include "url/scheme_host_port.h"
 
 namespace network {
@@ -73,7 +73,7 @@ std::set<mojom::RequestDestination> ToRequestDestinationSet(
 
 SharedDictionaryStorageOnDisk::WrappedDictionaryInfo::WrappedDictionaryInfo(
     net::SharedDictionaryInfo info,
-    std::unique_ptr<SimpleUrlPatternMatcher> matcher)
+    std::unique_ptr<url_pattern::SimpleUrlPatternMatcher> matcher)
     : net::SharedDictionaryInfo(std::move(info)),
       matcher_(std::move(matcher)),
       match_dest_(ToRequestDestinationSet(match_dest_string())) {}
@@ -94,9 +94,10 @@ SharedDictionaryStorageOnDisk::SharedDictionaryStorageOnDisk(
       isolation_key_(isolation_key),
       on_deleted_closure_runner_(std::move(on_deleted_closure_runner)),
       dictionary_cache_(dictionary_cache) {
-  memory_pressure_listener_ =
-      std::make_unique<base::AsyncMemoryPressureListener>(
+  memory_pressure_listener_registration_ =
+      std::make_unique<base::AsyncMemoryPressureListenerRegistration>(
           FROM_HERE,
+          base::MemoryPressureListenerTag::kSharedDictionaryStorageOnDisk,
           base::BindRepeating(&SharedDictionaryStorageOnDisk::OnMemoryPressure,
                               weak_factory_.GetWeakPtr()));
   manager_->metadata_store().GetDictionaries(
@@ -185,8 +186,7 @@ SharedDictionaryStorageOnDisk::GetDictionarySync(
           weak_factory_.GetWeakPtr(), info->disk_cache_key_token())));
   dictionaries_.emplace(info->disk_cache_key_token(), shared_dictionary.get());
 
-  if (memory_pressure_level_ ==
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE) {
+  if (memory_pressure_level_ == base::MEMORY_PRESSURE_LEVEL_NONE) {
     dictionary_cache_->Put(info->disk_cache_key_token(), destination,
                            shared_dictionary);
   }
@@ -217,7 +217,7 @@ SharedDictionaryStorageOnDisk::CreateWriter(
     const std::string& match,
     const std::set<mojom::RequestDestination>& match_dest,
     const std::string& id,
-    std::unique_ptr<SimpleUrlPatternMatcher> matcher) {
+    std::unique_ptr<url_pattern::SimpleUrlPatternMatcher> matcher) {
   CHECK(matcher);
   if (!manager_) {
     return base::unexpected(
@@ -238,12 +238,14 @@ bool SharedDictionaryStorageOnDisk::UpdateLastFetchTimeIfAlreadyRegistered(
     const std::string& match,
     const std::set<mojom::RequestDestination>& match_dest,
     const std::string& id,
+    const std::optional<base::TimeDelta>& ttl,
     base::Time last_fetch_time) {
   WrappedDictionaryInfo* matched_info = FindRegisteredInDictionaryInfoMap(
       dictionary_info_map_, url, response_time, expiration, match, match_dest,
-      id);
+      id, ttl);
   if (matched_info) {
-    manager_->UpdateDictionaryLastFetchTime(*matched_info, last_fetch_time);
+    manager_->UpdateDictionaryLastFetchTime(*matched_info, last_fetch_time,
+                                            ttl);
     return true;
   }
   return false;
@@ -262,9 +264,9 @@ void SharedDictionaryStorageOnDisk::OnDatabaseRead(
     const url::SchemeHostPort scheme_host_port =
         url::SchemeHostPort(info.url());
     const std::string match = info.match();
-    std::unique_ptr<SimpleUrlPatternMatcher> matcher;
+    std::unique_ptr<url_pattern::SimpleUrlPatternMatcher> matcher;
     auto matcher_create_result =
-        SimpleUrlPatternMatcher::Create(match, info.url());
+        url_pattern::SimpleUrlPatternMatcher::Create(match, &info.url());
     if (!matcher_create_result.has_value()) {
       continue;
     }
@@ -282,7 +284,7 @@ void SharedDictionaryStorageOnDisk::OnDatabaseRead(
 }
 
 void SharedDictionaryStorageOnDisk::OnDictionaryWritten(
-    std::unique_ptr<SimpleUrlPatternMatcher> matcher,
+    std::unique_ptr<url_pattern::SimpleUrlPatternMatcher> matcher,
     net::SharedDictionaryInfo info) {
   WrappedDictionaryInfo wrapped_info(std::move(info), std::move(matcher));
   const url::SchemeHostPort scheme_host_port =
@@ -314,7 +316,7 @@ void SharedDictionaryStorageOnDisk::OnDictionaryDeleted(
 }
 
 void SharedDictionaryStorageOnDisk::OnMemoryPressure(
-    base::MemoryPressureListener::MemoryPressureLevel level) {
+    base::MemoryPressureLevel level) {
   memory_pressure_level_ = level;
 }
 

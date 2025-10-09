@@ -694,6 +694,39 @@ std::string GetPermissionStringForUma(
                << " not accounted for";
 }
 
+const char* GetPredictionGrantLikelihoodString(
+    PermissionUiSelector::PredictionGrantLikelihood likelihood) {
+  switch (likelihood) {
+    case PermissionUiSelector::PredictionGrantLikelihood::
+        PermissionPrediction_Likelihood_DiscretizedLikelihood_DISCRETIZED_LIKELIHOOD_UNSPECIFIED:
+      return "Unspecified";
+    case PermissionUiSelector::PredictionGrantLikelihood::
+        PermissionPrediction_Likelihood_DiscretizedLikelihood_VERY_UNLIKELY:
+      return "VeryUnlikely";
+    case PermissionUiSelector::PredictionGrantLikelihood::
+        PermissionPrediction_Likelihood_DiscretizedLikelihood_UNLIKELY:
+      return "Unlikely";
+    case PermissionUiSelector::PredictionGrantLikelihood::
+        PermissionPrediction_Likelihood_DiscretizedLikelihood_NEUTRAL:
+      return "Neutral";
+    case PermissionUiSelector::PredictionGrantLikelihood::
+        PermissionPrediction_Likelihood_DiscretizedLikelihood_LIKELY:
+      return "Likely";
+    case PermissionUiSelector::PredictionGrantLikelihood::
+        PermissionPrediction_Likelihood_DiscretizedLikelihood_VERY_LIKELY:
+      return "VeryLikely";
+  }
+  NOTREACHED();
+}
+
+const char* GetProminenceString(PermissionPromptDisposition disposition) {
+  if (PermissionUmaUtil::IsPromptDispositionQuiet(disposition)) {
+    return "Quiet";
+  } else {
+    return "Loud";
+  }
+}
+
 }  // anonymous namespace
 
 // PermissionUmaUtil ----------------------------------------------------------
@@ -881,10 +914,12 @@ void PermissionUmaUtil::RecordEmbargoPromptSuppressionFromSource(
       break;
     case content::PermissionStatusSource::UNSPECIFIED:
     case content::PermissionStatusSource::KILL_SWITCH:
+    case content::PermissionStatusSource::ACTOR_OVERRIDE:
     case content::PermissionStatusSource::INSECURE_ORIGIN:
     case content::PermissionStatusSource::FEATURE_POLICY:
     case content::PermissionStatusSource::VIRTUAL_URL_DIFFERENT_ORIGIN:
     case content::PermissionStatusSource::FENCED_FRAME:
+    case content::PermissionStatusSource::HEURISTIC_GRANT:
       // The permission wasn't under embargo, so don't record anything. We may
       // embargo it later.
       break;
@@ -1097,6 +1132,24 @@ void PermissionUmaUtil::PermissionPromptResolved(
                         ".DidClickLearnMore"}),
           did_click_learn_more);
     }
+  }
+
+  // Record the permission action for the prediction service if the prediction
+  // is UNLIKELY or VERY_UNLIKELY. `predicted_grant_likelihood` is only
+  // populated by the prediction service for Notification and Geolocation
+  // permissions.
+  if (predicted_grant_likelihood.has_value() &&
+      (predicted_grant_likelihood.value() ==
+           PermissionPrediction_Likelihood_DiscretizedLikelihood_VERY_UNLIKELY ||
+       predicted_grant_likelihood.value() ==
+           PermissionPrediction_Likelihood_DiscretizedLikelihood_UNLIKELY)) {
+    const char* prominence_string = GetProminenceString(ui_disposition);
+    std::string histogram_name = base::StrCat(
+        {"Permissions.PredictionService.Action.", permission_type, ".",
+         GetPredictionGrantLikelihoodString(predicted_grant_likelihood.value()),
+         ".", prominence_string});
+    base::UmaHistogramEnumeration(histogram_name, permission_action,
+                                  PermissionAction::NUM);
   }
 }  // namespace permissions
 
@@ -1641,6 +1694,12 @@ void PermissionUmaUtil::RecordPageInfoPermissionChange(
 }
 
 // static
+void PermissionUmaUtil::RecordPageReloadInfoBarShown(bool shown) {
+  base::UmaHistogramBoolean(
+      "Permissions.QuietPrompt.Preignore.PageReloadInfoBar", shown);
+}
+
+// static
 std::string PermissionUmaUtil::GetPermissionActionString(
     PermissionAction permission_action) {
   switch (permission_action) {
@@ -2108,6 +2167,16 @@ void PermissionUmaUtil::RecordActionBrowserAlwaysActive(
 }
 
 // static
+void PermissionUmaUtil::RecordRenderedTextSize(PredictionModelType model_type,
+                                               RequestType request_type,
+                                               size_t text_size) {
+  base::UmaHistogramCounts10000(
+      base::StrCat({"Permissions.", GetPredictionModelString(model_type), ".",
+                    GetRequestTypeString(request_type), ".RenderedTextSize"}),
+      text_size);
+}
+
+// static
 void PermissionUmaUtil::RecordPredictionModelInquireTime(
     PredictionModelType model_type,
     base::TimeTicks model_inquire_start_time) {
@@ -2211,4 +2280,26 @@ void PermissionUmaUtil::RecordPassageEmbeddingsCalculationTimeout(
   base::UmaHistogramBoolean(
       "Permissions.AIv4.PassageEmbeddingsComputationTimeout", timeout);
 }
+
+// static
+void PermissionUmaUtil::RecordPassageEmbedderMetadataValid(bool valid) {
+  base::UmaHistogramBoolean("Permissions.AIv4.EmbedderMetadataValid", valid);
+}
+
+// static
+void PermissionUmaUtil::RecordPredictionServiceTimeout(bool timeout) {
+  base::UmaHistogramBoolean("Permissions.PredictionService.Timeout", timeout);
+}
+
+// static
+void PermissionUmaUtil::RecordPermissionAutoRejectForActor(
+    ContentSettingsType permission,
+    bool is_actor_operating) {
+  base::UmaHistogramBoolean(
+      base::StrCat({"Permissions.Experimental.Usage.",
+                    PermissionUtil::GetPermissionString(permission),
+                    ".IsBlockedDueToActuation"}),
+      is_actor_operating);
+}
+
 }  // namespace permissions

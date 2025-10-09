@@ -8,7 +8,6 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
-#include "components/viz/common/resources/resource_sizes.h"
 #include "components/viz/common/resources/shared_image_format.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
@@ -98,12 +97,13 @@ bool IsPixelDataValid(viz::SharedImageFormat format,
     return true;
   }
   // If we have initial data to upload, ensure it is sized appropriately
-  size_t estimated_size;
-  if (!viz::ResourceSizes::MaybeSizeInBytes(size, format, &estimated_size)) {
+
+  auto estimated_size = format.MaybeEstimatedSizeInBytes(size);
+  if (!estimated_size) {
     LOG(ERROR) << "Failed to calculate SharedImage size";
     return false;
   }
-  if (pixel_data.size() != estimated_size) {
+  if (pixel_data.size() != estimated_size.value()) {
     LOG(ERROR) << "Initial data does not have expected size.";
     return false;
   }
@@ -173,6 +173,21 @@ IOSurfaceImageBackingFactory::IOSurfaceImageBackingFactory(
 }
 
 IOSurfaceImageBackingFactory::~IOSurfaceImageBackingFactory() = default;
+
+// static
+gfx::GpuMemoryBufferHandle
+IOSurfaceImageBackingFactory::CreateGpuMemoryBufferHandle(
+    const gfx::Size& size,
+    viz::SharedImageFormat format) {
+  base::apple::ScopedCFTypeRef<IOSurfaceRef> io_surface =
+      gfx::CreateIOSurface(size, format, /*should_clear=*/true);
+  if (!io_surface) {
+    LOG(ERROR) << "Failed to allocate IOSurface.";
+    return {};
+  }
+
+  return gfx::GpuMemoryBufferHandle(std::move(io_surface));
+}
 
 std::unique_ptr<SharedImageBacking>
 IOSurfaceImageBackingFactory::CreateSharedImage(
@@ -369,9 +384,11 @@ IOSurfaceImageBackingFactory::CreateSharedImageInternal(
   // reported immediately after allocation/upload and before other GL
   // operations.
   gfx::ScopedIOSurface io_surface;
+  const bool should_clear =
+      usage.Has(SHARED_IMAGE_USAGE_WEBNN_SHARED_TENSOR) ? true : false;
   {
     gl::ScopedProgressReporter scoped_progress_reporter(progress_reporter_);
-    const bool should_clear = false;
+
     const bool override_rgba_to_bgra =
 #if BUILDFLAG(IS_IOS)
         false;
@@ -387,7 +404,7 @@ IOSurfaceImageBackingFactory::CreateSharedImageInternal(
   }
   SetIOSurfaceColorSpace(io_surface.get(), color_space);
 
-  const bool is_cleared = !pixel_data.empty();
+  const bool is_cleared = !pixel_data.empty() || should_clear;
   const bool framebuffer_attachment_angle =
       for_framebuffer_attachment && angle_texture_usage_;
 

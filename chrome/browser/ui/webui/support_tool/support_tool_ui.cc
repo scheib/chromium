@@ -49,7 +49,7 @@
 #include "content/public/browser/web_ui_message_handler.h"
 #include "net/base/url_util.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 #include "ui/webui/webui_util.h"
@@ -82,9 +82,9 @@ void RecordOpenPageMetric(const GURL& url) {
     return;
   }
   std::string trimmed_path;
-  // We remove '/' characters from the path. `url.path_piece()` will return the
+  // We remove '/' characters from the path. `url.path()` will return the
   // '/' along with the path value.
-  base::TrimString(url.path_piece(), "/", &trimmed_path);
+  base::TrimString(url.path(), "/", &trimmed_path);
   // Check if the path is URL generator path.
   if (trimmed_path.compare(kUrlGeneratorPath) == 0) {
     base::UmaHistogramEnumeration(

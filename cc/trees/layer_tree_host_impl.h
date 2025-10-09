@@ -36,6 +36,7 @@
 #include "cc/input/browser_controls_offset_manager_client.h"
 #include "cc/input/browser_controls_offset_tag_modifications.h"
 #include "cc/input/input_handler.h"
+#include "cc/input/progress_bar_offset_manager.h"
 #include "cc/input/scrollbar_animation_controller.h"
 #include "cc/layers/layer_collections.h"
 #include "cc/metrics/average_lag_tracking_manager.h"
@@ -358,6 +359,7 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
   void DidEndPinchZoom() override;
   void DidStartScroll() override;
   void DidEndScroll() override;
+  void DidMouseEnterNonViewportScroller(ElementId element_id) override;
   void DidMouseLeave() override;
   bool IsInHighLatencyMode() const override;
   void WillScrollContent(ElementId element_id) override;
@@ -475,7 +477,7 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
   void DidDrawAllLayers(const FrameData& frame);
 
   // Pushes differential updates to the display tree via a LayerContext.
-  void UpdateDisplayTree(FrameData& frame);
+  base::TimeTicks UpdateDisplayTree(FrameData& frame);
 
   const LayerTreeSettings& settings() const { return settings_; }
 
@@ -581,6 +583,7 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
 
   // EventLatencyTracker implementation.
   void ReportEventLatency(
+      const viz::BeginFrameArgs& args,
       std::vector<EventLatencyTracker::LatencyData> latencies) override;
 
   // Called from LayerTreeImpl.
@@ -725,6 +728,9 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
   }
   BrowserControlsOffsetManager* browser_controls_manager() {
     return browser_controls_offset_manager_.get();
+  }
+  ProgressBarOffsetManager* progress_bar_manager() {
+    return progress_bar_offset_manager_.get();
   }
   const GlobalStateThatImpactsTilePriority& global_tile_state() {
     return global_tile_state_;
@@ -928,6 +934,15 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
 
   void NotifyNewLocalSurfaceIdExpectedWhilePaused();
 
+  void ElasticOverscrollAnimationFinished();
+
+  void set_send_frame_token_to_embedder(bool send_frame_token_to_embedder) {
+    send_frame_token_to_embedder_ = send_frame_token_to_embedder;
+  }
+  bool send_frame_token_to_embedder() const {
+    return send_frame_token_to_embedder_;
+  }
+
  protected:
   LayerTreeHostImpl(
       const LayerTreeSettings& settings,
@@ -1047,8 +1062,7 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
   // active tree.
   void ActivateStateForImages();
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level);
+  void OnMemoryPressure(base::MemoryPressureLevel level);
 
   void AllocateLocalSurfaceId();
 
@@ -1204,6 +1218,7 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
 
   std::unique_ptr<BrowserControlsOffsetManager>
       browser_controls_offset_manager_;
+  std::unique_ptr<ProgressBarOffsetManager> progress_bar_offset_manager_;
 
   std::unique_ptr<PageScaleAnimation> page_scale_animation_;
 
@@ -1325,7 +1340,8 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
   viz::VerticalScrollDirection last_vertical_scroll_direction_ =
       viz::VerticalScrollDirection::kNull;
 
-  std::unique_ptr<base::AsyncMemoryPressureListener> memory_pressure_listener_;
+  std::unique_ptr<base::AsyncMemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
 
   PresentationTimeCallbackBuffer presentation_time_callbacks_;
 
@@ -1415,6 +1431,14 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
   // Track previously visible scrollable elements for viewport visibility
   // detection.
   base::flat_set<ElementId> previously_visible_scrollable_elements_;
+
+  // Only used in TreesInViz mode, whether to call
+  // CompositorFrameSinkSupport::OnFrameTokenChanged(). In TreesInViz
+  // mode, it's computed when calling GenerateCompositorFrame() in
+  // renderer process, and its computation when calling
+  // GenerateCompositorFrame() in viz is skipped, therefore, we need to
+  // pass it from renderer to viz.
+  bool send_frame_token_to_embedder_ = false;
 
   // Must be the last member to ensure this is destroyed first in the
   // destruction order and invalidates all weak pointers.

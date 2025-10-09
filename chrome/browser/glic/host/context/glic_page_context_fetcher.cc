@@ -10,6 +10,7 @@
 #include "chrome/browser/actor/actor_keyed_service.h"
 #include "chrome/browser/actor/actor_tab_data.h"
 #include "chrome/browser/actor/aggregated_journal.h"
+#include "chrome/browser/actor/browser_action_util.h"
 #include "chrome/browser/glic/host/context/glic_tab_data.h"
 #include "chrome/browser/glic/host/glic.mojom.h"
 #include "chrome/browser/glic/media/glic_media_integration.h"
@@ -75,15 +76,15 @@ void HandleFetchPageResult(
             page_context.inner_text_result->truncated));
   }
 
-  // TODO(crbug.com/411462297): Remove actor specific bits in this class once
-  // all actor entry points are removed.
+  // TODO(crbug.com/446700005): This path is used for both actor and non-actor
+  // context but includes bits specific to actor.
   actor::AggregatedJournal* journal = nullptr;
   actor::TaskId task_id;
   if (journal_entry) {
     journal = &journal_entry->GetJournal();
     task_id = journal_entry->GetTaskId();
   }
-  if (page_context.screenshot_result) {
+  if (page_context.screenshot_result.has_value()) {
     if (journal) {
       journal->LogScreenshot(tab_context->tab_data->url, task_id, "image/jpeg",
                              page_context.screenshot_result->jpeg_data);
@@ -154,11 +155,16 @@ void FetchPageContext(
   auto* web_contents = tab->GetContents();
 
   std::unique_ptr<actor::AggregatedJournal::PendingAsyncEntry> journal_entry;
+  std::unique_ptr<page_content_annotations::FetchPageProgressListener>
+      progress_listener;
   if (auto* actor_keyed_service =
           actor::ActorKeyedService::Get(web_contents->GetBrowserContext())) {
+    const GURL& url = web_contents->GetLastCommittedURL();
     journal_entry = actor_keyed_service->GetJournal().CreatePendingAsyncEntry(
-        web_contents->GetLastCommittedURL(), actor::TaskId(),
-        actor::mojom::JournalTrack::kActor, "GlicFetchPageContext", "");
+        url, actor::TaskId(), actor::mojom::JournalTrack::kActor,
+        "GlicFetchPageContext", {});
+    progress_listener = actor::CreateActorJournalFetchPageProgressListener(
+        actor_keyed_service->GetJournal().GetSafeRef(), url, actor::TaskId());
   }
 
   page_content_annotations::FetchPageContextOptions options;
@@ -168,18 +174,24 @@ void FetchPageContext(
   if (tab_context_options.include_pdf) {
     options.pdf_size_limit = tab_context_options.pdf_size_limit;
   }
-  options.include_viewport_screenshot =
-      tab_context_options.include_viewport_screenshot;
 
+  if (tab_context_options.include_viewport_screenshot) {
+    // Disable paint preview backend for glic, and capture the viewport only.
+    options.screenshot_options =
+        page_content_annotations::ScreenshotOptions::ViewportOnly(
+            /*paint_preview_options=*/std::nullopt);
+  }
+
+  const bool on_critical_path = true;
   if (tab_context_options.include_annotated_page_content) {
     if (tab_context_options.annotated_page_content_mode ==
         optimization_guide::proto::
             ANNOTATED_PAGE_CONTENT_MODE_ACTIONABLE_ELEMENTS) {
       options.annotated_page_content_options =
-          optimization_guide::ActionableAIPageContentOptions();
+          optimization_guide::ActionableAIPageContentOptions(on_critical_path);
     } else {
       options.annotated_page_content_options =
-          optimization_guide::DefaultAIPageContentOptions();
+          optimization_guide::DefaultAIPageContentOptions(on_critical_path);
     }
     options.annotated_page_content_options->max_meta_elements =
         tab_context_options.max_meta_tags;
@@ -193,7 +205,7 @@ void FetchPageContext(
   }
 
   page_content_annotations::FetchPageContext(
-      *web_contents, options,
+      *web_contents, options, std::move(progress_listener),
       base::BindOnce(
           &HandleFetchPageResult, tab->GetWeakPtr(),
           CreateTabData(web_contents),

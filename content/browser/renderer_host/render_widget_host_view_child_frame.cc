@@ -81,7 +81,7 @@ RenderWidgetHostViewChildFrame::~RenderWidgetHostViewChildFrame() {
     DetachFromTouchSelectionClientManagerIfNecessary();
 
   if (is_frame_sink_id_owner() && GetHostFrameSinkManager()) {
-    GetHostFrameSinkManager()->InvalidateFrameSinkId(frame_sink_id_, this);
+    GetHostFrameSinkManager()->InvalidateFrameSinkId(frame_sink_id_, this, {});
   }
 }
 
@@ -349,7 +349,10 @@ gfx::NativeView RenderWidgetHostViewChildFrame::GetNativeView() {
 
 gfx::NativeViewAccessible
 RenderWidgetHostViewChildFrame::GetNativeViewAccessible() {
-  NOTREACHED();
+  if (!GetRootView()) {
+    return gfx::NativeViewAccessible();
+  }
+  return GetRootView()->GetNativeViewAccessible();
 }
 
 void RenderWidgetHostViewChildFrame::UpdateFrameSinkIdRegistration() {
@@ -564,7 +567,10 @@ void RenderWidgetHostViewChildFrame::RegisterFrameSinkId() {
 
 void RenderWidgetHostViewChildFrame::UnregisterFrameSinkId() {
   DCHECK(host());
-  UpdateFrameSinkIdRegistration();
+  if (host()->delegate() && host()->delegate()->GetInputEventRouter()) {
+    host()->delegate()->GetInputEventRouter()->RemoveFrameSinkIdOwner(
+        frame_sink_id_);
+  }
   DetachFromTouchSelectionClientManagerIfNecessary();
 }
 
@@ -852,9 +858,10 @@ uint64_t RenderWidgetHostViewChildFrame::GetNSViewId() const {
 void RenderWidgetHostViewChildFrame::CopyFromSurface(
     const gfx::Rect& src_subrect,
     const gfx::Size& output_size,
-    base::OnceCallback<void(const SkBitmap&)> callback) {
+    base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+        callback) {
   if (!IsSurfaceAvailableForCopy()) {
-    std::move(callback).Run(SkBitmap());
+    std::move(callback).Run(viz::CopyOutputBitmapWithMetadata());
     return;
   }
 
@@ -863,10 +870,12 @@ void RenderWidgetHostViewChildFrame::CopyFromSurface(
           viz::CopyOutputRequest::ResultFormat::RGBA,
           viz::CopyOutputRequest::ResultDestination::kSystemMemory,
           base::BindOnce(
-              [](base::OnceCallback<void(const SkBitmap&)> callback,
+              [](base::OnceCallback<void(
+                     const viz::CopyOutputBitmapWithMetadata&)> callback,
                  std::unique_ptr<viz::CopyOutputResult> result) {
                 auto scoped_bitmap = result->ScopedAccessSkBitmap();
-                std::move(callback).Run(scoped_bitmap.GetOutScopedBitmap());
+                std::move(callback).Run(
+                    scoped_bitmap.GetOutScopedBitmapAndMetadata());
               },
               std::move(callback)));
 
@@ -966,6 +975,13 @@ RenderWidgetHostViewChildFrame::DidUpdateVisualProperties(
           &RenderWidgetHostViewChildFrame::OnDidUpdateVisualPropertiesComplete),
       weak_factory_.GetWeakPtr(), metadata);
   return viz::ScopedSurfaceIdAllocator(std::move(allocation_task));
+}
+
+input::CursorManager* RenderWidgetHostViewChildFrame::GetCursorManager() {
+  if (!GetRootView()) {
+    return nullptr;
+  }
+  return GetRootView()->GetCursorManager();
 }
 
 ui::TextInputType RenderWidgetHostViewChildFrame::GetTextInputType() const {

@@ -21,6 +21,7 @@
 #import "components/feature_engagement/public/feature_constants.h"
 #import "components/feature_engagement/public/tracker.h"
 #import "components/keyed_service/core/service_access_type.h"
+#import "components/omnibox/browser/omnibox_pref_names.h"
 #import "components/password_manager/core/browser/manage_passwords_referrer.h"
 #import "components/password_manager/core/browser/ui/password_check_referrer.h"
 #import "components/password_manager/core/common/password_manager_pref_names.h"
@@ -58,7 +59,6 @@
 #import "ios/chrome/browser/language/model/language_model_manager_factory.h"
 #import "ios/chrome/browser/net/model/crurl.h"
 #import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_feature.h"
-#import "ios/chrome/browser/passwords/model/features.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_password_check_manager.h"
 #import "ios/chrome/browser/passwords/model/ios_chrome_password_check_manager_factory.h"
 #import "ios/chrome/browser/passwords/model/password_check_observer_bridge.h"
@@ -78,6 +78,7 @@
 #import "ios/chrome/browser/settings/ui_bundled/autofill/autofill_credit_card_table_view_controller.h"
 #import "ios/chrome/browser/settings/ui_bundled/autofill/autofill_profile_table_view_controller.h"
 #import "ios/chrome/browser/settings/ui_bundled/bandwidth/bandwidth_management_table_view_controller.h"
+#import "ios/chrome/browser/settings/ui_bundled/button_catalog_view_controller.h"
 #import "ios/chrome/browser/settings/ui_bundled/bwg/coordinator/bwg_settings_coordinator.h"
 #import "ios/chrome/browser/settings/ui_bundled/cells/account_sign_in_item.h"
 #import "ios/chrome/browser/settings/ui_bundled/cells/enhanced_safe_browsing_inline_promo_item.h"
@@ -129,7 +130,6 @@
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_image_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_cell.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_item.h"
-#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_cell.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_model.h"
@@ -172,7 +172,7 @@ UIImage* GetBrandedGoogleServicesSymbol() {
 #if BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
   return CustomSettingsRootMulticolorSymbol(kGoogleIconSymbol);
 #else
-  return DefaultSettingsRootSymbol(@"gearshape.2");
+  return DefaultSettingsRootSymbol(kGearshape2Symbol);
 #endif
 }
 
@@ -274,7 +274,8 @@ struct EnhancedSafeBrowsingActivePromoData
   PasswordsCoordinator* _passwordsCoordinator;
 
   // Feature engagement tracker for the signin IPH.
-  raw_ptr<feature_engagement::Tracker> _featureEngagementTracker;
+  raw_ptr<feature_engagement::Tracker, DanglingUntriaged>
+      _featureEngagementTracker;
   // Presenter for the signin IPH.
   BubbleViewControllerPresenter* _bubblePresenter;
 
@@ -348,7 +349,7 @@ struct EnhancedSafeBrowsingActivePromoData
 - (instancetype)initWithBrowser:(Browser*)browser
        hasDefaultBrowserBlueDot:(BOOL)hasDefaultBrowserBlueDot {
   DCHECK(browser);
-  DCHECK(!browser->GetProfile()->IsOffTheRecord());
+  DCHECK_EQ(browser->type(), Browser::Type::kRegular);
 
   self = [super initWithStyle:ChromeTableViewStyle()];
   if (self) {
@@ -396,9 +397,9 @@ struct EnhancedSafeBrowsingActivePromoData
                                               prefName:prefs::kSigninAllowed];
     _allowChromeSigninPreference.observer = self;
 
-    _bottomOmniboxEnabled =
-        [[PrefBackedBoolean alloc] initWithPrefService:localState
-                                              prefName:prefs::kBottomOmnibox];
+    _bottomOmniboxEnabled = [[PrefBackedBoolean alloc]
+        initWithPrefService:localState
+                   prefName:omnibox::kIsOmniboxInBottomPosition];
     [_bottomOmniboxEnabled setObserver:self];
 
     _discoverFeedVisibilityBrowserAgent =
@@ -566,7 +567,7 @@ struct EnhancedSafeBrowsingActivePromoData
     [model addItem:[self downloadsSettingsDetailItem]
         toSectionWithIdentifier:SettingsSectionIdentifierInfo];
   }
-  if (ShouldShowSafariImportWorkflow()) {
+  if (ShouldShowSafariDataImportEntryPoint(_profile)) {
     [model addItem:[self safariDataImportSettingsDetailItem]
         toSectionWithIdentifier:SettingsSectionIdentifierInfo];
   }
@@ -590,6 +591,8 @@ struct EnhancedSafeBrowsingActivePromoData
   [model addItem:[self viewSourceSwitchItem]
       toSectionWithIdentifier:SettingsSectionIdentifierDebug];
   [model addItem:[self tableViewCatalogDetailItem]
+      toSectionWithIdentifier:SettingsSectionIdentifierDebug];
+  [model addItem:[self buttonCatalogDetailItem]
       toSectionWithIdentifier:SettingsSectionIdentifierDebug];
 #endif  // BUILDFLAG(CHROMIUM_BRANDING) && !defined(NDEBUG)
 }
@@ -955,6 +958,8 @@ struct EnhancedSafeBrowsingActivePromoData
               symbolBackgroundColor:[UIColor colorNamed:kOrange500Color]
             accessibilityIdentifier:kSettingsArticleSuggestionsCellId];
     _feedSettingsItem.on = _discoverFeedVisibilityBrowserAgent->IsEnabled();
+    _feedSettingsItem.target = self;
+    _feedSettingsItem.selector = @selector(articlesForYouSwitchToggled:);
   }
   return _feedSettingsItem;
 }
@@ -1055,7 +1060,8 @@ struct EnhancedSafeBrowsingActivePromoData
             symbolBackgroundColor:[UIColor colorNamed:kGrey400Color]
           accessibilityIdentifier:nil];
   showMemoryDebugSwitchItem.on = [_showMemoryDebugToolsEnabled value];
-
+  showMemoryDebugSwitchItem.target = self;
+  showMemoryDebugSwitchItem.selector = @selector(memorySwitchToggled:);
   return showMemoryDebugSwitchItem;
 }
 
@@ -1094,6 +1100,8 @@ struct EnhancedSafeBrowsingActivePromoData
 
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
   viewSourceItem.on = [defaults boolForKey:kDevViewSourceKey];
+  viewSourceItem.target = self;
+  viewSourceItem.selector = @selector(viewSourceSwitchToggled:);
   return viewSourceItem;
 }
 
@@ -1105,6 +1113,16 @@ struct EnhancedSafeBrowsingActivePromoData
             symbolBackgroundColor:[UIColor colorNamed:kGrey400Color]
           accessibilityIdentifier:nil];
 }
+
+- (TableViewDetailIconItem*)buttonCatalogDetailItem {
+  return [self detailItemWithType:SettingsItemTypeButtonCatalog
+                             text:@"Button Catalog"
+                       detailText:nil
+                           symbol:DefaultSettingsRootSymbol(kCartSymbol)
+            symbolBackgroundColor:[UIColor colorNamed:kGrey400Color]
+          accessibilityIdentifier:nil];
+}
+
 #endif  // BUILDFLAG(CHROMIUM_BRANDING) && !defined(NDEBUG)
 
 #pragma mark Item Constructors
@@ -1185,34 +1203,6 @@ struct EnhancedSafeBrowsingActivePromoData
   NSInteger itemType = [self.tableViewModel itemTypeForIndexPath:indexPath];
 
   switch (itemType) {
-    case SettingsItemTypeMemoryDebugging: {
-      TableViewSwitchCell* switchCell =
-          base::apple::ObjCCastStrict<TableViewSwitchCell>(cell);
-      [switchCell.switchView addTarget:self
-                                action:@selector(memorySwitchToggled:)
-                      forControlEvents:UIControlEventValueChanged];
-      break;
-    }
-    case SettingsItemTypeArticlesForYou: {
-      TableViewSwitchCell* switchCell =
-          base::apple::ObjCCastStrict<TableViewSwitchCell>(cell);
-      [switchCell.switchView addTarget:self
-                                action:@selector(articlesForYouSwitchToggled:)
-                      forControlEvents:UIControlEventValueChanged];
-      break;
-    }
-    case SettingsItemTypeViewSource: {
-#if BUILDFLAG(CHROMIUM_BRANDING) && !defined(NDEBUG)
-      TableViewSwitchCell* switchCell =
-          base::apple::ObjCCastStrict<TableViewSwitchCell>(cell);
-      [switchCell.switchView addTarget:self
-                                action:@selector(viewSourceSwitchToggled:)
-                      forControlEvents:UIControlEventValueChanged];
-      break;
-#else
-      NOTREACHED();
-#endif  // BUILDFLAG(CHROMIUM_BRANDING) && !defined(NDEBUG)
-    }
     case SettingsItemTypeManagedDefaultSearchEngine: {
       TableViewInfoButtonCell* managedCell =
           base::apple::ObjCCastStrict<TableViewInfoButtonCell>(cell);
@@ -1381,7 +1371,7 @@ struct EnhancedSafeBrowsingActivePromoData
       [self showTabsSettings];
       break;
     case SettingsItemTypeSafariDataImport: {
-      CHECK(ShouldShowSafariImportWorkflow());
+      CHECK(ShouldShowSafariDataImportEntryPoint(_profile));
       base::RecordAction(base::UserMetricsAction("Settings.SafariImport"));
       id<ApplicationCommands> handler = HandlerForProtocol(
           _browser->GetCommandDispatcher(), ApplicationCommands);
@@ -1410,6 +1400,11 @@ struct EnhancedSafeBrowsingActivePromoData
     case SettingsItemTypeTableCellCatalog:
       [self.navigationController
           pushViewController:[[TableCellCatalogViewController alloc] init]
+                    animated:YES];
+      break;
+    case SettingsItemTypeButtonCatalog:
+      [self.navigationController
+          pushViewController:[[ButtonCatalogViewController alloc] init]
                     animated:YES];
       break;
     case SettingsItemTypeBWGSettings:
@@ -1993,10 +1988,9 @@ struct EnhancedSafeBrowsingActivePromoData
   id<SystemIdentity> identity =
       authService->GetPrimaryIdentity(signin::ConsentLevel::kSignin);
   PrefService* prefService = _profile->GetPrefs();
-  const GaiaId gaiaID(identity.gaiaID);
   push_notification_settings::ClientPermissionState permission_state =
-      push_notification_settings::GetNotificationPermissionState(gaiaID,
-                                                                 prefService);
+      push_notification_settings::GetNotificationPermissionState(
+          identity.gaiaId, prefService);
   if (permission_state ==
       push_notification_settings::ClientPermissionState::ENABLED) {
     detailText = l10n_util::GetNSString(IDS_IOS_SETTING_ON);
@@ -2535,8 +2529,8 @@ struct EnhancedSafeBrowsingActivePromoData
 
 - (void)safariDataImportDidDismiss {
   NSIndexPath* indexPath = [self.tableView indexPathForSelectedRow];
-  if ([self.tableViewModel itemTypeForIndexPath:indexPath] ==
-      SettingsItemTypeSafariDataImport) {
+  if (indexPath && [self.tableViewModel itemTypeForIndexPath:indexPath] ==
+                       SettingsItemTypeSafariDataImport) {
     [self.tableView deselectRowAtIndexPath:indexPath animated:YES];
   }
 }

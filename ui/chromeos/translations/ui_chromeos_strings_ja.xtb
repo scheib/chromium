@@ -35,6 +35,7 @@
 <translation id="1249250836236328755">ジャンル</translation>
 <translation id="1254593899333212300">インターネットへの直接接続</translation>
 <translation id="1272293450992660632">PIN の値が一致しません。</translation>
+<translation id="1279040297980392566">スキャン待機中、後でもう一度お試しください</translation>
 <translation id="1280820357415527819">モバイル ネットワークを検索しています</translation>
 <translation id="1293556467332435079">ファイル</translation>
 <translation id="1297922636971898492">Google ドライブは現在ご利用いただけません。Google ドライブが利用可能になったときに、自動的にアップロードを再開します。</translation>
@@ -787,7 +788,7 @@
 <translation id="7075931588889865715">タイ語（TIS 820-2531）キーボード</translation>
 <translation id="708278670402572152">スキャンを有効にするにはネットワークから切断してください</translation>
 <translation id="7086590977277044826">タミル語（字母）キーボード</translation>
-<translation id="7088615885725309056">古い</translation>
+<translation id="7088615885725309056">次</translation>
 <translation id="7103992300314999525">マケドニア語</translation>
 <translation id="7104338189998813914">OneDrive アカウントへのアクセスで問題が発生しています</translation>
 <translation id="7106346894903675391">追加容量を購入...</translation>
@@ -1015,7 +1016,7 @@
 <translation id="8688591111840995413">不正なパスワード</translation>
 <translation id="8698464937041809063">Google 図形描画</translation>
 <translation id="8698877009525468705">このファイルは機密情報であり、管理者ポリシーによる制限が適用されます。</translation>
-<translation id="8712637175834984815">理解した</translation>
+<translation id="8712637175834984815">理解しました</translation>
 <translation id="8713112442029511308">マルタ語</translation>
 <translation id="8714406895390098252">自転車</translation>
 <translation id="8719721339511222681"><ph name="ENTRY_NAME" /> を選択しました。</translation>
@@ -1078,6 +1079,7 @@
 <translation id="9213073329713032541">インストールを開始しました。</translation>
 <translation id="9219103736887031265">画像</translation>
 <translation id="9219908252191632183">月面</translation>
+<translation id="931652069802536959">ネットワークはポリシーによってブロックされています</translation>
 <translation id="938470336146445890">ユーザー証明書をインストールしてください。</translation>
 <translation id="939736085109172342">新しいフォルダ</translation>
 <translation id="943972244133411984">更新者</translation>

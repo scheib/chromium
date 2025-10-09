@@ -61,7 +61,6 @@ using testing::ByMove;
 using testing::ContainerEq;
 using testing::Contains;
 using testing::Eq;
-using testing::Invoke;
 using testing::IsEmpty;
 using testing::IsNull;
 using testing::Not;
@@ -110,6 +109,7 @@ SyncCycleSnapshot MakeDefaultSyncCycleSnapshot() {
 class MockSyncServiceObserver : public SyncServiceObserver {
  public:
   MOCK_METHOD(void, OnStateChanged, (SyncService * sync), (override));
+  MOCK_METHOD(void, OnSyncShutdown, (SyncService * sync), (override));
 };
 
 class TestSyncServiceObserver : public SyncServiceObserver {
@@ -120,6 +120,7 @@ class TestSyncServiceObserver : public SyncServiceObserver {
     setup_in_progress_ = sync->IsSetupInProgress();
     auth_error_ = sync->GetAuthError();
   }
+  void OnSyncShutdown(SyncService* sync) override { NOTREACHED(); }
 
   bool setup_in_progress() const { return setup_in_progress_; }
   GoogleServiceAuthError auth_error() const { return auth_error_; }
@@ -171,6 +172,7 @@ class SyncServiceImplTest : public ::testing::Test {
   }
 
   void InitializeService() {
+    // Include a regular controller and a transport-mode controller.
     std::vector<FakeControllerInitParams> params;
     params.emplace_back(BOOKMARKS, /*enable_transport_mode=*/false);
     params.emplace_back(DEVICE_INFO, /*enable_transport_mode=*/true);
@@ -181,17 +183,6 @@ class SyncServiceImplTest : public ::testing::Test {
                              registered_types_controller_params) {
     DCHECK(!service_);
 
-    // Default includes a regular controller and a transport-mode controller.
-    DataTypeController::TypeVector controllers;
-    for (auto& params : registered_types_controller_params) {
-      auto controller = std::make_unique<FakeDataTypeController>(
-          params.data_type, params.enable_transport_mode,
-          std::move(params.batch_uploader));
-      // Hold a raw pointer to directly interact with the controller.
-      controller_map_[params.data_type] = controller.get();
-      controllers.push_back(std::move(controller));
-    }
-
     std::unique_ptr<SyncClientMock> sync_client =
         sync_service_impl_bundle_.CreateSyncClientMock();
     sync_client_ = sync_client.get();
@@ -201,23 +192,22 @@ class SyncServiceImplTest : public ::testing::Test {
     service_ = std::make_unique<SyncServiceImpl>(
         sync_service_impl_bundle_.CreateBasicInitParams(
             std::move(sync_client)));
-    service_->Initialize(std::move(controllers));
+    service_->Initialize(CreateAndRegisterFakeControllers(
+        std::move(registered_types_controller_params)));
   }
 
   void InitializeServiceWithLocalSyncBackend() {
-    DCHECK(!service_);
-
     // Include a regular controller and a transport-mode controller.
-    DataTypeController::TypeVector controllers;
-    controllers.push_back(std::make_unique<FakeDataTypeController>(BOOKMARKS));
-    controllers.push_back(std::make_unique<FakeDataTypeController>(
-        DEVICE_INFO, /*enable_transport_only_modle=*/true));
+    std::vector<FakeControllerInitParams> params;
+    params.emplace_back(BOOKMARKS, /*enable_transport_mode=*/false);
+    params.emplace_back(DEVICE_INFO, /*enable_transport_mode=*/true);
+    InitializeServiceWithLocalSyncBackend(std::move(params));
+  }
 
-    // Hold raw pointers to directly interact with controllers.
-    for (const auto& controller : controllers) {
-      controller_map_[controller->type()] =
-          static_cast<FakeDataTypeController*>(controller.get());
-    }
+  void InitializeServiceWithLocalSyncBackend(
+      std::vector<FakeControllerInitParams>
+          registered_types_controller_params) {
+    DCHECK(!service_);
 
     std::unique_ptr<SyncClientMock> sync_client =
         sync_service_impl_bundle_.CreateSyncClientMock();
@@ -231,7 +221,8 @@ class SyncServiceImplTest : public ::testing::Test {
     prefs()->SetBoolean(prefs::kEnableLocalSyncBackend, true);
 
     service_ = std::make_unique<SyncServiceImpl>(std::move(init_params));
-    service_->Initialize(std::move(controllers));
+    service_->Initialize(CreateAndRegisterFakeControllers(
+        std::move(registered_types_controller_params)));
   }
 
   std::unique_ptr<SyncServiceImpl> ShutdownAndReleaseService() {
@@ -304,6 +295,22 @@ class SyncServiceImplTest : public ::testing::Test {
   }
 
  private:
+  // Creates FakeDataTypeController instances based on `params`, stores raw
+  // pointers to them in `controller_map_`, and returns them as a vector of Fake
+  // unique pointers.
+  DataTypeController::TypeVector CreateAndRegisterFakeControllers(
+      std::vector<FakeControllerInitParams> params) {
+    DataTypeController::TypeVector controllers;
+    for (auto& param : params) {
+      auto controller = std::make_unique<FakeDataTypeController>(
+          param.data_type, param.enable_transport_mode,
+          std::move(param.batch_uploader));
+      controller_map_[param.data_type] = controller.get();
+      controllers.push_back(std::move(controller));
+    }
+    return controllers;
+  }
+
   base::test::SingleThreadTaskEnvironment task_environment_;
   SyncServiceImplBundle sync_service_impl_bundle_;
   std::unique_ptr<SyncServiceImpl> service_;
@@ -343,6 +350,8 @@ TEST_F(SyncServiceImplTest, SuccessfulLocalBackendInitialization) {
   EXPECT_TRUE(service()->GetDisableReasons().empty());
   EXPECT_EQ(SyncService::TransportState::ACTIVE,
             service()->GetTransportState());
+  EXPECT_FALSE(service()->HasSyncConsent());
+  EXPECT_FALSE(service()->IsSyncFeatureEnabled());
 }
 
 // ChromeOS Ash sets FirstSetupComplete automatically.
@@ -1957,8 +1966,8 @@ TEST_F(SyncServiceImplTest, ShouldReturnWaitingDownloadStatus) {
   bool met_configuring_data_type_manager = false;
   testing::NiceMock<MockSyncServiceObserver> mock_sync_service_observer;
   ON_CALL(mock_sync_service_observer, OnStateChanged)
-      .WillByDefault(Invoke([&met_configuring_data_type_manager](
-                                SyncService* service) {
+      .WillByDefault([&met_configuring_data_type_manager](
+                         SyncService* service) {
         EXPECT_NE(service->GetDownloadStatusFor(syncer::BOOKMARKS),
                   SyncService::DataTypeDownloadStatus::kError);
         if (service->GetTransportState() ==
@@ -1967,7 +1976,7 @@ TEST_F(SyncServiceImplTest, ShouldReturnWaitingDownloadStatus) {
           EXPECT_EQ(service->GetDownloadStatusFor(syncer::BOOKMARKS),
                     SyncService::DataTypeDownloadStatus::kWaitingForUpdates);
         }
-      }));
+      });
 
   // Observers must be added after initialization has been started.
   ASSERT_THAT(engine(), IsNull());
@@ -2226,6 +2235,17 @@ TEST_F(SyncServiceImplTest, EarlyCallToGetTypesWithUnsyncedDataShouldNotCrash) {
 }
 
 TEST_F(SyncServiceImplTest,
+       GetTypesWithUnsyncedDataWithLocalSyncShouldReturnEmpty) {
+  InitializeServiceWithLocalSyncBackend();
+  base::RunLoop().RunUntilIdle();
+  base::MockCallback<
+      base::OnceCallback<void(absl::flat_hash_map<DataType, size_t>)>>
+      cb;
+  EXPECT_CALL(cb, Run(absl::flat_hash_map<DataType, size_t>()));
+  service()->GetTypesWithUnsyncedData(syncer::UserTypes(), cb.Get());
+}
+
+TEST_F(SyncServiceImplTest,
        ShouldNotForwardUponGetLocalDataDescriptionsIfSyncDisabled) {
   prefs()->SetManagedPref(prefs::internal::kSyncManaged, base::Value(true));
   SignInWithoutSyncConsent();
@@ -2270,6 +2290,30 @@ TEST_F(SyncServiceImplTest,
   params.emplace_back(DEVICE_INFO, /*enable_transport_mode=*/true,
                       std::move(device_info_uploader));
   InitializeService(std::move(params));
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(service()->GetPreferredDataTypes().Has(DEVICE_INFO));
+
+  base::test::TestFuture<std::map<DataType, LocalDataDescription>> descriptions;
+  service()->GetLocalDataDescriptions({DEVICE_INFO},
+                                      descriptions.GetCallback());
+
+  EXPECT_THAT(descriptions.Get(), IsEmpty());
+}
+
+TEST_F(SyncServiceImplTest,
+       ShouldReturnEmptyUponGetLocalDataDescriptionsForLocalSync) {
+  // DEVICE_INFO will be passed to GetLocalDataDescription(), but local sync is
+  // enabled. So the uploader should not be queried.
+  auto device_info_uploader =
+      std::make_unique<MockDataTypeLocalDataBatchUploader>();
+  EXPECT_CALL(*device_info_uploader, GetLocalDataDescription).Times(0);
+
+  std::vector<FakeControllerInitParams> params;
+  params.emplace_back(DEVICE_INFO, /*enable_transport_mode=*/true,
+                      std::move(device_info_uploader));
+
+  InitializeServiceWithLocalSyncBackend(std::move(params));
   base::RunLoop().RunUntilIdle();
 
   ASSERT_TRUE(service()->GetPreferredDataTypes().Has(DEVICE_INFO));
@@ -2331,6 +2375,26 @@ TEST_F(SyncServiceImplTest,
 }
 
 TEST_F(SyncServiceImplTest,
+       ShouldDoNothingUponTriggerLocalDataMigrationForLocalSync) {
+  // DEVICE_INFO will be passed to TriggerLocalDataMigration(), but local sync
+  // is enabled. So data should not be uploaded.
+  auto device_info_uploader =
+      std::make_unique<MockDataTypeLocalDataBatchUploader>();
+  EXPECT_CALL(*device_info_uploader, TriggerLocalDataMigration()).Times(0);
+
+  std::vector<FakeControllerInitParams> params;
+  params.emplace_back(DEVICE_INFO, /*enable_transport_mode=*/true,
+                      std::move(device_info_uploader));
+
+  InitializeServiceWithLocalSyncBackend(std::move(params));
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(service()->GetPreferredDataTypes().Has(DEVICE_INFO));
+
+  service()->TriggerLocalDataMigration({DEVICE_INFO});
+}
+
+TEST_F(SyncServiceImplTest,
        ShouldNotForwardUponTriggerLocalDataMigrationForItemsIfSyncDisabled) {
   prefs()->SetManagedPref(prefs::internal::kSyncManaged, base::Value(true));
   SignInWithoutSyncConsent();
@@ -2378,6 +2442,29 @@ TEST_F(SyncServiceImplTest,
   params.emplace_back(DEVICE_INFO, /*enable_transport_mode=*/true,
                       std::move(device_info_uploader));
   InitializeService(std::move(params));
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(service()->GetPreferredDataTypes().Has(DEVICE_INFO));
+
+  std::map<DataType, std::vector<syncer::LocalDataItemModel::DataId>> items{
+      {DEVICE_INFO, {"d1", "d2"}}};
+  service()->TriggerLocalDataMigrationForItems(items);
+}
+
+TEST_F(SyncServiceImplTest,
+       ShouldDoNothingUponTriggerLocalDataMigrationForItemsForLocalSync) {
+  // DEVICE_INFO will be passed to TriggerLocalDataMigrationForItems(), but the
+  // user is syncing. So data should not be uploaded.
+  auto device_info_uploader =
+      std::make_unique<MockDataTypeLocalDataBatchUploader>();
+  EXPECT_CALL(*device_info_uploader,
+              TriggerLocalDataMigrationForItems(testing::_))
+      .Times(0);
+
+  std::vector<FakeControllerInitParams> params;
+  params.emplace_back(DEVICE_INFO, /*enable_transport_mode=*/true,
+                      std::move(device_info_uploader));
+  InitializeServiceWithLocalSyncBackend(std::move(params));
   base::RunLoop().RunUntilIdle();
 
   ASSERT_TRUE(service()->GetPreferredDataTypes().Has(DEVICE_INFO));
@@ -2524,6 +2611,26 @@ TEST_F(
 
   service()->SelectTypeAndMigrateLocalDataItemsWhenActive(BOOKMARKS, items);
   EXPECT_FALSE(service()->GetActiveDataTypes().Has(BOOKMARKS));
+}
+
+TEST_F(SyncServiceImplTest,
+       ShouldNotForwardUponSelectTypeAndMigrateLocalDataItemsForLocalSync) {
+  std::vector<LocalDataItemModel::DataId> items{{"d1"}};
+
+  // BOOKMARKS will be passed to
+  // SelectTypeAndMigrateLocalDataItemsWhenActive(), but local sync is enabled.
+  // So data should not be uploaded.
+  auto bookmarks_uploader =
+      std::make_unique<MockDataTypeLocalDataBatchUploader>();
+  EXPECT_CALL(*bookmarks_uploader, TriggerLocalDataMigration()).Times(0);
+
+  std::vector<FakeControllerInitParams> params;
+  params.emplace_back(BOOKMARKS, /*enable_transport_mode=*/true,
+                      std::move(bookmarks_uploader));
+  InitializeServiceWithLocalSyncBackend(std::move(params));
+  base::RunLoop().RunUntilIdle();
+
+  service()->SelectTypeAndMigrateLocalDataItemsWhenActive(BOOKMARKS, items);
 }
 
 TEST_F(SyncServiceImplTest, ShouldRecordLocalDataMigrationRequests) {

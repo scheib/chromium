@@ -9,7 +9,6 @@
 
 #include <list>
 #include <map>
-#include <memory>
 #include <optional>
 #include <utility>
 
@@ -77,8 +76,7 @@ class VIZ_CLIENT_EXPORT FrameEvictionManager
 
   // React on memory pressure events to adjust the number of cached frames.
   // Please make this private when crbug.com/443824 has been fixed.
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level);
 
   // Purges all unlocked frames, allowing us to reclaim resources.
   void PurgeAllUnlockedFrames();
@@ -122,7 +120,8 @@ class VIZ_CLIENT_EXPORT FrameEvictionManager
 
   // Listens for system under pressure notifications and adjusts number of
   // cached frames accordingly.
-  std::unique_ptr<base::MemoryPressureListener> memory_pressure_listener_;
+  base::AsyncMemoryPressureListenerRegistration
+      memory_pressure_listener_registration_;
 
   std::map<FrameEvictionManagerClient*, size_t> locked_frames_;
   // {FrameEvictionManagerClient, Last Unlock() time}, ordered with the most

@@ -6,10 +6,14 @@ package org.chromium.base;
 
 import android.app.ActivityManager;
 import android.app.ActivityManager.AppTask;
+import android.content.Context;
+import android.content.Context.BindServiceFlags;
+import android.content.ServiceConnection;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.hardware.display.DisplayManager;
 import android.util.SparseArray;
+import android.view.View;
 import android.view.Window;
 
 import org.chromium.build.annotations.NullMarked;
@@ -20,6 +24,19 @@ import java.util.concurrent.Executor;
 /** Interface to call unreleased Android APIs that are guarded by aconfig flags. */
 @NullMarked
 public interface AconfigFlaggedApiDelegate {
+    /**
+     * Prefer to use this to get a instance instead of calling ServiceLoaderUtil. If possible, avoid
+     * caching the return value in member or global variables as it allows more compile time
+     * optimizations.
+     */
+    static @Nullable AconfigFlaggedApiDelegate getInstance() {
+        return ServiceLoaderUtil.maybeCreate(AconfigFlaggedApiDelegate.class);
+    }
+
+    static void setInstanceForTesting(AconfigFlaggedApiDelegate testInstance) {
+        ServiceLoaderUtil.setInstanceForTesting(AconfigFlaggedApiDelegate.class, testInstance);
+    }
+
     /**
      * Calls the {@link android.app.ActivityManager#isTaskMoveAllowedOnDisplay} method if supported,
      * otherwise returns false.
@@ -45,12 +62,18 @@ public interface AconfigFlaggedApiDelegate {
     // within {@link ui.display.DisplayAndroidManager}.
 
     /** Interface that is used to subscribe to Display Topology Updates. */
-    public interface DisplayTopologyListener {
-        public void onDisplayTopologyChanged(SparseArray<RectF> absoluteBounds);
+    interface DisplayTopologyListener {
+        void onDisplayTopologyChanged(SparseArray<RectF> absoluteBounds);
     }
 
-    /** Checks if the display topology is available, based on the API level and Aconfig flags. */
-    default boolean isDisplayTopologyAvailable() {
+    /**
+     * Checks if the display topology is available, based on the API level, Aconfig flags and
+     * Display Topology state.
+     *
+     * @param displayManager {@link android.hardware.display.DisplayManager} from which Display
+     *     Topology will be obtained.
+     */
+    default boolean isDisplayTopologyAvailable(DisplayManager displayManager) {
         return false;
     }
 
@@ -59,7 +82,7 @@ public interface AconfigFlaggedApiDelegate {
      * supported, otherwise returns {@code null}.
      *
      * @param displayManager {@link android.hardware.display.DisplayManager} from which Display
-     *     Topology be will be obtained.
+     *     Topology will be obtained.
      * @return Map from logical display ID to the display's absolute bounds if method supported,
      *     otherwise {@code null}.
      */
@@ -94,6 +117,34 @@ public interface AconfigFlaggedApiDelegate {
      * @return boolean indicating whether the android API was invoked.
      */
     default boolean setKeyboardCaptureEnabled(Window window, boolean hasCapture) {
+        return false;
+    }
+
+    /** Returns whether rebindService() is available or not. */
+    default boolean isUpdateServiceBindingApiAvailable() {
+        return false;
+    }
+
+    /**
+     * Calls the {@link android.content.Context#rebindService(ServiceConnection, BindServiceFlags)}
+     * method if supported.
+     *
+     * @param context {@link android.content.Context} on which the method should be called.
+     * @param connection {@link android.content.ServiceConnection} The connection to rebind.
+     * @param flags {@link android.content.Context.BindServiceFlags} The flags to use when binding.
+     */
+    default void rebindService(
+            Context context, ServiceConnection connection, BindServiceFlags flags) {}
+
+    /**
+     * Calls {@link android.view.View#requestRectangleOnScreen(Rect, boolean, int)} if supported,
+     * with focus type of {@link android.view.View#RECTANGLE_ON_SCREEN_REQUEST_SOURCE_INPUT_FOCUS}.
+     *
+     * @param view view on which the method should be called
+     * @param rect the rect to request on screen, in coordinates relative to {@code view}
+     * @return whether the Android API was invoked
+     */
+    default boolean requestInputFocusOnScreen(View view, Rect boundsInView) {
         return false;
     }
 }

@@ -40,7 +40,6 @@ const base::TimeDelta kBannerPromoAnimationDuration = base::Seconds(0.5);
 
 // TODO(crbug.com/374808149): Clean up the killswitch.
 BASE_FEATURE(kPrimaryToolbarViewDidLoadUpdateViews,
-             "PrimaryToolbarViewDidLoadUpdateViews",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 @interface PrimaryToolbarViewController () <TabGroupIndicatorViewDelegate>
@@ -100,14 +99,6 @@ BASE_FEATURE(kPrimaryToolbarViewDidLoadUpdateViews,
 - (void)updateBackgroundColor {
   UIColor* backgroundColor =
       self.buttonFactory.toolbarConfiguration.backgroundColor;
-  if (base::FeatureList::IsEnabled(kThemeColorInTopToolbar) &&
-      !self.hasOmnibox) {
-    if (self.pageThemeColor) {
-      backgroundColor = self.pageThemeColor;
-    } else if (self.underPageBackgroundColor) {
-      backgroundColor = self.underPageBackgroundColor;
-    }
-  }
   self.view.backgroundColor = backgroundColor;
 }
 
@@ -172,35 +163,20 @@ BASE_FEATURE(kPrimaryToolbarViewDidLoadUpdateViews,
       [self verticalMarginForLocationBarForFullscreenProgress:1];
 }
 
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  // iOS 17 and later introduce a new way to handle trait changes. If the OS
-  // version is iOS 17 or later, we skip the old way of updating views.
-  if (@available(iOS 17, *)) {
-    return;
-  }
-  [self updateViews:self.view previousTraitCollection:previousTraitCollection];
-}
-#endif
-
 - (void)viewDidLoad {
   [super viewDidLoad];
 
-  // On iOS 17 and later, we register for specific trait changes (vertical and
-  // horizontal size classes) and provide a handler method
+  // We register for specific trait changes (vertical and horizontal size
+  // classes) and provide a handler method
   // `updateViews:previousTraitCollection:` to be called when those traits
   // change.
-  if (@available(iOS 17, *)) {
-    [self registerForTraitChanges:@[
-      UITraitVerticalSizeClass.class, UITraitHorizontalSizeClass.class
-    ]
-                       withAction:@selector(updateViews:
-                                      previousTraitCollection:)];
-    // TODO(crbug.com/374808149): Clean up the killswitch.
-    if (base::FeatureList::IsEnabled(kPrimaryToolbarViewDidLoadUpdateViews)) {
-      [self updateViews:self.view previousTraitCollection:nil];
-    }
+  [self
+      registerForTraitChanges:
+          @[ UITraitVerticalSizeClass.class, UITraitHorizontalSizeClass.class ]
+                   withAction:@selector(updateViews:previousTraitCollection:)];
+  // TODO(crbug.com/374808149): Clean up the killswitch.
+  if (base::FeatureList::IsEnabled(kPrimaryToolbarViewDidLoadUpdateViews)) {
+    [self updateViews:self.view previousTraitCollection:nil];
   }
 }
 

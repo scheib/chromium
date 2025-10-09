@@ -32,15 +32,11 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.pwd_check_wrapper.PasswordCheckController.PasswordCheckResult;
 import org.chromium.chrome.browser.pwd_check_wrapper.PasswordCheckController.PasswordStorageType;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
-import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.sync.SyncService;
 import org.chromium.components.sync.UserSelectableType;
-import org.chromium.components.user_prefs.UserPrefs;
-import org.chromium.components.user_prefs.UserPrefsJni;
 import org.chromium.google_apis.gaia.GaiaId;
 
-import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -57,8 +53,6 @@ public class GmsCorePasswordCheckControllerTest {
     @Mock private SyncService mSyncService;
     @Mock private PasswordStoreBridge mPasswordStoreBridge;
     @Mock private Profile mProfile;
-    @Mock private UserPrefs.Natives mUserPrefsJniMock;
-    @Mock private PrefService mPrefService;
     @Mock private PasswordManagerUtilBridge.Natives mPasswordManagerUtilBridgeNativeMock;
     @Mock private PasswordManagerHelper.Natives mPasswordManagerHelperNativeMock;
     FakePasswordCheckupClientHelper mPasswordCheckupClientHelper;
@@ -67,7 +61,7 @@ public class GmsCorePasswordCheckControllerTest {
 
     @Before
     public void setUp() {
-        setupUserProfileWithMockPrefService();
+        when(mProfile.getOriginalProfile()).thenReturn(mProfile);
         configureMockSyncServiceToSyncPasswords();
         configurePasswordManagerBackendSupport();
         setFakePasswordCheckupClientHelper();
@@ -81,7 +75,7 @@ public class GmsCorePasswordCheckControllerTest {
     private void configurePasswordManagerBackendSupport() {
         PasswordManagerUtilBridgeJni.setInstanceForTesting(mPasswordManagerUtilBridgeNativeMock);
         PasswordManagerHelperJni.setInstanceForTesting(mPasswordManagerHelperNativeMock);
-        when(mPasswordManagerUtilBridgeNativeMock.isPasswordManagerAvailable(mPrefService, true))
+        when(mPasswordManagerUtilBridgeNativeMock.isPasswordManagerAvailable(true))
                 .thenReturn(true);
 
         FakePasswordManagerBackendSupportHelper helper =
@@ -110,12 +104,6 @@ public class GmsCorePasswordCheckControllerTest {
         PasswordCheckupClientHelperFactory.setFactoryForTesting(passwordCheckupClientHelperFactory);
     }
 
-    private void setupUserProfileWithMockPrefService() {
-        when(mProfile.getOriginalProfile()).thenReturn(mProfile);
-        UserPrefsJni.setInstanceForTesting(mUserPrefsJniMock);
-        when(mUserPrefsJniMock.get(mProfile)).thenReturn(mPrefService);
-    }
-
     /**
      * The flow: checkPasswords is called -> as a result of password check 0 breached credentials
      * are obtained -> 10 passwords overall have been loaded.
@@ -134,9 +122,9 @@ public class GmsCorePasswordCheckControllerTest {
         PasswordCheckResult passwordCheckResult =
                 mController.checkPasswords(PasswordStorageType.ACCOUNT_STORAGE).get();
 
-        Assert.assertEquals(OptionalInt.of(0), passwordCheckResult.getBreachedCount());
+        Assert.assertEquals(0, passwordCheckResult.getBreachedCount().intValue());
         Assert.assertEquals(
-                OptionalInt.of(totalPasswords), passwordCheckResult.getTotalPasswordsCount());
+                totalPasswords, passwordCheckResult.getTotalPasswordsCount().intValue());
         Assert.assertEquals(null, passwordCheckResult.getError());
     }
 
@@ -155,8 +143,8 @@ public class GmsCorePasswordCheckControllerTest {
         PasswordCheckResult passwordCheckResult =
                 mController.checkPasswords(PasswordStorageType.ACCOUNT_STORAGE).get();
 
-        Assert.assertEquals(OptionalInt.of(0), passwordCheckResult.getBreachedCount());
-        Assert.assertEquals(OptionalInt.of(0), passwordCheckResult.getTotalPasswordsCount());
+        Assert.assertEquals(0, passwordCheckResult.getBreachedCount().intValue());
+        Assert.assertEquals(0, passwordCheckResult.getTotalPasswordsCount().intValue());
         Assert.assertEquals(null, passwordCheckResult.getError());
     }
 
@@ -171,8 +159,8 @@ public class GmsCorePasswordCheckControllerTest {
         PasswordCheckResult passwordCheckResult =
                 mController.checkPasswords(PasswordStorageType.LOCAL_STORAGE).get();
 
-        Assert.assertEquals(OptionalInt.empty(), passwordCheckResult.getBreachedCount());
-        Assert.assertEquals(OptionalInt.empty(), passwordCheckResult.getTotalPasswordsCount());
+        Assert.assertNull(passwordCheckResult.getBreachedCount());
+        Assert.assertNull(passwordCheckResult.getTotalPasswordsCount());
         Assert.assertEquals(error, passwordCheckResult.getError());
     }
 
@@ -197,10 +185,9 @@ public class GmsCorePasswordCheckControllerTest {
         PasswordCheckResult passwordCheckResultAccount =
                 mController.checkPasswords(PasswordStorageType.ACCOUNT_STORAGE).get();
 
-        Assert.assertEquals(OptionalInt.of(0), passwordCheckResultLocal.getBreachedCount());
-        Assert.assertEquals(OptionalInt.of(0), passwordCheckResultLocal.getTotalPasswordsCount());
-        Assert.assertEquals(OptionalInt.of(0), passwordCheckResultAccount.getBreachedCount());
-        Assert.assertEquals(
-                OptionalInt.of(10), passwordCheckResultAccount.getTotalPasswordsCount());
+        Assert.assertEquals(0, passwordCheckResultLocal.getBreachedCount().intValue());
+        Assert.assertEquals(0, passwordCheckResultLocal.getTotalPasswordsCount().intValue());
+        Assert.assertEquals(0, passwordCheckResultAccount.getBreachedCount().intValue());
+        Assert.assertEquals(10, passwordCheckResultAccount.getTotalPasswordsCount().intValue());
     }
 }

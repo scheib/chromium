@@ -8,12 +8,12 @@
 #include <string_view>
 
 #include "base/base64.h"
+#include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/types/cxx23_to_underlying.h"
 #include "base/values.h"
 #include "chrome/browser/actor/execution_engine.h"
 #include "chrome/browser/actor/shared_types.h"
-#include "chrome/browser/actor/task_id.h"
 #include "chrome/browser/actor/tools/attempt_login_tool_request.h"
 #include "chrome/browser/actor/tools/click_tool_request.h"
 #include "chrome/browser/actor/tools/drag_and_release_tool_request.h"
@@ -31,6 +31,7 @@
 #include "chrome/common/actor.mojom.h"
 #include "chrome/common/actor/action_result.h"
 #include "chrome/common/actor/actor_constants.h"
+#include "chrome/common/actor/task_id.h"
 #include "components/optimization_guide/content/browser/page_content_proto_provider.h"
 #include "components/optimization_guide/core/filters/bloom_filter.h"
 #include "components/optimization_guide/core/optimization_guide_switches.h"
@@ -49,9 +50,14 @@ using ::content::RenderFrameHost;
 using ::content::WebContents;
 using ::optimization_guide::DocumentIdentifierUserData;
 using ::optimization_guide::proto::Actions;
+using ::optimization_guide::proto::ActivateWindowAction;
 using ::optimization_guide::proto::ClickAction;
+using ClickType = ::optimization_guide::proto::ClickAction::ClickType;
+using ClickCount = ::optimization_guide::proto::ClickAction::ClickCount;
+using ::optimization_guide::proto::CloseWindowAction;
 using ::optimization_guide::proto::Coordinate;
 using ::optimization_guide::proto::CreateTabAction;
+using ::optimization_guide::proto::CreateWindowAction;
 using ::optimization_guide::proto::DragAndReleaseAction;
 using ::optimization_guide::proto::HistoryBackAction;
 using ::optimization_guide::proto::HistoryForwardAction;
@@ -61,35 +67,45 @@ using ::optimization_guide::proto::ScrollAction;
 using ::optimization_guide::proto::ScrollToAction;
 using ::optimization_guide::proto::SelectAction;
 using ::optimization_guide::proto::TypeAction;
-using ::optimization_guide::proto::TypeAction_TypeMode;
 using tabs::TabHandle;
 using tabs::TabInterface;
 
-Actions MakeClick(RenderFrameHost& rfh, int content_node_id) {
+namespace {
+TabHandle GetTabHandleForFrame(content::RenderFrameHost& rfh) {
+  auto* tab = TabInterface::GetFromContents(
+      content::WebContents::FromRenderFrameHost(&rfh));
+  CHECK(tab);
+  return tab->GetHandle();
+}
+}  // namespace
+
+Actions MakeClick(RenderFrameHost& rfh,
+                  int content_node_id,
+                  ClickType click_type,
+                  ClickCount click_count) {
   Actions actions;
   ClickAction* click = actions.add_actions()->mutable_click();
   click->mutable_target()->set_content_node_id(content_node_id);
   click->mutable_target()->mutable_document_identifier()->set_serialized_token(
       *DocumentIdentifierUserData::GetDocumentIdentifier(
           rfh.GetGlobalFrameToken()));
-  click->set_click_type(ClickAction::LEFT);
-  click->set_click_count(ClickAction::SINGLE);
-
-  auto* tab = TabInterface::GetFromContents(
-      content::WebContents::FromRenderFrameHost(&rfh));
-  click->set_tab_id(tab->GetHandle().raw_value());
-
+  click->set_click_type(click_type);
+  click->set_click_count(click_count);
+  click->set_tab_id(GetTabHandleForFrame(rfh).raw_value());
   return actions;
 }
 
-Actions MakeClick(TabHandle tab_handle, const gfx::Point& click_point) {
+Actions MakeClick(TabHandle tab_handle,
+                  const gfx::Point& click_point,
+                  ClickType click_type,
+                  ClickCount click_count) {
   Actions actions;
   ClickAction* click = actions.add_actions()->mutable_click();
   Coordinate* coordinate = click->mutable_target()->mutable_coordinate();
   coordinate->set_x(click_point.x());
   coordinate->set_y(click_point.y());
-  click->set_click_type(ClickAction::LEFT);
-  click->set_click_count(ClickAction::SINGLE);
+  click->set_click_type(click_type);
+  click->set_click_count(click_count);
   click->set_tab_id(tab_handle.raw_value());
   return actions;
 }
@@ -115,15 +131,17 @@ Actions MakeMouseMove(RenderFrameHost& rfh, int content_node_id) {
   move->mutable_target()->mutable_document_identifier()->set_serialized_token(
       *DocumentIdentifierUserData::GetDocumentIdentifier(
           rfh.GetGlobalFrameToken()));
+  move->set_tab_id(GetTabHandleForFrame(rfh).raw_value());
   return actions;
 }
 
-Actions MakeMouseMove(const gfx::Point& move_point) {
+Actions MakeMouseMove(TabHandle tab_handle, const gfx::Point& move_point) {
   Actions actions;
   MoveMouseAction* move = actions.add_actions()->mutable_move_mouse();
   Coordinate* coordinate = move->mutable_target()->mutable_coordinate();
   coordinate->set_x(move_point.x());
   coordinate->set_y(move_point.y());
+  move->set_tab_id(tab_handle.raw_value());
   return actions;
 }
 
@@ -143,10 +161,38 @@ Actions MakeCreateTab(SessionID window_id, bool foreground) {
   return actions;
 }
 
+Actions MakeActivateWindow(SessionID window_id) {
+  Actions actions;
+  ActivateWindowAction* activate_window =
+      actions.add_actions()->mutable_activate_window();
+  activate_window->set_window_id(window_id.id());
+  return actions;
+}
+
+Actions MakeCreateWindow() {
+  Actions actions;
+  actions.add_actions()->mutable_create_window();
+  return actions;
+}
+
+Actions MakeCloseWindow(SessionID window_id) {
+  Actions actions;
+  CloseWindowAction* close_window =
+      actions.add_actions()->mutable_close_window();
+  close_window->set_window_id(window_id.id());
+  return actions;
+}
+
 Actions MakeType(RenderFrameHost& rfh,
                  int content_node_id,
                  std::string_view text,
-                 bool follow_by_enter) {
+                 bool follow_by_enter,
+                 optimization_guide::proto::TypeAction::TypeMode mode) {
+  // TODO(crbug.com/417270084): TypeAction currently only supports the
+  // DELETE_EXISTING mode.
+  CHECK_EQ(mode, optimization_guide::proto::TypeAction::TypeMode::
+                     TypeAction_TypeMode_DELETE_EXISTING);
+
   Actions actions;
   TypeAction* type_action = actions.add_actions()->mutable_type();
   type_action->mutable_target()->set_content_node_id(content_node_id);
@@ -155,16 +201,17 @@ Actions MakeType(RenderFrameHost& rfh,
       ->set_serialized_token(*DocumentIdentifierUserData::GetDocumentIdentifier(
           rfh.GetGlobalFrameToken()));
   type_action->set_text(text);
-  // TODO(crbug.com/409570203): Tests should set a mode.
-  type_action->set_mode(
-      TypeAction_TypeMode::TypeAction_TypeMode_UNKNOWN_TYPE_MODE);
+  type_action->set_mode(mode);
   type_action->set_follow_by_enter(follow_by_enter);
+  type_action->set_tab_id(GetTabHandleForFrame(rfh).raw_value());
   return actions;
 }
 
-Actions MakeType(const gfx::Point& type_point,
+Actions MakeType(TabHandle tab_handle,
+                 const gfx::Point& type_point,
                  std::string_view text,
-                 bool follow_by_enter) {
+                 bool follow_by_enter,
+                 optimization_guide::proto::TypeAction::TypeMode mode) {
   Actions actions;
   TypeAction* type_action = actions.add_actions()->mutable_type();
   Coordinate* coordinate = type_action->mutable_target()->mutable_coordinate();
@@ -172,9 +219,10 @@ Actions MakeType(const gfx::Point& type_point,
   coordinate->set_y(type_point.y());
   type_action->set_text(text);
   // TODO(crbug.com/409570203): Tests should set a mode.
-  type_action->set_mode(
-      TypeAction_TypeMode::TypeAction_TypeMode_UNKNOWN_TYPE_MODE);
+  // Currently uses DELETE_EXISTING behavior in all cases.
+  type_action->set_mode(mode);
   type_action->set_follow_by_enter(follow_by_enter);
+  type_action->set_tab_id(tab_handle.raw_value());
   return actions;
 }
 
@@ -186,6 +234,9 @@ Actions MakeScroll(RenderFrameHost& rfh,
       << "Scroll action supports only one axis at a time.";
   Actions actions;
   ScrollAction* scroll = actions.add_actions()->mutable_scroll();
+  auto* tab = TabInterface::GetFromContents(
+      content::WebContents::FromRenderFrameHost(&rfh));
+  scroll->set_tab_id(tab->GetHandle().raw_value());
 
   if (content_node_id.has_value()) {
     scroll->mutable_target()->set_content_node_id(content_node_id.value());
@@ -219,6 +270,9 @@ Actions MakeScroll(RenderFrameHost& rfh,
 Actions MakeScrollTo(RenderFrameHost& rfh, int content_node_id) {
   Actions actions;
   ScrollToAction* scroll_to = actions.add_actions()->mutable_scroll_to();
+  auto* tab = TabInterface::GetFromContents(
+      content::WebContents::FromRenderFrameHost(&rfh));
+  scroll_to->set_tab_id(tab->GetHandle().raw_value());
   scroll_to->mutable_target()->set_content_node_id(content_node_id);
   scroll_to->mutable_target()
       ->mutable_document_identifier()
@@ -238,10 +292,12 @@ Actions MakeSelect(RenderFrameHost& rfh,
       ->set_serialized_token(*DocumentIdentifierUserData::GetDocumentIdentifier(
           rfh.GetGlobalFrameToken()));
   select_action->set_value(value);
+  select_action->set_tab_id(GetTabHandleForFrame(rfh).raw_value());
   return actions;
 }
 
-Actions MakeDragAndRelease(const gfx::Point& from_point,
+Actions MakeDragAndRelease(tabs::TabHandle tab_handle,
+                           const gfx::Point& from_point,
                            const gfx::Point& to_point) {
   Actions actions;
   DragAndReleaseAction* drag_and_release =
@@ -254,6 +310,30 @@ Actions MakeDragAndRelease(const gfx::Point& from_point,
       to_point.x());
   drag_and_release->mutable_to_target()->mutable_coordinate()->set_y(
       to_point.y());
+  drag_and_release->set_tab_id(tab_handle.raw_value());
+  return actions;
+}
+
+Actions MakeDragAndRelease(content::RenderFrameHost& rfh,
+                           int from_node_id,
+                           int to_node_id) {
+  Actions actions;
+  DragAndReleaseAction* drag_and_release =
+      actions.add_actions()->mutable_drag_and_release();
+
+  drag_and_release->mutable_from_target()->set_content_node_id(from_node_id);
+  drag_and_release->mutable_from_target()
+      ->mutable_document_identifier()
+      ->set_serialized_token(*DocumentIdentifierUserData::GetDocumentIdentifier(
+          rfh.GetGlobalFrameToken()));
+
+  drag_and_release->mutable_to_target()->set_content_node_id(to_node_id);
+  drag_and_release->mutable_to_target()
+      ->mutable_document_identifier()
+      ->set_serialized_token(*DocumentIdentifierUserData::GetDocumentIdentifier(
+          rfh.GetGlobalFrameToken()));
+
+  drag_and_release->set_tab_id(GetTabHandleForFrame(rfh).raw_value());
   return actions;
 }
 
@@ -269,13 +349,6 @@ Actions MakeAttemptLogin() {
   return actions;
 }
 
-TabHandle GetTab(content::RenderFrameHost& rfh) {
-  auto* tab = TabInterface::GetFromContents(
-      content::WebContents::FromRenderFrameHost(&rfh));
-  CHECK(tab);
-  return tab->GetHandle();
-}
-
 Actions MakeScriptTool(content::RenderFrameHost& rfh,
                        const std::string& name,
                        const std::string& input_arguments) {
@@ -287,7 +360,7 @@ Actions MakeScriptTool(content::RenderFrameHost& rfh,
   script_tool->set_tool_name(name);
   script_tool->set_input_arguments(input_arguments);
 
-  script_tool->set_tab_id(GetTab(rfh).raw_value());
+  script_tool->set_tab_id(GetTabHandleForFrame(rfh).raw_value());
 
   return action;
 }
@@ -307,8 +380,8 @@ PageTarget MakeTarget(const gfx::Point& point) {
 std::unique_ptr<ToolRequest> MakeClickRequest(content::RenderFrameHost& rfh,
                                               int content_node_id) {
   return std::make_unique<ClickToolRequest>(
-      GetTab(rfh), MakeTarget(rfh, content_node_id), MouseClickType::kLeft,
-      MouseClickCount::kSingle);
+      GetTabHandleForFrame(rfh), MakeTarget(rfh, content_node_id),
+      MouseClickType::kLeft, MouseClickCount::kSingle);
 }
 
 std::unique_ptr<ToolRequest> MakeClickRequest(TabInterface& tab,
@@ -331,7 +404,7 @@ std::unique_ptr<ToolRequest> MakeHistoryForwardRequest(TabInterface& tab) {
 std::unique_ptr<ToolRequest> MakeMouseMoveRequest(content::RenderFrameHost& rfh,
                                                   int content_node_id) {
   return std::make_unique<MoveMouseToolRequest>(
-      GetTab(rfh), MakeTarget(rfh, content_node_id));
+      GetTabHandleForFrame(rfh), MakeTarget(rfh, content_node_id));
 }
 
 std::unique_ptr<ToolRequest> MakeMouseMoveRequest(
@@ -351,8 +424,8 @@ std::unique_ptr<ToolRequest> MakeTypeRequest(content::RenderFrameHost& rfh,
                                              bool follow_by_enter) {
   // TODO(crbug.com/409570203): Tests should set a mode.
   return std::make_unique<TypeToolRequest>(
-      GetTab(rfh), MakeTarget(rfh, content_node_id), text, follow_by_enter,
-      TypeToolRequest::Mode::kReplace);
+      GetTabHandleForFrame(rfh), MakeTarget(rfh, content_node_id), text,
+      follow_by_enter, TypeToolRequest::Mode::kReplace);
 }
 std::unique_ptr<ToolRequest> MakeTypeRequest(TabInterface& tab,
                                              const gfx::Point& type_point,
@@ -366,7 +439,7 @@ std::unique_ptr<ToolRequest> MakeSelectRequest(content::RenderFrameHost& rfh,
                                                int content_node_id,
                                                std::string_view value) {
   return std::make_unique<SelectToolRequest>(
-      GetTab(rfh), MakeTarget(rfh, content_node_id), value);
+      GetTabHandleForFrame(rfh), MakeTarget(rfh, content_node_id), value);
 }
 
 std::unique_ptr<ToolRequest> MakeScrollRequest(
@@ -397,12 +470,12 @@ std::unique_ptr<ToolRequest> MakeScrollRequest(
   }
 
   return std::make_unique<ScrollToolRequest>(
-      GetTab(rfh), MakeTarget(rfh, node_id), direction, distance);
+      GetTabHandleForFrame(rfh), MakeTarget(rfh, node_id), direction, distance);
 }
 std::unique_ptr<ToolRequest> MakeScrollToRequest(content::RenderFrameHost& rfh,
                                                  int content_node_id) {
   return std::make_unique<ScrollToToolRequest>(
-      GetTab(rfh), MakeTarget(rfh, content_node_id));
+      GetTabHandleForFrame(rfh), MakeTarget(rfh, content_node_id));
 }
 std::unique_ptr<ToolRequest> MakeDragAndReleaseRequest(
     TabInterface& tab,
@@ -433,7 +506,7 @@ std::unique_ptr<ToolRequest> MakeScriptToolRequest(
     const std::string& name,
     const std::string& input_arguments) {
   return std::make_unique<ScriptToolRequest>(
-      GetTab(rfh), MakeTarget(rfh, kRootElementDomNodeId), name,
+      GetTabHandleForFrame(rfh), MakeTarget(rfh, kRootElementDomNodeId), name,
       input_arguments);
 }
 
@@ -457,6 +530,11 @@ void ExpectOkResult(base::test::TestFuture<mojom::ActionResultPtr>& future) {
 void ExpectOkResult(ActResultFuture& future) {
   const auto& result = *(future.Get<0>());
   ExpectOkResult(result);
+}
+
+void ExpectOkResult(PerformActionsFuture& future) {
+  const auto& result = future.Get<0>();
+  EXPECT_TRUE(IsOk(result)) << "Expected OK result, got " << result;
 }
 
 void ExpectErrorResult(ActResultFuture& future,

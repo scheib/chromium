@@ -6,186 +6,127 @@
 
 #include "base/callback_list.h"
 #include "base/functional/bind.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
+#include "chrome/browser/ui/tabs/tab_strip_api/tab_strip_service.h"
 #include "chrome/browser/ui/tabs/vertical_tab_strip_state_controller.h"
+#include "chrome/browser/ui/views/tabs/vertical/root_tab_collection_node.h"
+#include "chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_top_container.h"
+#include "chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_view.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/resize_area.h"
+#include "ui/views/controls/scroll_view.h"
 #include "ui/views/controls/separator.h"
-#include "ui/views/layout/delegating_layout_manager.h"
+#include "ui/views/layout/flex_layout.h"
+#include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/layout/layout_types.h"
-#include "ui/views/layout/proposed_layout.h"
 #include "ui/views/view.h"
 #include "ui/views/view_class_properties.h"
+#include "ui/views/view_utils.h"
 
 namespace {
-constexpr int kRegionVeritcalInteriorMargin = 8;
+constexpr gfx::Insets kRegionInteriorMargins = gfx::Insets::VH(8, 0);
+
 constexpr int kRegionVerticalPadding = 5;
-constexpr int kRegionHorizontalPadding = 12;
 }  // namespace
 
 VerticalTabStripRegionView::VerticalTabStripRegionView(
-    tabs::VerticalTabStripStateController* state_controller) {
+    tabs_api::TabStripService* service_register,
+    tabs::VerticalTabStripStateController* state_controller,
+    actions::ActionItem* root_action_item)
+    : state_controller_(state_controller) {
   SetBackground(views::CreateSolidBackground(ui::kColorFrameActive));
-  SetLayoutManager(std::make_unique<views::DelegatingLayoutManager>(this));
+  SetLayoutManager(std::make_unique<views::FlexLayout>())
+      ->SetOrientation(views::LayoutOrientation::kVertical)
+      .SetInteriorMargin(kRegionInteriorMargins)
+      .SetCollapseMargins(true)
+      .SetDefault(views::kMarginsKey,
+                  gfx::Insets::VH(
+                      kRegionVerticalPadding,
+                      GetLayoutConstant(VERTICAL_TAB_STRIP_HORIZONTAL_PADDING)))
+      .SetDefault(
+          views::kFlexBehaviorKey,
+          views::FlexSpecification(views::MinimumFlexSizeRule::kPreferred,
+                                   views::MaximumFlexSizeRule::kPreferred));
 
   // Create child views.
-  top_button_container_ = AddChildView(std::make_unique<views::View>());
+  top_button_container_ =
+      AddChildView(std::make_unique<VerticalTabStripTopContainer>(
+          state_controller, root_action_item));
 
   top_button_separator_ = AddChildView(std::make_unique<views::Separator>());
   top_button_separator_->SetColorId(kColorTabDividerFrameActive);
-
-  pinned_tabs_container_ = AddChildView(std::make_unique<views::View>());
-
-  auto tabs_separator = std::make_unique<views::Separator>();
-  tabs_separator->SetColorId(kColorTabDividerFrameActive);
-  // The tabs separator is only visible if in the collapsed state.
-  tabs_separator->SetVisible(state_controller->IsCollapsed());
-  tabs_separator_ = AddChildView(std::move(tabs_separator));
-
-  unpinned_tabs_container_ = AddChildView(std::make_unique<views::View>());
 
   segmented_button_ = AddChildView(std::make_unique<views::View>());
 
   gemini_button_ = AddChildView(std::make_unique<views::View>());
 
   resize_area_ = AddChildView(std::make_unique<views::ResizeArea>(this));
+  resize_area_->SetProperty(views::kViewIgnoredByLayoutKey, true);
 
   collapsed_state_changed_subscription_ =
       state_controller->RegisterOnStateChanged(base::BindRepeating(
           &VerticalTabStripRegionView::OnCollapsedStateChanged,
           base::Unretained(this)));
+
+  SetProperty(views::kElementIdentifierKey, kVerticalTabStripRegionElementId);
+
+  root_node_ = std::make_unique<RootTabCollectionNode>(
+      service_register, this,
+      base::BindRepeating(&VerticalTabStripRegionView::SetTabStripView,
+                          base::Unretained(this)));
 }
 
 VerticalTabStripRegionView::~VerticalTabStripRegionView() = default;
 
-views::ProposedLayout VerticalTabStripRegionView::CalculateProposedLayout(
-    const views::SizeBounds& size_bounds) const {
-  views::ProposedLayout layouts;
-  if (!size_bounds.is_fully_bounded()) {
-    return layouts;
-  }
-  views::SizeBounds default_size_bounds = size_bounds.Inset(
-      gfx::Insets::VH(kRegionVeritcalInteriorMargin, kRegionHorizontalPadding));
-  views::SizeBounds tab_container_size_bounds = size_bounds.Inset(
-      gfx::Insets::TLBR(kRegionVeritcalInteriorMargin, kRegionHorizontalPadding,
-                        kRegionVeritcalInteriorMargin, 0));
+void VerticalTabStripRegionView::Layout(PassKey) {
+  LayoutSuperclass<views::AccessiblePaneView>(this);
 
-  int y = kRegionVeritcalInteriorMargin;
-
-  // First place all top views with fixed sizes.
-  // Place |top_button_container_|.
-  gfx::Rect top_container_bounds(
-      kRegionHorizontalPadding, y, default_size_bounds.width().value(),
-      top_button_container_->GetPreferredSize(default_size_bounds).height());
-  layouts.child_layouts.emplace_back(top_button_container_.get(),
-                                     top_button_container_->GetVisible(),
-                                     top_container_bounds);
-
-  y += top_container_bounds.height() + kRegionVerticalPadding;
-
-  // Place the |top_button_separator_|.
-  gfx::Rect top_button_separator_bounds(
-      kRegionHorizontalPadding, y, default_size_bounds.width().value(),
-      top_button_separator_->GetPreferredSize(default_size_bounds).height());
-  layouts.child_layouts.emplace_back(top_button_separator_.get(),
-                                     top_button_separator_->GetVisible(),
-                                     top_button_separator_bounds);
-
-  y += top_button_separator_bounds.height() + kRegionVerticalPadding;
-
-  // Next place all the bottom views with fixed sizes.
-  int bottom = size_bounds.height().value() - kRegionVeritcalInteriorMargin;
-
-  // // Place the |gemini_button_|.
-  int gemini_button_height =
-      gemini_button_->GetPreferredSize(default_size_bounds).height();
-  gfx::Rect gemini_button_bounds(
-      kRegionHorizontalPadding, bottom - gemini_button_height,
-      default_size_bounds.width().value(), gemini_button_height);
-  layouts.child_layouts.emplace_back(
-      gemini_button_.get(), gemini_button_->GetVisible(), gemini_button_bounds);
-
-  bottom -= gemini_button_height + kRegionVerticalPadding;
-
-  // Place the |segmented_button_|.
-  int segmented_button_height =
-      segmented_button_->GetPreferredSize(default_size_bounds).height();
-  gfx::Rect segmented_button_bounds(
-      kRegionHorizontalPadding, bottom - segmented_button_height,
-      default_size_bounds.width().value(), segmented_button_height);
-  layouts.child_layouts.emplace_back(segmented_button_.get(),
-                                     segmented_button_->GetVisible(),
-                                     segmented_button_bounds);
-
-  bottom -= segmented_button_bounds.height() + kRegionVerticalPadding;
-
-  // Calculate the remaining available space and allocate it between the pinned
-  // and unpinned containers so that the pinned container will never take more
-  // than half of the remaining space.
-  int remaining_tabs_flex_height = bottom - y - kRegionVerticalPadding;
-  if (tabs_separator_->GetVisible()) {
-    remaining_tabs_flex_height -=
-        tabs_separator_->GetPreferredSize(default_size_bounds).height() +
-        kRegionVerticalPadding;
-  }
-
-  // Place the pinned container.
-  gfx::Rect pinned_container_bounds(
-      kRegionHorizontalPadding, y, tab_container_size_bounds.width().value(),
-      pinned_tabs_container_->GetPreferredSize(tab_container_size_bounds)
-          .height());
-  pinned_container_bounds.set_height(std::min(
-      pinned_container_bounds.height(), (remaining_tabs_flex_height / 2)));
-  layouts.child_layouts.emplace_back(pinned_tabs_container_.get(),
-                                     pinned_tabs_container_->GetVisible(),
-                                     pinned_container_bounds);
-
-  remaining_tabs_flex_height -= pinned_container_bounds.height();
-  y += pinned_container_bounds.height() + kRegionVerticalPadding;
-
-  // Place the tabs separator if visible.
-  if (tabs_separator_->GetVisible()) {
-    gfx::Rect tabs_separator_bounds(
-        kRegionHorizontalPadding, y, default_size_bounds.width().value(),
-        tabs_separator_->GetPreferredSize(default_size_bounds).height());
-    layouts.child_layouts.emplace_back(tabs_separator_.get(),
-                                       tabs_separator_->GetVisible(),
-                                       tabs_separator_bounds);
-
-    y += tabs_separator_bounds.height() + kRegionVerticalPadding;
-  }
-
-  // Place the unpinned container.
-  gfx::Rect unpinned_container_bounds(kRegionHorizontalPadding, y,
-                                      tab_container_size_bounds.width().value(),
-                                      remaining_tabs_flex_height);
-  layouts.child_layouts.emplace_back(unpinned_tabs_container_.get(),
-                                     unpinned_tabs_container_->GetVisible(),
-                                     unpinned_container_bounds);
-
-  // Place the |resize_area_|.
-  gfx::Rect resize_area_bounds(size_bounds.width().value() - kResizeAreaWidth,
-                               0, kResizeAreaWidth,
-                               size_bounds.height().value());
-  layouts.child_layouts.emplace_back(
-      resize_area_.get(), resize_area_->GetVisible(), resize_area_bounds);
-
-  layouts.host_size =
-      gfx::Size(size_bounds.width().value(), size_bounds.height().value());
-  return layouts;
+  // Manually position the resize area as it overlaps views handled by the flex
+  // layout.
+  resize_area_->SetBoundsRect(gfx::Rect(bounds().right() - kResizeAreaWidth, 0,
+                                        kResizeAreaWidth, bounds().height()));
 }
 
 void VerticalTabStripRegionView::OnResize(int resize_amount,
                                           bool done_resizing) {}
 
+bool VerticalTabStripRegionView::IsPositionInWindowCaption(
+    const gfx::Point& point) {
+  // TODO(crbug.com/439961435): Add logic once buttons are present
+  if (GetTopContainer()->bounds().Contains(point)) {
+    return true;
+  }
+  return false;
+}
+
+views::View* VerticalTabStripRegionView::SetTabStripView(
+    std::unique_ptr<views::View> view) {
+  CHECK(views::IsViewClass<VerticalTabStripView>(view.get()));
+  tab_strip_view_ =
+      static_cast<VerticalTabStripView*>(AddChildView(std::move(view)));
+  tab_strip_view_->SetCollapsedState(state_controller_->IsCollapsed());
+  gfx::Insets tab_container_margins = gfx::Insets::TLBR(
+      kRegionVerticalPadding,
+      GetLayoutConstant(VERTICAL_TAB_STRIP_HORIZONTAL_PADDING),
+      kRegionVerticalPadding, 0);
+  tab_strip_view_->SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
+                               views::MaximumFlexSizeRule::kUnbounded));
+  tab_strip_view_->SetProperty(views::kMarginsKey, tab_container_margins);
+  std::optional<size_t> separator_index = GetIndexOf(top_button_separator_);
+  CHECK(separator_index.has_value());
+  ReorderChildView(tab_strip_view_, separator_index.value() + 1);
+  return tab_strip_view_;
+}
+
 void VerticalTabStripRegionView::OnCollapsedStateChanged(
     tabs::VerticalTabStripStateController* state_controller) {
-  if (state_controller->IsCollapsed() != tabs_separator_->GetVisible()) {
-    tabs_separator_->SetVisible(state_controller->IsCollapsed());
-  }
+  tab_strip_view_->SetCollapsedState(state_controller->IsCollapsed());
 }
 
 BEGIN_METADATA(VerticalTabStripRegionView)

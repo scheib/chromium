@@ -33,8 +33,9 @@ BASE_DECLARE_FEATURE(kNtpAlphaBackgroundCollections);
 BASE_DECLARE_FEATURE(kNtpBackgroundImageErrorDetection);
 BASE_DECLARE_FEATURE(kNtpCalendarModule);
 BASE_DECLARE_FEATURE(kNtpChromeCartModule);
+BASE_DECLARE_FEATURE(kNtpCustomizeChromePromo);
 BASE_DECLARE_FEATURE(kNtpDriveModule);
-BASE_DECLARE_FEATURE(kNtpDriveModuleNoSyncRequirement);
+BASE_DECLARE_FEATURE(kNtpDriveModuleHistorySyncRequirement);
 BASE_DECLARE_FEATURE(kNtpDriveModuleSegmentation);
 BASE_DECLARE_FEATURE(kNtpDriveModuleShowSixFiles);
 #if !defined(OFFICIAL_BUILD)
@@ -78,9 +79,11 @@ BASE_DECLARE_FEATURE(kNtpWallpaperSearchButtonAnimation);
 BASE_DECLARE_FEATURE(kNtpWallpaperSearchButtonAnimationShownThreshold);
 BASE_DECLARE_FEATURE(kNtpMobilePromo);
 BASE_DECLARE_FEATURE(kNtpMicrosoftAuthenticationModule);
+BASE_DECLARE_FEATURE(kNtpNextFeatures);
 BASE_DECLARE_FEATURE(kNtpOneGoogleBarAsyncBarParts);
 BASE_DECLARE_FEATURE(kNtpFooter);
 BASE_DECLARE_FEATURE(kNtpTabGroupsModule);
+BASE_DECLARE_FEATURE(kNtpTabGroupsModuleZeroState);
 
 // Parameter for controlling the luminosity difference for NTP elements on light
 // backgrounds.
@@ -188,6 +191,10 @@ extern const base::FeatureParam<base::TimeDelta>
 // window.
 extern const base::FeatureParam<base::TimeDelta>
     kNtpCalendarModuleWindowStartDeltaParam;
+// Parameter for the maximum number of times to show Customize Chrome IPH.
+extern const base::FeatureParam<int> kNtpCustomizeChromePromoIPHMaxCount;
+// Parameter for the maximum number of times to show Customize Chrome.
+extern const base::FeatureParam<int> kNtpCustomizeChromePromoShownMaxCount;
 // Parameter determining whether the existence of Outlook attachment pages
 // should be checked.
 extern const base::FeatureParam<bool>

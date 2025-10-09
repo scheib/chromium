@@ -16,6 +16,14 @@
 // expanded differently in some places. The macro has the following signature:
 // ACCOUNT_CAPABILITY(cpp_label, java_label, name).
 
+// Here we rely on build_config.h to not introduce any symbols that can be
+// textually inserted in the code. If that changes in the future, this header
+// should be removed from this file and included transitively instead.
+#include "build/build_config.h"
+
+// The server-side documentation and definition for a given capability can be
+// found at go/capability-alias (eg. go/capability-alias/ge2dinbnmnqxa).
+
 // clang-format off
 // keep-sorted start newline_separated=yes sticky_prefixes=#if group_prefixes=#endif
 // clang-format on
@@ -26,6 +34,12 @@ ACCOUNT_CAPABILITY(kCanFetchFamilyMemberInfoCapabilityName,
 ACCOUNT_CAPABILITY(kCanHaveEmailAddressDisplayedCapabilityName,
                    CAN_HAVE_EMAIL_ADDRESS_DISPLAYED_CAPABILITY_NAME,
                    "accountcapabilities/haytqlldmfya")
+
+#if !BUILDFLAG(IS_ANDROID)
+ACCOUNT_CAPABILITY(kCanMakeChromeSearchEngineChoiceScreenChoice,
+                   CAN_MAKE_CHROME_SEARCH_ENGINE_CHOICE_SCREEN_CHOICE,
+                   "accountcapabilities/ge4tenznmnqxa")
+#endif
 
 ACCOUNT_CAPABILITY(kCanRunChromePrivacySandboxTrialsCapabilityName,
                    CAN_RUN_CHROME_PRIVACY_SANDBOX_TRIALS_CAPABILITY_NAME,
@@ -88,6 +102,10 @@ ACCOUNT_CAPABILITY(kIsOptedInToParentalSupervisionCapabilityName,
                    IS_OPTED_IN_TO_PARENTAL_SUPERVISION_CAPABILITY_NAME,
                    "accountcapabilities/guzdslldmfya")
 
+ACCOUNT_CAPABILITY(kIsSubjectToAccountLevelEnterprisePoliciesCapabilityName,
+                   IS_SUBJECT_TO_ACCOUNT_LEVEL_ENTERPRISE_POLICIES_CAPABILITY_NAME,
+                   "accountcapabilities/ge4tgnznmnqxa")
+
 ACCOUNT_CAPABILITY(
     kIsSubjectToChromePrivacySandboxRestrictedMeasurementNotice,
     IS_SUBJECT_TO_CHROME_PRIVACY_SANDBOX_RESTRICTED_MEASUREMENT_NOTICE,
@@ -100,11 +118,5 @@ ACCOUNT_CAPABILITY(kIsSubjectToEnterprisePoliciesCapabilityName,
 ACCOUNT_CAPABILITY(kIsSubjectToParentalControlsCapabilityName,
                    IS_SUBJECT_TO_PARENTAL_CONTROLS_CAPABILITY_NAME,
                    "accountcapabilities/guydolldmfya")
-// keep-sorted end
 
-// TODO(crbug.com/435151047): Remove this once the capability is fully rolled
-// out.
-ACCOUNT_CAPABILITY_TEMPORARY_NOT_IOS(
-    kIsSubjectToAccountLevelEnterprisePoliciesCapabilityName,
-    IS_SUBJECT_TO_ACCOUNT_LEVEL_ENTERPRISE_POLICIES_CAPABILITY_NAME,
-    "accountcapabilities/ge4tgnznmnqxa")
+// keep-sorted end

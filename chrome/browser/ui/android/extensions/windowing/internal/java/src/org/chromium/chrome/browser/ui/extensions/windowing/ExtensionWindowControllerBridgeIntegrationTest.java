@@ -34,6 +34,7 @@ import org.chromium.chrome.test.transit.ntp.RegularNewTabPageStation;
 import org.chromium.chrome.test.transit.page.WebPageStation;
 import org.chromium.ui.base.DeviceFormFactor;
 
+import java.util.Collections;
 import java.util.List;
 
 @RunWith(ChromeJUnit4ClassRunner.class)
@@ -61,18 +62,57 @@ public class ExtensionWindowControllerBridgeIntegrationTest {
     @Test
     @MediumTest
     @MinAndroidSdkLevel(Build.VERSION_CODES.R)
+    @Restriction(DeviceFormFactor.TABLET_OR_DESKTOP /* Test needs "new window" in app menu. */)
+    public void startChromeTabbedActivity_openNewWindow_notifyExtensionInternalsOfWindowCreation() {
+        // Arrange:
+        // (1) Launch ChromeTabbedActivity (the first window).
+        // (2) Add a native WindowControllerListObserverForTesting to capture extension internal
+        // events.
+        WebPageStation webPageStation = mFreshCtaTransitTestRule.startOnBlankPage();
+        ExtensionWindowControllerBridgeImpl.addWindowControllerListObserverForTesting();
+
+        // Act: Open a new window.
+        RegularNewTabPageStation ntpStation =
+                webPageStation.openRegularTabAppMenu().openNewWindow();
+        int secondTaskId = ntpStation.getActivity().getTaskId();
+        var extensionWindowControllerBridge = getExtensionWindowControllerBridge(secondTaskId);
+        assertNotNull(extensionWindowControllerBridge);
+        var extensionWindowId = extensionWindowControllerBridge.getExtensionWindowIdForTesting();
+
+        // Assert.
+        var extensionInternalEvents =
+                ExtensionWindowControllerBridgeImpl.getExtensionInternalEventsForTesting()
+                        .get(extensionWindowId);
+        assertNotNull(extensionInternalEvents);
+        assertEquals(
+                ExtensionInternalWindowEventForTesting.CREATED,
+                (int) extensionInternalEvents.get(0));
+
+        // Cleanup.
+        ExtensionWindowControllerBridgeImpl.removeWindowControllerListObserverForTesting();
+        ntpStation.getActivity().finish();
+    }
+
+    @Test
+    @MediumTest
+    @MinAndroidSdkLevel(Build.VERSION_CODES.R)
     @Restriction(
             // Test needs "new window" in app menu and the tablet behavior to enter split screen
             // mode to trigger a window bounds change.
             DeviceFormFactor.ONLY_TABLET)
     public void
             startChromeTabbedActivity_triggerTaskBoundsChange_notifyExtensionWindowController() {
-        // Arrange: launch ChromeTabbedActivity (the first window).
+        // Arrange:
+        // (1) Launch ChromeTabbedActivity (the first window).
+        // (2) Add a native WindowControllerListObserverForTesting to capture extension internal
+        // events.
         WebPageStation webPageStation = mFreshCtaTransitTestRule.startOnBlankPage();
         int firstTaskId = mFreshCtaTransitTestRule.getActivity().getTaskId();
         var extensionWindowControllerBridge = getExtensionWindowControllerBridge(firstTaskId);
         assertNotNull(extensionWindowControllerBridge);
-        extensionWindowControllerBridge.addWindowControllerListObserverForTesting();
+        int firstExtensionWindowId =
+                extensionWindowControllerBridge.getExtensionWindowIdForTesting();
+        ExtensionWindowControllerBridgeImpl.addWindowControllerListObserverForTesting();
 
         // Act: Open a new window.
         // On tablets, this will enter split screen mode and trigger a window bounds change for the
@@ -86,14 +126,71 @@ public class ExtensionWindowControllerBridgeIntegrationTest {
 
         // Assert.
         var extensionInternalEvents =
-                extensionWindowControllerBridge.getExtensionInternalEventsForTesting();
-        assertEquals(1, extensionInternalEvents.size());
-        assertEquals(
-                ExtensionInternalWindowEventForTesting.BOUNDS_CHANGED,
-                (int) extensionInternalEvents.get(0));
+                ExtensionWindowControllerBridgeImpl.getExtensionInternalEventsForTesting()
+                        .get(firstExtensionWindowId);
+        assertNotNull(extensionInternalEvents);
+        assertTrue(
+                extensionInternalEvents.contains(
+                        ExtensionInternalWindowEventForTesting.BOUNDS_CHANGED));
 
         // Cleanup.
-        extensionWindowControllerBridge.removeWindowControllerListObserverForTesting();
+        ExtensionWindowControllerBridgeImpl.removeWindowControllerListObserverForTesting();
+        ntpStation.getActivity().finish();
+    }
+
+    @Test
+    @MediumTest
+    @Restriction(DeviceFormFactor.TABLET_OR_DESKTOP /* Test needs "new window" in app menu. */)
+    public void startChromeTabbedActivity_triggerTaskFocusChange_notifyExtensionWindowController() {
+        // Arrange:
+        // (1) Launch ChromeTabbedActivity (the first window).
+        // (2) Add a native WindowControllerListObserverForTesting to capture extension internal
+        // events.
+        WebPageStation webPageStation = mFreshCtaTransitTestRule.startOnBlankPage();
+        int firstTaskId = mFreshCtaTransitTestRule.getActivity().getTaskId();
+        var firstExtensionWindowControllerBridge = getExtensionWindowControllerBridge(firstTaskId);
+        assertNotNull(firstExtensionWindowControllerBridge);
+        int firstExtensionWindowId =
+                firstExtensionWindowControllerBridge.getExtensionWindowIdForTesting();
+        ExtensionWindowControllerBridgeImpl.addWindowControllerListObserverForTesting();
+
+        // Act: Open a new window.
+        // This will cause the first window to lose focus and the second window to gain focus.
+        // Both focus change events should be captured.
+        RegularNewTabPageStation ntpStation =
+                webPageStation.openRegularTabAppMenu().openNewWindow();
+        int secondTaskId = ntpStation.getActivity().getTaskId();
+        var secondChromeAndroidTask = getChromeAndroidTask(secondTaskId);
+        assertNotNull(secondChromeAndroidTask);
+        CriteriaHelper.pollUiThread(secondChromeAndroidTask::isActive);
+        var secondExtensionWindowControllerBridge =
+                getExtensionWindowControllerBridge(secondTaskId);
+        assertNotNull(secondExtensionWindowControllerBridge);
+        var secondExtensionWindowId =
+                secondExtensionWindowControllerBridge.getExtensionWindowIdForTesting();
+
+        // Assert.
+        var extensionInternalEventsForFirstWindow =
+                ExtensionWindowControllerBridgeImpl.getExtensionInternalEventsForTesting()
+                        .get(firstExtensionWindowId);
+        assertNotNull(extensionInternalEventsForFirstWindow);
+        var extensionInternalEventsForSecondWindow =
+                ExtensionWindowControllerBridgeImpl.getExtensionInternalEventsForTesting()
+                        .get(secondExtensionWindowId);
+        assertNotNull(extensionInternalEventsForSecondWindow);
+        assertEquals(
+                1,
+                Collections.frequency(
+                        extensionInternalEventsForFirstWindow,
+                        ExtensionInternalWindowEventForTesting.FOCUS_LOST));
+        assertEquals(
+                1,
+                Collections.frequency(
+                        extensionInternalEventsForSecondWindow,
+                        ExtensionInternalWindowEventForTesting.FOCUS_OBTAINED));
+
+        // Cleanup.
+        ExtensionWindowControllerBridgeImpl.removeWindowControllerListObserverForTesting();
         ntpStation.getActivity().finish();
     }
 
@@ -124,6 +221,36 @@ public class ExtensionWindowControllerBridgeIntegrationTest {
 
         // Assert.
         assertEquals(0, extensionWindowControllerBridge.getNativePtrForTesting());
+    }
+
+    @Test
+    @MediumTest
+    public void destroyChromeTabbedActivity_notifyExtensionInternalsOfWindowDestruction() {
+        // Arrange:
+        // (1) Launch ChromeTabbedActivity (the first window).
+        // (2) Add a native WindowControllerListObserverForTesting to capture extension internal
+        // events.
+        mFreshCtaTransitTestRule.startOnBlankPage();
+        int taskId = mFreshCtaTransitTestRule.getActivity().getTaskId();
+        var extensionWindowControllerBridge = getExtensionWindowControllerBridge(taskId);
+        assertNotNull(extensionWindowControllerBridge);
+        var extensionWindowId = extensionWindowControllerBridge.getExtensionWindowIdForTesting();
+        ExtensionWindowControllerBridgeImpl.addWindowControllerListObserverForTesting();
+
+        // Act.
+        mFreshCtaTransitTestRule.finishActivity();
+
+        // Assert.
+        var extensionInternalEvents =
+                ExtensionWindowControllerBridgeImpl.getExtensionInternalEventsForTesting()
+                        .get(extensionWindowId);
+        assertNotNull(extensionInternalEvents);
+        assertEquals(
+                ExtensionInternalWindowEventForTesting.REMOVED,
+                (int) extensionInternalEvents.get(extensionInternalEvents.size() - 1));
+
+        // Cleanup.
+        ExtensionWindowControllerBridgeImpl.removeWindowControllerListObserverForTesting();
     }
 
     private @Nullable ChromeAndroidTask getChromeAndroidTask(int taskId) {

@@ -103,7 +103,10 @@ class LocalFrameMojoHandler
   void GetTextSurroundingSelection(
       uint32_t max_length,
       GetTextSurroundingSelectionCallback callback) final;
-  void SendInterventionReport(const String& id, const String& message) final;
+  void SendInterventionReport(
+      const String& id,
+      const String& message,
+      const std::optional<FrameToken>& child_frame_token) final;
   void SetFrameOwnerProperties(
       mojom::blink::FrameOwnerPropertiesPtr properties) final;
   void NotifyUserActivation(
@@ -111,7 +114,7 @@ class LocalFrameMojoHandler
   void NotifyVirtualKeyboardOverlayRect(const gfx::Rect& keyboard_rect) final;
   void ShowInterestInElement(int) final;
   void AddMessageToConsole(mojom::blink::ConsoleMessageLevel level,
-                           const WTF::String& message,
+                           const String& message,
                            bool discard_duplicates) final;
   void SwapInImmediately() final;
   void CheckCompleted() final;
@@ -209,8 +212,7 @@ class LocalFrameMojoHandler
       mojom::blink::NavigationApiEntryRestoreReason) final;
   void UpdatePrerenderURL(const KURL& matched_url,
                           UpdatePrerenderURLCallback callback) final;
-  void NotifyNavigationApiOfDisposedEntries(
-      const WTF::Vector<WTF::String>&) final;
+  void NotifyNavigationApiOfDisposedEntries(const Vector<String>&) final;
   void TraverseCancelled(const String& navigation_api_key,
                          mojom::blink::TraverseCancelledReason reason) final;
   void DispatchNavigateEventForCrossDocumentTraversal(
@@ -232,13 +234,13 @@ class LocalFrameMojoHandler
       base::TimeTicks request_start,
       base::TimeTicks response_start,
       uint32_t response_code,
-      const WTF::String& mime_type,
+      const String& mime_type,
       network::mojom::blink::LoadTimingInfoPtr load_timing_info,
       net::HttpConnectionInfo connection_info,
-      const WTF::String& alpn_negotiated_protocol,
+      const String& alpn_negotiated_protocol,
       bool is_secure_transport,
       bool is_validated,
-      const WTF::String& normalized_server_timing,
+      const String& normalized_server_timing,
       const ::network::URLLoaderCompletionStatus& completion_status) final;
   void GetScrollPosition(GetScrollPositionCallback callback) final;
 

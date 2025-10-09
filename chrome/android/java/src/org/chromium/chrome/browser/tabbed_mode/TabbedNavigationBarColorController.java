@@ -22,7 +22,6 @@ import org.chromium.base.Callback;
 import org.chromium.base.CallbackController;
 import org.chromium.base.ObserverList;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.EnsuresNonNullIf;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -51,14 +50,14 @@ import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils;
 import org.chromium.chrome.browser.ui.edge_to_edge.NavigationBarColorProvider;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeSupplier.ChangeObserver;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeSystemBarColorHelper;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeSupplier.ChangeObserver;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeSystemBarColorHelper;
 import org.chromium.ui.insets.InsetObserver;
 import org.chromium.ui.interpolators.Interpolators;
 import org.chromium.ui.util.ColorUtils;
 
-import java.util.Optional;
+import java.util.function.Supplier;
 
 /** Controls the bottom system navigation bar color for the provided {@link Window}. */
 @NullMarked
@@ -155,7 +154,7 @@ class TabbedNavigationBarColorController
             Supplier<SnackbarManager> snackbarManagerSupplier,
             ObservableSupplier<ContextualSearchManager> contextualSearchManagerSupplier,
             BottomSheetController bottomSheetController,
-            Optional<OmniboxSuggestionsVisualState> omniboxSuggestionsVisualState,
+            @Nullable OmniboxSuggestionsVisualState omniboxSuggestionsVisualState,
             ManualFillingComponentSupplier manualFillingComponentSupplier,
             ObservableSupplier<Integer> overviewColorSupplier,
             InsetObserver insetObserver,

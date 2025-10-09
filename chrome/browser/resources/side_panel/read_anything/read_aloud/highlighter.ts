@@ -4,64 +4,36 @@
 
 import {assert} from '//resources/js/assert.js';
 
-import {getCurrentSpeechRate, isRectVisible} from '../common.js';
-import {NodeStore} from '../node_store.js';
-import {isEspeak} from '../voice_language_util.js';
-
+import {MovementGranularity, PhraseHighlight, SentenceHighlight, WordHighlight} from './movement.js';
+import type {Highlight} from './movement.js';
+import {getReadAloudModel} from './read_aloud_model_browser_proxy.js';
+import type {ReadAloudModelBrowserProxy} from './read_aloud_model_browser_proxy.js';
+import type {Segment} from './read_aloud_types.js';
+import {getCurrentSpeechRate} from './speech_presentation_rules.js';
 import {VoiceLanguageController} from './voice_language_controller.js';
+import {isEspeak} from './voice_language_conversions.js';
 import {WordBoundaries} from './word_boundaries.js';
-
-// Characters that should be ignored for word highlighting when not accompanied
-// by other characters.
-const IGNORED_HIGHLIGHT_CHARACTERS_REGEX: RegExp = /^[.,!?'"(){}\[\]]+$/;
-
-export const previousReadHighlightClass = 'previous-read-highlight';
-export const currentReadHighlightClass = 'current-read-highlight';
-const PARENT_OF_HIGHLIGHT_CLASS = 'parent-of-highlight';
 
 // Manages state and drawing of visual highlights for read aloud.
 export class ReadAloudHighlighter {
-  private previousHighlights_: HTMLElement[] = [];
-  // Key: a DOM node that's already been read aloud
-  // Value: the index offset at which this node's text begins within its parent
-  // text. For reading aloud we sometimes split up nodes so the speech sounds
-  // more natural. When that text is then selected we need to pass the correct
-  // index down the pipeline, so we store that info here.
-  private highlightedNodeToOffsetInParent_: Map<Node, number> = new Map();
+  private previousGranularities_: MovementGranularity[] = [];
+  private currentGranularity_: MovementGranularity|null = null;
   private wordBoundaries_: WordBoundaries = WordBoundaries.getInstance();
-  private nodeStore_: NodeStore = NodeStore.getInstance();
   private allowAutoScroll_ = true;
   private voiceLanguageController_ = VoiceLanguageController.getInstance();
+  private readAloudModel_: ReadAloudModelBrowserProxy = getReadAloudModel();
 
-  hasCurrentHighlights(): boolean {
-    return this.previousHighlights_.some(
-        highlight => highlight.classList.contains(currentReadHighlightClass));
-  }
-
-  private getCurrentHighlights_(): HTMLElement[] {
-    return this.previousHighlights_.filter(
-        highlight => highlight.classList.contains(currentReadHighlightClass));
+  hasCurrentGranularity(): boolean {
+    return !!this.currentGranularity_;
   }
 
   updateAutoScroll(): void {
-    this.allowAutoScroll_ = isRectVisible(this.getCurrentHighlightBounds_());
-  }
-
-  getOffsetInAncestor(node: Node): number {
-    if (this.highlightedNodeToOffsetInParent_.has(node)) {
-      return this.highlightedNodeToOffsetInParent_.get(node)!;
-    }
-
-    return 0;
-  }
-
-  getAncestorId(node: Node): number|undefined {
-    const ancestor = this.getAncestor_(node);
-    return ancestor ? this.nodeStore_.getAxId(ancestor) : undefined;
+    this.allowAutoScroll_ =
+        !!this.currentGranularity_ && this.currentGranularity_.isVisible();
   }
 
   highlightCurrentGranularity(
-      axNodeIds: number[], scrollIntoView: boolean,
+      segments: Segment[], scrollIntoView: boolean,
       shouldUpdateSentenceHighlight: boolean): void {
     const highlightGranularity = this.getEffectiveHighlightingGranularity_();
     switch (highlightGranularity) {
@@ -75,7 +47,7 @@ export class ReadAloudHighlighter {
       // highlights have already been calculated.
       case chrome.readingMode.sentenceHighlighting:
         if (shouldUpdateSentenceHighlight) {
-          this.highlightCurrentSentence_(axNodeIds, scrollIntoView);
+          this.highlightCurrentSentence_(segments, scrollIntoView);
         }
         break;
       case chrome.readingMode.wordHighlighting:
@@ -91,98 +63,55 @@ export class ReadAloudHighlighter {
     }
   }
 
-  onWillMoveToNextGranularity() {
+  onWillMoveToNextGranularity(segments: Segment[]) {
     const highlightGranularity = this.getEffectiveHighlightingGranularity_();
-    if (highlightGranularity === chrome.readingMode.sentenceHighlighting) {
-      return;
+    if (highlightGranularity !== chrome.readingMode.sentenceHighlighting) {
+      // When we're about to move to the next granularity, ensure the rest of
+      // the sentence we are about to skip is still highlighted with previous
+      // highlight formatting.
+      this.highlightCurrentSentence_(
+          segments, /*scrollIntoView=*/ false,
+          /* previousHighlightOnly=*/ true);
     }
 
-    // When we're about to move to the next granularity, ensure the rest of the
-    // sentence we are about to skip is still highlighted for previous
-    // highlight formatting.
-    this.highlightCurrentSentence_(
-        chrome.readingMode.getCurrentText(), /*scrollIntoView=*/ false,
-        /* previousHighlightOnly=*/ true);
-  }
 
-  // Resets formatting on the current highlight, including previous highlight
-  // formatting.
-  removeCurrentHighlight() {
-    // The most recent highlight could have been spread across multiple
-    // segments so clear the formatting for all of the segments.
-    for (let i = 0; i < chrome.readingMode.getCurrentText().length; i++) {
-      const lastElement = this.previousHighlights_.pop();
-      if (lastElement) {
-        lastElement.classList.remove(currentReadHighlightClass);
-      }
+    if (this.currentGranularity_) {
+      this.currentGranularity_.setPrevious();
+      this.previousGranularities_.push(this.currentGranularity_);
+      this.currentGranularity_ = null;
     }
   }
 
-  // Sets the previous highlight formatting and removes the current highlight
-  // formatting.
-  resetPreviousHighlight() {
-    this.previousHighlights_.forEach((element) => {
-      if (element) {
-        element.classList.add(previousReadHighlightClass);
-        element.classList.remove(currentReadHighlightClass);
-      }
-    });
+  onWillMoveToPreviousGranularity() {
+    if (this.currentGranularity_) {
+      this.currentGranularity_.clearFormatting();
+      this.currentGranularity_ = null;
+      const lastPrevious = this.previousGranularities_.pop();
+      lastPrevious?.clearFormatting();
+    }
   }
 
-  // Removes all highlight formatting.
+  // Restores the highlight formatting to the existing previous granularity
+  // queue if there is one.
+  restorePreviousHighlighting() {
+    this.previousGranularities_.forEach(highlight => highlight.setPrevious());
+  }
+
+  // Removes all highlight formatting, but maintains the previous granularity
+  // queue.
   clearHighlightFormatting() {
-    this.previousHighlights_.forEach((element) => {
-      if (element) {
-        element.classList.remove(previousReadHighlightClass);
-        element.classList.remove(currentReadHighlightClass);
-      }
-    });
-    this.previousHighlights_ = [];
+    if (this.currentGranularity_) {
+      this.currentGranularity_.clearFormatting();
+      this.currentGranularity_ = null;
+    }
+    this.previousGranularities_.forEach(
+        highlight => highlight.clearFormatting());
   }
 
-
-  isInvalidHighlightForWordHighlighting(textToHighlight?: string): boolean {
-    // If a highlight is just white space or punctuation, we can skip
-    // highlighting.
-    const text = textToHighlight?.trim();
-    return !text || text === '' ||
-        IGNORED_HIGHLIGHT_CHARACTERS_REGEX.test(text);
-  }
-
-  private getCurrentHighlightBounds_(): DOMRect {
-    const bounds = new DOMRect();
-    const currentHighlights = this.getCurrentHighlights_();
-    if (!currentHighlights || !currentHighlights.length) {
-      return bounds;
-    }
-    const firstHighlight = currentHighlights.at(0);
-    const lastHighlight = currentHighlights.at(-1);
-    if (!firstHighlight || !lastHighlight) {
-      return bounds;
-    }
-    const firstRect = firstHighlight.getBoundingClientRect();
-    const lastRect = lastHighlight.getBoundingClientRect();
-    bounds.x = Math.min(firstRect.x, lastRect.x);
-    bounds.y = firstRect.y;
-    bounds.width = Math.max(firstRect.right, lastRect.right) - bounds.x;
-    bounds.height = lastRect.bottom - firstRect.y;
-    return bounds;
-  }
-
-  private getAncestor_(node: Node): Node|null {
-    if (!node.parentElement || !node.parentNode) {
-      return null;
-    }
-
-    let ancestor = null;
-    if (node.parentElement.classList.contains(PARENT_OF_HIGHLIGHT_CLASS)) {
-      ancestor = node.parentNode;
-    } else if (node.parentElement.parentElement?.classList.contains(
-                   PARENT_OF_HIGHLIGHT_CLASS)) {
-      ancestor = node.parentNode.parentNode;
-    }
-
-    return ancestor;
+  // Clears all the formatting and discards the granularity queue.
+  reset() {
+    this.clearHighlightFormatting();
+    this.previousGranularities_ = [];
   }
 
   private getEffectiveHighlightingGranularity_(): number {
@@ -203,9 +132,13 @@ export class ReadAloudHighlighter {
       return chrome.readingMode.sentenceHighlighting;
     }
 
+    // Until ts_model_impl supports phrase highlighting, always fallback to
+    // sentence highlighting.
+
     const currentSpeechRate: number = getCurrentSpeechRate();
 
-    if (!chrome.readingMode.isPhraseHighlightingEnabled) {
+    if (!chrome.readingMode.isPhraseHighlightingEnabled ||
+        chrome.readingMode.isTsTextSegmentationEnabled) {
       // Choose sentence highlighting for fast voices.
       if (currentSpeechRate > 1.2 &&
           highlight === chrome.readingMode.autoHighlighting) {
@@ -234,8 +167,6 @@ export class ReadAloudHighlighter {
   }
 
   private highlightCurrentWordOrPhrase_(highlightPhrases: boolean): void {
-    this.resetCurrentHighlight_();
-    this.resetPreviousHighlight();
     const {
       speechUtteranceStartIndex,
       previouslySpokenIndex,
@@ -243,146 +174,52 @@ export class ReadAloudHighlighter {
     } = this.wordBoundaries_.state;
     const index = speechUtteranceStartIndex + previouslySpokenIndex;
     const highlightSegments =
-        chrome.readingMode.getHighlightForCurrentSegmentIndex(
+        this.readAloudModel_.getHighlightForCurrentSegmentIndex(
             index, highlightPhrases);
-    let accumulatedHighlightLength = 0;
-    let didApplyHighlight = false;
-    for (const segment of highlightSegments) {
-      const {nodeId, start, length: segmentLength} = segment;
 
-      const node = this.nodeStore_.getDomNode(nodeId);
-      if (!node) {
-        continue;
-      }
-
-
-      // For phrase highlighting, always use the segment length received from
-      // getHighlightForCurrentSegmentIndex. For word highlighting, prioritize
-      // the word boundary received from the TTS engine if there is one.
-      const useTtsWordLength = !highlightPhrases && speechUtteranceLength > 0;
-      const remainingTtsLength =
-          Math.max(speechUtteranceLength - accumulatedHighlightLength, 0);
-      const highlightLength =
-          useTtsWordLength ? remainingTtsLength : segmentLength;
-
-      if (highlightLength <= 0) {
-        continue;
-      }
-
-      const endIndex = start + highlightLength;
-      const textContent = node.textContent?.substring(start, endIndex).trim();
-      // If the remaining text is just punctuation, don't show it as a current
-      // highlight, but do fade it out as 'before the current highlight.'
-      const previousHighlightOnly =
-          this.isInvalidHighlightForWordHighlighting(textContent);
-      const element = node as HTMLElement;
-      const highlightedNode = this.highlightCurrentText_(
-          start, endIndex, element, previousHighlightOnly);
-      this.nodeStore_.replaceDomNode(element, highlightedNode);
-
-      // Keep track of the highlight length that's been spoken so that
-      // speechUtteranceLength can be used across multiple nodes.
-      accumulatedHighlightLength += highlightLength;
-      didApplyHighlight = true;
+    if (this.currentGranularity_) {
+      this.currentGranularity_.onWillHighlightWordOrPhrase(highlightSegments);
     }
-
-    if (didApplyHighlight) {
+    const highlight = highlightPhrases ?
+        new PhraseHighlight(highlightSegments) :
+        new WordHighlight(highlightSegments, speechUtteranceLength);
+    if (!highlight.isEmpty()) {
+      this.addHighlightToCurrentGranularity_(highlight);
       this.scrollHighlightIntoView_();
     }
   }
 
   private highlightCurrentSentence_(
-      nodeIds: number[], scrollIntoView: boolean,
+      segments: Segment[], scrollIntoView: boolean,
       previousHighlightOnly: boolean = false) {
-    if (!nodeIds.length) {
+    if (!segments.length) {
       return;
     }
 
-    this.resetPreviousHighlight();
-    for (const nodeId of nodeIds) {
-      const element = this.nodeStore_.getDomNode(nodeId) as HTMLElement;
-      const highlighted =
-          this.highlightCurrentElement_(nodeId, previousHighlightOnly, element);
-      if (highlighted) {
-        this.nodeStore_.replaceDomNode(element, highlighted);
-      }
+    const highlight = new SentenceHighlight(segments);
+    if (previousHighlightOnly) {
+      highlight.setPrevious();
     }
-
+    this.addHighlightToCurrentGranularity_(highlight);
     if (scrollIntoView) {
       this.scrollHighlightIntoView_();
     }
   }
 
-  private highlightCurrentElement_(
-      nodeId: number, previousHighlightOnly = false,
-      element?: HTMLElement): HTMLElement|undefined {
-    if (!element) {
-      return undefined;
-    }
-    const start = chrome.readingMode.getCurrentTextStartIndex(nodeId);
-    const end = chrome.readingMode.getCurrentTextEndIndex(nodeId);
-    if ((start < 0) || (end < 0)) {
-      // If the start or end index is invalid, don't use this node.
-      return undefined;
-    }
-    return this.highlightCurrentText_(
-        start, end, element, previousHighlightOnly);
-  }
-
-  // The following results in
-  // <span>
-  //   <span class="previous-read-highlight"> prefix text </span>
-  //   <span class="current-read-highlight"> highlighted text </span>
-  //   suffix text
-  // </span>
-  private highlightCurrentText_(
-      highlightStart: number, highlightEnd: number, currentNode: HTMLElement,
-      previousHighlightOnly: boolean = false): HTMLElement {
-    const parentOfHighlight = document.createElement('span');
-    parentOfHighlight.classList.add(PARENT_OF_HIGHLIGHT_CLASS);
-
-    // First pull out any text within this node before the highlighted
-    // section. Since it's already been highlighted, we fade it out.
-    const highlightPrefix =
-        currentNode.textContent!.substring(0, highlightStart);
-    if (highlightPrefix.length > 0) {
-      const prefixNode = document.createElement('span');
-      prefixNode.classList.add(previousReadHighlightClass);
-      prefixNode.textContent = highlightPrefix;
-      this.previousHighlights_.push(prefixNode);
-      parentOfHighlight.appendChild(prefixNode);
+  private addHighlightToCurrentGranularity_(highlight: Highlight) {
+    if (highlight.isEmpty()) {
+      return;
     }
 
-    // Then get the section of text to highlight and mark it for
-    // highlighting.
-    const readingHighlight = document.createElement('span');
-    // In the case where we don't actually want to show the current highlight,
-    // but the text should still be included in 'previously read', add the
-    // previous formatting instead of the current formatting.
-    if (previousHighlightOnly) {
-      readingHighlight.classList.add(previousReadHighlightClass);
-    } else {
-      readingHighlight.classList.add(currentReadHighlightClass);
+    // If there's no current granularity yet, it means the last granularity is
+    // finished (or this is the first granularity), so create a new one.
+    // Otherwise, the given highlight is likely a word or phrase that is less
+    // than a full granularity on its own, so add it to the existing
+    // granularity.
+    if (!this.currentGranularity_) {
+      this.currentGranularity_ = new MovementGranularity();
     }
-    const textNode = document.createTextNode(
-        currentNode.textContent!.substring(highlightStart, highlightEnd));
-    readingHighlight.appendChild(textNode);
-    this.highlightedNodeToOffsetInParent_.set(textNode, highlightStart);
-    parentOfHighlight.appendChild(readingHighlight);
-
-    // Finally, append the rest of the text for this node that has yet to be
-    // highlighted.
-    const highlightSuffix = currentNode.textContent!.substring(highlightEnd);
-    if (highlightSuffix.length > 0) {
-      const suffixNode = document.createTextNode(highlightSuffix);
-      this.highlightedNodeToOffsetInParent_.set(suffixNode, highlightEnd);
-      parentOfHighlight.appendChild(suffixNode);
-    }
-
-    // Replace the current node in the tree with the split up version of the
-    // node.
-    this.previousHighlights_.push(readingHighlight);
-    return parentOfHighlight;
+    this.currentGranularity_.addHighlight(highlight);
   }
 
   private scrollHighlightIntoView_() {
@@ -394,38 +231,7 @@ export class ReadAloudHighlighter {
     }
 
 
-    // Ensure all the current highlights are in view.
-    // TODO: crbug.com/40927698 - Handle if the highlight is longer than the
-    // full height of the window (e.g. when font size is very large). Possibly
-    // using word boundaries to know when we've reached the bottom of the
-    // window and need to scroll so the rest of the current highlight is
-    // showing.
-    const firstHighlight = this.getCurrentHighlights_().at(0);
-    if (!firstHighlight) {
-      return;
-    }
-    const highlightBounds = this.getCurrentHighlightBounds_();
-    if (highlightBounds.height > (window.innerHeight / 2)) {
-      // If the bottom of the highlight would be offscreen if we center it,
-      // scroll the first highlight to the top instead of centering it.
-      firstHighlight.scrollIntoView({block: 'start'});
-    } else if (
-        (highlightBounds.bottom > window.innerHeight) ||
-        (highlightBounds.top < 0)) {
-      // Otherwise center the current highlight if part of it would be cut
-      // off.
-      firstHighlight.scrollIntoView({block: 'center'});
-    }
-  }
-
-  // Resets the current highlight. Does not change how this element will
-  // be considered for previous highlighting.
-  private resetCurrentHighlight_() {
-    this.previousHighlights_.forEach((element) => {
-      if (element) {
-        element.classList.remove(currentReadHighlightClass);
-      }
-    });
+    this.currentGranularity_?.scrollIntoView();
   }
 
   static getInstance(): ReadAloudHighlighter {

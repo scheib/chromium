@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.sync.settings;
 
+import static org.chromium.build.NullUtil.assumeNonNull;
+
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -14,7 +16,6 @@ import android.provider.Browser;
 import android.text.TextUtils;
 
 import androidx.annotation.IntDef;
-import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.browser.customtabs.CustomTabsIntent;
@@ -22,17 +23,18 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.ApkInfo;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
 import org.chromium.base.Promise;
 import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeStringConstants;
 import org.chromium.chrome.browser.LaunchIntentDispatcher;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider.CustomTabsUiType;
 import org.chromium.chrome.browser.customtabs.CustomTabIntentDataProvider;
-import org.chromium.chrome.browser.password_manager.PasswordManagerUtilBridge;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.DisplayableProfileData;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
@@ -41,7 +43,6 @@ import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.sync.SyncService;
 import org.chromium.components.sync.TrustedVaultUserActionTriggerForUMA;
 import org.chromium.components.sync.UserActionableError;
-import org.chromium.components.sync.UserSelectableType;
 import org.chromium.google_apis.gaia.GoogleServiceAuthErrorState;
 import org.chromium.ui.widget.Toast;
 
@@ -49,6 +50,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /** Helper methods for sync settings. */
+@NullMarked
 public class SyncSettingsUtils {
     private static final String MY_ACCOUNT_URL = "https://myaccount.google.com/smartlink/home";
     private static final String TAG = "SyncSettingsUtils";
@@ -94,7 +96,7 @@ public class SyncSettingsUtils {
     }
 
     /** Returns the type of the sync error */
-    public static @UserActionableError int getSyncError(Profile profile) {
+    public static @UserActionableError int getSyncError(@Nullable Profile profile) {
         assert profile != null;
         SyncService syncService = SyncServiceFactory.getForProfile(profile);
         if (syncService == null) {
@@ -109,13 +111,14 @@ public class SyncSettingsUtils {
      * @param context The application context.
      * @param error The sync error.
      */
-    public static String getSyncErrorHint(Context context, @UserActionableError int error) {
+    public static @Nullable String getSyncErrorHint(
+            Context context, @UserActionableError int error) {
         switch (error) {
             case UserActionableError.SIGN_IN_NEEDS_UPDATE:
                 return context.getString(R.string.hint_sync_auth_error_modern);
             case UserActionableError.NEEDS_CLIENT_UPGRADE:
                 return context.getString(
-                        R.string.hint_client_out_of_date, BuildInfo.getInstance().hostPackageLabel);
+                        R.string.hint_client_out_of_date, ApkInfo.getHostPackageLabel());
             case UserActionableError.UNRECOVERABLE_ERROR:
                 return context.getString(R.string.hint_other_sync_errors);
             case UserActionableError.NEEDS_PASSPHRASE:
@@ -144,7 +147,8 @@ public class SyncSettingsUtils {
      * @param context The application context.
      * @param error The sync error.
      */
-    public static String getSyncErrorCardTitle(Context context, @UserActionableError int error) {
+    public static @Nullable String getSyncErrorCardTitle(
+            Context context, @UserActionableError int error) {
         switch (error) {
             case UserActionableError.SIGN_IN_NEEDS_UPDATE:
             case UserActionableError.NEEDS_CLIENT_UPGRADE:
@@ -176,7 +180,7 @@ public class SyncSettingsUtils {
             case UserActionableError.NEEDS_CLIENT_UPGRADE:
                 return context.getString(
                         R.string.client_out_of_date_error_card_button,
-                        BuildInfo.getInstance().hostPackageLabel);
+                        ApkInfo.getHostPackageLabel());
             case UserActionableError.NEEDS_PASSPHRASE:
                 return context.getString(R.string.passphrase_required_error_card_button);
             case UserActionableError.NEEDS_TRUSTED_VAULT_KEY_FOR_EVERYTHING:
@@ -222,7 +226,7 @@ public class SyncSettingsUtils {
 
         if (syncService.requiresClientUpgrade()) {
             return context.getString(
-                    R.string.sync_error_upgrade_client, BuildInfo.getInstance().hostPackageLabel);
+                    R.string.sync_error_upgrade_client, ApkInfo.getHostPackageLabel());
         }
 
         if (syncService.hasUnrecoverableError()) {
@@ -251,8 +255,7 @@ public class SyncSettingsUtils {
             return context.getString(R.string.sync_needs_verification_title);
         }
 
-        if (syncService.getSelectedTypes().contains(UserSelectableType.PASSWORDS)
-                && PasswordManagerUtilBridge.isGmsCoreUpdateRequired()) {
+        if (syncService.getUserActionableError() == UserActionableError.NEEDS_UPM_BACKEND_UPGRADE) {
             return context.getString(R.string.sync_error_outdated_gms);
         }
 
@@ -412,7 +415,7 @@ public class SyncSettingsUtils {
                             "Error opening trusted vault dialog for code ",
                             requestCode,
                             ": ",
-                            exception);
+                            assumeNonNull(exception));
                 });
     }
 
@@ -483,17 +486,17 @@ public class SyncSettingsUtils {
     }
 
     /**
-     * Returns either the full name or the email address of a DisplayableProfileData according
-     * to preference. If the preferred string is not displayable, returns the other displayable
-     * string, or fallback to default string.
+     * Returns either the full name or the email address of a DisplayableProfileData according to
+     * preference. If the preferred string is not displayable, returns the other displayable string,
+     * or fallback to default string.
      *
-     * This method is used by {@link Preference#setTitle(CharSequence)} callers.
+     * <p>This method is used by {@link Preference#setTitle(CharSequence)} callers.
      *
      * @param profileData DisplayableProfileData containing the user's full name and email address.
      * @param context The context where the returned string is passed to setTitle(CharSequence).
      * @param preference Whether the full name or the email is preferred.
      */
-    public static String getDisplayableFullNameOrEmailWithPreference(
+    public static @Nullable String getDisplayableFullNameOrEmailWithPreference(
             DisplayableProfileData profileData, Context context, @TitlePreference int preference) {
         final String fullName = profileData.getFullName();
         final String accountEmail = profileData.getAccountEmail();
@@ -526,7 +529,7 @@ public class SyncSettingsUtils {
      * @return A ErrorCardDetails instance containing the error message and the button text for the
      *     identity error.
      */
-    public static ErrorCardDetails getIdentityErrorErrorCardDetails(
+    public static @Nullable ErrorCardDetails getIdentityErrorErrorCardDetails(
             @UserActionableError int error) {
         switch (error) {
             case UserActionableError.NEEDS_PASSPHRASE:

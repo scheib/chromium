@@ -16,10 +16,10 @@
 #include "base/time/default_tick_clock.h"
 #include "base/time/tick_clock.h"
 #include "chrome/browser/ash/app_list/search/essential_search/essential_search_manager.h"
-#include "chrome/browser/ash/app_restore/browser_restore_observer.h"
 #include "chrome/browser/ash/boot_times_recorder/boot_times_recorder.h"
 #include "chrome/browser/ash/login/saml/in_session_password_change_manager.h"
 #include "chrome/browser/ash/login/session/chrome_session_manager.h"
+#include "chrome/browser/ash/login/session/session_manager_delegate_impl.h"
 #include "chrome/browser/ash/login/users/avatar/user_image_manager_registry.h"
 #include "chrome/browser/ash/login/users/policy_user_manager_controller.h"
 #include "chrome/browser/ash/login/users/profile_user_manager_controller.h"
@@ -45,6 +45,7 @@
 #include "chrome/browser/profiles/profile_io_data.h"
 #include "chrome/browser/sessions/session_restore.h"
 #include "chrome/browser/sessions/session_service_utils.h"
+#include "chrome/browser/sync/device_info_sync_service_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -69,7 +70,9 @@
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/keyed_service/content/browser_context_keyed_service_shutdown_notifier_factory.h"
+#include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
+#include "components/sync/base/command_line_switches.h"
 #include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_manager_impl.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -101,16 +104,16 @@ class PrimaryProfileServicesShutdownNotifierFactory
 
   PrimaryProfileServicesShutdownNotifierFactory()
       : BrowserContextKeyedServiceShutdownNotifierFactory(
-            "PrimaryProfileServices") {}
+            "PrimaryProfileServices") {
+    DependsOn(DeviceInfoSyncServiceFactory::GetInstance());
+  }
   ~PrimaryProfileServicesShutdownNotifierFactory() override = default;
 };
 
 }  // namespace
 
 BrowserProcessPlatformPart::BrowserProcessPlatformPart()
-    : browser_restore_observer_(
-          std::make_unique<ash::BrowserRestoreObserver>()),
-      created_profile_helper_(false),
+    : created_profile_helper_(false),
       browser_context_flusher_(std::make_unique<ash::BrowserContextFlusher>()),
       account_manager_factory_(std::make_unique<ash::AccountManagerFactory>()) {
 }
@@ -219,7 +222,8 @@ void BrowserProcessPlatformPart::ShutdownDeviceDisablingManager() {
 void BrowserProcessPlatformPart::InitializeSessionManager() {
   CHECK(ash::BootTimesRecorder::GetIfCreated());
   CHECK(!session_manager_);
-  session_manager_ = std::make_unique<ash::ChromeSessionManager>();
+  session_manager_ = std::make_unique<ash::ChromeSessionManager>(
+      std::make_unique<ash::SessionManagerDelegateImpl>());
   session_manager_->AddObserver(ash::BootTimesRecorder::Get());
 }
 
@@ -315,12 +319,22 @@ void BrowserProcessPlatformPart::InitializePrimaryProfileServices(
       g_browser_process->local_state(), CHECK_DEREF(user),
       primary_profile->GetProfilePolicyConnector()->IsManaged());
 
-  if (ash::features::IsAutoSignOutEnabled()) {
-    auto_sign_out_service_ = std::make_unique<ash::AutoSignOutService>();
+  if (ash::features::IsAutoSignOutEnabled() &&
+      primary_profile->IsRegularProfile() && syncer::IsSyncAllowedByFlag()) {
+    PrefService* prefs = primary_profile->GetPrefs();
+    // AutoSignOutService is tied to the primary user profile and it's
+    // destroyed via the `primary_profile_shutdown_subscription_`. To ensure
+    // a safe shutdown, the `PrimaryProfileServicesShutdownNotifierFactory`
+    // uses a `DependsOn()` to guarantee that DeviceInfoSyncService outlives
+    // AutoSignOutService.
+    auto_sign_out_service_ = std::make_unique<ash::AutoSignOutService>(
+        DeviceInfoSyncServiceFactory::GetForProfile(primary_profile),
+        session_manager_.get(), prefs);
   }
 }
 
 void BrowserProcessPlatformPart::ShutdownPrimaryProfileServices() {
+  auto_sign_out_service_.reset();
   secure_dns_manager_.reset();
   if (ash::SystemProxyManager::Get())
     ash::SystemProxyManager::Get()->StopObservingPrimaryProfilePrefs();

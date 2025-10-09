@@ -96,9 +96,6 @@ public class OmniboxFeatures {
     /// Holds the information whether logic should focus on preserving memory on this device.
     private static @Nullable Boolean sIsLowMemoryDevice;
 
-    public static final CachedFlag sOmniboxAnswerActions =
-            newFlag(OmniboxFeatureList.OMNIBOX_ANSWER_ACTIONS, FeatureState.ENABLED_IN_TEST);
-
     public static final CachedFlag sAnimateSuggestionsListAppearance =
             newFlag(
                     OmniboxFeatureList.ANIMATE_SUGGESTIONS_LIST_APPEARANCE,
@@ -137,23 +134,27 @@ public class OmniboxFeatures {
     public static final CachedFlag sOmniboxMultimodalInput =
             newFlag(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT, FeatureState.DISABLED);
 
+    public static final BooleanCachedFeatureParam sAimToggleOnly =
+            newBooleanParam(sOmniboxMultimodalInput, "aim_toggle_only", false);
+
     public static final CachedFlag sMultilineEditField =
             newFlag(OmniboxFeatureList.MULTILINE_EDIT_FIELD, FeatureState.DISABLED);
 
     public static final CachedFlag sAndroidHubSearchTabGroups =
             newFlag(OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS, FeatureState.ENABLED_IN_TEST);
 
+    public static final CachedFlag sOmniboxImprovementForLFF =
+            newFlag(OmniboxFeatureList.OMNIBOX_IMPROVEMENT_FOR_LFF, FeatureState.DISABLED);
+
+    public static final CachedFlag sRemoveSearchReadyOmnibox =
+            newFlag(OmniboxFeatureList.REMOVE_SEARCH_READY_OMNIBOX, FeatureState.ENABLED_IN_TEST);
+
+    public static final BooleanCachedFeatureParam sRemoveSroIncludingVerbatimMatch =
+            newBooleanParam(
+                    sRemoveSearchReadyOmnibox, "remove_sro_including_verbatim_match", false);
+
     public static final BooleanCachedFeatureParam sOmniboxParityRetrieveBuiltInEngineIcon =
-            newBooleanParam(sOmniboxMobileParityUpdateV2, "retrieve_builtin_favicon", false);
-
-    public static final BooleanCachedFeatureParam sAnswerActionsShowAboveKeyboard =
-            newBooleanParam(sOmniboxAnswerActions, "AnswerActionsShowAboveKeyboard", false);
-
-    public static final BooleanCachedFeatureParam sAnswerActionsShowIfUrlsPresent =
-            newBooleanParam(sOmniboxAnswerActions, "ShowIfUrlsPresent", false);
-
-    public static final BooleanCachedFeatureParam sAnswerActionsShowRichCard =
-            newBooleanParam(sOmniboxAnswerActions, "ShowRichCard", false);
+            newBooleanParam(sOmniboxMobileParityUpdateV2, "retrieve_builtin_favicon", true);
 
     public static final IntCachedFeatureParam sGeolocationRequestTimeoutMinutes =
             newIntParam(
@@ -201,6 +202,14 @@ public class OmniboxFeatures {
     // suggestions on SearchActivity.
     public static final BooleanCachedFeatureParam sJumpStartOmniboxCoverRecentlyVisitedPage =
             newBooleanParam(sJumpStartOmnibox, "jump_start_cover_recently_visited_page", false);
+
+    // This parameter enables the hub search entrypoints on the tab groups pane.
+    public static final BooleanCachedFeatureParam sAndroidHubSearchEnableOnTabGroupsPane =
+            newBooleanParam(sAndroidHubSearchTabGroups, "enable_hub_search_tab_groups_pane", true);
+
+    // This parameter enables showing the switch-to-tab chip on large form factors.
+    public static final BooleanCachedFeatureParam sOmniboxImprovementForLFFSwitchToTabChip =
+            newBooleanParam(sOmniboxImprovementForLFF, "switch_to_tab_chip", false);
 
     // Omnibox Diagnostics
     private static final CachedFlag sDiagnostics =
@@ -317,29 +326,6 @@ public class OmniboxFeatures {
      */
     public static int getMaxPrefetchesPerOmniboxSession() {
         return sTouchDownTriggerMaxPrefetchesPerSession.getValue();
-    }
-
-    /** Returns whether answer suggestions should be annotated with attached action chips. */
-    public static boolean shouldShowAnswerActions() {
-        return sOmniboxAnswerActions.isEnabled();
-    }
-
-    /** Returns whether answers with actions should be re-ordered to just above the keyboard */
-    public static boolean shouldShowAnswerWithActionsAboveKeyboard() {
-        return shouldShowAnswerActions() && sAnswerActionsShowAboveKeyboard.getValue();
-    }
-
-    /**
-     * Returns whether answers with actions should be displayed if there are url suggestions
-     * present.
-     */
-    public static boolean shouldShowAnswerWithActionsIfUrlsPresent() {
-        return shouldShowAnswerActions() && sAnswerActionsShowIfUrlsPresent.getValue();
-    }
-
-    /** Returns whether answers with actions should be presented as a rich card */
-    public static boolean shouldShowRichAnswerCard() {
-        return shouldShowAnswerActions() && sAnswerActionsShowRichCard.getValue();
     }
 
     /**

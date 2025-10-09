@@ -555,6 +555,7 @@ export class Authenticator extends EventTarget {
     this.trusted_ = true;
     this.authFlow = AuthFlow.DEFAULT;
     this.samlHandler_.reset();
+    this.samlRedirectionInProgress = false;
     this.videoEnabled = false;
     this.services_ = null;
     this.servicesProvided_ = false;
@@ -1018,8 +1019,8 @@ export class Authenticator extends EventTarget {
       if (headerName === SIGN_IN_HEADER) {
         if (this.samlRedirectionInProgress) {
           console.warn(
-              `Authenticator: sign-in header received during ongoing SAML ' +
-              'redirection, it will be ignored`)
+              'Authenticator: sign-in header received during ongoing SAML ' +
+              'redirection, it will be ignored')
           return;
         }
         // See go/gaia-response-headers#google-accounts-signin for the expected

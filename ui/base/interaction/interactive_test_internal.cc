@@ -28,6 +28,8 @@ namespace ui::test::internal {
 
 DEFINE_ELEMENT_IDENTIFIER_VALUE(kInteractiveTestPivotElementId);
 DEFINE_CUSTOM_ELEMENT_EVENT_TYPE(kInteractiveTestPivotEventType);
+DEFINE_STATE_IDENTIFIER_VALUE(PollingStateObserver<bool>,
+                              kInteractiveTestPollUntilState);
 
 StateObserverElement::StateObserverElement(ElementIdentifier id,
                                            ElementContext context)
@@ -119,6 +121,7 @@ void InteractiveTestPrivate::OnElementAdded(TrackedElement* el) {
 }
 
 void InteractiveTestPrivate::MaybeAddPivotElement(ElementContext context) {
+  CHECK(context) << "Attempted to run steps in an invalid (null) context.";
   if (!base::Contains(pivot_elements_, context)) {
     auto pivot =
         std::make_unique<TestElement>(kInteractiveTestPivotElementId, context);
@@ -355,22 +358,10 @@ std::string InteractiveTestPrivate::DebugDumpBounds(
                             bounds.width(), bounds.height());
 }
 
-void SpecifyElement(ui::InteractionSequence::StepBuilder& builder,
-                    ElementSpecifier element) {
-  std::visit(
-      absl::Overload{
-          [&builder](ElementIdentifier id) { builder.SetElementID(id); },
-          [&builder](std::string_view name) { builder.SetElementName(name); }},
-      element);
-}
-
 std::string DescribeElement(ElementSpecifier element) {
-  return std::visit(
-      absl::Overload{[](ElementIdentifier id) { return id.GetName(); },
-                     [](std::string_view name) {
-                       return base::StringPrintf("\"%s\"", name.data());
-                     }},
-      element);
+  std::ostringstream oss;
+  oss << element;
+  return oss.str();
 }
 
 InteractionSequence::Builder BuildSubsequence(

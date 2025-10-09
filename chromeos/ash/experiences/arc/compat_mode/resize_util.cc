@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "ash/constants/notifier_catalogs.h"
-#include "ash/frame/non_client_frame_view_ash.h"
+#include "ash/frame/frame_view_ash.h"
 #include "ash/public/cpp/arc_compat_mode_util.h"
 #include "ash/public/cpp/arc_resize_lock_type.h"
 #include "ash/public/cpp/system/toast_data.h"
@@ -54,11 +54,11 @@ gfx::Size GetPossibleSizeInWorkArea(aura::Window* window,
   const float preferred_aspect_ratio = size.width() / size.height();
 
   auto workarea =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(window).work_area();
+      display::Screen::Get()->GetDisplayNearestWindow(window).work_area();
 
   // Shrink workarea with the edge offset.
   workarea.Inset(gfx::Insets(kDisplayEdgeOffsetDp));
-  auto* const frame_view = ash::NonClientFrameViewAsh::Get(window);
+  auto* const frame_view = ash::FrameViewAsh::Get(window);
   if (frame_view) {
     workarea.Inset(
         gfx::Insets().set_top(frame_view->NonClientTopBorderHeight()));

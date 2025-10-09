@@ -185,6 +185,7 @@ test("ios_web_unittests") {
     "//ios/web/download:download_unittests",
     "//ios/web/favicon:unittests",
     "//ios/web/find_in_page:find_in_page_unittests",
+    "//ios/web/js_features/clipboard:unittests",
     "//ios/web/js_features/context_menu:unittests",
     "//ios/web/js_features/fullscreen:unittests",
     "//ios/web/js_features/window_error:unittests",
@@ -416,6 +417,7 @@ source_set("ios_web_web_state_unittests") {
   ]
 
   sources = [
+    "web_state/data_controls_protocol_smoke_unittest.mm",
     "web_state/policy_decision_state_tracker_unittest.mm",
     "web_state/web_state_context_menu_bridge_unittest.mm",
     "web_state/web_state_delegate_bridge_unittest.mm",
@@ -466,6 +468,7 @@ source_set("ios_web_web_state_ui_unittests") {
     ":core",
     "//base",
     "//base/test:test_support",
+    "//components/test/ios",
     "//components/url_formatter",
     "//ios/net",
     "//ios/testing:ocmock_support",
@@ -488,6 +491,7 @@ source_set("ios_web_web_state_ui_unittests") {
     "//ios/web/test:test_support",
     "//ios/web/test/fakes",
     "//ios/web/web_state:web_state_impl_header",
+    "//ios/web/web_state:web_view_internal_creation_util",
     "//ios/web/web_state/ui",
     "//ios/web/web_state/ui:crw_context_menu_controller",
     "//ios/web/web_state/ui:wk_web_view_configuration_provider",
@@ -590,6 +594,7 @@ test("ios_web_inttests") {
     "//ios/web/web_state",
     "//ios/web/web_state:test_util",
     "//ios/web/web_state:web_state_impl_header",
+    "//ios/web/web_state:web_view_internal_creation_util",
     "//ios/web/web_state/ui",
     "//ios/web/web_state/ui:crw_context_menu_controller",
     "//ios/web/web_state/ui:web_controller_header",
@@ -603,7 +608,6 @@ test("ios_web_inttests") {
   ]
   sources = [
     "browser_state_web_view_partition_inttest.mm",
-    "find_in_page/java_script_find_in_page_manager_inttest.mm",
     "navigation/crw_error_page_helper_inttest.mm",
     "navigation/crw_wk_navigation_handler_inttest.mm",
     "navigation/history_state_operations_inttest.mm",

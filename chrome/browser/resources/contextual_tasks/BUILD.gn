@@ -1,0 +1,38 @@
+# Copyright 2025 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//ui/webui/resources/tools/build_webui.gni")
+
+assert(!is_android)
+
+build_webui("build") {
+  grd_prefix = "contextual_tasks"
+
+  static_files = [ "contextual_tasks.html" ]
+
+  ts_files = [
+    "app.ts",
+    "app.html.ts",
+    "contextual_tasks_browser_proxy.ts",
+  ]
+
+  css_files = [ "app.css" ]
+
+  mojo_files_deps =
+      [ "//chrome/browser/contextual_tasks:mojo_bindings_ts__generator" ]
+  mojo_files = [ "$root_gen_dir/chrome/browser/contextual_tasks/contextual_tasks.mojom-webui.ts" ]
+
+  ts_definitions = [
+    "//tools/typescript/definitions/chrome_event.d.ts",
+    "//tools/typescript/definitions/webview_tag.d.ts",
+  ]
+
+  ts_deps = [
+    "//third_party/lit/v3_0:build_ts",
+    "//ui/webui/resources/cr_elements:build_ts",
+    "//ui/webui/resources/mojo:build_ts",
+  ]
+
+  webui_context_type = "trusted"
+}

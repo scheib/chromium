@@ -33,6 +33,7 @@ source_set("themes") {
   deps = [
     "//chrome/app/theme:theme_resources",
     "//chrome/browser/new_tab_page/chrome_colors",
+    "//chrome/browser/search/background",
     "//chrome/browser/search/background:constants",
     "//chrome/browser/ui/color:color_headers",
     "//chrome/browser/ui/frame",
@@ -47,6 +48,7 @@ source_set("themes") {
     "//components/sync/protocol",
     "//components/sync_preferences",
     "//components/tab_groups",
+    "//components/themes:prefs",
     "//content/public/browser",
     "//third_party/abseil-cpp:absl",
     "//ui/color",
@@ -73,16 +75,6 @@ source_set("themes") {
       "//extensions/common",
     ]
     deps += [ "//extensions/browser" ]
-  }
-  if (is_win || is_mac || is_linux) {
-    public += [ "theme_color_policy_handler.h" ]
-    sources += [ "theme_color_policy_handler.cc" ]
-    deps += [
-      "//components/policy:generated",
-      "//components/policy:policy_code_generate",
-      "//components/policy/core/browser",
-      "//third_party/re2",
-    ]
   }
   if (is_win) {
     sources += [

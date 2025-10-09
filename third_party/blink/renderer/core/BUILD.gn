@@ -63,6 +63,7 @@ import("//third_party/blink/renderer/core/patching/build.gni")
 import("//third_party/blink/renderer/core/permissions_policy/build.gni")
 import("//third_party/blink/renderer/core/preferences/build.gni")
 import("//third_party/blink/renderer/core/resize_observer/build.gni")
+import("//third_party/blink/renderer/core/route_matching/build.gni")
 import("//third_party/blink/renderer/core/sanitizer/build.gni")
 import("//third_party/blink/renderer/core/scheduler/build.gni")
 import(
@@ -194,7 +195,6 @@ source_set("prerequisites") {
     "//third_party/blink/renderer/core/probe:generated",
     "//third_party/blink/renderer/platform",
     "//third_party/icu",
-    "//third_party/libpng",
     "//third_party/libwebp",
     "//third_party/libxml",
     "//third_party/libxslt",
@@ -321,6 +321,8 @@ component("core") {
   sources += rebase_path(blink_core_sources_paint, "", "paint")
   sources +=
       rebase_path(blink_core_sources_resize_observer, "", "resize_observer")
+  sources +=
+      rebase_path(blink_core_sources_route_matching, "", "route_matching")
   sources += rebase_path(blink_core_sources_sanitizer, "", "sanitizer")
   sources +=
       rebase_path(blink_core_sources_speculation_rules, "", "speculation_rules")
@@ -418,6 +420,7 @@ component("core") {
     "//third_party/blink/public/strings:generate_permission_element_strings_mono_grd",
     "//third_party/blink/public/strings:permission_element_generated_strings",
     "//third_party/blink/public/strings:permission_element_strings_grit",
+    "//third_party/rust/xml/v1:lib",
     "//tools/v8_context_snapshot:buildflags",
     "//ui/base/cursor/mojom:cursor_type_blink",
     "//ui/base/dragdrop/mojom:mojom_blink",
@@ -1093,11 +1096,6 @@ make_names("make_core_generated_script_type_names") {
   output_dir = blink_core_output_dir
 }
 
-make_names("make_core_generated_securitypolicyviolation_disposition_names") {
-  in_files = [ "events/securitypolicyviolation_disposition_names.json5" ]
-  output_dir = blink_core_output_dir
-}
-
 make_names("make_core_generated_shadow_element_names") {
   in_files = [ "html/shadow/shadow_element_names.json5" ]
   output_dir = "$blink_core_output_dir/html/shadow"
@@ -1298,7 +1296,6 @@ targets_generating_sources = [
   ":make_core_generated_preference_values",
   ":make_core_generated_property_bitsets",
   ":make_core_generated_script_type_names",
-  ":make_core_generated_securitypolicyviolation_disposition_names",
   ":make_core_generated_settings",
   ":make_core_generated_shadow_element_names",
   ":make_core_generated_style_property_shorthand",
@@ -1348,7 +1345,6 @@ target(core_generated_target_type, "core_generated") {
     "//third_party/blink/renderer/bindings:buildflags",
     "//third_party/blink/renderer/platform:make_platform_generated",
     "//third_party/blink/renderer/platform/wtf",
-    "//third_party/libpng",
     "//third_party/libwebp",
     "//third_party/libxml",
     "//third_party/libxslt",
@@ -1474,6 +1470,7 @@ source_set("unit_tests") {
       rebase_path(blink_core_tests_permissions_policy, "", "permissions_policy")
   sources +=
       rebase_path(blink_core_tests_resize_observer, "", "resize_observer")
+  sources += rebase_path(blink_core_tests_route_matching, "", "route_matching")
   sources += rebase_path(blink_core_tests_sanitizer, "", "sanitizer")
   sources += rebase_path(blink_core_tests_scheduler, "", "scheduler")
   sources += rebase_path(blink_core_tests_scheduler_integration_tests,

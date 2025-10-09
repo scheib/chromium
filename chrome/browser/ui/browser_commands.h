@@ -86,31 +86,33 @@ void OpenURLOffTheRecord(Profile* profile, const GURL& url);
 
 bool CanGoBack(const Browser* browser);
 bool CanGoBack(content::WebContents* web_contents);
+bool ShouldEnableBackButton(const Browser* browser);
 void GoBack(Browser* browser, WindowOpenDisposition disposition);
 void GoBack(content::WebContents* web_contents);
 bool CanGoForward(const Browser* browser);
 bool CanGoForward(content::WebContents* web_contents);
+bool ShouldEnableForwardButton(const Browser* browser);
 void GoForward(Browser* browser, WindowOpenDisposition disposition);
 void GoForward(content::WebContents* web_contents);
 void NavigateToIndexWithDisposition(Browser* browser,
                                     int index,
                                     WindowOpenDisposition disposition);
-void Reload(Browser* browser, WindowOpenDisposition disposition);
+void Reload(BrowserWindowInterface* browser, WindowOpenDisposition disposition);
 void ReloadBypassingCache(Browser* browser, WindowOpenDisposition disposition);
 bool CanReload(const Browser* browser);
 void Home(Browser* browser, WindowOpenDisposition disposition);
 base::WeakPtr<content::NavigationHandle> OpenCurrentURL(Browser* browser);
 void Stop(Browser* browser);
-void NewWindow(Browser* browser);
+void NewWindow(BrowserWindowInterface* browser);
 void NewIncognitoWindow(Profile* profile);
-void CloseWindow(Browser* browser);
+void CloseWindow(BrowserWindowInterface* browser);
 content::WebContents& NewTab(Browser* browser);
 void NewTabToRight(Browser* browser);
-void CloseTab(Browser* browser);
+void CloseTab(BrowserWindowInterface* browser);
 bool CanZoomIn(content::WebContents* contents);
 bool CanZoomOut(content::WebContents* contents);
 bool CanResetZoom(content::WebContents* contents);
-void RestoreTab(Browser* browser);
+void RestoreTab(BrowserWindowInterface* browser);
 void SelectNextTab(
     Browser* browser,
     TabStripUserGestureDetails gesture_detail = TabStripUserGestureDetails(
@@ -157,7 +159,8 @@ void MoveGroupToExistingWindow(Browser* source,
 void MuteSite(Browser* browser);
 void PinTab(Browser* browser);
 void GroupTab(Browser* browser);
-void NewSplitTab(Browser* browser, split_tabs::SplitTabCreatedSource source);
+void NewSplitTab(BrowserWindowInterface* browser,
+                 split_tabs::SplitTabCreatedSource source);
 
 // Tab group commands
 // These values are persisted to logs. Entries should not be renumbered
@@ -186,6 +189,11 @@ void FocusNextTabGroup(Browser* browser);
 // Finds the previous tab group that isn't the current one in the tabstrip and
 // activates the first tab in the group.
 void FocusPreviousTabGroup(Browser* browser);
+// Takes all ungrouped tabs and places them in a new group.
+// Returns true if a group was made, and false otherwise.
+bool GroupAllUngroupedTabs(Browser* browser);
+// Creates a new tab at the end of the group which last had the active tab.
+void AddNewTabToRecentGroup(Browser* browser);
 
 void MuteSiteForKeyboardFocusedTab(Browser* browser);
 bool HasKeyboardFocusedTab(const Browser* browser);
@@ -248,6 +256,8 @@ void FindPrevious(Browser* browser);
 void FindInPage(Browser* browser, bool find_next, bool forward_direction);
 void ShowTabSearch(BrowserWindowInterface* bwi);
 void CloseTabSearch(Browser* browser);
+void ShowContextualTasksSidePanel(BrowserWindowInterface* browser);
+void ToggleVerticalTabs(Browser* browser);
 void ShowTabDeclutter(Browser* browser);
 bool CanCloseFind(Browser* browser);
 void CloseFind(Browser* browser);
@@ -288,7 +298,8 @@ void ToggleRequestTabletSite(Browser* browser);
 // using its mobile version layout. Note it won't take effect until the web
 // contents is reloaded.
 void SetAndroidOsForTabletSite(content::WebContents* current_tab);
-void ToggleFullscreenMode(Browser* browser, bool user_initiated = false);
+void ToggleFullscreenMode(BrowserWindowInterface* browser,
+                          bool user_initiated = false);
 void ClearCache(Browser* browser);
 bool IsDebuggerAttachedToCurrentTab(Browser* browser);
 void CopyURL(BrowserWindowInterface* bwi, content::WebContents* web_contents);
@@ -309,7 +320,7 @@ void ExecuteUIDebugCommand(int id, const Browser* browser);
 
 std::optional<int> GetKeyboardFocusedTabIndex(const Browser* browser);
 
-void ShowIncognitoClearBrowsingDataDialog(Browser* browser);
+void ShowIncognitoClearBrowsingDataDialog(BrowserWindowInterface* bwi);
 void ShowIncognitoHistoryDisclaimerDialog(Browser* browser);
 bool ShouldInterceptChromeURLNavigationInIncognito(Browser* browser,
                                                    const GURL& url);

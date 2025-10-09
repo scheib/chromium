@@ -6,7 +6,9 @@
 
 #include "base/time/time.h"
 #include "chrome/browser/glic/host/guest_util.h"
+#include "chrome/browser/glic/public/glic_keyed_service.h"
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/user_education/browser_user_education_interface.h"
 #include "components/tabs/public/tab_interface.h"
@@ -50,7 +52,7 @@ void GlicIphController::MaybeShowPromo() {
   }
   auto* const contents = tab->GetContents();
   if (!contents->GetURL().SchemeIsHTTPOrHTTPS() ||
-      contents->GetURL().host() == GetGuestURL().host() ||
+      contents->GetURL().GetHost() == GetGuestURL().GetHost() ||
       !contents->IsDocumentOnLoadCompletedInPrimaryMainFrame()) {
     return;
   }

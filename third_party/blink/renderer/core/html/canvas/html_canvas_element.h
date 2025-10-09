@@ -44,7 +44,6 @@
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap_source.h"
 #include "third_party/blink/renderer/core/page/page_visibility_observer.h"
-#include "third_party/blink/renderer/platform/bindings/v8_external_memory_accounter.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types_3d.h"
 #include "third_party/blink/renderer/platform/graphics/offscreen_canvas_placeholder.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
@@ -118,10 +117,11 @@ class CORE_EXPORT HTMLCanvasElement final
   void setLayoutSubtree(bool);
   bool layoutSubtree() const;
 
-  void SetSize(gfx::Size new_size) final;
+  void SetSize(gfx::Size new_size);
 
   // Called by Document::getCSSCanvasContext as well as above getContext().
   CanvasRenderingContext* GetCanvasRenderingContext(
+      ExecutionContext*,
       const String&,
       const CanvasContextCreationAttributesCore&);
 
@@ -243,8 +243,6 @@ class CORE_EXPORT HTMLCanvasElement final
   bool TransferToGPUTextureWasInvoked() override;
 
   // CanvasRenderingContextHost implementation
-  void UpdateMemoryUsage() override;
-  size_t GetMemoryUsage() const override;
   bool ShouldAccelerate2dContext() const override;
   bool LowLatencyEnabled() const override;
   void SetTransferToGPUTextureWasInvoked() override;
@@ -400,8 +398,6 @@ class CORE_EXPORT HTMLCanvasElement final
 
   void OnWidthOrHeightAssigned();
 
-  void SetSurfaceSize(gfx::Size);
-
   bool SizeChangesAreAllowed(ExceptionState& exception_state);
 
   bool PaintsIntoCanvasBuffer() const;
@@ -416,6 +412,7 @@ class CORE_EXPORT HTMLCanvasElement final
   scoped_refptr<StaticBitmapImage> GetTransparentImage();
 
   CanvasRenderingContext* GetCanvasRenderingContextInternal(
+      ExecutionContext*,
       const String&,
       const CanvasContextCreationAttributesCore&);
 
@@ -467,9 +464,6 @@ class CORE_EXPORT HTMLCanvasElement final
 
   bool did_notify_listeners_for_current_frame_ = false;
 
-  // GPU Memory Management
-  mutable intptr_t externally_allocated_memory_;
-
   scoped_refptr<StaticBitmapImage> transparent_image_;
 
   // Paint flags set based on CSS properties, which must be propagated to the
@@ -479,8 +473,6 @@ class CORE_EXPORT HTMLCanvasElement final
   cc::PaintFlags::DynamicRangeLimitMixture dynamic_range_limit_;
 
   VectorOf<ElementHitTestRegion> hit_test_regions_;
-
-  NO_UNIQUE_ADDRESS V8ExternalMemoryAccounterBase external_memory_accounter_;
 };
 
 }  // namespace blink

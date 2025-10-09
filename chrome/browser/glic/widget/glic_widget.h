@@ -18,18 +18,37 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/widget/widget.h"
 
+class BrowserWindowInterface;
+
 namespace glic {
+// Distance the detached window should be from the top and the right of the
+// display when opened unassociated to a browser.
+inline constexpr static int kDefaultDetachedTopRightDistance = 48;
+
+class GlicView;
 
 extern void* kGlicWidgetIdentifier;
 
 // Glic panel widget.
 class GlicWidget : public views::Widget, public ThemeServiceObserver {
  public:
-  explicit GlicWidget(const Widget&) = delete;
-  GlicWidget& operator=(const Widget&) = delete;
+  GlicWidget(const GlicWidget&) = delete;
+  GlicWidget& operator=(const GlicWidget&) = delete;
   ~GlicWidget() override;
 
+  // Returns the initial size for the single instance floating window.
   static gfx::Size GetInitialSize();
+
+  static gfx::Rect GetInitialBounds(BrowserWindowInterface* browser,
+                                    gfx::Size target_size);
+
+  // Return `current_size` or the default minimum size if not provided.
+  // The return value is clamped to fit between the minimum and maximum sizes.
+  static gfx::Size ClampSize(std::optional<gfx::Size> current_size,
+                             const GlicWidget* glic_widget);
+
+  // True if |bounds| is an allowed position the Widget can be shown in.
+  static bool IsWidgetLocationAllowed(const gfx::Rect& bounds);
 
   // Create a widget with the given bounds.
   static std::unique_ptr<GlicWidget> Create(
@@ -37,6 +56,13 @@ class GlicWidget : public views::Widget, public ThemeServiceObserver {
       const gfx::Rect& initial_bounds,
       base::WeakPtr<ui::AcceleratorTarget> accelerator_delegate,
       bool user_resizable);
+
+  // Returns the last requested size, given by glic_size, clamped between the
+  // widget's minimum size and a maximum size (or the initial size if none is
+  // set).
+  static gfx::Size GetLastRequestedSizeClamped(
+      const GlicWidget* glic_widget,
+      std::optional<gfx::Size> glic_size);
 
   // Get the most-overlapping display.
   display::Display GetDisplay();
@@ -55,6 +81,7 @@ class GlicWidget : public views::Widget, public ThemeServiceObserver {
   gfx::Rect WidgetToVisibleBounds(gfx::Rect widget_bounds);
 
   base::WeakPtr<GlicWidget> GetWeakPtr();
+  GlicView* GetGlicView();
 
  private:
   GlicWidget(ThemeService* theme_service, InitParams params);

@@ -50,7 +50,7 @@ import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.location.LocationUtils;
 import org.chromium.components.permissions.PermissionDialogController;
@@ -299,6 +299,7 @@ public class PageInfoDiscoverabilityTest {
     }
 
     /** Tests omnibox permission when permission is blocked by the user. */
+    // Disabled on android.emulator_12l_landscape - crbug.com/442769979.
     @Test
     @MediumTest
     @Feature({"PageInfoDiscoverability"})
@@ -358,7 +359,7 @@ public class PageInfoDiscoverabilityTest {
                     mMediator.onDialogResult(
                             sPermissionTestRule.getActivity().getWindowAndroid(),
                             permissions,
-                            ContentSettingValues.ALLOW);
+                            ContentSetting.ALLOW);
                 });
         Assert.assertEquals(
                 isInSiteSettings ? contentSettingsType : ContentSettingsType.DEFAULT,

@@ -31,10 +31,11 @@ class TestingAimEligibilityService : public ChromeAimEligibilityService {
       bool is_server_eligible,
       bool server_eligibility_enabled,
       PrefService& pref_service,
-      TemplateURLService& template_url_service)
+      TemplateURLService* template_url_service)
       : ChromeAimEligibilityService(pref_service,
                                     template_url_service,
-                                    /*url_loader_factory=*/nullptr),
+                                    /*url_loader_factory=*/nullptr,
+                                    /*identity_manager=*/nullptr),
         is_locally_eligible_(is_locally_eligible),
         is_server_eligible_(is_server_eligible),
         server_eligibility_enabled_(server_eligibility_enabled) {}
@@ -117,7 +118,7 @@ class NtpComposeboxFieldTrialEntrypointBrowserTest
                   std::make_unique<TestingAimEligibilityService>(
                       is_locally_eligible, is_server_eligible,
                       server_eligibility_enabled, *profile->GetPrefs(),
-                      *TemplateURLServiceFactory::GetForProfile(profile)));
+                      TemplateURLServiceFactory::GetForProfile(profile)));
             }));
 
     InProcessBrowserTest::SetUpOnMainThread();
@@ -164,7 +165,7 @@ IN_PROC_BROWSER_TEST_P(NtpComposeboxFieldTrialEntrypointBrowserTest, Test) {
     expected_enabled = false;
   } else {
     // Get the service to check server eligibility (this is now handled by the
-    // mock)
+    // mock).
     auto* service =
         AimEligibilityServiceFactory::GetForProfile(browser()->profile());
 
@@ -176,9 +177,11 @@ IN_PROC_BROWSER_TEST_P(NtpComposeboxFieldTrialEntrypointBrowserTest, Test) {
       if (!is_locally_eligible) {
         expected_enabled = false;
       } else {
-        // 4. For English locales in the US, check the EnglishUS feature.
+        // 4. For English locales in the US, check either the EnglishUS or
+        // generic features.
         if (locale == "en-US" && country == "us") {
-          expected_enabled = entrypoint_english_us_feature;
+          expected_enabled =
+              entrypoint_english_us_feature || entrypoint_feature;
         } else {
           // 5. Otherwise, check the generic entrypoint feature.
           expected_enabled = entrypoint_feature;

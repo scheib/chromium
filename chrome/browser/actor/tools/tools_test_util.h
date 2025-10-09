@@ -5,13 +5,16 @@
 #ifndef CHROME_BROWSER_ACTOR_TOOLS_TOOLS_TEST_UTIL_H_
 #define CHROME_BROWSER_ACTOR_TOOLS_TOOLS_TEST_UTIL_H_
 
+#include <string>
 #include <string_view>
 
 #include "base/command_line.h"
+#include "base/files/scoped_temp_dir.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/actor/actor_task.h"
 #include "chrome/browser/password_manager/actor_login/actor_login_service.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/browser/render_frame_host.h"
 
@@ -52,12 +55,12 @@ class MockActorLoginService : public actor_login::ActorLoginService {
 
   void SetLoginStatus(actor_login::LoginStatusResultOrError login_status);
 
-  const actor_login::Credential& last_credential_used() const;
+  const std::optional<actor_login::Credential>& last_credential_used() const;
 
  private:
   actor_login::CredentialsOrError credentials_;
   actor_login::LoginStatusResultOrError login_status_;
-  actor_login::Credential last_credential_used_;
+  std::optional<actor_login::Credential> last_credential_used_;
 };
 
 inline constexpr int32_t kNonExistentContentNodeId =
@@ -92,10 +95,36 @@ class ActorToolsTest : public InProcessBrowserTest {
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
   base::HistogramTester histogram_tester_for_init_;
+  base::ScopedTempDir temp_dir_;
+};
+
+class ActorToolsGeneralPageStabilityTest
+    : public ActorToolsTest,
+      public ::testing::WithParamInterface<
+          ::features::ActorGeneralPageStabilityMode> {
+ public:
+  static std::string DescribeParam(
+      const testing::TestParamInfo<ParamType>& info);
+  ActorToolsGeneralPageStabilityTest();
+  ~ActorToolsGeneralPageStabilityTest() override;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 gfx::RectF GetBoundingClientRect(content::RenderFrameHost& rfh,
                                  std::string_view query);
+
+std::string DescribeGeneralPageStabilityMode(
+    features::ActorGeneralPageStabilityMode mode);
+
+inline constexpr features::ActorGeneralPageStabilityMode
+    kActorGeneralPageStabilityModeValues[] = {
+        features::ActorGeneralPageStabilityMode::kDisabled,
+        features::ActorGeneralPageStabilityMode::kAllEnabled,
+};
+
+std::string DescribePaintStabilityMode(features::ActorPaintStabilityMode mode);
 
 }  // namespace actor
 

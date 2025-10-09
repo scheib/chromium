@@ -871,12 +871,12 @@ class NavCaptureParameterizedBrowserTest
     wildcard.name = "0";
 
     url_pattern.protocol.emplace_back(
-        PartType::kFixed, destination_page.scheme(), Modifier::kNone);
-    url_pattern.hostname.emplace_back(PartType::kFixed, destination_page.host(),
-                                      Modifier::kNone);
+        PartType::kFixed, destination_page.GetScheme(), Modifier::kNone);
+    url_pattern.hostname.emplace_back(
+        PartType::kFixed, destination_page.GetHost(), Modifier::kNone);
     // The path can be the destination url plus anything else.
-    url_pattern.pathname.emplace_back(PartType::kFixed, destination_page.path(),
-                                      Modifier::kNone);
+    url_pattern.pathname.emplace_back(
+        PartType::kFixed, destination_page.GetPath(), Modifier::kNone);
     url_pattern.pathname.push_back(wildcard);
     url_pattern.search.push_back(wildcard);
     url_pattern.hash.push_back(wildcard);
@@ -905,7 +905,7 @@ class NavCaptureParameterizedBrowserTest
     // redirection happening on the way from a source to a destination url.
     // Prevent multiple redirections from being triggered which causes a Chrome
     // error page to show up, cancelling the navigation.
-    if (base::Contains(request.GetURL().query_piece(), "redirect")) {
+    if (base::Contains(request.GetURL().query(), "redirect")) {
       return nullptr;
     }
 
@@ -935,10 +935,10 @@ class NavCaptureParameterizedBrowserTest
     // destination url.
     GURL::Replacements destination_replacements;
     GURL request_url = request.GetURL();
-    destination_replacements.SetRefStr(request_url.ref_piece());
+    destination_replacements.SetRefStr(request_url.ref());
     std::string new_query =
         request_url.has_query()
-            ? base::StrCat({request_url.query_piece(), "&did_redirect"})
+            ? base::StrCat({request_url.query(), "&did_redirect"})
             : "did_redirect";
     destination_replacements.SetQueryStr(new_query);
     redirect_to = redirect_to.ReplaceComponents(destination_replacements);
@@ -1012,12 +1012,11 @@ class NavCaptureParameterizedBrowserTest
   }
 
   void ClickIntentPickerChip(Browser* browser) {
-    ui_test_utils::BrowserChangeObserver app_browser_observer(
-        nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+    ui_test_utils::BrowserCreatedObserver browser_created_observer;
     // Clicking the Intent Picker will trigger a re-parenting (not a new
     // navigation, so the DomMessage has already been sent).
     ASSERT_TRUE(web_app::ClickIntentPickerChip(browser));
-    app_browser_observer.Wait();
+    browser_created_observer.Wait();
 
     // After re-parenting, the old browser gets a new tab contents and we
     // need to wait for that to finish loading before capturing the end
@@ -1142,8 +1141,6 @@ class NavCaptureParameterizedBrowserTest
     base::File exclusive_file = base::File(
         lock_file_path, base::File::FLAG_OPEN_ALWAYS | base::File::FLAG_WRITE);
 
-// Fuchsia doesn't support file locking.
-#if !BUILDFLAG(IS_FUCHSIA)
     {
       SCOPED_TRACE("Attempting to gain exclusive lock of " +
                    lock_file_path.MaybeAsASCII());
@@ -1152,7 +1149,6 @@ class NavCaptureParameterizedBrowserTest
                base::File::FILE_OK;
       });
     }
-#endif  // !BUILDFLAG(IS_FUCHSIA)
 
     // Re-read expectations to catch changes from other parallel runs of
     // rebaselining.
@@ -1160,9 +1156,7 @@ class NavCaptureParameterizedBrowserTest
 
     return base::ScopedClosureRunner(base::BindOnce(
         [](base::File lock_file) {
-#if !BUILDFLAG(IS_FUCHSIA)
           EXPECT_EQ(lock_file.Unlock(), base::File::FILE_OK);
-#endif  // !BUILDFLAG(IS_FUCHSIA)
           lock_file.Close();
         },
         std::move(exclusive_file)));
@@ -1873,7 +1867,8 @@ class NavCaptureParameterizedBrowserTest
           "tests": {}
         })";
     }
-    test_expectations_ = base::JSONReader::Read(json_data);
+    test_expectations_ =
+        base::JSONReader::Read(json_data, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
     ASSERT_TRUE(test_expectations_) << "Unable to read test expectation file";
     ASSERT_TRUE(test_expectations_.value().is_dict());
   }

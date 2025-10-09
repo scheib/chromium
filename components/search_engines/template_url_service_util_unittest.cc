@@ -14,15 +14,14 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "components/country_codes/country_codes.h"
 #include "components/os_crypt/async/browser/test_utils.h"
+#include "components/regional_capabilities/program_settings.h"
 #include "components/regional_capabilities/regional_capabilities_country_id.h"
 #include "components/regional_capabilities/regional_capabilities_prefs.h"
 #include "components/regional_capabilities/regional_capabilities_service.h"
-#include "components/regional_capabilities/regional_capabilities_switches.h"
 #include "components/search_engines/keyword_web_data_service.h"
 #include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
 #include "components/search_engines/search_engines_pref_names.h"
@@ -77,55 +76,6 @@ std::unique_ptr<TemplateURL> CreatePrepopulateTemplateURL(
   data->id = id;
   data->regulatory_origin = reg_ext_type;
   return std::make_unique<TemplateURL>(*data);
-}
-
-// Sets up dependencies and calls `GetSearchProvidersUsingLoadedEngines()`.
-// As with the wrapped function, `template_urls` will be updated with the loaded
-// engines, including the starter pack ones, and `*resource_keyword_version`
-// will be set to the version number for the loaded data or to 0 if no
-// prepopulated engines were loaded.
-void CallGetSearchProvidersUsingLoadedEngines(
-    search_engines::SearchEnginesTestEnvironment&
-        search_engines_test_environment,
-    TemplateURLService::OwnedTemplateURLVector* template_urls,
-    WDKeywordsResult::Metadata& inout_resource_metadata,
-    os_crypt_async::OSCryptAsync* os_crypt) {
-  // Setup inspired by `//components/webdata_services/web_data_service_wrapper*`
-
-  base::test::TaskEnvironment task_environment{
-      base::test::TaskEnvironment::MainThreadType::UI};
-  auto task_runner = task_environment.GetMainThreadTaskRunner();
-
-  base::ScopedTempDir scoped_temp_dir;
-  ASSERT_TRUE(scoped_temp_dir.CreateUniqueTempDir());
-
-  auto profile_database = base::MakeRefCounted<WebDatabaseService>(
-      scoped_temp_dir.GetPath().Append(kWebDataFilename),
-      /*ui_task_runner=*/task_runner,
-      /*db_task_runner=*/task_runner);
-  profile_database->AddTable(std::make_unique<KeywordTable>());
-  profile_database->LoadDatabase(os_crypt);
-
-  auto keyword_web_data = base::MakeRefCounted<KeywordWebDataService>(
-      profile_database, task_runner);
-  keyword_web_data->Init(base::DoNothing());
-
-  {
-    SearchTermsData search_terms_data;
-    std::set<std::string> removed_keyword_guids;
-
-    GetSearchProvidersUsingLoadedEngines(
-        keyword_web_data.get(), &search_engines_test_environment.pref_service(),
-        search_engines_test_environment.prepopulate_data_resolver(),
-        template_urls,
-        /*default_search_provider=*/nullptr, search_terms_data,
-        inout_resource_metadata, &removed_keyword_guids);
-
-    EXPECT_TRUE(removed_keyword_guids.empty());
-  }
-
-  keyword_web_data->ShutdownOnUISequence();
-  profile_database->ShutdownDatabase();
 }
 
 TEST(TemplateURLServiceUtilTest, RemoveDuplicatePrepopulateIDs) {
@@ -267,12 +217,6 @@ class TemplateURLServiceUtilLoadTest : public testing::Test {
   TemplateURLServiceUtilLoadTest()
       : os_crypt_(os_crypt_async::GetTestOSCryptAsyncForTesting(
             /*is_sync_for_unittests=*/true)) {
-#if BUILDFLAG(IS_ANDROID)
-    // TODO(https://crbug.com/438133907): Reenable once supported by the test
-    // environment.
-    scoped_feature_list_.InitAndDisableFeature(
-        switches::kResolveRegionalCapabilitiesFromDevice);
-#endif  // BUILDFLAG(IS_ANDROID)
   }
 
   // Type used both as input and output of test helpers, to represent the
@@ -314,12 +258,61 @@ class TemplateURLServiceUtilLoadTest : public testing::Test {
 
   // For country samples, using Belgium and France for EEA, and the United
   // States for non-EEA.
-  const CountryIdHolder kEeaCountryId =
-      CountryIdHolder(country_codes::CountryId("BE"));
+  const country_codes::CountryId kRawEeaCountryId =
+      country_codes::CountryId("BE");
+  const CountryIdHolder kEeaCountryId = CountryIdHolder(kRawEeaCountryId);
   const CountryIdHolder kOtherEeaCountryId =
       CountryIdHolder(country_codes::CountryId("FR"));
-  const CountryIdHolder kNonEeaCountryId =
-      CountryIdHolder(country_codes::CountryId("US"));
+  const country_codes::CountryId kRawNonEeaCountryId =
+      country_codes::CountryId("US");
+  const CountryIdHolder kNonEeaCountryId = CountryIdHolder(kRawNonEeaCountryId);
+
+  // Sets up dependencies and calls `GetSearchProvidersUsingLoadedEngines()`.
+  // As with the wrapped function, `template_urls` will be updated with the
+  // loaded engines, including the starter pack ones, and
+  // `*resource_keyword_version` will be set to the version number for the
+  // loaded data or to 0 if no prepopulated engines were loaded.
+  void CallGetSearchProvidersUsingLoadedEngines(
+      TemplateURLService::OwnedTemplateURLVector* template_urls,
+      WDKeywordsResult::Metadata& inout_resource_metadata,
+      os_crypt_async::OSCryptAsync* os_crypt) {
+    // Setup inspired by
+    // `//components/webdata_services/web_data_service_wrapper*`
+
+    auto task_runner = task_environment_.GetMainThreadTaskRunner();
+
+    base::ScopedTempDir scoped_temp_dir;
+    ASSERT_TRUE(scoped_temp_dir.CreateUniqueTempDir());
+
+    auto profile_database = base::MakeRefCounted<WebDatabaseService>(
+        scoped_temp_dir.GetPath().Append(kWebDataFilename),
+        /*ui_task_runner=*/task_runner,
+        /*db_task_runner=*/task_runner);
+    profile_database->AddTable(std::make_unique<KeywordTable>());
+    profile_database->LoadDatabase(os_crypt);
+
+    auto keyword_web_data = base::MakeRefCounted<KeywordWebDataService>(
+        profile_database, task_runner);
+    keyword_web_data->Init(base::DoNothing());
+
+    {
+      SearchTermsData search_terms_data;
+      std::set<std::string> removed_keyword_guids;
+
+      GetSearchProvidersUsingLoadedEngines(
+          keyword_web_data.get(),
+          &search_engines_test_environment_.pref_service(),
+          search_engines_test_environment_.prepopulate_data_resolver(),
+          template_urls,
+          /*default_search_provider=*/nullptr, search_terms_data,
+          inout_resource_metadata, &removed_keyword_guids);
+
+      EXPECT_TRUE(removed_keyword_guids.empty());
+    }
+
+    keyword_web_data->ShutdownOnUISequence();
+    profile_database->ShutdownDatabase();
+  }
 
   // Simulates how the search providers are loaded during Chrome init by
   // calling `GetSearchProvidersUsingLoadedEngines()`.
@@ -334,8 +327,7 @@ class TemplateURLServiceUtilLoadTest : public testing::Test {
     WDKeywordsResult::Metadata resource_metadata;
     resource_metadata.builtin_keyword_data_version = initial_state.data_version;
     resource_metadata.builtin_keyword_country = initial_state.country;
-    CallGetSearchProvidersUsingLoadedEngines(search_engines_test_environment_,
-                                             &template_urls, resource_metadata,
+    CallGetSearchProvidersUsingLoadedEngines(&template_urls, resource_metadata,
                                              os_crypt_.get());
     size_t keyword_engines_count =
         template_urls.size() -
@@ -348,10 +340,6 @@ class TemplateURLServiceUtilLoadTest : public testing::Test {
     };
   }
 
-  PrefService& prefs() {
-    return search_engines_test_environment_.pref_service();
-  }
-
   search_engines::SearchEngineChoiceService& search_engine_choice_service() {
     return search_engines_test_environment_.search_engine_choice_service();
   }
@@ -362,16 +350,17 @@ class TemplateURLServiceUtilLoadTest : public testing::Test {
   }
 
  private:
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::MainThreadType::UI};
   std::unique_ptr<os_crypt_async::OSCryptAsync> os_crypt_;
   search_engines::SearchEnginesTestEnvironment search_engines_test_environment_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(TemplateURLServiceUtilLoadTest,
        GetSearchProvidersUsingLoadedEngines_OutOfEea) {
-  regional_capabilities_service().ClearCacheForTesting();
-  prefs().SetInteger(regional_capabilities::prefs::kCountryIDAtInstall,
-                     kNonEeaCountryId.GetForTesting().Serialize());
+  regional_capabilities_service().SetCacheForTesting(
+      kRawNonEeaCountryId, regional_capabilities::GetSettingsForProgram(
+                               regional_capabilities::Program::kDefault));
 
   const KeywordTestMetadata kDefaultUpdatedState = {
       .data_version = kCurrentDataVersion,
@@ -413,9 +402,9 @@ TEST_F(TemplateURLServiceUtilLoadTest,
 
 TEST_F(TemplateURLServiceUtilLoadTest,
        GetSearchProvidersUsingLoadedEngines_InEea) {
-  regional_capabilities_service().ClearCacheForTesting();
-  prefs().SetInteger(regional_capabilities::prefs::kCountryIDAtInstall,
-                     kEeaCountryId.GetForTesting().Serialize());
+  regional_capabilities_service().SetCacheForTesting(
+      kRawEeaCountryId, regional_capabilities::GetSettingsForProgram(
+                            regional_capabilities::Program::kWaffle));
   const size_t kEeaKeywordEnginesCount =
       TemplateURLPrepopulateData::kRegionalSettings
           .find(kEeaCountryId.GetForTesting())

@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.history;
 
+import static org.chromium.build.NullUtil.assumeNonNull;
 import static org.chromium.chrome.browser.hub.HubAnimationConstants.HUB_LAYOUT_FADE_DURATION_MS;
 
 import android.app.Activity;
@@ -14,7 +15,6 @@ import android.widget.FrameLayout;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
@@ -37,6 +37,7 @@ import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.widget.MenuOrKeyboardActionController.MenuOrKeyboardActionHandler;
 
 import java.util.function.DoubleConsumer;
+import java.util.function.Supplier;
 
 /** A {@link Pane} representing history. */
 @NullMarked
@@ -53,6 +54,8 @@ public class HistoryPane implements Pane {
     private final ObservableSupplierImpl<@Nullable View> mHubOverlayViewSupplier =
             new ObservableSupplierImpl<>();
     private final ObservableSupplierImpl<Boolean> mHubSearchEnabledStateSupplier =
+            new ObservableSupplierImpl<>();
+    private final ObservableSupplierImpl<Boolean> mHubSearchBoxVisibilitySupplier =
             new ObservableSupplierImpl<>();
 
     // FrameLayout which has HistoryManager's root view as the only child.
@@ -138,7 +141,7 @@ public class HistoryPane implements Pane {
                             mActivity,
                             /* isSeparateActivity= */ false,
                             mSnackbarManager,
-                            mProfileProviderSupplier.get().getOriginalProfile(),
+                            assumeNonNull(mProfileProviderSupplier.get()).getOriginalProfile(),
                             mBottomSheetController,
                             mTabSupplier,
                             new BrowsingHistoryBridge(
@@ -199,6 +202,11 @@ public class HistoryPane implements Pane {
     @Override
     public ObservableSupplier<Boolean> getHubSearchEnabledStateSupplier() {
         return mHubSearchEnabledStateSupplier;
+    }
+
+    @Override
+    public ObservableSupplier<Boolean> getHubSearchBoxVisibilitySupplier() {
+        return mHubSearchBoxVisibilitySupplier;
     }
 
     private void onHistoryItemOpened() {

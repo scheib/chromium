@@ -39,7 +39,7 @@ class ScopedTooltipDisabler;
 namespace views {
 class DesktopDragDropClientWin;
 class HWNDMessageHandler;
-class NonClientFrameView;
+class FrameView;
 
 namespace test {
 class DesktopWindowTreeHostWinTestApi;
@@ -99,8 +99,6 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   void OnNativeWidgetCreated(const Widget::InitParams& params) override;
   void OnActiveWindowChanged(bool active) override;
   void OnWidgetInitDone() override;
-  void OnWidgetThemeChanged(ui::ColorProviderKey::ColorMode color_mode,
-                            std::optional<SkColor> background_color) override;
   std::unique_ptr<corewm::Tooltip> CreateTooltip() override;
   std::unique_ptr<aura::client::DragDropClient> CreateDragDropClient() override;
   void Close() override;
@@ -147,13 +145,14 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
       Widget::MoveLoopEscapeBehavior escape_behavior) override;
   void EndMoveLoop() override;
   void SetVisibilityChangedAnimationsEnabled(bool value) override;
-  std::unique_ptr<NonClientFrameView> CreateNonClientFrameView() override;
+  std::unique_ptr<FrameView> CreateFrameView() override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
   void FrameTypeChanged() override;
   void SetFullscreen(bool fullscreen, int64_t target_display_id) override;
   bool IsFullscreen() const override;
   void SetOpacity(float opacity) override;
+  void SetBackgroundColor(SkColor background_color) override;
   void SetAspectRatio(const gfx::SizeF& aspect_ratio,
                       const gfx::Size& excluded_margin) override;
   void SetWindowIcons(const gfx::ImageSkia& window_icon,
@@ -226,6 +225,7 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   gfx::Size DIPToScreenSize(const gfx::Size& dip_size) const override;
   void ResetWindowControls() override;
   gfx::NativeViewAccessible GetNativeViewAccessible() override;
+  gfx::NativeViewAccessible GetParentNativeViewAccessible() override;
   void HandleActivationChanged(bool active) override;
   bool HandleAppCommand(int command) override;
   void HandleCancelMode() override;

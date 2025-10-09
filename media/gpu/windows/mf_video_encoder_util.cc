@@ -392,13 +392,6 @@ std::vector<Microsoft::WRL::ComPtr<IMFActivate>> EnumerateHardwareEncoders(
   if (!InitializeMediaFoundation()) {
     return encoders;
   }
-#if defined(ARCH_CPU_ARM64)
-  // TODO (crbug.com/1509117): Temporarily disable video encoding on arm64
-  // until we figure out what OS reports all codecs as supported.
-  if (!base::FeatureList::IsEnabled(kMediaFoundationAcceleratedEncodeOnArm64)) {
-    return encoders;
-  }
-#endif
 
   MFTEnum2Type mftenum2_func = GetMFTEnum2Function();
   if (!mftenum2_func) {
@@ -564,6 +557,13 @@ std::vector<FramerateAndResolution> GetMaxFramerateAndResolutionsFromMFT(
   if (codec == VideoCodec::kH264) {
     max_framerate_and_resolutions.push_back(kLegacy2KMaxFramerateAndResolution);
     max_framerate_and_resolutions.push_back(kLegacy4KMaxFramerateAndResolution);
+  } else if (codec == VideoCodec::kVP9) {
+    max_framerate_and_resolutions.push_back(
+        kVP9Modern2KMaxFramerateAndResolution);
+    max_framerate_and_resolutions.push_back(
+        kVP9Modern4KMaxFramerateAndResolution);
+    max_framerate_and_resolutions.push_back(
+        kVP9Modern8KMaxFramerateAndResolution);
   } else {
     max_framerate_and_resolutions.push_back(kModern2KMaxFramerateAndResolution);
     max_framerate_and_resolutions.push_back(kModern4KMaxFramerateAndResolution);

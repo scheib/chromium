@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
+import("//pdf/features.gni")
 
 assert(is_chromeos)
 
@@ -441,6 +442,7 @@ source_set("browser_tests") {
     "//chrome/browser/apps/app_service:app_registry_cache_waiter",
     "//chrome/browser/apps/app_service:constants",
     "//chrome/browser/apps/app_service:test_support",
+    "//chrome/browser/apps/app_service/publishers",
     "//chrome/browser/ash/app_list/search",
     "//chrome/browser/ash/app_list/search/local_image_search",
     "//chrome/browser/ash/arc/fileapi",
@@ -563,6 +565,10 @@ source_set("browser_tests") {
     "//ui/views",
     "//url",
   ]
+
+  if (enable_pdf) {
+    deps += [ "//pdf:features" ]
+  }
 
   # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
   # enable the diagnostic by removing this line.

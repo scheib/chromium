@@ -50,6 +50,7 @@
 #import "ios/chrome/browser/menu/ui_bundled/browser_action_factory.h"
 #import "ios/chrome/browser/omnibox/coordinator/omnibox_coordinator.h"
 #import "ios/chrome/browser/omnibox/model/chrome_omnibox_client_ios.h"
+#import "ios/chrome/browser/omnibox/public/omnibox_presentation_context.h"
 #import "ios/chrome/browser/omnibox/ui/omnibox_focus_delegate.h"
 #import "ios/chrome/browser/overlays/model/public/overlay_presentation_context.h"
 #import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
@@ -855,6 +856,12 @@ const base::TimeDelta kSearchWithCameraTooltipHintDelay = base::Seconds(2.0);
 }
 
 - (void)lensOverlayResultsPagePresenter:
+            (id<LensOverlayResultsPagePresenting>)presenter
+    animateAttachedUIDismissWithCompletion:(ProceduralBlock)completion {
+  [self animateSelectionUIExitWithCompletion:completion];
+}
+
+- (void)lensOverlayResultsPagePresenter:
             (LensOverlayResultsPagePresenter*)presenter
                 didUpdateDimensionState:(SheetDimensionState)state {
   if (_associatedTabHelper) {
@@ -921,7 +928,7 @@ const base::TimeDelta kSearchWithCameraTooltipHintDelay = base::Seconds(2.0);
   [_metricsRecorder recordOverflowMenuOpened];
 }
 
-- (void)lensOverlayMediatorOpenURLInNewTabRequsted:(GURL)URL {
+- (void)lensOverlayMediatorOpenURLInNewTabRequested:(GURL)URL {
   // Take a snapshot of the current tab before opening the URL in a new tab.
   // A side effect of opening a new tab is that the snapshot storage associated
   // to the current web state is updated. This snapshot would not include the
@@ -1327,7 +1334,7 @@ const base::TimeDelta kSearchWithCameraTooltipHintDelay = base::Seconds(2.0);
       initWithBaseViewController:nil
                          browser:browser
                    omniboxClient:std::move(omniboxClient)
-                   isLensOverlay:YES];
+             presentationContext:OmniboxPresentationContext::kLensOverlay];
 
   // TODO(crbug.com/355179721): Add omnibox focus delegate.
   _omniboxCoordinator.presenterDelegate = _resultViewController;
@@ -1573,8 +1580,8 @@ const base::TimeDelta kSearchWithCameraTooltipHintDelay = base::Seconds(2.0);
   }
 
   _resultsPagePresenter.delegate = self;
-  _resultMediator.presentationDelegate = _resultsPagePresenter;
-  _mediator.presentationDelegate = _resultsPagePresenter;
+  _resultMediator.bottomSheetCommands = _resultsPagePresenter;
+  _mediator.bottomSheetCommands = _resultsPagePresenter;
 }
 
 // Presents the result botom sheet.
@@ -1600,6 +1607,12 @@ const base::TimeDelta kSearchWithCameraTooltipHintDelay = base::Seconds(2.0);
 // Displays a restoration window to preserve lens overlay's visual state during
 // tab changes.
 - (void)showRestorationWindowIfNeeded {
+  // The custom presentation does not need the restoration window as the bottom
+  // sheet is contained in the container view.
+  if (UseCustomLensOverlayBottomSheet()) {
+    return;
+  }
+
   // If there is a pending snapshot, show it in a separate fullscreen window to
   // ease the transition.
   UIWindow* sceneWindow = self.browser->GetSceneState().window;

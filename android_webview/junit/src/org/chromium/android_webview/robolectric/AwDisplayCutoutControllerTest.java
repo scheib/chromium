@@ -15,9 +15,9 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.view.DisplayCutout;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.WindowInsets;
 
+import androidx.core.graphics.Insets;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
@@ -34,17 +34,22 @@ import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLog;
 
 import org.chromium.android_webview.AwDisplayCutoutController;
-import org.chromium.android_webview.AwDisplayCutoutController.Insets;
 import org.chromium.android_webview.common.AwFeatures;
 import org.chromium.base.Log;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.Features.EnableFeatures;
 
 /** JUnit tests for AwDisplayCutoutController. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
-@EnableFeatures(AwFeatures.WEBVIEW_SAFE_AREA_INCLUDES_SYSTEM_BARS)
+@EnableFeatures({
+    AwFeatures.WEBVIEW_REPORT_IME_INSETS,
+    AwFeatures.WEBVIEW_SAFE_AREA_INCLUDES_SYSTEM_BARS
+})
+// This feature is tested in AwContentsTest.
+@Features.DisableFeatures({AwFeatures.WEBVIEW_USE_VIEW_POSITION_OBSERVER_FOR_INSETS})
 public class AwDisplayCutoutControllerTest {
     private static final String TAG = "DisplayCutoutTest";
     private static final boolean DEBUG = false;
@@ -57,9 +62,6 @@ public class AwDisplayCutoutControllerTest {
     @Mock private DisplayCutout mDisplayCutout;
     @Mock private View mView;
     @Mock private View mAnotherView;
-
-    @Mock private ViewGroup mParentView;
-    @Mock private ViewGroup mRootView;
 
     private View.OnApplyWindowInsetsListener mListener;
     private final int[] mLocationOnScreen = {0, 0};
@@ -149,7 +151,10 @@ public class AwDisplayCutoutControllerTest {
         mInOrder.verify(mDelegate).getDipScale();
 
         // Note that DIP of 2.0 is applied, so the values are halved.
-        mInOrder.verify(mDelegate).setDisplayCutoutSafeArea(eq(new Insets(10, 20, 30, 40)));
+        mInOrder.verify(mDelegate).setDisplayCutoutSafeArea(eq(Insets.of(10, 20, 30, 40)));
+        // Every time the display cutout safe area is changed, we should notify that IME insets have
+        // changed.
+        mInOrder.verify(mDelegate).bottomImeInsetChanged();
     }
 
     @Test
@@ -163,7 +168,10 @@ public class AwDisplayCutoutControllerTest {
         mInOrder.verify(mDelegate).getDipScale();
 
         // Note that DIP of 2.0 is applied, so the values are halved.
-        mInOrder.verify(mDelegate).setDisplayCutoutSafeArea(eq(new Insets(10, 20, 30, 40)));
+        mInOrder.verify(mDelegate).setDisplayCutoutSafeArea(eq(Insets.of(10, 20, 30, 40)));
+        // Every time the display cutout safe area is changed, we should notify that IME insets have
+        // changed.
+        mInOrder.verify(mDelegate).bottomImeInsetChanged();
     }
 
     @Test
@@ -177,7 +185,10 @@ public class AwDisplayCutoutControllerTest {
         mInOrder.verify(mDelegate).getDipScale();
 
         // Note that DIP of 2.0 is applied, so the values are halved.
-        mInOrder.verify(mDelegate).setDisplayCutoutSafeArea(eq(new Insets(10, 20, 30, 40)));
+        mInOrder.verify(mDelegate).setDisplayCutoutSafeArea(eq(Insets.of(10, 20, 30, 40)));
+        // Every time the display cutout safe area is changed, we should notify that IME insets have
+        // changed.
+        mInOrder.verify(mDelegate).bottomImeInsetChanged();
     }
 
     @Test

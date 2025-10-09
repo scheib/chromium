@@ -51,7 +51,6 @@
 #include "cc/tiles/tile_priority.h"
 #include "cc/tiles/tiling_set_raster_queue_all.h"
 #include "cc/trees/layer_tree_impl.h"
-#include "components/viz/common/resources/resource_sizes.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
 #include "components/viz/test/begin_frame_args_test.h"
 #include "gpu/command_buffer/client/test_shared_image_interface.h"
@@ -63,7 +62,6 @@
 #include "third_party/skia/include/core/SkSurface.h"
 
 using testing::_;
-using testing::Invoke;
 using testing::Return;
 using testing::StrictMock;
 
@@ -1771,7 +1769,7 @@ TEST_F(TileManagerTest, AllWorkFinished) {
         host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     EXPECT_TRUE(host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     run_loop.Run();
@@ -1785,7 +1783,7 @@ TEST_F(TileManagerTest, AllWorkFinished) {
         host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     host_impl()->tile_manager()->SetMoreTilesNeedToBeRasterizedForTesting();
     EXPECT_TRUE(host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
@@ -1800,7 +1798,7 @@ TEST_F(TileManagerTest, AllWorkFinished) {
         host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->ResetSignalsForTesting();
     host_impl()->tile_manager()->SetMoreTilesNeedToBeRasterizedForTesting();
     host_impl()->tile_manager()->CheckIfMoreTilesNeedToBePreparedForTesting();
@@ -1814,7 +1812,7 @@ TEST_F(TileManagerTest, AllWorkFinished) {
         host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->ResetSignalsForTesting();
     auto global_state = host_impl()->global_tile_state();
     global_state.tree_priority = SMOOTHNESS_TAKES_PRIORITY;
@@ -1825,9 +1823,8 @@ TEST_F(TileManagerTest, AllWorkFinished) {
   }
 }
 
-// Same test as `AllWorkFinished` above, but with kFastPathNoRaster enabled.
+// Tests the "no work" fast path.
 TEST_F(TileManagerTest, FastPathWhenNoRasterWork) {
-  base::test::ScopedFeatureList feature_list{features::kFastPathNoRaster};
   base::HistogramTester histogram_tester;
 
   host_impl()->tile_manager()->DisbleMetricsSubsamplingForTesting();
@@ -1839,7 +1836,7 @@ TEST_F(TileManagerTest, FastPathWhenNoRasterWork) {
         host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     EXPECT_TRUE(host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     run_loop.Run();
@@ -1853,7 +1850,7 @@ TEST_F(TileManagerTest, FastPathWhenNoRasterWork) {
         host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     host_impl()->tile_manager()->SetMoreTilesNeedToBeRasterizedForTesting();
     EXPECT_TRUE(host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
@@ -1877,7 +1874,7 @@ TEST_F(TileManagerTest, ActivateAndDrawWhenOOM) {
     EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(global_state);
     EXPECT_TRUE(host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
     run_loop.Run();
@@ -1895,7 +1892,7 @@ TEST_F(TileManagerTest, ActivateAndDrawWhenOOM) {
     EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(global_state);
     run_loop.Run();
     EXPECT_FALSE(host_impl()->notify_tile_state_changed_called());
@@ -1914,7 +1911,7 @@ class TileManagerOcclusionTest : public TileManagerTest {
       const GlobalStateThatImpactsTilePriority& state) {
     base::RunLoop run_loop;
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     tile_manager()->PrepareTiles(state);
     run_loop.Run();
     tile_manager()->PrepareToDraw();
@@ -2052,7 +2049,7 @@ TEST_F(PixelInspectTileManagerTest, ImageDrawn) {
   auto* tile_manager = host_impl()->tile_manager();
   base::RunLoop run_loop;
   EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-      .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
   tile_manager->PrepareTiles(host_impl()->global_tile_state());
   run_loop.Run();
   tile_manager->PrepareToDraw();
@@ -2135,8 +2132,9 @@ TEST_F(ActivationTasksDoNotBlockReadyToDrawTest,
   // The first task to run should be ReadyToDraw (this should not be blocked by
   // the tasks required for activation).
   base::RunLoop run_loop;
-  EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw())
-      .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+  EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw()).WillOnce([&run_loop]() {
+    run_loop.Quit();
+  });
   static_cast<SynchronousTaskGraphRunner*>(task_graph_runner())
       ->RunSingleTaskForTesting();
   run_loop.Run();
@@ -2487,7 +2485,7 @@ TEST_F(InvalidResourceTileManagerTest, InvalidResource) {
 
   base::RunLoop run_loop;
   EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-      .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
   tile_manager->PrepareTiles(host_impl()->global_tile_state());
   run_loop.Run();
   tile_manager->PrepareToDraw();
@@ -2636,7 +2634,7 @@ TEST_F(TileManagerReadyToDrawTest, SmoothActivationWaitsOnCallback) {
   {
     base::RunLoop run_loop;
     EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate())
-        .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     EXPECT_CALL(*mock_raster_buffer_provider(),
                 IsResourceReadyToDraw(testing::_))
         .WillRepeatedly(Return(true));
@@ -2656,8 +2654,9 @@ TEST_F(TileManagerReadyToDrawTest, NonSmoothActivationDoesNotWaitOnCallback) {
   base::RunLoop run_loop;
 
   host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
-  EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate())
-      .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+  EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate()).WillOnce([&run_loop]() {
+    run_loop.Quit();
+  });
   run_loop.Run();
 
   EXPECT_TRUE(host_impl()->tile_manager()->IsReadyToDraw());
@@ -2675,8 +2674,9 @@ TEST_F(TileManagerReadyToDrawTest, HdrHeadroomPropagated) {
   base::RunLoop run_loop;
 
   host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
-  EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate())
-      .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+  EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate()).WillOnce([&run_loop]() {
+    run_loop.Quit();
+  });
   run_loop.Run();
 
   EXPECT_TRUE(host_impl()->tile_manager()->IsReadyToDraw());
@@ -2716,8 +2716,9 @@ TEST_F(TileManagerReadyToDrawTest, SmoothDrawWaitsOnCallback) {
 
   {
     base::RunLoop run_loop;
-    EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+    EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw()).WillOnce([&run_loop]() {
+      run_loop.Quit();
+    });
     EXPECT_CALL(*mock_raster_buffer_provider(),
                 IsResourceReadyToDraw(testing::_))
         .WillRepeatedly(Return(true));
@@ -2737,8 +2738,9 @@ TEST_F(TileManagerReadyToDrawTest, NonSmoothDrawDoesNotWaitOnCallback) {
   base::RunLoop run_loop;
 
   host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
-  EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw())
-      .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+  EXPECT_CALL(MockHostImpl(), NotifyReadyToDraw()).WillOnce([&run_loop]() {
+    run_loop.Quit();
+  });
   run_loop.Run();
 
   EXPECT_TRUE(host_impl()->tile_manager()->IsReadyToDraw());
@@ -2751,8 +2753,9 @@ TEST_F(TileManagerReadyToDrawTest, NoCallbackWhenAlreadyReadyToDraw) {
 
   base::RunLoop run_loop;
   host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
-  EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate())
-      .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+  EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate()).WillOnce([&run_loop]() {
+    run_loop.Quit();
+  });
   EXPECT_CALL(*mock_raster_buffer_provider(), IsResourceReadyToDraw(_))
       .WillRepeatedly(Return(true));
   run_loop.Run();
@@ -2776,7 +2779,7 @@ TEST_F(TileManagerReadyToDrawTest, TilePrioritiesUpdated) {
   {
     base::RunLoop run_loop;
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
 
     // Until we activate our ready to draw callback, treat all resources as not
     // ready to draw.
@@ -2817,7 +2820,7 @@ TEST_F(TileManagerReadyToDrawTest, TilePrioritiesUpdated) {
   {
     base::RunLoop run_loop;
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     run_loop.Run();
   }
@@ -2873,7 +2876,7 @@ TEST_F(TileManagerReadyToDrawTest, PrepaintTilesAreDroppedWhenIdle) {
   base::RunLoop run_loop;
   host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
   EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-      .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
   run_loop.Run();
 
   int prepaint_tiles =
@@ -2927,7 +2930,7 @@ TEST_F(TileManagerReadyToDrawTest, PrepaintTilesAreNotDropped) {
   base::RunLoop run_loop;
   host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
   EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-      .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
   run_loop.Run();
 
   int before_prepaint_tiles =
@@ -2954,7 +2957,7 @@ TEST_F(TileManagerReadyToDrawTest, PrepaintTilesContinuousIdleTime) {
     base::RunLoop run_loop;
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     run_loop.Run();
   };
 
@@ -3024,7 +3027,7 @@ TEST_F(TileManagerReadyToDrawTest, ReadyToDrawRespectsRequirementChange) {
     host_impl()->tile_manager()->DidModifyTilePriorities();
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate())
-        .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     EXPECT_CALL(*mock_raster_buffer_provider(), IsResourceReadyToDraw(_))
         .WillRepeatedly(Return(true));
     run_loop.Run();
@@ -3072,7 +3075,7 @@ TEST_F(TileManagerReadyToDrawTest, ReadyToDrawRespectsRequirementChange) {
     host_impl()->tile_manager()->DidModifyTilePriorities();
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate())
-        .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     run_loop.Run();
   }
 
@@ -3098,7 +3101,7 @@ TEST_F(TileManagerReadyToDrawTest, SetBackIsLikelyToRequireADrawToFalse) {
     host_impl()->tile_manager()->DidModifyTilePriorities();
     host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
     EXPECT_CALL(MockHostImpl(), NotifyReadyToActivate())
-        .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     EXPECT_CALL(*mock_raster_buffer_provider(), IsResourceReadyToDraw(_))
         .WillRepeatedly(Return(true));
     run_loop.Run();
@@ -3969,7 +3972,7 @@ TEST_F(TileManagerCheckRasterQueriesTest,
   base::RunLoop run_loop;
   EXPECT_FALSE(host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
   EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-      .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
   EXPECT_CALL(pending_raster_queries_, CheckRasterFinishedQueries()).Times(1);
   host_impl()->tile_manager()->PrepareTiles(host_impl()->global_tile_state());
   EXPECT_TRUE(host_impl()->tile_manager()->HasScheduledTileTasksForTesting());
@@ -4014,7 +4017,7 @@ class TileManagerTileReclaimTest : public TileManagerTest {
 
     base::RunLoop run_loop;
     EXPECT_CALL(MockHostImpl(), NotifyAllTileTasksCompleted())
-        .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     host_impl()->tile_manager()->PrepareTiles(global_tile_state);
     run_loop.Run();
   }

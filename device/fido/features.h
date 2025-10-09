@@ -12,6 +12,13 @@
 
 namespace device {
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS)
+// Allows the passkey unlock error UI to be shown.
+COMPONENT_EXPORT(DEVICE_FIDO)
+BASE_DECLARE_FEATURE(kPasskeyUnlockErrorUi);
+#endif
+
 #if BUILDFLAG(IS_WIN)
 // Controls whether on Windows, U2F/CTAP2 requests are forwarded to the
 // native WebAuthentication API, where available.
@@ -40,10 +47,6 @@ BASE_DECLARE_FEATURE(kWebAuthnICloudKeychainForInactiveWithDrive);
 COMPONENT_EXPORT(DEVICE_FIDO)
 BASE_DECLARE_FEATURE(kWebAuthnICloudKeychainForInactiveWithoutDrive);
 
-// Retry requests to U2F keys after a delay if a low-level error happens.
-COMPONENT_EXPORT(DEVICE_FIDO)
-BASE_DECLARE_FEATURE(kWebAuthnRetryU2FErrors);
-
 // Use insecure software unexportable keys to authenticate to the enclave.
 // For development purposes only.
 COMPONENT_EXPORT(DEVICE_FIDO)
@@ -66,6 +69,12 @@ BASE_DECLARE_FEATURE(kWebAuthnPublishPrelinkingInfo);
 // Enables the WebAuthn Signal API for Windows Hello.
 COMPONENT_EXPORT(DEVICE_FIDO)
 BASE_DECLARE_FEATURE(kWebAuthnHelloSignal);
+
+#if BUILDFLAG(IS_ANDROID)
+// Enables the WebAuthn Signal API for Chrome on Android.
+COMPONENT_EXPORT(DEVICE_FIDO)
+BASE_DECLARE_FEATURE(kWebAuthnAndroidSignal);
+#endif  // BUILDFLAG(IS_ANDROID)
 
 // When enabled, skips configuring hybrid when Windows can do hybrid. Hybrid may
 // still be delegated to Windows regardless of this flag.
@@ -123,12 +132,6 @@ BASE_DECLARE_FEATURE_PARAM(int, kWebAuthnImmediateMediationTimeoutMilliseconds);
 COMPONENT_EXPORT(DEVICE_FIDO)
 BASE_DECLARE_FEATURE(kWebAuthnImmediateGetAutoselect);
 
-// Enables large blob support for iCloud Keychain in MacOS.
-#if BUILDFLAG(IS_MAC)
-COMPONENT_EXPORT(DEVICE_FIDO)
-BASE_DECLARE_FEATURE(kWebAuthnLargeBlobForICloudKeychain);
-#endif  // BUILDFLAG(IS_MAC)
-
 // Enables large blob support for Google Password Manager.
 COMPONENT_EXPORT(DEVICE_FIDO)
 BASE_DECLARE_FEATURE(kWebAuthnLargeBlobForGPM);
@@ -140,6 +143,29 @@ BASE_DECLARE_FEATURE(kWebAuthnSendPinGeneration);
 // Adds the cohort public key and cert.xml serial number to GPM wrapped PINs.
 COMPONENT_EXPORT(DEVICE_FIDO)
 BASE_DECLARE_FEATURE(kWebAuthnWrapCohortData);
+
+// Enables the Authenticator interface to support
+// 'navigator.credentials.get({password: true, mediation: "immediate"})'
+// requests.
+COMPONENT_EXPORT(DEVICE_FIDO)
+BASE_DECLARE_FEATURE(kAuthenticatorPasswordsOnlyImmediateRequests);
+
+// Controls setting the `create_new_vault` flag when refreshing a PIN. When
+// enabled, the enclave will produce new Vault parameters to create a new Vault
+// instead of replacing it.
+COMPONENT_EXPORT(DEVICE_FIDO)
+BASE_DECLARE_FEATURE(kWebAuthnNewRefreshFlow);
+
+// If enabled, treats an empty enumeration of Windows Hello credentials the same
+// as enumeration not being supported. This works around an issue where Windows
+// Hello fails to enumerate credentials under RDP.
+COMPONENT_EXPORT(DEVICE_FIDO)
+BASE_DECLARE_FEATURE(kWebAuthenticationFixWindowsHelloRdp);
+
+// When running an assertion operation, sends the enclave a hash of the client
+// data JSON instead of the full contents.
+COMPONENT_EXPORT(DEVICE_FIDO)
+BASE_DECLARE_FEATURE(kWebAuthenticationHashClientDataJsonForEnclave);
 
 }  // namespace device
 

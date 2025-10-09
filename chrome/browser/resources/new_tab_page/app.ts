@@ -33,20 +33,28 @@ import {getCss} from './app.css.js';
 import {getHtml} from './app.html.js';
 import {BackgroundManager} from './background_manager.js';
 import type {CustomizeButtonsDocumentCallbackRouter, CustomizeButtonsHandlerRemote} from './customize_buttons.mojom-webui.js';
-import {CustomizeChromeSection, SidePanelOpenTrigger} from './customize_buttons.mojom-webui.js';
+import {SidePanelOpenTrigger} from './customize_buttons.mojom-webui.js';
 import {CustomizeButtonsProxy} from './customize_buttons_proxy.js';
+import {CustomizeChromeSection} from './customize_chrome.mojom-webui.js';
 import {CustomizeDialogPage} from './customize_dialog_types.js';
 import type {IframeElement} from './iframe.js';
 import type {LogoElement} from './logo.js';
-import {recordBoolean, recordDuration, recordEnumeration, recordLoadDuration, recordSparseValueWithPersistentHash, recordValue} from './metrics_utils.js';
+import {recordBoolean, recordDuration, recordEnumeration, recordLinearValue, recordLoadDuration, recordSparseValueWithPersistentHash} from './metrics_utils.js';
 import {ParentTrustedDocumentProxy} from './modules/microsoft_auth_frame_connector.js';
 import type {PageCallbackRouter, PageHandlerRemote, Theme} from './new_tab_page.mojom-webui.js';
 import {IphFeature, NtpBackgroundImageSource} from './new_tab_page.mojom-webui.js';
 import {NewTabPageProxy} from './new_tab_page_proxy.js';
 import type {MicrosoftAuthUntrustedDocumentRemote} from './ntp_microsoft_auth_shared_ui.mojom-webui.js';
+import {ShowNtpPromosResult} from './ntp_promo.mojom-webui.js';
 import {$$} from './utils.js';
 import {Action as VoiceAction, recordVoiceAction} from './voice_search_overlay.js';
 import {WindowProxy} from './window_proxy.js';
+
+enum ModuleLoadStatus {
+  MODULE_LOAD_IN_PROGRESS = 0,
+  MODULE_LOAD_NOT_ATTEMPTED = 1,
+  MODULE_LOAD_COMPLETE = 2,
+}
 
 interface ExecutePromoBrowserCommandData {
   commandId: Command;
@@ -133,6 +141,12 @@ function ensureLazyLoaded() {
   document.body.appendChild(script);
 }
 
+function recordShowBrowserPromosResult(result: ShowNtpPromosResult) {
+  recordEnumeration(
+      'UserEducation.NtpPromos.ShowResult', result,
+      ShowNtpPromosResult.MAX_VALUE + 1);
+}
+
 const AppElementBase = HelpBubbleMixinLit(CrLitElement);
 
 export interface AppElement {
@@ -207,15 +221,15 @@ export class AppElement extends AppElementBase {
         notify: true,
       },
 
-      closingComposebox: {
-        type: Boolean,
-        reflect: true,
-      },
       composeboxCloseByClickOutside_: {type: Boolean},
       composeboxEnabled: {type: Boolean},
       composeButtonEnabled: {type: Boolean},
 
       browserPromoType_: {type: String},
+      browserPromoLimit_: {type: Number},
+      browserPromoCompletedLimit_: {type: Number},
+      showBrowserPromo_: {type: Boolean},
+
       realboxShown_: {type: Boolean},
       logoEnabled_: {type: Boolean},
       oneGoogleBarEnabled_: {type: Boolean},
@@ -223,7 +237,10 @@ export class AppElement extends AppElementBase {
       middleSlotPromoEnabled_: {type: Boolean},
       modulesEnabled_: {type: Boolean},
       middleSlotPromoLoaded_: {type: Boolean},
-      modulesLoaded_: {type: Boolean},
+      modulesLoadedStatus_: {
+        type: Number,
+        reflect: true,
+      },
 
       modulesShownToUser: {
         type: Boolean,
@@ -233,12 +250,26 @@ export class AppElement extends AppElementBase {
       microsoftModuleEnabled_: {type: Boolean},
       microsoftAuthIframePath_: {type: String},
 
+      ntpRealboxNextEnabled_: {
+        type: Boolean,
+        reflect: true,
+      },
+
       /**
        * In order to avoid flicker, the promo and modules are hidden until both
        * are loaded. If modules are disabled, the promo is shown as soon as it
        * is loaded.
        */
       promoAndModulesLoaded_: {type: Boolean},
+
+      realboxLayoutMode_: {
+        type: String,
+        reflect: true,
+      },
+
+      searchboxCyclingPlaceholders_: {
+        type: Boolean,
+      },
 
       showComposebox_: {
         type: Boolean,
@@ -302,8 +333,14 @@ export class AppElement extends AppElementBase {
       loadTimeData.getBoolean('modulesEnabled');
   protected accessor browserPromoType_: string =
       loadTimeData.getString('browserPromoType');
+  protected accessor browserPromoLimit_: number =
+      loadTimeData.getInteger('browserPromoLimit');
+  protected accessor browserPromoCompletedLimit_: number =
+      loadTimeData.getInteger('browserPromoCompletedLimit');
+  protected accessor showBrowserPromo_: boolean = false;
   private accessor middleSlotPromoLoaded_: boolean = false;
-  private accessor modulesLoaded_: boolean = false;
+  private accessor modulesLoadedStatus_: ModuleLoadStatus =
+      ModuleLoadStatus.MODULE_LOAD_IN_PROGRESS;
   protected accessor modulesShownToUser: boolean = false;
   protected accessor microsoftModuleEnabled_: boolean =
       loadTimeData.getBoolean('microsoftModuleEnabled');
@@ -317,7 +354,6 @@ export class AppElement extends AppElementBase {
   protected accessor wallpaperSearchButtonEnabled_: boolean =
       loadTimeData.getBoolean('wallpaperSearchButtonEnabled');
   protected accessor showWallpaperSearchButton_: boolean = false;
-  accessor closingComposebox: boolean = false;
   accessor composeButtonEnabled: boolean =
       loadTimeData.getBoolean('searchboxShowComposeEntrypoint');
   protected accessor composeboxCloseByClickOutside_: boolean =
@@ -325,6 +361,12 @@ export class AppElement extends AppElementBase {
   accessor composeboxEnabled: boolean =
       loadTimeData.getBoolean('searchboxShowComposebox');
   protected accessor isFooterVisible_: boolean = false;
+  protected accessor ntpRealboxNextEnabled_: boolean =
+      loadTimeData.getBoolean('ntpRealboxNextEnabled');
+  protected accessor realboxLayoutMode_: string =
+      loadTimeData.getString('realboxLayoutMode');
+  protected accessor searchboxCyclingPlaceholders_: boolean =
+      loadTimeData.getBoolean('searchboxCyclingPlaceholders');
 
   private callbackRouter_: PageCallbackRouter;
   private pageHandler_: PageHandlerRemote;
@@ -377,24 +419,18 @@ export class AppElement extends AppElementBase {
      */
     this.backgroundImageLoadStartEpoch_ = performance.timeOrigin;
 
-    recordValue(
-        {
-          metricName: 'NewTabPage.Height',
-          type: chrome.metricsPrivate.MetricTypeType.HISTOGRAM_LINEAR,
-          min: 1,
-          max: 1000,
-          buckets: 200,
-        },
-        Math.floor(window.innerHeight));
-    recordValue(
-        {
-          metricName: 'NewTabPage.Width',
-          type: chrome.metricsPrivate.MetricTypeType.HISTOGRAM_LINEAR,
-          min: 1,
-          max: 1920,
-          buckets: 384,
-        },
-        Math.floor(window.innerWidth));
+    recordLinearValue(
+        'NewTabPage.Height',
+        /*min=*/ 1,
+        /*max=*/ 1000,
+        /*buckets=*/ 200,
+        /*value=*/ Math.floor(window.innerHeight));
+    recordLinearValue(
+        'NewTabPage.Width',
+        /*min=*/ 1,
+        /*max=*/ 1920,
+        /*buckets=*/ 384,
+        /*value=*/ Math.floor(window.innerWidth));
 
     ColorChangeUpdater.forDocument().start();
   }
@@ -532,6 +568,10 @@ export class AppElement extends AppElementBase {
     });
     this.printPerformance_();
     performance.measure('app-creation', 'app-creation-start');
+
+    if (!this.modulesEnabled_) {
+      this.recordBrowserPromoMetrics_();
+    }
   }
 
   override willUpdate(changedProperties: PropertyValues<this>) {
@@ -553,15 +593,10 @@ export class AppElement extends AppElementBase {
       this.singleColoredLogo_ = this.computeSingleColoredLogo_();
     }
 
-    if (changedPrivateProperties.has('showComposebox_')) {
-      this.logoColor_ = this.computeLogoColor_();
-      this.singleColoredLogo_ = this.computeSingleColoredLogo_();
-    }
-
     // theme_, showLensUploadDialog_
     this.realboxShown_ = this.computeRealboxShown_();
 
-    // middleSlotPromoLoaded_, modulesLoaded_
+    // middleSlotPromoLoaded_, modulesLoadedStatus_
     this.promoAndModulesLoaded_ = this.computePromoAndModulesLoaded_();
 
     // wallpaperSearchButtonEnabled_, showBackgroundImage_, backgroundColor_
@@ -569,6 +604,15 @@ export class AppElement extends AppElementBase {
 
     // showWallpaperSearchButton_, showBackgroundImage_
     this.showCustomizeChromeText_ = this.computeShowCustomizeChromeText_();
+
+    // modulesEnabled_, modulesShownToUser, modulesLoadedStatus_
+    this.showBrowserPromo_ = this.computeShowBrowserPromo_();
+
+    if ((changedPrivateProperties.has('modulesLoadedStatus_') &&
+         this.modulesLoadedStatus_ !==
+             ModuleLoadStatus.MODULE_LOAD_IN_PROGRESS)) {
+      this.recordBrowserPromoMetrics_();
+    }
   }
 
   override updated(changedProperties: PropertyValues<this>) {
@@ -603,26 +647,13 @@ export class AppElement extends AppElementBase {
         changedPrivateProperties.has('showComposebox_')) {
       this.updateOneGoogleBarAppearance_();
     }
-
-    if (changedPrivateProperties.has('showComposebox_')) {
-      if (this.showComposebox_) {
-        // Set Timeout since browser needs time to render the initial
-        // state before the final state is applied to run the transition.
-        setTimeout(() => {
-          const composeboxScrim =
-              this.shadowRoot.querySelector<HTMLElement>('#composeboxScrim');
-          assert(composeboxScrim);
-          composeboxScrim.classList.add('fade');
-        }, 0);
-      }
-    }
   }
 
   // Called to update the OGB of relevant NTP state changes.
   private updateOneGoogleBarAppearance_() {
     if (this.oneGoogleBarLoaded_) {
       let isNtpDarkTheme;
-      if (this.isComposeboxVisible_()) {
+      if (this.showComposebox_) {
         isNtpDarkTheme = this.theme_ && this.theme_.isDark;
       } else {
         isNtpDarkTheme = this.theme_ &&
@@ -660,13 +691,14 @@ export class AppElement extends AppElementBase {
   private computeRealboxShown_(): boolean {
     // Do not show the realbox if the upload dialog is showing.
     return !!this.theme_ && !this.showLensUploadDialog_ &&
-        !this.isComposeboxVisible_();
+        !this.showComposebox_;
   }
 
   private computePromoAndModulesLoaded_(): boolean {
     return (!loadTimeData.getBoolean('middleSlotPromoEnabled') ||
             this.middleSlotPromoLoaded_) &&
-        (!loadTimeData.getBoolean('modulesEnabled') || this.modulesLoaded_);
+        (!loadTimeData.getBoolean('modulesEnabled') ||
+         this.modulesLoadedStatus_ === ModuleLoadStatus.MODULE_LOAD_COMPLETE);
   }
 
   private onRealboxCanShowSecondarySideChanged_(e: MediaQueryListEvent) {
@@ -677,10 +709,12 @@ export class AppElement extends AppElementBase {
     // Integration tests use this attribute to determine when lazy load has
     // completed.
     document.documentElement.setAttribute('lazy-loaded', String(true));
-    this.registerHelpBubble(
-        CUSTOMIZE_CHROME_BUTTON_ELEMENT_ID,
-        ['ntp-customize-buttons', '#customizeButton'], {fixed: true});
-    this.pageHandler_.maybeShowFeaturePromo(IphFeature.kCustomizeChrome);
+    if (!this.isFooterVisible_) {
+      this.registerHelpBubble(
+          CUSTOMIZE_CHROME_BUTTON_ELEMENT_ID,
+          ['ntp-customize-buttons', '#customizeButton'], {fixed: true});
+      this.pageHandler_.maybeShowFeaturePromo(IphFeature.kCustomizeChrome);
+    }
     if (this.showWallpaperSearchButton_) {
       this.customizeButtonsHandler_.incrementWallpaperSearchButtonShownCount();
     }
@@ -719,31 +753,10 @@ export class AppElement extends AppElementBase {
         this.shadowRoot.querySelector<ComposeboxElement>('#composebox');
     assert(composebox);
     composebox.resetText();
-    this.fadeoutScrim_();
-  }
-
-  private fadeoutScrim_() {
-    const composeboxScrim =
-        this.shadowRoot.querySelector<HTMLElement>('#composeboxScrim');
-    assert(composeboxScrim);
-    composeboxScrim.addEventListener('transitionend', (e: TransitionEvent) => {
-      if (e.propertyName === 'opacity') {  // Match the animation name
-        this.toggleComposebox_();
-        this.closingComposebox = false;
-      }
-    });
-    composeboxScrim.classList.remove('fade');
-    const composebox = this.shadowRoot.querySelector('#composebox');
-    assert(composebox);
-    composebox.classList.add('fade-out');
-    this.closingComposebox = true;
+    this.toggleComposebox_();
     this.logoColor_ = this.computeLogoColor_();
     this.singleColoredLogo_ = this.computeSingleColoredLogo_();
     this.updateOneGoogleBarAppearance_();
-  }
-
-  private isComposeboxVisible_() {
-    return this.showComposebox_ && !this.closingComposebox;
   }
 
   protected onOpenVoiceSearch_() {
@@ -907,18 +920,11 @@ export class AppElement extends AppElementBase {
       return null;
     }
 
-    if (this.isComposeboxVisible_()) {
-      return this.theme_.isDark ? hexColorToSkColor('#ffffff') : null;
-    }
-
     return this.theme_.logoColor ||
         (this.theme_.isDark ? hexColorToSkColor('#ffffff') : null);
   }
 
   private computeSingleColoredLogo_(): boolean {
-    if (this.isComposeboxVisible_()) {
-      return !!this.theme_ && this.theme_.isDark;
-    }
     return !!this.theme_ && (!!this.theme_.logoColor || this.theme_.isDark);
   }
 
@@ -1021,8 +1027,36 @@ export class AppElement extends AppElementBase {
     this.middleSlotPromoLoaded_ = true;
   }
 
-  protected onModulesLoaded_() {
-    this.modulesLoaded_ = true;
+  protected onModulesLoaded_(e: CustomEvent<number|null>) {
+    this.modulesLoadedStatus_ = e.detail ?
+        ModuleLoadStatus.MODULE_LOAD_COMPLETE :
+        ModuleLoadStatus.MODULE_LOAD_NOT_ATTEMPTED;
+  }
+
+  protected computeShowBrowserPromo_(): boolean {
+    return !this.modulesEnabled_ ||
+        (this.modulesLoadedStatus_ !==
+             ModuleLoadStatus.MODULE_LOAD_IN_PROGRESS &&
+         !this.modulesShownToUser);
+  }
+
+  protected recordBrowserPromoMetrics_() {
+    if (!this.showBrowserPromo_) {
+      recordShowBrowserPromosResult(ShowNtpPromosResult.kNotShownDueToPolicy);
+      return;
+    }
+
+    switch (this.browserPromoType_) {
+      case 'empty':
+        recordShowBrowserPromosResult(ShowNtpPromosResult.kNotShownNoPromos);
+        break;
+      case 'simple':
+      case 'setuplist':
+        recordShowBrowserPromosResult(ShowNtpPromosResult.kShown);
+        break;
+      default:
+        break;
+    }
   }
 
   protected onCustomizeModule_() {

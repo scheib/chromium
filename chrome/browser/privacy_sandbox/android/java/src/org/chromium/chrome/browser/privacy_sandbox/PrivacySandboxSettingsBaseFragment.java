@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.privacy_sandbox;
 
+import static org.chromium.build.NullUtil.assumeNonNull;
+
 import android.content.Context;
 import android.os.Bundle;
 import android.view.Menu;
@@ -106,8 +108,9 @@ public abstract class PrivacySandboxSettingsBaseFragment extends ChromeBaseSetti
         if (actionStringResId != 0) {
             snackbar.setAction(getResources().getString(actionStringResId), null);
         }
-        if (multiLine) snackbar.setSingleLine(false);
-        mSnackbarManagerSupplier.get().showSnackbar(snackbar);
+        if (multiLine) snackbar.setDefaultLines(false);
+        SnackbarManager snackbarManager = assumeNonNull(mSnackbarManagerSupplier.get());
+        snackbarManager.showSnackbar(snackbar);
     }
 
     protected void parseAndRecordReferrer() {

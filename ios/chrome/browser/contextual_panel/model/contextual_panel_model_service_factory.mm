@@ -44,9 +44,10 @@ ContextualPanelModelServiceFactory::~ContextualPanelModelServiceFactory() {}
 
 std::unique_ptr<KeyedService>
 ContextualPanelModelServiceFactory::BuildServiceInstanceFor(
-    web::BrowserState* context) const {
-  ProfileIOS* profile = ProfileIOS::FromBrowserState(context);
-  std::map<ContextualPanelItemType, raw_ptr<ContextualPanelModel>> models;
+    ProfileIOS* profile) const {
+  std::map<ContextualPanelItemType,
+           raw_ptr<ContextualPanelModel, DanglingUntriaged>>
+      models;
 
   auto* sample_panel_model_factory =
       SamplePanelModelFactory::GetForProfile(profile);
@@ -65,7 +66,8 @@ ContextualPanelModelServiceFactory::BuildServiceInstanceFor(
 
   auto* reader_mode_model_factory =
       ReaderModeModelFactory::GetForProfile(profile);
-  if (reader_mode_model_factory && IsReaderModeAvailable()) {
+  if (reader_mode_model_factory && IsReaderModeAvailable() &&
+      IsReaderModeOmniboxEntryPointEnabled()) {
     models.emplace(ContextualPanelItemType::ReaderModeItem,
                    reader_mode_model_factory);
   }

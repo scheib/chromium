@@ -40,7 +40,7 @@ void BaseState::OnWMEvent(WindowState* window_state, const WMEvent* event) {
     }
     return;
   }
-  if ((window_state->IsTrustedPinned() || window_state->IsPinned()) &&
+  if ((window_state->IsLockedFullscreen() || window_state->IsPinned()) &&
       (event->type() != WM_EVENT_NORMAL && event->type() != WM_EVENT_RESTORE &&
        event->IsTransitionEvent())) {
     // PIN state can be exited only by normal event or restore event.
@@ -92,8 +92,8 @@ WindowStateType BaseState::GetStateForTransitionEvent(WindowState* window_state,
       return WindowStateType::kPip;
     case WM_EVENT_FLOAT:
       return WindowStateType::kFloated;
-    case WM_EVENT_TRUSTED_PIN:
-      return WindowStateType::kTrustedPinned;
+    case WM_EVENT_LOCKED_FULLSCREEN:
+      return WindowStateType::kLockedFullscreen;
     default:
       break;
   }
@@ -112,7 +112,7 @@ WindowStateType BaseState::GetStateForTransitionEvent(WindowState* window_state,
 void BaseState::CycleSnap(WindowState* window_state, WMEventType event) {
   auto* shell = Shell::Get();
   // For tablet mode, use `TabletModeWindowState::CycleTabletSnap`.
-  DCHECK(!display::Screen::GetScreen()->InTabletMode());
+  DCHECK(!display::Screen::Get()->InTabletMode());
 
   WindowStateType desired_snap_state = event == WM_EVENT_CYCLE_SNAP_PRIMARY
                                            ? WindowStateType::kPrimarySnapped

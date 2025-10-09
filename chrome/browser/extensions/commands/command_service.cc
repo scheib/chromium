@@ -26,6 +26,7 @@
 #include "extensions/browser/extension_function_registry.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_system.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/api/commands/commands_handler.h"
 #include "extensions/common/command.h"
 #include "extensions/common/extension_id.h"
@@ -33,6 +34,8 @@
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "ui/base/accelerators/command.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 namespace {
@@ -104,6 +107,9 @@ void ClearSuggestedKeyWasAssignedPrefs(
   ExtensionPrefs::ScopedDictionaryUpdate updater(&extension_prefs, extension_id,
                                                  kCommands);
   std::unique_ptr<prefs::DictionaryValueUpdate> current_prefs = updater.Get();
+  if (!current_prefs) {
+    return;
+  }
 
   for (const Command& removed_command : removed_commands) {
     std::unique_ptr<prefs::DictionaryValueUpdate> command_prefs;

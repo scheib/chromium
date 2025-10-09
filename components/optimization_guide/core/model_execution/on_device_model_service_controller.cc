@@ -245,8 +245,8 @@ void OnDeviceModelServiceController::SetLanguageDetectionModel(
 }
 
 void OnDeviceModelServiceController::MaybeUpdateSafetyModel(
-    base::optional_ref<const ModelInfo> model_info) {
-  safety_client_.MaybeUpdateSafetyModel(model_info);
+    std::unique_ptr<SafetyModelInfo> safety_model_info) {
+  safety_client_.MaybeUpdateSafetyModel(std::move(safety_model_info));
   UpdateSolutionProviders();
 }
 
@@ -331,6 +331,16 @@ void OnDeviceModelServiceController::OnDeviceModelClient::
 MaybeAdaptationMetadata& OnDeviceModelServiceController::GetFeatureMetadata(
     ModelBasedCapabilityKey feature) {
   return adaptation_metadata_.Get(feature);
+}
+
+proto::OnDeviceModelPerformanceHint
+OnDeviceModelServiceController::GetPerformanceHint() {
+  if (!base_model_controller_->model_metadata()) {
+    return proto::OnDeviceModelPerformanceHint::
+        ON_DEVICE_MODEL_PERFORMANCE_HINT_UNSPECIFIED;
+  }
+
+  return base_model_controller_->model_metadata()->performance_hint();
 }
 
 void OnDeviceModelServiceController::AddOnDeviceModelAvailabilityChangeObserver(

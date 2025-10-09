@@ -7,6 +7,7 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/strings/string_split.h"
+#include "base/system/sys_info.h"
 #include "build/build_config.h"
 #include "ui/gl/gl_switches.h"
 
@@ -71,9 +72,7 @@ bool IsDeviceBlocked(const std::string& field, const std::string& block_list) {
 }
 #endif
 
-BASE_FEATURE(kForceANGLEFeatures,
-             "ForceANGLEFeatures",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kForceANGLEFeatures, base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string> kForcedANGLEEnabledFeaturesFP{
     &kForceANGLEFeatures, "EnabledFeatures", ""};
@@ -91,9 +90,9 @@ void SplitAndAppendANGLEFeatureList(const std::string& list,
 }  // namespace
 
 #if BUILDFLAG(IS_APPLE)
-BASE_FEATURE(kGpuVsync, "GpuVsync", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kGpuVsync, base::FEATURE_DISABLED_BY_DEFAULT);
 #else
-BASE_FEATURE(kGpuVsync, "GpuVsync", base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kGpuVsync, base::FEATURE_ENABLED_BY_DEFAULT);
 #endif
 
 #if BUILDFLAG(ENABLE_VALIDATING_COMMAND_DECODER)
@@ -102,15 +101,12 @@ BASE_FEATURE(kGpuVsync, "GpuVsync", base::FEATURE_ENABLED_BY_DEFAULT);
 // Feature lives in ui/gl because it affects the GL binding initialization on
 // platforms that would otherwise not default to using EGL bindings.
 BASE_FEATURE(kDefaultPassthroughCommandDecoder,
-             "DefaultPassthroughCommandDecoder",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Add a small delay in shader compiling if validating command decoder is used.
 // This is to verify if passthrough command decoder impacting negatively top
 // level metrics could be due to slower shader compiling.
-BASE_FEATURE(kAddDelayToGLCompileShader,
-             "AddDelayToGLCompileShader",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAddDelayToGLCompileShader, base::FEATURE_DISABLED_BY_DEFAULT);
 // Histogram |GrCompileShaderUs| mean is 1.8ms (native) vs 3.1ms (ANGLE).
 // Therefore, we add a 1.3ms delay to shader compiling.
 constexpr base::FeatureParam<base::TimeDelta> kGLCompileShaderDelay = {
@@ -122,7 +118,6 @@ constexpr base::FeatureParam<base::TimeDelta> kGLCompileShaderDelay = {
 // If true, VsyncThreadWin will use the compositor clock
 // to determine the vsync interval.
 BASE_FEATURE(kUseCompositorClockVSyncInterval,
-             "UseCompositorClockVSyncInterval",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool UseCompositorClockVSyncInterval() {
@@ -204,9 +199,7 @@ bool IsANGLEValidationEnabled() {
 }
 #else
 // Enables the use of ANGLE validation for EGL and GL (non-WebGL) contexts.
-BASE_FEATURE(kDefaultEnableANGLEValidation,
-             "DefaultEnableANGLEValidation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kDefaultEnableANGLEValidation, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsANGLEValidationEnabled() {
   return base::FeatureList::IsEnabled(kDefaultEnableANGLEValidation) &&
@@ -216,9 +209,7 @@ bool IsANGLEValidationEnabled() {
 
 // Killswitch feature for allowing ANGLE to pass untranslated shaders to the
 // driver.
-BASE_FEATURE(kAllowANGLEPassthroughShaders,
-             "AllowANGLEPassthroughShaders",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kAllowANGLEPassthroughShaders, base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool IsANGLEPassthroughShadersAllowed() {
   return base::FeatureList::IsEnabled(kAllowANGLEPassthroughShaders);
@@ -264,9 +255,7 @@ bool IsSwiftShaderAllowedByCommandLine(const base::CommandLine* command_line) {
 
 // Allow fallback to SwfitShader without command line flags during the
 // deprecation period.
-BASE_FEATURE(kAllowSwiftShaderFallback,
-             "AllowSwiftShaderFallback",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kAllowSwiftShaderFallback, base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool IsSwiftShaderAllowedByFeature() {
   return base::FeatureList::IsEnabled(kAllowSwiftShaderFallback);
@@ -287,9 +276,15 @@ bool IsSwiftShaderAllowed(const base::CommandLine* command_line) {
 }
 
 #if BUILDFLAG(IS_WIN)
-BASE_FEATURE(kAllowD3D11WarpFallback,
-             "AllowD3D11WarpFallback",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAllowD3D11WarpFallback, base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsWARPAllowedByFeature() {
+  return base::FeatureList::IsEnabled(kAllowD3D11WarpFallback);
+}
+#else
+bool IsWARPAllowedByFeature() {
+  return false;
+}
 #endif
 
 bool IsAnySoftwareGLAllowed(const base::CommandLine* command_line) {
@@ -303,7 +298,6 @@ bool IsAnySoftwareGLAllowed(const base::CommandLine* command_line) {
 }
 
 BASE_FEATURE(kAllowSoftwareGLFallbackDueToCrashes,
-             "AllowSoftwareGLFallbackDueToCrashes",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool IsSoftwareGLFallbackDueToCrashesAllowed(
@@ -328,4 +322,17 @@ base::TimeDelta GetGLCompileShaderDelay() {
   return base::TimeDelta();
 #endif  // BUILDFLAG(ENABLE_VALIDATING_COMMAND_DECODER)
 }
+
+#if BUILDFLAG(IS_ANDROID)
+BASE_FEATURE(kAndroidLimitRgb565DisplayToApi32,
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+bool PreferRGB565ResourcesForDisplay() {
+  return base::SysInfo::AmountOfPhysicalMemory().InMiB() <= 512 &&
+         (base::android::android_info::sdk_int() <=
+              base::android::android_info::SDK_VERSION_Sv2 ||
+          !base::FeatureList::IsEnabled(kAndroidLimitRgb565DisplayToApi32));
+}
+#endif
+
 }  // namespace features

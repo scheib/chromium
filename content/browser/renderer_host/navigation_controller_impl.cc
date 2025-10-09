@@ -42,6 +42,7 @@
 #include "base/containers/adapters.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
@@ -73,9 +74,6 @@
 #include "content/browser/renderer_host/navigation_entry_impl.h"
 #include "content/browser/renderer_host/navigation_entry_restore_context_impl.h"
 #include "content/browser/renderer_host/navigation_request.h"
-#include "content/browser/renderer_host/navigation_transitions/navigation_entry_screenshot_cache.h"
-#include "content/browser/renderer_host/navigation_transitions/navigation_entry_screenshot_manager.h"
-#include "content/browser/renderer_host/navigation_transitions/navigation_transition_config.h"
 #include "content/browser/renderer_host/navigator.h"
 #include "content/browser/renderer_host/page_delegate.h"
 #include "content/browser/renderer_host/render_frame_host_delegate.h"
@@ -122,6 +120,12 @@
 #include "third_party/blink/public/mojom/runtime_feature_state/runtime_feature.mojom.h"
 #include "url/url_constants.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "content/browser/renderer_host/navigation_transitions/navigation_entry_screenshot_cache.h"
+#include "content/browser/renderer_host/navigation_transitions/navigation_entry_screenshot_manager.h"
+#include "content/browser/renderer_host/navigation_transitions/navigation_transition_config.h"
+#endif  // BUILDFLAG(IS_ANDROID)
+
 namespace content {
 namespace {
 
@@ -129,7 +133,6 @@ namespace {
 // activations, per https://crbug.com/417251428.
 // TODO(crbug.com/420275259): Diagnose crashes and enable by default.
 BASE_FEATURE(kSkipExtraBfcacheNavigationRequest,
-             "SkipExtraBfcacheNavigationRequest",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Enables a CHECK in RendererDidNavigate to ensure that session
@@ -137,7 +140,6 @@ BASE_FEATURE(kSkipExtraBfcacheNavigationRequest,
 // document sequence number matches. Helps detect navigation process
 // mismatches and potential security issues.
 BASE_FEATURE(kCheckSiteInstanceOnHistoryNavigation,
-             "CheckSiteInstanceOnHistoryNavigation",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Invoked when entries have been pruned, or removed. For example, if the
@@ -163,27 +165,6 @@ void ConfigureEntriesForRestore(
     entry->SetTransitionType(ui::PAGE_TRANSITION_RELOAD);
     entry->set_restore_type(type);
   }
-}
-
-// Determines whether or not we should be carrying over a user agent override
-// between two NavigationEntries.
-bool ShouldKeepOverride(NavigationEntry* last_entry) {
-  return last_entry && last_entry->GetIsOverridingUserAgent();
-}
-
-// Determines whether to override user agent for a navigation.
-bool ShouldOverrideUserAgent(
-    NavigationController::UserAgentOverrideOption override_user_agent,
-    NavigationEntry* last_committed_entry) {
-  switch (override_user_agent) {
-    case NavigationController::UA_OVERRIDE_INHERIT:
-      return ShouldKeepOverride(last_committed_entry);
-    case NavigationController::UA_OVERRIDE_TRUE:
-      return true;
-    case NavigationController::UA_OVERRIDE_FALSE:
-      return false;
-  }
-  NOTREACHED();
 }
 
 // Returns true if this navigation should be treated as a reload. For e.g.
@@ -330,7 +311,7 @@ bool IsValidURLForNavigation(FrameTreeNode* node,
   // supported.  See https://crbug.com/1444221.
   if (node->current_frame_host()->GetSiteInstance()->IsGuest()) {
     auto* cpsp = content::ChildProcessSecurityPolicy::GetInstance();
-    if (!cpsp->IsWebSafeScheme(dest_url.scheme()) &&
+    if (!cpsp->IsWebSafeScheme(dest_url.GetScheme()) &&
         !dest_url.SchemeIs(url::kAboutScheme)) {
       LOG(WARNING) << "Refusing to load unsafe URL in a guest: "
                    << dest_url.possibly_invalid_spec();
@@ -1189,6 +1170,26 @@ bool NavigationControllerImpl::CanGoBack() {
   return GetIndexForGoBack().has_value();
 }
 
+bool NavigationControllerImpl::ShouldEnableBackButton() {
+  std::optional<int> back_index = GetIndexForGoBack();
+
+  if (back_index.has_value()) {
+    return true;
+  }
+
+  // If we don't have a valid index to go back to, but entries still exist
+  // behind the current one, that means all of them are skippable. We should
+  // still show the back button, so the user can long-press/hover to select a
+  // skippable entry, but clicking the button will do nothing. This also avoids
+  // changing the button's state if the user interacts with the page and thus
+  // disables the history manipulation intervention.
+  if (GetEntryAtOffset(-1)) {
+    return true;
+  }
+
+  return false;
+}
+
 std::optional<int> NavigationControllerImpl::GetIndexForGoForward() {
   for (int index = GetIndexForOffset(1); index < GetEntryCount(); index++) {
     if (!GetEntryAtIndex(index)->should_skip_on_back_forward_ui()) {
@@ -1200,6 +1201,26 @@ std::optional<int> NavigationControllerImpl::GetIndexForGoForward() {
 
 bool NavigationControllerImpl::CanGoForward() {
   return GetIndexForGoForward().has_value();
+}
+
+bool NavigationControllerImpl::ShouldEnableForwardButton() {
+  std::optional<int> forward_index = GetIndexForGoForward();
+
+  if (forward_index.has_value()) {
+    return true;
+  }
+
+  // If we don't have a valid index to go forward to, but entries still exist
+  // in front of the current one, that means all of them are skippable. We
+  // should still show the forward button, so the user can long-press/hover to
+  // select a skippable entry, but clicking the button will do nothing. This
+  // also avoids changing the button's state if the user interacts with the page
+  // and thus disables the history manipulation intervention.
+  if (GetEntryAtOffset(1)) {
+    return true;
+  }
+
+  return false;
 }
 
 bool NavigationControllerImpl::CanGoToOffset(int offset) {
@@ -1227,22 +1248,26 @@ bool NavigationControllerImpl::CanGoToOffsetWithSkipping(int offset) {
 
 NavigationController::WeakNavigationHandleVector
 NavigationControllerImpl::GoBack() {
+  if (!CanGoBack()) {
+    return NavigationController::WeakNavigationHandleVector();
+  }
+
   const std::optional<int> target_index = GetIndexForGoBack();
-
   CHECK(target_index.has_value());
-
   return GoToIndex(*target_index);
 }
 
 NavigationController::WeakNavigationHandleVector
 NavigationControllerImpl::GoForward() {
+  if (!CanGoForward()) {
+    return NavigationController::WeakNavigationHandleVector();
+  }
+
   // Note that at least one entry (the last one) will be non-skippable since
   // entries are marked skippable only when they add another entry because of
   // redirect or pushState.
   const std::optional<int> target_index = GetIndexForGoForward();
-
   CHECK(target_index.has_value());
-
   return GoToIndex(*target_index);
 }
 
@@ -2690,6 +2715,7 @@ BackForwardCacheImpl& NavigationControllerImpl::GetBackForwardCache() {
   return back_forward_cache_;
 }
 
+#if BUILDFLAG(IS_ANDROID)
 NavigationEntryScreenshotCache*
 NavigationControllerImpl::GetNavigationEntryScreenshotCache() {
   CHECK(frame_tree_->is_primary());
@@ -2704,6 +2730,7 @@ NavigationControllerImpl::GetNavigationEntryScreenshotCache() {
   }
   return nav_entry_screenshot_cache_.get();
 }
+#endif  // BUILDFLAG(IS_ANDROID)
 
 void NavigationControllerImpl::DiscardPendingEntry(bool was_failure) {
   // It is not safe to call DiscardPendingEntry while NavigateToEntry is in
@@ -3805,8 +3832,8 @@ base::WeakPtr<NavigationHandle> NavigationControllerImpl::NavigateWithoutEntry(
   // passed as a const reference, this is not possible.
   // TODO(clamy): When we only create a NavigationRequest, move this to
   // CreateNavigationRequestFromLoadURLParams.
-  bool override_user_agent = ShouldOverrideUserAgent(params.override_user_agent,
-                                                     GetLastCommittedEntry());
+  bool override_user_agent =
+      ShouldOverrideUserAgentInNextNavigation(params.override_user_agent);
 
   // An entry replacement must happen if the current browsing context should
   // maintain a trivial session history.
@@ -4480,10 +4507,12 @@ void NavigationControllerImpl::SetActive(bool is_active) {
   if (is_active && needs_reload_)
     LoadIfNecessary();
 
+#if BUILDFLAG(IS_ANDROID)
   if (frame_tree_->is_primary();
       auto* cache = GetNavigationEntryScreenshotCache()) {
     cache->SetVisible(is_active);
   }
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 void NavigationControllerImpl::LoadIfNecessary() {
@@ -4947,8 +4976,9 @@ NavigationControllerImpl::PopulateSingleNavigationApiHistoryEntryVector(
   // If |entries| was constructed by iterating backwards from
   // |entry_index|, it's latest-at-the-front, but the renderer will want it
   // earliest-at-the-front. Reverse it.
-  if (direction == Direction::kBack)
-    std::reverse(entries.begin(), entries.end());
+  if (direction == Direction::kBack) {
+    std::ranges::reverse(entries);
+  }
   return entries;
 }
 
@@ -5234,6 +5264,31 @@ NavigationControllerImpl::CreateNavigationRequestForErrorPage(
   navigation_request->set_net_error(net::ERR_BLOCKED_BY_CLIENT);
   navigation_request->set_error_page_html(error_page_html);
   return navigation_request;
+}
+
+bool NavigationControllerImpl::ShouldOverrideUserAgentInNextNavigation(
+    NavigationController::UserAgentOverrideOption option) {
+  switch (option) {
+    case NavigationController::UA_OVERRIDE_INHERIT: {
+      NavigationEntryImpl* last_entry = GetLastCommittedEntry();
+      CHECK(last_entry);
+      // A prerender page has a distinct `NavigationController`, thus its last
+      // committed entry is always an initial entry when starting prerender. In
+      // such cases, delegate the decision to `PrerenderHost`.
+      if (frame_tree_->is_prerendering() && last_entry->IsInitialEntry() &&
+          base::FeatureList::IsEnabled(
+              features::kPreloadingRespectUserAgentOverride)) {
+        return PrerenderHost::GetFromFrameTree(&frame_tree_.get())
+            .IsInitiatorOverridingUserAgent();
+      }
+      return last_entry->GetIsOverridingUserAgent();
+    }
+    case NavigationController::UA_OVERRIDE_TRUE:
+      return true;
+    case NavigationController::UA_OVERRIDE_FALSE:
+      return false;
+  }
+  NOTREACHED();
 }
 
 }  // namespace content

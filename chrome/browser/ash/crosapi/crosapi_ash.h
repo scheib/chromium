@@ -28,7 +28,6 @@ class DiagnosticsServiceAsh;
 class ProbeServiceAsh;
 class TelemetryDiagnosticsRoutineServiceAsh;
 class TelemetryManagementServiceAsh;
-class VideoConferenceManagerAsh;
 
 namespace auth {
 class InSessionAuth;
@@ -43,7 +42,6 @@ class PrintPreviewWebcontentsAdapterAsh;
 namespace crosapi {
 
 class DocumentScanAsh;
-class FileSystemProviderServiceAsh;
 class KeystoreServiceAsh;
 class LocalPrinterAsh;
 class VpnServiceAsh;
@@ -125,10 +123,6 @@ class CrosapiAsh : public mojom::Crosapi {
 
   DocumentScanAsh* document_scan_ash() { return document_scan_ash_.get(); }
 
-  FileSystemProviderServiceAsh* file_system_provider_service_ash() {
-    return file_system_provider_service_ash_.get();
-  }
-
   KeystoreServiceAsh* keystore_service_ash() {
     return keystore_service_ash_.get();
   }
@@ -142,10 +136,6 @@ class CrosapiAsh : public mojom::Crosapi {
 
   ash::ProbeServiceAsh* probe_service_ash() { return probe_service_ash_.get(); }
 
-  ash::VideoConferenceManagerAsh* video_conference_manager_ash() {
-    return video_conference_manager_ash_.get();
-  }
-
   VpnServiceAsh* vpn_service_ash() { return vpn_service_ash_.get(); }
 
  private:
@@ -154,8 +144,6 @@ class CrosapiAsh : public mojom::Crosapi {
 
   std::unique_ptr<ash::DiagnosticsServiceAsh> diagnostics_service_ash_;
   std::unique_ptr<DocumentScanAsh> document_scan_ash_;
-  std::unique_ptr<FileSystemProviderServiceAsh>
-      file_system_provider_service_ash_;
   std::unique_ptr<KeystoreServiceAsh> keystore_service_ash_;
   std::unique_ptr<LocalPrinterAsh> local_printer_ash_;
   std::unique_ptr<ash::TelemetryDiagnosticsRoutineServiceAsh>
@@ -165,7 +153,6 @@ class CrosapiAsh : public mojom::Crosapi {
   std::unique_ptr<ash::ProbeServiceAsh> probe_service_ash_;
   std::unique_ptr<ash::printing::PrintPreviewWebcontentsAdapterAsh>
       print_preview_webcontents_adapter_ash_;
-  std::unique_ptr<ash::VideoConferenceManagerAsh> video_conference_manager_ash_;
   std::unique_ptr<VpnServiceAsh> vpn_service_ash_;
 
   mojo::ReceiverSet<mojom::Crosapi, CrosapiId> receiver_set_;

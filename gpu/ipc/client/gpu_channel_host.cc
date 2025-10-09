@@ -20,7 +20,7 @@
 #include "gpu/ipc/common/command_buffer_id.h"
 #include "gpu/ipc/common/command_buffer_trace_utils.h"
 #include "gpu/ipc/common/gpu_watchdog_timeout.h"
-#include "ipc/ipc_channel_mojo.h"
+#include "ipc/ipc_channel.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "url/gurl.h"
 
@@ -367,11 +367,15 @@ void GpuChannelHost::ConnectionTracker::OnDisconnectedFromGpuProcess() {
   NotifyGpuChannelLost();
 }
 
-void GpuChannelHost::ConnectionTracker::AddObserver(
+bool GpuChannelHost::ConnectionTracker::AddObserverIfNotAlreadyLost(
     GpuChannelLostObserver* obs) {
   AutoLock lock(channel_obs_lock_);
+  if (!is_connected()) {
+    return false;
+  }
   CHECK(!base::Contains(observer_list_, obs));
   observer_list_.push_back(obs);
+  return true;
 }
 
 void GpuChannelHost::ConnectionTracker::RemoveObserver(
@@ -405,9 +409,8 @@ void GpuChannelHost::Listener::Initialize(
     mojo::PendingAssociatedReceiver<mojom::GpuChannel> receiver,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner) {
   base::AutoLock lock(lock_);
-  channel_ =
-      IPC::ChannelMojo::Create(std::move(handle), IPC::Channel::MODE_CLIENT,
-                               this, io_task_runner, io_task_runner);
+  channel_ = IPC::Channel::Create(std::move(handle), IPC::Channel::MODE_CLIENT,
+                                  this, io_task_runner, io_task_runner);
   DCHECK(channel_);
   bool result = channel_->Connect();
   DCHECK(result);
@@ -426,8 +429,8 @@ void GpuChannelHost::Listener::OnChannelError() {
   channel_ = nullptr;
 }
 
-void GpuChannelHost::AddObserver(GpuChannelLostObserver* obs) {
-  connection_tracker_->AddObserver(obs);
+bool GpuChannelHost::AddObserverIfNotAlreadyLost(GpuChannelLostObserver* obs) {
+  return connection_tracker_->AddObserverIfNotAlreadyLost(obs);
 }
 
 void GpuChannelHost::RemoveObserver(GpuChannelLostObserver* obs) {

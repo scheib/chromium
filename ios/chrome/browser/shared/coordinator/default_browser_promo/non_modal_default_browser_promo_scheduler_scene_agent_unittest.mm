@@ -40,6 +40,7 @@
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
@@ -53,7 +54,7 @@
 namespace {
 
 std::unique_ptr<KeyedService> BuildFeatureEngagementMockTracker(
-    web::BrowserState* context) {
+    ProfileIOS* profile) {
   return std::make_unique<feature_engagement::test::MockTracker>();
 }
 
@@ -138,8 +139,8 @@ class NonModalDefaultBrowserPromoSchedulerSceneAgentTest : public PlatformTest {
   base::test::ScopedFeatureList feature_list_;
   IOSChromeScopedTestingLocalState scoped_testing_local_state_;
   std::unique_ptr<TestProfileIOS> profile_;
-  raw_ptr<web::FakeWebState> test_web_state_;
-  raw_ptr<Browser> browser_;
+  raw_ptr<web::FakeWebState, DanglingUntriaged> test_web_state_;
+  raw_ptr<Browser, DanglingUntriaged> browser_;
   raw_ptr<feature_engagement::test::MockTracker> mock_tracker_;
   FakeOverlayPresentationContext overlay_presentation_context_;
   id promo_commands_handler_;
@@ -336,10 +337,15 @@ TEST_F(NonModalDefaultBrowserPromoSchedulerSceneAgentTest,
 
   [promo_commands_handler_ verify];
 
-  [[application_ expect]
-                openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]
-                options:@{}
-      completionHandler:nil];
+  NSURL* url = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
+  if (@available(iOS 18.3, *)) {
+    if (IsDefaultAppsDestinationAvailable() &&
+        IsUseDefaultAppsDestinationForPromosEnabled()) {
+      url = [NSURL
+          URLWithString:UIApplicationOpenDefaultApplicationsSettingsURLString];
+    }
+  }
+  [[application_ expect] openURL:url options:{} completionHandler:nil];
   [scheduler_ logUserPerformedPromoAction];
 
   [application_ verify];

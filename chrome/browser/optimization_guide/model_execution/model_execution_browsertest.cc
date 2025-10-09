@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
@@ -14,6 +15,7 @@
 #include "base/test/with_feature_override.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/global_features.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
 #include "chrome/browser/optimization_guide/model_execution/optimization_guide_global_state.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
@@ -55,6 +57,7 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
+#include "services/on_device_model/public/cpp/cpu.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/tflite/buildflags.h"
 
@@ -110,9 +113,6 @@ class ScopedSetMetricsConsent {
   const bool consent_;
 };
 
-constexpr float kTestDefaultTemperature = 0.9;
-constexpr uint32_t kTestDefaultTopK = 7;
-
 }  // namespace
 
 class ModelExecutionBrowserTestBase : public InProcessBrowserTest {
@@ -130,7 +130,7 @@ class ModelExecutionBrowserTestBase : public InProcessBrowserTest {
         net::EmbeddedTestServer::TYPE_HTTPS);
     net::EmbeddedTestServer::ServerCertificateConfig cert_config;
     cert_config.dns_names = {
-        GURL(kOptimizationGuideServiceModelExecutionDefaultURL).host(),
+        GURL(kOptimizationGuideServiceModelExecutionDefaultURL).GetHost(),
     };
     model_execution_server_->SetSSLConfig(cert_config);
     model_execution_server_->RegisterRequestHandler(base::BindRepeating(
@@ -142,7 +142,7 @@ class ModelExecutionBrowserTestBase : public InProcessBrowserTest {
     model_quality_logs_server_ = std::make_unique<net::EmbeddedTestServer>(
         net::EmbeddedTestServer::TYPE_HTTPS);
     cert_config.dns_names = {
-        GURL(kOptimizationGuideServiceModelQualtiyDefaultURL).host(),
+        GURL(kOptimizationGuideServiceModelQualtiyDefaultURL).GetHost(),
     };
     model_quality_logs_server_->SetSSLConfig(cert_config);
     model_quality_logs_server_->RegisterRequestHandler(base::BindRepeating(
@@ -159,15 +159,15 @@ class ModelExecutionBrowserTestBase : public InProcessBrowserTest {
     cmd->AppendSwitchASCII(
         switches::kOptimizationGuideServiceModelExecutionURL,
         model_execution_server_
-            ->GetURL(
-                GURL(kOptimizationGuideServiceModelExecutionDefaultURL).host(),
-                "/")
+            ->GetURL(GURL(kOptimizationGuideServiceModelExecutionDefaultURL)
+                         .GetHost(),
+                     "/")
             .spec());
     cmd->AppendSwitchASCII(
         switches::kModelQualityServiceURL,
         model_quality_logs_server_
             ->GetURL(
-                GURL(kOptimizationGuideServiceModelQualtiyDefaultURL).host(),
+                GURL(kOptimizationGuideServiceModelQualtiyDefaultURL).GetHost(),
                 "/")
             .spec());
   }
@@ -662,30 +662,20 @@ IN_PROC_BROWSER_TEST_F(ModelExecutionEnabledBrowserTest,
       0);
 }
 
-// TODO(crbug.com/388544208): Flaky on linux-win-cross-rel.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_GetOnDeviceModelEligibilityModelNotEligible \
-  DISABLED_GetOnDeviceModelEligibilityModelNotEligible
-#else
-#define MAYBE_GetOnDeviceModelEligibilityModelNotEligible \
-  GetOnDeviceModelEligibilityModelNotEligible
-#endif
 IN_PROC_BROWSER_TEST_F(ModelExecutionEnabledBrowserTest,
-                       MAYBE_GetOnDeviceModelEligibilityModelNotEligible) {
-  EXPECT_EQ(GetOnDeviceModelEligibility(ModelBasedCapabilityKey::kCompose),
-            OnDeviceModelEligibilityReason::kModelNotEligible);
-}
-
-IN_PROC_BROWSER_TEST_F(
-    ModelExecutionEnabledBrowserTest,
-    GetOnDeviceModelEligibilityExecutionDisabledNullDebugReason) {
+                       GetOnDeviceModelEligibilityExecutionDisabled) {
   EXPECT_NE(GetOnDeviceModelEligibility(ModelBasedCapabilityKey::kCompose),
             OnDeviceModelEligibilityReason::kSuccess);
 }
 
+#if BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
+
 class OnDeviceModelExecutionEnabledBrowserTest
     : public ModelExecutionEnabledBrowserTest {
  public:
+  static constexpr float kTestDefaultTemperature = 0.9;
+  static constexpr uint32_t kTestDefaultTopK = 7;
+
   void InitializeFeatureList() override {
     scoped_feature_list_.InitWithFeaturesAndParameters(
         {{features::kOptimizationGuideModelExecution, {}},
@@ -694,12 +684,22 @@ class OnDeviceModelExecutionEnabledBrowserTest
          {features::kOnDeviceModelPerformanceParams,
           {{"compatible_on_device_performance_classes", "*"}}}},
         {});
+
+    // This test depends on the disk information being available in a timely
+    // manner (see crbug.com/346579988). Use this flag to have the information
+    // retrieved with higher priority which reduces the chances of flakiness.
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        optimization_guide::switches::
+            kGetFreeDiskSpaceWithUserVisiblePriorityTask);
   }
 
-  OptimizationGuideGlobalState* broker_state() {
+  ModelBrokerState* broker_state() {
     // Ensure keyed service is created, which should create and hold state.
     GetOptimizationGuideKeyedService();
-    return OptimizationGuideGlobalState::CreateOrGet().get();
+    return &g_browser_process->GetFeatures()
+                ->optimization_guide_global_feature()
+                ->Get()
+                .model_broker_state();
   }
 
   void SetUpLocalStatePrefService(PrefService* local_state) override {
@@ -795,6 +795,8 @@ IN_PROC_BROWSER_TEST_F(OnDeviceModelExecutionEnabledBrowserTest,
   EXPECT_EQ(sampling_config->default_top_k, kTestDefaultTopK);
   EXPECT_EQ(sampling_config->default_temperature, kTestDefaultTemperature);
 }
+
+#endif  // BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
 
 class ModelExecutionInternalsPageBrowserTest
     : public ModelExecutionEnabledBrowserTest {
@@ -1006,8 +1008,7 @@ class ModelExecutionNewFeaturesEnabledAutomaticallyTest
 #if !BUILDFLAG(IS_ANDROID)
 
 class ModelExecutionEnterprisePolicyBrowserTest
-    : public ModelExecutionEnabledBrowserTest,
-      public ::testing::WithParamInterface<bool> {
+    : public ModelExecutionEnabledBrowserTest {
  public:
   void SetUp() override {
     policy_provider_.SetDefaultReturns(
@@ -1030,23 +1031,14 @@ class ModelExecutionEnterprisePolicyBrowserTest
         features::internal::kTabOrganizationGraduated,
         features::internal::kWallpaperSearchGraduated};
 
-    if (ShowEnterpriseDisabledFeatures()) {
-      enabled_features.push_back(features::kAiSettingsPageEnterpriseDisabledUi);
-    } else {
-      disabled_features.push_back(
-          features::kAiSettingsPageEnterpriseDisabledUi);
-    }
-
     scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
   }
-
-  bool ShowEnterpriseDisabledFeatures() { return GetParam(); }
 
  protected:
   testing::NiceMock<policy::MockConfigurationPolicyProvider> policy_provider_;
 };
 
-IN_PROC_BROWSER_TEST_P(ModelExecutionEnterprisePolicyBrowserTest,
+IN_PROC_BROWSER_TEST_F(ModelExecutionEnterprisePolicyBrowserTest,
                        EnableComposeWithoutLogging) {
   EnableSignin();
 
@@ -1116,7 +1108,7 @@ IN_PROC_BROWSER_TEST_P(ModelExecutionEnterprisePolicyBrowserTest,
       1);
 }
 
-IN_PROC_BROWSER_TEST_P(ModelExecutionEnterprisePolicyBrowserTest,
+IN_PROC_BROWSER_TEST_F(ModelExecutionEnterprisePolicyBrowserTest,
                        DisableThenEnableWallpaperSearch) {
   EnableSignin();
 
@@ -1142,8 +1134,7 @@ IN_PROC_BROWSER_TEST_P(ModelExecutionEnterprisePolicyBrowserTest,
                nullptr);
   policy_provider_.UpdateChromePolicy(policies);
   base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(ShowEnterpriseDisabledFeatures(),
-            IsSettingVisible(UserVisibleFeatureKey::kWallpaperSearch));
+  EXPECT_TRUE(IsSettingVisible(UserVisibleFeatureKey::kWallpaperSearch));
   EXPECT_FALSE(ShouldFeatureBeCurrentlyEnabledForUser(
       UserVisibleFeatureKey::kWallpaperSearch));
 
@@ -1163,10 +1154,6 @@ IN_PROC_BROWSER_TEST_P(ModelExecutionEnterprisePolicyBrowserTest,
   EXPECT_TRUE(ShouldFeatureBeCurrentlyEnabledForUser(
       UserVisibleFeatureKey::kWallpaperSearch));
 }
-
-INSTANTIATE_TEST_SUITE_P(,
-                         ModelExecutionEnterprisePolicyBrowserTest,
-                         ::testing::Bool());
 
 #endif  //  !BUILDFLAG(IS_ANDROID)
 

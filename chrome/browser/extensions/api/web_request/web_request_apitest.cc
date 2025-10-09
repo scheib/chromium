@@ -198,7 +198,8 @@ class NavigateTabMessageHandler {
 
  private:
   void HandleNavigateTabMessage(const std::string& message) {
-    std::optional<base::Value> command = base::JSONReader::Read(message);
+    std::optional<base::Value> command =
+        base::JSONReader::Read(message, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
     if (command && command->is_dict()) {  // Check the message decoded from JSON
       base::Value::Dict* data = command->GetDict().FindDict("navigate");
       if (data) {
@@ -873,7 +874,7 @@ class DevToolsFrontendInWebRequestApiTest : public ExtensionApiTest {
     std::string status_line;
     std::string contents;
     GetFileContents(
-        test_root_dir_.AppendASCII(params->url_request.url.path().substr(1)),
+        test_root_dir_.AppendASCII(params->url_request.url.GetPath().substr(1)),
         &status_line, &contents);
     content::URLLoaderInterceptor::WriteResponse(status_line, contents,
                                                  params->client.get());
@@ -1584,8 +1585,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiTestWithContextType,
   custom_args.Append(url.spec());
   custom_args.Append(insecure_destination.spec());
 
-  std::string config_string;
-  base::JSONWriter::Write(custom_args, &config_string);
+  std::string config_string = base::WriteJson(custom_args).value_or("");
   ASSERT_TRUE(RunExtensionTest("webrequest/test_redirects_from_secure",
                                {.custom_arg = config_string.c_str()}))
       << message_;
@@ -1615,8 +1615,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiTestWithContextType,
       https_test_server.GetURL("/webrequest/test_redirects_workers/page/");
   base::Value::Dict custom_args;
   custom_args.Set("base_url", base_url.spec());
-  std::string config_string;
-  base::JSONWriter::Write(custom_args, &config_string);
+  std::string config_string = base::WriteJson(custom_args).value_or("");
 
   ASSERT_TRUE(RunExtensionTest("webrequest/test_redirects_workers",
                                {.custom_arg = config_string.c_str()}))
@@ -1860,25 +1859,35 @@ IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiTestWithContextType,
                                               ReplyBehavior::kWillReply);
   ExtensionTestMessageListener listener_main2("web_request_status2",
                                               ReplyBehavior::kWillReply);
-
+// Android does not support platform apps, so tests for requests from apps are
+// omitted. See https://crbug.com/440452765 for more details.
+#if !BUILDFLAG(IS_ANDROID)
   ExtensionTestMessageListener listener_app("app_done");
+#endif  // !BUILDFLAG(IS_ANDROID)
   ExtensionTestMessageListener listener_extension("extension_done");
 
   // Set up webRequest listener
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("webrequest_extensions/main")));
+#if !BUILDFLAG(IS_ANDROID)
   EXPECT_TRUE(listener_main1.WaitUntilSatisfied());
+#endif  // !BUILDFLAG(IS_ANDROID)
   EXPECT_TRUE(listener_main2.WaitUntilSatisfied());
 
-  // Perform some network activity in an app and another extension.
+#if !BUILDFLAG(IS_ANDROID)
+  // Perform some network activity in an app.
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("webrequest_extensions/app"),
                     {.context_type = ContextType::kFromManifest}));
+#endif  // !BUILDFLAG(IS_ANDROID)
+  // Perform some network activity in another extension.
   ASSERT_TRUE(LoadExtension(
       test_data_dir_.AppendASCII("webrequest_extensions/extension"),
       {.context_type = ContextType::kFromManifest}));
 
+#if !BUILDFLAG(IS_ANDROID)
   EXPECT_TRUE(listener_app.WaitUntilSatisfied());
+#endif  // !BUILDFLAG(IS_ANDROID)
   EXPECT_TRUE(listener_extension.WaitUntilSatisfied());
 
   // Load a page, a content script from "webrequest_extensions/extension" will
@@ -2001,7 +2010,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiTestWithContextType,
     content::RenderFrameHostWrapper child_frame(
         ChildFrameAt(main_frame.get(), 0));
     ASSERT_TRUE(child_frame);
-    const std::string kChildHost = child_frame->GetLastCommittedURL().host();
+    const std::string kChildHost = child_frame->GetLastCommittedURL().GetHost();
 
     // The extension shouldn't be able to intercept the xhr requests since it
     // doesn't have any permissions.
@@ -2026,7 +2035,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiTestWithContextType,
       web_contents->GetPrimaryMainFrame());
   content::RenderFrameHostWrapper child_frame(
       ChildFrameAt(main_frame.get(), 0));
-  const std::string kChildHost = child_frame->GetLastCommittedURL().host();
+  const std::string kChildHost = child_frame->GetLastCommittedURL().GetHost();
 
   ASSERT_TRUE(child_frame);
   EXPECT_TRUE(
@@ -2893,7 +2902,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
     // The extension should see the request to the Web origin.
     EXPECT_TRUE(HasSeenWebRequestInBackgroundScript(extension, profile(),
-                                                    web_url.host()));
+                                                    web_url.GetHost()));
   }
 
   {
@@ -2910,7 +2919,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
     // The extension shouldn't see the request to the WebUI pages.
     EXPECT_FALSE(HasSeenWebRequestInBackgroundScript(extension, profile(),
-                                                     webui_url.host()));
+                                                     webui_url.GetHost()));
   }
 }
 
@@ -2947,7 +2956,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   navigation_observer.Wait();
   ASSERT_TRUE(navigation_observer.last_navigation_succeeded());
   EXPECT_TRUE(HasSeenWebRequestInBackgroundScript(extension, profile(),
-                                                  web_url.host()));
+                                                  web_url.GetHost()));
 }
 
 // Tests that webRequest API can't inspect a chrome-untrusted:// main frame
@@ -2984,7 +2993,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   navigation_observer.Wait();
   ASSERT_TRUE(navigation_observer.last_navigation_succeeded());
   EXPECT_FALSE(HasSeenWebRequestInBackgroundScript(extension, profile(),
-                                                   webui_url.host()));
+                                                   webui_url.GetHost()));
 }
 
 // Tests that webRequest API can't inspect a subframe inside chrome-untrusted://
@@ -3027,7 +3036,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   ASSERT_TRUE(navigation_observer.last_navigation_succeeded());
   EXPECT_FALSE(HasSeenWebRequestInBackgroundScript(extension, profile(),
-                                                   web_url.host()));
+                                                   web_url.GetHost()));
 }
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -4593,7 +4602,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiTestWithContextType,
         if (request.relative_url.starts_with("/server-redirect-with-csp")) {
           auto response =
               std::make_unique<net::test_server::BasicHttpResponse>();
-          response->AddCustomHeader("Location", request.GetURL().query_piece());
+          response->AddCustomHeader("Location", request.GetURL().query());
           response->AddCustomHeader("Content-Security-Policy",
                                     "frame-ancestors 'none'");
           response->set_code(net::HTTP_MOVED_PERMANENTLY);
@@ -5977,6 +5986,7 @@ class ProxyCORSWebRequestApiTest
 };
 
 using ProxyCORSDeclarativeNetRequestApiTest = ProxyCORSWebRequestApiTest;
+using ProxyCORSWebRequestApiTestWithContextTypeMv3 = ProxyCORSWebRequestApiTest;
 
 INSTANTIATE_TEST_SUITE_P(PersistentBackground,
                          ProxyCORSWebRequestApiTest,
@@ -5988,6 +5998,10 @@ INSTANTIATE_TEST_SUITE_P(ServiceWorker,
 
 INSTANTIATE_TEST_SUITE_P(/* No prefix */,
                          ProxyCORSDeclarativeNetRequestApiTest,
+                         ::testing::Values(ContextType::kFromManifest));
+
+INSTANTIATE_TEST_SUITE_P(/* No prefix */,
+                         ProxyCORSWebRequestApiTestWithContextTypeMv3,
                          ::testing::Values(ContextType::kFromManifest));
 
 // Regression test for crbug.com/1212625
@@ -6089,6 +6103,143 @@ IN_PROC_BROWSER_TEST_P(ProxyCORSDeclarativeNetRequestApiTest,
   // Wait for the proxy server to return a response for the preflight request
   // after auth is provided. If the preflight request was cancelled, then this
   // test will not finish.
+  WaitForPreflightResponse();
+}
+
+// Tests that an extension can successfully receive and handle an
+// `onAuthRequired` event for a CORS preflighted request that requires proxy
+// authentication. The test verifies that the extension's handler provides the
+// necessary credentials and the preflight request completes successfully.
+// Regression test for https://crbug.com/40928015.
+IN_PROC_BROWSER_TEST_P(ProxyCORSWebRequestApiTestWithContextTypeMv3,
+                       PreflightOnAuthRequiredSuccessful) {
+  static constexpr char kManifest[] = R"({
+    "name": "MV3 CORS Preflight webRequest.OnAuthRequired",
+    "version": "0.1",
+    "manifest_version": 3,
+    "permissions": [ "webRequest", "webRequestAuthProvider" ],
+    "host_permissions": [ "http://127.0.0.1/*", "http://cors.test/*" ],
+    "background": { "service_worker": "background.js" }
+  })";
+
+  static constexpr char kBackgroundJs[] =
+      R"(chrome.webRequest.onAuthRequired.addListener(details => {
+             const authCredentials = { username: '%s', password: '%s' };
+             chrome.test.succeed();
+             return {authCredentials};
+           },
+           { urls: ['<all_urls>'] },
+           ['blocking']);)";
+
+  TestExtensionDir test_dir;
+  test_dir.WriteManifest(kManifest);
+  test_dir.WriteFile(
+      FILE_PATH_LITERAL("background.js"),
+      base::StringPrintf(kBackgroundJs, kCORSProxyUser, kCORSProxyPass));
+
+  const Extension* extension = LoadExtension(test_dir.UnpackedPath());
+  ASSERT_TRUE(extension) << message_;
+
+  ResultCatcher result_catcher;
+  preflight_waiter_ = std::make_unique<base::RunLoop>();
+
+  ASSERT_TRUE(NavigateToURL(GetActiveWebContents(),
+                            embedded_test_server()->GetURL("/empty.html")));
+  // Send a CORS preflight request which requires proxy auth.
+  ExecuteCorsPreflightedRequest();
+
+  // The extension should have received the OnAuthRequired event.
+  EXPECT_TRUE(result_catcher.GetNextResult());
+  // Wait for the proxy server to return a response for the preflight request
+  // after auth is provided. If the preflight request was cancelled, then this
+  // test will not finish.
+  WaitForPreflightResponse();
+}
+
+// Tests that an extension can successfully use 'extraHeaders' and
+// 'declarativeNetRequest' (with header-dependent rules) while handling
+// 'onAuthRequired' for a CORS preflight request.
+// Regression test for crbug.com/444248440.
+IN_PROC_BROWSER_TEST_P(ProxyCORSWebRequestApiTestWithContextTypeMv3,
+                       PreflightOnAuthRequiredWithExtraHeadersDNR) {
+  static constexpr char kManifest[] = R"({
+    "name": "MV3 CORS Preflight webRequest.OnAuthRequired extraHeaders DNR",
+    "version": "0.1",
+    "manifest_version": 3,
+    "permissions": [
+      "webRequest",
+      "webRequestAuthProvider",
+      "declarativeNetRequest"
+    ],
+    "host_permissions": [ "http://127.0.0.1/*", "http://cors.test/*" ],
+    "background": { "service_worker": "background.js" },
+    "declarative_net_request": {
+      "rule_resources": [{
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }]
+    }
+  })";
+
+  static constexpr char kBackgroundJs[] =
+      R"(chrome.webRequest.onAuthRequired.addListener(details => {
+             const authCredentials = { username: '%s', password: '%s' };
+             setTimeout(() => {
+               chrome.test.succeed();
+             }, 0);
+             return {authCredentials};
+           },
+           { urls: ['<all_urls>'] },
+           // 'extraHeaders' is necessary to hit the critical path.
+           ['blocking', 'extraHeaders']);)";
+
+  // Use a DNR rule that depends on response headers. By including
+  // 'responseHeaders' in the condition, the rule cannot be evaluated until
+  // headers are received.
+  // This ensures `RulesetManager::HasRulesets(kOnHeadersReceived)` returns
+  // true, forcing the call to `EvaluateRequestWithHeaders`.
+  static constexpr char kRulesJson[] = R"([
+    {
+      "id": 1,
+      "priority": 1,
+      "action": { "type": "block" },
+      "condition": {
+        "urlFilter": "*",
+        "responseHeaders": [{"header": "header-that-forces-evaluation"}]
+      }
+    }
+  ])";
+
+  TestExtensionDir test_dir;
+  test_dir.WriteManifest(kManifest);
+  test_dir.WriteFile(
+      FILE_PATH_LITERAL("background.js"),
+      base::StringPrintf(kBackgroundJs, kCORSProxyUser, kCORSProxyPass));
+  test_dir.WriteFile(FILE_PATH_LITERAL("rules.json"), kRulesJson);
+
+  const Extension* extension = LoadExtension(test_dir.UnpackedPath());
+  ASSERT_TRUE(extension) << message_;
+
+  ResultCatcher result_catcher;
+  preflight_waiter_ = std::make_unique<base::RunLoop>();
+
+  ASSERT_TRUE(NavigateToURL(GetActiveWebContents(),
+                            embedded_test_server()->GetURL("/empty.html")));
+
+  // Send a CORS preflight request which requires proxy auth.
+  // This triggers the sequence:
+  //   - Preflight
+  //   - Auth Challenge
+  //   - HandleAuthRequest (with extraHeaders)
+  //   - HandleResponseOrRedirectHeaders
+  //   - WebRequestEventRouter::OnHeadersReceived
+  //   - RulesetManager::HasRulesets(kOnHeadersReceived) == true
+  //   - RulesetManager::EvaluateRequestWithHeaders(nullptr)
+  //   - Graceful handling of headers == nullptr.
+  ExecuteCorsPreflightedRequest();
+
+  EXPECT_TRUE(result_catcher.GetNextResult());
   WaitForPreflightResponse();
 }
 
@@ -6849,6 +7000,116 @@ IN_PROC_BROWSER_TEST_F(ManifestV3WebRequestApiTest,
 
   // ... and the extension should have seen the request.
   EXPECT_EQ(2, get_request_count());
+}
+
+// Verifies that a failed dispatch to an inactive, non-blocking listener does
+// not cause a request to bypass a blocking listener. Regression test for
+// crbug.com/412695438.
+IN_PROC_BROWSER_TEST_F(
+    ManifestV3WebRequestApiTest,
+    NonBlockingListenerFailureDoesNotBypassBlockingListener) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+
+  // An extension with a listener that cancels any requests that include
+  // example.com.
+  static constexpr char kBlockingManifest[] =
+      R"({
+           "name": "MV3 WebRequest",
+           "version": "0.1",
+           "manifest_version": 3,
+           "permissions": ["webRequest", "webRequestBlocking"],
+           "host_permissions": [
+             "http://example.com/*"
+           ],
+           "background": {"service_worker": "background.js"}
+         })";
+  static constexpr char kBlockingBackgroundJs[] =
+      R"(chrome.webRequest.onBeforeRequest.addListener(
+             (details) => {
+               if (details.url.includes('example.com')) {
+                 return {cancel: true}
+               }
+               return {};
+             },
+             {urls: ['<all_urls>'], types: ['main_frame']},
+             ['blocking']);
+         chrome.test.sendMessage('ready');)";
+
+  TestExtensionDir blocking_test_dir;
+  blocking_test_dir.WriteManifest(kBlockingManifest);
+  blocking_test_dir.WriteFile(FILE_PATH_LITERAL("background.js"),
+                              kBlockingBackgroundJs);
+  const Extension* blocking_extension = LoadPolicyExtension(blocking_test_dir);
+  ASSERT_TRUE(blocking_extension);
+
+  EXPECT_EQ(1u, web_request_router()->GetListenerCountForTesting(
+                    profile(), "webRequest.onBeforeRequest"));
+  EXPECT_EQ(0u, web_request_router()->GetInactiveListenerCountForTesting(
+                    profile(), "webRequest.onBeforeRequest"));
+
+  // An extension with a non-blocking listener that registers the first
+  // time it's activated, but fails to do it the subsequent times.
+  static constexpr char kNonBlockingManifest[] =
+      R"({
+           "name": "MV3 WebRequest",
+           "version": "0.1",
+           "manifest_version": 3,
+           "permissions": ["webRequest", "storage"],
+           "host_permissions": [
+             "http://example.com/*"
+           ],
+           "background": {"service_worker": "background.js"}
+         })";
+  static constexpr char kNonBlockingBackgroundJs[] =
+      R"(const key = 'listenerRegistered';
+         chrome.storage.local.get([key], async (result) => {
+           if (!result[key]) {
+             chrome.webRequest.onBeforeRequest.addListener(
+                 async (details) => {},
+                 {urls: ['<all_urls>'], types: ['main_frame']});
+             await chrome.storage.local.set({[key]: true});
+           }
+           chrome.test.sendMessage('ready');
+         });)";
+
+  TestExtensionDir non_blocking_test_dir;
+  non_blocking_test_dir.WriteManifest(kNonBlockingManifest);
+  non_blocking_test_dir.WriteFile(FILE_PATH_LITERAL("background.js"),
+                                  kNonBlockingBackgroundJs);
+  ExtensionTestMessageListener ready_listener("ready");
+  const Extension* non_blocking_extension =
+      LoadExtension(non_blocking_test_dir.UnpackedPath());
+  ASSERT_TRUE(non_blocking_extension);
+  ASSERT_TRUE(ready_listener.WaitUntilSatisfied());
+
+  EXPECT_EQ(2u, web_request_router()->GetListenerCountForTesting(
+                    profile(), "webRequest.onBeforeRequest"));
+  EXPECT_EQ(0u, web_request_router()->GetInactiveListenerCountForTesting(
+                    profile(), "webRequest.onBeforeRequest"));
+
+  // Stop the non-blocking extension's service worker, making its listener
+  // inactive.
+  browsertest_util::StopServiceWorkerForExtensionGlobalScope(
+      profile(), non_blocking_extension->id());
+  // Note: the task to remove listeners from ExtensionWebRequestEventRouter
+  // is async; run to flush the posted task.
+  base::RunLoop().RunUntilIdle();
+
+  // There should now be one active listener (blocking) and one inactive
+  // listener (non-blocking).
+  EXPECT_EQ(1u, web_request_router()->GetListenerCountForTesting(
+                    profile(), "webRequest.onBeforeRequest"));
+  EXPECT_EQ(1u, web_request_router()->GetInactiveListenerCountForTesting(
+                    profile(), "webRequest.onBeforeRequest"));
+
+  // Stop the blocking extension's service worker too.
+  browsertest_util::StopServiceWorkerForExtensionGlobalScope(
+      profile(), blocking_extension->id());
+
+  // Navigation to example.com should be correctly blocked.
+  auto* web_contents = GetActiveWebContents();
+  EXPECT_FALSE(NavigateToURL(web_contents, embedded_test_server()->GetURL(
+                                               "example.com", "/simple.html")));
 }
 
 // Tests unloading an extension with lazy listeners while the worker is

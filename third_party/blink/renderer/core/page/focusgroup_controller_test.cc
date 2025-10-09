@@ -52,6 +52,34 @@ class FocusgroupControllerTest : public PageTestBase {
   ScopedFocusgroupForTest focusgroup_enabled{true};
 };
 
+TEST_F(FocusgroupControllerTest,
+       GridNavigationDisabledWithoutFocusgroupGridFlag) {
+  // Explicitly disable FocusgroupGrid. Ensure arrow keys don't traverse a
+  // grid when the feature is disabled.
+  ScopedFocusgroupGridForTest grid_enabled{false};
+  GetDocument().body()->SetInnerHTMLWithoutTrustedTypes(R"HTML(
+    <table id=table focusgroup=grid>
+      <tr>
+        <td id=c1 tabindex=0>1</td>
+        <td id=c2 tabindex=-1>2</td>
+      </tr>
+    </table>
+  )HTML");
+  UpdateAllLifecyclePhasesForTest();
+
+  auto* c1 = GetElementById("c1");
+  auto* c2 = GetElementById("c2");
+  ASSERT_TRUE(c1);
+  ASSERT_TRUE(c2);
+  c1->Focus();
+  ASSERT_EQ(GetDocument().FocusedElement(), c1);
+
+  // Send right arrow; with grid flag disabled, focus shouldn't move.
+  auto* event = KeyDownEvent(ui::DomKey::ARROW_RIGHT, c1);
+  SendEvent(event);
+  EXPECT_EQ(GetDocument().FocusedElement(), c1);
+}
+
 TEST_F(FocusgroupControllerTest, FocusgroupDirectionForEventValid) {
   // Arrow right should be forward and inline.
   auto* event = KeyDownEvent(ui::DomKey::ARROW_RIGHT);
@@ -155,8 +183,8 @@ TEST_F(FocusgroupControllerTest, IsAxisSupported) {
   ASSERT_TRUE(utils::IsAxisSupported(flags_block_only,
                                      FocusgroupDirection::kForwardBlock));
 
-  FocusgroupFlags flags_both_directions =
-      FocusgroupFlags::kInline | FocusgroupFlags::kBlock;
+  FocusgroupFlags flags_both_directions = static_cast<FocusgroupFlags>(
+      FocusgroupFlags::kInline | FocusgroupFlags::kBlock);
   ASSERT_FALSE(utils::IsAxisSupported(flags_both_directions,
                                       FocusgroupDirection::kNone));
   ASSERT_TRUE(utils::IsAxisSupported(flags_both_directions,
@@ -206,8 +234,8 @@ TEST_F(FocusgroupControllerTest, WrapsInDirection) {
   ASSERT_TRUE(utils::WrapsInDirection(flags_wrap_block,
                                       FocusgroupDirection::kForwardBlock));
 
-  FocusgroupFlags flags_wrap_both =
-      FocusgroupFlags::kWrapInline | FocusgroupFlags::kWrapBlock;
+  FocusgroupFlags flags_wrap_both = static_cast<FocusgroupFlags>(
+      FocusgroupFlags::kWrapInline | FocusgroupFlags::kWrapBlock);
   ASSERT_FALSE(
       utils::WrapsInDirection(flags_wrap_both, FocusgroupDirection::kNone));
   ASSERT_TRUE(utils::WrapsInDirection(flags_wrap_both,
@@ -235,7 +263,8 @@ TEST_F(FocusgroupControllerTest, FocusgroupExtendsInAxis) {
   ASSERT_FALSE(utils::FocusgroupExtendsInAxis(
       extending_focusgroup, focusgroup, FocusgroupDirection::kForwardBlock));
 
-  focusgroup |= FocusgroupFlags::kInline | FocusgroupFlags::kBlock;
+  focusgroup = static_cast<FocusgroupFlags>(FocusgroupFlags::kInline |
+                                            FocusgroupFlags::kBlock);
 
   ASSERT_FALSE(utils::FocusgroupExtendsInAxis(extending_focusgroup, focusgroup,
                                               FocusgroupDirection::kNone));
@@ -248,7 +277,8 @@ TEST_F(FocusgroupControllerTest, FocusgroupExtendsInAxis) {
   ASSERT_FALSE(utils::FocusgroupExtendsInAxis(
       extending_focusgroup, focusgroup, FocusgroupDirection::kForwardBlock));
 
-  extending_focusgroup |= FocusgroupFlags::kInline | FocusgroupFlags::kBlock;
+  extending_focusgroup = static_cast<FocusgroupFlags>(FocusgroupFlags::kInline |
+                                                      FocusgroupFlags::kBlock);
 
   ASSERT_FALSE(utils::FocusgroupExtendsInAxis(extending_focusgroup, focusgroup,
                                               FocusgroupDirection::kNone));
@@ -347,21 +377,21 @@ TEST_F(FocusgroupControllerTest, FindNearestFocusgroupAncestor) {
     <div>
       <span id=item1 tabindex=0></span>
     </div>
-    <div id=fg1 focusgroup>
+    <div id=fg1 focusgroup="toolbar">
       <span id=item2 tabindex=-1></span>
       <div>
-        <div id=fg2 focusgroup=extend>
+        <div id=fg2 focusgroup="toolbar extend">
           <span id=item3 tabindex=-1></span>
           <div>
             <span id=item4></span>
           </div>
-          <table id=fg3 focusgroup=grid>
+          <table id=fg3 focusgroup="grid">
             <tr>
               <td id=item5 tabindex=-1>
                 <!-- The following is an error. -->
-                <div id=fg4 focusgroup=grid>
+                <div id=fg4 focusgroup="grid">
                   <span id=item6 tabindex=-1></span>
-                  <div id=fg5 focusgroup>
+                  <div id=fg5 focusgroup="toolbar">
                     <span id=item7 tabindex=-1></span>
                   </div>
                 </div>
@@ -370,7 +400,7 @@ TEST_F(FocusgroupControllerTest, FindNearestFocusgroupAncestor) {
           </table>
           <div id=fg6-container>
             <template shadowrootmode=open>
-              <div id=fg6 focusgroup=extend>
+              <div id=fg6 focusgroup="toolbar extend">
                 <span id=item8 tabindex=-1></span>
               </div>
             </template>
@@ -559,10 +589,10 @@ TEST_F(FocusgroupControllerTest, LastElementWithin) {
 
 TEST_F(FocusgroupControllerTest, IsFocusgroupItem) {
   GetDocument().body()->SetInnerHTMLWithoutTrustedTypes(R"HTML(
-    <div id=fg1 focusgroup>
+    <div id=fg1 focusgroup="toolbar">
       <span id=item1 tabindex=0></span>
       <span id=item2></span>
-      <div id=fg2 focusgroup=extend>
+      <div id=fg2 focusgroup="toolbar extend">
         <span tabindex=-1></span>
         <div id=non-fg1 tabindex=-1>
           <span id=item3 tabindex=-1></span>
@@ -597,7 +627,7 @@ TEST_F(FocusgroupControllerTest, IsFocusgroupItem) {
 
 TEST_F(FocusgroupControllerTest, CellAtIndexInRowBehaviorOnNoCellFound) {
   GetDocument().body()->SetInnerHTMLWithoutTrustedTypes(R"HTML(
-    <table id=table focusgroup=grid>
+    <table id=table focusgroup="grid">
       <tr>
         <td id=r1c1></td>
         <td id=r1c2></td>
@@ -630,7 +660,7 @@ TEST_F(FocusgroupControllerTest, CellAtIndexInRowBehaviorOnNoCellFound) {
   ASSERT_TRUE(r2c1);
   ASSERT_TRUE(r3c2);
 
-  ASSERT_TRUE(table->GetFocusgroupFlags() & FocusgroupFlags::kGrid);
+  ASSERT_EQ(table->GetFocusgroupData().behavior, FocusgroupBehavior::kGrid);
   auto* helper = utils::CreateGridFocusgroupStructureInfoForGridRoot(table);
 
   // The first column starts at index 0.

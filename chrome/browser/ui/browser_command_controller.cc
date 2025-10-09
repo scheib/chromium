@@ -62,13 +62,13 @@
 #include "chrome/browser/ui/startup/default_browser_prompt/default_browser_prompt_prefs.h"
 #include "chrome/browser/ui/tabs/features.h"
 #include "chrome/browser/ui/tabs/public/tab_features.h"
+#include "chrome/browser/ui/tabs/split_tab_metrics.h"
 #include "chrome/browser/ui/tabs/tab_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
 #include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_utils.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_entry_id.h"
-#include "chrome/browser/ui/views/side_panel/side_panel_enums.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_ui.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
@@ -150,6 +150,7 @@
 #include "chrome/browser/glic/glic_profile_manager.h"
 #include "chrome/browser/glic/public/glic_enabling.h"
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
+#include "chrome/browser/glic/widget/glic_window_controller.h"
 #endif
 
 using WebExposedIsolationLevel = content::WebExposedIsolationLevel;
@@ -466,6 +467,7 @@ void BrowserCommandController::WebContentsFocusChanged() {
 }
 
 void BrowserCommandController::ShowCustomizeChromeSidePanel(
+    SidePanelOpenTrigger trigger,
     std::optional<CustomizeChromeSection> section) {
   tabs::TabInterface* tab = browser_->tab_strip_model()->GetActiveTab();
   if (!tab || !tab->GetTabFeatures() ||
@@ -481,7 +483,7 @@ void BrowserCommandController::ShowCustomizeChromeSidePanel(
     return;
   }
 
-  side_panel_controller->OpenSidePanel(SidePanelOpenTrigger::kAppMenu, section);
+  side_panel_controller->OpenSidePanel(trigger, section);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -561,6 +563,9 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
       break;
     case IDC_TAB_SEARCH_CLOSE:
       CloseTabSearch(browser_);
+      break;
+    case IDC_TOGGLE_VERTICAL_TABS:
+      ToggleVerticalTabs(browser_);
       break;
 
     // Window management commands
@@ -645,6 +650,12 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
       break;
     case IDC_MOVE_TAB_TO_NEW_WINDOW:
       MoveActiveTabToNewWindow(browser_);
+      break;
+    case IDC_NEW_SPLIT_TAB:
+      if (!browser_->tab_strip_model()->GetActiveTab()->IsSplit()) {
+        NewSplitTab(browser_,
+                    split_tabs::SplitTabCreatedSource::kKeyboardShortcut);
+      }
       break;
     case IDC_NAME_WINDOW:
       PromptToNameWindow(browser_);
@@ -740,8 +751,16 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
     case IDC_SHOW_SYNC_SETTINGS:
       chrome::ShowSettingsSubPage(browser_, chrome::kSyncSetupSubPage);
       break;
+    case IDC_SHOW_CONTEXTUAL_TASKS_SIDE_PANEL:
+      ShowContextualTasksSidePanel(browser_);
+      break;
     case IDC_TURN_ON_SYNC:
       signin_ui_util::EnableSyncFromSingleAccountPromo(
+          browser_->profile(), GetAccountInfoFromProfile(browser_->profile()),
+          signin_metrics::AccessPoint::kMenu);
+      break;
+    case IDC_SHOW_SIGNIN:
+      signin_ui_util::SignInFromSingleAccountPromo(
           browser_->profile(), GetAccountInfoFromProfile(browser_->profile()),
           signin_metrics::AccessPoint::kMenu);
       break;
@@ -961,6 +980,10 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
       ShowSettingsSubPage(browser_->GetBrowserForOpeningWebUi(),
                           chrome::kPeopleSubPage);
       break;
+    case IDC_RECENT_TABS_SEE_DEVICE_TABS:
+      ShowHistorySubPage(browser_->GetBrowserForOpeningWebUi(),
+                         kChromeUIHistorySyncedTabs);
+      break;
     case IDC_SHOW_BOOKMARK_MANAGER:
       ShowBookmarkManager(browser_->GetBrowserForOpeningWebUi());
       break;
@@ -1041,10 +1064,10 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
                           chrome::kSafetyHubSubPage);
       break;
     case IDC_HELP_PAGE_VIA_KEYBOARD:
-      ShowHelp(browser_, HELP_SOURCE_KEYBOARD);
+      ShowHelp(browser_, chrome::HelpSource::kKeyboard);
       break;
     case IDC_HELP_PAGE_VIA_MENU:
-      ShowHelp(browser_, HELP_SOURCE_MENU);
+      ShowHelp(browser_, chrome::HelpSource::kMenu);
       break;
     case IDC_CHROME_TIPS:
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -1103,6 +1126,7 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
                                     TabGroupShortcut::kCloseTabGroup);
       break;
     case IDC_CREATE_NEW_TAB_GROUP:
+    case IDC_CREATE_NEW_TAB_GROUP_TOP_LEVEL:
       CreateNewTabGroup(browser_);
       base::UmaHistogramEnumeration("TabGroups.Shortcuts",
                                     TabGroupShortcut::kCreateNewTabGroup);
@@ -1112,7 +1136,14 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
       base::UmaHistogramEnumeration("TabGroups.Shortcuts",
                                     TabGroupShortcut::kAddNewTabToGroup);
       break;
-
+    case IDC_GROUP_UNGROUPED_TABS:
+      GroupAllUngroupedTabs(browser_);
+      base::RecordAction(
+          base::UserMetricsAction("TabGroups_GroupAllUngroupedTabs"));
+      break;
+    case IDC_ADD_NEW_TAB_RECENT_GROUP:
+      AddNewTabToRecentGroup(browser_);
+      break;
     case IDC_WINDOW_CLOSE_TABS_TO_RIGHT:
       CloseTabsToRight(browser_);
       break;
@@ -1196,12 +1227,14 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
     }
 
     case IDC_SHOW_CUSTOMIZE_CHROME_SIDE_PANEL: {
-      ShowCustomizeChromeSidePanel(CustomizeChromeSection::kAppearance);
+      ShowCustomizeChromeSidePanel(SidePanelOpenTrigger::kAppMenu,
+                                   CustomizeChromeSection::kAppearance);
       break;
     }
 
     case IDC_SHOW_CUSTOMIZE_CHROME_TOOLBAR: {
-      ShowCustomizeChromeSidePanel(CustomizeChromeSection::kToolbar);
+      ShowCustomizeChromeSidePanel(SidePanelOpenTrigger::kAppMenu,
+                                   CustomizeChromeSection::kToolbar);
       break;
     }
 
@@ -1250,15 +1283,7 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
       base::MakeRefCounted<shell_integration::DefaultBrowserWorker>()
           ->StartSetAsDefault(base::DoNothing());
 
-      // Log metrics before clearing prefs and closing prompts.
-      if (g_browser_process->local_state()->HasPrefPath(
-              prefs::kDefaultBrowserFirstShownTime)) {
-        base::UmaHistogramCounts100(
-            "DefaultBrowser.AppMenu.TimesShownBeforeAccept",
-            g_browser_process->local_state()->GetInteger(
-                prefs::kDefaultBrowserDeclinedCount) +
-                1);
-      }
+      // Clear prefs and close prompts.
       chrome::startup::default_prompt::UpdatePrefsForDismissedPrompt(
           browser_->profile());
       DefaultBrowserPromptManager::GetInstance()->CloseAllPrompts(
@@ -1396,6 +1421,10 @@ void BrowserCommandController::InitCommandState() {
   command_updater_.UpdateCommandEnabled(IDC_FOCUS_NEXT_TAB_GROUP, true);
   command_updater_.UpdateCommandEnabled(IDC_FOCUS_PREV_TAB_GROUP, true);
   command_updater_.UpdateCommandEnabled(IDC_CLOSE_TAB_GROUP, true);
+  command_updater_.UpdateCommandEnabled(IDC_GROUP_UNGROUPED_TABS, true);
+  command_updater_.UpdateCommandEnabled(IDC_CREATE_NEW_TAB_GROUP_TOP_LEVEL,
+                                        true);
+  command_updater_.UpdateCommandEnabled(IDC_ADD_NEW_TAB_RECENT_GROUP, true);
 
   // Omnibox commands
   command_updater_.UpdateCommandEnabled(IDC_SHOW_FULL_URLS, true);
@@ -1415,6 +1444,7 @@ void BrowserCommandController::InitCommandState() {
   command_updater_.UpdateCommandEnabled(IDC_NAME_WINDOW, true);
   command_updater_.UpdateCommandEnabled(IDC_ORGANIZE_TABS, true);
   command_updater_.UpdateCommandEnabled(IDC_DECLUTTER_TABS, true);
+  command_updater_.UpdateCommandEnabled(IDC_TOGGLE_VERTICAL_TABS, true);
 #if BUILDFLAG(IS_CHROMEOS)
   command_updater_.UpdateCommandEnabled(IDC_TOGGLE_MULTITASK_MENU, true);
   command_updater_.UpdateCommandEnabled(IDC_MINIMIZE_WINDOW, true);
@@ -1502,6 +1532,7 @@ void BrowserCommandController::InitCommandState() {
   command_updater_.UpdateCommandEnabled(IDC_SHOW_SYNC_SETTINGS, true);
   command_updater_.UpdateCommandEnabled(IDC_TURN_ON_SYNC, true);
   command_updater_.UpdateCommandEnabled(IDC_SHOW_SIGNIN_WHEN_PAUSED, true);
+  command_updater_.UpdateCommandEnabled(IDC_SHOW_SIGNIN, true);
   command_updater_.UpdateCommandEnabled(IDC_SHOW_ADDRESSES, !guest_session);
   command_updater_.UpdateCommandEnabled(IDC_HELP_MENU, true);
   command_updater_.UpdateCommandEnabled(IDC_HELP_PAGE_VIA_KEYBOARD, true);
@@ -1515,6 +1546,10 @@ void BrowserCommandController::InitCommandState() {
                              !profile()->IsIncognitoProfile()));
   command_updater_.UpdateCommandEnabled(
       IDC_RECENT_TABS_LOGIN_FOR_DEVICE_TABS,
+      (!guest_session && !profile()->IsSystemProfile() &&
+       !profile()->IsIncognitoProfile()));
+  command_updater_.UpdateCommandEnabled(
+      IDC_RECENT_TABS_SEE_DEVICE_TABS,
       (!guest_session && !profile()->IsSystemProfile() &&
        !profile()->IsIncognitoProfile()));
 #if !BUILDFLAG(IS_CHROMEOS)
@@ -1602,6 +1637,9 @@ void BrowserCommandController::InitCommandState() {
                                         enable_tab_search_commands);
   command_updater_.UpdateCommandEnabled(IDC_TAB_SEARCH_CLOSE,
                                         enable_tab_search_commands);
+
+  command_updater_.UpdateCommandEnabled(IDC_SHOW_CONTEXTUAL_TASKS_SIDE_PANEL,
+                                        true);
 
   if (base::FeatureList::IsEnabled(features::kUIDebugTools)) {
     command_updater_.UpdateCommandEnabled(IDC_DEBUG_TOGGLE_TABLET_MODE, true);
@@ -1749,8 +1787,10 @@ void BrowserCommandController::UpdateCommandsForTabState() {
   }
 
   // Navigation commands
-  command_updater_.UpdateCommandEnabled(IDC_BACK, CanGoBack(browser_));
-  command_updater_.UpdateCommandEnabled(IDC_FORWARD, CanGoForward(browser_));
+  command_updater_.UpdateCommandEnabled(IDC_BACK,
+                                        ShouldEnableBackButton(browser_));
+  command_updater_.UpdateCommandEnabled(IDC_FORWARD,
+                                        ShouldEnableForwardButton(browser_));
   const bool can_reload = CanReload(browser_);
   command_updater_.UpdateCommandEnabled(IDC_RELOAD, can_reload);
   command_updater_.UpdateCommandEnabled(IDC_RELOAD_BYPASSING_CACHE, can_reload);
@@ -2220,6 +2260,8 @@ void BrowserCommandController::UpdateCommandsForTabStripStateChanged() {
                                         CanCloseOtherTabs(browser_));
   command_updater_.UpdateCommandEnabled(IDC_MOVE_TAB_TO_NEW_WINDOW,
                                         CanMoveActiveTabToNewWindow(browser_));
+  command_updater_.UpdateCommandEnabled(IDC_NEW_SPLIT_TAB,
+                                        browser_->is_type_normal());
   UpdateCommandsForBookmarkEditing();
 }
 

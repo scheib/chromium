@@ -65,6 +65,47 @@ TEST_F(EntityTableTest, BasicWriteThenRead) {
   EXPECT_THAT(table().GetEntityInstances(), UnorderedElementsAre(pp, dl));
 }
 
+// Tests that AddOrUpdateEntityInstance() correctly adds entities with an id
+// that's not formatted as GUID.
+TEST_F(EntityTableTest, BasicWriteNonGuidFormatId) {
+  EntityInstance vr = test::GetVehicleEntityInstanceWithRandomGuid(
+      {.guid = "non-guid-format",
+       .record_type = EntityInstance::RecordType::kServerWallet});
+
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(vr));
+  EXPECT_THAT(table().GetEntityInstances(), UnorderedElementsAre(vr));
+}
+
+// Tests that the entity table preserves read only flag between write and read.
+TEST_F(EntityTableTest, BasicWriteThenRead_ReadOnlyInstance) {
+  EntityInstance pp =
+      test::GetPassportEntityInstance(test::PassportEntityOptions{
+          .are_attributes_read_only =
+              EntityInstance::AreAttributesReadOnly{true}});
+
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(pp));
+
+  EXPECT_THAT(table().GetEntityInstances(), UnorderedElementsAre(pp));
+}
+
+// Tests retrieving entity instances by record type.
+TEST_F(EntityTableTest, GetEntityInstancesByRecordType) {
+  EntityInstance local_pp = test::GetPassportEntityInstance(
+      {.record_type = EntityInstance::RecordType::kLocal});
+  EntityInstance server_dl = test::GetDriversLicenseEntityInstance(
+      {.record_type = EntityInstance::RecordType::kServerWallet});
+
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(local_pp));
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(server_dl));
+  EXPECT_THAT(table().GetEntityInstances(),
+              UnorderedElementsAre(local_pp, server_dl));
+  EXPECT_THAT(table().GetEntityInstances(EntityInstance::RecordType::kLocal),
+              UnorderedElementsAre(local_pp));
+  EXPECT_THAT(
+      table().GetEntityInstances(EntityInstance::RecordType::kServerWallet),
+      UnorderedElementsAre(server_dl));
+}
+
 // Tests updating entity instances.
 TEST_F(EntityTableTest, AddOrUpdateEntityInstance) {
   EntityInstance pp = test::GetPassportEntityInstance(
@@ -83,6 +124,31 @@ TEST_F(EntityTableTest, AddOrUpdateEntityInstance) {
   });
   EXPECT_TRUE(table().AddOrUpdateEntityInstance(pp));
   ASSERT_THAT(table().GetEntityInstances(), UnorderedElementsAre(pp, dl));
+}
+
+// Tests deleting entity instances by record_type.
+TEST_F(EntityTableTest, DeleteEntityInstancesByRecordType) {
+  EntityInstance pp = test::GetPassportEntityInstance();
+  EntityInstance dl = test::GetDriversLicenseEntityInstance();
+  EntityInstance wallet_vr = test::GetVehicleEntityInstance({
+      .guid = "00000000-0000-4000-8000-123000000000",
+      .record_type = EntityInstance::RecordType::kServerWallet,
+  });
+  EntityInstance local_vr = test::GetVehicleEntityInstance({
+      .guid = "00000000-0000-4000-8000-456000000000",
+      .record_type = EntityInstance::RecordType::kLocal,
+  });
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(pp));
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(dl));
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(wallet_vr));
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(local_vr));
+  ASSERT_THAT(table().GetEntityInstances(),
+              UnorderedElementsAre(pp, dl, wallet_vr, local_vr));
+  // Delete Wallet entity instances.
+  EXPECT_TRUE(
+      table().DeleteEntityInstances(EntityInstance::RecordType::kServerWallet));
+  EXPECT_THAT(table().GetEntityInstances(),
+              UnorderedElementsAre(pp, dl, local_vr));
 }
 
 // Tests removing individual entity instances.
@@ -158,13 +224,43 @@ TEST_F(EntityTableTest, GetEntityInstancesSkipsEmptyInstances) {
       R"(UPDATE autofill_ai_attributes
          SET attribute_type = attribute_type || 'some-garbage-suffix'
          WHERE entity_guid = ?)"));
-  attributes_update.BindString(0, pp.guid().AsLowercaseString());
+  attributes_update.BindString(0, *pp.guid());
   ASSERT_TRUE(attributes_update.Run())
       << "The UPDATE failed: " << test_api(table()).db()->GetErrorMessage()
       << " (Check the table and column names in the "
          "UpdateBuilder() call above.)";
 
   EXPECT_THAT(table().GetEntityInstances(), ElementsAre(dl));
+}
+
+// Tests the EntityInstanceExists method.
+TEST_F(EntityTableTest, EntityInstanceExists) {
+  EntityInstance pp = test::GetPassportEntityInstance();
+  EntityInstance dl = test::GetDriversLicenseEntityInstance();
+
+  // Initially, no entity should exist.
+  EXPECT_FALSE(table().EntityInstanceExists(pp.guid()));
+  EXPECT_FALSE(table().EntityInstanceExists(dl.guid()));
+
+  // After adding an entity, it should exist.
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(pp));
+  EXPECT_TRUE(table().EntityInstanceExists(pp.guid()));
+  EXPECT_FALSE(table().EntityInstanceExists(dl.guid()));
+
+  // After adding another entity, both should exist.
+  ASSERT_TRUE(table().AddOrUpdateEntityInstance(dl));
+  EXPECT_TRUE(table().EntityInstanceExists(pp.guid()));
+  EXPECT_TRUE(table().EntityInstanceExists(dl.guid()));
+
+  // After removing an entity, it should no longer exist.
+  ASSERT_TRUE(table().RemoveEntityInstance(pp.guid()));
+  EXPECT_FALSE(table().EntityInstanceExists(pp.guid()));
+  EXPECT_TRUE(table().EntityInstanceExists(dl.guid()));
+
+  // After removing the other entity, neither should exist.
+  ASSERT_TRUE(table().RemoveEntityInstance(dl.guid()));
+  EXPECT_FALSE(table().EntityInstanceExists(pp.guid()));
+  EXPECT_FALSE(table().EntityInstanceExists(dl.guid()));
 }
 
 }  // namespace

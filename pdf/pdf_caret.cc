@@ -4,8 +4,14 @@
 
 #include "pdf/pdf_caret.h"
 
+#include <stdint.h>
+
+#include <optional>
+#include <vector>
+
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/containers/flat_map.h"
 #include "base/containers/span.h"
 #include "base/time/time.h"
 #include "pdf/page_character_index.h"
@@ -15,6 +21,7 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/events/keycodes/keyboard_codes_win.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/vector2d.h"
 
 namespace chrome_pdf {
 
@@ -31,12 +38,27 @@ PdfCaret::PdfCaret(PdfCaretClient* client, const PageCharacterIndex& index)
 
 PdfCaret::~PdfCaret() = default;
 
-void PdfCaret::SetVisibility(bool is_visible) {
-  if (is_visible_ == is_visible) {
+void PdfCaret::SetEnabled(bool enabled) {
+  if (enabled_ == enabled) {
     return;
   }
 
-  is_visible_ = is_visible;
+  enabled_ = enabled;
+  if (ShouldDrawCaret()) {
+    SetScreenRectForCurrentCaret();
+  }
+  RefreshDisplayState();
+}
+
+void PdfCaret::SetVisible(bool visible) {
+  if (is_visible_ == visible) {
+    return;
+  }
+
+  is_visible_ = visible;
+  if (ShouldDrawCaret()) {
+    SetScreenRectForCurrentCaret();
+  }
   RefreshDisplayState();
 }
 
@@ -56,11 +78,16 @@ void PdfCaret::SetChar(const PageCharacterIndex& next_char) {
   index_ = next_char;
 
   const gfx::Rect old_screen_rect = caret_screen_rect_;
-  caret_screen_rect_ = GetScreenRectForCaret();
-  if (!old_screen_rect.IsEmpty() && old_screen_rect != caret_screen_rect_) {
+  SetScreenRectForCurrentCaret();
+  if (is_blink_visible_ && !old_screen_rect.IsEmpty() &&
+      old_screen_rect != caret_screen_rect_) {
     client_->InvalidateRect(old_screen_rect);
   }
-  if (is_visible_) {
+}
+
+void PdfCaret::SetCharAndDraw(const PageCharacterIndex& next_char) {
+  SetChar(next_char);
+  if (ShouldDrawCaret()) {
     RefreshDisplayState();
   }
 }
@@ -83,43 +110,60 @@ bool PdfCaret::MaybeDrawCaret(const RegionData& region,
 }
 
 void PdfCaret::OnGeometryChanged() {
-  if (!is_visible_) {
+  if (!ShouldDrawCaret()) {
     return;
   }
-
-  caret_screen_rect_ = GetScreenRectForCaret();
+  SetScreenRectForCurrentCaret();
   if (!caret_screen_rect_.IsEmpty()) {
     client_->InvalidateRect(caret_screen_rect_);
   }
 }
 
 bool PdfCaret::OnKeyDown(const blink::WebKeyboardEvent& event) {
+  // The caret is not visible during text selection, so key events should still
+  // be handled when not visible.
+  if (!enabled_) {
+    return false;
+  }
+
+  bool should_select =
+      !!(event.GetModifiers() & blink::WebInputEvent::Modifiers::kShiftKey);
   switch (event.windows_key_code) {
     case ui::KeyboardCode::VKEY_LEFT:
-      MoveToNextChar(/*move_right=*/false);
+      MoveHorizontallyToNextChar(/*move_right=*/false, should_select);
       return true;
     case ui::KeyboardCode::VKEY_RIGHT:
-      MoveToNextChar(/*move_right=*/true);
+      MoveHorizontallyToNextChar(/*move_right=*/true, should_select);
+      return true;
+    case ui::KeyboardCode::VKEY_UP:
+      MoveVerticallyToNextChar(/*move_down=*/false, should_select);
+      return true;
+    case ui::KeyboardCode::VKEY_DOWN:
+      MoveVerticallyToNextChar(/*move_down=*/true, should_select);
       return true;
     default:
       return false;
   }
 }
 
+bool PdfCaret::ShouldDrawCaret() const {
+  return enabled_ && is_visible_;
+}
+
 void PdfCaret::RefreshDisplayState() {
   blink_timer_.Stop();
-  if (is_visible_ && blink_interval_.is_positive()) {
+  is_blink_visible_ = ShouldDrawCaret();
+  if (is_blink_visible_ && blink_interval_.is_positive()) {
     blink_timer_.Start(FROM_HERE, blink_interval_, this,
                        &PdfCaret::OnBlinkTimerFired);
   }
-  is_blink_visible_ = is_visible_;
   if (!caret_screen_rect_.IsEmpty()) {
     client_->InvalidateRect(caret_screen_rect_);
   }
 }
 
 void PdfCaret::OnBlinkTimerFired() {
-  CHECK(is_visible_);
+  CHECK(ShouldDrawCaret());
   CHECK(blink_interval_.is_positive());
   is_blink_visible_ = !is_blink_visible_;
   if (!caret_screen_rect_.IsEmpty()) {
@@ -127,34 +171,41 @@ void PdfCaret::OnBlinkTimerFired() {
   }
 }
 
-gfx::Rect PdfCaret::GetScreenRectForCaret() const {
+void PdfCaret::SetScreenRectForCurrentCaret() {
+  CaretScreenRectData data = GetScreenRectForCaret(index_);
+  caret_screen_rect_ = data.screen_rect;
+  cached_screen_rect_index_ = data.actual_index;
+}
+
+PdfCaret::CaretScreenRectData PdfCaret::GetScreenRectForCaret(
+    const PageCharacterIndex& index) const {
   gfx::Rect screen_rect;
-  PageCharacterIndex curr_char = index_;
+  PageCharacterIndex curr_index = index;
 
   do {
-    screen_rect = GetScreenRectForChar(curr_char);
+    screen_rect = GetScreenRectForChar(curr_index);
     if (!screen_rect.IsEmpty()) {
       break;
     }
 
     // Failed to find a screen rect at the start of the page.
-    if (curr_char.char_index == 0u) {
-      return screen_rect;
+    if (curr_index.char_index == 0) {
+      return {screen_rect, curr_index};
     }
 
     // Synthetic whitespaces and newlines generated by PDFium may not have a
     // screen rect. Find the nearest previous char that has a screen rect.
-    --curr_char.char_index;
+    --curr_index.char_index;
   } while (true);
 
   /// Use the right of the previous char's rect.
-  if (index_.char_index != curr_char.char_index) {
+  if (index.char_index != curr_index.char_index) {
     screen_rect.Offset(screen_rect.width(), 0);
   }
 
   CHECK(!screen_rect.IsEmpty());
   screen_rect.set_width(kCaretWidth);
-  return screen_rect;
+  return {screen_rect, curr_index};
 }
 
 gfx::Rect PdfCaret::GetScreenRectForChar(
@@ -192,42 +243,290 @@ void PdfCaret::Draw(const RegionData& region, const gfx::Rect& rect) const {
   }
 }
 
-void PdfCaret::MoveToNextChar(bool move_right) {
-  if (!WillCaretExitPage(move_right)) {
-    const int delta = move_right ? 1 : -1;
-    // TODO(crbug.com/427139500): Skip newlines.
-    SetChar({index_.page_index, index_.char_index + delta});
+void PdfCaret::MoveToChar(const PageCharacterIndex& new_index,
+                          bool should_select) {
+  if (!should_select) {
+    client_->ClearTextSelection();
+  }
+
+  if (index_ == new_index) {
     return;
   }
 
+  if (!should_select || (!client_->IsSelecting() &&
+                         !StartSelection(/*move_right=*/index_ < new_index))) {
+    SetCharAndDraw(new_index);
+  } else {
+    ExtendSelection(new_index);
+    SetChar(new_index);
+  }
+
+  if (!caret_screen_rect_.IsEmpty()) {
+    client_->ScrollToChar(cached_screen_rect_index_);
+  }
+}
+
+void PdfCaret::MoveHorizontallyToNextChar(bool move_right, bool should_select) {
+  std::optional<PageCharacterIndex> next_char =
+      GetAdjacentCaretPos(index_, move_right);
+  if (next_char.has_value()) {
+    MoveToChar(next_char.value(), should_select);
+  }
+}
+
+void PdfCaret::MoveVerticallyToNextChar(bool move_down, bool should_select) {
+  // Find the next text line by getting the next two sets of newlines that
+  // border the text line.
+
+  // Newlines are considered part of the current line. When moving up and on a
+  // newline, skip it so that `GetNextNewlineOnPage()` does not use the current
+  // newline.
+  PageCharacterIndex start_index = index_;
+  if (!move_down) {
+    start_index = GetNextNonNewlineOnPage(index_, /*move_right=*/false)
+                      .value_or(start_index);
+  }
+
+  // Search for the first newline.
+  std::optional<PageCharacterIndex> first_newline =
+      GetNextNewlineOnPage(start_index, move_down);
   uint32_t page_index = index_.page_index;
+  const int delta = move_down ? 1 : -1;
+  if (!first_newline.has_value()) {
+    // If there is no newline, then there is no next line on the current page.
+    page_index += delta;
+    if (!client_->PageIndexInBounds(page_index)) {
+      // There is no page in the `move_down` direction. Stay at the end of the
+      // page.
+      const PageCharacterIndex end_index = {
+          index_.page_index,
+          move_down ? client_->GetCharCount(index_.page_index) : 0};
+      MoveToChar(end_index, should_select);
+      return;
+    }
+    // Start at the beginning or end of the adjacent page.
+    first_newline = {page_index,
+                     move_down ? 0 : client_->GetCharCount(page_index)};
+  } else {
+    // Check for consecutive newlines and skip one of them. There cannot be more
+    // than two consecutive newlines.
+    //
+    // Synthetic newlines cannot be the first or last char on a page.
+    CHECK(!WillCaretExitPage(first_newline.value(), /*move_right=*/false));
+
+    PageCharacterIndex adjacent_char = first_newline.value();
+    adjacent_char.char_index += delta;
+    if (client_->IsSynthesizedNewline(adjacent_char)) {
+      first_newline = adjacent_char;
+    }
+  }
+
+  // Search for the second newline. Start on the adjacent non-newline char.
+  start_index = GetNextNonNewlineOnPage(first_newline.value(), move_down)
+                    .value_or(first_newline.value());
+  std::optional<PageCharacterIndex> second_newline =
+      GetNextNewlineOnPage(start_index, move_down);
+  if (!second_newline.has_value()) {
+    // If there is no newline, then the line starts or ends at one end of the
+    // page.
+    second_newline = {start_index.page_index,
+                      move_down ? client_->GetCharCount(page_index) : 0};
+  }
+
+  // When moving up, `first_newline` is after the line and `second_newline` is
+  // before the line. Swap them.
+  if (first_newline.value().char_index > second_newline.value().char_index) {
+    std::swap(first_newline, second_newline);
+  }
+  MoveToChar(
+      GetClosestCharInTextLine(first_newline.value(), second_newline.value()),
+      should_select);
+}
+
+bool PdfCaret::StartSelection(bool move_right) const {
+  if (client_->GetCharCount(index_.page_index) != 0) {
+    client_->StartSelection(index_);
+    return true;
+  }
+
+  // Avoid starting a selection on a no-text page by starting on the adjacent
+  // caret position.
+  // `GetAdjacentCaretPos()` will never return std::nullopt because the caret
+  // should always be moving.
+  PageCharacterIndex adjacent_caret_pos =
+      GetAdjacentCaretPos(index_, move_right).value();
+  if (client_->GetCharCount(adjacent_caret_pos.page_index) != 0) {
+    client_->StartSelection(adjacent_caret_pos);
+    return true;
+  }
+
+  return false;
+}
+
+void PdfCaret::ExtendSelection(const PageCharacterIndex& new_index) const {
+  if (client_->GetCharCount(new_index.page_index) != 0) {
+    client_->ExtendAndInvalidateSelectionByChar(new_index);
+    return;
+  }
+
+  uint32_t char_count = client_->GetCharCount(index_.page_index);
+  if (char_count == 0) {
+    // Moving from a no-text page to another no-text page. Do nothing.
+    return;
+  }
+
+  // When moving to a no-text page, select the remaining text on the original
+  // page.
+  const bool move_right = index_ < new_index;
+  PageCharacterIndex end_index = {index_.page_index,
+                                  move_right ? char_count : 0};
+  if (end_index == index_) {
+    // `end_index` is already part of the selection.
+    return;
+  }
+  client_->ExtendAndInvalidateSelectionByChar(end_index);
+}
+
+bool PdfCaret::WillCaretExitPage(const PageCharacterIndex& index,
+                                 bool move_right) const {
+  if (move_right) {
+    return index.char_index == client_->GetCharCount(index.page_index);
+  }
+  return index.char_index == 0;
+}
+
+bool PdfCaret::IndexHasChar(const PageCharacterIndex& index) const {
+  return index.char_index < client_->GetCharCount(index.page_index);
+}
+
+bool PdfCaret::IsSynthesizedNewline(const PageCharacterIndex& index) const {
+  return IndexHasChar(index) && client_->IsSynthesizedNewline(index);
+}
+
+std::optional<PageCharacterIndex> PdfCaret::GetAdjacentCaretPos(
+    const PageCharacterIndex& index,
+    bool move_right) const {
+  if (!WillCaretExitPage(index, move_right)) {
+    const int delta = move_right ? 1 : -1;
+    PageCharacterIndex next_char = {index.page_index, index.char_index + delta};
+    // Newlines synthetically created by PDFium have empty screen rects.
+    // Skip consecutive newlines.
+    if (IsSynthesizedNewline(index) && IsSynthesizedNewline(next_char)) {
+      // Synthetic newlines cannot be the first or last char on a page.
+      CHECK(!WillCaretExitPage(next_char, move_right));
+
+      // There cannot be more than two consecutive synthetic newlines.
+      next_char.char_index += delta;
+    }
+    return next_char;
+  }
+
+  uint32_t page_index = index.page_index;
 
   // If `move_right` is true, move one page to the right if possible.
   if (move_right) {
     ++page_index;
     if (!client_->PageIndexInBounds(page_index)) {
       // There is no next page. Stay at current position.
-      return;
+      return std::nullopt;
     }
-    SetChar({page_index, 0});
-    return;
+    return PageCharacterIndex(page_index, 0);
   }
 
   // Otherwise, move one page to the left if possible.
   if (page_index == 0) {
     // There is no previous page. Stay at current position.
-    return;
+    return std::nullopt;
   }
 
   --page_index;
-  SetChar({page_index, client_->GetCharCount(page_index)});
+  return PageCharacterIndex(page_index, client_->GetCharCount(page_index));
 }
 
-bool PdfCaret::WillCaretExitPage(bool move_right) const {
-  if (move_right) {
-    return index_.char_index == client_->GetCharCount(index_.page_index);
+std::optional<PageCharacterIndex> PdfCaret::GetNextNonNewlineOnPage(
+    const PageCharacterIndex& index,
+    bool move_right) const {
+  PageCharacterIndex curr_index = index;
+  const int delta = move_right ? 1 : -1;
+  while (!WillCaretExitPage(curr_index, move_right) &&
+         IsSynthesizedNewline(curr_index)) {
+    curr_index.char_index += delta;
   }
-  return index_.char_index == 0;
+
+  if (curr_index == index) {
+    return std::nullopt;
+  }
+
+  return curr_index;
+}
+
+std::optional<PageCharacterIndex> PdfCaret::GetNextNewlineOnPage(
+    const PageCharacterIndex& index,
+    bool move_right) const {
+  PageCharacterIndex curr_index = index;
+  const int delta = move_right ? 1 : -1;
+  while (!WillCaretExitPage(curr_index, move_right) &&
+         !IsSynthesizedNewline(curr_index)) {
+    curr_index.char_index += delta;
+  }
+
+  if (WillCaretExitPage(curr_index, move_right)) {
+    // Could not find a newline.
+    return std::nullopt;
+  }
+
+  return curr_index;
+}
+
+PageCharacterIndex PdfCaret::GetClosestCharInTextLine(
+    const PageCharacterIndex& start_newline,
+    const PageCharacterIndex& end_newline) const {
+  const uint32_t page_index = start_newline.page_index;
+  CHECK_EQ(page_index, end_newline.page_index);
+
+  // The start newline is not part of the text line, so skip to the right.
+  PageCharacterIndex line_start =
+      GetNextNonNewlineOnPage(start_newline, /*move_right=*/true)
+          .value_or(start_newline);
+
+  const gfx::Point caret_center = caret_screen_rect_.CenterPoint();
+
+  // The property of distances of characters in a line from a point is unimodal
+  // (it decreases to a minimum, then increases). A binary search that compares
+  // mid and mid+1 can find this minimum efficiently.
+
+  // Cache the results of `GetScreenRectForCaret()` to avoid redundant calls.
+  base::flat_map<uint32_t, uint64_t> distances;
+  auto get_cached_distance = [&](uint32_t char_index) {
+    if (!distances.contains(char_index)) {
+      gfx::Rect screen_rect =
+          GetScreenRectForCaret({page_index, char_index}).screen_rect;
+      gfx::Vector2d distance_vector = caret_center - screen_rect.CenterPoint();
+      // Just need to compare relative lengths. Length squared is cheaper to
+      // compute.
+      distances[char_index] = distance_vector.LengthSquared();
+    }
+    return distances[char_index];
+  };
+
+  uint32_t low_char_index = line_start.char_index;
+  uint32_t high_char_index = end_newline.char_index;
+  while (low_char_index < high_char_index) {
+    uint32_t mid_char_index =
+        low_char_index + (high_char_index - low_char_index) / 2;
+    int64_t mid_distance = get_cached_distance(mid_char_index);
+    int64_t mid_right_distance = get_cached_distance(mid_char_index + 1);
+
+    if (mid_distance < mid_right_distance) {
+      // The closest character is in the left half, including mid.
+      high_char_index = mid_char_index;
+    } else {
+      // The closest character is in the right half, not including mid.
+      low_char_index = mid_char_index + 1;
+    }
+  }
+
+  return {page_index, low_char_index};
 }
 
 }  // namespace chrome_pdf

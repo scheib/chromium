@@ -34,13 +34,12 @@
 #include "gpu/command_buffer/service/gpu_switches.h"
 #include "gpu/command_buffer/service/gpu_tracer.h"
 #include "gpu/command_buffer/service/logger.h"
-#include "gpu/command_buffer/service/passthrough_discardable_manager.h"
 #include "gpu/command_buffer/service/raster_decoder.h"
-#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
+#include "gpu/ipc/common/surface_handle.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_context_egl.h"
@@ -234,25 +233,19 @@ class BitIterator {
 struct Config {
   size_t MakeFromBits(const uint8_t* bits, size_t size) {
     BitIterator it(bits, size);
-#if BUILDFLAG(IS_ANDROID)
-    attrib_helper.red_size = 8;
-    attrib_helper.green_size = 8;
-    attrib_helper.blue_size = 8;
-    attrib_helper.alpha_size = it.GetBit() ? 8 : 0;
-#endif
     [[maybe_unused]] bool es3 = it.GetBit();
 #if defined(GPU_FUZZER_USE_RASTER_DECODER)
-    attrib_helper.context_type = CONTEXT_TYPE_OPENGLES2;
+    context_type = CONTEXT_TYPE_OPENGLES2;
 #else
     bool es31 = it.GetBit();
     if (es3) {
-      attrib_helper.context_type =
+      context_type =
           es31 ? CONTEXT_TYPE_OPENGLES31_FOR_TESTING : CONTEXT_TYPE_OPENGLES3;
     } else {
-      attrib_helper.context_type = CONTEXT_TYPE_OPENGLES2;
+      context_type = CONTEXT_TYPE_OPENGLES2;
     }
 #endif
-    attrib_helper.enable_gpu_rasterization = it.GetBit();
+    enable_gpu_rasterization = it.GetBit();
 
 #if defined(GPU_FUZZER_USE_STUB)
     std::vector<std::string_view> enabled_extensions;
@@ -279,22 +272,23 @@ struct Config {
 #if defined(GPU_FUZZER_USE_PASSTHROUGH_CMD_DECODER) && \
     !defined(GPU_FUZZER_USE_RASTER_DECODER)
     gl_context_attribs.webgl_compatibility_context =
-        IsWebGLContextType(attrib_helper.context_type);
+        IsWebGLContextType(context_type);
     gl_context_attribs.global_texture_share_group = true;
     gl_context_attribs.robust_resource_initialization = true;
     gl_context_attribs.robust_buffer_access = true;
     gl_context_attribs.allow_client_arrays = false;
     gl_context_attribs.client_major_es_version =
-        IsWebGL2OrES3OrHigherContextType(attrib_helper.context_type) ? 3 : 2;
+        IsWebGL2OrES3OrHigherContextType(context_type) ? 3 : 2;
     gl_context_attribs.client_minor_es_version =
-        IsES31ForTestingContextType(attrib_helper.context_type) ? 1 : 0;
+        IsES31ForTestingContextType(context_type) ? 1 : 0;
 #endif
 
     return it.consumed_bytes();
   }
 
+  ContextType context_type = CONTEXT_TYPE_OPENGLES2;
+  bool enable_gpu_rasterization = false;
   GpuDriverBugWorkarounds workarounds;
-  ContextCreationAttribs attrib_helper;
   gl::GLContextAttribs gl_context_attribs;
 #if defined(GPU_FUZZER_USE_STUB)
   const char* version;
@@ -354,11 +348,6 @@ class CommandBufferSetup {
 #else
 #error invalid configuration
 #endif
-    discardable_manager_ =
-        std::make_unique<ServiceDiscardableManager>(gpu_preferences_);
-    passthrough_discardable_manager_ =
-        std::make_unique<PassthroughDiscardableManager>(gpu_preferences_);
-
     if (gpu_preferences_.use_passthrough_cmd_decoder)
       recreate_context_ = true;
 
@@ -433,44 +422,51 @@ class CommandBufferSetup {
       shared_image_factory_->CreateSharedImage(
           mailbox, si_format, gfx::Size(256, 256),
           gfx::ColorSpace::CreateSRGB(), kTopLeft_GrSurfaceOrigin,
-          kPremul_SkAlphaType, gfx::kNullAcceleratedWidget,
+          kPremul_SkAlphaType, gpu::kNullSurfaceHandle,
           SharedImageUsageSet(usage), "TestLabel");
     }
 
 #if defined(GPU_FUZZER_USE_RASTER_DECODER)
     context_state_->MakeCurrent(nullptr);
-    auto* context = context_state_->context();
-    decoder_.reset(raster::RasterDecoder::Create(
+    decoder_ = raster::RasterDecoder::Create(
         command_buffer_.get(), command_buffer_->service(), &outputter_,
         gpu_feature_info, gpu_preferences_, /*memory_tracker=*/nullptr,
-        shared_image_manager_.get(), context_state_, /*is_privileged=*/true));
+        shared_image_manager_.get(), context_state_, /*is_privileged=*/true);
+    decoder_->GetLogger()->set_log_synthesized_gl_errors(false);
+
+    auto result =
+        decoder_->Initialize(config_.enable_gpu_rasterization,
+                             /*lose_context_when_out_of_memory=*/false);
+    if (result != gpu::ContextResult::kSuccess) {
+      return false;
+    }
 #else
     context_->MakeCurrentDefault();
     // GLES2Decoder may Initialize feature_info differently than
     // SharedContextState and should have its own.
     auto decoder_feature_info = base::MakeRefCounted<gles2::FeatureInfo>(
         config_.workarounds, gpu_feature_info);
-    scoped_refptr<gles2::ContextGroup> context_group = new gles2::ContextGroup(
-        gpu_preferences_, /*memory_tracker=*/nullptr, &translator_cache_,
-        &completeness_cache_, decoder_feature_info,
-        /*bind_generates_resource=*/false,
-        /*progress_reporter=*/nullptr, gpu_feature_info,
-        discardable_manager_.get(), passthrough_discardable_manager_.get(),
-        shared_image_manager_.get());
+    scoped_refptr<gles2::ContextGroup> context_group =
+        MakeRefCounted<gles2::ContextGroup>(
+            gpu_preferences_, /*memory_tracker=*/nullptr, &translator_cache_,
+            &completeness_cache_, decoder_feature_info,
+            /*progress_reporter=*/nullptr, gpu_feature_info,
+            shared_image_manager_.get());
     auto* context = context_.get();
-    decoder_.reset(gles2::GLES2Decoder::Create(
-        command_buffer_.get(), command_buffer_->service(), &outputter_,
-        context_group.get()));
-#endif
-
+    decoder_ = gles2::GLES2Decoder::Create(command_buffer_.get(),
+                                           command_buffer_->service(),
+                                           &outputter_, context_group.get());
     decoder_->GetLogger()->set_log_synthesized_gl_errors(false);
 
-    auto result = decoder_->Initialize(context->default_surface(), context,
-                                       true, gles2::DisallowedFeatures(),
-                                       config_.attrib_helper);
+    auto result =
+        decoder_->Initialize(context->default_surface(), context,
+                             /*offscreen=*/true, config_.context_type,
+                             /*lose_context_when_out_of_memory=*/false);
     if (result != gpu::ContextResult::kSuccess) {
       return false;
     }
+#endif
+
     decoder_initialized_ = true;
 
     command_buffer_->set_handler(decoder_.get());
@@ -642,9 +638,6 @@ class CommandBufferSetup {
 
   gles2::TraceOutputter outputter_;
   scoped_refptr<gl::GLShareGroup> share_group_;
-  std::unique_ptr<ServiceDiscardableManager> discardable_manager_;
-  std::unique_ptr<PassthroughDiscardableManager>
-      passthrough_discardable_manager_;
   std::unique_ptr<SharedImageManager> shared_image_manager_;
   std::unique_ptr<SharedImageFactory> shared_image_factory_;
 

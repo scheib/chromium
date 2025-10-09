@@ -435,6 +435,43 @@ class SigninUtilHistorySyncOptinTest : public SigninUtilTest {
       switches::kAvatarButtonSyncPromoForTesting};
 };
 
+TEST_F(SigninUtilHistorySyncOptinTest, HistorySyncOptinDisallowedByPolicy) {
+  SignInAndSetUpSyncService();
+
+  syncer::UserSelectableTypeSet types({syncer::UserSelectableType::kTabs,
+                                       syncer::UserSelectableType::kHistory});
+
+  DisableAllSyncedDataTypes();
+  ASSERT_TRUE(signin_util::IsSyncingUserSelectableTypesAllowedByPolicy(
+      test_sync_service(), types));
+
+  test_sync_service()->SetAllowedByEnterprisePolicy(false);
+  EXPECT_FALSE(signin_util::IsSyncingUserSelectableTypesAllowedByPolicy(
+      test_sync_service(), types));
+}
+
+TEST_F(SigninUtilHistorySyncOptinTest,
+       HistorySyncOptinDisallowedByPolicyPerType) {
+  SignInAndSetUpSyncService();
+
+  syncer::UserSelectableTypeSet types({syncer::UserSelectableType::kTabs,
+                                       syncer::UserSelectableType::kHistory});
+
+  DisableAllSyncedDataTypes();
+  ASSERT_TRUE(signin_util::IsSyncingUserSelectableTypesAllowedByPolicy(
+      test_sync_service(), types));
+
+  test_sync_service()->GetUserSettings()->SetTypeIsManagedByPolicy(
+      syncer::UserSelectableType::kHistory, /*managed=*/true);
+
+  EXPECT_FALSE(signin_util::IsSyncingUserSelectableTypesAllowedByPolicy(
+      test_sync_service(), types));
+  EXPECT_FALSE(signin_util::IsSyncingUserSelectableTypesAllowedByPolicy(
+      test_sync_service(), {syncer::UserSelectableType::kHistory}));
+  EXPECT_TRUE(signin_util::IsSyncingUserSelectableTypesAllowedByPolicy(
+      test_sync_service(), {syncer::UserSelectableType::kTabs}));
+}
+
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 TEST_F(SigninUtilHistorySyncOptinTest,
        ShouldNotShowHistorySyncOptinScreenIfNoPrimaryAccount) {
@@ -467,6 +504,7 @@ TEST_F(SigninUtilHistorySyncOptinTest,
   EXPECT_FALSE(signin_util::ShouldShowHistorySyncOptinScreen(*profile()));
   EXPECT_FALSE(signin_util::ShouldShowAvatarSyncPromo(profile()));
 }
+
 TEST_F(SigninUtilHistorySyncOptinTest,
        ShouldNotShowHistorySyncOptinScreenIfUserIsAlreadyOptedIn) {
   SignInAndSetUpSyncService();
@@ -529,6 +567,20 @@ TEST_F(SigninUtilHistorySyncOptinTest,
       syncer::UserSelectableType::kSavedTabGroups, false);
 
   EXPECT_TRUE(signin_util::ShouldShowHistorySyncOptinScreen(*profile()));
+}
+
+TEST_F(SigninUtilHistorySyncOptinTest, EnableHistorySync) {
+  SignInAndSetUpSyncService();
+  DisableAllSyncedDataTypes();
+
+  signin_util::EnableHistorySync(test_sync_service());
+
+  EXPECT_TRUE(test_sync_service()->GetUserSettings()->GetSelectedTypes().Has(
+      syncer::UserSelectableType::kHistory));
+  EXPECT_TRUE(test_sync_service()->GetUserSettings()->GetSelectedTypes().Has(
+      syncer::UserSelectableType::kTabs));
+  EXPECT_TRUE(test_sync_service()->GetUserSettings()->GetSelectedTypes().Has(
+      syncer::UserSelectableType::kSavedTabGroups));
 }
 
 TEST_F(SigninUtilHistorySyncOptinTest, ShouldShowAvatarSyncPromo) {

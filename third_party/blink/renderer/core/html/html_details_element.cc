@@ -178,8 +178,8 @@ void HTMLDetailsElement::ParseAttribute(
                             old_state, new_state, /*source=*/nullptr);
     pending_event_task_ = PostCancellableTask(
         *GetDocument().GetTaskRunner(TaskType::kDOMManipulation), FROM_HERE,
-        WTF::BindOnce(&HTMLDetailsElement::DispatchPendingEvent,
-                      WrapPersistent(this), params.reason));
+        BindOnce(&HTMLDetailsElement::DispatchPendingEvent,
+                 WrapPersistent(this), params.reason));
 
     Element* content =
         EnsureUserAgentShadowRoot(SlotAssignmentMode::kManual)
@@ -325,8 +325,7 @@ bool HTMLDetailsElement::HandleCommandInternal(HTMLElement& invoker,
     return false;
   }
 
-  if (RuntimeEnabledFeatures::ToggleEventSourceEnabled() &&
-      pending_toggle_event_) {
+  if (pending_toggle_event_) {
     // pending_toggle_event_ is created inside the attribute handling code which
     // we can't pass the invoker to, so we set it here instead.
     pending_toggle_event_ = ToggleEvent::Create(

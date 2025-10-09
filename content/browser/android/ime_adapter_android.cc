@@ -18,6 +18,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "components/input/native_web_keyboard_event.h"
+#include "content/browser/android/ime_text_span.h"
 #include "content/browser/android/text_suggestion_host_android.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_view_host_delegate.h"
@@ -210,6 +211,12 @@ void ImeAdapterAndroid::UpdateState(const ui::mojom::TextInputState& state) {
   ScopedJavaLocalRef<jobject> obj = java_ime_adapter_.get(env);
   if (obj.is_null())
     return;
+  base::android::ScopedJavaLocalRef<jobjectArray> j_ime_text_spans;
+
+  if (base::FeatureList::IsEnabled(
+          blink::features::kAndroidSpellcheckFullApiBlink)) {
+    j_ime_text_spans = ToImeTextSpanJniArray(env, state.ime_text_spans_info);
+  }
 
   ScopedJavaLocalRef<jstring> jstring_text =
       ConvertUTF16ToJavaString(env, state.value.value_or(std::u16string()));
@@ -222,7 +229,7 @@ void ImeAdapterAndroid::UpdateState(const ui::mojom::TextInputState& state) {
       state.composition ? state.composition.value().end() : -1,
       state.reply_to_request,
       static_cast<int>(state.last_vk_visibility_request),
-      static_cast<int>(state.vk_policy));
+      static_cast<int>(state.vk_policy), j_ime_text_spans);
 }
 
 void ImeAdapterAndroid::UpdateOnTouchDown() {
@@ -351,6 +358,36 @@ void ImeAdapterAndroid::CommitText(JNIEnv* env,
     relative_cursor_pos -= text16.length();
 
   rwhi->ImeCommitText(text16, ime_text_spans, gfx::Range::InvalidRange(),
+                      relative_cursor_pos);
+}
+
+void ImeAdapterAndroid::ReplaceText(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& obj,
+    int start,
+    int end,
+    const base::android::JavaParamRef<jstring>& text_str,
+    int relative_cursor_pos) {
+  RenderWidgetHostImpl* rwhi = GetFocusedWidget();
+  if (!rwhi) {
+    return;
+  }
+
+  std::u16string text16 = ConvertJavaStringToUTF16(env, text_str);
+
+  std::vector<ui::ImeTextSpan> ime_text_spans =
+      GetImeTextSpansFromJava(env, obj, text_str, text16);
+
+  // relative_cursor_pos is as described in the Android API for
+  // InputConnection#commitText, whereas the parameters for
+  // ImeConfirmComposition are relative to the end of the composition.
+  if (relative_cursor_pos > 0) {
+    relative_cursor_pos--;
+  } else {
+    relative_cursor_pos -= text16.length();
+  }
+
+  rwhi->ImeCommitText(text16, ime_text_spans, gfx::Range(start, end),
                       relative_cursor_pos);
 }
 

@@ -88,6 +88,7 @@
 #include "crypto/unexportable_key.h"
 #include "crypto/user_verifying_key.h"
 #include "device/fido/enclave/constants.h"
+#include "device/fido/enclave/enclave_authenticator.h"
 #include "device/fido/enclave/transact.h"
 #include "device/fido/enclave/types.h"
 #include "device/fido/features.h"
@@ -487,6 +488,31 @@ bool IsAllOk(const cbor::Value& response, const size_t num_responses) {
   return true;
 }
 
+// Returns the request error, if present, for the |error_index|th response
+// returned by the enclave. Returns nullopt for debug errors.
+std::optional<device::enclave::RequestError> GetRequestError(
+    const cbor::Value& response,
+    const size_t error_index) {
+  if (!response.is_array()) {
+    return std::nullopt;
+  }
+  const cbor::Value::ArrayValue& responses = response.GetArray();
+  if (responses.size() <= error_index) {
+    return std::nullopt;
+  }
+  const cbor::Value& inner_response = responses.at(error_index);
+  if (!inner_response.is_map()) {
+    return std::nullopt;
+  }
+  const cbor::Value::MapValue& inner_response_map = inner_response.GetMap();
+  const auto error_it =
+      inner_response_map.find(cbor::Value(enclave::kResponseErrorKey));
+  if (error_it == inner_response_map.end() || !error_it->second.is_integer()) {
+    return std::nullopt;
+  }
+  return device::enclave::GetRequestError(error_it->second.GetInteger());
+}
+
 // Update `user` with the wrapped security domain member key in `response`.
 // This is used when registering with the enclave, which provides a wrapped
 // asymmetric key that becomes the security domain member key for this device.
@@ -629,6 +655,9 @@ cbor::Value BuildPINRenewalRequest(std::string cert_xml,
   request.emplace(enclave::kRecoveryKeyStoreSigXml, ToVector(sig_xml));
   request.emplace(enclave::kRequestWrappedSecretKey, wrapped_secret);
   request.emplace(enclave::kRequestWrappedPINDataKey, wrapped_pin);
+  if (base::FeatureList::IsEnabled(device::kWebAuthnNewRefreshFlow)) {
+    request.emplace(enclave::kRecoveryKeyStoreCreateNewVault, true);
+  }
 
   return cbor::Value(std::move(request));
 }
@@ -767,15 +796,28 @@ std::optional<crypto::UserVerifyingKeyLabel> UserVerifyingKeyLabelFromString(
 #endif
 }
 
+// Returns a GURL from a feature param. If the feature does not result in a
+// valid URL, the default is returned instead.
+GURL GetUrl(const base::FeatureParam<std::string>& feature_param) {
+  GURL url(feature_param.Get());
+  if (url.is_valid()) {
+    return url;
+  }
+  FIDO_LOG(ERROR) << "Finch provided " << feature_param.name
+                  << " URL not valid: " << feature_param.Get();
+  GURL default_url(feature_param.default_value);
+  CHECK(default_url.is_valid());
+  return default_url;
+}
+
 // Fetch the contents of the given URL.
 std::unique_ptr<network::SimpleURLLoader> FetchURL(
     network::mojom::URLLoaderFactory* url_loader_factory,
-    std::string_view url,
+    const GURL& url,
     base::OnceCallback<void(std::optional<std::string>)> callback) {
   auto network_request = std::make_unique<network::ResourceRequest>();
-  GURL gurl(url);
-  CHECK(gurl.is_valid());
-  network_request->url = std::move(gurl);
+  CHECK(url.is_valid());
+  network_request->url = std::move(url);
 
   auto loader = network::SimpleURLLoader::Create(std::move(network_request),
                                                  kTrafficAnnotation);
@@ -1999,18 +2041,17 @@ class EnclaveManager::StateMachine {
           trusted_vault::DownloadAuthenticationFactorsRegistrationStateResult>(
         event));
 
-    const trusted_vault::DownloadAuthenticationFactorsRegistrationStateResult*
-        result = std::get_if<
-            trusted_vault::
-                DownloadAuthenticationFactorsRegistrationStateResult>(&event);
-    if (result->state ==
+    const auto& result = std::get<
+        trusted_vault::DownloadAuthenticationFactorsRegistrationStateResult>(
+        event);
+    if (result.state ==
         trusted_vault::DownloadAuthenticationFactorsRegistrationStateResult::
             State::kError) {
       state_ = State::kStop;
       return;
     }
 
-    if (manager_->IsSecurityDomainReset(*result)) {
+    if (manager_->IsSecurityDomainReset(result)) {
       // The security domain has been reset. Clear the registration and bail
       // out.
       manager_->ClearRegistration();
@@ -2024,7 +2065,7 @@ class EnclaveManager::StateMachine {
       return;
     }
 
-    if (!result->gpm_pin_metadata && (is_pin_renewal_ || is_pin_update_)) {
+    if (!result.gpm_pin_metadata && (is_pin_renewal_ || is_pin_update_)) {
       // Chrome is trying to renew or update a PIN but the security domain
       // reports there is no PIN. Don't delete the local PIN state in case
       // there's a bug in the server, but also don't try renewing or updating it
@@ -2038,18 +2079,18 @@ class EnclaveManager::StateMachine {
       state_ = State::kStop;
       return;
     }
-    if (result->gpm_pin_metadata) {
+    if (result.gpm_pin_metadata) {
       // This code saves the PIN public key even if the security domain reports
       // it is not usable or if it is invalid. This is necessary because the
       // security domain requires the current PIN public key to be set when
       // joining a PIN, which Chrome will do later during processing.
-      if (result->gpm_pin_metadata->public_key) {
+      if (result.gpm_pin_metadata->public_key) {
         FIDO_LOG(EVENT) << "GPM PIN public key updated";
         action_->pin_public_key =
-            std::move(*result->gpm_pin_metadata->public_key);
+            std::move(*result.gpm_pin_metadata->public_key);
       }
-      if (result->gpm_pin_metadata->usable_pin_metadata) {
-        const auto& metadata = *result->gpm_pin_metadata->usable_pin_metadata;
+      if (result.gpm_pin_metadata->usable_pin_metadata) {
+        const auto& metadata = *result.gpm_pin_metadata->usable_pin_metadata;
         auto wrapped_pin = std::make_unique<EnclaveLocalState::WrappedPIN>();
         if (wrapped_pin->ParseFromString(metadata.wrapped_pin) &&
             !CheckPINInvariants(*wrapped_pin).has_value()) {
@@ -2063,7 +2104,7 @@ class EnclaveManager::StateMachine {
       }
     }
 
-    if (is_set_pin_ && result->gpm_pin_metadata) {
+    if (is_set_pin_ && result.gpm_pin_metadata) {
       // There is already a PIN.
       state_ = State::kStop;
       return;
@@ -2504,6 +2545,34 @@ class EnclaveManager::StateMachine {
 
     cbor::Value response =
         std::move(std::get_if<EnclaveResponse>(&event)->value());
+    std::optional<device::enclave::RequestError> error =
+        GetRequestError(response, 0u);
+    if (error) {
+      switch (*error) {
+        case device::enclave::RequestError::kCohortNotYetDeprecated:
+          base::UmaHistogramEnumeration(
+              kPinRenewalFailureHistogram,
+              PinRenewalFailureCause::kCohortNotYetDeprecated);
+          // This is the usual expected result of a PIN renewal.
+          FIDO_LOG(EVENT) << "Not renewing PIN because the enclave reports the "
+                             "cohort is not yet deprecated";
+          user_->set_last_refreshed_pin_epoch_secs(
+              base::Time::Now().InSecondsFSinceUnixEpoch());
+          manager_->WriteState(&local_state_);
+          return;
+        case device::enclave::RequestError::kRecoveryKeyStoreDowngrade:
+          base::UmaHistogramEnumeration(
+              kPinRenewalFailureHistogram,
+              PinRenewalFailureCause::kRecoveryKeyStoreDowngrade);
+          FIDO_LOG(ERROR) << "Not renewing PIN because it would result in "
+                             "downgrading the recovery store";
+          return;
+        default:
+          // `IsAllOk` below catches other errors the enclave may return that
+          // the client does not know about.
+          break;
+      }
+    }
     if (!IsAllOk(response, 1)) {
       base::UmaHistogramEnumeration(kPinRenewalFailureHistogram,
                                     PinRenewalFailureCause::kEnclaveRequest2);
@@ -2739,12 +2808,12 @@ class EnclaveManager::StateMachine {
     state_ = State::kDownloadingRecoveryKeyStoreKeys;
     cert_xml_loader_ = FetchURL(
         manager_->url_loader_factory_.get(),
-        device::enclave::kRecoveryKeyStoreCertFileURL,
+        GetUrl(device::enclave::kCertXmlUrlFeature),
         base::BindOnce(&StateMachine::FetchComplete,
                        weak_ptr_factory_.GetWeakPtr(), FetchedFile::kCertFile));
     sig_xml_loader_ = FetchURL(
         manager_->url_loader_factory_.get(),
-        device::enclave::kRecoveryKeyStoreSigFileURL,
+        GetUrl(device::enclave::kSigXmlUrlFeature),
         base::BindOnce(&StateMachine::FetchComplete,
                        weak_ptr_factory_.GetWeakPtr(), FetchedFile::kSigFile));
   }
@@ -2806,6 +2875,48 @@ EnclaveManager::UVKeyOptions::~UVKeyOptions() = default;
 EnclaveManager::UVKeyOptions::UVKeyOptions(UVKeyOptions&&) = default;
 EnclaveManager::UVKeyOptions& EnclaveManager::UVKeyOptions::operator=(
     EnclaveManager::UVKeyOptions&& other) = default;
+
+// Observes the `IdentityManager` and tells the `EnclaveManager` when the
+// primary account for the profile has changed.
+class EnclaveManager::IdentityObserver
+    : public signin::IdentityManager::Observer {
+ public:
+  IdentityObserver(signin::IdentityManager* identity_manager,
+                   EnclaveManager* manager)
+      : identity_manager_(identity_manager), manager_(manager) {
+    identity_manager_->AddObserver(this);
+  }
+
+  ~IdentityObserver() override {
+    if (observing_) {
+      identity_manager_->RemoveObserver(this);
+    }
+  }
+
+  void OnPrimaryAccountChanged(
+      const signin::PrimaryAccountChangeEvent& event_details) override {
+    manager_->HandleIdentityChange();
+  }
+
+  void OnAccountsInCookieUpdated(
+      const signin::AccountsInCookieJarInfo& accounts_in_cookie_jar_info,
+      const GoogleServiceAuthError& error) override {
+    manager_->HandleIdentityChange();
+  }
+
+  void OnIdentityManagerShutdown(
+      signin::IdentityManager* identity_manager) override {
+    if (observing_) {
+      identity_manager_->RemoveObserver(this);
+      observing_ = false;
+    }
+  }
+
+ private:
+  bool observing_ = true;
+  const raw_ptr<signin::IdentityManager> identity_manager_;
+  const raw_ptr<EnclaveManager> manager_;
+};
 
 EnclaveManager::EnclaveManager(
     const base::FilePath& base_dir,
@@ -3773,48 +3884,6 @@ std::vector<uint8_t> EnclaveManager::EncryptWrappedPIN(
   wrapped_pin.insert(wrapped_pin.begin(), std::begin(nonce), std::end(nonce));
   return wrapped_pin;
 }
-
-// Observes the `IdentityManager` and tells the `EnclaveManager` when the
-// primary account for the profile has changed.
-class EnclaveManager::IdentityObserver
-    : public signin::IdentityManager::Observer {
- public:
-  IdentityObserver(signin::IdentityManager* identity_manager,
-                   EnclaveManager* manager)
-      : identity_manager_(identity_manager), manager_(manager) {
-    identity_manager_->AddObserver(this);
-  }
-
-  ~IdentityObserver() override {
-    if (observing_) {
-      identity_manager_->RemoveObserver(this);
-    }
-  }
-
-  void OnPrimaryAccountChanged(
-      const signin::PrimaryAccountChangeEvent& event_details) override {
-    manager_->HandleIdentityChange();
-  }
-
-  void OnAccountsInCookieUpdated(
-      const signin::AccountsInCookieJarInfo& accounts_in_cookie_jar_info,
-      const GoogleServiceAuthError& error) override {
-    manager_->HandleIdentityChange();
-  }
-
-  void OnIdentityManagerShutdown(
-      signin::IdentityManager* identity_manager) override {
-    if (observing_) {
-      identity_manager_->RemoveObserver(this);
-      observing_ = false;
-    }
-  }
-
- private:
-  bool observing_ = true;
-  const raw_ptr<signin::IdentityManager> identity_manager_;
-  const raw_ptr<EnclaveManager> manager_;
-};
 
 void EnclaveManager::Act() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);

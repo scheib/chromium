@@ -90,14 +90,15 @@ NSString* const kURLAndDistillationDateFormat = @"%@ • %@";
 
 #pragma mark - ListItem
 
-- (void)configureCell:(TableViewCell*)cell
+- (void)configureCell:(LegacyTableViewCell*)cell
            withStyler:(ChromeTableViewStyler*)styler {
   [super configureCell:cell withStyler:styler];
   TableViewURLCell* URLCell =
       base::apple::ObjCCastStrict<TableViewURLCell>(cell);
   URLCell.titleLabel.text = [self titleLabelText];
   URLCell.URLLabel.text = [self URLLabelText];
-  URLCell.cellUniqueIdentifier = base::SysUTF8ToNSString(self.entryURL.host());
+  URLCell.cellUniqueIdentifier =
+      base::SysUTF8ToNSString(self.entryURL.GetHost());
   URLCell.accessibilityTraits |= UIAccessibilityTraitButton;
   URLCell.metadataImage.image =
       self.showCloudSlashIcon

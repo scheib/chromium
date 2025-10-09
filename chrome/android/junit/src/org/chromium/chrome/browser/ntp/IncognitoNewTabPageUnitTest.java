@@ -35,12 +35,17 @@ import org.chromium.chrome.browser.ntp.IncognitoNewTabPageView.IncognitoNewTabPa
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.chrome.browser.ui.native_page.NativePageHost;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgePadAdjuster;
 import org.chromium.ui.base.TestActivity;
+import org.chromium.ui.edge_to_edge.EdgeToEdgePadAdjuster;
 
 /** Unit test for {@link org.chromium.chrome.browser.ntp.IncognitoNewTabPage} */
 @RunWith(BaseRobolectricTestRunner.class)
-@DisableFeatures(ChromeFeatureList.TRACKING_PROTECTION_3PCD)
+@EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_BOTTOM_CHIN)
+@DisableFeatures({
+    ChromeFeatureList.TRACKING_PROTECTION_3PCD,
+    ChromeFeatureList.IP_PROTECTION_UX,
+    ChromeFeatureList.FINGERPRINTING_PROTECTION_UX
+})
 public class IncognitoNewTabPageUnitTest {
     @Rule
     public ActivityScenarioRule<TestActivity> mScenarioRule =
@@ -76,9 +81,6 @@ public class IncognitoNewTabPageUnitTest {
     }
 
     @Test
-    @EnableFeatures({
-        ChromeFeatureList.EDGE_TO_EDGE_BOTTOM_CHIN,
-    })
     public void setupEdgeToEdgeWithInsets() {
         mEdgeToEdgeSupplier.set(mEdgeToEdgeController);
         verify(mEdgeToEdgeController).registerAdjuster(mEdgePadAdjusterCaptor.capture());
@@ -93,7 +95,6 @@ public class IncognitoNewTabPageUnitTest {
     }
 
     @Test
-    @EnableFeatures({ChromeFeatureList.EDGE_TO_EDGE_BOTTOM_CHIN})
     public void setupEdgeToEdgeWithoutInsets() {
         mEdgeToEdgeSupplier.set(mEdgeToEdgeController);
         verify(mEdgeToEdgeController).registerAdjuster(mEdgePadAdjusterCaptor.capture());

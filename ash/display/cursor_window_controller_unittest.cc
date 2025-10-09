@@ -214,77 +214,6 @@ TEST_F(CursorWindowControllerTest, VisibilityTest) {
   EXPECT_TRUE(GetCursorHostWindow()->IsVisible());
 }
 
-namespace {
-
-// Emulates the behavior of BitmapImageSource used in ResourceBundle.
-class TestCursorImageSource : public gfx::ImageSkiaSource {
- public:
-  TestCursorImageSource() = default;
-  TestCursorImageSource(const TestCursorImageSource&) = delete;
-  TestCursorImageSource operator=(const TestCursorImageSource&) = delete;
-  ~TestCursorImageSource() override = default;
-
-  // gfx::ImageSkiaSource:
-  gfx::ImageSkiaRep GetImageForScale(float scale) override {
-    float resource_scale = ui::GetSupportedResourceScaleFactor(scale);
-    if (resource_scale == 1.f) {
-      return rep_1x_;
-    } else if (resource_scale == 2.f) {
-      return rep_2x_;
-    }
-    NOTREACHED();
-  }
-
- private:
-  gfx::ImageSkiaRep rep_1x_ =
-      gfx::ImageSkiaRep(gfx::test::CreateBitmap(/*size=*/25, SK_ColorBLACK),
-                        1.f);
-  gfx::ImageSkiaRep rep_2x_ =
-      gfx::ImageSkiaRep(gfx::test::CreateBitmap(/*size=*/50, SK_ColorWHITE),
-                        2.f);
-};
-
-}  // namespace
-
-// Make sure that composition cursor uses correct assets with various scales.
-TEST_F(CursorWindowControllerTest, ScaleUsesCorrectAssets) {
-  testing::NiceMock<ui::MockResourceBundleDelegate> mock_delegate;
-  gfx::ImageSkia image_skia(std::make_unique<TestCursorImageSource>(),
-                            gfx::Size(25, 25));
-
-  auto get_pixel_value = [&](float scale) {
-    // TODO(b/318592117): don't need to update display when
-    // wm::GetCursorData uses ImageSkia instead of SkBitmap.
-    // Trigger regeneration of the cursor image.
-    UpdateDisplay(base::StringPrintf("300x200*%f", scale));
-
-    uint32_t* data = static_cast<uint32_t*>(
-        GetCursorImage().GetRepresentation(scale).GetBitmap().getPixels());
-    return data[0];
-  };
-
-  EXPECT_CALL(mock_delegate, GetImageNamed(testing::_))
-      .WillOnce(testing::Return(gfx::Image(image_skia)));
-
-  ui::ResourceBundle test_bundle(&mock_delegate);
-  auto* original =
-      ui::ResourceBundle::SwapSharedInstanceForTesting(&test_bundle);
-  // Force re-create composited cursor.
-  SetCursorCompositionEnabled(false);
-  SetCursorCompositionEnabled(true);
-
-  // The cursor should use 2x resources when dsf > 1.2.
-  EXPECT_EQ(SK_ColorWHITE, get_pixel_value(2.4f));
-  EXPECT_EQ(SK_ColorWHITE, get_pixel_value(2.f));
-  EXPECT_EQ(SK_ColorWHITE, get_pixel_value(1.25f));
-  EXPECT_EQ(SK_ColorBLACK, get_pixel_value(1.20f));
-  EXPECT_EQ(SK_ColorBLACK, get_pixel_value(1.15f));
-  EXPECT_EQ(SK_ColorBLACK, get_pixel_value(1.f));
-  EXPECT_EQ(SK_ColorBLACK, get_pixel_value(0.8f));
-
-  ui::ResourceBundle::SwapSharedInstanceForTesting(original);
-}
-
 // Test different properties of the composited cursor with different device
 // scale factors and zoom levels.
 TEST_F(CursorWindowControllerTest, DSF) {
@@ -292,7 +221,7 @@ TEST_F(CursorWindowControllerTest, DSF) {
 
   auto cursor_test = [&](ui::Cursor cursor, float large_cursor_size_in_dip) {
     const float dsf =
-        display::Screen::GetScreen()->GetPrimaryDisplay().device_scale_factor();
+        display::Screen::Get()->GetPrimaryDisplay().device_scale_factor();
     SCOPED_TRACE(testing::Message()
                  << cursor.type() << " at scale " << dsf << " and size "
                  << large_cursor_size_in_dip);
@@ -354,9 +283,8 @@ TEST_F(CursorWindowControllerTest, DSF) {
     for (const float zoom : {0.8f, 1.0f, 1.25f}) {
       UpdateDisplay(
           base::StringPrintf("1000x500*%f@%f", device_scale_factor, zoom));
-      const float dsf = display::Screen::GetScreen()
-                            ->GetPrimaryDisplay()
-                            .device_scale_factor();
+      const float dsf =
+          display::Screen::Get()->GetPrimaryDisplay().device_scale_factor();
 
       for (const int large_cursor_size_in_dip : {0, 32, 64, 128}) {
         cursor_manager->SetCursorSize(large_cursor_size_in_dip == 0
@@ -382,7 +310,7 @@ TEST_F(CursorWindowControllerTest, DSF) {
 TEST_F(CursorWindowControllerTest, ShouldEnableCursorCompositing) {
   PrefService* prefs =
       Shell::Get()->session_controller()->GetActivePrefService();
-  display::Display display = display::Screen::GetScreen()->GetPrimaryDisplay();
+  display::Display display = display::Screen::Get()->GetPrimaryDisplay();
   const float dsf = 2.0f;
   display.set_device_scale_factor(dsf);
   display.set_maximum_cursor_size(gfx::Size(128, 128));
@@ -446,35 +374,41 @@ TEST_F(CursorWindowControllerTest, LargeCursorColoringSpotCheck) {
     SkColor cursor_color;  // Set the cursor to this color.
     SkColor not_found;     // Spot-check: This color shouldn't be in the cursor.
     SkColor found;         // Spot-check: This color should be in the cursor.
-    gfx::NativeCursor cursor;
-  } kTestCases[] = {
-      // Cursors should still have white.
-      {SK_ColorMAGENTA, SK_ColorBLUE, SK_ColorWHITE, CursorType::kHand},
-      {SK_ColorBLUE, SK_ColorMAGENTA, SK_ColorWHITE, CursorType::kCell},
-      {SK_ColorGREEN, SK_ColorBLUE, SK_ColorWHITE, CursorType::kNoDrop},
+    CursorType cursor_type;
+  } kColorTestCases[] = {
+      // Cursors should not have black because the black cursor body should be
+      // replaced by other colors.
+      {SK_ColorRED, SK_ColorBLACK, SK_ColorWHITE, CursorType::kPointer},
+      {SK_ColorRED, SK_ColorBLACK, SK_ColorWHITE, CursorType::kCell},
+
+      // Cursors should not have white because the white cursor body should be
+      // replaced by other colors.
+      {SK_ColorMAGENTA, SK_ColorWHITE, SK_ColorBLACK, CursorType::kHand},
+
       // Also cursors should still have transparent.
       {SK_ColorRED, SK_ColorGREEN, SK_ColorTRANSPARENT, CursorType::kPointer},
+
       // The no drop cursor has red in it, check it's still there:
-      // Most of the cursor should be colored, but the red part shouldn't be
+      // Cursor body should be colored, but the red part shouldn't be
       // re-colored.
       {SK_ColorBLUE, SK_ColorGREEN, SkColorSetRGB(181, 70, 72),
        CursorType::kNoDrop},
-      // Similarly, the copy cursor has green in it.
+
+      // Similarly, the copy cursor has a green part in it which should not be
+      // re-colored.
       {SK_ColorBLUE, SK_ColorRED, SkColorSetRGB(57, 149, 88),
        CursorType::kCopy},
   };
 
-  for (const auto& test : kTestCases) {
+  for (const auto& test : kColorTestCases) {
     cursor_window_controller()->SetCursorColor(test.cursor_color);
-    cursor_window_controller()->SetCursor(test.cursor);
+    cursor_window_controller()->SetCursor(test.cursor_type);
     const SkBitmap* bitmap = GetCursorImage().bitmap();
-    // We should find |cursor_color| pixels in the cursor, but no black or
-    // |not_found| color pixels. All black pixels are recolored.
-    // We should also find |found| color.
+    // We should find `cursor_color` and `found` color pixels in the cursor, but
+    // no |not_found| color pixels.
     bool has_color = false;
     bool has_not_found_color = false;
     bool has_found_color = false;
-    bool has_black = false;
     for (int x = 0; x < bitmap->width(); ++x) {
       for (int y = 0; y < bitmap->height(); ++y) {
         SkColor color = bitmap->getColor(x, y);
@@ -484,8 +418,6 @@ TEST_F(CursorWindowControllerTest, LargeCursorColoringSpotCheck) {
           has_not_found_color = true;
         else if (color == test.found)
           has_found_color = true;
-        else if (color == SK_ColorBLACK)
-          has_black = true;
       }
     }
     EXPECT_TRUE(has_color) << color_utils::SkColorToRgbaString(
@@ -494,7 +426,6 @@ TEST_F(CursorWindowControllerTest, LargeCursorColoringSpotCheck) {
         << color_utils::SkColorToRgbaString(test.found);
     EXPECT_FALSE(has_not_found_color)
         << color_utils::SkColorToRgbaString(test.not_found);
-    EXPECT_FALSE(has_black);
   }
 
   // Set back to the default color and ensure cursor compositing is disabled.

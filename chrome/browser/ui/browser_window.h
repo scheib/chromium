@@ -34,7 +34,7 @@
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/base/window_open_disposition.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -246,6 +246,9 @@ class BrowserWindow : public ui::BaseWindow {
   // changed.
   virtual void UpdateDevTools(content::WebContents* inspected_web_contents) = 0;
 
+  // Returns true if the browser window can dock a DevTools panel.
+  virtual bool CanDockDevTools() const = 0;
+
   // Update any loading animations running in the window. |is_visible| is true
   // if the window is visible.
   virtual void UpdateLoadingAnimations(bool is_visible) = 0;
@@ -318,7 +321,7 @@ class BrowserWindow : public ui::BaseWindow {
 
   // Tries to focus the location bar.  Clears the window focus (to avoid
   // inconsistent state) if this fails.
-  virtual void SetFocusToLocationBar(bool select_all) = 0;
+  virtual void SetFocusToLocationBar(bool is_user_initiated) = 0;
 
   // Informs the view whether or not a load is in progress for the current tab.
   // The view can use this notification to update the reload/stop button.
@@ -334,9 +337,6 @@ class BrowserWindow : public ui::BaseWindow {
   // Updates whether or not the custom tab bar is visible. Animates the
   // transition if |animate| is true.
   virtual void UpdateCustomTabBarVisibility(bool visible, bool animate) = 0;
-
-  // Updates the visibility of the scrim that covers the content area.
-  virtual void SetContentScrimVisibility(bool visible) = 0;
 
   // Updates the visibility of the scrim that covers the devtools area.
   virtual void SetDevToolsScrimVisibility(bool visible) = 0;
@@ -460,7 +460,7 @@ class BrowserWindow : public ui::BaseWindow {
   virtual views::Button* GetSharingHubIconButton() = 0;
 
   // Toggles the multitask menu on the browser frame size button.
-  virtual void ToggleMultitaskMenu() const = 0;
+  virtual void ToggleMultitaskMenu() = 0;
 #else
   // Shows the Sharing Hub bubble. This must only be called as a direct result
   // of user action.
@@ -516,9 +516,6 @@ class BrowserWindow : public ui::BaseWindow {
   // Shows the app menu (for accessibility).
   virtual void ShowAppMenu() = 0;
 
-  // Allows the BrowserWindow object to handle the specified mouse event
-  // before sending it to the renderer.
-  virtual bool PreHandleMouseEvent(const blink::WebMouseEvent& event) = 0;
   // Allows the BrowserWindow object to handle a mouse drag update
   // before sending it to the renderer.
   // `point` is relative to the content view.
@@ -545,14 +542,22 @@ class BrowserWindow : public ui::BaseWindow {
   virtual web_modal::WebContentsModalDialogHost*
   GetWebContentsModalDialogHost() = 0;
 
+  // Return the WebContentsModalDialogHost for use in positioning web contents
+  // modal dialogs relative to its corresponding container view if possible,
+  // otherwise falls back to returning the WebContentsModalDialogHost that is
+  // responsible for modal positioning relative to the browser window.
+  virtual web_modal::WebContentsModalDialogHost*
+  GetWebContentsModalDialogHostFor(content::WebContents* web_contents) = 0;
+
   // Construct a BrowserWindow implementation for the specified |browser|.
-  static BrowserWindow* CreateBrowserWindow(std::unique_ptr<Browser> browser,
-                                            bool user_gesture,
-                                            bool in_tab_dragging);
+  static std::unique_ptr<BrowserWindow, BrowserWindowDeleter>
+  CreateBrowserWindow(Browser* browser,
+                      bool user_gesture,
+                      bool in_tab_dragging);
 
   virtual void ShowAvatarBubbleFromAvatarButton(bool is_source_accelerator) = 0;
 
-  // Attempts showing the In-Produce-Help for profile Switching. This is called
+  // Attempts showing the In-Product-Help for profile Switching. This is called
   // after creating a new profile or opening an existing profile. If the profile
   // customization bubble is shown, the IPH should be shown after.
   virtual void MaybeShowProfileSwitchIPH() = 0;
@@ -653,11 +658,10 @@ class BrowserWindow : public ui::BaseWindow {
   virtual BrowserView* AsBrowserView() = 0;
 
  protected:
-  // Synchronously destroys the Browser.
-  // TODO(crbug.com/413168662): This can be removed once the ownership structure
-  // is updated and Browser owns BrowserWindow.
-  friend class Browser;
-  virtual void DestroyBrowser() = 0;
+  friend struct BrowserWindowDeleter;
+  // Deletes `this`. Note BrowserWindow will no longer be valid after this
+  // returns.
+  virtual void DeleteBrowserWindow() = 0;
 };
 
 #endif  // CHROME_BROWSER_UI_BROWSER_WINDOW_H_

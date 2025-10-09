@@ -52,7 +52,7 @@
   // NO-OP
 }
 
-- (void)lensResultPageOpenURLInNewTabRequsted:(GURL)URL {
+- (void)lensResultPageOpenURLInNewTabRequested:(GURL)URL {
   _openInNewTabRequested = YES;
 }
 
@@ -167,7 +167,7 @@ class LensResultPageMediatorTest : public PlatformTest {
  protected:
   web::WebTaskEnvironment task_environment_;
   IOSChromeScopedTestingLocalState scoped_testing_local_state_;
-  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+  variations::test::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
 
   LensResultPageMediator* mediator_;
@@ -178,14 +178,16 @@ class LensResultPageMediatorTest : public PlatformTest {
   FakeLensResultPageMediatorDelegate* fake_delegate_;
 
   // Call `AttachFakeWebState()` to use `fake_web_state_`.
-  raw_ptr<web::FakeWebState> fake_web_state_;
+  raw_ptr<web::FakeWebState, DanglingUntriaged> fake_web_state_;
 };
 
 // Tests that the mediator starts a navigation when loadResultsURL is called.
 TEST_F(LensResultPageMediatorTest, ShouldStartNavigationWhenLoadingResultsURL) {
-  ASSERT_EQ(variations::VariationsIdsProvider::ForceIdsResult::SUCCESS,
-            variations::VariationsIdsProvider::GetInstance()->ForceVariationIds(
-                /*variation_ids=*/{"100"}, /*command_line_variation_ids=*/""));
+  ASSERT_EQ(
+      variations::VariationsIdsProvider::ForceIdsResult::SUCCESS,
+      variations::VariationsIdsProvider::GetInstance()
+          ->ForceVariationIdsForTesting(
+              /*variation_ids=*/{"100"}, /*command_line_variation_ids=*/""));
   AttachFakeWebState();
   GURL result_url = GURL("https://www.google.com");
   NSDictionary<NSString*, NSString*>* http_headers =

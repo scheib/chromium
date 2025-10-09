@@ -201,8 +201,10 @@ void MoveTabGroupToBrowser(const TabGroup* source_tab_group,
   CHECK_EQ(source_browser->GetProfile(), destination_browser->GetProfile());
   auto* sync_service = tab_groups::TabGroupSyncServiceFactory::GetForProfile(
       source_browser->GetProfile());
-  auto lock = sync_service->CreateScopedLocalObserverPauser();
-
+  std::unique_ptr<ScopedLocalObservationPauser> lock;
+  if (sync_service) {
+    lock = sync_service->CreateScopedLocalObserverPauser();
+  }
   MoveTabGroupAcrossBrowsers(source_tab_group, source_browser,
                              destination_browser, destination_tab_group_index);
 }
@@ -301,9 +303,9 @@ data_sharing::MemberRole GetUserRoleForGroup(
     return data_sharing::MemberRole::kUnknown;
   }
 
-  CollaborationId collab_id =
+  syncer::CollaborationId collab_id =
       GetTabGroupCollabID(tab_group, tab_group_sync_service);
-  if (collab_id == CollaborationId()) {
+  if (collab_id == syncer::CollaborationId()) {
     return data_sharing::MemberRole::kUnknown;
   }
 
@@ -311,16 +313,16 @@ data_sharing::MemberRole GetUserRoleForGroup(
   return collaboration_service->GetCurrentUserRoleForGroup(group_id);
 }
 
-CollaborationId GetTabGroupCollabID(
+syncer::CollaborationId GetTabGroupCollabID(
     const TabGroup* tab_group,
     TabGroupSyncService* tab_group_sync_service) {
   if (!tab_group) {
-    return CollaborationId();
+    return syncer::CollaborationId();
   }
   return GetTabGroupCollabID(tab_group->tab_group_id(), tab_group_sync_service);
 }
 
-CollaborationId GetTabGroupCollabID(
+syncer::CollaborationId GetTabGroupCollabID(
     const tab_groups::EitherGroupID& tab_group_id,
     TabGroupSyncService* tab_group_sync_service) {
   if (tab_group_sync_service) {
@@ -331,7 +333,7 @@ CollaborationId GetTabGroupCollabID(
       return saved_group->collaboration_id().value();
     }
   }
-  return CollaborationId();
+  return syncer::CollaborationId();
 }
 
 }  // namespace utils

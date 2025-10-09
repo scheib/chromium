@@ -44,6 +44,7 @@
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink.h"
 #include "third_party/blink/public/mojom/security_context/insecure_request_policy.mojom-blink.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
+#include "third_party/blink/public/mojom/worker/shared_worker_exception_details.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_network_provider.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
@@ -108,6 +109,23 @@ void WebSharedWorkerImpl::CountFeature(WebFeature feature) {
   host_->OnFeatureUsed(feature);
 }
 
+void WebSharedWorkerImpl::ReportException(const WebString& error_message,
+                                          const WebString& source_url,
+                                          int line_number,
+                                          int column_number,
+                                          int exception_id,
+                                          bool is_eval_error) {
+  DCHECK(IsMainThread());
+  auto details = mojom::blink::SharedWorkerExceptionDetails::New();
+  details->error_message = error_message;
+  details->source_location = network::mojom::blink::SourceLocation::New(
+      source_url, line_number, column_number);
+  details->error_type = is_eval_error
+                            ? mojom::blink::SharedWorkerErrorType::kRuntimeError
+                            : mojom::blink::SharedWorkerErrorType::kParseError;
+  host_->OnReportException(std::move(details));
+}
+
 void WebSharedWorkerImpl::DidFailToFetchClassicScript() {
   DCHECK(IsMainThread());
   host_->OnScriptLoadFailed("Failed to fetch a worker script.");
@@ -124,7 +142,7 @@ void WebSharedWorkerImpl::DidFailToFetchModuleScript() {
 
 void WebSharedWorkerImpl::DidEvaluateTopLevelScript(bool success) {
   DCHECK(IsMainThread());
-  DCHECK(!running_);
+  CHECK(!running_);
   running_ = true;
   DispatchPendingConnections();
 }
@@ -166,8 +184,7 @@ void WebSharedWorkerImpl::ConnectToChannel(int connection_request_id,
   PostCrossThreadTask(
       *task_runner_for_connect_event_, FROM_HERE,
       CrossThreadBindOnce(&WebSharedWorkerImpl::ConnectTaskOnWorkerThread,
-                          WTF::CrossThreadUnretained(this),
-                          std::move(channel)));
+                          CrossThreadUnretained(this), std::move(channel)));
   host_->OnConnected(connection_request_id);
 }
 
@@ -214,7 +231,8 @@ void WebSharedWorkerImpl::StartWorkerContext(
     CrossVariantMojoReceiver<mojom::blink::ReportingObserverInterfaceBase>
         coep_reporting_observer,
     CrossVariantMojoReceiver<mojom::blink::ReportingObserverInterfaceBase>
-        dip_reporting_observer) {
+        dip_reporting_observer,
+    std::optional<blink::NoiseToken> canvas_noise_token) {
   DCHECK(IsMainThread());
   DCHECK(web_worker_fetch_context);
   CHECK(constructor_origin.Get()->CanAccessSharedWorkers());
@@ -277,7 +295,8 @@ void WebSharedWorkerImpl::StartWorkerContext(
       require_cross_site_request_for_cookies,
       blink::SecurityOrigin::CreateFromUrlOrigin(
           url::Origin(origin_from_browser)),
-      std::move(coep_reporting_observer), std::move(dip_reporting_observer));
+      std::move(coep_reporting_observer), std::move(dip_reporting_observer),
+      std::move(canvas_noise_token));
 
   auto thread_startup_data = WorkerBackingThreadStartupData::CreateDefault();
   thread_startup_data.atomics_wait_mode =
@@ -363,7 +382,8 @@ std::unique_ptr<WebSharedWorker> WebSharedWorker::CreateAndStart(
     CrossVariantMojoReceiver<mojom::blink::ReportingObserverInterfaceBase>
         coep_reporting_observer,
     CrossVariantMojoReceiver<mojom::blink::ReportingObserverInterfaceBase>
-        dip_reporting_observer) {
+        dip_reporting_observer,
+    std::optional<blink::NoiseToken> canvas_noise_token) {
   auto worker =
       base::WrapUnique(new WebSharedWorkerImpl(token, std::move(host), client));
   worker->StartWorkerContext(
@@ -375,7 +395,8 @@ std::unique_ptr<WebSharedWorker> WebSharedWorker::CreateAndStart(
       pause_worker_context_on_start, std::move(worker_main_script_load_params),
       std::move(policy_container), std::move(web_worker_fetch_context),
       ukm_source_id, require_cross_site_request_for_cookies,
-      std::move(coep_reporting_observer), std::move(dip_reporting_observer));
+      std::move(coep_reporting_observer), std::move(dip_reporting_observer),
+      std::move(canvas_noise_token));
   return worker;
 }
 

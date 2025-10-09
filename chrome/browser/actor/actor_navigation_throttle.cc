@@ -12,6 +12,8 @@
 #include "chrome/browser/actor/execution_engine.h"
 #include "chrome/browser/actor/site_policy.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/common/actor/journal_details_builder.h"
+#include "chrome/common/actor_webui.mojom.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_throttle_registry.h"
@@ -79,24 +81,43 @@ ActorNavigationThrottle::WillRedirectRequest() {
 
 content::NavigationThrottle::ThrottleCheckResult
 ActorNavigationThrottle::WillProcessResponse() {
-  if (!execution_engine_->ShouldGateNavigation(*navigation_handle())) {
+  if (!execution_engine_ ||
+      !execution_engine_->ShouldGateNavigation(
+          *navigation_handle(),
+          base::BindOnce(
+              &ActorNavigationThrottle::OnUserConfirmationDialogDecision,
+              weak_factory_.GetWeakPtr()))) {
     return content::NavigationThrottle::PROCEED;
   }
+  // We do not invoke the callback which resumes/cancels the request
+  // in pre-rendered frames.
+  if (navigation_handle()->IsInPrerenderedMainFrame()) {
+    return content::NavigationThrottle::CANCEL_AND_IGNORE;
+  }
+  return content::NavigationThrottle::DEFER;
+}
 
+void ActorNavigationThrottle::OnUserConfirmationDialogDecision(
+    webui::mojom::UserConfirmationDialogResponsePtr response) {
+  CHECK(!navigation_handle()->IsInPrerenderedMainFrame())
+      << "We should not be prompting for pre-rendered frame navigations.";
+  if (response->result->is_permission_granted() &&
+      response->result->get_permission_granted()) {
+    Resume();
+    return;
+  }
   AggregatedJournal& journal = GetJournal();
-  journal.Log(navigation_handle()->GetURL(), task_id_,
-              mojom::JournalTrack::kActor, "NavThrottle",
-              "Cancel: Do not navigate cross origin");
+  journal.Log(
+      navigation_handle()->GetURL(), task_id_, mojom::JournalTrack::kActor,
+      "NavThrottle",
+      JournalDetailsBuilder().AddError("Navigate cross origin").Build());
   // If the navigation we're about to cancel is attributable to the actor's
-  // tool usage, consider the action a failure. But we don't consider
-  // canceled prerenders to be an error.
-  if (navigation_handle()->IsInPrimaryMainFrame()) {
+  // tool usage, consider the action a failure.
+  if (navigation_handle()->IsInPrimaryMainFrame() && execution_engine_) {
     execution_engine_->FailCurrentTool(
         mojom::ActionResultCode::kTriggeredNavigationBlocked);
-  } else {
-    CHECK(navigation_handle()->IsInPrerenderedMainFrame());
   }
-  return content::NavigationThrottle::CANCEL_AND_IGNORE;
+  CancelDeferredNavigation(CANCEL_AND_IGNORE);
 }
 
 content::NavigationThrottle::ThrottleCheckResult
@@ -109,15 +130,20 @@ ActorNavigationThrottle::WillStartOrRedirectRequest(bool is_redirection) {
 
   if (!is_redirection && !initiator_origin) {
     journal.Log(navigation_url, task_id_, mojom::JournalTrack::kActor,
-                "NavThrottle", "Proceed: not triggered by page");
+                "NavThrottle",
+                JournalDetailsBuilder()
+                    .Add("navigate", "Not triggered by page")
+                    .Build());
     return content::NavigationThrottle::PROCEED;
   }
 
   if (initiator_origin && initiator_origin->IsSameOriginWith(navigation_url)) {
     journal.Log(navigation_url, task_id_, mojom::JournalTrack::kActor,
                 "NavThrottle",
-                is_redirection ? "Proceed: same origin redirect"
-                               : "Proceed: same origin navigation");
+                JournalDetailsBuilder()
+                    .Add("navigate", is_redirection ? "Same origin redirect"
+                                                    : "Same origin navigation")
+                    .Build());
     // This isn't needed for correctness. We know that if the actor triggered a
     // same origin navigation, the destination URL will be allowed. So we
     // avoid an unnecessary defer.
@@ -126,8 +152,10 @@ ActorNavigationThrottle::WillStartOrRedirectRequest(bool is_redirection) {
 
   auto journal_entry = journal.CreatePendingAsyncEntry(
       navigation_url, task_id_, mojom::JournalTrack::kActor, "NavThrottle",
-      is_redirection ? "Defer: check redirect safety"
-                     : "Defer: check navigation safety");
+      JournalDetailsBuilder()
+          .Add("defer", is_redirection ? "Check redirect safety"
+                                       : "Check navigation safety")
+          .Build());
 
   MayActOnUrl(
       navigation_url, /*allow_insecure_http=*/true, GetProfile(), journal,
@@ -142,12 +170,13 @@ void ActorNavigationThrottle::OnMayActOnUrlResult(
     std::unique_ptr<AggregatedJournal::PendingAsyncEntry> journal_entry,
     bool may_act) {
   if (may_act) {
-    journal_entry->EndEntry("Resume");
+    journal_entry->EndEntry(
+        JournalDetailsBuilder().Add("result", "Resume").Build());
     Resume();
     return;
   }
 
-  journal_entry->EndEntry("Cancel");
+  journal_entry->EndEntry(JournalDetailsBuilder().AddError("Cancel").Build());
   // If the navigation we're about to cancel is attributable to the actor's tool
   // usage, consider the action a failure. But we don't consider canceled
   // prerenders to be an error.

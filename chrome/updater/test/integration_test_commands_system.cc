@@ -60,16 +60,19 @@ std::string RegistrationRequestToString(
   value.Set("brand_code", registration.brand_code);
   value.Set("brand_path", registration.brand_path.AsUTF8Unsafe());
   value.Set("ap", registration.ap);
-  value.Set("ap_path", registration.ap_path.AsUTF8Unsafe());
-  value.Set("ap_key", registration.ap_key);
-  value.Set("version", registration.version.GetString());
-  value.Set("version_path", registration.version_path.AsUTF8Unsafe());
-  value.Set("version_key", registration.version_key);
+  value.Set("ap_path",
+            registration.ap_path.value_or(base::FilePath()).AsUTF8Unsafe());
+  value.Set("ap_key", registration.ap_key.value_or(""));
+  value.Set("version", registration.version);
+  value.Set(
+      "version_path",
+      registration.version_path.value_or(base::FilePath()).AsUTF8Unsafe());
+  value.Set("version_key", registration.version_key.value_or(""));
   value.Set("existence_checker_path",
             registration.existence_checker_path.AsUTF8Unsafe());
-  value.Set("cohort", registration.cohort);
-  value.Set("cohort_name", registration.cohort_name);
-  value.Set("cohort_hint", registration.cohort_hint);
+  value.Set("cohort", registration.cohort.value_or(""));
+  value.Set("cohort_name", registration.cohort_name.value_or(""));
+  value.Set("cohort_hint", registration.cohort_hint.value_or(""));
   return StringFromValue(base::Value(value.Clone()));
 }
 
@@ -385,6 +388,13 @@ class IntegrationTestCommandsSystem : public IntegrationTestCommands {
                 Param("exit_code", base::NumberToString(expected_exit_code))});
   }
 
+  void RunUpdateApps(int expected_exit_code,
+                     const base::Version& version) const override {
+    RunCommand("run_update_apps",
+               {Param("exit_code", base::NumberToString(expected_exit_code)),
+                Param("version", version.GetString())});
+  }
+
   void RegisterApp(const RegistrationRequest& registration) const override {
     RunCommand(
         "register_app",
@@ -501,25 +511,27 @@ class IntegrationTestCommandsSystem : public IntegrationTestCommands {
     RunCommand("run_handoff", {Param("app_id", app_id)});
   }
 
-  void InstallScheduledTask(const std::string& task_name,
+  void InstallScheduledTask(bool run_elevated,
+                            const std::string& task_name,
                             bool use_task_subfolders) const override {
     RunCommand(
-        "install_scheduled_task",
+        run_elevated, "install_scheduled_task",
         {Param("task_name", task_name),
          Param("use_task_subfolders", BoolToString(use_task_subfolders))});
   }
-  void IsScheduledTaskRegisteredFromMedium(
-      const std::string& task_name,
-      bool use_task_subfolders) const override {
-    RunCommandDeElevated(
-        "is_scheduled_task_registered_from_medium",
+  void IsScheduledTaskRegistered(bool run_elevated,
+                                 const std::string& task_name,
+                                 bool use_task_subfolders) const override {
+    RunCommand(
+        run_elevated, "is_scheduled_task_registered",
         {Param("task_name", task_name),
          Param("use_task_subfolders", BoolToString(use_task_subfolders))});
   }
-  void DeleteScheduledTask(const std::string& task_name,
+  void DeleteScheduledTask(bool run_elevated,
+                           const std::string& task_name,
                            bool use_task_subfolders) const override {
     RunCommand(
-        "delete_scheduled_task",
+        run_elevated, "delete_scheduled_task",
         {Param("task_name", task_name),
          Param("use_task_subfolders", BoolToString(use_task_subfolders))});
   }
@@ -795,6 +807,13 @@ class IntegrationTestCommandsSystem : public IntegrationTestCommands {
     RunDeElevated(updater_scope_, GenerateHelperCommand(command_switch, params),
                   &exit_code);
     ASSERT_EQ(exit_code, 0);
+  }
+
+  void RunCommand(bool run_elevated,
+                  const std::string& command_switch,
+                  const std::vector<Param>& params) const {
+    run_elevated ? RunCommand(command_switch, params)
+                 : RunCommandDeElevated(command_switch, params);
   }
 
   const UpdaterScope updater_scope_;

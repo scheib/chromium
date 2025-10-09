@@ -89,7 +89,6 @@ OffscreenCanvas::OffscreenCanvas(ExecutionContext* context, gfx::Size size)
   }
 
   CanvasResourceTracker::For(context->GetIsolate())->Add(this, context);
-  UpdateMemoryUsage();
 }
 
 OffscreenCanvas* OffscreenCanvas::Create(ScriptState* script_state,
@@ -99,10 +98,6 @@ OffscreenCanvas* OffscreenCanvas::Create(ScriptState* script_state,
   return MakeGarbageCollected<OffscreenCanvas>(
       ExecutionContext::From(script_state),
       gfx::Size(ClampTo<int>(width), ClampTo<int>(height)));
-}
-
-OffscreenCanvas::~OffscreenCanvas() {
-  external_memory_accounter_.Decrease(v8::Isolate::GetCurrent(), memory_usage_);
 }
 
 void OffscreenCanvas::Dispose() {
@@ -166,7 +161,7 @@ void OffscreenCanvas::SetSize(gfx::Size size) {
     return;
   }
 
-  CanvasRenderingContextHost::SetSize(size);
+  size_ = size;
   UpdateMemoryUsage();
   current_frame_damage_rect_ = SkIRect::MakeWH(Size().width(), Size().height());
 
@@ -272,7 +267,16 @@ scoped_refptr<Image> OffscreenCanvas::GetSourceImageForCanvas(
     *status = kZeroSizeCanvasSourceImageStatus;
     return nullptr;
   }
-  scoped_refptr<StaticBitmapImage> image = context_->GetImage(reason);
+  scoped_refptr<StaticBitmapImage> image;
+  if (IsWebGL() || IsWebGPU()) {
+    // Because WebGL/WebGPU sources always require copying the back buffer,
+    // we use PaintRenderingResultsToSnapshot instead of GetImage in order to
+    // keep a cached copy of the backing in the canvas's resource provider.
+    image = RenderingContext()->PaintRenderingResultsToSnapshot(kBackBuffer,
+                                                                reason);
+  } else {
+    image = RenderingContext()->GetImage(reason);
+  }
   if (!image) {
     image = CreateTransparentImage();
   }
@@ -307,7 +311,7 @@ ScriptPromise<Blob> OffscreenCanvas::convertToBlob(
     const ImageEncodeOptions* options,
     ExceptionState& exception_state) {
   DCHECK(IsOffscreenCanvas());
-  WTF::String object_name = "OffscreenCanvas";
+  String object_name = "OffscreenCanvas";
   std::stringstream error_msg;
 
   if (is_neutered_) {
@@ -326,6 +330,13 @@ ScriptPromise<Blob> OffscreenCanvas::convertToBlob(
   if (!OriginClean()) {
     error_msg << "Tainted " << object_name << " may not be exported.";
     exception_state.ThrowSecurityError(error_msg.str().c_str());
+    return EmptyPromise();
+  }
+
+  if (RuntimeEnabledFeatures::BlockCanvasReadbackEnabled(
+          GetExecutionContext())) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kNotAllowedError,
+                                      String(kBlockCanvasReadbackErrorMessage));
     return EmptyPromise();
   }
 
@@ -426,7 +437,7 @@ CanvasRenderingContext* OffscreenCanvas::GetCanvasRenderingContext(
           CanvasContextCreationAttributesCore::PowerPreference::kLowPower;
     }
 
-    context_ = factory->Create(this, recomputed_attributes);
+    context_ = factory->Create(execution_context, this, recomputed_attributes);
     if (context_) {
       context_->RecordUKMCanvasRenderingAPI();
       context_->RecordUMACanvasRenderingAPI();
@@ -615,48 +626,10 @@ UniqueFontSelector* OffscreenCanvas::GetFontSelector() {
     base_selector =
         To<WorkerGlobalScope>(GetExecutionContext())->GetFontSelector();
   }
-  auto* unique_font_selector = MakeGarbageCollected<UniqueFontSelector>(
-      base_selector,
-      RuntimeEnabledFeatures::CanvasTextNgEnabled(GetExecutionContext()));
+  auto* unique_font_selector =
+      MakeGarbageCollected<UniqueFontSelector>(base_selector);
   unique_font_selector_ = unique_font_selector;
   return unique_font_selector;
-}
-
-void OffscreenCanvas::UpdateMemoryUsage() {
-  // NOTE: All formats used by canvas are either 8-bit or 16-bit.
-  int bytes_per_pixel = GetRenderingContextFormat().BitsPerPixel() / 8;
-
-  base::CheckedNumeric<int32_t> memory_usage_checked = bytes_per_pixel;
-  memory_usage_checked *= Size().width();
-  memory_usage_checked *= Size().height();
-  int32_t new_memory_usage =
-      memory_usage_checked.ValueOrDefault(std::numeric_limits<int32_t>::max());
-
-  // TODO(junov): We assume that it is impossible to be inside a FastAPICall
-  // from a host interface other than the rendering context.  This assumption
-  // may need to be revisited in the future depending on how the usage of
-  // [NoAllocDirectCall] evolves.
-  intptr_t delta_bytes = new_memory_usage - memory_usage_;
-  if (delta_bytes) {
-    // Here we check "IsAllocationAllowed", but it is actually garbage
-    // collection that is not allowed, and allocations can trigger GC.
-    // AdjustAmountOfExternalAllocatedMemory is not an allocation but it
-    // can trigger GC, So we use "IsAllocationAllowed" as a proxy for
-    // "is GC allowed". When garbage collection is already in progress,
-    // allocations are not allowed, but calling
-    // AdjustAmountOfExternalAllocatedMemory is safe, hence the
-    // 'diposing_' condition in the DCHECK below.
-    // Since ThreadState::Current() might be nullptr at test shutdown,
-    // `disposing_` must be evaluated before `IsAllocationAllowed()`.
-    // See crbug.com/438132028 for the detail.
-    DCHECK(disposing_ || ThreadState::Current()->IsAllocationAllowed());
-    external_memory_accounter_.Update(v8::Isolate::GetCurrent(), delta_bytes);
-    memory_usage_ = new_memory_usage;
-  }
-}
-
-size_t OffscreenCanvas::GetMemoryUsage() const {
-  return base::saturated_cast<size_t>(memory_usage_);
 }
 
 void OffscreenCanvas::Trace(Visitor* visitor) const {

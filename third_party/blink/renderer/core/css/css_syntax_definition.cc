@@ -196,8 +196,7 @@ const CSSValue* ConsumeSingleType(const CSSSyntaxComponent& syntax,
       CSSParserContext::ParserModeOverridingScope scope(context,
                                                         kHTMLStandardMode);
       return css_parsing_utils::ConsumeLengthOrPercent(
-          stream, context, CSSPrimitiveValue::ValueRange::kAll,
-          css_parsing_utils::UnitlessQuirk::kForbid, kCSSAnchorQueryTypesAll);
+          stream, context, CSSPrimitiveValue::ValueRange::kAll);
     }
     case CSSSyntaxType::kColor: {
       CSSParserContext::ParserModeOverridingScope scope(context,
@@ -353,13 +352,10 @@ String CSSSyntaxDefinition::ToString() const {
     return String("*");
   }
   StringBuilder builder;
-  builder.Append(syntax_components_[0].ToString());
-  for (size_t i = 1; i < syntax_components_.size(); i++) {
-    CSSSyntaxComponent component = syntax_components_[i];
-    builder.Append(" | ");
-    builder.Append(component.ToString());
-  }
-  return builder.ToString();
+  builder.AppendRange(syntax_components_, " | ", [](const auto& component) {
+    return component.ToString();
+  });
+  return builder.ReleaseString();
 }
 
 CSSSyntaxDefinition CSSSyntaxDefinition::CreateNumericSyntax() {

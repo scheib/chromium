@@ -103,6 +103,9 @@ chromium-metrics-reviews@google.com.
   <int value="4" label="KEYBOARD_LOCK_REQUESTED"/>
   <int value="5" label="POINTER_LOCK_REQUESTED"/>
   <int value="6" label="VIBRATION_API"/>
+  <int value="7" label="FULLSCREEN_API"/>
+  <int value="8" label="CLIPBOARD_COPY_API"/>
+  <int value="9" label="CREDIT_CARD_FORM"/>
 </enum>
 
 <enum name="ClientSidePhishingImageEmbeddingResult">
@@ -140,6 +143,13 @@ chromium-metrics-reviews@google.com.
   <int value="3" label="Scam experiment verdict 2"/>
   <int value="999" label="Scam experiment verdict catch all enforcement"/>
   <int value="1000" label="Scam experiment verdict catch all telemetry"/>
+</enum>
+
+<enum name="OptimizationGuideOnDeviceModelUnavailableReason">
+  <int value="0" label="Unknown"/>
+  <int value="2" label="NotSupported"/>
+  <int value="3" label="PendingAssets"/>
+  <int value="4" label="PendingUsage"/>
 </enum>
 
 <!-- LINT.IfChange(SafeBrowsingAndroidGetReferringAppInfoResult) -->

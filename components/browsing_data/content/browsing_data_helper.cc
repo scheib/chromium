@@ -38,10 +38,12 @@ bool WebsiteSettingsFilterAdapter(
     return false;
   }
 
-  // Website settings only use origin-scoped patterns. The only content setting
-  // this filter is used for is DURABLE_STORAGE, which also only uses
-  // origin-scoped patterns. Such patterns can be directly translated to a GURL.
-  GURL url(primary_pattern.ToString());
+  // The predicate is URL-based. Content settings patterns, however, are not
+  // always convertible to a valid GURL. We use `ToRepresentativeUrl()` to
+  // attempt to resolve common wildcards (e.g., `[*.]example.com` to
+  // `example.com`).
+  GURL url = primary_pattern.ToRepresentativeUrl();
+
   DCHECK(url.is_valid()) << "url: '" << url.possibly_invalid_spec() << "' "
                          << "pattern: '" << primary_pattern.ToString() << "'";
   return predicate.Run(url);
@@ -69,7 +71,7 @@ bool IsWebScheme(const std::string& scheme) {
 }
 
 bool HasWebScheme(const GURL& origin) {
-  return IsWebScheme(origin.scheme());
+  return IsWebScheme(origin.GetScheme());
 }
 
 HostContentSettingsMap::PatternSourcePredicate CreateWebsiteSettingsFilter(
@@ -250,7 +252,8 @@ int GetUniqueThirdPartyCookiesHostCount(
   for (auto entry : browsing_data_model) {
     std::string host = BrowsingDataModel::GetHost(entry.data_owner.get());
     if (entry.data_details->blocked_third_party ||
-        (top_frame_domain.empty() && !IsSameHost(host, top_frame_url.host())) ||
+        (top_frame_domain.empty() &&
+         !IsSameHost(host, top_frame_url.GetHost())) ||
         (!top_frame_domain.empty() && !url::DomainIs(host, top_frame_domain))) {
       for (auto storage_type : entry.data_details->storage_types) {
         if (browsing_data_model.IsBlockedByThirdPartyCookieBlocking(

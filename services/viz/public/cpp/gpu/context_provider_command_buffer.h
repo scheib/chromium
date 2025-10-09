@@ -19,11 +19,13 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/memory_dump_provider.h"
+#include "base/types/pass_key.h"
 #include "components/viz/common/gpu/context_provider.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "gpu/command_buffer/client/shared_memory_limits.h"
 #include "gpu/command_buffer/common/context_creation_attribs.h"
 #include "gpu/command_buffer/common/scheduling_priority.h"
+#include "gpu/ipc/common/gpu_channel.mojom.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "services/viz/public/cpp/gpu/command_buffer_metrics.h"
 #include "skia/buildflags.h"
@@ -54,11 +56,9 @@ class WebGPUInterface;
 }  // namespace webgpu
 }  // namespace gpu
 
-namespace skia_bindings {
-class GrContextForGLES2Interface;
-}
-
 namespace viz {
+
+enum class WebGLContextType { kWebGL1, kWebGL2 };
 
 // Implementation of ContextProvider that provides a GL implementation
 // over command buffer to the GPU process.
@@ -70,7 +70,22 @@ class ContextProviderCommandBuffer
  public:
   REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE();
 
-  ContextProviderCommandBuffer(
+  static scoped_refptr<ContextProviderCommandBuffer> CreateForGL(
+      scoped_refptr<gpu::GpuChannelHost> channel,
+      int32_t stream_id,
+      gpu::SchedulingPriority stream_priority,
+      const GURL& active_url,
+      command_buffer_metrics::ContextType type,
+      bool lose_context_when_out_of_memory = false);
+
+  static scoped_refptr<ContextProviderCommandBuffer> CreateForWebGL(
+      scoped_refptr<gpu::GpuChannelHost> channel,
+      const GURL& active_url,
+      WebGLContextType context_type,
+      bool prefer_low_power_gpu,
+      bool fail_if_major_performance_caveat);
+
+  static scoped_refptr<ContextProviderCommandBuffer> CreateForRaster(
       scoped_refptr<gpu::GpuChannelHost> channel,
       int32_t stream_id,
       gpu::SchedulingPriority stream_priority,
@@ -78,7 +93,26 @@ class ContextProviderCommandBuffer
       bool automatic_flushes,
       bool support_locking,
       const gpu::SharedMemoryLimits& memory_limits,
-      const gpu::ContextCreationAttribs& attributes,
+      command_buffer_metrics::ContextType type,
+      bool enable_gpu_rasterization,
+      bool lose_context_when_out_of_memory);
+
+  static scoped_refptr<ContextProviderCommandBuffer> CreateForWebGPU(
+      scoped_refptr<gpu::GpuChannelHost> channel,
+      const GURL& active_url,
+      command_buffer_metrics::ContextType type,
+      base::SharedMemoryMapper* buffer_mapper);
+
+  ContextProviderCommandBuffer(
+      base::PassKey<ContextProviderCommandBuffer> pass_key,
+      scoped_refptr<gpu::GpuChannelHost> channel,
+      int32_t stream_id,
+      gpu::SchedulingPriority stream_priority,
+      const GURL& active_url,
+      bool automatic_flushes,
+      bool support_locking,
+      const gpu::SharedMemoryLimits& memory_limits,
+      gpu::mojom::ContextCreationAttribsPtr attributes,
       command_buffer_metrics::ContextType type,
       base::SharedMemoryMapper* buffer_mapper = nullptr);
 
@@ -92,7 +126,6 @@ class ContextProviderCommandBuffer
   gpu::gles2::GLES2Interface* ContextGL() override;
   gpu::raster::RasterInterface* RasterInterface() override;
   gpu::ContextSupport* ContextSupport() override;
-  class GrDirectContext* GrContext() override;
   gpu::SharedImageInterface* SharedImageInterface() override;
   ContextCacheController* CacheController() override;
   base::Lock* GetLock() override;
@@ -118,6 +151,11 @@ class ContextProviderCommandBuffer
   friend class base::DeleteHelper<ContextProviderCommandBuffer>;
   ~ContextProviderCommandBuffer() override;
 
+  // Used by MockContextProviderCommandBuffer in
+  // media/mojo/clients/mojo_gpu_video_accelerator_factories_unittest.cc
+  explicit ContextProviderCommandBuffer(
+      scoped_refptr<gpu::GpuChannelHost> channel);
+
  private:
   void OnLostContext();
 
@@ -140,7 +178,7 @@ class ContextProviderCommandBuffer
   const bool automatic_flushes_;
   const bool support_locking_;
   const gpu::SharedMemoryLimits memory_limits_;
-  const gpu::ContextCreationAttribs attributes_;
+  const gpu::mojom::ContextCreationAttribsPtr attributes_;
   const command_buffer_metrics::ContextType context_type_;
 
   scoped_refptr<gpu::GpuChannelHost> channel_;
@@ -187,8 +225,6 @@ class ContextProviderCommandBuffer
 
   // END IMPORTANT NOTE                                                       //
   //////////////////////////////////////////////////////////////////////////////
-
-  std::unique_ptr<skia_bindings::GrContextForGLES2Interface> gr_context_;
 
   std::unique_ptr<ContextCacheController> cache_controller_;
 

@@ -14,18 +14,21 @@ import org.chromium.base.lifetime.LifetimeAssert;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.chrome.browser.extensions.ContextMenuSource;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.toolbar.MenuBuilderHelper;
 import org.chromium.chrome.browser.toolbar.extensions.ExtensionActionButtonProperties.ListItemType;
 import org.chromium.chrome.browser.ui.extensions.ExtensionAction;
+import org.chromium.chrome.browser.ui.extensions.ExtensionActionContextMenuBridge;
 import org.chromium.chrome.browser.ui.extensions.ExtensionActionPopupContents;
 import org.chromium.chrome.browser.ui.extensions.ExtensionActionsBridge;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.extensions.ShowAction;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.listmenu.ListMenuButton;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
-import org.chromium.ui.modelutil.ModelListAdapter;
 import org.chromium.ui.modelutil.PropertyModel;
 
 @NullMarked
@@ -117,6 +120,26 @@ class ExtensionActionListMediator implements Destroyable {
         mCurrentPopup.addOnDismissListener(this::closePopup);
     }
 
+    private void onContextClick(ListMenuButton buttonView, String actionId) {
+        Tab currentTab = mExtensionActionsUpdateHelper.getCurrentTab();
+        if (currentTab == null) {
+            return;
+        }
+
+        WebContents webContents = currentTab.getWebContents();
+        Profile profile = mExtensionActionsUpdateHelper.getProfile();
+        if (webContents == null || profile == null) {
+            return;
+        }
+
+        ExtensionActionContextMenuBridge bridge =
+                new ExtensionActionContextMenuBridge(
+                        profile, actionId, webContents, ContextMenuSource.TOOLBAR_ACTION);
+
+        ExtensionActionContextMenuUtils.showContextMenu(
+                mContext, buttonView, bridge, MenuBuilderHelper.getRectProvider(buttonView), null);
+    }
+
     private void closePopup() {
         if (mCurrentPopup == null) {
             return;
@@ -142,10 +165,16 @@ class ExtensionActionListMediator implements Destroyable {
                 ExtensionActionsBridge extensionActionsBridge, int tabId, String actionId) {
             ExtensionAction action = extensionActionsBridge.getAction(actionId, tabId);
             assert action != null;
-            Bitmap icon = extensionActionsBridge.getActionIcon(actionId, tabId);
+
+            Tab currentTab = mExtensionActionsUpdateHelper.getCurrentTab();
+            WebContents webContents = currentTab == null ? null : currentTab.getWebContents();
+
+            Bitmap icon =
+                    ExtensionActionIconUtil.getActionIcon(
+                            mContext, extensionActionsBridge, actionId, tabId, webContents);
             assert icon != null;
 
-            return new ModelListAdapter.ListItem(
+            return new ListItem(
                     ListItemType.EXTENSION_ACTION,
                     new PropertyModel.Builder(ExtensionActionButtonProperties.ALL_KEYS)
                             .with(ExtensionActionButtonProperties.ICON, icon)
@@ -153,6 +182,12 @@ class ExtensionActionListMediator implements Destroyable {
                             .with(
                                     ExtensionActionButtonProperties.ON_CLICK_LISTENER,
                                     (view) -> onPrimaryClick(view, actionId))
+                            .with(
+                                    ExtensionActionButtonProperties.ON_CONTEXT_CLICK_LISTENER,
+                                    (view) -> {
+                                        onContextClick((ListMenuButton) view, actionId);
+                                        return false;
+                                    })
                             .with(ExtensionActionButtonProperties.TITLE, action.getTitle())
                             .build());
         }

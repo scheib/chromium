@@ -16,7 +16,6 @@
 #include "chrome/browser/ui/autofill/autofill_bubble_controller_base.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_instance.h"
 #include "components/autofill/core/browser/integrators/autofill_ai/autofill_ai_manager.h"
-#include "components/optimization_guide/proto/features/common_quality_data.pb.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 
@@ -50,6 +49,9 @@ class SaveOrUpdateAutofillAiDataControllerImpl
   void OnBubbleClosed(AutofillAiBubbleClosedReason closed_reason) override;
   base::WeakPtr<SaveOrUpdateAutofillAiDataController> GetWeakPtr() override;
   std::u16string GetDialogTitle() const override;
+  std::u16string GetPrimaryAccountEmail() const override;
+  bool IsWalletableEntity() const override;
+  void OnGoToWalletLinkClicked() override;
   std::vector<EntityAttributeUpdateDetails> GetUpdatedAttributesDetails()
       const override;
   bool IsSavePrompt() const override;
@@ -59,19 +61,33 @@ class SaveOrUpdateAutofillAiDataControllerImpl
   BubbleType GetBubbleType() const override;
   base::WeakPtr<BubbleControllerBase> GetBubbleControllerBaseWeakPtr() override;
 
+  // content::WebContentsObserver:
+  // Used to re-show the bubble when it was previously closed due to the user
+  // clicking on a link in the bubble.
+  void OnVisibilityChanged(content::Visibility visibility) override;
+
  protected:
   explicit SaveOrUpdateAutofillAiDataControllerImpl(
       content::WebContents* web_contents,
       const std::string& app_locale);
 
   // AutofillBubbleControllerBase::
-  PageActionIconType GetPageActionIconType() override;
+  std::optional<PageActionIconType> GetPageActionIconType() override;
   void DoShowBubble() override;
 
  private:
   friend class content::WebContentsUserData<
       SaveOrUpdateAutofillAiDataControllerImpl>;
   friend class SaveOrUpdateAutofillAiDataControllerImplTest;
+
+  // Configures the controller's state for the Autofill AI data save/update
+  // prompt. `new_entity` is the data detected on the page, `old_entity` is the
+  // existing data to be updated (if any), and `save_prompt_acceptance_callback`
+  // is the callback to run upon user decision.
+  void SetupPrompt(EntityInstance new_entity,
+                   std::optional<EntityInstance> old_entity,
+                   AutofillClient::EntitySaveOrUpdatePromptResultCallback
+                       save_prompt_acceptance_callback);
 
   // The browser's locale when the object was instantiated.
   const std::string app_locale_;
@@ -88,6 +104,12 @@ class SaveOrUpdateAutofillAiDataControllerImpl
   // or update prompt.
   AutofillClient::EntitySaveOrUpdatePromptResultCallback
       save_prompt_acceptance_callback_;
+
+  // Whether the bubble should be re-shown when the current web_contents becomes
+  // visible. This is true when the user has clicked a link in the bubble that
+  // leads to a navigation. In situations like this the bubble is closed,
+  // focusing back on the tab should re-open it.
+  bool reopen_bubble_when_web_contents_becomes_visible_ = false;
 
   base::WeakPtrFactory<SaveOrUpdateAutofillAiDataControllerImpl>
       weak_ptr_factory_{this};

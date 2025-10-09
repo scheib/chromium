@@ -161,8 +161,7 @@ SystemWebAppDelegateMap CreateSystemWebApps(Profile* profile) {
 
   SystemWebAppDelegateMap delegate_map;
   for (auto& info : info_vec) {
-    if (info->IsAppEnabled() ||
-        base::FeatureList::IsEnabled(features::kEnableAllSystemWebApps)) {
+    if (info->IsAppEnabled()) {
       // Gets `type` before std::move().
       SystemWebAppType type = info->GetType();
       delegate_map.emplace(type, std::move(info));
@@ -181,8 +180,8 @@ web_app::ExternalInstallOptions CreateInstallOptionsForSystemApp(
     const SystemWebAppDelegate& delegate,
     bool force_update,
     bool is_disabled) {
-  DCHECK(delegate.GetInstallUrl().scheme() == content::kChromeUIScheme ||
-         delegate.GetInstallUrl().scheme() ==
+  DCHECK(delegate.GetInstallUrl().GetScheme() == content::kChromeUIScheme ||
+         delegate.GetInstallUrl().GetScheme() ==
              content::kChromeUIUntrustedScheme);
 
   web_app::ExternalInstallOptions install_options(
@@ -315,10 +314,6 @@ void SystemWebAppManager::StopBackgroundTasksForTesting() {
 }
 
 bool SystemWebAppManager::IsAppEnabled(SystemWebAppType type) const {
-  if (base::FeatureList::IsEnabled(features::kEnableAllSystemWebApps)) {
-    return true;
-  }
-
   const SystemWebAppDelegate* delegate =
       GetSystemWebApp(system_app_delegates_, type);
   if (!delegate) {

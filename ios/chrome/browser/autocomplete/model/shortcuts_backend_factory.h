@@ -30,9 +30,9 @@ class ShortcutsBackendFactory : public RefcountedProfileKeyedServiceFactoryIOS {
   ShortcutsBackendFactory();
   ~ShortcutsBackendFactory() override;
 
-  // BrowserStateKeyedServiceFactory implementation.
+  // RefcountedProfileKeyedServiceFactoryIOS implementation.
   scoped_refptr<RefcountedKeyedService> BuildServiceInstanceFor(
-      web::BrowserState* context) const override;
+      ProfileIOS* profile) const override;
 };
 
 }  // namespace ios

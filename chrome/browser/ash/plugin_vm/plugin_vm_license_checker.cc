@@ -33,8 +33,6 @@ namespace plugin_vm {
 
 namespace {
 
-constexpr char kValidationOAuth2Scope[] =
-    "https://www.googleapis.com/auth/applicense.bytebot";
 constexpr char kValidationEndpoint[] = "https://bytebot.googleapis.com/";
 constexpr char kValidationServicePath[] =
     "v1/applications/chromePluginVm:getLicenseStatus";
@@ -102,8 +100,8 @@ bool ResponseIndicatesValidLicense(int response_code,
 
   // Expected response body:
   // { "status": "ACTIVE", ...}
-  std::optional<base::Value::Dict> response =
-      base::JSONReader::ReadDict(response_body);
+  std::optional<base::Value::Dict> response = base::JSONReader::ReadDict(
+      response_body, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!response) {
     LOG(ERROR) << "response_body was of unexpected format.";
     return false;
@@ -148,11 +146,8 @@ void PluginVmLicenseChecker::FetchAccessToken() {
       IdentityManagerFactory::GetForProfile(profile_);
   DCHECK(identity_manager);
 
-  signin::ScopeSet validation_scope;
-  validation_scope.insert(kValidationOAuth2Scope);
-
   token_fetcher_ = std::make_unique<signin::PrimaryAccountAccessTokenFetcher>(
-      "ChromePluginVm", identity_manager, validation_scope,
+      signin::OAuthConsumerId::kPluginVmLicenseChecker, identity_manager,
       base::BindOnce(&PluginVmLicenseChecker::CallEndpointWithAccessToken,
                      weak_ptr_factory_.GetWeakPtr()),
       signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate,

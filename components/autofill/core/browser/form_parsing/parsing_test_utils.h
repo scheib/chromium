@@ -92,12 +92,12 @@ class FormFieldParserTestBase {
 
   // Apply the parsing with a specific parser.
   virtual std::unique_ptr<FormFieldParser> Parse(ParsingContext& context,
-                                                 AutofillScanner* scanner) = 0;
+                                                 AutofillScanner& scanner) = 0;
 
   FieldRendererId MakeFieldRendererId();
 
   // Fields that will be parsed.
-  std::vector<std::unique_ptr<AutofillField>> fields_;
+  std::vector<FormFieldData> fields_;
   // Actual outcome of parsing.
   FieldCandidatesMap field_candidates_map_;
   // Expectations of parsing.

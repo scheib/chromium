@@ -22,8 +22,7 @@ RtpTransceiverState::RtpTransceiverState(
     webrtc::RtpTransceiverDirection direction,
     std::optional<webrtc::RtpTransceiverDirection> current_direction,
     std::optional<webrtc::RtpTransceiverDirection> fired_direction,
-    WTF::Vector<webrtc::RtpHeaderExtensionCapability>
-        header_extensions_negotiated)
+    Vector<webrtc::RtpHeaderExtensionCapability> header_extensions_negotiated)
     : main_task_runner_(std::move(main_task_runner)),
       signaling_task_runner_(std::move(signaling_task_runner)),
       webrtc_transceiver_(std::move(webrtc_transceiver)),
@@ -189,18 +188,16 @@ class RTCRtpTransceiverImpl::RTCRtpTransceiverInternal
           native_peer_connection,
       scoped_refptr<blink::WebRtcMediaStreamTrackAdapterMap> track_map,
       RtpTransceiverState state,
-      bool require_encoded_insertable_streams,
       std::unique_ptr<webrtc::Metronome> decode_metronome)
       : main_task_runner_(state.main_task_runner()),
         signaling_task_runner_(state.signaling_task_runner()),
         webrtc_transceiver_(state.webrtc_transceiver()),
         state_(std::move(state)) {
     sender_ = std::make_unique<blink::RTCRtpSenderImpl>(
-        native_peer_connection, track_map, state_.MoveSenderState(),
-        require_encoded_insertable_streams);
+        native_peer_connection, track_map, state_.MoveSenderState());
     receiver_ = std::make_unique<blink::RTCRtpReceiverImpl>(
         native_peer_connection, state_.MoveReceiverState(),
-        require_encoded_insertable_streams, std::move(decode_metronome));
+        std::move(decode_metronome));
   }
 
   const RtpTransceiverState& state() const {
@@ -336,13 +333,11 @@ RTCRtpTransceiverImpl::RTCRtpTransceiverImpl(
         native_peer_connection,
     scoped_refptr<blink::WebRtcMediaStreamTrackAdapterMap> track_map,
     RtpTransceiverState transceiver_state,
-    bool encoded_insertable_streams,
     std::unique_ptr<webrtc::Metronome> decode_metronome)
     : internal_(base::MakeRefCounted<RTCRtpTransceiverInternal>(
           std::move(native_peer_connection),
           std::move(track_map),
           std::move(transceiver_state),
-          encoded_insertable_streams,
           std::move(decode_metronome))) {}
 
 RTCRtpTransceiverImpl::RTCRtpTransceiverImpl(const RTCRtpTransceiverImpl& other)

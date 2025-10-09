@@ -27,6 +27,7 @@
   V(kUserNote, kActionSidePanelShowUserNote, "UserNotes")                     \
   V(kFeed, kActionSidePanelShowFeed, "Feed")                                  \
   V(kWebView, std::nullopt, "WebView")                                        \
+  V(kContextualTasks, kActionSidePanelShowContextualTasks, "ContextualTasks") \
   /* Contextual Entries */                                                    \
   V(kSideSearch, kActionSidePanelShowSideSearch, "SideSearch")                \
   V(kLens, kActionSidePanelShowLens, "Lens")                                  \
@@ -40,6 +41,7 @@
     "LensOverlayResults")                                                     \
   V(kMerchantTrust, kActionSidePanelShowMerchantTrust, "MerchantTrust")       \
   V(kComments, kActionSidePanelShowComments, "Comments")                      \
+  V(kGlic, kActionSidePanelShowGlic, "Glic")                                  \
   /* Extensions (nothing more should be added below here) */                  \
   V(kExtension, std::nullopt, "Extension")
 

@@ -47,8 +47,8 @@ import org.chromium.components.feature_engagement.Tracker;
 import org.chromium.ui.base.ViewUtils;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayDeque;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -66,13 +66,13 @@ public class TileRenderer {
     private final int mDesiredIconSize;
     private final int mMinIconSize;
     private final float mIconCornerRadius;
+    private final String mPinnedShortcutString;
     private int mTitleLinesCount;
     private boolean mNativeInitializationComplete;
     private @Nullable Profile mProfile;
 
     @LayoutRes private final int mTileLayoutResId;
-    private final float mTileWidthDp;
-    private final float mDividerWidthDp;
+    private final float mTileWidth;
 
     private class LargeIconCallbackImpl implements LargeIconBridge.LargeIconCallback {
         private final WeakReference<Tile> mTile;
@@ -106,13 +106,13 @@ public class TileRenderer {
 
     /** Simple multimap from SiteSuggestion to SuggestionsTileView. */
     private static class SuggestionsTileViewCache {
-        private final Map<SiteSuggestion, LinkedList<SuggestionsTileView>> mStorage =
+        private final Map<SiteSuggestion, ArrayDeque<SuggestionsTileView>> mStorage =
                 new HashMap<>();
 
         void put(SiteSuggestion key, SuggestionsTileView value) {
-            LinkedList<SuggestionsTileView> bucket = mStorage.get(key);
+            ArrayDeque<SuggestionsTileView> bucket = mStorage.get(key);
             if (bucket == null) {
-                bucket = new LinkedList<>();
+                bucket = new ArrayDeque<>();
                 mStorage.put(key, bucket);
             }
             bucket.addLast(value);
@@ -120,7 +120,7 @@ public class TileRenderer {
 
         @Nullable SuggestionsTileView remove(SiteSuggestion key) {
             SuggestionsTileView ret = null;
-            LinkedList<SuggestionsTileView> bucket = mStorage.get(key);
+            ArrayDeque<SuggestionsTileView> bucket = mStorage.get(key);
             if (bucket != null) {
                 ret = bucket.removeFirst(); // FIFO, for consistecy.
                 if (bucket.isEmpty()) {
@@ -145,13 +145,13 @@ public class TileRenderer {
         mDesiredIconSize = res.getDimensionPixelSize(R.dimen.tile_view_icon_size);
         mIconCornerRadius = res.getDimension(R.dimen.tile_view_icon_corner_radius);
         int minIconSize = res.getDimensionPixelSize(R.dimen.tile_view_icon_min_size);
+        mPinnedShortcutString = res.getString(R.string.accessibility_ntp_pinned_shortcut_badge);
 
         // On ldpi devices, mDesiredIconSize could be even smaller than the global limit.
         mMinIconSize = Math.min(mDesiredIconSize, minIconSize);
 
         mTileLayoutResId = getTileLayoutResId();
-        mTileWidthDp = res.getDimension(getTileWidthDimenResId());
-        mDividerWidthDp = res.getDimension(R.dimen.tile_view_divider_width);
+        mTileWidth = res.getDimension(getTileWidthDimenResId());
 
         int iconColor = mContext.getColor(R.color.default_favicon_background_color);
         int iconTextSize = res.getDimensionPixelSize(R.dimen.tile_view_icon_text_size);
@@ -212,7 +212,7 @@ public class TileRenderer {
                 if (prevTile != null
                         && (prevTile.getData().source == TileSource.CUSTOM_LINKS)
                                 != (tile.getData().source == TileSource.CUSTOM_LINKS)) {
-                    parent.addNonTileViewWithWidth(buildDivider(parent), mDividerWidthDp);
+                    parent.addDivider(buildDivider(parent));
                 }
                 parent.addTile(tileView);
                 if (focusedUrl != null && focusedUrl.equals(tile.getUrl().getSpec())) {
@@ -228,7 +228,7 @@ public class TileRenderer {
 
             if (shouldShowAddNewButton(sectionTiles)) {
                 TileView addCustomLinksButton = buildAddCustomLinksButton(parent, setupDelegate);
-                parent.addNonTileViewWithWidth(addCustomLinksButton, mTileWidthDp);
+                parent.addUiView(addCustomLinksButton, mTileWidth);
             }
         }
     }
@@ -376,6 +376,9 @@ public class TileRenderer {
                     RecordUserAction.record("Suggestions.Button.AddItem");
                     setupDelegate.getCustomTileModificationDelegate().add();
                 });
+        // Allow "Add new" title translation to wrap to second line. We change max lines instead of
+        // lines to avoid (clickable) blank line appearing at bottom if the title fits in one line.
+        tileView.setTitleMaxLines(2);
         // Prevent Custom Tile swap key from  propagating (i.e., suppress scrolls) to make the
         // button's behavior more similar to Custom Tiles.
         tileView.setOnKeyListener(
@@ -415,10 +418,14 @@ public class TileRenderer {
                             R.string.accessibility_omnibox_most_visited_tile_search,
                             tile.getTitle()));
         } else {
+            String title = tile.getTitle();
+            if (tile.getData().source == TileSource.CUSTOM_LINKS) {
+                title += ": " + mPinnedShortcutString;
+            }
             tileView.setContentDescription(
                     mContext.getString(
                             R.string.accessibility_omnibox_most_visited_tile_navigate,
-                            tile.getTitle(),
+                            title,
                             tile.getUrl().getHost()));
         }
     }

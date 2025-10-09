@@ -10,7 +10,9 @@
 #include "chrome/browser/actor/execution_engine.h"
 #include "chrome/browser/actor/ui/actor_ui_state_manager_prefs.h"
 #include "chrome/browser/actor/ui/mocks/mock_event_dispatcher.h"
+#include "chrome/browser/glic/public/glic_keyed_service.h"
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
+#include "chrome/browser/glic/widget/glic_window_controller.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
@@ -63,7 +65,7 @@ class GlicKeyedServiceBrowserTest : public InProcessBrowserTest {
 
     // First open it so close pathway triggers.
     glic_service->window_controller().ShowDetachedForTesting();
-    glic_service->ClosePanel();
+    glic_service->window_controller().Close();
   }
 
  private:

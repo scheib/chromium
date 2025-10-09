@@ -9,6 +9,7 @@
 #include "components/page_load_metrics/browser/observers/page_load_metrics_observer_tester.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
 #include "components/page_load_metrics/common/page_load_metrics.mojom.h"
+#include "net/base/load_timing_info.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom-shared.h"
 
@@ -82,8 +83,8 @@ class WaiterMetricsObserver final : public PageLoadMetricsObserver {
       const gfx::Rect& main_frame_intersection_rect) override;
   void OnMainFrameViewportRectChanged(
       const gfx::Rect& main_frame_viewport_rect) override;
-  void OnMainFrameImageAdRectsChanged(
-      const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) override;
+  void OnMainFrameAdRectsChanged(
+      const base::flat_map<int, gfx::Rect>& main_frame_ad_rects) override;
   void OnV8MemoryChanged(
       const std::vector<MemoryUpdate>& memory_updates) override;
   void OnPageRenderDataUpdate(const mojom::FrameRenderDataUpdate& render_data,
@@ -152,12 +153,12 @@ PageLoadMetricsTestWaiter::PageLoadMetricsTestWaiter(
 
 PageLoadMetricsTestWaiter::PageLoadMetricsTestWaiter(
     content::WebContents* web_contents,
-    const char* observer_name_)
-    : MetricsLifecycleObserver(web_contents), observer_name_(observer_name_) {}
+    const char* observer_name)
+    : MetricsLifecycleObserver(web_contents), observer_name_(observer_name) {}
 
 PageLoadMetricsTestWaiter::~PageLoadMetricsTestWaiter() {
   CHECK(did_add_observer_);
-  CHECK_EQ(nullptr, run_loop_.get());
+  CHECK(!run_loop_);
 }
 
 void PageLoadMetricsTestWaiter::AddPageExpectation(TimingField field) {
@@ -181,8 +182,8 @@ void PageLoadMetricsTestWaiter::SetMainFrameIntersectionExpectation() {
   expected_.did_set_main_frame_intersection_ = true;
 }
 
-void PageLoadMetricsTestWaiter::SetMainFrameImageAdRectsExpectation() {
-  expected_.did_observed_main_frame_image_ad_rects_ = true;
+void PageLoadMetricsTestWaiter::SetMainFrameAdRectsExpectation() {
+  expected_.did_observed_main_frame_ad_rects_ = true;
 }
 
 void PageLoadMetricsTestWaiter::AddMainFrameViewportRectExpectation(
@@ -286,9 +287,9 @@ bool PageLoadMetricsTestWaiter::DidObserveWebFeature(
        static_cast<blink::UseCounterFeature::EnumValue>(feature)});
 }
 
-bool PageLoadMetricsTestWaiter::DidObserveMainFrameImageAdRect(
+bool PageLoadMetricsTestWaiter::DidObserveMainFrameAdRect(
     const gfx::Rect& rect) const {
-  for (auto& [id, observed_rect] : main_frame_image_ad_rects_) {
+  for (auto& [id, observed_rect] : main_frame_ad_rects_) {
     if (observed_rect == rect) {
       return true;
     }
@@ -338,7 +339,7 @@ void PageLoadMetricsTestWaiter::OnSoftNavigationMetricsUpdated(
   }
 
   // Increment image lcp update counts.
-  if (!new_soft_navigation_metrics.largest_contentful_paint.is_null()) {
+  if (new_soft_navigation_metrics.largest_contentful_paint) {
     if (new_soft_navigation_metrics.largest_contentful_paint
             ->largest_image_paint.has_value() &&
         new_soft_navigation_metrics.largest_contentful_paint
@@ -354,7 +355,7 @@ void PageLoadMetricsTestWaiter::OnSoftNavigationMetricsUpdated(
   }
 
   // Increment text lcp update counts.
-  if (!new_soft_navigation_metrics.largest_contentful_paint.is_null()) {
+  if (new_soft_navigation_metrics.largest_contentful_paint) {
     if (new_soft_navigation_metrics.largest_contentful_paint->largest_text_paint
             .has_value() &&
         new_soft_navigation_metrics.largest_contentful_paint->largest_text_paint
@@ -463,16 +464,16 @@ void PageLoadMetricsTestWaiter::OnMainFrameViewportRectChanged(
     run_loop_->Quit();
 }
 
-void PageLoadMetricsTestWaiter::OnMainFrameImageAdRectsChanged(
-    const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) {
-  if (main_frame_image_ad_rects.empty()) {
+void PageLoadMetricsTestWaiter::OnMainFrameAdRectsChanged(
+    const base::flat_map<int, gfx::Rect>& main_frame_ad_rects) {
+  if (main_frame_ad_rects.empty()) {
     return;
   }
 
-  observed_.did_observed_main_frame_image_ad_rects_ = true;
+  observed_.did_observed_main_frame_ad_rects_ = true;
 
-  for (auto& [id, rect] : main_frame_image_ad_rects) {
-    main_frame_image_ad_rects_[id] = rect;
+  for (auto& [id, rect] : main_frame_ad_rects) {
+    main_frame_ad_rects_[id] = rect;
   }
 
   if (ExpectationsSatisfied() && run_loop_) {
@@ -713,13 +714,12 @@ bool PageLoadMetricsTestWaiter::MainFrameViewportRectExpectationsSatisfied()
              expected_.main_frame_viewport_rect_;
 }
 
-bool PageLoadMetricsTestWaiter::MainFrameImageAdRectsExpectationsSatisfied()
-    const {
-  if (!expected_.did_observed_main_frame_image_ad_rects_) {
+bool PageLoadMetricsTestWaiter::MainFrameAdRectsExpectationsSatisfied() const {
+  if (!expected_.did_observed_main_frame_ad_rects_) {
     return true;
   }
 
-  return observed_.did_observed_main_frame_image_ad_rects_;
+  return observed_.did_observed_main_frame_ad_rects_;
 }
 
 bool PageLoadMetricsTestWaiter::MemoryUpdateExpectationsSatisfied() const {
@@ -795,7 +795,7 @@ bool PageLoadMetricsTestWaiter::ExpectationsSatisfied() const {
          CpuTimeExpectationsSatisfied() &&
          MainFrameIntersectionExpectationsSatisfied() &&
          MainFrameViewportRectExpectationsSatisfied() &&
-         MainFrameImageAdRectsExpectationsSatisfied() &&
+         MainFrameAdRectsExpectationsSatisfied() &&
          MemoryUpdateExpectationsSatisfied() &&
          LayoutShiftExpectationsSatisfied() &&
          NumInteractionsExpectationsSatisfied() &&
@@ -928,10 +928,10 @@ void WaiterMetricsObserver::OnMainFrameViewportRectChanged(
   }
 }
 
-void WaiterMetricsObserver::OnMainFrameImageAdRectsChanged(
-    const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) {
+void WaiterMetricsObserver::OnMainFrameAdRectsChanged(
+    const base::flat_map<int, gfx::Rect>& main_frame_ad_rects) {
   if (waiter_) {
-    waiter_->OnMainFrameImageAdRectsChanged(main_frame_image_ad_rects);
+    waiter_->OnMainFrameAdRectsChanged(main_frame_ad_rects);
   }
 }
 

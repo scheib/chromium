@@ -20,9 +20,17 @@ _HEADER = """# Copyright 2025 The Chromium Authors
 # To regenerate, see instructions at build/modules/modularize/README.md
 
 """
+_RULE_MAP = {
+    IncludeDir.Builtin: 'builtin_module',
+    IncludeDir.Framework: 'framework_module',
+    IncludeDir.LibCxx: 'libcxx_module',
+    IncludeDir.Sysroot: 'sysroot_module',
+    IncludeDir.SysrootModule: 'apple_sysroot_module',
+}
 
-_SYSROOT_MODULEMAP = """modulemap_config("sysroot_modulemap") {
-  source = "module.modulemap"
+_SYSROOT_MODULEMAP = """sysroot_modulemap("sysroot_modulemap") {
+  source = "module.modulemap.in"
+  out = "${target_gen_dir}/module.modulemap"
 }
 
 """
@@ -64,7 +72,8 @@ def _update_content(path: pathlib.Path, content: str):
   path.write_text(content)
 
 
-def render_modulemap(out_dir: pathlib.Path, sysroot: pathlib.Path,
+def render_modulemap(out_dir: pathlib.Path, replacements: dict[pathlib.Path,
+                                                               str],
                      targets: list[Target]):
   """Writes a modulemap to {out_dir}"""
   f = io.StringIO()
@@ -78,8 +87,12 @@ def render_modulemap(out_dir: pathlib.Path, sysroot: pathlib.Path,
       f.write(f'  module {header.submodule_name} {{\n')
       for single in sorted(header.group):
         assert single.abs is not None
-        f.write(
-            f'    header "{single.abs.relative_to(out_dir, walk_up=True)}"\n')
+        path = str(single.abs)
+        for frm, to in replacements.items():
+          path = path.replace(str(frm), to)
+        # After replacements, all paths should be absolute.
+        assert not path.startswith('/'), path
+        f.write(f'    header "{path}"\n')
       if not header.exports and header.exports is not None:
         f.write('    export *\n')
       for export in header.exports or []:
@@ -88,7 +101,7 @@ def render_modulemap(out_dir: pathlib.Path, sysroot: pathlib.Path,
       f.write('  }\n')
 
     f.write('}\n')
-  _update_content(out_dir / 'module.modulemap', f.getvalue())
+  _update_content(out_dir / 'module.modulemap.in', f.getvalue())
 
 
 def _render_string_list(f, indent: int, key: str, values: list[str]):
@@ -114,35 +127,41 @@ def render_build_gn(out_dir: pathlib.Path, targets: list[Target],
   f = io.StringIO()
   f.write(_HEADER)
   f.write('import("//buildtools/third_party/libc++/modules.gni")\n\n')
-  all_modulemap_configs = []
+  all_modulemap_configs = set()
   if compiler.sysroot_dir == IncludeDir.Sysroot:
-    all_modulemap_configs.append("sysroot_modulemap")
+    all_modulemap_configs.add("sysroot_modulemap")
     f.write(_SYSROOT_MODULEMAP)
 
-  for target in sorted(targets):
-    direct_deps = set()
-    for hdr in target.headers:
-      direct_deps.update(hdr.required_deps)
-    public_deps = sorted({
-        f':{hdr.root_module}'
-        for hdr in direct_deps
-        if hdr.root_module is not None and hdr.root_module != target.name
-    })
+  module_to_modulemaps = compiler.modulemaps_for_modules()
 
-    rule = {
-        IncludeDir.LibCxx: 'libcxx_module',
-        IncludeDir.Sysroot: 'sysroot_module',
-        IncludeDir.Builtin: 'builtin_module',
-    }[target.include_dir]
+  for target in sorted(targets):
+    rule = _RULE_MAP[target.include_dir]
+
+    modulemap_target = None
+    if target.name in module_to_modulemaps:
+      kind, rel = compiler.split_path(module_to_modulemaps[target.name])
+      modulemap_target = rel.removesuffix('/module.modulemap').removesuffix(
+          '.modulemap').replace('/', '_') + '_modulemap'
+      if kind == IncludeDir.Framework and modulemap_target not in all_modulemap_configs:
+        f.write(f'framework_modulemap("{modulemap_target}") {{\n')
+        f.write(f'  name = "{modulemap_target.removesuffix("_modulemap")}"\n')
+        f.write('}\n')
+        all_modulemap_configs.add(modulemap_target)
+      elif kind == IncludeDir.SysrootModule and modulemap_target not in all_modulemap_configs:
+        f.write(f'apple_sysroot_modulemap("{modulemap_target}") {{\n')
+        f.write(f'  sysroot_path = "{rel}"\n')
+        f.write('}\n')
+        all_modulemap_configs.add(modulemap_target)
+
     f.write(f'{rule}("{target.name}") {{\n')
-    _render_string_list(f, 2, 'public_deps', public_deps)
-    kwargs = collections.defaultdict(set)
-    for header in target.headers:
-      for single in header.group:
-        for dep in {single} | single.required_textual_deps:
-          for k, v in dep.kwargs.items():
-            kwargs[k].update(v)
-    for k, v in sorted(kwargs.items()):
+    if target.include_dir in [IncludeDir.SysrootModule, IncludeDir.Framework
+                              ] and modulemap_target is not None:
+      f.write(f'  modulemap = ":{modulemap_target}"\n')
+      if kind == IncludeDir.SysrootModule:
+        f.write(f'  modulemap_path = "{rel}"\n')
+    _render_string_list(f, 2, 'public_deps',
+                        [f':{dep}' for dep in target.public_deps])
+    for k, v in sorted(target.kwargs.items()):
       _render_string_list(f, 2, k, sorted(v))
     f.write('}\n\n')
 

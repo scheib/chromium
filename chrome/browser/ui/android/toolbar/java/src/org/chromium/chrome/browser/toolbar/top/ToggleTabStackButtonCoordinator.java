@@ -21,6 +21,7 @@ import androidx.core.widget.ImageViewCompat;
 
 import org.chromium.base.Callback;
 import org.chromium.base.CallbackController;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.build.annotations.NullMarked;
@@ -47,7 +48,6 @@ import org.chromium.components.browser_ui.widget.highlight.ViewHighlighter.Highl
 import org.chromium.components.feature_engagement.FeatureConstants;
 import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.base.ViewUtils;
-import org.chromium.ui.util.XrUtils;
 import org.chromium.url.GURL;
 
 /**
@@ -57,9 +57,9 @@ import org.chromium.url.GURL;
  * class.
  */
 @NullMarked
-public class ToggleTabStackButtonCoordinator extends ToolbarChild {
+public class ToggleTabStackButtonCoordinator extends ToolbarChildButton {
     private static final int IPH_TAB_SWITCHER_XR_WAIT_TIME_MS = 5 * 1000;
-    private static final int IPH_TAB_SWITCHER_XR_MIN_TABS = 4;
+    private static final int IPH_TAB_SWITCHER_XR_MIN_TABS = 3;
 
     private final CallbackController mCallbackController = new CallbackController();
     private final Context mContext;
@@ -105,7 +105,7 @@ public class ToggleTabStackButtonCoordinator extends ToolbarChild {
             ObservableSupplier<TabModelSelector> tabModelSelectorSupplier,
             ThemeColorProvider themeColorProvider,
             IncognitoStateProvider incognitoStateProvider) {
-        super(themeColorProvider, incognitoStateProvider);
+        super(context, themeColorProvider, incognitoStateProvider);
         mContext = context;
         mToggleTabStackButton = toggleTabStackButton;
         mUserEducationHelper = userEducationHelper;
@@ -212,6 +212,16 @@ public class ToggleTabStackButtonCoordinator extends ToolbarChild {
         }
 
         mToggleTabStackButton.destroy();
+    }
+
+    @Override
+    public void setVisibility(boolean isVisible) {
+        mToggleTabStackButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+    }
+
+    @Override
+    public boolean isVisible() {
+        return mToggleTabStackButton.getVisibility() == View.VISIBLE;
     }
 
     /** Get container view for drawing, accessibility traversal and animations. */
@@ -331,7 +341,7 @@ public class ToggleTabStackButtonCoordinator extends ToolbarChild {
         params.setBoundsRespectPadding(true);
         IphCommandBuilder builder = null;
         if (ChromeFeatureList.sTabStripIncognitoMigration.isEnabled()
-                && mTabModelSelectorSupplier.hasValue()) {
+                && mTabModelSelectorSupplier.get() != null) {
             TabModelSelector selector = mTabModelSelectorSupplier.get();
             // When in Incognito, show IPH to switch out.
             if (selector.getCurrentModel().isIncognitoBranded()) {
@@ -355,7 +365,7 @@ public class ToggleTabStackButtonCoordinator extends ToolbarChild {
 
         if (builder == null
                 && !mIncognitoStateProvider.isIncognitoSelected()
-                && mPromoShownOneshotSupplier.hasValue()
+                && mPromoShownOneshotSupplier.get() != null
                 && !mPromoShownOneshotSupplier.get()) {
             builder =
                     new IphCommandBuilder(
@@ -451,7 +461,7 @@ public class ToggleTabStackButtonCoordinator extends ToolbarChild {
     }
 
     private void maybeShowXrIph(int tabCount) {
-        if (!XrUtils.isXrDevice()) return;
+        if (!DeviceInfo.isXr()) return;
         if (tabCount < IPH_TAB_SWITCHER_XR_MIN_TABS) return;
         if (mUserEducationHelper == null) return;
 

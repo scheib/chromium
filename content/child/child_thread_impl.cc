@@ -57,7 +57,7 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
-#include "ipc/ipc_channel_mojo.h"
+#include "ipc/ipc_channel_factory.h"
 #include "ipc/ipc_platform_file.h"
 #include "ipc/ipc_sync_channel.h"
 #include "mojo/core/embedder/scoped_ipc_support.h"
@@ -459,8 +459,7 @@ class ChildThreadImpl::IOThreadState
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level) override {
+  void OnMemoryPressure(base::MemoryPressureLevel level) override {
     main_thread_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&ChildThreadImpl::OnMemoryPressureFromBrowserReceived,
@@ -721,7 +720,7 @@ void ChildThreadImpl::Init(const Options& options) {
   // Add filters passed here via options.
   if (options.with_legacy_ipc_channel) {
     DCHECK(legacy_ipc_bootstrap_pipe.is_valid());
-    channel_->Init(IPC::ChannelMojo::CreateClientFactory(
+    channel_->Init(IPC::ChannelFactory::CreateClientFactory(
                        std::move(legacy_ipc_bootstrap_pipe),
                        ChildProcess::current()->io_task_runner(),
                        ipc_task_runner_
@@ -916,7 +915,7 @@ bool ChildThreadImpl::IsInBrowserProcess() const {
 
 #if BUILDFLAG(IS_ANDROID)
 void ChildThreadImpl::OnMemoryPressureFromBrowserReceived(
-    base::MemoryPressureListener::MemoryPressureLevel level) {
+    base::MemoryPressureLevel level) {
   // Generate no memory pressure signals when --single-process is specified.
   // Because we expect a signal for the browser process has been already
   // generated.

@@ -72,10 +72,6 @@ void ChannelProxy::Context::CreateChannel(
   }
 }
 
-bool ChannelProxy::Context::TryFilters(const Message& message) {
-  return false;
-}
-
 // Called on the IPC::Channel thread
 void ChannelProxy::Context::PauseChannel() {
   DCHECK(channel_);
@@ -92,22 +88,6 @@ void ChannelProxy::Context::UnpauseChannel(bool flush) {
 void ChannelProxy::Context::FlushChannel() {
   DCHECK(channel_);
   channel_->Flush();
-}
-
-// Called on the IPC::Channel thread
-bool ChannelProxy::Context::OnMessageReceived(const Message& message) {
-  // First give a chance to the filters to process this message.
-  if (!TryFilters(message))
-    OnMessageReceivedNoFilter(message);
-  return true;
-}
-
-// Called on the IPC::Channel thread
-bool ChannelProxy::Context::OnMessageReceivedNoFilter(const Message& message) {
-  GetTaskRunner(message.routing_id())
-      ->PostTask(FROM_HERE,
-                 base::BindOnce(&Context::OnDispatchMessage, this, message));
-  return true;
 }
 
 // Called on the IPC::Channel thread
@@ -171,29 +151,6 @@ void ChannelProxy::Context::Clear() {
   listener_ = nullptr;
 }
 
-// Called on the IPC::Channel thread
-void ChannelProxy::Context::OnSendMessage(std::unique_ptr<Message> message) {
-  if (!channel_) {
-    OnChannelClosed();
-    return;
-  }
-
-  if (!channel_->Send(message.release()))
-    OnChannelError();
-}
-
-// Called on the listener's thread
-void ChannelProxy::Context::OnDispatchMessage(const Message& message) {
-  if (!listener_)
-    return;
-
-  OnDispatchConnected();
-
-  listener_->OnMessageReceived(message);
-  if (message.dispatch_error())
-    listener_->OnBadMessageReceived(message);
-}
-
 // Called on the IPC::Channel thread.
 scoped_refptr<base::SingleThreadTaskRunner>
 ChannelProxy::Context::GetTaskRunner(int32_t routing_id) {
@@ -223,9 +180,9 @@ void ChannelProxy::Context::OnDispatchError() {
 }
 
 // Called on the listener's thread
-void ChannelProxy::Context::OnDispatchBadMessage(const Message& message) {
+void ChannelProxy::Context::OnDispatchBadMessage() {
   if (listener_)
-    listener_->OnBadMessageReceived(message);
+    listener_->OnBadMessageReceived();
 }
 
 // Called on the listener's thread
@@ -256,12 +213,6 @@ void ChannelProxy::Context::AddGenericAssociatedInterfaceForIOThread(
     support->AddGenericAssociatedInterface(name, factory);
 }
 
-void ChannelProxy::Context::Send(Message* message) {
-  ipc_task_runner()->PostTask(
-      FROM_HERE, base::BindOnce(&ChannelProxy::Context::OnSendMessage, this,
-                                base::WrapUnique(message)));
-}
-
 // Called on the listener's thread.
 void ChannelProxy::Context::SetUrgentMessageObserver(
     UrgentMessageObserver* observer) {
@@ -272,7 +223,7 @@ void ChannelProxy::Context::SetUrgentMessageObserver(
 
 // static
 std::unique_ptr<ChannelProxy> ChannelProxy::Create(
-    const IPC::ChannelHandle& channel_handle,
+    const mojo::MessagePipeHandle& channel_handle,
     Channel::Mode mode,
     Listener* listener,
     const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
@@ -309,7 +260,7 @@ ChannelProxy::~ChannelProxy() {
   Close();
 }
 
-void ChannelProxy::Init(const IPC::ChannelHandle& channel_handle,
+void ChannelProxy::Init(const mojo::MessagePipeHandle& channel_handle,
                         Channel::Mode mode,
                         bool create_pipe_now) {
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
@@ -348,7 +299,6 @@ void ChannelProxy::Init(std::unique_ptr<ChannelFactory> factory,
       FROM_HERE, base::BindOnce(&Context::OnChannelOpened, context_));
 
   did_init_ = true;
-  OnChannelInit();
 }
 
 void ChannelProxy::Pause() {
@@ -380,21 +330,6 @@ void ChannelProxy::Close() {
   }
 }
 
-bool ChannelProxy::Send(Message* message) {
-  DCHECK(!message->is_sync()) << "Need to use IPC::SyncChannel";
-  SendInternal(message);
-  return true;
-}
-
-void ChannelProxy::SendInternal(Message* message) {
-  DCHECK(did_init_);
-
-  // TODO(alexeypa): add DCHECK(CalledOnValidThread()) here. Currently there are
-  // tests that call Send() from a wrong thread. See http://crbug.com/163523.
-
-  context_->Send(message);
-}
-
 void ChannelProxy::AddGenericAssociatedInterfaceForIOThread(
     const std::string& name,
     const GenericAssociatedInterfaceFactory& factory) {
@@ -410,9 +345,6 @@ void ChannelProxy::GetRemoteAssociatedInterface(
 void ChannelProxy::ClearIPCTaskRunner() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   context()->ClearIPCTaskRunner();
-}
-
-void ChannelProxy::OnChannelInit() {
 }
 
 void ChannelProxy::SetUrgentMessageObserver(UrgentMessageObserver* observer) {

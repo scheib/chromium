@@ -422,14 +422,14 @@ bool DrmGpuDisplayManager::TakeDisplayControl() {
   return status;
 }
 
-void DrmGpuDisplayManager::RelinquishDisplayControl() {
+bool DrmGpuDisplayManager::RelinquishDisplayControl() {
   const bool detach_planes_before_dropping =
       display::features::IsFastDrmMasterDropEnabled();
   if (detach_planes_before_dropping &&
       !screen_manager_->DetachPlanesFromAllControllers()) {
     LOG(ERROR) << __func__
                << ": unable to detach planes from all enabled controllers.";
-    return;
+    return false;
   }
 
   const DrmDeviceVector& devices = drm_device_manager_->GetDrmDevices();
@@ -437,6 +437,7 @@ void DrmGpuDisplayManager::RelinquishDisplayControl() {
     if (!drm->DropMaster()) {
       LOG(ERROR) << __func__ << "Drm drop master failed for: "  // nocheck
                  << drm->device_path().value();
+      return false;
     }
   }
 
@@ -446,6 +447,8 @@ void DrmGpuDisplayManager::RelinquishDisplayControl() {
   if (detach_planes_before_dropping) {
     screen_manager_->UpdateControllerToWindowMapping();
   }
+
+  return true;
 }
 
 bool DrmGpuDisplayManager::ShouldDisplayEventTriggerConfiguration(
@@ -589,7 +592,10 @@ bool DrmGpuDisplayManager::ConfigureDisplays(
   bool config_success = screen_manager_->ConfigureDisplayControllers(
       controllers_to_configure, modeset_flags);
 
-  const bool should_try_test_fallback = !is_commit && !config_success;
+  // TODO: crbug.com/441557393 - Properly handle tiled displays in BigJoiner
+  // fallback instead of skipping the entire fallback.
+  const bool should_try_test_fallback =
+      !is_commit && !config_success && !HasTiledDisplay();
   bool did_test_modeset_with_fallback = false;
   if (should_try_test_fallback) {
     did_test_modeset_with_fallback = true;
@@ -1069,6 +1075,15 @@ std::unique_ptr<drmModeModeInfo> DrmGpuDisplayManager::FindModeForDisplay(
   auto out_mode = std::make_unique<drmModeModeInfo>();
   *out_mode = *matching_modes.front();
   return out_mode;
+}
+
+bool DrmGpuDisplayManager::HasTiledDisplay() const {
+  for (const auto& display : displays_) {
+    if (display->GetTileProperty().has_value()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace ui

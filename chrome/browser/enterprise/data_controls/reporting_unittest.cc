@@ -22,6 +22,11 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#endif
+
 namespace data_controls {
 
 namespace {
@@ -43,11 +48,21 @@ class DataControlsReportingTest : public testing::Test {
     helper_ = std::make_unique<
         enterprise_connectors::test::EventReportValidatorHelper>(
         managed_profile_);
+
+#if BUILDFLAG(IS_CHROMEOS)
+    network_config_helper_ =
+        std::make_unique<ash::network_config::CrosNetworkConfigTestHelper>();
+    ash::NetworkHandler::Initialize();
+#endif
   }
 
   void TearDown() override {
     managed_profile_->GetPrefs()->ClearPref(kDataControlsRulesScopePref);
     helper_.reset();
+
+#if BUILDFLAG(IS_CHROMEOS)
+    ash::NetworkHandler::Shutdown();
+#endif
   }
 
   Profile* incognito_managed_profile() {
@@ -153,6 +168,10 @@ class DataControlsReportingTest : public testing::Test {
   std::unique_ptr<content::WebContents> guest_contents_;
   std::unique_ptr<enterprise_connectors::test::EventReportValidatorHelper>
       helper_;
+#if BUILDFLAG(IS_CHROMEOS)
+  std::unique_ptr<ash::network_config::CrosNetworkConfigTestHelper>
+      network_config_helper_;
+#endif
 };
 
 }  // namespace
@@ -172,11 +191,11 @@ TEST_F(DataControlsReportingTest, NoReportInIncognitoProfile) {
               .size = 1234,
               .format_type = ui::ClipboardFormatType::PlainTextType(),
           }),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
   router->ReportPasteWarningBypassed(
       ChromeClipboardContext(managed_endpoint(GURL(kGoogleUrl)),
                              managed_endpoint(GURL(kChromiumUrl)), {}),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
   router->ReportCopy(
       ChromeClipboardContext(
           managed_endpoint(GURL(kChromiumUrl)),
@@ -184,10 +203,10 @@ TEST_F(DataControlsReportingTest, NoReportInIncognitoProfile) {
               .size = 1234,
               .format_type = ui::ClipboardFormatType::PlainTextType(),
           }),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
   router->ReportCopyWarningBypassed(
       ChromeClipboardContext(managed_endpoint(GURL(kChromiumUrl)), {}),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
 
   // This wait call is necessary since all the "Report*" calls trigger async
   // code, so we need to wait a bit so the "validator.ExpectNoReport();" call is
@@ -210,11 +229,11 @@ TEST_F(DataControlsReportingTest, NoReportInUnmanagedProfile) {
               .size = 1234,
               .format_type = ui::ClipboardFormatType::PlainTextType(),
           }),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
   router->ReportPasteWarningBypassed(
       ChromeClipboardContext(managed_endpoint(GURL(kGoogleUrl)),
                              unmanaged_endpoint(GURL(kChromiumUrl)), {}),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
   router->ReportCopy(
       ChromeClipboardContext(
           unmanaged_endpoint(GURL(kChromiumUrl)),
@@ -222,10 +241,10 @@ TEST_F(DataControlsReportingTest, NoReportInUnmanagedProfile) {
               .size = 1234,
               .format_type = ui::ClipboardFormatType::PlainTextType(),
           }),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
   router->ReportCopyWarningBypassed(
       ChromeClipboardContext(unmanaged_endpoint(GURL(kChromiumUrl)), {}),
-      Verdict::Warn({{0, {"1", "rule_1_name"}}}));
+      Verdict::Warn({{{0, true}, {"1", "rule_1_name"}}}));
 
   // This wait call is necessary since all the "Report*" calls trigger async
   // code, so we need to wait a bit so the "validator.ExpectNoReport();" call is
@@ -315,7 +334,7 @@ TEST_F(DataControlsReportingTest, NoReportWithoutTriggeredRules) {
 }
 
 TEST_F(DataControlsReportingTest, PasteInManagedProfile_OSClipboardSource) {
-  Verdict::TriggeredRules triggered_rules = {{0, {"1", "rule_1_name"}}};
+  Verdict::TriggeredRules triggered_rules = {{{0, true}, {"1", "rule_1_name"}}};
   auto validator = helper_->CreateValidator();
   base::RunLoop validator_run_loop;
   validator.SetDoneClosure(validator_run_loop.QuitClosure());
@@ -355,7 +374,7 @@ TEST_F(DataControlsReportingTest, PasteInManagedProfile_OSClipboardSource) {
 
 TEST_F(DataControlsReportingTest,
        PasteInManagedProfile_IncognitoOSClipboardSource) {
-  Verdict::TriggeredRules triggered_rules = {{0, {"1", "rule_1_name"}}};
+  Verdict::TriggeredRules triggered_rules = {{{0, true}, {"1", "rule_1_name"}}};
   auto validator = helper_->CreateValidator();
   base::RunLoop validator_run_loop;
   validator.SetDoneClosure(validator_run_loop.QuitClosure());
@@ -394,7 +413,7 @@ TEST_F(DataControlsReportingTest,
 }
 
 TEST_F(DataControlsReportingTest, PasteInManagedProfile_ManagedSourceProfile) {
-  Verdict::TriggeredRules triggered_rules = {{0, {"1", "rule_1_name"}}};
+  Verdict::TriggeredRules triggered_rules = {{{0, true}, {"1", "rule_1_name"}}};
   auto validator = helper_->CreateValidator();
   base::RunLoop validator_run_loop;
   validator.SetDoneClosure(validator_run_loop.QuitClosure());
@@ -434,8 +453,8 @@ TEST_F(DataControlsReportingTest, PasteInManagedProfile_ManagedSourceProfile) {
 TEST_F(DataControlsReportingTest,
        PasteInManagedProfile_IncognitoManagedSourceProfile) {
   Verdict::TriggeredRules triggered_rules = {
-      {0, {"1", "rule_1_name"}},
-      {1, {"2", "rule_2_name"}},
+      {{0, true}, {"1", "rule_1_name"}},
+      {{1, true}, {"2", "rule_2_name"}},
   };
   auto validator = helper_->CreateValidator();
   base::RunLoop validator_run_loop;
@@ -475,7 +494,7 @@ TEST_F(DataControlsReportingTest,
 
 TEST_F(DataControlsReportingTest,
        PasteInManagedProfile_UnmanagedSourceProfile) {
-  Verdict::TriggeredRules triggered_rules = {{0, {"1", "rule_1_name"}}};
+  Verdict::TriggeredRules triggered_rules = {{{0, true}, {"1", "rule_1_name"}}};
   auto validator = helper_->CreateValidator();
   base::RunLoop validator_run_loop;
   validator.SetDoneClosure(validator_run_loop.QuitClosure());
@@ -519,7 +538,7 @@ TEST_F(DataControlsReportingTest,
   managed_profile_->GetPrefs()->SetInteger(kDataControlsRulesScopePref,
                                            policy::POLICY_SCOPE_MACHINE);
 
-  Verdict::TriggeredRules triggered_rules = {{0, {"1", "rule_1_name"}}};
+  Verdict::TriggeredRules triggered_rules = {{{0, true}, {"1", "rule_1_name"}}};
   auto validator = helper_->CreateValidator();
   base::RunLoop validator_run_loop;
   validator.SetDoneClosure(validator_run_loop.QuitClosure());
@@ -556,7 +575,7 @@ TEST_F(DataControlsReportingTest,
 }
 
 TEST_F(DataControlsReportingTest, CopyInManagedProfile) {
-  Verdict::TriggeredRules triggered_rules = {{0, {"1", "rule_1_name"}}};
+  Verdict::TriggeredRules triggered_rules = {{{0, true}, {"1", "rule_1_name"}}};
   auto* router =
       enterprise_connectors::ReportingEventRouterFactory::GetForBrowserContext(
           managed_profile_);

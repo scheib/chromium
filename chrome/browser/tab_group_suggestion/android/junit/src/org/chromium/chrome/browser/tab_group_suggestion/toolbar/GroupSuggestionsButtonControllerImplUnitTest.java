@@ -24,9 +24,15 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.JniOnceCallback;
+import org.chromium.base.Token;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tab_group_suggestion.SuggestionMetricsService;
+import org.chromium.chrome.browser.tab_group_suggestion.SuggestionMetricsService.GroupCreationSource;
+import org.chromium.chrome.browser.tab_group_suggestion.SuggestionMetricsServiceFactory;
 import org.chromium.chrome.browser.tabmodel.TabGroupModelFilter;
+import org.chromium.chrome.browser.tabmodel.TabGroupModelFilter.MergeNotificationType;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.components.visited_url_ranking.url_grouping.CachedSuggestions;
 import org.chromium.components.visited_url_ranking.url_grouping.GroupSuggestion;
@@ -51,10 +57,12 @@ public class GroupSuggestionsButtonControllerImplUnitTest {
     @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     @Mock private GroupSuggestionsService mMockGroupSuggestionService;
+    @Mock private SuggestionMetricsService mSuggestionMetricsService;
     @Mock private Tab mMockTab;
     @Mock private Tab mSecondTab;
     @Mock private Tab mThirdTab;
     @Mock private TabModel mTabModel;
+    @Mock private Profile mProfile;
     @Mock private TabGroupModelFilter mTabGroupModelFilter;
 
     @Before
@@ -63,10 +71,16 @@ public class GroupSuggestionsButtonControllerImplUnitTest {
         when(mSecondTab.getId()).thenReturn(SECOND_TAB_ID);
         when(mThirdTab.getId()).thenReturn(THIRD_TAB_ID);
 
+        when(mMockTab.getProfile()).thenReturn(mProfile);
+        when(mSecondTab.getProfile()).thenReturn(mProfile);
+        when(mThirdTab.getProfile()).thenReturn(mProfile);
+
         when(mTabGroupModelFilter.getTabModel()).thenReturn(mTabModel);
         when(mTabModel.getTabById(TAB_ID)).thenReturn(mMockTab);
         when(mTabModel.getTabById(SECOND_TAB_ID)).thenReturn(mSecondTab);
         when(mTabModel.getTabById(THIRD_TAB_ID)).thenReturn(mThirdTab);
+
+        SuggestionMetricsServiceFactory.setForTesting(mSuggestionMetricsService);
     }
 
     @Test
@@ -226,6 +240,9 @@ public class GroupSuggestionsButtonControllerImplUnitTest {
                         suggestionCallback);
         when(mMockGroupSuggestionService.getCachedSuggestions(WINDOW_ID)).thenReturn(suggestion);
 
+        Token tabGroupId = new Token(1L, 2L);
+        when(mMockTab.getTabGroupId()).thenReturn(tabGroupId);
+
         var controller = new GroupSuggestionsButtonControllerImpl(mMockGroupSuggestionService);
 
         controller.shouldShowButton(mMockTab, WINDOW_ID);
@@ -234,9 +251,16 @@ public class GroupSuggestionsButtonControllerImplUnitTest {
         verify(suggestionCallback).onResult(suggestionCallbackArgumentCaptor.capture());
         var responseMetadata = suggestionCallbackArgumentCaptor.getValue();
         verify(mTabGroupModelFilter)
-                .mergeListOfTabsToGroup(eq(List.of(mSecondTab, mThirdTab)), eq(mMockTab), eq(true));
+                .mergeListOfTabsToGroup(
+                        eq(List.of(mSecondTab, mThirdTab)),
+                        eq(mMockTab),
+                        eq(null),
+                        eq(MergeNotificationType.NOTIFY_ALWAYS));
 
         assertEquals(UserResponse.ACCEPTED, responseMetadata.getUserResponse());
+        verify(mSuggestionMetricsService)
+                .onSuggestionAccepted(
+                        eq(WINDOW_ID), eq(GroupCreationSource.CPA_SUGGESTION), eq(tabGroupId));
     }
 
     @Test
@@ -250,6 +274,11 @@ public class GroupSuggestionsButtonControllerImplUnitTest {
         controller.shouldShowButton(mMockTab, WINDOW_ID);
         controller.destroy();
 
+        verify(suggestionCallback).destroy();
+
+        // Tests whether if the cached suggestions have been set to null.
+        // The callback should not be destroyed twice.
+        controller.destroy();
         verify(suggestionCallback).destroy();
     }
 

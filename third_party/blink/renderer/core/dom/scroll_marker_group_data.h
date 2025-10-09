@@ -101,7 +101,7 @@ class ScrollMarkerGroupData : public GarbageCollected<ScrollMarkerGroupData>,
                                                  bool apply_snap_alignment);
   // Returns the currently selected scroll marker (selected_marker_).
   // Might be replaced by pending_selected_marker_ at the next snapshot.
-  Element* Selected() const;
+  CORE_EXPORT Element* Selected() const;
   void UpdateSelectedScrollMarker();
 
   Element* FindNextScrollMarker(const Element* current);
@@ -127,6 +127,12 @@ class ScrollMarkerGroupData : public GarbageCollected<ScrollMarkerGroupData>,
   void UnPinSelectedMarker() { selected_marker_is_pinned_ = false; }
   bool SelectedMarkerIsPinned() const { return selected_marker_is_pinned_; }
 
+  // TODO(384523570) Temporary solution to fix lifecycle issues, as scroll
+  // marker calculation requires post-layout state, but UpdateSnapshot is
+  // sometimes called pre-layout.
+  // ScrollSnapshotClient:
+  void UpdateSnapshotForServiceAnimations() override {}
+
  private:
   // Sets the pending_selected_marker_ to be updated at the next
   // snapshot.
@@ -145,9 +151,21 @@ class ScrollMarkerGroupData : public GarbageCollected<ScrollMarkerGroupData>,
                         const HeapVector<Member<Element>>& candidates);
   Element* ChooseMarkerRecursively();
 
-  // TODO(332396355): Add spec link, once it's created.
+  // https://drafts.csswg.org/css-overflow-5/#scroll-marker-grouping
+  // Vector of scroll markers, which are either ::scroll-marker pseudo-elements
+  // or HTML anchor elements.
   HeapVector<Member<Element>> focus_group_;
 
+  enum class InvalidationState {
+    kClean,
+    // kNeedsActiveMarkerUpdate, if selected marker became null during style
+    // recalc, and we should update it at the next snapshot.
+    kNeedsActiveMarkerUpdate,
+    // kNeedsFullUpdate, if we should recalculate the selected scroll marker at
+    // the next snapshot.
+    kNeedsFullUpdate,
+  };
+  InvalidationState invalidation_state_ = InvalidationState::kClean;
   // True, if some <a> scroll markers have been added or removed. It signals
   // to Document that ScrollMarkerGroupData -> "scrollers with <a> scroll
   // marker targets" map should be updated.
@@ -157,9 +175,6 @@ class ScrollMarkerGroupData : public GarbageCollected<ScrollMarkerGroupData>,
   // scroll. It should remain the selected scroll marker until we clear this bit
   // due to a non-targeted scroll.
   bool selected_marker_is_pinned_ = false;
-  // True, if selected marker became null during style recalc, and we
-  // should update it at the next snapshot.
-  bool selected_marker_is_invalid_ = false;
   // The latest apply_snap_alignment status received via
   // SetPendingSelectedMarker.
   bool apply_snap_alignment_ = false;

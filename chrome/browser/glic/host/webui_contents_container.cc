@@ -5,16 +5,21 @@
 #include "chrome/browser/glic/host/webui_contents_container.h"
 
 #include "base/check.h"
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/user_metrics.h"
+#include "chrome/browser/file_select_helper.h"
 #include "chrome/browser/glic/glic_profile_manager.h"
 #include "chrome/browser/glic/public/glic_keyed_service.h"
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
 #include "chrome/browser/glic/widget/glic_view.h"
+#include "chrome/browser/glic/widget/glic_widget.h"
 #include "chrome/browser/glic/widget/glic_window_controller.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/webui_url_constants.h"
+#include "content/public/browser/file_select_listener.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "ui/views/controls/webview/webview.h"
@@ -25,7 +30,10 @@ namespace {
 content::WebContents::CreateParams MakeCreateParams(Profile* profile,
                                                     bool initially_hidden) {
   auto params = content::WebContents::CreateParams(profile);
-  params.initially_hidden = initially_hidden;
+  if (base::FeatureList::IsEnabled(
+          features::kGlicGuestContentsVisibilityState)) {
+    params.initially_hidden = initially_hidden;
+  }
   return params;
 }
 
@@ -63,9 +71,9 @@ WebUIContentsContainer::~WebUIContentsContainer() {
 bool WebUIContentsContainer::HandleKeyboardEvent(
     content::WebContents* source,
     const input::NativeWebKeyboardEvent& event) {
-  GlicView* glic_view = glic_window_controller_->GetGlicView();
-  return glic_view && unhandled_keyboard_event_handler_.HandleKeyboardEvent(
-                          event, glic_view->GetFocusManager());
+  GlicWidget* glic_widget = glic_window_controller_->GetGlicWidget();
+  return glic_widget && unhandled_keyboard_event_handler_.HandleKeyboardEvent(
+                            event, glic_widget->GetFocusManager());
 }
 
 void WebUIContentsContainer::RequestMediaAccessPermission(
@@ -74,6 +82,14 @@ void WebUIContentsContainer::RequestMediaAccessPermission(
     content::MediaResponseCallback callback) {
   MediaCaptureDevicesDispatcher::GetInstance()->ProcessMediaAccessRequest(
       web_contents, request, std::move(callback), nullptr);
+}
+
+void WebUIContentsContainer::RunFileChooser(
+    content::RenderFrameHost* render_frame_host,
+    scoped_refptr<content::FileSelectListener> listener,
+    const blink::mojom::FileChooserParams& params) {
+  FileSelectHelper::RunFileChooser(render_frame_host, std::move(listener),
+                                   params);
 }
 
 void WebUIContentsContainer::PrimaryMainFrameRenderProcessGone(

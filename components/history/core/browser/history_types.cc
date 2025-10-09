@@ -211,6 +211,24 @@ QueryURLResult& QueryURLResult::operator=(const QueryURLResult&) = default;
 
 QueryURLResult& QueryURLResult::operator=(QueryURLResult&&) noexcept = default;
 
+// QueryURLAndVisitsResult ----------------------------------------------------
+
+QueryURLAndVisitsResult::QueryURLAndVisitsResult() = default;
+
+QueryURLAndVisitsResult::~QueryURLAndVisitsResult() = default;
+
+QueryURLAndVisitsResult::QueryURLAndVisitsResult(
+    const QueryURLAndVisitsResult&) = default;
+
+QueryURLAndVisitsResult::QueryURLAndVisitsResult(
+    QueryURLAndVisitsResult&&) noexcept = default;
+
+QueryURLAndVisitsResult& QueryURLAndVisitsResult::operator=(
+    const QueryURLAndVisitsResult&) = default;
+
+QueryURLAndVisitsResult& QueryURLAndVisitsResult::operator=(
+    QueryURLAndVisitsResult&&) noexcept = default;
+
 // MostVisitedURL --------------------------------------------------------------
 
 MostVisitedURL::MostVisitedURL() = default;
@@ -300,9 +318,10 @@ HistoryAddPageArgs::HistoryAddPageArgs()
                          ui::PAGE_TRANSITION_LINK,
                          false,
                          SOURCE_BROWSED,
+                         VisitResponseCodeCategory::kNot404,
                          false,
                          true,
-                         false,
+                         VisitContextEphemerality::kNotEphemeral,
                          std::nullopt,
                          std::nullopt,
                          std::nullopt,
@@ -322,9 +341,10 @@ HistoryAddPageArgs::HistoryAddPageArgs(
     ui::PageTransition transition,
     bool hidden,
     VisitSource source,
+    VisitResponseCodeCategory response_code_category,
     bool did_replace_entry,
     bool consider_for_ntp_most_visited,
-    bool is_ephemeral,
+    VisitContextEphemerality visit_context_ephemerality,
     std::optional<std::u16string> title,
     std::optional<GURL> top_level_url,
     std::optional<GURL> frame_url,
@@ -343,9 +363,10 @@ HistoryAddPageArgs::HistoryAddPageArgs(
       transition(transition),
       hidden(hidden),
       visit_source(source),
+      response_code_category(response_code_category),
       did_replace_entry(did_replace_entry),
       consider_for_ntp_most_visited(consider_for_ntp_most_visited),
-      is_ephemeral(is_ephemeral),
+      visit_context_ephemerality(visit_context_ephemerality),
       title(title),
       top_level_url(top_level_url),
       frame_url(frame_url),

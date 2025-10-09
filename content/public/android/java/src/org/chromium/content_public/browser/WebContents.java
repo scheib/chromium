@@ -62,10 +62,10 @@ public interface WebContents extends Parcelable {
     }
 
     /**
-     * @return a default implementation of {@link InternalsHolder} that holds a reference to
-     * {@link WebContentsInternals} object owned by {@link WebContents} instance.
+     * @return a default implementation of {@link InternalsHolder} that holds a reference to {@link
+     *     WebContentsInternals} object owned by {@link WebContents} instance.
      */
-    public static InternalsHolder createDefaultInternalsHolder() {
+    static InternalsHolder createDefaultInternalsHolder() {
         return new InternalsHolder() {
             private @Nullable WebContentsInternals mInternals;
 
@@ -216,6 +216,15 @@ public interface WebContents extends Parcelable {
      * @return The character encoding for the current visible page.
      */
     String getEncoding();
+
+    /**
+     * Discards the RenderFrameHost associated with this WebContents.
+     *
+     * @param onDiscarded a callback to be called when the RenderFrameHost is discarded. May never
+     *     be called if the operation fails.
+     *     <p>TODO(crbug.com/441841249): Change the runnable to a callback.
+     */
+    void discard(Runnable onDiscarded);
 
     /**
      * @return Whether this WebContents is loading a resource.
@@ -656,6 +665,13 @@ public interface WebContents extends Parcelable {
     int getOriginalWindowOpenDisposition();
 
     /**
+     * Updates the Window Controls Overlay rect for a PWA.
+     *
+     * @param rect The rect of the overlay.
+     */
+    public void updateWindowControlsOverlay(Rect rect);
+
+    /**
      * Factory interface passed to {@link #getOrSetUserData()} for instantiation of class as user
      * data.
      *
@@ -675,7 +691,7 @@ public interface WebContents extends Parcelable {
      *
      * @param <T> Class to instantiate.
      */
-    public interface UserDataFactory<T> {
+    interface UserDataFactory<T> {
         T create(WebContents webContents);
     }
 
@@ -689,7 +705,7 @@ public interface WebContents extends Parcelable {
      *     yet, or {@code userDataFactory} is null, or the internal data storage is already
      *     garbage-collected.
      */
-    public <T extends UserData> @Nullable T getOrSetUserData(
+    <T extends UserData> @Nullable T getOrSetUserData(
             Class<T> key, @Nullable UserDataFactory<T> userDataFactory);
 
     /**
@@ -699,5 +715,5 @@ public interface WebContents extends Parcelable {
      * @param key The class object representing the type of user data to remove. If no user data
      *     object of this type exists, this method has no effect.
      */
-    public <T extends UserData> void removeUserData(Class<T> key);
+    <T extends UserData> void removeUserData(Class<T> key);
 }

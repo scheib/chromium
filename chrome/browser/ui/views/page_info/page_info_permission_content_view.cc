@@ -41,10 +41,6 @@
 #include "ui/views/controls/separator.h"
 #include "ui/views/layout/flex_layout.h"
 
-#if !BUILDFLAG(IS_CHROMEOS)
-#include "chrome/browser/ui/views/media_preview/media_preview_feature.h"
-#endif
-
 namespace {
 std::u16string PageInfoSubpageText(ContentSettingsType type) {
   // Without this, the title and toggle accessibility text inside the submenu of
@@ -384,13 +380,6 @@ void PageInfoPermissionContentView::MaybeAddMediaPreview(
   if (type_ != ContentSettingsType::MEDIASTREAM_CAMERA &&
       type_ != ContentSettingsType::MEDIASTREAM_MIC &&
       type_ != ContentSettingsType::CAMERA_PAN_TILT_ZOOM) {
-    return;
-  }
-
-  const GURL& site_url = web_contents->GetLastCommittedURL();
-  if (!media_preview_feature::ShouldShowMediaPreview(
-          *web_contents->GetBrowserContext(), site_url, site_url,
-          media_preview_metrics::UiLocation::kPageInfo)) {
     return;
   }
 

@@ -23,6 +23,7 @@
 #include "base/memory/shared_memory_mapping.h"
 #include "base/numerics/byte_conversions.h"
 #include "base/stl_util.h"
+#include "base/types/to_address.h"
 #include "components/viz/common/resources/shared_image_format.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/client/test_shared_image_interface.h"
@@ -286,8 +287,7 @@ EncodedDataHelperH265::EncodedDataHelperH265(base::span<const uint8_t> stream,
                                              VideoCodec codec)
     : EncodedDataHelper(std::move(stream), codec),
       h265_parser_(std::make_unique<H265Parser>()) {
-  h265_parser_->SetStream(reinterpret_cast<uint8_t*>(data_.data()),
-                          data_.size());
+  h265_parser_->SetStream(base::as_byte_span(data_));
 }
 
 EncodedDataHelperH265::~EncodedDataHelperH265() = default;
@@ -329,17 +329,18 @@ scoped_refptr<DecoderBuffer> EncodedDataHelperH265::GetNextBuffer() {
       }
       CHECK_EQ(result, H265Parser::kOk);
     }
-    CHECK_LE(nalu.data,
+    CHECK_LE(nalu.data.data(),
              reinterpret_cast<uint8_t*>(data_.data()) + data_.size());
-    CHECK_LE(nalu.data + nalu.size,
+    CHECK_LE(nalu.data.data() + nalu.data.size(),
              reinterpret_cast<uint8_t*>(data_.data()) + data_.size());
 
     struct NALUMetadata nalu_metadata;
     nalu_metadata.start_pointer =
         reinterpret_cast<uint8_t*>(data_.data()) + next_pos_to_parse_;
     nalu_metadata.start_index = next_pos_to_parse_;
-    nalu_metadata.header_size = nalu.data - nalu_metadata.start_pointer;
-    nalu_metadata.size_with_header = nalu_metadata.header_size + nalu.size;
+    nalu_metadata.header_size = nalu.data.data() - nalu_metadata.start_pointer;
+    nalu_metadata.size_with_header =
+        nalu_metadata.header_size + nalu.data.size();
     VLOG(2) << "NALU (" << nalu.nal_unit_type << ") found " << nalu_metadata
             << " next_pos_to_parse_=" << next_pos_to_parse_;
 
@@ -439,8 +440,7 @@ bool EncodedDataHelperH265::ReachEndOfStream() const {
 
 void EncodedDataHelperH265::Rewind() {
   h265_parser_->Reset();
-  h265_parser_->SetStream(reinterpret_cast<uint8_t*>(data_.data()),
-                          data_.size());
+  h265_parser_->SetStream(base::as_byte_span(data_));
   previous_nalus_.clear();
   EncodedDataHelper::Rewind();
 }
@@ -742,8 +742,12 @@ scoped_refptr<VideoFrame> AlignedDataHelper::CreateVideoFrameFromVideoFrameData(
     for (size_t i = 0; i < layout_->planes().size(); i++)
       data[i] = buf + layout_->planes()[i].offset;
 
+    // TODO(crbug.com/40285824): spanify this usage.
     auto frame = media::VideoFrame::WrapExternalYuvDataWithLayout(
-        *layout_, visible_rect_, natural_size_, data[0], data[1], data[2],
+        *layout_, visible_rect_, natural_size_,
+        UNSAFE_TODO(base::span(data[0], layout_->planes()[0].size)),
+        UNSAFE_TODO(base::span(data[1], layout_->planes()[1].size)),
+        UNSAFE_TODO(base::span(data[2], layout_->planes()[2].size)),
         frame_timestamp);
     DCHECK(frame);
     frame->BackWithOwnedSharedMemory(std::move(dup_region), std::move(mapping));
@@ -833,11 +837,18 @@ scoped_refptr<const VideoFrame> RawDataHelper::GetFrame(size_t index) const {
     frame_data[i] = const_cast<uint8_t*>(src_frame.plane_addrs[i]);
   }
 
+  // TODO(crbug.com/40285824): spanify this usage.
   scoped_refptr<VideoFrame> video_frame =
       VideoFrame::WrapExternalYuvDataWithLayout(
           video_->FrameLayout(), video_->VisibleRect(),
-          video_->VisibleRect().size(), frame_data[0], frame_data[1],
-          frame_data[2], base::TimeTicks::Now().since_origin());
+          video_->VisibleRect().size(),
+          UNSAFE_TODO(base::span(frame_data[0],
+                                 video_->FrameLayout().planes()[0].size)),
+          UNSAFE_TODO(base::span(frame_data[1],
+                                 video_->FrameLayout().planes()[1].size)),
+          UNSAFE_TODO(base::span(frame_data[2],
+                                 video_->FrameLayout().planes()[2].size)),
+          base::TimeTicks::Now().since_origin());
   video_frame->AddDestructionObserver(
       base::DoNothingWithBoundArgs(std::move(src_frame)));
   return video_frame;

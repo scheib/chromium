@@ -39,6 +39,7 @@
 #include "components/ssl_errors/error_info.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/storage_partition.h"
@@ -56,15 +57,11 @@
 #include "components/security_interstitials/content/captive_portal_helper_android.h"
 #endif
 
-BASE_FEATURE(kMITMSoftwareInterstitial,
-             "MITMSoftwareInterstitial",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kMITMSoftwareInterstitial, base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace {
 
-BASE_FEATURE(kSSLCommonNameMismatchHandling,
-             "SSLCommonNameMismatchHandling",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kSSLCommonNameMismatchHandling, base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Default delay in milliseconds before displaying the SSL interstitial.
 // This can be changed in tests.
@@ -860,7 +857,7 @@ void SSLErrorHandler::CommonNameMismatchHandlerCallback(
                     SUGGESTED_URL_AVAILABLE) {
     RecordUMA(WWW_MISMATCH_URL_AVAILABLE);
     CommonNameMismatchRedirectObserver::AddToConsoleAfterNavigation(
-        web_contents(), request_url_.host(), suggested_url.host());
+        web_contents(), request_url_.GetHost(), suggested_url.GetHost());
     delegate_->NavigateToSuggestedURL(suggested_url);
   } else {
     RecordUMA(WWW_MISMATCH_URL_NOT_AVAILABLE);

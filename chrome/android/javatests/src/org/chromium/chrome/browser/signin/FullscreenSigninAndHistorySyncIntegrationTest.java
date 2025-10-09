@@ -66,7 +66,6 @@ import org.chromium.chrome.browser.ui.signin.history_sync.HistorySyncHelper;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ActivityTestUtils;
-import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
 import org.chromium.chrome.test.util.browser.signin.SigninTestRule;
 import org.chromium.chrome.test.util.browser.signin.SigninTestUtil;
 import org.chromium.chrome.test.util.browser.sync.SyncTestUtil;
@@ -115,7 +114,7 @@ public class FullscreenSigninAndHistorySyncIntegrationTest {
     @Mock private HistorySyncHelper mHistorySyncHelperMock;
 
     private SigninAndHistorySyncActivity mActivity;
-    private @SigninAccessPoint int mSigninAccessPoint = SigninAccessPoint.SIGNIN_PROMO;
+    private @SigninAccessPoint int mSigninAccessPoint = SigninAccessPoint.FULLSCREEN_SIGNIN_PROMO;
     private @HistorySyncConfig.OptInMode int mHistoryOptInMode =
             HistorySyncConfig.OptInMode.OPTIONAL;
     private final SigninTestUtil.CustomDeviceLockActivityLauncher mDeviceLockActivityLauncher =
@@ -550,7 +549,7 @@ public class FullscreenSigninAndHistorySyncIntegrationTest {
         onView(withText(TestAccounts.AADC_ADULT_ACCOUNT.getFullName())).perform(click());
         onView(withText(R.string.signin_add_account_to_device)).perform(click());
         mSigninTestRule.setAddAccountFlowResult(TestAccounts.ACCOUNT2);
-        onViewWaiting(AccountManagerTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
+        onViewWaiting(SigninTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
 
         // Verify that the fullscreen sign-in promo is shown with the newly added account.
         onViewWaiting(withId(R.id.fullscreen_signin)).check(matches(isDisplayed()));
@@ -628,9 +627,7 @@ public class FullscreenSigninAndHistorySyncIntegrationTest {
     public void testSigninDisabledByConfig() {
         mSigninTestRule.addAccount(TestAccounts.ACCOUNT1);
         FullscreenSigninAndHistorySyncConfig config =
-                new FullscreenSigninAndHistorySyncConfig.Builder()
-                        .shouldDisableSignin(true)
-                        .build();
+                getDefaultConfigBuilder().shouldDisableSignin(true).build();
 
         launchActivity(/* shouldReplaceProgressBars= */ true, config);
 
@@ -646,8 +643,7 @@ public class FullscreenSigninAndHistorySyncIntegrationTest {
     @Feature("RenderTest")
     @Features.EnableFeatures(SigninFeatures.SMART_EMAIL_LINE_BREAKING)
     public void testSigninAndHistorySync() throws Exception {
-        FullscreenSigninAndHistorySyncConfig config =
-                new FullscreenSigninAndHistorySyncConfig.Builder().build();
+        FullscreenSigninAndHistorySyncConfig config = getDefaultConfigBuilder().build();
 
         launchActivity(/* shouldReplaceProgressBars= */ true, config);
 
@@ -675,15 +671,14 @@ public class FullscreenSigninAndHistorySyncIntegrationTest {
     @Features.EnableFeatures(SigninFeatures.SMART_EMAIL_LINE_BREAKING)
     public void testSigninAndHistorySyncCustomization() throws Exception {
         // Create a config which only uses non-default resource values to test customization.
-        // For instance, the default sign-in strings are used for history sync and vice versa.
         FullscreenSigninAndHistorySyncConfig config =
-                new FullscreenSigninAndHistorySyncConfig.Builder()
-                        .signinTitleId(R.string.history_sync_title)
-                        .signinSubtitleId(R.string.history_sync_subtitle)
+                new FullscreenSigninAndHistorySyncConfig.Builder(
+                                "custom title",
+                                "custom subtitle",
+                                "custom dismiss",
+                                "custom hystory sync title",
+                                "custom hystory sync subtitle")
                         .signinLogoId(R.drawable.ic_globe_24dp)
-                        .signinDismissTextId(R.string.signin_add_account_to_device)
-                        .historySyncTitleId(R.string.signin_fre_title)
-                        .historySyncSubtitleId(R.string.signin_fre_subtitle)
                         .build();
         launchActivity(/* shouldReplaceProgressBars= */ true, config);
 
@@ -710,9 +705,7 @@ public class FullscreenSigninAndHistorySyncIntegrationTest {
 
     private void launchActivity(boolean shouldReplaceProgressBars) {
         FullscreenSigninAndHistorySyncConfig config =
-                new FullscreenSigninAndHistorySyncConfig.Builder()
-                        .historyOptInMode(mHistoryOptInMode)
-                        .build();
+                getDefaultConfigBuilder().historyOptInMode(mHistoryOptInMode).build();
         launchActivity(shouldReplaceProgressBars, config);
     }
 
@@ -754,5 +747,10 @@ public class FullscreenSigninAndHistorySyncIntegrationTest {
 
             ViewUtils.waitForVisibleView(allOf(withId(R.id.fre_logo), isDisplayed()));
         }
+    }
+
+    private FullscreenSigninAndHistorySyncConfig.Builder getDefaultConfigBuilder() {
+        return new FullscreenSigninAndHistorySyncConfig.Builder(
+                "title", "subtitle", "dismiss", "hystory sync title", "hystory sync subtitle");
     }
 }

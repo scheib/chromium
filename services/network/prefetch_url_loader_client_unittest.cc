@@ -20,6 +20,7 @@
 #include "net/base/isolation_info.h"
 #include "net/base/network_isolation_key.h"
 #include "net/cookies/site_for_cookies.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "net/url_request/redirect_info.h"
 #include "net/url_request/referrer_policy.h"
@@ -39,7 +40,6 @@ namespace {
 using ::testing::_;
 using ::testing::Eq;
 using ::testing::InSequence;
-using ::testing::Invoke;
 using ::testing::IsTrue;
 using ::testing::MockFunction;
 using ::testing::NotNull;
@@ -311,7 +311,7 @@ class PrefetchURLLoaderClientTest : public ::testing::Test {
     EXPECT_CALL(mock_client_,
                 OnReceiveResponse(URLResponseHeadIsOk(), _,
                                   Optional(BigBufferHasExpectedContents())))
-        .WillOnce(WithArg<1>(Invoke(CheckDataPipeContents)));
+        .WillOnce(WithArg<1>(CheckDataPipeContents));
     EXPECT_CALL(mock_client_, OnReceiveRedirect(EqualsTestRedirectInfo(),
                                                 URLResponseHeadIsOk()));
     EXPECT_CALL(mock_client_, OnUploadProgress(Eq(kTestCurrentPosition),
@@ -439,7 +439,7 @@ TEST_F(PrefetchURLLoaderClientTest, MAYBE_ReplayAfterResponse) {
     EXPECT_CALL(mock_client(),
                 OnReceiveResponse(URLResponseHeadIsOk(), _,
                                   Optional(BigBufferHasExpectedContents())))
-        .WillOnce(WithArg<1>(Invoke(CheckDataPipeContents)));
+        .WillOnce(WithArg<1>(CheckDataPipeContents));
     EXPECT_CALL(checkpoint, Call(1));
     EXPECT_CALL(mock_client(), OnComplete(URLLoaderCompletionStatusIsOk()));
     EXPECT_CALL(checkpoint, Call(2));

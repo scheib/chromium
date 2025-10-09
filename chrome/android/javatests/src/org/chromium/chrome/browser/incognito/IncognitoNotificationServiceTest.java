@@ -168,6 +168,7 @@ public class IncognitoNotificationServiceTest {
             TabStateInfo incognitoInfo =
                     new TabStateInfo(
                             true,
+                            false,
                             TestTabModelDirectory.V2_TEXTAREA.version,
                             i,
                             TestTabModelDirectory.V2_TEXTAREA.url,
@@ -237,6 +238,7 @@ public class IncognitoNotificationServiceTest {
     @Test
     @MediumTest
     @Feature("Incognito")
+    @DisabledTest(message = "https://crbug.com/440177822")
     public void testCloseAllIncognitoNotificationForIncognitoCct_DoesNotCloseCct()
             throws PendingIntent.CanceledException {
         launchIncognitoTabAndEnsureNotificationDisplayed();

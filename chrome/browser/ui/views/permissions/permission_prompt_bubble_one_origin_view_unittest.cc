@@ -10,7 +10,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.h"
 #include "chrome/browser/ui/views/permissions/permission_prompt_style.h"
 #include "chrome/grit/generated_resources.h"
@@ -23,7 +22,6 @@
 
 #if !BUILDFLAG(IS_CHROMEOS)
 #include "base/run_loop.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
 #include "components/media_effects/test/fake_audio_service.h"
@@ -33,8 +31,6 @@
 #include "third_party/blink/public/common/features.h"
 #endif
 
-using base::Bucket;
-using testing::ElementsAre;
 using PermissionPromptBubbleOneOriginViewTest = ChromeViewsTestBase;
 
 namespace {
@@ -216,9 +212,6 @@ constexpr char kMicId2[] = "mic_id_2";
 constexpr char kMicName2[] = "mic_name_2";
 constexpr char kGroupId2[] = "group_id_2";
 
-constexpr char kOriginTrialAllowedHistogramName[] =
-    "MediaPreviews.UI.Permissions.OriginTrialAllowed";
-
 }  // namespace
 
 // Takes care of all setup needed to initialize page info permission prompt one
@@ -227,11 +220,6 @@ constexpr char kOriginTrialAllowedHistogramName[] =
 class PermissionPromptBubbleOneOriginViewTestMediaPreview
     : public TestWithBrowserView {
  protected:
-  PermissionPromptBubbleOneOriginViewTestMediaPreview() {
-    scoped_feature_list_.InitAndEnableFeature(
-        blink::features::kCameraMicPreview);
-  }
-
   void SetUp() override {
     TestWithBrowserView::SetUp();
     base::test::TestFuture<void> mic_infos, camera_infos;
@@ -280,14 +268,12 @@ class PermissionPromptBubbleOneOriginViewTestMediaPreview
         base::NumberToString16(devices));
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
   media_effects::ScopedFakeAudioService audio_service_;
   media_effects::ScopedFakeVideoCaptureService video_service_;
   std::optional<media_effects::ScopedMediaDeviceInfo> media_device_info_;
 
   std::optional<TestDelegate> test_delegate_;
   std::unique_ptr<PermissionPromptBubbleOneOriginView> permission_prompt_;
-  base::HistogramTester histogram_tester_;
 };
 
 // Verify the device counter as well as the tooltip for the mic permission
@@ -323,9 +309,6 @@ TEST_F(PermissionPromptBubbleOneOriginViewTestMediaPreview,
   EXPECT_EQ(mic_label->GetText(), GetExpectedMicLabelText(1));
   EXPECT_EQ(mic_label->GetRenderedTooltipText(gfx::Point()),
             base::UTF8ToUTF16(std::string(kMicName2)));
-
-  EXPECT_THAT(histogram_tester_.GetAllSamples(kOriginTrialAllowedHistogramName),
-              ElementsAre(Bucket(1, 1)));
 }
 
 // Verify the device counter as well as the tooltip for the camera permission
@@ -359,9 +342,6 @@ TEST_F(PermissionPromptBubbleOneOriginViewTestMediaPreview,
   EXPECT_EQ(camera_label->GetText(), GetExpectedCameraLabelText(1));
   EXPECT_EQ(camera_label->GetRenderedTooltipText(gfx::Point()),
             base::UTF8ToUTF16(std::string(kCameraName)));
-
-  EXPECT_THAT(histogram_tester_.GetAllSamples(kOriginTrialAllowedHistogramName),
-              ElementsAre(Bucket(1, 1)));
 }
 
 // Verify the device counter as well as the tooltip for the ptz camera
@@ -447,9 +427,6 @@ TEST_F(PermissionPromptBubbleOneOriginViewTestMediaPreview,
   EXPECT_EQ(mic_label->GetText(), GetExpectedMicLabelText(1));
   EXPECT_EQ(mic_label->GetRenderedTooltipText(gfx::Point()),
             base::UTF8ToUTF16(std::string(kMicName2)));
-
-  EXPECT_THAT(histogram_tester_.GetAllSamples(kOriginTrialAllowedHistogramName),
-              ElementsAre(Bucket(1, 1)));
 }
 
 // Verify there is no preview created when there is no camera or mic permissions
@@ -461,8 +438,6 @@ TEST_F(PermissionPromptBubbleOneOriginViewTestMediaPreview,
   ASSERT_FALSE(permission_prompt_->GetCameraPermissionLabelForTesting());
   ASSERT_FALSE(permission_prompt_->GetPtzCameraPermissionLabelForTesting());
   ASSERT_FALSE(permission_prompt_->GetMicPermissionLabelForTesting());
-
-  histogram_tester_.ExpectTotalCount(kOriginTrialAllowedHistogramName, 0);
 }
 
 #endif

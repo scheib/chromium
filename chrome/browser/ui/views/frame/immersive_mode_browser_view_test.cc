@@ -8,7 +8,7 @@
 #include "chrome/browser/ui/ash/test_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
-#include "chrome/browser/ui/views/frame/browser_non_client_frame_view_chromeos.h"
+#include "chrome/browser/ui/views/frame/browser_frame_view_chromeos.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/immersive_mode_controller.h"
 #include "chrome/browser/ui/views/frame/immersive_mode_controller_chromeos.h"
@@ -70,8 +70,7 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTestNoWebUiTabStrip,
                        ImmersiveFullscreen) {
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
   content::WebContents* web_contents = browser_view->GetActiveWebContents();
-  BrowserNonClientFrameViewChromeOS* frame_view =
-      GetFrameViewChromeOS(browser_view);
+  BrowserFrameViewChromeOS* frame_view = GetFrameViewChromeOS(browser_view);
 
   ImmersiveModeController* immersive_mode_controller =
       browser_view->immersive_mode_controller();
@@ -287,10 +286,6 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTest,
 // hidden, and the fullscreen control popup doesn't show up).
 IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTest,
                        RegularToLockedFullscreenDisablesImmersive) {
-  if (!IsIsShelfVisibleSupported()) {
-    GTEST_SKIP() << "Ash is too old.";
-  }
-
   EnterImmersiveFullscreenMode(browser());
 
   // Set locked fullscreen state.
@@ -306,9 +301,11 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTest,
   // Make sure the fullscreen control popup doesn't show up.
   ui::MouseEvent mouse_move(ui::EventType::kMouseMoved, gfx::Point(1, 1),
                             gfx::Point(), base::TimeTicks(), 0, 0);
-  ASSERT_TRUE(browser_view->fullscreen_control_host_for_test());
-  browser_view->fullscreen_control_host_for_test()->OnMouseEvent(mouse_move);
-  EXPECT_FALSE(browser_view->fullscreen_control_host_for_test()->IsVisible());
+  auto* const fullscreen_control_host =
+      browser()->GetFeatures().fullscreen_control_host();
+  ASSERT_NE(fullscreen_control_host, nullptr);
+  fullscreen_control_host->OnMouseEvent(mouse_move);
+  EXPECT_FALSE(fullscreen_control_host->IsVisible());
 }
 
 // Regression test for crbug.com/883104.  Make sure that immersive fullscreen is
@@ -316,10 +313,6 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTest,
 // fullscreen control popup doesn't show up).
 IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTest,
                        LockedFullscreenDisablesImmersive) {
-  if (!IsIsShelfVisibleSupported()) {
-    GTEST_SKIP() << "Ash is too old.";
-  }
-
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
   EXPECT_FALSE(browser_view->GetWidget()->IsFullscreen());
 
@@ -335,18 +328,16 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTest,
   // Make sure the fullscreen control popup doesn't show up.
   ui::MouseEvent mouse_move(ui::EventType::kMouseMoved, gfx::Point(1, 1),
                             gfx::Point(), base::TimeTicks(), 0, 0);
-  ASSERT_TRUE(browser_view->fullscreen_control_host_for_test());
-  browser_view->fullscreen_control_host_for_test()->OnMouseEvent(mouse_move);
-  EXPECT_FALSE(browser_view->fullscreen_control_host_for_test()->IsVisible());
+  auto* const fullscreen_control_host =
+      browser()->GetFeatures().fullscreen_control_host();
+  ASSERT_NE(fullscreen_control_host, nullptr);
+  fullscreen_control_host->OnMouseEvent(mouse_move);
+  EXPECT_FALSE(fullscreen_control_host->IsVisible());
 }
 
 // Test the shelf visibility affected by entering and exiting tab fullscreen and
 // immersive fullscreen.
 IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTest, TabAndBrowserFullscreen) {
-  if (!IsIsShelfVisibleSupported()) {
-    GTEST_SKIP() << "Ash is too old.";
-  }
-
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
 
   ASSERT_TRUE(

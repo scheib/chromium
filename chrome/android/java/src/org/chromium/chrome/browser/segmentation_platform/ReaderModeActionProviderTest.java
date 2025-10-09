@@ -42,6 +42,7 @@ import org.chromium.chrome.browser.dom_distiller.DomDistillerTabUtils;
 import org.chromium.chrome.browser.dom_distiller.DomDistillerTabUtilsJni;
 import org.chromium.chrome.browser.dom_distiller.ReaderModeActionRateLimiter;
 import org.chromium.chrome.browser.dom_distiller.ReaderModeManager;
+import org.chromium.chrome.browser.dom_distiller.ReaderModeMetrics;
 import org.chromium.chrome.browser.dom_distiller.TabDistillabilityProvider;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -88,6 +89,7 @@ public class ReaderModeActionProviderTest {
     @Mock private ReaderModeActionRateLimiter mReaderModeActionRateLimiter;
 
     @Before
+    @SuppressWarnings("DirectInvocationOnMock")
     public void setUp() {
         initializeReaderModeBackend();
         ReaderModeActionRateLimiter.setInstanceForTesting(mReaderModeActionRateLimiter);
@@ -119,7 +121,7 @@ public class ReaderModeActionProviderTest {
         TabDistillabilityProvider tabDistillabilityProvider =
                 TabDistillabilityProvider.get(mMockTab);
         tabDistillabilityProvider.onIsPageDistillableResult(
-                mMockTab.getUrl(),
+                TEST_URL,
                 isDistillable,
                 /* isLast= */ true,
                 /* isLongArticle= */ false,
@@ -138,6 +140,21 @@ public class ReaderModeActionProviderTest {
 
         Assert.assertTrue(accumulator.getSignal(AdaptiveToolbarButtonVariant.READER_MODE));
     }
+
+    @Test
+    public void testChromeSchemeUrl_isNotDistillableImmediateResult() throws TimeoutException {
+        when(mMockTab.getUrl()).thenReturn(new GURL("chrome://newtab"));
+
+        HashMap<Integer, ActionProvider> providers = new HashMap<>();
+        var provider = new ReaderModeActionProvider(mButtonVisibilitySupplier);
+        providers.put(AdaptiveToolbarButtonVariant.READER_MODE, provider);
+        SignalAccumulator accumulator = new SignalAccumulator(new Handler(), mMockTab, providers);
+        provider.getAction(mMockTab, accumulator);
+        ShadowLooper.idleMainLooper();
+
+        Assert.assertFalse(accumulator.getSignal(AdaptiveToolbarButtonVariant.READER_MODE));
+    }
+
 
     @Test
     public void testWaitForDistillabilityResult() throws TimeoutException {
@@ -162,14 +179,16 @@ public class ReaderModeActionProviderTest {
         HistogramWatcher watcher =
                 HistogramWatcher.newBuilder()
                         .expectBooleanRecord(
-                                ReaderModeActionProvider
-                                        .SIGNAL_ACCUMULATOR_WITHIN_TIMEOUT_HISTOGRAM,
-                                true)
+                                "DomDistiller.Android.AnyPageSignalWithinTimeout", true)
                         .expectBooleanRecord(
-                                ReaderModeActionProvider
-                                        .SIGNAL_ACCUMULATOR_DISTILLABLE_WITHIN_TIMEOUT_HISTOGRAM,
-                                true)
-                        .expectAnyRecord(ReaderModeActionProvider.READER_MODE_SIGNAL_TIME_HISTOGRAM)
+                                "DomDistiller.Android.DistillablePageSignalWithinTimeout", true)
+                        // First step in the CPA funnel which shows the page is eligible for
+                        // distillation.
+                        .expectIntRecord(
+                                ReaderModeMetrics
+                                        .READER_MODE_CONTEXTUAL_PAGE_ACTION_EVENT_HISTOGRAM,
+                                ReaderModeMetrics.ReaderModeContextualPageActionEvent.ELIGIBLE)
+                        .expectAnyRecord("DomDistiller.Time.TimeToProvideResultToAccumulator")
                         .build();
         setReaderModeBackendSignal(true);
         provider.getAction(mMockTab, mMockSignalAccumulator);
@@ -190,14 +209,10 @@ public class ReaderModeActionProviderTest {
         HistogramWatcher watcher =
                 HistogramWatcher.newBuilder()
                         .expectBooleanRecord(
-                                ReaderModeActionProvider
-                                        .SIGNAL_ACCUMULATOR_WITHIN_TIMEOUT_HISTOGRAM,
-                                false)
+                                "DomDistiller.Android.AnyPageSignalWithinTimeout", false)
                         .expectBooleanRecord(
-                                ReaderModeActionProvider
-                                        .SIGNAL_ACCUMULATOR_DISTILLABLE_WITHIN_TIMEOUT_HISTOGRAM,
-                                false)
-                        .expectAnyRecord(ReaderModeActionProvider.READER_MODE_SIGNAL_TIME_HISTOGRAM)
+                                "DomDistiller.Android.DistillablePageSignalWithinTimeout", false)
+                        .expectAnyRecord("DomDistiller.Time.TimeToProvideResultToAccumulator")
                         .build();
         setReaderModeBackendSignal(true);
         provider.getAction(mMockTab, mMockSignalAccumulator);
@@ -318,7 +333,22 @@ public class ReaderModeActionProviderTest {
                 .runReadabilityHeuristicsOnWebContents(
                         any(), readabilityHeuristicCallbackCaptor.capture());
         Assert.assertNotNull(readabilityHeuristicCallbackCaptor.getValue());
+
+        HistogramWatcher watcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord(
+                                ReaderModeMetrics
+                                        .READER_MODE_CONTEXTUAL_PAGE_ACTION_EVENT_HISTOGRAM,
+                                ReaderModeMetrics.ReaderModeContextualPageActionEvent.ELIGIBLE)
+                        .expectIntRecord(
+                                ReaderModeMetrics
+                                        .READER_MODE_CONTEXTUAL_PAGE_ACTION_EVENT_HISTOGRAM,
+                                ReaderModeMetrics.ReaderModeContextualPageActionEvent.SUPPRESSED)
+                        .build();
+
         readabilityHeuristicCallbackCaptor.getValue().onResult(true);
+
+        watcher.assertExpected();
         verify(mMockSignalAccumulator, Mockito.times(0))
                 .setSignal(AdaptiveToolbarButtonVariant.READER_MODE, true);
     }
@@ -340,5 +370,14 @@ public class ReaderModeActionProviderTest {
         ShadowLooper.idleMainLooper();
 
         verify(mMockSignalAccumulator).setSignal(AdaptiveToolbarButtonVariant.READER_MODE, true);
+    }
+
+    @Test
+    @EnableFeatures(DomDistillerFeatures.READER_MODE_DISTILL_IN_APP + ":show_cpa/false")
+    public void testActionNotVisibleWhenParamDisabled() {
+        when(mReaderModeActionRateLimiter.isActionSuppressed()).thenReturn(true);
+        var provider = new ReaderModeActionProvider(mButtonVisibilitySupplier);
+        provider.getAction(mMockTab, mMockSignalAccumulator);
+        verify(mMockSignalAccumulator).setSignal(AdaptiveToolbarButtonVariant.READER_MODE, false);
     }
 }

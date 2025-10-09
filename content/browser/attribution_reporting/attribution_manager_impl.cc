@@ -148,6 +148,11 @@ enum class ConversionReportSendRetryCount {
 constexpr base::TimeDelta kReportDeliveryFirstRetryDelay = base::Minutes(5);
 constexpr base::TimeDelta kReportDeliverySecondRetryDelay = base::Minutes(15);
 
+#if BUILDFLAG(IS_ANDROID)
+BASE_FEATURE(kAttributionReportObserveAppState,
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
+
 }  // namespace
 
 // This class consolidates logic regarding when to schedule the browser to send
@@ -330,12 +335,12 @@ void RecordNetworkConnectionTypeOnFailure(
   switch (report_type) {
     case AttributionReport::Type::kEventLevel:
       base::UmaHistogramEnumeration(
-          "Conversions.EventLevelReport.NetworkConnectionTypeOnFailure",
+          "Conversions.EventLevelReport.NetworkConnectionTypeOnFailure2",
           connection_type);
       break;
     case AttributionReport::Type::kAggregatableAttribution:
       base::UmaHistogramEnumeration(
-          "Conversions.AggregatableReport.NetworkConnectionTypeOnFailure",
+          "Conversions.AggregatableReport.NetworkConnectionTypeOnFailure2",
           connection_type);
       break;
     case AttributionReport::Type::kNullAggregatable:
@@ -506,14 +511,6 @@ void LogMetricsOnReportSent(const AttributionReport& report) {
       UMA_HISTOGRAM_COUNTS_1000(
           "Conversions.TimeFromTriggerToReportSentSuccessfully",
           time_from_conversion_to_report_sent.InHours());
-      UMA_HISTOGRAM_BOOLEAN(
-          "Conversions."
-          "TimeFromTriggerToReportSentSuccessfullyExceeds30Days",
-          time_from_conversion_to_report_sent > base::Days(30));
-      UMA_HISTOGRAM_BOOLEAN(
-          "Conversions."
-          "ExtraReportDelayForSuccessfulSendExceeds30Days",
-          time_since_original_report_time > base::Days(30));
 
       RecordReportRetriesEventLevel(report.failed_send_attempts());
 
@@ -535,18 +532,10 @@ void LogMetricsOnReportSent(const AttributionReport& report) {
           time_from_conversion_to_report_sent, base::Minutes(1), base::Days(24),
           50);
 
-      UMA_HISTOGRAM_BOOLEAN(
-          "Conversions.AggregatableReport."
-          "TimeFromTriggerToReportSentSuccessfullyExceeds30Days",
-          time_from_conversion_to_report_sent > base::Days(30));
       UMA_HISTOGRAM_CUSTOM_TIMES(
           "Conversions.AggregatableReport.ExtraReportDelayForSuccessfulSend",
           time_since_original_report_time, base::Seconds(1), base::Days(24),
           /*bucket_count=*/50);
-      UMA_HISTOGRAM_BOOLEAN(
-          "Conversions.AggregatableReport."
-          "ExtraReportDelayForSuccessfulSendExceeds30Days",
-          time_since_original_report_time > base::Days(30));
 
       RecordReportRetriesAggregatable(report.failed_send_attempts());
 
@@ -762,7 +751,12 @@ AttributionManagerImpl::AttributionManagerImpl(
   CHECK(os_level_manager_);
 
   scheduler_timer_ = std::make_unique<ReportSchedulerTimer>(
-      std::make_unique<ReportScheduler>(weak_factory_.GetWeakPtr()));
+      std::make_unique<ReportScheduler>(weak_factory_.GetWeakPtr())
+#if BUILDFLAG(IS_ANDROID)
+          ,
+      base::FeatureList::IsEnabled(kAttributionReportObserveAppState)
+#endif
+  );
 }
 
 AttributionManagerImpl::~AttributionManagerImpl() {
@@ -1212,7 +1206,6 @@ void AttributionManagerImpl::SendReports(
   for (auto& report : reports) {
     SendReport(base::NullCallback(), now, std::move(report));
   }
-  report_sender_->SetInFirstBatch(/*in_first_batch=*/false);
 }
 
 // If `web_ui_callback` is null, assumes that `report` is being sent at its
@@ -1220,8 +1213,6 @@ void AttributionManagerImpl::SendReports(
 void AttributionManagerImpl::SendReport(base::OnceClosure web_ui_callback,
                                         const base::Time now,
                                         AttributionReport report) {
-  CHECK_LE(report.report_time(), now);
-
   bool inserted = reports_being_sent_.emplace(report.id()).second;
   if (!inserted) {
     if (web_ui_callback) {
@@ -1285,11 +1276,13 @@ void AttributionManagerImpl::SendReport(AttributionReport report,
   report_sender_->SendReport(
       std::move(report), is_debug_report,
       base::BindOnce(
-          [](ReportSentCallback callback, const AttributionReport& report,
-             SendResult::Sent sent) {
+          [](ReportSentCallback callback,
+             network::mojom::ConnectionType connection_type,
+             const AttributionReport& report, SendResult::Sent sent) {
+            sent.connection_type = connection_type;
             std::move(callback).Run(report, SendResult(std::move(sent)));
           },
-          std::move(callback)));
+          std::move(callback), scheduler_timer_->connection_type()));
 }
 
 void AttributionManagerImpl::OnReportSent(base::OnceClosure done,
@@ -1308,13 +1301,11 @@ void AttributionManagerImpl::OnReportSent(base::OnceClosure done,
                            return std::nullopt;
                          case SendResult::Sent::Result::kTransientFailure:
                            RecordNetworkConnectionTypeOnFailure(
-                               report.GetReportType(),
-                               scheduler_timer_->connection_type());
+                               report.GetReportType(), sent.connection_type);
                            return HandleTransientFailureOnSendReport(report);
                          case SendResult::Sent::Result::kFailure:
                            RecordNetworkConnectionTypeOnFailure(
-                               report.GetReportType(),
-                               scheduler_timer_->connection_type());
+                               report.GetReportType(), sent.connection_type);
                            return std::nullopt;
                        }
                      },

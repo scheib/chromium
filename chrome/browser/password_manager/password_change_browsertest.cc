@@ -11,6 +11,7 @@
 #include "base/test/gmock_callback_support.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/run_until.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
 #include "chrome/browser/affiliations/affiliation_service_factory.h"
 #include "chrome/browser/browser_process.h"
@@ -30,7 +31,6 @@
 #include "chrome/browser/password_manager/passwords_navigation_observer.h"
 #include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/passwords/bubble_controllers/password_bubble_controller_base.h"
 #include "chrome/browser/ui/passwords/manage_passwords_ui_controller.h"
@@ -44,6 +44,8 @@
 #include "components/affiliations/core/browser/mock_affiliation_service.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/test_autofill_manager_injector.h"
+#include "components/autofill/core/browser/form_structure_test_api.h"
+#include "components/autofill/core/browser/foundations/autofill_manager_test_api.h"
 #include "components/autofill/core/browser/foundations/browser_autofill_manager.h"
 #include "components/autofill/core/browser/foundations/test_autofill_manager_waiter.h"
 #include "components/autofill/core/common/autofill_test_utils.h"
@@ -54,8 +56,7 @@
 #include "components/optimization_guide/core/optimization_guide_prefs.h"
 #include "components/optimization_guide/core/optimization_guide_proto_util.h"
 #include "components/optimization_guide/proto/model_quality_service.pb.h"
-#include "components/password_manager/core/browser/one_time_passwords/otp_form_manager.h"
-#include "components/password_manager/core/browser/one_time_passwords/otp_manager.h"
+#include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/password_form_manager.h"
 #include "components/password_manager/core/browser/password_store/test_password_store.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
@@ -82,7 +83,6 @@ using ::optimization_guide::TestModelQualityLogsUploaderService;
 using ::testing::_;
 using ::testing::An;
 using ::testing::DoAll;
-using ::testing::Invoke;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::SizeIs;
@@ -98,6 +98,9 @@ using OpenFormResponseData = ::optimization_guide::proto::OpenFormResponseData;
 using QualityStatus = ::optimization_guide::proto::
     PasswordChangeQuality_StepQuality_SubmissionStatus;
 using SubmissionOutcome = PasswordChangeSubmissionVerifier::SubmissionOutcome;
+using SubmitFormResponseData =
+    ::optimization_guide::proto::SubmitFormResponseData;
+using IsLoggedIn = LoginStateChecker::IsLoggedIn;
 
 constexpr char kPasswordChangeSubmissionOutcomeHistogram[] =
     "PasswordManager.PasswordChangeSubmissionOutcome";
@@ -158,6 +161,14 @@ const ukm::mojom::UkmEntry* GetMetricEntry(
 
 class PasswordChangeBrowserTest : public PasswordManagerBrowserTestBase {
  public:
+  PasswordChangeBrowserTest() {
+    // TODO (crbug.com/439496997): Fix the test to work with this feature flag
+    // default value.
+    scoped_feature_list_.InitWithFeatures(
+        {password_manager::features::kSubmitWithEnterDuringPasswordChange},
+        {password_manager::features::kCheckLoginStateBeforePasswordChange});
+  }
+
   void SetUpInProcessBrowserTestFixture() override {
     PasswordManagerBrowserTestBase::SetUpInProcessBrowserTestFixture();
     create_services_subscription_ =
@@ -185,10 +196,12 @@ class PasswordChangeBrowserTest : public PasswordManagerBrowserTestBase {
     ASSERT_TRUE(observer.Wait());
   }
 
-  void VerifyUniqueQualityLog(QualityStatus open_form_status,
+  void VerifyUniqueQualityLog(QualityStatus login_check_status,
+                              QualityStatus open_form_status,
                               QualityStatus submit_form_status,
                               QualityStatus verify_submission_status,
-                              FinalModelStatus final_status) {
+                              FinalModelStatus final_status,
+                              bool login_check_was_skipped = false) {
     const auto& logs = logs_uploader().uploaded_logs();
     ASSERT_EQ(1, std::ranges::count_if(logs, [](const auto& log) {
                 return log->password_change_submission().has_quality();
@@ -199,10 +212,13 @@ class PasswordChangeBrowserTest : public PasswordManagerBrowserTestBase {
     // Verify the single log values.
     optimization_guide::proto::PasswordChangeQuality quality =
         it->get()->password_change_submission().quality();
-    EXPECT_EQ(quality.final_model_status(), final_status);
-    EXPECT_EQ(quality.verify_submission().status(), verify_submission_status);
+    EXPECT_EQ(quality.logged_in_check().classification_overridden_by_user(),
+              login_check_was_skipped);
+    EXPECT_EQ(quality.logged_in_check().status(), login_check_status);
     EXPECT_EQ(quality.open_form().status(), open_form_status);
     EXPECT_EQ(quality.submit_form().status(), submit_form_status);
+    EXPECT_EQ(quality.verify_submission().status(), verify_submission_status);
+    EXPECT_EQ(quality.final_model_status(), final_status);
   }
 
   void SetPrivacyNoticeAcceptedPref() {
@@ -280,8 +296,7 @@ class PasswordChangeBrowserTest : public PasswordManagerBrowserTestBase {
               ASSERT_TRUE(password_change_request.page_context()
                               .has_annotated_page_content());
             }),
-            WithArg<3>(Invoke([response,
-                               logs_uploader_weak_ptr](auto callback) {
+            WithArg<3>([response, logs_uploader_weak_ptr](auto callback) {
               base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(
@@ -292,7 +307,7 @@ class PasswordChangeBrowserTest : public PasswordManagerBrowserTestBase {
                       std::make_unique<
                           optimization_guide::ModelQualityLogEntry>(
                           logs_uploader_weak_ptr)));
-            }))));
+            })));
   }
 
   autofill::FormData CreateSimpleOtp() {
@@ -310,20 +325,30 @@ class PasswordChangeBrowserTest : public PasswordManagerBrowserTestBase {
   }
 
   void AddOtpToThePage() {
+    // Inject the form because otherwise it cannot be guaranteed that the OTP
+    // field is classified as such.
     auto form = CreateSimpleOtp();
+    auto form_structure = std::make_unique<autofill::FormStructure>(form);
+    const std::vector<autofill::FieldType> field_types = {
+        autofill::ONE_TIME_CODE};
+    autofill::test_api(*form_structure)
+        .SetFieldTypes(/*heuristic_types=*/field_types,
+                       /*server_types=*/field_types);
+    autofill::test_api(*form_structure).AssignSections();
+    autofill::test_api(*GetAutofillManager())
+        .AddSeenFormStructure(std::move(form_structure));
+    autofill::test_api(*GetAutofillManager()).OnFormsParsed({form});
 
-    GetAutofillManager()->OnFormsSeen(
-        /*updated_forms=*/{form},
-        /*removed_forms=*/{});
-    ASSERT_TRUE(GetAutofillManager()->WaitForFormsSeen(1));
     ASSERT_TRUE(
         GetAutofillManager()->FindCachedFormById(form.fields()[0].global_id()));
 
-    password_manager::OtpManager* otp_manager =
-        ChromePasswordManagerClient::FromWebContents(WebContents())
-            ->GetOtpManager();
-    otp_manager->ProcessClassificationModelPredictions(
-        form, {{form.fields()[0].global_id(), autofill::ONE_TIME_CODE}});
+    // Notify observers manually as this would typically happen during parsing
+    // but the step is skipped when using the Test APIs.
+    GetAutofillManager()->NotifyObservers(
+        &TestAutofillManager::Observer::OnFieldTypesDetermined,
+        form.global_id(),
+        TestAutofillManager::Observer::FieldTypeSource::
+            kHeuristicsOrAutocomplete);
   }
 
  private:
@@ -332,6 +357,7 @@ class PasswordChangeBrowserTest : public PasswordManagerBrowserTestBase {
   base::CallbackListSubscription create_services_subscription_;
   autofill::TestAutofillManagerInjector<TestAutofillManager>
       autofill_manager_injector_;
+  base::test::ScopedFeatureList scoped_feature_list_;
   base::WeakPtrFactory<PasswordChangeBrowserTest> weak_ptr_factory_{this};
 };
 
@@ -580,6 +606,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, NewPasswordIsSaved) {
           kPasswordChangeSubmissionOutcomeName,
       static_cast<int>(SubmissionOutcome::kSuccess));
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_STEP_SKIPPED,
@@ -772,6 +800,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
           kPasswordChangeSubmissionOutcomeName,
       static_cast<int>(SubmissionOutcome::kPageError));
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_STEP_SKIPPED,
@@ -811,6 +841,12 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, OpenTabWithPasswordChange) {
 
   EXPECT_EQ(tab_strip->count(), 2);
   EXPECT_EQ(tab_strip->active_index(), 1);
+
+  EXPECT_FALSE(ChromePasswordManagerClient::FromWebContents(WebContents())
+                   ->apply_client_side_prediction_override_for_testing());
+  EXPECT_TRUE(ChromePasswordManagerClient::FromWebContents(
+                  tab_strip->GetActiveWebContents())
+                  ->apply_client_side_prediction_override_for_testing());
 }
 
 IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
@@ -882,16 +918,6 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, OTPDetectionHaltsTheFlow) {
   SetPrivacyNoticeAcceptedPref();
-  autofill::FormData form;
-  autofill::FormFieldData field;
-  field.set_name(u"otp");
-  field.set_id_attribute(field.name());
-  field.set_name_attribute(field.name());
-  field.set_form_control_type(autofill::FormControlType::kInputText);
-  field.set_renderer_id(autofill::FieldRendererId(1));
-  form.set_fields({field});
-  password_manager::OtpFormManager otp_form_manager(form, {field.global_id()},
-                                                    client());
   const GURL main_url = WebContents()->GetLastCommittedURL();
   EXPECT_CALL(*affiliation_service(), GetChangePasswordURL(main_url))
       .WillOnce(Return(embedded_test_server()->GetURL("/password/done.html")));
@@ -907,7 +933,7 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, OTPDetectionHaltsTheFlow) {
             PasswordChangeDelegate::State::kWaitingForChangePasswordForm);
 
   auto* delegate_impl = static_cast<PasswordChangeDelegateImpl*>(delegate);
-  delegate_impl->OnOtpFieldDetected(&otp_form_manager);
+  delegate_impl->OnOtpFieldDetected();
 
   EXPECT_EQ(delegate->GetCurrentState(),
             PasswordChangeDelegate::State::kOtpDetected);
@@ -922,6 +948,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, OTPDetectionHaltsTheFlow) {
       [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
 
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_OTP_DETECTED,
@@ -954,14 +982,14 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, CancelFromToast) {
       static_cast<PasswordChangeDelegateImpl*>(delegate)->ui_controller();
   EXPECT_TRUE(ui_controller->toast_view());
   // Verify action button is present and visible.
-  EXPECT_TRUE(ui_controller->toast_view()->action_button());
-  EXPECT_TRUE(ui_controller->toast_view()->action_button()->GetVisible());
+  EXPECT_TRUE(ui_controller->toast_view()->close_button());
+  EXPECT_TRUE(ui_controller->toast_view()->close_button()->GetVisible());
 
   SetModelQualityLogsUploader();
 
   // Click action button, this should cancel the flow.
   views::test::ButtonTestApi clicker(
-      ui_controller->toast_view()->action_button());
+      ui_controller->toast_view()->close_button());
   clicker.NotifyClick(ui::test::TestEvent());
 
   EXPECT_EQ(PasswordChangeDelegate::State::kCanceled,
@@ -969,9 +997,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, CancelFromToast) {
 
   // Verify toast is displayed.
   EXPECT_TRUE(ui_controller->toast_view());
-  // Verify the toast has no action button, meaning it's just a
-  // confirmation.
-  EXPECT_FALSE(ui_controller->toast_view()->action_button()->GetVisible());
+  // Action button navigates to the password change tab
+  EXPECT_TRUE(ui_controller->toast_view()->action_button()->GetVisible());
 
   // The quality log is uploaded in the destructor.
   base::WeakPtr<PasswordChangeDelegate> delegate_weak_ptr =
@@ -980,6 +1007,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest, CancelFromToast) {
       [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
 
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_FLOW_INTERRUPTED,
@@ -1298,6 +1327,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
       [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
 
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_ACTION_SUCCESS,
@@ -1341,7 +1372,7 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
       delegate->AsWeakPtr();
   // Simulate clicking the "cancel" button on the UI toast.
   views::test::ButtonTestApi clicker(
-      ui_controller->toast_view()->action_button());
+      ui_controller->toast_view()->close_button());
   clicker.NotifyClick(ui::test::TestEvent());
   // Verify that the flow's state is "canceled".
   EXPECT_EQ(PasswordChangeDelegate::State::kCanceled,
@@ -1350,6 +1381,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
       [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
 
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_ACTION_SUCCESS,
@@ -1393,7 +1426,7 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
       delegate->AsWeakPtr();
   // Simulate clicking the "cancel" button on the UI toast.
   views::test::ButtonTestApi clicker(
-      ui_controller->toast_view()->action_button());
+      ui_controller->toast_view()->close_button());
   clicker.NotifyClick(ui::test::TestEvent());
   // Verify that the flow's state is "canceled".
   EXPECT_EQ(PasswordChangeDelegate::State::kCanceled,
@@ -1402,6 +1435,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
       [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
 
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
@@ -1418,16 +1453,6 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
 IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
                        OtpDetectedfterSubmitFormStep) {
   SetPrivacyNoticeAcceptedPref();
-  autofill::FormData form;
-  autofill::FormFieldData field;
-  field.set_name(u"otp");
-  field.set_id_attribute(field.name());
-  field.set_name_attribute(field.name());
-  field.set_form_control_type(autofill::FormControlType::kInputText);
-  field.set_renderer_id(autofill::FieldRendererId(1));
-  form.set_fields({field});
-  password_manager::OtpFormManager otp_form_manager(form, {field.global_id()},
-                                                    client());
   const GURL main_url = WebContents()->GetLastCommittedURL();
   EXPECT_CALL(*affiliation_service(), GetChangePasswordURL(main_url))
       .WillOnce(Return(embedded_test_server()->GetURL("/password/done.html")));
@@ -1450,7 +1475,7 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
       delegate->AsWeakPtr();
 
   auto* delegate_impl = static_cast<PasswordChangeDelegateImpl*>(delegate);
-  delegate_impl->OnOtpFieldDetected(&otp_form_manager);
+  delegate_impl->OnOtpFieldDetected();
   EXPECT_EQ(delegate->GetCurrentState(),
             PasswordChangeDelegate::State::kOtpDetected);
   delegate_impl->ui_controller()->CallOnDialogCanceledForTesting();
@@ -1458,6 +1483,8 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTest,
       [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
 
   VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
       /*open_form_status=*/
       QualityStatus::
           PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
@@ -1493,22 +1520,64 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTestWithLoginCheck,
   auto* delegate =
       password_change_service()->GetPasswordChangeDelegate(WebContents());
   delegate->StartPasswordChangeFlow();
+  auto* delegate_impl = static_cast<PasswordChangeDelegateImpl*>(delegate);
 
   // Verify that the background tab was not created yet.
-  EXPECT_FALSE(static_cast<PasswordChangeDelegateImpl*>(delegate)->executor());
-  EXPECT_TRUE(
-      static_cast<PasswordChangeDelegateImpl*>(delegate)->login_checker());
+  EXPECT_FALSE(delegate_impl->executor());
+  EXPECT_TRUE(delegate_impl->login_checker());
   EXPECT_EQ(delegate->GetCurrentState(),
             PasswordChangeDelegate::State::kWaitingForChangePasswordForm);
 
-  // Verify that password change fails if the user is not logged in.
-  static_cast<PasswordChangeDelegateImpl*>(delegate)
-      ->login_checker()
-      ->RespondWithLoginStatus(false);
-  EXPECT_FALSE(
-      static_cast<PasswordChangeDelegateImpl*>(delegate)->login_checker());
+  delegate_impl->login_checker()->RespondWithLoginStatus(IsLoggedIn(false));
   EXPECT_EQ(delegate->GetCurrentState(),
-            PasswordChangeDelegate::State::kCanceled);
+            PasswordChangeDelegate::State::kLoginFormDetected);
+  // Verify that password change fails if the user is not logged in.
+  for (auto i = 1; i < LoginStateChecker::kMaxLoginChecks; i++) {
+    delegate_impl->login_checker()->RespondWithLoginStatus(IsLoggedIn(false));
+  }
+  EXPECT_FALSE(delegate_impl->login_checker());
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kChangePasswordFormNotFound);
+}
+
+IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTestWithLoginCheck,
+                       OpenTabWhenLoggedOut) {
+  const GURL main_url = WebContents()->GetLastCommittedURL();
+  EXPECT_CALL(*affiliation_service(), GetChangePasswordURL(main_url))
+      .WillOnce(Return(GURL(kChangePasswordURL)));
+  password_change_service()->OfferPasswordChangeUi(main_url, u"test",
+                                                   u"password", WebContents());
+  auto* delegate =
+      password_change_service()->GetPasswordChangeDelegate(WebContents());
+  delegate->StartPasswordChangeFlow();
+  auto* delegate_impl = static_cast<PasswordChangeDelegateImpl*>(delegate);
+  // Verify that the background tab was not created yet.
+  EXPECT_FALSE(delegate_impl->executor());
+  EXPECT_TRUE(delegate_impl->login_checker());
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kWaitingForChangePasswordForm);
+
+  delegate_impl->login_checker()->RespondWithLoginStatus(IsLoggedIn(false));
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kLoginFormDetected);
+  // Verify that password change fails if the user is not logged in after
+  // maximum amount of attempts.
+  for (auto i = 1; i < LoginStateChecker::kMaxLoginChecks; i++) {
+    delegate_impl->login_checker()->RespondWithLoginStatus(IsLoggedIn(false));
+  }
+  EXPECT_FALSE(delegate_impl->login_checker());
+  EXPECT_FALSE(delegate_impl->executor());
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kChangePasswordFormNotFound);
+  // When a user is not logged in, we still open a new tab with the
+  // change password URL, so there should be two tabs after.
+  ASSERT_EQ(browser()->tab_strip_model()->count(), 1);
+  delegate->OpenPasswordChangeTab();
+  ASSERT_EQ(browser()->tab_strip_model()->count(), 2);
+  auto* change_password_contents =
+      browser()->tab_strip_model()->GetWebContentsAt(1);
+  ASSERT_EQ(change_password_contents->GetVisibleURL(),
+            GURL(kChangePasswordURL));
 }
 
 IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTestWithLoginCheck,
@@ -1518,6 +1587,7 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTestWithLoginCheck,
       .WillOnce(Return(GURL(kChangePasswordURL)));
   password_change_service()->OfferPasswordChangeUi(main_url, u"test",
                                                    u"password", WebContents());
+  SetModelQualityLogsUploader();
   auto* delegate =
       password_change_service()->GetPasswordChangeDelegate(WebContents());
   delegate->StartPasswordChangeFlow();
@@ -1532,10 +1602,154 @@ IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTestWithLoginCheck,
   // Verify that password change continues if the user is logged in.
   static_cast<PasswordChangeDelegateImpl*>(delegate)
       ->login_checker()
-      ->RespondWithLoginStatus(true);
+      ->RespondWithLoginStatus(IsLoggedIn(true));
   EXPECT_FALSE(
       static_cast<PasswordChangeDelegateImpl*>(delegate)->login_checker());
   EXPECT_TRUE(static_cast<PasswordChangeDelegateImpl*>(delegate)->executor());
   EXPECT_EQ(delegate->GetCurrentState(),
             PasswordChangeDelegate::State::kWaitingForChangePasswordForm);
+  // Stop the flow to check the correct state of the quality log.
+  delegate->Stop();
+  // The quality log is uploaded in the destructor.
+  base::WeakPtr<PasswordChangeDelegate> delegate_weak_ptr =
+      delegate->AsWeakPtr();
+  EXPECT_TRUE(base::test::RunUntil(
+      [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
+  VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_ACTION_SUCCESS,
+      /*open_form_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /* submit_form_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /*verify_submission_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /*final_status=*/
+      FinalModelStatus::FINAL_MODEL_STATUS_UNSPECIFIED,
+      /*login_check_was_skipped=*/false);
+}
+
+IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTestWithLoginCheck,
+                       FlowInterruptedBeforeLoginCheck) {
+  SetPrivacyNoticeAcceptedPref();
+
+  const GURL main_url = WebContents()->GetLastCommittedURL();
+  EXPECT_CALL(*affiliation_service(), GetChangePasswordURL(main_url))
+      .WillOnce(testing::Return(
+          embedded_test_server()->GetURL("/password/done.html")));
+
+  password_change_service()->OfferPasswordChangeUi(main_url, u"test",
+                                                   u"pa$$word", WebContents());
+  PasswordChangeDelegate* delegate =
+      password_change_service()->GetPasswordChangeDelegate(WebContents());
+  EXPECT_TRUE(delegate);
+  delegate->StartPasswordChangeFlow();
+  PasswordChangeUIController* ui_controller =
+      static_cast<PasswordChangeDelegateImpl*>(delegate)->ui_controller();
+  EXPECT_TRUE(ui_controller->toast_view());
+  // Verify action button is present and visible.
+  EXPECT_TRUE(ui_controller->toast_view()->close_button());
+  EXPECT_TRUE(ui_controller->toast_view()->close_button()->GetVisible());
+
+  SetModelQualityLogsUploader();
+
+  // Click action button, this should cancel the flow.
+  // Which is counted as an interruption in the quality logs.
+  views::test::ButtonTestApi clicker(
+      ui_controller->toast_view()->close_button());
+  clicker.NotifyClick(ui::test::TestEvent());
+  EXPECT_EQ(PasswordChangeDelegate::State::kCanceled,
+            delegate->GetCurrentState());
+
+  // The quality log is uploaded in the destructor.
+  base::WeakPtr<PasswordChangeDelegate> delegate_weak_ptr =
+      delegate->AsWeakPtr();
+  EXPECT_TRUE(base::test::RunUntil(
+      [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
+
+  VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_FLOW_INTERRUPTED,
+      /*open_form_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /* submit_form_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /*verify_submission_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /*final_status=*/
+      FinalModelStatus::FINAL_MODEL_STATUS_UNSPECIFIED);
+}
+
+IN_PROC_BROWSER_TEST_F(PasswordChangeBrowserTestWithLoginCheck,
+                       UserSkipsLoginCheck) {
+  const GURL main_url = WebContents()->GetLastCommittedURL();
+  EXPECT_CALL(*affiliation_service(), GetChangePasswordURL(main_url))
+      .WillOnce(Return(GURL(kChangePasswordURL)));
+  password_change_service()->OfferPasswordChangeUi(main_url, u"test",
+                                                   u"password", WebContents());
+  SetModelQualityLogsUploader();
+  auto* delegate =
+      password_change_service()->GetPasswordChangeDelegate(WebContents());
+  delegate->StartPasswordChangeFlow();
+  auto* delegate_impl = static_cast<PasswordChangeDelegateImpl*>(delegate);
+  // Verify that the background tab was not created yet.
+  EXPECT_FALSE(delegate_impl->executor());
+  EXPECT_TRUE(delegate_impl->login_checker());
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kWaitingForChangePasswordForm);
+
+  delegate_impl->login_checker()->RespondWithLoginStatus(IsLoggedIn(false));
+  EXPECT_TRUE(delegate_impl->login_checker());
+  EXPECT_FALSE(delegate_impl->executor());
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kLoginFormDetected);
+
+  // Failing for the second time changes the state to give an option to
+  // continue.
+  delegate_impl->login_checker()->RespondWithLoginStatus(IsLoggedIn(false));
+  EXPECT_TRUE(delegate_impl->login_checker());
+  EXPECT_FALSE(delegate_impl->executor());
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kLoginFormDetectedUserCanContinue);
+
+  // User stays in `kLoginFormDetectedUserCanContinue` after subsequent
+  // failures.
+  delegate_impl->login_checker()->RespondWithLoginStatus(IsLoggedIn(false));
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kLoginFormDetectedUserCanContinue);
+
+  // Now the user clicks "Continue" which skips login check.
+  delegate->OnUserSkippedLoginCheck();
+  EXPECT_FALSE(delegate_impl->login_checker());
+  EXPECT_TRUE(delegate_impl->executor());
+  EXPECT_EQ(delegate->GetCurrentState(),
+            PasswordChangeDelegate::State::kWaitingForChangePasswordForm);
+  // Stop the flow to check the correct state of the quality log.
+  delegate->Stop();
+  // The quality log is uploaded in the destructor.
+  base::WeakPtr<PasswordChangeDelegate> delegate_weak_ptr =
+      delegate->AsWeakPtr();
+  EXPECT_TRUE(base::test::RunUntil(
+      [&delegate_weak_ptr]() { return !delegate_weak_ptr; }));
+  VerifyUniqueQualityLog(
+      /*login_check_status=*/QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNEXPECTED_STATE,
+      /*open_form_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /* submit_form_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /*verify_submission_status=*/
+      QualityStatus::
+          PasswordChangeQuality_StepQuality_SubmissionStatus_UNKNOWN_STATUS,
+      /*final_status=*/
+      FinalModelStatus::FINAL_MODEL_STATUS_UNSPECIFIED,
+      /*login_check_was_skipped=*/true);
 }

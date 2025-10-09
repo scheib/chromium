@@ -15,6 +15,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/trace_event/trace_event.h"
 #include "base/types/pass_key.h"
+#include "device/vr/public/mojom/hit_test_subscription_id.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "third_party/blink/renderer/bindings/core/v8/frozen_array.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -77,7 +78,7 @@ const char kReferenceSpaceNotSupported[] =
     "This device does not support the requested reference space type.";
 
 const char kIncompatibleLayer[] =
-    "XRWebGLLayer was created with a different session.";
+    "XRLayer was created with a different session.";
 
 const char kBaseLayerAndLayers[] =
     "Both baseLayer and layers should not be set at the same time when "
@@ -198,11 +199,12 @@ Vector<device::mojom::blink::EntityTypeForHitTest> GetEntityTypesForHitTest(
 }
 
 template <typename T>
-HashSet<uint64_t> GetIdsOfUnusedHitTestSources(
-    const HeapHashMap<uint64_t, WeakMember<T>>& id_to_hit_test_source,
-    const HashSet<uint64_t>& all_ids) {
+HashSet<device::HitTestSubscriptionId> GetIdsOfUnusedHitTestSources(
+    const HeapHashMap<device::HitTestSubscriptionId, WeakMember<T>>&
+        id_to_hit_test_source,
+    const HashSet<device::HitTestSubscriptionId>& all_ids) {
   // Gather all IDs of unused hit test sources:
-  HashSet<uint64_t> unused_hit_test_source_ids;
+  HashSet<device::HitTestSubscriptionId> unused_hit_test_source_ids;
   for (auto& id : all_ids) {
     if (!base::Contains(id_to_hit_test_source, id)) {
       unused_hit_test_source_ids.insert(id);
@@ -819,7 +821,7 @@ ScriptPromise<XRAnchor> XRSession::CreateAnchorHelper(
     const gfx::Transform& native_origin_from_anchor,
     const device::mojom::blink::XRNativeOriginInformationPtr&
         native_origin_information,
-    std::optional<uint64_t> maybe_plane_id,
+    std::optional<device::PlaneId> maybe_plane_id,
     ExceptionState& exception_state) {
   DVLOG(2) << __func__;
 
@@ -857,19 +859,11 @@ ScriptPromise<XRAnchor> XRSession::CreateAnchorHelper(
       script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
 
-  if (maybe_plane_id) {
-    xr_->xrEnvironmentProviderRemote()->CreatePlaneAnchor(
-        native_origin_information->Clone(),
-        *maybe_native_origin_from_anchor_pose, *maybe_plane_id,
-        resolver->WrapCallbackInScriptScope(WTF::BindOnce(
-            &XRSession::OnCreateAnchorResult, WrapPersistent(this))));
-  } else {
-    xr_->xrEnvironmentProviderRemote()->CreateAnchor(
-        native_origin_information->Clone(),
-        *maybe_native_origin_from_anchor_pose,
-        resolver->WrapCallbackInScriptScope(WTF::BindOnce(
-            &XRSession::OnCreateAnchorResult, WrapPersistent(this))));
-  }
+  xr_->xrEnvironmentProviderRemote()->CreateAnchor(
+      native_origin_information->Clone(), *maybe_native_origin_from_anchor_pose,
+      maybe_plane_id,
+      resolver->WrapCallbackInScriptScope(blink::BindOnce(
+          &XRSession::OnCreateAnchorResult, WrapPersistent(this))));
 
   create_anchor_promises_.insert(resolver);
 
@@ -1043,7 +1037,7 @@ ScriptPromise<XRHitTestSource> XRSession::requestHitTestSource(
 
   xr_->xrEnvironmentProviderRemote()->SubscribeToHitTest(
       maybe_native_origin->Clone(), entity_types, std::move(ray_mojo),
-      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
+      resolver->WrapCallbackInScriptScope(blink::BindOnce(
           &XRSession::OnSubscribeToHitTestResult, WrapPersistent(this))));
   request_hit_test_source_promises_.insert(resolver);
 
@@ -1110,9 +1104,9 @@ XRSession::requestHitTestSourceForTransientInput(
 
   xr_->xrEnvironmentProviderRemote()->SubscribeToHitTestForTransientInput(
       options_init->profile(), entity_types, std::move(ray_mojo),
-      resolver->WrapCallbackInScriptScope(
-          WTF::BindOnce(&XRSession::OnSubscribeToHitTestForTransientInputResult,
-                        WrapPersistent(this))));
+      resolver->WrapCallbackInScriptScope(blink::BindOnce(
+          &XRSession::OnSubscribeToHitTestForTransientInputResult,
+          WrapPersistent(this))));
   request_hit_test_source_promises_.insert(resolver);
 
   return promise;
@@ -1120,69 +1114,67 @@ XRSession::requestHitTestSourceForTransientInput(
 
 void XRSession::OnSubscribeToHitTestResult(
     ScriptPromiseResolver<XRHitTestSource>* resolver,
-    device::mojom::SubscribeToHitTestResult result,
-    uint64_t subscription_id) {
-  DVLOG(2) << __func__ << ": result=" << result
-           << ", subscription_id=" << subscription_id;
+    const std::optional<device::HitTestSubscriptionId>& subscription_id) {
+  DVLOG(2) << __func__ << ": subscription_id="
+           << subscription_id.value_or(device::kInvalidHitTestSubscriptionId);
 
   DCHECK(request_hit_test_source_promises_.Contains(resolver));
   request_hit_test_source_promises_.erase(resolver);
 
-  if (result != device::mojom::SubscribeToHitTestResult::SUCCESS) {
+  if (!subscription_id) {
     resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
                                      kHitTestSubscriptionFailed);
     return;
   }
 
   XRHitTestSource* hit_test_source =
-      MakeGarbageCollected<XRHitTestSource>(subscription_id, this);
+      MakeGarbageCollected<XRHitTestSource>(*subscription_id, this);
 
-  hit_test_source_ids_to_hit_test_sources_.insert(subscription_id,
+  hit_test_source_ids_to_hit_test_sources_.insert(*subscription_id,
                                                   hit_test_source);
-  hit_test_source_ids_.insert(subscription_id);
+  hit_test_source_ids_.insert(*subscription_id);
 
   resolver->Resolve(hit_test_source);
 }
 
 void XRSession::OnSubscribeToHitTestForTransientInputResult(
     ScriptPromiseResolver<XRTransientInputHitTestSource>* resolver,
-    device::mojom::SubscribeToHitTestResult result,
-    uint64_t subscription_id) {
-  DVLOG(2) << __func__ << ": result=" << result
-           << ", subscription_id=" << subscription_id;
+    const std::optional<device::HitTestSubscriptionId>& subscription_id) {
+  DVLOG(2) << __func__ << ": subscription_id="
+           << subscription_id.value_or(device::kInvalidHitTestSubscriptionId);
 
   DCHECK(request_hit_test_source_promises_.Contains(resolver));
   request_hit_test_source_promises_.erase(resolver);
 
-  if (result != device::mojom::SubscribeToHitTestResult::SUCCESS) {
+  if (!subscription_id) {
     resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
                                      kHitTestSubscriptionFailed);
     return;
   }
 
   XRTransientInputHitTestSource* hit_test_source =
-      MakeGarbageCollected<XRTransientInputHitTestSource>(subscription_id,
+      MakeGarbageCollected<XRTransientInputHitTestSource>(*subscription_id,
                                                           this);
 
   hit_test_source_ids_to_transient_input_hit_test_sources_.insert(
-      subscription_id, hit_test_source);
-  hit_test_source_for_transient_input_ids_.insert(subscription_id);
+      *subscription_id, hit_test_source);
+  hit_test_source_for_transient_input_ids_.insert(*subscription_id);
 
   resolver->Resolve(hit_test_source);
 }
 
-void XRSession::OnCreateAnchorResult(ScriptPromiseResolver<XRAnchor>* resolver,
-                                     device::mojom::CreateAnchorResult result,
-                                     uint64_t id) {
-  DVLOG(2) << __func__ << ": result=" << result << ", id=" << id;
+void XRSession::OnCreateAnchorResult(
+    ScriptPromiseResolver<XRAnchor>* resolver,
+    const std::optional<device::AnchorId>& id) {
+  DVLOG(2) << __func__ << ": id=" << id.value_or(device::kInvalidAnchorId);
 
   DCHECK(create_anchor_promises_.Contains(resolver));
   create_anchor_promises_.erase(resolver);
 
-  if (result == device::mojom::CreateAnchorResult::SUCCESS) {
+  if (id) {
     // Anchor was created successfully on the device. Subsequent frame update
     // must contain newly created anchor data.
-    anchor_ids_to_pending_anchor_promises_.insert(id, resolver);
+    anchor_ids_to_pending_anchor_promises_.insert(*id, resolver);
   } else {
     resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
                                      kAnchorCreationFailed);
@@ -1199,7 +1191,7 @@ void XRSession::EnsureEnvironmentErrorHandler() {
   if (!environment_error_handler_subscribed_ &&
       xr_->xrEnvironmentProviderRemote()) {
     environment_error_handler_subscribed_ = true;
-    xr_->AddEnvironmentProviderErrorHandler(WTF::BindOnce(
+    xr_->AddEnvironmentProviderErrorHandler(BindOnce(
         &XRSession::OnEnvironmentProviderError, WrapWeakPersistent(this)));
   }
 }
@@ -1271,7 +1263,7 @@ void XRSession::ProcessAnchorsData(
            << ", all anchors size="
            << tracked_anchors_data->all_anchors_ids.size();
 
-  HeapHashMap<uint64_t, Member<XRAnchor>> updated_anchors;
+  HeapHashMap<device::AnchorId, Member<XRAnchor>> updated_anchors;
 
   // First, process all anchors that had their information updated (new anchors
   // are also processed here).
@@ -1437,12 +1429,14 @@ ScriptPromise<XRLightProbe> XRSession::requestLightProbe(
     return EmptyPromise();
   }
 
-  if (light_probe_init->reflectionFormat() != "srgba8" &&
-      light_probe_init->reflectionFormat() != "rgba16f") {
+  if (light_probe_init->reflectionFormat() !=
+          V8XRReflectionFormat::Enum::kSrgba8 &&
+      light_probe_init->reflectionFormat() !=
+          V8XRReflectionFormat::Enum::kRgba16F) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
         "Reflection format \"" +
-            light_probe_init->reflectionFormat().AsString() +
+            light_probe_init->reflectionFormat().AsStringView() +
             "\" not supported.");
     return EmptyPromise();
   }
@@ -1523,7 +1517,7 @@ void XRSession::ForceEnd(ShutdownPolicy shutdown_policy) {
   }
 
   xr_->ExitPresent(
-      WTF::BindOnce(&XRSession::OnExitPresent, WrapWeakPersistent(this)));
+      BindOnce(&XRSession::OnExitPresent, WrapWeakPersistent(this)));
 
   if (wait_for_response) {
     waiting_for_shutdown_ = true;
@@ -2066,12 +2060,8 @@ void XRSession::SetMetricsReporter(std::unique_ptr<MetricsReporter> reporter) {
   metrics_reporter_ = std::move(reporter);
 }
 
-void XRSession::OnFrame(
-    double timestamp,
-    scoped_refptr<gpu::ClientSharedImage> output_shared_image,
-    const gpu::SyncToken& output_sync_token,
-    scoped_refptr<gpu::ClientSharedImage> camera_image_shared_image,
-    const gpu::SyncToken& camera_image_sync_token) {
+void XRSession::OnFrame(double timestamp,
+                        Vector<XRSharedImageData> shared_images) {
   TRACE_EVENT0("gpu", "OnFrame");
   DVLOG(2) << __func__ << ": ended_=" << ended_
            << ", pending_frame_=" << pending_frame_;
@@ -2093,9 +2083,8 @@ void XRSession::OnFrame(
       // submit a frame back to the runtime, as all "GetFrameData" calls need a
       // matching submit.
       if (prev_base_layer_) {
-        layer_shared_image_manager_.SetLayerSharedImages(
-            prev_base_layer_, output_shared_image, output_sync_token,
-            camera_image_shared_image, camera_image_sync_token);
+        layer_shared_image_manager_.SetSharedImages(prev_base_layer_,
+                                                    std::move(shared_images));
 
         DVLOG(2) << __func__
                  << ": prev_base_layer_ is valid, submitting frame to it";
@@ -2116,9 +2105,8 @@ void XRSession::OnFrame(
     }
 
     XRLayer* frame_base_layer = render_state_->GetFirstLayer();
-    layer_shared_image_manager_.SetLayerSharedImages(
-        frame_base_layer, output_shared_image, output_sync_token,
-        camera_image_shared_image, camera_image_sync_token);
+    layer_shared_image_manager_.SetSharedImages(frame_base_layer,
+                                                std::move(shared_images));
 
     frame_base_layer->OnFrameStart();
 

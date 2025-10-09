@@ -22,7 +22,6 @@
 #import "ios/chrome/app/application_delegate/startup_information.h"
 #import "ios/chrome/app/application_delegate/url_opener.h"
 #import "ios/chrome/app/application_delegate/url_opener_params.h"
-#import "ios/chrome/app/chrome_overlay_window.h"
 #import "ios/chrome/app/main_application_delegate_testing.h"
 #import "ios/chrome/app/main_controller.h"
 #import "ios/chrome/app/startup/app_launch_metrics.h"
@@ -41,6 +40,7 @@
 #import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/chrome_overlay_window/chrome_overlay_window.h"
 #import "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #import "ios/web/common/uikit_ui_util.h"
 #import "ios/web/public/thread/web_task_traits.h"
@@ -81,8 +81,10 @@ constexpr base::TimeDelta kMainIntentCheckDelay = base::Seconds(1);
     _metricsMediator = [[MetricsMediator alloc] init];
     [_mainController setMetricsMediator:_metricsMediator];
     _appState = [[AppState alloc] initWithStartupInformation:_mainController];
-    _pushNotificationDelegate =
-        [[PushNotificationDelegate alloc] initWithAppState:_appState];
+    _pushNotificationDelegate = [[PushNotificationDelegate alloc]
+              initWithAppState:_appState
+        userNotificationCenter:UNUserNotificationCenter
+                                   .currentNotificationCenter];
     [_mainController setAppState:_appState];
   }
   return self;
@@ -147,6 +149,11 @@ constexpr base::TimeDelta kMainIntentCheckDelay = base::Seconds(1);
   // Any report captured from this point on should be noted as after terminate.
   crash_keys::SetCrashedAfterAppWillTerminate();
   base::ios::ScopedCriticalAction::ApplicationWillTerminate();
+
+  UNUserNotificationCenter* center =
+      [UNUserNotificationCenter currentNotificationCenter];
+  center.delegate = nil;
+  _pushNotificationDelegate = nil;
 
   // If `self.didFinishLaunching` is NO, that indicates that the app was
   // terminated before startup could be run. In this situation, skip running

@@ -4,6 +4,10 @@
 
 #include "chrome/browser/ui/tabs/tab_list_bridge.h"
 
+#include <deque>
+
+#include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -16,6 +20,52 @@
 // TODO(devlin): Would it make sense to port this to instead be a
 // TabListInterface browsertest, and use it on all relevant platforms?
 using TabListBridgeBrowserTest = InProcessBrowserTest;
+
+// Represents an event reported via `TabListInterfaceObserver`.
+struct Event {
+  enum class Type {
+    TAB_ADDED,
+    ACTIVE_TAB_CHANGED,
+  };
+  Type type;
+  raw_ptr<tabs::TabInterface> tab;
+};
+
+// A fake implementation of TabListInterfaceObserver that records callback
+// invocations as `Event`s.
+class FakeObserver : public TabListInterfaceObserver {
+ public:
+  explicit FakeObserver(TabListInterface* tab_list) {
+    observation_.Observe(tab_list);
+  }
+
+  // Reads an event of the specified type, discarding events of other types
+  // reported before the event.
+  Event ReadEvent(Event::Type type) {
+    while (true) {
+      CHECK(!events_.empty()) << "No event of the specified type reported";
+      Event event = std::move(events_.front());
+      events_.pop_front();
+      if (event.type == type) {
+        return event;
+      }
+    }
+  }
+
+  // TabListInterfaceObserver:
+  void OnTabAdded(tabs::TabInterface* tab, int index) override {
+    events_.push_back(Event{Event::Type::TAB_ADDED, tab});
+  }
+
+  void OnActiveTabChanged(tabs::TabInterface* tab) override {
+    events_.push_back(Event{Event::Type::ACTIVE_TAB_CHANGED, tab});
+  }
+
+ private:
+  std::deque<Event> events_;
+  base::ScopedObservation<TabListInterface, TabListInterfaceObserver>
+      observation_{this};
+};
 
 // A helpful matcher for tabs having an expected URL. Since we assume the
 // TabInterface works, this is sufficient to meaningfully describe tabs in
@@ -232,4 +282,141 @@ IN_PROC_BROWSER_TEST_F(TabListBridgeBrowserTest, CloseTab) {
 
   tab_list_interface->CloseTab(tab_to_close->GetHandle());
   EXPECT_EQ(1, tab_list_interface->GetTabCount());
+}
+
+IN_PROC_BROWSER_TEST_F(TabListBridgeBrowserTest, MoveTab) {
+  const GURL url1("http://one.example");
+  const GURL url2("http://two.example");
+  const GURL url3("http://three.example");
+
+  // Open three tabs.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url1, WindowOpenDisposition::CURRENT_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url2, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url3, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  TabListInterface* tab_list_interface = TabListInterface::From(browser());
+  ASSERT_TRUE(tab_list_interface);
+
+  EXPECT_THAT(tab_list_interface->GetAllTabs(),
+              testing::ElementsAre(MatchesTab(url1), MatchesTab(url2),
+                                   MatchesTab(url3)));
+
+  // Move the first tab to the end.
+  tabs::TabInterface* tab_to_move = tab_list_interface->GetTab(0);
+  tab_list_interface->MoveTab(tab_to_move->GetHandle(), 2);
+  EXPECT_THAT(tab_list_interface->GetAllTabs(),
+              testing::ElementsAre(MatchesTab(url2), MatchesTab(url3),
+                                   MatchesTab(url1)));
+
+  // Move the new first tab (originally second) to the middle.
+  tab_to_move = tab_list_interface->GetTab(0);
+  tab_list_interface->MoveTab(tab_to_move->GetHandle(), 1);
+  EXPECT_THAT(tab_list_interface->GetAllTabs(),
+              testing::ElementsAre(MatchesTab(url3), MatchesTab(url2),
+                                   MatchesTab(url1)));
+}
+
+IN_PROC_BROWSER_TEST_F(TabListBridgeBrowserTest, MoveTabToWindow) {
+  const GURL url1("http://one.example");
+  const GURL url2("http://two.example");
+
+  // Open two tabs.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url1, WindowOpenDisposition::CURRENT_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url2, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  TabListInterface* source_list_interface = TabListInterface::From(browser());
+  ASSERT_TRUE(source_list_interface);
+
+  // Create a second browser.
+  Browser* second_browser = CreateBrowser(browser()->profile());
+  TabListInterface* destination_list_interface =
+      TabListInterface::From(second_browser);
+  ASSERT_TRUE(destination_list_interface);
+
+  EXPECT_EQ(2, source_list_interface->GetTabCount());
+  EXPECT_EQ(1, destination_list_interface->GetTabCount());
+
+  // Move the second tab from the first browser to the second.
+  tabs::TabInterface* tab_to_move = source_list_interface->GetTab(1);
+  source_list_interface->MoveTabToWindow(tab_to_move->GetHandle(),
+                                         second_browser->session_id(), 1);
+
+  // Verify the tabs are in the correct places.
+  EXPECT_EQ(1, source_list_interface->GetTabCount());
+  EXPECT_EQ(2, destination_list_interface->GetTabCount());
+
+  EXPECT_THAT(source_list_interface->GetAllTabs(),
+              testing::ElementsAre(MatchesTab(url1)));
+  EXPECT_THAT(destination_list_interface->GetAllTabs(),
+              testing::ElementsAre(testing::_, MatchesTab(url2)));
+}
+
+IN_PROC_BROWSER_TEST_F(TabListBridgeBrowserTest, Observer_OnTabAdded) {
+  const GURL url1("http://one.example");
+  const GURL url2("http://two.example");
+  const GURL url3("http://three.example");
+
+  TabListInterface* tab_list_interface = TabListBridge::From(browser());
+  ASSERT_TRUE(tab_list_interface);
+
+  FakeObserver observer(tab_list_interface);
+
+  // Navigate to one.example in the current tab.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url1, WindowOpenDisposition::CURRENT_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  // Open a new tab in the background.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url2, WindowOpenDisposition::NEW_BACKGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  // Open a new tab in the foreground.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url3, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  // We should have received two TAB_ADDED events.
+  EXPECT_THAT(observer.ReadEvent(Event::Type::TAB_ADDED).tab, MatchesTab(url2));
+  EXPECT_THAT(observer.ReadEvent(Event::Type::TAB_ADDED).tab, MatchesTab(url3));
+}
+
+IN_PROC_BROWSER_TEST_F(TabListBridgeBrowserTest, Observer_OnActiveTabChanged) {
+  const GURL url1("http://one.example");
+  const GURL url2("http://two.example");
+  const GURL url3("http://three.example");
+
+  TabListInterface* tab_list_interface = TabListBridge::From(browser());
+  ASSERT_TRUE(tab_list_interface);
+
+  FakeObserver observer(tab_list_interface);
+
+  // Navigate to one.example in the current tab.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url1, WindowOpenDisposition::CURRENT_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  // Open a new tab in the background.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url2, WindowOpenDisposition::NEW_BACKGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  // Open a new tab in the foreground.
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url3, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+
+  // We should have received single ACTIVE_TAB_CHANGED event.
+  EXPECT_THAT(observer.ReadEvent(Event::Type::ACTIVE_TAB_CHANGED).tab,
+              MatchesTab(url3));
 }

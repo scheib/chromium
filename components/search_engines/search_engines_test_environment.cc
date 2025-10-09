@@ -6,8 +6,10 @@
 
 #include <utility>
 
+#include "base/check_deref.h"
 #include "base/test/bind.h"
 #include "components/metrics/metrics_pref_names.h"
+#include "components/policy/core/common/management/management_service.h"
 #include "components/regional_capabilities/regional_capabilities_service.h"
 #include "components/regional_capabilities/regional_capabilities_test_utils.h"
 #include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
@@ -16,6 +18,7 @@
 #include "components/search_engines/template_url_prepopulate_data_resolver.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_service_test_util.h"
+#include "components/signin/public/identity_manager/identity_test_environment.h"
 
 namespace search_engines {
 
@@ -69,7 +72,9 @@ SearchEnginesTestEnvironment::GetSearchEngineChoiceServiceFactory(
                 : std::make_unique<FakeSearchEngineChoiceServiceClient>(),
             environment.pref_service(), &environment.local_state(),
             environment.regional_capabilities_service(),
-            environment.prepopulate_data_resolver());
+            environment.prepopulate_data_resolver(),
+            CHECK_DEREF(environment.identity_test_env().identity_manager()),
+            environment.management_service());
         if (!skip_init) {
           service->Init();
         }
@@ -145,6 +150,15 @@ SearchEnginesTestEnvironment::prepopulate_data_resolver() {
             pref_service(), regional_capabilities_service());
   }
   return *prepopulate_data_resolver_;
+}
+
+policy::ManagementService& SearchEnginesTestEnvironment::management_service() {
+  if (!management_service_) {
+    management_service_ = std::make_unique<policy::ManagementService>(
+        /*providers=*/std::vector<
+            std::unique_ptr<policy::ManagementStatusProvider>>{});
+  }
+  return *management_service_;
 }
 
 SearchEngineChoiceService&

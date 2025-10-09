@@ -24,13 +24,9 @@
 
 namespace tracing {
 
-BASE_FEATURE(kTracingTriggers,
-             "TracingTriggers",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kFieldTracing, "FieldTracing", base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kPresetTracing,
-             "PresetTracing",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kTracingTriggers, base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kFieldTracing, base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kPresetTracing, base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE_PARAM(bool,
                    kFieldTracingAnonymized,
@@ -72,6 +68,7 @@ constexpr const char* kBrowserCategoriesList[] = {
     "browser",
     "cc",
     "chromeos",
+    "content",
     "device",
     "disabled-by-default-cpu_profiler",
     "disabled-by-default-power",
@@ -84,23 +81,26 @@ constexpr const char* kBrowserCategoriesList[] = {
     "fledge",
     "fonts",
     "gpu",
+    "IndexedDB",
     "interactions",
     "ipc",
     "latency",
     "latencyInfo",
     "loading",
     "memory",
-    "mojom",
     "mojom.flow",
+    "mojom",
     "navigation",
     "omnibox",
     "passwords",
     "performance_manager.cpu_metrics",
+    "performance_manager.graph",
     "performance_scenarios",
     "renderer_host",
     "renderer",
     "safe_browsing",
     "ServiceWorker",
+    "shutdown",
     "sql",
     "startup",
     "sync",
@@ -108,6 +108,7 @@ constexpr const char* kBrowserCategoriesList[] = {
     "toplevel",
     "tracing.background",
     "ui",
+    "v8.memory",
     "v8.wasm",
     "v8",
 };

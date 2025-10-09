@@ -12,7 +12,6 @@ import android.app.ActivityOptions;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.os.Build;
 import android.util.Pair;
 
@@ -23,7 +22,6 @@ import org.chromium.base.AconfigFlaggedApiDelegate;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.ResettersForTesting;
-import org.chromium.base.ServiceLoaderUtil;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -54,16 +52,10 @@ public class PopupCreator {
     private static @Nullable ReparentingTask sReparentingTaskForTesting;
     private static @Nullable Insets sInsetsForecastForTesting;
 
-    // TODO(https://crbug.com/411002260): remove the display argument when Android display topology
-    // API is available in Chrome
-    public static void moveTabToNewPopup(
-            Tab tab, WindowFeatures windowFeatures, DisplayAndroid display) {
+    public static void moveTabToNewPopup(Tab tab, WindowFeatures windowFeatures) {
         Intent intent = initializePopupIntent();
         ActivityOptions activityOptions =
-                createPopupActivityOptions(
-                        windowFeatures,
-                        display,
-                        getPopupInsetsForecast(tab.getWindowAndroid(), display));
+                createPopupActivityOptions(windowFeatures, tab.getWindowAndroid());
         intent.putExtra(EXTRA_REQUESTED_WINDOW_FEATURES, windowFeatures.toBundle());
 
         getReparentingTask(tab)
@@ -85,8 +77,7 @@ public class PopupCreator {
             return sArePopupsEnabledForTesting;
         }
 
-        AconfigFlaggedApiDelegate delegate =
-                ServiceLoaderUtil.maybeCreate(AconfigFlaggedApiDelegate.class);
+        AconfigFlaggedApiDelegate delegate = AconfigFlaggedApiDelegate.getInstance();
         if (delegate == null) {
             return false;
         }
@@ -224,8 +215,7 @@ public class PopupCreator {
                         + ", target bounds = "
                         + targetWindowBoundsPx);
 
-        final AconfigFlaggedApiDelegate delegate =
-                ServiceLoaderUtil.maybeCreate(AconfigFlaggedApiDelegate.class);
+        final AconfigFlaggedApiDelegate delegate = AconfigFlaggedApiDelegate.getInstance();
         if (delegate == null) {
             Log.w(TAG, "adjustWindowBounds: AconfigFlaggedApiDelegate is null -- bailing out");
             return;
@@ -366,46 +356,51 @@ public class PopupCreator {
     }
 
     private static ActivityOptions createPopupActivityOptions(
-            WindowFeatures windowFeatures, DisplayAndroid display, Insets insets) {
+            WindowFeatures windowFeatures, @Nullable WindowAndroid sourceWindow) {
         ActivityOptions activityOptions = ActivityOptions.makeBasic();
 
-        Pair<Integer, Rect> localCoordinatesPx =
-                getLocalCoordinatesPxFromWindowFeatures(windowFeatures, display);
-        if (localCoordinatesPx.first != null) {
-            activityOptions.setLaunchDisplayId(localCoordinatesPx.first);
-            if (localCoordinatesPx.second != null) {
-                if (ChromeFeatureList.isEnabled(
-                        ChromeFeatureList.ANDROID_WINDOW_POPUP_PREDICT_FINAL_BOUNDS)) {
-                    Log.v(TAG, "createPopupActivityOptions: DO apply insets = " + insets);
-                    final Rect outerBounds =
-                            WindowInsetsUtils.insetRectangle(localCoordinatesPx.second, insets);
-                    activityOptions.setLaunchBounds(outerBounds);
-                } else {
-                    Log.v(TAG, "createPopupActivityOptions: DO NOT apply insets = " + insets);
-                    activityOptions.setLaunchBounds(localCoordinatesPx.second);
-                }
+        final Pair<DisplayAndroid, Rect> localCoordinates =
+                getLocalCoordinatesPxFromWindowFeatures(windowFeatures);
+
+        if (localCoordinates != null) {
+            final DisplayAndroid display = localCoordinates.first;
+            Rect bounds = localCoordinates.second;
+
+            Log.v(TAG, "createPopupActivityOptions: ideal bounds = " + bounds);
+
+            if (ChromeFeatureList.isEnabled(
+                    ChromeFeatureList.ANDROID_WINDOW_POPUP_PREDICT_FINAL_BOUNDS)) {
+                Insets insets = getPopupInsetsForecast(sourceWindow, display);
+                Log.v(TAG, "createPopupActivityOptions: apply insets = " + insets);
+                bounds = WindowInsetsUtils.insetRectangle(bounds, insets);
             }
+
+            bounds = DisplayUtil.clampWindowToDisplay(bounds, display);
+            Log.v(TAG, "createPopupActivityOptions: clamped bounds = " + bounds);
+
+            activityOptions.setLaunchDisplayId(display.getDisplayId());
+            activityOptions.setLaunchBounds(bounds);
         }
 
         return activityOptions;
     }
 
-    private static Pair<Integer, Rect> getLocalCoordinatesPxFromWindowFeatures(
-            WindowFeatures windowFeatures, DisplayAndroid display) {
+    private static @Nullable Pair<DisplayAndroid, Rect> getLocalCoordinatesPxFromWindowFeatures(
+            WindowFeatures windowFeatures) {
         if (windowFeatures.width == null || windowFeatures.height == null) {
-            return Pair.create(null, null);
+            return null;
         }
 
-        float widthDp = windowFeatures.width;
-        float heightDp = windowFeatures.height;
-        float leftDp = windowFeatures.left == null ? 0 : windowFeatures.left;
-        float topDp = windowFeatures.top == null ? 0 : windowFeatures.top;
+        final int widthDp = windowFeatures.width;
+        final int heightDp = windowFeatures.height;
+        final int leftDp = windowFeatures.left == null ? 0 : windowFeatures.left;
+        final int topDp = windowFeatures.top == null ? 0 : windowFeatures.top;
 
-        float rightDp = leftDp + widthDp;
-        float bottomDp = topDp + heightDp;
+        final int rightDp = leftDp + widthDp;
+        final int bottomDp = topDp + heightDp;
 
-        return DisplayUtil.getLocalCoordinatesPx(
-                new RectF(leftDp, topDp, rightDp, bottomDp), display);
+        return DisplayUtil.convertGlobalDipToLocalPxCoordinates(
+                new Rect(leftDp, topDp, rightDp, bottomDp));
     }
 
     private static ReparentingTask getReparentingTask(Tab tab) {

@@ -16,7 +16,7 @@ static_library("main_parts") {
   public_deps = [
     "//base",
     "//chrome/browser/ash/external_metrics",
-    "//chrome/browser/ash/pcie_peripheral",
+    "//chromeos/ash/components/pcie_peripheral",
   ]
 
   deps = [
@@ -27,8 +27,10 @@ static_library("main_parts") {
     "//ash/webui/camera_app_ui:document_scanning",
     "//build:branding_buildflags",
     "//build/config/chromebox_for_meetings:buildflags",
+    "//build/config/cuttlefish:buildflags",
     "//chrome/browser:browser_process",
     "//chrome/browser:browser_public_dependencies",
+    "//chrome/browser:global_features",
     "//chrome/browser/ash/accessibility",
     "//chrome/browser/ash/ambient",
     "//chrome/browser/ash/app_mode",
@@ -40,6 +42,7 @@ static_library("main_parts") {
     "//chrome/browser/ash/browser_delegate:impl",
     "//chrome/browser/ash/camera",
     "//chrome/browser/ash/certs",
+    "//chrome/browser/ash/child_accounts/parent_access_code",
     "//chrome/browser/ash/crosapi",
     "//chrome/browser/ash/crostini",
     "//chrome/browser/ash/dbus",

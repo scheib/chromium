@@ -102,6 +102,7 @@ static_library("content_shell_app") {
       "//content/web_test:web_test_browser",
       "//content/web_test:web_test_common",
       "//content/web_test:web_test_renderer",
+      "//ui/native_theme",
     ]
   }
   if (!is_fuchsia) {
@@ -131,6 +132,10 @@ static_library("content_shell_app") {
     ]
 
     deps += [ "//components/crash/core/common:reporter_running_ios" ]
+
+    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
+    # enable the diagnostic by removing this line.
+    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
   }
   defines = [
     "CONTENT_SHELL_VERSION=\"$content_shell_version\"",
@@ -316,7 +321,6 @@ static_library("content_shell_lib") {
     ":shell_controller_mojom",
     "//base",
     "//base:base_static",
-    "//cc/base",
     "//components/cdm/renderer",
     "//components/custom_handlers",
     "//components/custom_handlers:test_support",
@@ -324,9 +328,7 @@ static_library("content_shell_lib") {
     "//components/embedder_support:user_agent",
     "//components/input",
     "//components/keyed_service/content",
-    "//components/metrics",
     "//components/metrics:net",
-    "//components/metrics:test_support",
     "//components/network_hints/browser",
     "//components/network_hints/renderer",
     "//components/network_session_configurator/common",
@@ -337,7 +339,6 @@ static_library("content_shell_lib") {
     "//components/prefs",
     "//components/services/storage/test_api",
     "//components/url_formatter",
-    "//components/variations",
     "//components/variations/service",
     "//components/web_cache/renderer",
     "//content:content_resources",
@@ -455,7 +456,6 @@ static_library("content_shell_lib") {
       public_deps += [ "//ui/base/mojom:ui_base_types" ]
       deps += [
         "//ui/color:color_headers",
-        "//ui/native_theme",
         "//ui/resources",
         "//ui/views:test_support",
         "//ui/views/controls/webview",
@@ -1062,6 +1062,7 @@ mojom("content_browsertests_mojom") {
   public_deps = [
     "//mojo/public/mojom/base",
     "//sandbox/policy/mojom",
+    "//third_party/blink/public/mojom/fingerprinting_protection",
     "//third_party/blink/public/mojom/tokens",
   ]
 }

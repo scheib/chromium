@@ -747,7 +747,8 @@ void DedicatedWorkerHost::CreateWebSocketConnector(
           ancestor_render_frame_host_id_.child_id,
           ancestor_render_frame_host_id_.frame_routing_id,
           GetStorageKey().origin(),
-          ancestor_render_frame_host->GetIsolationInfoForSubresources()),
+          ancestor_render_frame_host->GetIsolationInfoForSubresources(),
+          worker_client_security_state_->Clone()),
       std::move(receiver));
 }
 
@@ -766,7 +767,8 @@ void DedicatedWorkerHost::CreateWebTransportConnector(
       std::make_unique<WebTransportConnectorImpl>(
           worker_process_host_->GetDeprecatedID(),
           ancestor_render_frame_host->GetWeakPtr(), GetStorageKey().origin(),
-          isolation_info_.network_anonymization_key()),
+          isolation_info_.network_anonymization_key(),
+          worker_client_security_state_->Clone()),
       std::move(receiver));
 }
 

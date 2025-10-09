@@ -9,10 +9,10 @@
 #include "components/viz/common/resources/shared_image_format.h"
 
 namespace gpu {
-class ClientSharedImage;
+class LegacyGpuMemoryBufferForVideo;
+class MappableBufferNativePixmap;
 class SharedImageFormatToBufferFormatRestrictedUtilsAccessor;
 class SharedImageFormatRestrictedUtilsAccessor;
-class TestSharedImageInterface;
 }  // namespace gpu
 
 namespace cc {
@@ -21,6 +21,10 @@ class PerfContextProvider;
 
 namespace gfx {
 enum class BufferFormat : uint8_t;
+}
+
+namespace ui {
+class WaylandOverlayManager;
 }
 
 enum SkColorType : int;
@@ -71,6 +75,38 @@ gfx::BufferFormat SinglePlaneSharedImageFormatToBufferFormat(
 COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
 SharedImageFormat GetSharedImageFormat(gfx::BufferFormat buffer_format);
 
+// Returns the shared memory offset for `plane_index` for a `format` of `size`.
+COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
+size_t SharedMemoryOffsetForSharedImageFormat(SharedImageFormat format,
+                                              int plane_index,
+                                              const gfx::Size& size);
+
+// Calculates the row size in bytes for a shared memory plane of a
+// SharedImageFormat. Returns size on success and std::nullopt if the row size
+// exceeds the maximum value of `size_t`.
+COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
+std::optional<size_t> SharedMemoryRowSizeForSharedImageFormat(
+    SharedImageFormat format,
+    int plane_index,
+    int width);
+
+// Calculates the plane size in bytes for a shared memory plane of a
+// SharedImageFormat. Returns true on success and false if the plane size
+// exceeds the maximum value of `size_t`.
+COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
+std::optional<size_t> SharedMemoryPlaneSizeForSharedImageFormat(
+    SharedImageFormat format,
+    int plane_index,
+    const gfx::Size& size);
+
+// Calculates the image size in bytes for shared memory of a
+// SharedImageFormat. Returns true on success and false if the image size
+// exceeds the maximum value of `size_t`.
+COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
+std::optional<size_t> SharedMemorySizeForSharedImageFormat(
+    SharedImageFormat format,
+    const gfx::Size& size);
+
 // Utilities that conceptually belong only on the service side, but are
 // currently used by some clients. Usage is restricted to friended clients.
 class COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
@@ -93,9 +129,10 @@ class COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
 class COMPONENT_EXPORT(VIZ_SHARED_IMAGE_FORMAT)
     SharedImageFormatToBufferFormatRestrictedUtils {
  private:
-  friend class gpu::ClientSharedImage;
   friend class gpu::SharedImageFormatToBufferFormatRestrictedUtilsAccessor;
-  friend class gpu::TestSharedImageInterface;
+  friend class gpu::LegacyGpuMemoryBufferForVideo;
+  friend class gpu::MappableBufferNativePixmap;
+  friend class ui::WaylandOverlayManager;
 
   // BufferFormat is being transitioned out of SharedImage code (to use
   // SharedImageFormat instead). Refrain from using this function or preferably

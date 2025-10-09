@@ -36,6 +36,7 @@ robolectric_toolchain = "//build/toolchain/android:robolectric_$host_cpu"
 if (is_android) {
   import("//build/config/android/channel.gni")
   import("//build/config/clang/clang.gni")
+  import("//build/config/cronet/config.gni")
   import("//build/config/dcheck_always_on.gni")
   import("//build/config/sanitizers/sanitizers.gni")
   import("//build/toolchain/siso.gni")
@@ -69,14 +70,14 @@ if (is_android) {
     enable_chrome_android_internal =
         build_with_chromium && checkout_src_internal && target_os == "android"
 
-    # Experimental new flag for the build system to automatically attempt to
-    # fix missing java deps. This should always be false on bots so they do not
-    # succeed when there are build errors. Devs can override this in args.gn.
-    auto_add_missing_java_deps = false
-
     # The default to use for android:minSdkVersion for targets that do
     # not explicitly set it.
     default_min_sdk_version = 29
+    if (is_cronet_build) {
+      # Cronet's min sdk version support policy is different from the rest of
+      # Chromium; Cronet explicitly supports older devices.
+      default_min_sdk_version = 23
+    }
 
     # Static analysis can be either "on" or "off" or "build_server". This
     # controls how android lint, error-prone, bytecode checks are run. This
@@ -93,12 +94,7 @@ if (is_android) {
     # "off"
     #     Disables static analysis. Many bots set this so as to not duplicate
     #     the same analysis steps as other bots.
-    android_static_analysis = "build_server"
-    if (is_official_build) {
-      # Speed up official builds by disabling. Any failures should have already
-      # been caught by other bots.
-      android_static_analysis = "off"
-    }
+    android_static_analysis = "default"
 
     # Embed a wrap.sh file within apks to set custom environment variables.
     # Use a comma space-separated list.
@@ -106,6 +102,24 @@ if (is_android) {
     android_custom_env = ""
   }
   enable_wrap_sh = is_hwasan || is_asan || android_custom_env != ""
+
+  # Make it such that is_official_build sets android_static_analysis="off", but
+  # leaves enable_r8_tracerefs=true.
+  declare_args() {
+    # Controls whether TraceReferences checks are done (for targets with
+    # proguard_enabled=true).
+    enable_r8_tracerefs = android_static_analysis != "off"
+  }
+
+  if (android_static_analysis == "default") {
+    if (is_official_build) {
+      # Speed up official builds by disabling. Any failures should have already
+      # been caught by other bots.
+      android_static_analysis = "off"
+    } else {
+      android_static_analysis = "build_server"
+    }
+  }
 
   if (android_static_analysis == "build_server" && enable_java_templates &&
       getenv("SWARMING_TASK_ID") != "") {
@@ -304,11 +318,22 @@ if (is_android) {
 
     # Where to write failed expectations for bots to read.
     expectations_failure_dir = "$root_build_dir/failed_expectations"
+
+    # Enables rewriting of certain method invocations with overloads that take an
+    # additional argument of type org.chromium.base.task.Location (see
+    # //build/android/location_rewriter)
+    enable_java_location_rewrite = false
   }
 
   if (is_asan) {
     # Disable lint since increasing min_sdk_version can cause ObsoleteSdkInt warnings.
     disable_android_lint = true
+  }
+
+  if (is_cronet_build) {
+    # Disable Java bytecode rewriting for cronet to prevent pulling in bytecode
+    # rewriter's dependencies
+    enable_java_location_rewrite = false
   }
 
   assert(

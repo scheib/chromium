@@ -80,7 +80,7 @@ class OfferNotificationBubbleControllerImpl
 
   // AutofillBubbleControllerBase:
   void OnVisibilityChanged(content::Visibility visibility) override;
-  PageActionIconType GetPageActionIconType() override;
+  std::optional<PageActionIconType> GetPageActionIconType() override;
   void DoShowBubble() override;
 
   // Returns whether the web content associated with this controller is active.
@@ -91,6 +91,10 @@ class OfferNotificationBubbleControllerImpl
       OfferNotificationBubbleControllerImpl>;
   friend class OfferNotificationBubbleControllerImplTest;
   friend class OfferNotificationBubbleViewsTestBase;
+
+  // Configures the controller's state for displaying an offer notification.
+  // This includes setting the offer data and the linked card, if any.
+  void SetupOfferNotification(AutofillOfferData offer, const CreditCard* card);
 
   // Hides the bubble if it is visible and resets the bubble shown timestamp.
   // `should_show_icon` decides whether the icon should be visible after the

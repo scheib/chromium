@@ -280,14 +280,6 @@ class MEDIA_EXPORT VideoFrame : public base::RefCountedThreadSafe<VideoFrame> {
       const VideoFrameLayout& layout,
       const gfx::Rect& visible_rect,
       const gfx::Size& natural_size,
-      const uint8_t* data,
-      size_t data_size,
-      base::TimeDelta timestamp);
-
-  static scoped_refptr<VideoFrame> WrapExternalDataWithLayout(
-      const VideoFrameLayout& layout,
-      const gfx::Rect& visible_rect,
-      const gfx::Size& natural_size,
       base::span<const uint8_t> data,
       base::TimeDelta timestamp);
 
@@ -304,17 +296,6 @@ class MEDIA_EXPORT VideoFrame : public base::RefCountedThreadSafe<VideoFrame> {
       base::span<const uint8_t> y_data,
       base::span<const uint8_t> u_data,
       base::span<const uint8_t> v_data,
-      base::TimeDelta timestamp);
-
-  // Wraps external YUV data with VideoFrameLayout. The returned VideoFrame does
-  // not own the data passed in.
-  static scoped_refptr<VideoFrame> WrapExternalYuvDataWithLayout(
-      const VideoFrameLayout& layout,
-      const gfx::Rect& visible_rect,
-      const gfx::Size& natural_size,
-      const uint8_t* y_data,
-      const uint8_t* u_data,
-      const uint8_t* v_data,
       base::TimeDelta timestamp);
 
   static scoped_refptr<VideoFrame> WrapExternalYuvDataWithLayout(
@@ -365,7 +346,7 @@ class MEDIA_EXPORT VideoFrame : public base::RefCountedThreadSafe<VideoFrame> {
       gfx::ClientNativePixmapFactory* client_native_pixmap_factory,
       gfx::GpuMemoryBufferHandle handle,
       const gfx::Size& coded_size,
-      gfx::BufferFormat format,
+      viz::SharedImageFormat format,
       gfx::BufferUsage usage,
       base::TimeDelta timestamp);
 #endif
@@ -478,12 +459,16 @@ class MEDIA_EXPORT VideoFrame : public base::RefCountedThreadSafe<VideoFrame> {
   static size_t Columns(size_t plane, VideoPixelFormat format, int width);
 
   // Given a crypto/hash Hasher, hash in the pixels from a single VideoFrame.
+  // If `visible_data_only` is true only the frame's visible area will be
+  // hashed, if false then the entire coded frame area will be hashed.
   static void UpdateHashWithFrameForTesting(crypto::hash::Hasher& hasher,
-                                            const VideoFrame& frame);
+                                            const VideoFrame& frame,
+                                            bool visible_data_only = true);
 
   // Convenience wrapper around UpdateHashWithFrameForTesting(): produces the
   // SHA-256 hash of a single video frame's pixels, as a lowercase hex string.
-  static std::string HexHashOfFrameForTesting(const VideoFrame& frame);
+  static std::string HexHashOfFrameForTesting(const VideoFrame& frame,
+                                              bool visible_data_only = true);
 
   // Returns true if |frame| is accessible mapped in the VideoFrame memory
   // space.
@@ -626,6 +611,10 @@ class MEDIA_EXPORT VideoFrame : public base::RefCountedThreadSafe<VideoFrame> {
   // frame data scanlines (coded_size.width() pixels, without stride padding).
   int row_bytes(size_t plane) const;
   int rows(size_t plane) const;
+
+  // Similar to row_bytes() and rows(), but instead refers to the visible area.
+  int GetVisibleRowBytes(size_t plane) const;
+  int GetVisibleRows(size_t plane) const;
 
   // Returns the number of columns for a given plane.
   int columns(size_t plane) const;

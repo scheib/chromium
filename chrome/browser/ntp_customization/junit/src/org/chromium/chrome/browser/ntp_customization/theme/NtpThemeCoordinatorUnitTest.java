@@ -6,8 +6,11 @@ package org.chromium.chrome.browser.ntp_customization.theme;
 
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import android.content.Context;
@@ -25,6 +28,7 @@ import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.ntp_customization.BottomSheetDelegate;
+import org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils.NtpBackgroundImageType;
 import org.chromium.chrome.browser.ntp_customization.R;
 import org.chromium.chrome.browser.profiles.Profile;
 
@@ -35,6 +39,7 @@ public class NtpThemeCoordinatorUnitTest {
 
     @Mock private BottomSheetDelegate mBottomSheetDelegate;
     @Mock private Profile mProfile;
+    @Mock private Runnable mDismissBottomSheet;
 
     private Context mContext;
     private NtpThemeCoordinator mCoordinator;
@@ -45,7 +50,9 @@ public class NtpThemeCoordinatorUnitTest {
                 new ContextThemeWrapper(
                         ApplicationProvider.getApplicationContext(),
                         R.style.Theme_BrowserUI_DayNight);
-        mCoordinator = new NtpThemeCoordinator(mContext, mBottomSheetDelegate, mProfile);
+        mCoordinator =
+                new NtpThemeCoordinator(
+                        mContext, mBottomSheetDelegate, mProfile, mDismissBottomSheet);
     }
 
     @Test
@@ -56,9 +63,7 @@ public class NtpThemeCoordinatorUnitTest {
     @Test
     public void testRegisterBottomSheetLayout() {
         verify(mBottomSheetDelegate)
-                .registerBottomSheetLayout(
-                        eq(NtpThemeCoordinator.NTPThemeBottomSheetSection.THEME_COLLECTIONS),
-                        any());
+                .registerBottomSheetLayout(eq(NtpBackgroundImageType.THEME_COLLECTION), any());
     }
 
     @Test
@@ -72,5 +77,20 @@ public class NtpThemeCoordinatorUnitTest {
         mCoordinator.setNtpThemeBottomSheetViewForTesting(ntpThemeBottomSheetView);
         mCoordinator.destroy();
         verify(ntpThemeBottomSheetView).destroy();
+    }
+
+    @Test
+    public void testOnPreviewClosed() {
+        boolean isImageSelected = false;
+        mCoordinator.onPreviewClosed(isImageSelected);
+
+        verify(mBottomSheetDelegate, never()).onNewColorSelected(anyBoolean());
+        verify(mDismissBottomSheet).run();
+
+        isImageSelected = true;
+        mCoordinator.onPreviewClosed(isImageSelected);
+
+        verify(mBottomSheetDelegate).onNewColorSelected(eq(true));
+        verify(mDismissBottomSheet, times(2)).run();
     }
 }

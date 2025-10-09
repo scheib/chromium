@@ -20,7 +20,6 @@
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -459,8 +458,7 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, SetCursorPosition) {
     // The screen point is in density-independent pixels, so it should always be
     // the same as what the JS has set, (450, 350), assuming all the
     // multiple-display and DPI math was correct.
-    const gfx::Point point =
-        display::Screen::GetScreen()->GetCursorScreenPoint();
+    const gfx::Point point = display::Screen::Get()->GetCursorScreenPoint();
     EXPECT_EQ(point, gfx::Point(450, 350));
   }
 }

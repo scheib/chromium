@@ -49,7 +49,7 @@
 #include "media/base/media_switches.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/common/fingerprinting_protection/canvas_noise_token.h"
+#include "third_party/blink/public/common/fingerprinting_protection/noise_token.h"
 #include "third_party/blink/public/common/history/session_history_constants.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/common/input/web_menu_source_type.h"
@@ -63,6 +63,7 @@
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink.h"
 #include "third_party/blink/public/mojom/page/draggable_region.mojom-blink.h"
 #include "third_party/blink/public/mojom/page/prerender_page_param.mojom.h"
+#include "third_party/blink/public/mojom/page/widget.mojom-blink.h"
 #include "third_party/blink/public/mojom/partitioned_popins/partitioned_popin_params.mojom.h"
 #include "third_party/blink/public/mojom/window_features/window_features.mojom-blink.h"
 #include "third_party/blink/public/platform/interface_registry.h"
@@ -82,6 +83,7 @@
 #include "third_party/blink/public/web/web_meaningful_layout.h"
 #include "third_party/blink/public/web/web_navigation_type.h"
 #include "third_party/blink/public/web/web_node.h"
+#include "third_party/blink/public/web/web_performance_metrics_for_reporting.h"
 #include "third_party/blink/public/web/web_plugin.h"
 #include "third_party/blink/public/web/web_range.h"
 #include "third_party/blink/public/web/web_render_theme.h"
@@ -477,7 +479,7 @@ void MaybePreloadSystemFonts(Page* page) {
   is_first_run = false;
 
   page->GetAgentGroupScheduler().DefaultTaskRunner()->PostTask(
-      FROM_HERE, WTF::BindOnce([]() { FontCache::MaybePreloadSystemFonts(); }));
+      FROM_HERE, BindOnce([]() { FontCache::MaybePreloadSystemFonts(); }));
 }
 
 }  // namespace
@@ -503,7 +505,7 @@ WebView* WebView::Create(
     blink::mojom::PartitionedPopinParamsPtr partitioned_popin_params,
     int32_t history_index,
     int32_t history_length,
-    const std::optional<uint64_t>& canvas_noise_token) {
+    const std::optional<NoiseToken>& canvas_noise_token) {
   return WebViewImpl::Create(
       client,
       is_hidden ? mojom::blink::PageVisibilityState::kHidden
@@ -534,7 +536,7 @@ WebViewImpl* WebViewImpl::Create(
     blink::mojom::PartitionedPopinParamsPtr partitioned_popin_params,
     int32_t history_index,
     int32_t history_length,
-    const std::optional<uint64_t>& canvas_noise_token) {
+    const std::optional<NoiseToken>& canvas_noise_token) {
   return new WebViewImpl(
       client, visibility, std::move(prerender_param), fenced_frame_mode,
       compositing_enabled, widgets_never_composited, opener,
@@ -610,7 +612,7 @@ WebViewImpl::WebViewImpl(
     blink::mojom::PartitionedPopinParamsPtr partitioned_popin_params,
     int32_t history_index,
     int32_t history_length,
-    const std::optional<uint64_t>& canvas_noise_token)
+    const std::optional<NoiseToken>& canvas_noise_token)
     : widgets_never_composited_(widgets_never_composited),
       web_view_client_(client),
       chrome_client_(MakeGarbageCollected<ChromeClientImpl>(this)),
@@ -636,7 +638,7 @@ WebViewImpl::WebViewImpl(
     // corresponding browser-side `RenderViewHostImpl` (e.g. tests or
     // printing), call `Close()` directly instead to delete `this`.
     receiver_.set_disconnect_handler(
-        WTF::BindOnce(&WebViewImpl::MojoDisconnected, WTF::Unretained(this)));
+        BindOnce(&WebViewImpl::MojoDisconnected, Unretained(this)));
   }
   if (!web_view_client_)
     DCHECK(!does_composite_);
@@ -722,7 +724,8 @@ bool WebViewImpl::StartPageScaleAnimation(const gfx::Point& target_position,
       if (view && view->GetScrollableArea()) {
         view->GetScrollableArea()->SetScrollOffset(
             ScrollOffset(gfx::Vector2dF(clamped_point.OffsetFromOrigin())),
-            mojom::blink::ScrollType::kProgrammatic);
+            mojom::blink::ScrollType::kProgrammatic,
+            cc::ScrollSourceType::kAbsoluteScroll);
       }
 
       return false;
@@ -1250,7 +1253,12 @@ void WebViewImpl::DidFirstVisuallyNonEmptyPaint() {
 }
 
 void WebViewImpl::OnFirstContentfulPaint() {
-  local_main_frame_host_remote_->OnFirstContentfulPaint();
+  DCHECK(MainFrameImpl());
+  WebPerformanceMetricsForReporting metrics =
+      MainFrameImpl()->PerformanceMetricsForReporting();
+  local_main_frame_host_remote_->OnFirstContentfulPaint(
+      metrics.FirstContentfulPaintAsMonotonicTime() -
+      metrics.NavigationStartAsMonotonicTime());
 }
 
 void WebViewImpl::UpdateICBAndResizeViewport(
@@ -1345,6 +1353,16 @@ void WebViewImpl::DidUpdateBrowserControls() {
     visual_viewport.SetBrowserControlsAdjustment(
         GetBrowserControls().UnreportedSizeAdjustment());
   }
+}
+
+void WebViewImpl::DidUpdateLoadProgress(float progress) {
+  WebLocalFrameImpl* main_frame = MainFrameImpl();
+  if (!main_frame) {
+    return;
+  }
+
+  WebFrameWidgetImpl* widget = main_frame->LocalRootFrameWidget();
+  widget->SetLoadProgress(progress);
 }
 
 void WebViewImpl::DidUpdateMaxSafeAreaInsets(
@@ -1926,6 +1944,10 @@ void WebView::ApplyWebPreferences(const web_pref::WebPreferences& prefs,
     RuntimeEnabledFeatures::SetReduceHardwareConcurrencyEnabled(true);
     RuntimeEnabledFeatures::SetReduceScreenSizeEnabled(true);
   }
+
+  if (prefs.ai_prompt_api_enabled) {
+    RuntimeEnabledFeatures::SetAIPromptAPIEnabled(true);
+  }
 }
 
 void WebViewImpl::ThemeChanged() {
@@ -2445,6 +2467,8 @@ void WebViewImpl::SetPageLifecycleStateFromNewPageCommit(
     mojom::blink::PagehideDispatch pagehide_dispatch) {
   TRACE_EVENT0("navigation",
                "WebViewImpl::SetPageLifecycleStateFromNewPageCommit");
+  base::ScopedUmaHistogramTimer timer(
+      "Navigation.PageLifecycleStateFromNewPageCommit.Duration");
   mojom::blink::PageLifecycleStatePtr state =
       GetPage()->GetPageLifecycleState().Clone();
   state->visibility = visibility;
@@ -2609,10 +2633,16 @@ void WebViewImpl::SetPageLifecycleStateInternal(
   GetPage()->SetPageLifecycleState(std::move(new_state));
 
   // Notify all local frames that we've updated the page lifecycle state.
+  BFCacheStateChange bfcache_change = BFCacheStateChange::kNoChange;
+  if (restoring_from_bfcache) {
+    bfcache_change = BFCacheStateChange::kRestoredFromBFCache;
+  } else if (storing_in_bfcache) {
+    bfcache_change = BFCacheStateChange::kStoredToBFCache;
+  }
   for (WebFrame* frame = MainFrame(); frame; frame = frame->TraverseNext()) {
     if (frame->IsWebLocalFrame()) {
       frame->ToWebLocalFrame()->Client()->DidSetPageLifecycleState(
-          restoring_from_bfcache);
+          bfcache_change);
     }
   }
 
@@ -3116,7 +3146,7 @@ void WebViewImpl::Show(const LocalFrameToken& opener_frame_token,
   local_main_frame_host_remote_->ShowCreatedWindow(
       opener_frame_token, NavigationPolicyToDisposition(policy),
       std::move(window_features), opened_by_user_gesture,
-      WTF::BindOnce(&WebViewImpl::DidShowCreatedWindow, WTF::Unretained(this)));
+      BindOnce(&WebViewImpl::DidShowCreatedWindow, Unretained(this)));
 }
 
 void WebViewImpl::DidShowCreatedWindow() {
@@ -3181,18 +3211,18 @@ void WebViewImpl::UpdateTargetURL(const WebURL& url,
 }
 
 void WebViewImpl::SendUpdatedTargetURLToBrowser(const KURL& target_url) {
-  // Note: WTF::Unretained() usage below is safe, since `this` owns both
+  // Note: blink::Unretained() usage below is safe, since `this` owns both
   // `mojo::Remote` objects.
   if (GetPage()->MainFrame()->IsLocalFrame()) {
     DCHECK(local_main_frame_host_remote_);
     local_main_frame_host_remote_->UpdateTargetURL(
-        target_url, WTF::BindOnce(&WebViewImpl::TargetURLUpdatedInBrowser,
-                                  WTF::Unretained(this)));
+        target_url,
+        BindOnce(&WebViewImpl::TargetURLUpdatedInBrowser, Unretained(this)));
   } else {
     DCHECK(remote_main_frame_host_remote_);
     remote_main_frame_host_remote_->UpdateTargetURL(
-        target_url, WTF::BindOnce(&WebViewImpl::TargetURLUpdatedInBrowser,
-                                  WTF::Unretained(this)));
+        target_url,
+        BindOnce(&WebViewImpl::TargetURLUpdatedInBrowser, Unretained(this)));
   }
 }
 
@@ -3236,7 +3266,8 @@ void WebViewImpl::ResetScrollAndScaleState() {
 
     if (!scrollable_area->GetScrollOffset().IsZero()) {
       scrollable_area->SetScrollOffset(ScrollOffset(),
-                                       mojom::blink::ScrollType::kProgrammatic);
+                                       mojom::blink::ScrollType::kProgrammatic,
+                                       cc::ScrollSourceType::kAbsoluteScroll);
     }
   }
 
@@ -3303,13 +3334,15 @@ gfx::Transform WebViewImpl::GetDeviceEmulationTransform() const {
 }
 
 void WebViewImpl::EnableDeviceEmulation(const DeviceEmulationParams& params) {
-  web_widget_->EnableDeviceEmulation(params);
+  web_widget_->EnableDeviceEmulation(
+      params, mojom::blink::DeviceEmulationCacheBehavior::kClearCache);
 }
 
 void WebViewImpl::ActivateDevToolsTransform(
-    const DeviceEmulationParams& params) {
+    const DeviceEmulationParams& params,
+    const mojom::blink::DeviceEmulationCacheBehavior& cache_behavior) {
   gfx::Transform device_emulation_transform =
-      dev_tools_emulator_->EnableDeviceEmulation(params);
+      dev_tools_emulator_->EnableDeviceEmulation(params, cache_behavior);
   SetDeviceEmulationTransform(device_emulation_transform);
 }
 
@@ -3467,11 +3500,11 @@ void WebViewImpl::UpdateUseOverlayScrollbar(bool use_overlay_scrollbar) {
 #endif
 
 void WebViewImpl::UpdateCanvasNoiseToken(
-    std::optional<uint64_t> canvas_noise_token) {
+    std::optional<NoiseToken> canvas_noise_token) {
   GetPage()->SetCanvasNoiseToken(canvas_noise_token);
 }
 
-std::optional<uint64_t> WebViewImpl::CanvasNoiseTokenForTesting() {
+std::optional<NoiseToken> WebViewImpl::CanvasNoiseTokenForTesting() {
   return GetPage()->CanvasNoiseToken();
 }
 
@@ -3506,11 +3539,10 @@ void WebViewImpl::ActivatePrerenderedPage(
     }
   }
 
-  // A null `activation_start` is sent to the WebViewImpl that does not host the
-  // main frame, in which case we expect that it does not have any documents
-  // since cross-origin documents are not loaded during prerendering.
+  // Valid `activation_start` should be sent to only prerendered frames hosted
+  // by this WebViewImpl.
   DCHECK((!main_frame_document && child_frame_documents.size() == 0) ||
-         !prerender_page_activation_params->activation_start.is_null());
+         prerender_page_activation_params->activation_start.has_value());
   // We also only send view_transition_state to the main frame.
   DCHECK(main_frame_document ||
          !prerender_page_activation_params->view_transition_state);
@@ -4144,7 +4176,7 @@ void WebViewImpl::MojoDisconnected() {
   // process, and is used to release ownership of the corresponding
   // RenderViewImpl instance. https://crbug.com/1000035.
   GetPage()->GetAgentGroupScheduler().DefaultTaskRunner()->PostNonNestableTask(
-      FROM_HERE, WTF::BindOnce(&WebViewImpl::Close, WTF::Unretained(this)));
+      FROM_HERE, BindOnce(&WebViewImpl::Close, Unretained(this)));
 }
 
 void WebViewImpl::CreateRemoteMainFrame(

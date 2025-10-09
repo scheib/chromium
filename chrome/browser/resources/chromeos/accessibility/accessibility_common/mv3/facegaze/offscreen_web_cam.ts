@@ -28,7 +28,7 @@ const VIDEO_FRAME_DIMENSIONS = 192;
 
 /** The wasm loader JS is checked in under this path. */
 const WASM_LOADER_PATH =
-    'accessibility_common/third_party/mediapipe_task_vision/' +
+    'accessibility_common/mv3/third_party/mediapipe_task_vision/' +
     'vision_wasm_internal.js';
 
 /** A helper class to support test. */
@@ -40,6 +40,9 @@ class TestSupport {
   constructor(owner: OffscreenWebCam) {
     this.owner_ = owner;
 
+    Messenger.registerHandler(
+        OffscreenCommandType.FACEGAZE_CREATE_FACE_LANDMARKER_FOR_TEST,
+        () => this.createFaceLandmarker());
     Messenger.registerHandler(
         OffscreenCommandType.FACEGAZE_MOCK_NO_CAMERA_FOR_TEST,
         () => this.mockNoCamera_());
@@ -59,6 +62,12 @@ class TestSupport {
         OffscreenCommandType.FACEGAZE_SET_CAMERA_RETRIES_FOR_TEST,
         (message: {retries: number}) =>
             this.setWebCamRetriesRemaining(message));
+    Messenger.registerHandler(
+        OffscreenCommandType.FACEGAZE_HAS_FACE_LANDMARKER_FOR_TEST,
+        () => Promise.resolve(this.hasFaceLandmarker()));
+    Messenger.registerHandler(
+        OffscreenCommandType.FACEGAZE_WEBCAM_STOP_FOR_TEST,
+        () => this.stopForTest());
   }
 
   mockNoCamera_(): void {
@@ -109,6 +118,21 @@ class TestSupport {
   setWebCamRetriesRemaining(message: {retries: number}): void {
     // @ts-ignore Private member access.
     this.owner_.connectToWebCamRetriesRemaining_ = message.retries;
+  }
+
+  async createFaceLandmarker(): Promise<void> {
+    // @ts-ignore Private member access.
+    return this.owner_.createFaceLandmarker_();
+  }
+
+  hasFaceLandmarker(): boolean {
+    // @ts-ignore Private member access.
+    return !!this.owner_.faceLandmarker_;
+  }
+
+  stopForTest(): void {
+    // @ts-ignore Private member access.
+    return this.owner_.stopImageCaptureTrack_();
   }
 }
 
@@ -272,22 +296,22 @@ class OffscreenWebCam {
 
   private stop_(): void {
     this.stopped_ = true;
+    this.stopImageCaptureTrack_();
+    this.faceLandmarker_ = null;
+  }
+
+  private onTrackEnded_(): void {
+    this.stopImageCaptureTrack_();
+    this.connectToWebCam_();
+  }
+
+  private stopImageCaptureTrack_(): void {
+    // Disconnect from the webcam by resetting `imageCapture_`.
     if (this.imageCapture_) {
       this.removeEventListeners_();
       this.imageCapture_.track.stop();
       this.imageCapture_ = undefined;
     }
-    this.faceLandmarker_ = null;
-  }
-
-  private onTrackEnded_(): void {
-    if (this.imageCapture_) {
-      // Tell MediaStreamTrack that we are no longer using this ended track.
-      this.imageCapture_.track.stop();
-      this.removeEventListeners_();
-    }
-    this.imageCapture_ = undefined;
-    this.connectToWebCam_();
   }
 
   private removeEventListeners_(): void {

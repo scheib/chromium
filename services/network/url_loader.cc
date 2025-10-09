@@ -17,6 +17,7 @@
 #include "base/command_line.h"
 #include "base/containers/enum_set.h"
 #include "base/containers/fixed_flat_set.h"
+#include "base/feature_list.h"
 #include "base/files/file.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
@@ -39,6 +40,7 @@
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/typed_macros.h"
+#include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
@@ -126,6 +128,8 @@
 #include "services/network/slop_bucket.h"
 #include "services/network/ssl_private_key_proxy.h"
 #include "services/network/throttling/scoped_throttling_token.h"
+#include "services/network/throttling/throttling_controller.h"
+#include "services/network/throttling/throttling_network_interceptor.h"
 #include "services/network/trust_tokens/trust_token_request_helper.h"
 #include "services/network/trust_tokens/trust_token_url_loader_interceptor.h"
 #include "services/network/url_loader_factory.h"
@@ -136,6 +140,8 @@
 namespace network {
 
 namespace {
+
+BASE_FEATURE(kDelayedCookieNotification, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Cannot use 0, because this means "default" in
 // mojo::core::Core::CreateDataPipe
@@ -1142,10 +1148,14 @@ void URLLoader::OnResponseStarted(net::URLRequest* url_request, int net_error) {
         internal::FetchKeepAliveRequestNetworkMetricType::kOnResponse);
   }
 
-  // Use `true` to force sending the cookie accessed update now. This is because
-  // for navigations the CookieObserver might get torn down by the time the
-  // request completes.
-  ReportFlaggedResponseCookies(true);
+  // Wait to report for main frame navigations. This is because handling the
+  // cookie notification contends with ReadyToCommitNavigation, which is in the
+  // critical path for loading. Additionally, cookie observers for navigations
+  // now outlive the NavigationRequest.
+  bool delay_cookie_call =
+      url_request_->isolation_info().IsMainFrameRequest() &&
+      base::FeatureList::IsEnabled(kDelayedCookieNotification);
+  ReportFlaggedResponseCookies(!delay_cookie_call);
 
   if (net_error != net::OK) {
     NotifyCompleted(net_error);
@@ -1312,6 +1322,13 @@ void URLLoader::ContinueOnResponseStarted() {
       // treat the response as "text/plain".  This is the most secure option.
       response_->mime_type.assign("text/plain");
     }
+  }
+
+  // If client-side content decoding is requested, store the types of decoding
+  // to be used with the Durable Message so it can decode on retrieval.
+  if (devtools_durable_message_) {
+    devtools_durable_message_->set_client_decoding_types(
+        response_->client_side_content_decoding_types);
   }
 
   // If client-side content decoding is requested and either ORB or MIME
@@ -1516,6 +1533,7 @@ void URLLoader::ReadMore() {
         bool should_wait = true;
         if (base::FeatureList::IsEnabled(kSlopBucket) && !slop_bucket_) {
           slop_bucket_ = SlopBucket::RequestSlopBucket(url_request_.get());
+          was_slop_bucket_enabled_ = true;
         }
         if (slop_bucket_ && !slop_bucket_->read_in_progress() &&
             !slop_bucket_->IsComplete()) {
@@ -1931,10 +1949,25 @@ void URLLoader::NotifyCompleted(int error_code) {
                                    total_received, 50, 10 * 1000 * 1000, 50);
     mojo_begin_write_count_for_uma_ =
         std::max(mojo_begin_write_count_for_uma_, 1);
+    const int proportion = mojo_blocked_write_count_for_uma_ * 100 /
+                           mojo_begin_write_count_for_uma_;
     base::UmaHistogramPercentage(
-        "Net.URLLoader.ProportionOfWritesBlockedByMojo",
-        mojo_blocked_write_count_for_uma_ * 100 /
-            mojo_begin_write_count_for_uma_);
+        "Net.URLLoader.ProportionOfWritesBlockedByMojo", proportion);
+    if (was_slop_bucket_enabled_) {
+      base::UmaHistogramPercentage(
+          "Net.URLLoader.SlopBucket.ProportionOfWritesBlockedByMojo.All",
+          proportion);
+
+      using CacheEntryStatus = net::HttpResponseInfo::CacheEntryStatus;
+      const CacheEntryStatus& cache_entry_status =
+          url_request_->response_info().cache_entry_status;
+      if (cache_entry_status != CacheEntryStatus::ENTRY_USED &&
+          cache_entry_status != CacheEntryStatus::ENTRY_VALIDATED) {
+        base::UmaHistogramPercentage(
+            "Net.URLLoader.SlopBucket.ProportionOfWritesBlockedByMojo.NoCache",
+            proportion);
+      }
+    }
   }
 
   if (total_sent > 0) {
@@ -2181,11 +2214,22 @@ void URLLoader::DispatchOnRawRequest(
         *site_has_cookie_in_other_partition;
   }
 
+  std::optional<base::UnguessableToken> applied_network_conditions_id;
+  if (throttling_token_) {
+    ThrottlingNetworkInterceptor* interceptor =
+        ThrottlingController::GetInterceptor(throttling_token_->source_id(),
+                                             url_request_->url());
+    if (interceptor) {
+      applied_network_conditions_id = interceptor->conditions().rule_id();
+    }
+  }
+
   devtools_observer_->OnRawRequest(
       devtools_request_id().value(), url_request_->maybe_sent_cookies(),
       std::move(headers), load_timing_info.request_start,
       private_network_access_interceptor_.CloneClientSecurityState(),
-      std::move(other_partition_info));
+      std::move(other_partition_info),
+      std::move(applied_network_conditions_id));
 }
 
 void URLLoader::DispatchOnRawResponse() {

@@ -35,6 +35,7 @@
 #include "components/permissions/permission_prompt.h"
 #include "components/permissions/permission_request_manager.h"
 #include "components/permissions/permission_util.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/visibility.h"
@@ -117,8 +118,8 @@ void ChipController::OnNavigation(
   ResetPermissionPromptChip();
 }
 
-void ChipController::OnTabVisibilityChanged(content::Visibility visibility) {
-  if (visibility == content::Visibility::HIDDEN) {
+void ChipController::OnTabActiveChanged(bool is_active) {
+  if (!is_active) {
     ResetPermissionPromptChip();
   }
 }

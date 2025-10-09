@@ -99,7 +99,7 @@ CredentialUIEntry AsCredentialUIEntry(
 class SavedPasswordsPresenterTest : public testing::Test {
  protected:
   void SetUp() override {
-    store_->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
+    store_->Init(/*affiliated_match_helper=*/nullptr);
     presenter_.Init();
     task_env_.RunUntilIdle();
   }
@@ -1162,10 +1162,8 @@ namespace {
 class SavedPasswordsPresenterWithTwoStoresTest : public testing::Test {
  protected:
   void SetUp() override {
-    profile_store_->Init(/*prefs=*/nullptr,
-                         /*affiliated_match_helper=*/nullptr);
-    account_store_->Init(/*prefs=*/nullptr,
-                         /*affiliated_match_helper=*/nullptr);
+    profile_store_->Init(/*affiliated_match_helper=*/nullptr);
+    account_store_->Init(/*affiliated_match_helper=*/nullptr);
     presenter_.Init();
     RunUntilIdle();
   }
@@ -1902,6 +1900,118 @@ TEST_F(SavedPasswordsPresenterTest, GetAffiliatedGroups) {
       "PasswordManager.PasswordsGrouping.Time", base::Milliseconds(kDelay), 1);
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+TEST_F(SavedPasswordsPresenterTest, GetAllowedActorLoginSites_SingleSite) {
+  PasswordForm form_1 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore, 1);
+  form_1.actor_login_approved = true;
+
+  PasswordForm form_2 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore, 2);
+
+  store().AddLogins({form_1, form_2});
+  RunUntilIdle();
+
+  EXPECT_THAT(presenter().GetActorLoginPermissions(),
+              UnorderedElementsAre(ActorLoginPermission{
+                  .url = form_1.url, .username = form_1.username_value}));
+}
+
+TEST_F(SavedPasswordsPresenterTest, GetAllowedActorLoginSites_Deduplicates) {
+  PasswordForm form_1 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore);
+  form_1.actor_login_approved = true;
+
+  PasswordForm form_2 = form_1;
+  store().AddLogins({form_1, form_2});
+  RunUntilIdle();
+
+  EXPECT_THAT(presenter().GetActorLoginPermissions(),
+              UnorderedElementsAre(ActorLoginPermission{
+                  .url = form_1.url, .username = form_1.username_value}));
+}
+
+TEST_F(SavedPasswordsPresenterTest,
+       GetAllowedActorLoginSites_MultipleSitesDifferentCredentials) {
+  PasswordForm form_1 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore);
+  form_1.actor_login_approved = true;
+
+  PasswordForm form_2 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore, 1);
+  form_2.actor_login_approved = true;
+  store().AddLogins({form_1, form_2});
+  RunUntilIdle();
+
+  EXPECT_THAT(presenter().GetActorLoginPermissions(),
+              UnorderedElementsAre(
+                  ActorLoginPermission{.url = form_1.url,
+                                       .username = form_1.username_value},
+                  ActorLoginPermission{.url = form_2.url,
+                                       .username = form_2.username_value}));
+}
+
+TEST_F(SavedPasswordsPresenterTest,
+       GetAllowedActorLoginSites_SameUsernameDifferentURLs) {
+  PasswordForm form1 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore);
+  form1.actor_login_approved = true;
+  form1.username_value = u"shared_user";
+
+  PasswordForm form2 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore, 1);
+  form2.actor_login_approved = true;
+  form2.username_value = u"shared_user";
+  store().AddLogins({form1, form2});
+  RunUntilIdle();
+
+  EXPECT_THAT(presenter().GetActorLoginPermissions(),
+              UnorderedElementsAre(
+                  ActorLoginPermission{.url = form1.url,
+                                       .username = form1.username_value},
+                  ActorLoginPermission{.url = form2.url,
+                                       .username = form2.username_value}));
+}
+
+TEST_F(SavedPasswordsPresenterTest, RevokeActorLoginPermission) {
+  PasswordForm form =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore);
+  form.actor_login_approved = true;
+  store().AddLogin(form);
+  RunUntilIdle();
+
+  presenter().RevokeActorLoginPermission(
+      {.url = form.url, .username = form.username_value});
+  RunUntilIdle();
+
+  form.actor_login_approved = false;
+  EXPECT_THAT(store().stored_passwords(),
+              ElementsAre(Pair(form.signon_realm, ElementsAre(form))));
+}
+
+TEST_F(SavedPasswordsPresenterTest,
+       RevokeActorLoginPermissionHandlesDuplicates) {
+  PasswordForm form1 =
+      CreateTestPasswordForm(PasswordForm::Store::kProfileStore);
+  form1.actor_login_approved = true;
+  form1.password_element = u"pwd1";
+  PasswordForm form2 = form1;
+  form2.password_element = u"pwd2";
+  store().AddLogin(form1);
+  store().AddLogin(form2);
+  RunUntilIdle();
+
+  presenter().RevokeActorLoginPermission(
+      {.url = form1.url, .username = form1.username_value});
+  RunUntilIdle();
+
+  form1.actor_login_approved = false;
+  form2.actor_login_approved = false;
+  EXPECT_THAT(store().stored_passwords(),
+              ElementsAre(Pair(form1.signon_realm, ElementsAre(form1, form2))));
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
+
 // Prefixes like [m, mobile, www] are considered as "same-site".
 TEST_F(SavedPasswordsPresenterWithTwoStoresTest,
        GetSavedCredentialsGroupsSameSites) {
@@ -2033,14 +2143,12 @@ class SavedPasswordsPresenterInitializationTest : public ::testing::Test {
     profile_store_ = base::MakeRefCounted<PasswordStore>(
         std::make_unique<FakePasswordStoreBackend>(
             IsAccountStore(false), profile_store_backend_runner()));
-    profile_store_->Init(/*prefs=*/nullptr,
-                         /*affiliated_match_helper=*/nullptr);
+    profile_store_->Init(/*affiliated_match_helper=*/nullptr);
 
     account_store_ = base::MakeRefCounted<PasswordStore>(
         std::make_unique<FakePasswordStoreBackend>(
             IsAccountStore(true), account_store_backend_runner()));
-    account_store_->Init(/*prefs=*/nullptr,
-                         /*affiliated_match_helper=*/nullptr);
+    account_store_->Init(/*affiliated_match_helper=*/nullptr);
   }
 
   ~SavedPasswordsPresenterInitializationTest() override {

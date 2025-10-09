@@ -271,13 +271,14 @@ void HandleMediaPermissionsRequestResult(
 std::optional<url::Origin> ParseAndValidateWebOrigin(
     const std::string& origin_str) {
   GURL origin_url(origin_str);
-  if (!origin_url.username().empty() || !origin_url.password().empty() ||
-      !origin_url.query().empty() || !origin_url.ref().empty()) {
+  if (!origin_url.GetUsername().empty() || !origin_url.GetPassword().empty() ||
+      !origin_url.GetQuery().empty() || !origin_url.GetRef().empty()) {
     return std::nullopt;
   }
 
-  if (!origin_url.path().empty() && origin_url.path() != "/")
+  if (!origin_url.GetPath().empty() && origin_url.GetPath() != "/") {
     return std::nullopt;
+  }
 
   auto origin = url::Origin::Create(origin_url);
   if (origin.opaque())
@@ -325,6 +326,7 @@ class AudioStreamBrokerFactory final
       int render_frame_id,
       const std::string& device_id,
       const media::AudioParameters& params,
+      const base::UnguessableToken& group_id,
       uint32_t shared_memory_count,
       bool enable_agc,
       media::mojom::AudioProcessingConfigPtr processing_config,
@@ -332,7 +334,7 @@ class AudioStreamBrokerFactory final
       mojo::PendingRemote<blink::mojom::RendererAudioInputStreamFactoryClient>
           renderer_factory_client) final {
     return base_factory_->CreateAudioInputStreamBroker(
-        render_process_id, render_frame_id, device_id, params,
+        render_process_id, render_frame_id, device_id, params, group_id,
         shared_memory_count, enable_agc, std::move(processing_config),
         std::move(deleter), std::move(renderer_factory_client));
   }

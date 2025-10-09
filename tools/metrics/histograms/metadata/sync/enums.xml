@@ -77,7 +77,11 @@ chromium-metrics-reviews@google.com.
   <int value="0" label="Password manager settings"/>
   <int value="1" label="Password promo card"/>
   <int value="2" label="Bookmark manager promo card"/>
-  <int value="3" label="Profile menu button"/>
+  <int value="3" label="Profile menu row button"/>
+  <int value="4" label="Profile menu primary button action"/>
+  <int value="5" label="Profile menu primary button with bookmarks action"/>
+  <int value="6"
+      label="Profile menu priamry button with Windows10 depreciation action"/>
 </enum>
 
 <!-- LINT.ThenChange(/chrome/browser/profiles/batch_upload/batch_upload_service.h:EntryPoint) -->
@@ -125,17 +129,6 @@ chromium-metrics-reviews@google.com.
   <int value="0" label="Not first sync"/>
   <int value="1" label="First sync"/>
 </enum>
-
-<!-- LINT.IfChange(CrossUserSharingDecryptionResult) -->
-
-<enum name="CrossUserSharingDecryptionResult">
-  <int value="0" label="Succeeded"/>
-  <int value="1" label="Invitation missing required fields"/>
-  <int value="2" label="Failed to decrypt invitation"/>
-  <int value="3" label="Failed to parse decrypted invitation"/>
-</enum>
-
-<!-- LINT.ThenChange(/components/sync/engine/data_type_worker.cc:CrossUserSharingDecryptionResult) -->
 
 <!-- LINT.IfChange(CrossUserSharingKeyPairState) -->
 
@@ -258,6 +251,23 @@ chromium-metrics-reviews@google.com.
 
 <!-- LINT.ThenChange(/components/sync_bookmarks/bookmark_model_merger.cc:RemoteBookmarkUpdateError) -->
 
+<!-- LINT.IfChange(SessionSpecificsInvalidReason) -->
+
+<enum name="SessionSpecificsInvalidReason">
+  <summary>
+    The validity (or reason for non-validity) of a SessionSpecifics.
+  </summary>
+  <int value="0" label="Missing session_tag"/>
+  <int value="1" label="Both header and tab specified"/>
+  <int value="2" label="Neither header nor tab specified"/>
+  <int value="3" label="Tab with invalid tab_node_id"/>
+  <int value="4" label="Tab with invalid tab_id"/>
+  <int value="5" label="Header with duplicate tab IDs"/>
+  <int value="6" label="Header with tab_node_id"/>
+</enum>
+
+<!-- LINT.ThenChange(/components/sync_sessions/session_store.h:SessionSpecificsInvalidReason) -->
+
 <enum name="SyncablePref">
 <!-- LINT.IfChange(CommonSyncablePref) -->
 
@@ -357,6 +367,15 @@ chromium-metrics-reviews@google.com.
   <int value="92" label="FingerprintingProtectionEnabled"/>
   <int value="93" label="AutofillNameAndEmailProfileSignature"/>
   <int value="94" label="AutofillNameAndEmailProfileNotSelectedCounter"/>
+  <int value="96" label="AutofillAiLastVersionDeduped"/>
+  <int value="97" label="CrossDeviceOmniboxIsInBottomPosition"/>
+  <int value="98" label="AutofillWasNameAndEmailProfileUsed"/>
+  <int value="99" label="CrossDeviceCrossPlatformPromosIOS16thActiveDay"/>
+  <int value="100" label="CrossDeviceSafetyCheckHomeModuleEnabled"/>
+  <int value="101" label="AutofillAiIdentityEntitiesEnabled"/>
+  <int value="102" label="AutofillAiTravelEntitiesEnabled"/>
+  <int value="103" label="CrossDeviceTabResumptionHomeModuleEnabled"/>
+  <int value="104" label="AutofillAmountExtractionAiTermsSeen"/>
 <!-- LINT.ThenChange(/components/sync_preferences/common_syncable_prefs_database.cc:CommonSyncablePref)-->
 
 <!-- LINT.IfChange(ChromeSyncablePref) -->
@@ -726,6 +745,13 @@ chromium-metrics-reviews@google.com.
   <int value="100328" label="GlicRolloutEligibility"/>
   <int value="100329" label="ShelfNotebookLmAppPinRolls"/>
   <int value="100330" label="VerticalTabsEnabled"/>
+  <int value="100331" label="SplitViewDragAndDropEnabled"/>
+  <int value="100332" label="iOSEnhancedBrowsingPromoLastImpressionTimestamp"/>
+  <int value="100333" label="iOSEnhancedBrowsingPromoImpressionsCounter"/>
+  <int value="100334" label="iOSEnhancedBrowsingPromoOptOut"/>
+  <int value="100335" label="iOSLensPromoLastImpressionTimestamp"/>
+  <int value="100336" label="iOSLensPromoImpressionsCounter"/>
+  <int value="100337" label="iOSLensPromoOptOut"/>
 <!-- LINT.ThenChange(/chrome/browser/sync/prefs/chrome_syncable_prefs_database.cc:ChromeSyncablePref)-->
 
 <!-- LINT.IfChange(IosSyncablePref) -->
@@ -741,6 +767,7 @@ chromium-metrics-reviews@google.com.
   <int value="200008" label="SearchSuggestEnabled_IOS"/>
   <int value="200009" label="TrackPricesOnTabsEnabled"/>
   <int value="200010" label="VoiceSearchLocale"/>
+  <int value="200011" label="IOSBwgConsent"/>
 <!-- LINT.ThenChange(/ios/chrome/browser/sync/model/prefs/ios_chrome_syncable_prefs_database.cc:IosSyncablePref)-->
 
 </enum>
@@ -891,7 +918,7 @@ chromium-metrics-reviews@google.com.
   <int value="54" label="Autofill Wallet Usage"/>
   <int value="55" label="(Obsolete) Segmentation"/>
   <int value="56" label="Saved Tab Groups"/>
-  <int value="57" label="Power Bookmark"/>
+  <int value="57" label="(Obsolete) Power Bookmark"/>
   <int value="58" label="WebAuthn Credentials"/>
   <int value="59" label="Incoming Password Sharing Invitations"/>
   <int value="60" label="Outgoing Password Sharing Invitations"/>
@@ -906,6 +933,9 @@ chromium-metrics-reviews@google.com.
   <int value="69" label="Autofill Valuable"/>
   <int value="70" label="Shared Tab Group Account Data"/>
   <int value="71" label="SharedComment"/>
+  <int value="72" label="Account Setting"/>
+  <int value="73" label="AI Thread"/>
+  <int value="74" label="Contextual Task"/>
 </enum>
 
 <!-- LINT.ThenChange(/components/sync/base/data_type.h:SyncDataTypes) -->
@@ -1174,7 +1204,7 @@ chromium-metrics-reviews@google.com.
   <int value="37" label="kAutofillValuableFailedToLoadDatabase"/>
   <int value="38" label="kAutofillValuableFailedToLoadMetadata"/>
   <int value="39" label="kAutofillValuableFailedToReadMetadata"/>
-  <int value="40" label="kAutofillValuableFailedToSetLoyaltyCards"/>
+  <int value="40" label="kAutofillValuableFailedToWriteToDatabase"/>
   <int value="41" label="kAutofillValuableUnsupportedActionType"/>
   <int value="42" label="kAutofillWalletFailedToLoadBenefitsFromTable"/>
   <int value="43" label="kAutofillWalletFailedToLoadDatabase"/>
@@ -1257,13 +1287,13 @@ chromium-metrics-reviews@google.com.
   <int value="129" label="kPlusAddressTransactionCommitFailedOnDisableSync"/>
   <int value="130"
       label="kPlusAddressTransactionCommitFailedOnIncrementalSync"/>
-  <int value="131" label="kPowerBookmarkDatabaseCommitFailed"/>
-  <int value="132" label="kPowerBookmarkDatabaseInitFailed"/>
-  <int value="133" label="kPowerBookmarkFailedToBeginTransaction"/>
-  <int value="134" label="kPowerBookmarkFailedToCommitTransaction"/>
-  <int value="135" label="kPowerBookmarkFailedToDeleteLocalPowers"/>
-  <int value="136" label="kPowerBookmarkFailedToLoadMetadata"/>
-  <int value="137" label="kPowerBookmarkFailedToMergeLocalPowers"/>
+  <int value="131" label="(Obsolete) kPowerBookmarkDatabaseCommitFailed"/>
+  <int value="132" label="(Obsolete) kPowerBookmarkDatabaseInitFailed"/>
+  <int value="133" label="(Obsolete) kPowerBookmarkFailedToBeginTransaction"/>
+  <int value="134" label="(Obsolete) kPowerBookmarkFailedToCommitTransaction"/>
+  <int value="135" label="(Obsolete) kPowerBookmarkFailedToDeleteLocalPowers"/>
+  <int value="136" label="(Obsolete) kPowerBookmarkFailedToLoadMetadata"/>
+  <int value="137" label="(Obsolete) kPowerBookmarkFailedToMergeLocalPowers"/>
   <int value="138" label="kPrefFailedToDeserializeValue"/>
   <int value="139" label="kPrefModelsNotAssociated"/>
   <int value="140" label="kPrintersFailedToDeserializeSpecifics"/>
@@ -1462,6 +1492,20 @@ chromium-metrics-reviews@google.com.
 </enum>
 
 <!-- LINT.ThenChange(/chrome/browser/themes/theme_syncable_service.h:ThemePrefInMigration) -->
+
+<!-- LINT.IfChange(TriggerRefreshSource) -->
+
+<enum name="TriggerRefreshSource">
+  <int value="0" label="Unknown"/>
+  <int value="1" label="Browser Tabs Model Provider"/>
+  <int value="2" label="Android Sync Service Bridge"/>
+  <int value="3" label="Sync Invalidations Service"/>
+  <int value="4" label="Local Sync"/>
+  <int value="5" label="Sync Internals"/>
+  <int value="6" label="Foreign Session Helper"/>
+</enum>
+
+<!-- LINT.ThenChange(/components/sync/service/sync_service.h:TriggerRefreshSource) -->
 
 <!-- LINT.IfChange(TrustedVaultDegradedRecoverabilityValue) -->
 

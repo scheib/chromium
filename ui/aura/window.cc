@@ -158,7 +158,7 @@ class ScopedCursorHider {
       client::CursorClient* cursor_client = client::GetCursorClient(window_);
       if (cursor_client) {
         const display::Display& display =
-            display::Screen::GetScreen()->GetDisplayNearestWindow(window_);
+            display::Screen::Get()->GetDisplayNearestWindow(window_);
         cursor_client->SetDisplay(display);
         cursor_client->ShowCursor();
       }
@@ -253,7 +253,7 @@ Window::~Window() {
   if (frame_sink_id_.is_valid() && !embeds_external_client_) {
     auto* context_factory = Env::GetInstance()->context_factory();
     auto* host_frame_sink_manager = context_factory->GetHostFrameSinkManager();
-    host_frame_sink_manager->InvalidateFrameSinkId(frame_sink_id_, this);
+    host_frame_sink_manager->InvalidateFrameSinkId(frame_sink_id_, this, {});
   }
 }
 

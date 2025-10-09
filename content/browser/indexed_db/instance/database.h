@@ -92,6 +92,8 @@ class CONTENT_EXPORT Database {
 
   const list_set<Connection*>& connections() const { return connections_; }
 
+  size_t GetNumTransactionsAcrossAllConnections() const;
+
   Status RunTasks();
   void RegisterAndScheduleTransaction(Transaction* transaction);
 
@@ -107,6 +109,8 @@ class CONTENT_EXPORT Database {
 
   // Number of connections that have progressed passed initial open call.
   size_t ConnectionCount() const { return connections_.size(); }
+
+  bool IsAcceptingConnections() const { return !force_closing_; }
 
   // Number of active open/delete calls (running or blocked on other
   // connections).

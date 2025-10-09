@@ -2,8 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import type * as actorWebUiMojom from '../actor_webui.mojom-webui.js';
 import type * as mojom from '../glic.mojom-webui.js';
 import type * as api from '../glic_api/glic_api.js';
+
+import type * as requestTypes from './request_types.js';
 
 
 /* eslint-disable-next-line @typescript-eslint/naming-convention */
@@ -93,3 +96,15 @@ assertNever<CheckEnumCompatibility<
     typeof mojom.ActorTaskPauseReason, typeof api.ActorTaskPauseReason>>();
 assertNever<CheckEnumCompatibility<
     typeof mojom.ActorTaskStopReason, typeof api.ActorTaskStopReason>>();
+assertNever<CheckEnumCompatibility<
+    typeof actorWebUiMojom.UserGrantedPermissionDuration,
+    typeof api.UserGrantedPermissionDuration>>();
+assertNever<CheckEnumCompatibility<
+    typeof actorWebUiMojom.SelectCredentialDialogErrorReason,
+    typeof requestTypes.SelectCredentialDialogErrorReason>>();
+assertNever<CheckEnumCompatibility<
+    typeof actorWebUiMojom.UserConfirmationDialogErrorReason,
+    typeof requestTypes.UserConfirmationDialogErrorReason>>();
+assertNever<CheckEnumCompatibility<
+    typeof mojom.MetricUserInputReactionType,
+    typeof api.MetricUserInputReactionType>>();

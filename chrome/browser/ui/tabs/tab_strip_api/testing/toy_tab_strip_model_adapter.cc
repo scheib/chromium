@@ -87,7 +87,7 @@ mojom::ContainerPtr ToyTabStripModelAdapter::GetTabStripTopology() {
 
 std::optional<const tab_groups::TabGroupId>
 ToyTabStripModelAdapter::FindGroupIdFor(
-    const tabs::TabCollection::Handle& collection_handle) {
+    const tabs::TabCollection::Handle& collection_handle) const {
   return tab_strip_->GetGroupIdFor(collection_handle);
 }
 
@@ -104,6 +104,33 @@ void ToyTabStripModelAdapter::SetTabSelection(
                                       handles_to_select.end());
   tab_strip_->SetTabSelection(selection);
   tab_strip_->SetActiveTab(to_activate);
+}
+
+std::optional<tab_groups::TabGroupId>
+ToyTabStripModelAdapter::GetTabGroupForTab(int index) const {
+  // TODO(crbug.com/412709271): Integrate with the toy tabstrip
+  NOTIMPLEMENTED();
+  return std::nullopt;
+}
+
+tabs::TabCollectionHandle
+ToyTabStripModelAdapter::GetCollectionHandleForTabGroupId(
+    tab_groups::TabGroupId group_id) const {
+  // TODO(crbug.com/412709271): Integrate with the toy tabstrip
+  NOTIMPLEMENTED();
+  return tabs::TabCollectionHandle::Null();
+}
+
+tabs_api::Position ToyTabStripModelAdapter::GetPositionForAbsoluteIndex(
+    int absolute_index) const {
+  NOTIMPLEMENTED();
+  return tabs_api::Position();
+}
+
+InsertionParams ToyTabStripModelAdapter::CalculateInsertionParams(
+    const std::optional<tabs_api::Position>& pos) const {
+  NOTIMPLEMENTED();
+  return tabs_api::InsertionParams();
 }
 
 }  // namespace tabs_api::testing

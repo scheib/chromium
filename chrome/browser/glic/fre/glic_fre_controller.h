@@ -98,6 +98,9 @@ class GlicFreController {
   // the same browser.
   void AcceptFre();
 
+  // Rejects the FRE dialog.
+  void RejectFre();
+
   // Closes the FRE dialog.
   void DismissFre(mojom::FreWebUiState panel);
 
@@ -145,6 +148,10 @@ class GlicFreController {
     return weak_ptr_factory_.GetWeakPtr();
   }
 
+  void SetIsShowingDialogForTesting(bool is_showing) {
+    is_showing_dialog_for_testing_ = is_showing;
+  }
+
  private:
   FRIEND_TEST_ALL_PREFIXES(GlicFreControllerTest,
                            UpdateLauncherOnFreCompletion);
@@ -187,6 +194,13 @@ class GlicFreController {
   // is fully loaded and showing.
   std::optional<base::ElapsedTimer> presentation_timer_;
 
+  // Tracks the total time the FRE is open.
+  std::optional<base::ElapsedTimer> open_timer_;
+
+  // Tracks the total time since the FRE completed loading and has entered the
+  // Ready state.
+  std::optional<base::ElapsedTimer> interaction_timer_;
+
   // Tracks elapsed time between the start of the WebUI framework loading and
   // the moment it's fully loaded. This ends right before the web client begins loading.
   std::optional<base::ElapsedTimer> webui_framework_load_timer_;
@@ -194,6 +208,11 @@ class GlicFreController {
   // Tracks elapsed time between the start of the web client loading and the
   // moment it's fully loaded.
   std::optional<base::ElapsedTimer> web_client_load_timer_;
+
+  // True if the user has accepted the FRE.
+  bool accepted_ = false;
+
+  std::optional<bool> is_showing_dialog_for_testing_;
 
   base::WeakPtrFactory<GlicFreController> weak_ptr_factory_{this};
 };

@@ -40,7 +40,7 @@ const base::FilePath::CharType kDocRoot[] =
 
 }  // namespace
 
-const char kUserAgent[] = "user-agent";
+constexpr char kUserAgent[] = "user-agent";
 
 #if BUILDFLAG(IS_ANDROID)
 #define MAYBE_SyncHttpBridgeTest DISABLED_SyncHttpBridgeTest
@@ -103,7 +103,7 @@ class MAYBE_SyncHttpBridgeTest : public testing::Test {
   raw_ptr<HttpBridge> bridge_for_race_test_ = nullptr;
 
   base::test::TaskEnvironment task_environment_;
-  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+  variations::test::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   // Separate thread for IO used by the HttpBridge.
   base::Thread io_thread_;

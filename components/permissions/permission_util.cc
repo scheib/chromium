@@ -676,16 +676,18 @@ bool PermissionUtil::HasUserGesture(PermissionPrompt::Delegate* delegate) {
 bool PermissionUtil::CanPermissionRequestIgnoreStatus(
     const std::unique_ptr<PermissionRequestData>& request,
     content::PermissionStatusSource source) {
-  if (!request->embedded_permission_element_initiated) {
+  if (!request->IsEmbeddedPermissionElementInitiated()) {
     return false;
   }
 
   switch (source) {
     case content::PermissionStatusSource::KILL_SWITCH:
+    case content::PermissionStatusSource::ACTOR_OVERRIDE:
     case content::PermissionStatusSource::FEATURE_POLICY:
     case content::PermissionStatusSource::FENCED_FRAME:
     case content::PermissionStatusSource::INSECURE_ORIGIN:
     case content::PermissionStatusSource::VIRTUAL_URL_DIFFERENT_ORIGIN:
+    case content::PermissionStatusSource::HEURISTIC_GRANT:
       return false;
     case content::PermissionStatusSource::MULTIPLE_DISMISSALS:
     case content::PermissionStatusSource::MULTIPLE_IGNORES:

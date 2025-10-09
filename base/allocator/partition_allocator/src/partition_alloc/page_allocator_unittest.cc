@@ -460,14 +460,18 @@ TEST(PartitionAllocPageAllocatorTest, InaccessiblePages) {
   FreePages(buffer, PageAllocationGranularity());
 }
 
-// TODO(crbug.com/40212918): Understand why we can't read from Read-Execute
-// pages on iOS.
-#if PA_BUILDFLAG(IS_IOS)
-#define MAYBE_ReadExecutePages DISABLED_ReadExecutePages
-#else
-#define MAYBE_ReadExecutePages ReadExecutePages
-#endif  // PA_BUILDFLAG(IS_IOS)
-TEST(PartitionAllocPageAllocatorTest, MAYBE_ReadExecutePages) {
+TEST(PartitionAllocPageAllocatorTest, ReadExecutePages) {
+  // Before iOS 18.6 on devices this appears to trigger a mach exception and not
+  // a fault signal, which doesn't work with the FAULT_TEST_BEGIN/FAULT_TEST_END
+  // logic. Skip on these devices.
+#if PA_BUILDFLAG(IS_IOS) && !TARGET_IPHONE_SIMULATOR
+  if (__builtin_available(iOS 18.6, *)) {
+  } else {
+    // Workaround for incorrectly failed iOS tests with GTEST_SKIP,
+    // see crbug.com/912138 for details.
+    return;
+  }
+#endif  // PA_BUILDFLAG(IS_IOS) && !TARGET_IPHONE_SIMULATOR
   uintptr_t buffer =
       AllocPages(PageAllocationGranularity(), PageAllocationGranularity(),
                  PageAccessibilityConfiguration(

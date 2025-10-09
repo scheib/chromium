@@ -123,8 +123,7 @@ class CC_EXPORT StagingBufferPool final
   void StagingStateAsValueInto(
       base::trace_event::TracedValue* staging_state) const;
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level);
+  void OnMemoryPressure(base::MemoryPressureLevel level);
 
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
   const raw_ptr<viz::RasterContextProvider> worker_context_provider_;
@@ -146,7 +145,8 @@ class CC_EXPORT StagingBufferPool final
   bool reduce_memory_usage_pending_ GUARDED_BY(lock_);
   base::RepeatingClosure reduce_memory_usage_callback_ GUARDED_BY(lock_);
 
-  std::unique_ptr<base::AsyncMemoryPressureListener> memory_pressure_listener_;
+  std::unique_ptr<base::AsyncMemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
 
   base::WeakPtrFactory<StagingBufferPool> weak_ptr_factory_{this};
 };

@@ -35,6 +35,7 @@ class FakeUserPolicySigninService : public policy::UserPolicySigninService {
   void RegisterForPolicyWithAccountId(
       const std::string& username,
       const CoreAccountId& account_id,
+      bool is_registration_for_management_consistency_check,
       PolicyRegistrationCallback callback) override;
 
   // policy::UserPolicySigninServiceBase:
@@ -45,6 +46,9 @@ class FakeUserPolicySigninService : public policy::UserPolicySigninService {
       const std::vector<std::string>& user_affiliation_ids,
       scoped_refptr<network::SharedURLLoaderFactory> test_shared_loader_factory,
       PolicyFetchCallback callback) override;
+
+  void UpdateDMTokenAndClientId(const std::string& dm_token,
+                                const std::string& client_id);
 
  private:
   std::string dm_token_;

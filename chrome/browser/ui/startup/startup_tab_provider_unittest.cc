@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/startup/startup_tab_provider.h"
 
+#include "base/command_line.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
@@ -99,13 +100,13 @@ TEST(StartupTabProviderTest, GetPinnedTabsForState) {
       pref_default, pinned, false);
 
   ASSERT_EQ(1U, output.size());
-  EXPECT_EQ("www.google.com", output[0].url.host());
+  EXPECT_EQ("www.google.com", output[0].url.GetHost());
 
   output =
       StartupTabProviderImpl::GetPinnedTabsForState(pref_urls, pinned, false);
 
   ASSERT_EQ(1U, output.size());
-  EXPECT_EQ("www.google.com", output[0].url.host());
+  EXPECT_EQ("www.google.com", output[0].url.GetHost());
 }
 
 TEST(StartupTabProviderTest, GetPinnedTabsForState_Negative) {
@@ -139,14 +140,14 @@ TEST(StartupTabProviderTest, GetPreferencesTabsForState) {
       StartupTabProviderImpl::GetPreferencesTabsForState(pref_urls, false);
 
   ASSERT_EQ(1U, output.size());
-  EXPECT_EQ("www.google.com", output[0].url.host());
+  EXPECT_EQ("www.google.com", output[0].url.GetHost());
   EXPECT_EQ(StartupTab::Type::kNormal, output[0].type);
 
   output = StartupTabProviderImpl::GetPreferencesTabsForState(
       pref_last_and_urls, false);
 
   ASSERT_EQ(1U, output.size());
-  EXPECT_EQ("www.google.com", output[0].url.host());
+  EXPECT_EQ("www.google.com", output[0].url.GetHost());
   EXPECT_EQ(StartupTab::Type::kFromLastAndUrlsStartupPref, output[0].type);
 }
 

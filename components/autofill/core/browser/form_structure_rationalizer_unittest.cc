@@ -15,8 +15,10 @@
 #include "components/autofill/core/browser/autofill_field.h"
 #include "components/autofill/core/browser/crowdsourcing/autofill_crowdsourcing_encoding.h"
 #include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/browser/form_parsing/determine_regex_types.h"
 #include "components/autofill/core/browser/form_structure_test_api.h"
 #include "components/autofill/core/browser/heuristic_source.h"
+#include "components/autofill/core/browser/proto/server.pb.h"
 #include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
@@ -132,7 +134,12 @@ std::unique_ptr<FormStructure> BuildFormStructure(
 
   // Identifies the sections based on the heuristics types.
   if (run_heuristics) {
-    form_structure->DetermineHeuristicTypes(GeoIpCountryCode(""), nullptr);
+    const RegexPredictions regex_predictions =
+        DetermineRegexTypes(GeoIpCountryCode(""), LanguageCode(""),
+                            form_structure->ToFormData(), nullptr);
+    regex_predictions.ApplyTo(form_structure->fields());
+    form_structure->RationalizeAndAssignSections(GeoIpCountryCode(""),
+                                                 LanguageCode(""), nullptr);
   } else {
     for (size_t i = 0; i < fields.size(); ++i) {
       form_structure->field(i)->set_heuristic_type(GetActiveHeuristicSource(),
@@ -142,7 +149,8 @@ std::unique_ptr<FormStructure> BuildFormStructure(
   ParseServerPredictionsQueryResponse(
       response_string, {form_structure.get()},
       test::GetEncodedSignatures({form_structure.get()}), nullptr);
-  form_structure->RationalizeAndAssignSections(nullptr, /*legacy_order=*/true);
+  form_structure->RationalizeAndAssignSections(GeoIpCountryCode(""),
+                                               LanguageCode(""), nullptr);
   return form_structure;
 }
 
@@ -159,14 +167,15 @@ auto FieldTypesAre(auto... types) {
   return ElementsAre(FieldTypeSet{types}...);
 }
 
-std::vector<std::optional<std::string>> GetFormatStrings(
+std::vector<std::optional<std::string>> GetDateFormatStrings(
     const FormStructure& form_structure) {
   std::vector<std::optional<std::string>> format_strings;
   format_strings.reserve(form_structure.field_count());
   for (size_t i = 0; i < form_structure.field_count(); ++i) {
-    if (std::optional<std::u16string> format_string =
-            form_structure.field(i)->format_string().CopyAsOptional()) {
-      format_strings.emplace_back(base::UTF16ToUTF8(*format_string));
+    if (std::optional<AutofillFormatString> format_string =
+            form_structure.field(i)->format_string().CopyAsOptional();
+        format_string && format_string->type == FormatString_Type_DATE) {
+      format_strings.emplace_back(base::UTF16ToUTF8(format_string->value));
     } else {
       format_strings.push_back(std::nullopt);
     }
@@ -1090,7 +1099,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest, FirstNumberIsWholeNumber) {
                   {ADDRESS_HOME_LINE1, false},
                   {PHONE_HOME_WHOLE_NUMBER, false},
                   {PHONE_HOME_CITY_AND_NUMBER, true}});
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   EXPECT_THAT(GetOnlyFilledWhenFocused(fields),
               ::testing::Eq(expected_only_fill_when_focused));
@@ -1106,7 +1115,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest, FirstNumberIsComponentized) {
                   {PHONE_HOME_COUNTRY_CODE, true},
                   {PHONE_HOME_CITY_CODE, true},
                   {PHONE_HOME_NUMBER, true}});
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   EXPECT_THAT(GetOnlyFilledWhenFocused(fields),
               ::testing::Eq(expected_only_fill_when_focused));
@@ -1119,7 +1128,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest,
                   {ADDRESS_HOME_LINE1, false},
                   {PHONE_HOME_COUNTRY_CODE, false},
                   {PHONE_HOME_CITY_CODE, false}});
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   // Even though we did not find the PHONE_HOME_NUMBER finishing the phone
   // number, the remaining fields are filled.
@@ -1138,7 +1147,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest, FillPhonePartsOnceOnly) {
                   // third number that are not filled.
                   {PHONE_HOME_WHOLE_NUMBER, true},
                   {PHONE_HOME_CITY_CODE, true}});
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   EXPECT_THAT(GetOnlyFilledWhenFocused(fields),
               ::testing::Eq(expected_only_fill_when_focused));
@@ -1156,7 +1165,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest, SkipHiddenPhoneNumberFields) {
   // fields are skipped.
   fields[2]->set_is_visible(false);
   fields[2]->set_is_focusable(false);
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   EXPECT_THAT(GetOnlyFilledWhenFocused(fields),
               ::testing::Eq(expected_only_fill_when_focused));
@@ -1173,7 +1182,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest, ProcessNumberPrefixAndSuffix) {
                   {PHONE_HOME_CITY_CODE, true},
                   {PHONE_HOME_NUMBER_PREFIX, true},
                   {PHONE_HOME_NUMBER_SUFFIX, true}});
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   EXPECT_THAT(GetOnlyFilledWhenFocused(fields),
               ::testing::Eq(expected_only_fill_when_focused));
@@ -1190,7 +1199,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest, IncorrectPrefix) {
                   {PHONE_HOME_NUMBER, false},
                   // This would be a second number.
                   {PHONE_HOME_CITY_AND_NUMBER, true}});
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   EXPECT_THAT(GetOnlyFilledWhenFocused(fields),
               ::testing::Eq(expected_only_fill_when_focused));
@@ -1207,7 +1216,7 @@ TEST_F(RationalizePhoneNumbersForFillingTest, IncorrectSuffix) {
                   {PHONE_HOME_NUMBER, false},
                   // This would be a second number.
                   {PHONE_HOME_CITY_AND_NUMBER, true}});
-  FormStructureRationalizer rationalizer(&fields);
+  FormStructureRationalizer rationalizer(fields);
   rationalizer.RationalizePhoneNumbersForFilling();
   EXPECT_THAT(GetOnlyFilledWhenFocused(fields),
               ::testing::Eq(expected_only_fill_when_focused));
@@ -1228,8 +1237,9 @@ TEST_F(RationalizeDateFormatTest, LeavesUntouchedIfUnknown) {
        {.field_type = PASSPORT_EXPIRATION_DATE, .placeholder = "DD/MM/YYYY"}},
       /*run_heuristics=*/false);
   form_structure->fields()[1]->set_format_string_unless_overruled(
-      u"YYYY-MM-DD", AutofillField::FormatStringSource::kServer);
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+      AutofillFormatString(u"YYYY-MM-DD", FormatString_Type_DATE),
+      AutofillFormatStringSource::kServer);
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre(std::nullopt, "YYYY-MM-DD", "DD/MM/YYYY"));
 }
 
@@ -1239,9 +1249,10 @@ TEST_F(RationalizeDateFormatTest, DoesNotOverruleTheServer) {
       {{.field_type = PASSPORT_EXPIRATION_DATE, .placeholder = "DD/MM/YYYY"},
        {.field_type = PASSPORT_EXPIRATION_DATE, .placeholder = "DD/MM/YYYY"}},
       /*run_heuristics=*/false);
-  form_structure->fields().back()->set_format_string_unless_overruled(
-      u"YYYY-MM-DD", AutofillField::FormatStringSource::kServer);
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+  form_structure->fields()[1]->set_format_string_unless_overruled(
+      AutofillFormatString(u"YYYY-MM-DD", FormatString_Type_DATE),
+      AutofillFormatStringSource::kServer);
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre("DD/MM/YYYY", "YYYY-MM-DD"));
 }
 
@@ -1258,7 +1269,7 @@ TEST_F(RationalizeDateFormatTest, Placeholder) {
         .value = "YYYY-MM-DD"}},
       /*run_heuristics=*/false);
   EXPECT_THAT(
-      GetFormatStrings(*form_structure),
+      GetDateFormatStrings(*form_structure),
       ElementsAre("YYYY-MM-DD", "DD", "YYYY-MM", "DD/MM/YY", "DD/MM/YY"));
 }
 
@@ -1279,7 +1290,7 @@ TEST_F(RationalizeDateFormatTest, Value) {
         .value = "YYYY-MM-DD"}},
       /*run_heuristics=*/false);
   EXPECT_THAT(
-      GetFormatStrings(*form_structure),
+      GetDateFormatStrings(*form_structure),
       ElementsAre("YYYY-MM-DD", "DD", "YYYY-MM", "DD/MM/YY", "DD/MM/YY"));
 }
 
@@ -1292,7 +1303,7 @@ TEST_F(RationalizeDateFormatTest, Label_OnePerField) {
                           {.label = "Until which D/M/YY is the thing valid?",
                            .field_type = PASSPORT_EXPIRATION_DATE}},
                          /*run_heuristics=*/false);
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre("YYYY-MM-DD", "D/M/YY"));
 }
 
@@ -1309,7 +1320,7 @@ TEST_F(RationalizeDateFormatTest, Label_SplitAcrossThreeFields) {
                           {.label = "Until which D/M/YY is the thing valid?",
                            .field_type = PASSPORT_EXPIRATION_DATE}},
                          /*run_heuristics=*/false);
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre("YYYY", "MM", "DD", "D/M/YY"));
 }
 
@@ -1324,7 +1335,7 @@ TEST_F(RationalizeDateFormatTest, Label_SplitAcrossThreeFieldsWithEmptyLabels) {
                           {.label = "Until which D/M/YY is the thing valid?",
                            .field_type = PASSPORT_ISSUE_DATE}},
                          /*run_heuristics=*/false);
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre("DD", "MM", "YYYY", "D/M/YY"));
 }
 
@@ -1339,7 +1350,7 @@ TEST_F(RationalizeDateFormatTest, Label_SplitAcrossTwoFields) {
                           {.label = "Until which D/M/YY is the thing valid?",
                            .field_type = PASSPORT_EXPIRATION_DATE}},
                          /*run_heuristics=*/false);
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre("YYYY", "MM", "D/M/YY"));
 }
 
@@ -1352,7 +1363,7 @@ TEST_F(RationalizeDateFormatTest, Label_DoNotSplitIfTooFewFields) {
                           {.label = "When did you pick it up? YYYY-MM-DD",
                            .field_type = PASSPORT_ISSUE_DATE}},
                          /*run_heuristics=*/false);
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre("YYYY-MM-DD", "YYYY-MM-DD"));
 }
 
@@ -1370,7 +1381,7 @@ TEST_F(RationalizeDateFormatTest, Label_DoNotCrashIfManyFields) {
                            .field_type = PASSPORT_ISSUE_DATE}},
                          /*run_heuristics=*/false);
   // There is no particular motivation for this assignment.
-  EXPECT_THAT(GetFormatStrings(*form_structure),
+  EXPECT_THAT(GetDateFormatStrings(*form_structure),
               ElementsAre("YYYY", "MM", "DD", "YYYY-MM-DD"));
 }
 

@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.autofill.settings;
 
 import static org.chromium.build.NullUtil.assumeNonNull;
-import static org.chromium.chrome.browser.autofill.editors.AddressEditorCoordinator.UserFlow.UPDATE_EXISTING_ADDRESS_PROFILE;
 
 import android.content.Context;
 import android.content.res.Configuration;
@@ -33,6 +32,7 @@ import org.chromium.chrome.browser.autofill.AutofillEditorBase;
 import org.chromium.chrome.browser.autofill.AutofillFallbackSurfaceLauncher;
 import org.chromium.chrome.browser.autofill.PersonalDataManager;
 import org.chromium.chrome.browser.autofill.PersonalDataManagerFactory;
+import org.chromium.chrome.browser.autofill.SaveUpdateAddressProfilePromptMode;
 import org.chromium.chrome.browser.autofill.editors.AddressEditorCoordinator;
 import org.chromium.chrome.browser.autofill.editors.AddressEditorCoordinator.Delegate;
 import org.chromium.chrome.browser.autofill.editors.EditorDialogView;
@@ -134,7 +134,7 @@ public class AutofillProfilesFragment extends ChromeBaseSettingsFragment
     public static final String GOOGLE_ACCOUNT_WORK_ADDRESS_EDIT_URL =
             "https://myaccount.google.com/address/work?utm_source=chrome&utm_campaign=manage_addresses";
     public static final String GOOGLE_ACCOUNT_NAME_EMAIL_ADDRESS_EDIT_URL =
-            "https://myaccount.google.com/personal-info";
+            "https://myaccount.google.com/personal-info?utm_source=chrome-settings&utm_medium=autofill";
 
     private @Nullable AddressEditorCoordinator mAddressEditor;
     private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
@@ -221,7 +221,7 @@ public class AutofillProfilesFragment extends ChromeBaseSettingsFragment
         disabledSettingsInfoPref.setSummary(R.string.autofill_disable_settings_explanation);
         disabledSettingsInfoPref.setButtonText(
                 getResources().getString(R.string.autofill_disable_settings_button_label));
-        disabledSettingsInfoPref.setIconResource(R.drawable.ic_google_services_48dp);
+        disabledSettingsInfoPref.setIconResource(R.drawable.ic_google_services_24dp);
         disabledSettingsInfoPref.setOnButtonClick(
                 () -> {
                     SettingsNavigation settingsNavigation =
@@ -338,6 +338,7 @@ public class AutofillProfilesFragment extends ChromeBaseSettingsFragment
     @Override
     public void onPersonalDataChanged() {
         rebuildProfileList();
+        notifyPreferencesUpdated();
         if (sObserverForTest != null) sObserverForTest.onEditorDismiss();
     }
 
@@ -391,7 +392,7 @@ public class AutofillProfilesFragment extends ChromeBaseSettingsFragment
                             mAddressEditorDelegate,
                             getProfile(),
                             autofillAddress,
-                            UPDATE_EXISTING_ADDRESS_PROFILE,
+                            SaveUpdateAddressProfilePromptMode.UPDATE_PROFILE,
                             /* saveToDisk= */ true);
             mAddressEditor.setAllowDelete(true);
             mAddressEditor.showEditorDialog();

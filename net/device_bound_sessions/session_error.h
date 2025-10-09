@@ -40,12 +40,25 @@ struct NET_EXPORT SessionError {
     kMissingScope = 21,
     kNoCredentials = 22,
     kInvalidScopeIncludeSite = 23,
-    kWellKnownUnavailable = 24,
+    kSubdomainRegistrationWellKnownUnavailable = 24,
     kSubdomainRegistrationUnauthorized = 25,
-    kWellKnownMalformed = 26,
-    kMaxValue = kWellKnownMalformed,
+    kSubdomainRegistrationWellKnownMalformed = 26,
+    kFederatedNotAuthorized = 27,
+    kSessionProviderWellKnownUnavailable = 28,
+    kSessionProviderWellKnownMalformed = 29,
+    kRelyingPartyWellKnownUnavailable = 30,
+    kRelyingPartyWellKnownMalformed = 31,
+    kFederatedKeyThumbprintMismatch = 32,
+    kInvalidFederatedSessionUrl = 33,
+    kInvalidFederatedSession = 34,
+    kInvalidFederatedKey = 35,
+    kTooManyRelyingOriginLabels = 36,
+    kBoundCookieSetForbidden = 37,
+    kMaxValue = kBoundCookieSetForbidden,
   };
   // LINT.ThenChange(//tools/metrics/histograms/metadata/net/enums.xml:DeviceBoundSessionError)
+
+  using enum ErrorType;
 
   explicit SessionError(ErrorType type);
   ~SessionError();

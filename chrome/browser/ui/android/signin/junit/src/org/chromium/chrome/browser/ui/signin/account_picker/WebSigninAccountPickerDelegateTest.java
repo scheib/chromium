@@ -32,19 +32,19 @@ import org.chromium.chrome.browser.signin.services.SigninMetricsUtilsJni;
 import org.chromium.chrome.browser.signin.services.WebSigninBridge;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
-import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.browser.WebSigninTrackerResult;
 import org.chromium.components.signin.metrics.AccountConsistencyPromoAction;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.test.util.FakeAccountManagerFacade;
+import org.chromium.components.signin.test.util.TestAccounts;
 import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.url.GURL;
 
 /** This class tests the {@link WebSigninAccountPickerDelegate}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @LooperMode(LooperMode.Mode.LEGACY)
 public class WebSigninAccountPickerDelegateTest {
-    private static final String CONTINUE_URL = "https://test-continue-url.com";
-    private static final String TEST_EMAIL = "test.account@gmail.com";
+    private static final GURL CONTINUE_URL = new GURL("https://test-continue-url.com");
 
     private final FakeAccountManagerFacade mFakeAccountManagerFacade =
             spy(new FakeAccountManagerFacade());
@@ -75,11 +75,9 @@ public class WebSigninAccountPickerDelegateTest {
 
     private WebSigninAccountPickerDelegate mDelegate;
 
-    private CoreAccountInfo mCoreAccountInfo;
-
     @Before
     public void setUp() {
-        mCoreAccountInfo = mAccountManagerTestRule.addAccount(TEST_EMAIL);
+        mAccountManagerTestRule.addAccount(TestAccounts.ACCOUNT1);
         when(mTabMock.getProfile()).thenReturn(mProfileMock);
         SigninMetricsUtilsJni.setInstanceForTesting(mSigninMetricsUtilsJniMock);
         mDelegate =
@@ -97,25 +95,32 @@ public class WebSigninAccountPickerDelegateTest {
     @Test
     public void testSignInSucceeded() {
 
-        mDelegate.onSignInComplete(mCoreAccountInfo, mSigninStateControllerMock);
+        mDelegate.onSignInComplete(TestAccounts.ACCOUNT1, mSigninStateControllerMock);
 
         verify(mWebSigninBridgeFactoryMock)
-                .create(eq(mProfileMock), eq(mCoreAccountInfo), mWebSigninCallbackCaptor.capture());
+                .create(
+                        eq(mProfileMock),
+                        eq(TestAccounts.ACCOUNT1),
+                        mWebSigninCallbackCaptor.capture());
 
         mWebSigninCallbackCaptor.getValue().onResult(WebSigninTrackerResult.SUCCESS);
 
         verify(mSigninStateControllerMock).onSigninComplete();
         verify(mTabMock).loadUrl(mLoadUrlParamsCaptor.capture());
         LoadUrlParams loadUrlParams = mLoadUrlParamsCaptor.getValue();
-        Assert.assertEquals("Continue url does not match!", CONTINUE_URL, loadUrlParams.getUrl());
+        Assert.assertEquals(
+                "Continue url does not match!", CONTINUE_URL.getSpec(), loadUrlParams.getUrl());
     }
 
     @Test
     public void testSignInFailedWithConnectionError() {
-        mDelegate.onSignInComplete(mCoreAccountInfo, mSigninStateControllerMock);
+        mDelegate.onSignInComplete(TestAccounts.ACCOUNT1, mSigninStateControllerMock);
 
         verify(mWebSigninBridgeFactoryMock)
-                .create(eq(mProfileMock), eq(mCoreAccountInfo), mWebSigninCallbackCaptor.capture());
+                .create(
+                        eq(mProfileMock),
+                        eq(TestAccounts.ACCOUNT1),
+                        mWebSigninCallbackCaptor.capture());
 
         mWebSigninCallbackCaptor.getValue().onResult(WebSigninTrackerResult.OTHER_ERROR);
 
@@ -131,10 +136,13 @@ public class WebSigninAccountPickerDelegateTest {
 
     @Test
     public void testSignInFailedWithGaiaError() {
-        mDelegate.onSignInComplete(mCoreAccountInfo, mSigninStateControllerMock);
+        mDelegate.onSignInComplete(TestAccounts.ACCOUNT1, mSigninStateControllerMock);
 
         verify(mWebSigninBridgeFactoryMock)
-                .create(eq(mProfileMock), eq(mCoreAccountInfo), mWebSigninCallbackCaptor.capture());
+                .create(
+                        eq(mProfileMock),
+                        eq(TestAccounts.ACCOUNT1),
+                        mWebSigninCallbackCaptor.capture());
 
         mWebSigninCallbackCaptor.getValue().onResult(WebSigninTrackerResult.AUTH_ERROR);
         verify(mSigninStateControllerMock).showAuthError();

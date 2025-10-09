@@ -69,6 +69,9 @@ using signin_metrics::PromoAction;
   raw_ptr<syncer::SyncService> _syncService;
   ChangeProfileContinuationProvider _continuationProvider;
   AddAccountSigninMediator* _mediator;
+  // Email to pre-fill.
+  NSString* _prefilledEmail;
+  BOOL _stopped;
 }
 
 #pragma mark - Public
@@ -79,6 +82,7 @@ using signin_metrics::PromoAction;
                                accessPoint:(AccessPoint)accessPoint
                                promoAction:(PromoAction)promoAction
                               signinIntent:(AddAccountSigninIntent)signinIntent
+                            prefilledEmail:(NSString*)email
                       continuationProvider:
                           (const ChangeProfileContinuationProvider&)
                               continuationProvider {
@@ -89,10 +93,10 @@ using signin_metrics::PromoAction;
   if (self) {
     CHECK(continuationProvider);
     CHECK(viewController, base::NotFatalUntil::M140);
-    CHECK(browser, base::NotFatalUntil::M140);
     _continuationProvider = continuationProvider;
     _signinIntent = signinIntent;
     _promoAction = promoAction;
+    _prefilledEmail = [email copy];
   }
   return self;
 }
@@ -142,7 +146,8 @@ using signin_metrics::PromoAction;
       initWithBaseViewController:self.baseViewController
                      prefService:profile->GetPrefs()
                  identityManager:_identityManager
-      identityInteractionManager:identityInteractionManager];
+      identityInteractionManager:identityInteractionManager
+                  prefilledEmail:_prefilledEmail];
   self.addAccountSigninManager.delegate = self;
   // Note that, up to iOS 18, the view may disappear if the user turn off their
   // screen, without informing the delegate, due to a bug in UIKit. See
@@ -153,12 +158,12 @@ using signin_metrics::PromoAction;
 #pragma mark - AnimatedCoordinator
 
 - (void)stopAnimated:(BOOL)animated {
+  // The coordinator should not be stopped twice. Indeed, after the first stop,
+  // the coordinator will be released, and this will cause the second stop to be
+  // executed on a zombie object. See crbug.com/442589294.
+  CHECK(!_stopped, base::NotFatalUntil::M145);
+  _stopped = YES;
   [super stopAnimated:animated];
-  // When interrupting `self.postSigninManagerCoordinator` or
-  // `self.historySyncPopupCoordinator` below, the signinCompletion is called.
-  // This callback is in charge to call `[self
-  // runCompletionWithSigninResult: completionIdentity:]`.
-
   [self stopPostSigninManagerCoordinatorAnimated:animated];
   [self interruptAddAccountSigninManager:animated];
   [self stopAlertCoordinator];
@@ -259,7 +264,14 @@ using signin_metrics::PromoAction;
 
 #pragma mark - Private
 
+// Returns whether the coordinator is started and not stopped.
+- (BOOL)isStarted {
+  return !_continuationProvider.is_null();
+}
+
 - (void)stopAlertCoordinator {
+  // To avoid reentry, `noInteractionAction` is set to nil.
+  self.alertCoordinator.noInteractionAction = nil;
   [self.alertCoordinator stop];
   self.alertCoordinator = nil;
 }
@@ -339,14 +351,17 @@ using signin_metrics::PromoAction;
   // `identity` is set, only and only if the sign-in is successful.
   DCHECK(((signinResult == SigninCoordinatorResultSuccess) && identity) ||
          ((signinResult != SigninCoordinatorResultSuccess) && !identity));
-  id<SystemIdentity> completionIdentity = identity;
-  [self runCompletionWithSigninResult:signinResult
-                   completionIdentity:completionIdentity];
+  if (_stopped) {
+    // The delegate is already dealing with stopping `self`.
+    return;
+  }
+  [self runCompletionWithSigninResult:signinResult completionIdentity:identity];
 }
 
 // Presents the extra screen with `identity` pre-selected.
 - (void)presentPostSigninManagerCoordinatorWithIdentity:
     (id<SystemIdentity>)identity {
+  CHECK([self isStarted], base::NotFatalUntil::M144);
   // The new UIViewController is presented on top of the currently displayed
   // view controller.
   self.postSigninManagerCoordinator = [SigninCoordinator
@@ -385,6 +400,7 @@ using signin_metrics::PromoAction;
     [self addAccountDoneWithSigninResult:result identity:resultIdentity];
     return;
   }
+  CHECK([self isStarted], base::NotFatalUntil::M144);
   self.historySyncPopupCoordinator = [[HistorySyncPopupCoordinator alloc]
       initWithBaseViewController:self.baseViewController
                          browser:self.browser
@@ -427,6 +443,10 @@ using signin_metrics::PromoAction;
 
 - (void)mediatorWantsToBeStopped:(AddAccountSigninMediator*)mediator {
   CHECK_EQ(_mediator, mediator, base::NotFatalUntil::M144);
+  if (_stopped) {
+    // Stop is already ongoing.
+    return;
+  }
   [self runCompletionWithSigninResult:SigninCoordinatorResultInterrupted
                    completionIdentity:nil];
 }

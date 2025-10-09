@@ -134,10 +134,6 @@ enum DataType {
   // (Linux, Mac, Windows, ChromeOS) and Android.
   SAVED_TAB_GROUP,
 
-  // Power bookmarks are features associated with bookmarks(i.e. notes, price
-  // tracking). Their life cycle are synced with bookmarks.
-  POWER_BOOKMARK,
-
   // WebAuthn credentials, more commonly known as passkeys.
   WEBAUTHN_CREDENTIAL,
 
@@ -178,7 +174,19 @@ enum DataType {
   // Comments for shared contexts.
   SHARED_COMMENT,
 
-  LAST_USER_DATA_TYPE = SHARED_COMMENT,
+  // ACCOUNT_SETTING(s) forwarded from the user's account. Since the
+  // settings originate from the user account, this is not reusing any of the
+  // standard syncable prefs.
+  // Read-only on the client.
+  ACCOUNT_SETTING,
+
+  // A user thread when interacting with AI features.
+  AI_THREAD,
+
+  // Information about a contextual task.
+  CONTEXTUAL_TASK,
+
+  LAST_USER_DATA_TYPE = CONTEXTUAL_TASK,
 
   // ---- Control Types ----
   // An object representing a set of Nigori keys.
@@ -264,7 +272,7 @@ enum class DataTypeForHistograms {
   kAutofillWalletUsage = 54,
   // kDeprecatedSegmentation = 55,
   kSavedTabGroups = 56,
-  kPowerBookmark = 57,
+  // kDeprecatedPowerBookmark = 57,
   kWebAuthnCredentials = 58,
   kIncomingPasswordSharingInvitations = 59,
   kOutgoingPasswordSharingInvitations = 60,
@@ -279,7 +287,10 @@ enum class DataTypeForHistograms {
   kAutofillValuable = 69,
   kSharedTabGroupAccountData = 70,
   kSharedComment = 71,
-  kMaxValue = kSharedComment,
+  kAccountSetting = 72,
+  kAIThread = 73,
+  kContextualTask = 74,
+  kMaxValue = kContextualTask,
 };
 // LINT.ThenChange(/tools/metrics/histograms/metadata/sync/enums.xml:SyncDataTypes)
 
@@ -339,7 +350,12 @@ constexpr DataTypeSet HighPriorityUserTypes() {
       // in the creation flow for a new profile. If the user has no theme in
       // their sync data, the browser offers a theme customization bubble which
       // should appear soon after opening the browser.
-      THEMES};
+      THEMES,
+      // This guarantees that sync will process updates for collaboration groups
+      // before other data types during initial sync download and during
+      // uploads, which is critical for remote clients to correctly detect the
+      // start of a passive migration.
+      COLLABORATION_GROUP};
 }
 
 // This is the subset of UserTypes() that have a *lower* priority than other
@@ -402,7 +418,7 @@ constexpr DataTypeSet SharedTypes() {
 // any pending account data or abort, depending on the platform.
 constexpr DataTypeSet TypesRequiringUnsyncedDataCheckOnSignout() {
   static_assert(
-      56 == GetNumDataTypes(),
+      58 == GetNumDataTypes(),
       "Add new types to `TypesRequiringUnsyncedDataCheckOnSignout()` if there "
       "should be a warning when the user signs out and the types have unsynced "
       "data. The warning offers the user to either proceed with sign-out "

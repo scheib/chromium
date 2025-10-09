@@ -4,6 +4,10 @@
 
 #include "chrome/browser/web_applications/web_app_database_serialization.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -11,22 +15,30 @@
 #include <vector>
 
 #include "base/check.h"
+#include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/containers/flat_set.h"
+#include "base/containers/span.h"
+#include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/not_fatal_until.h"
+#include "base/notreached.h"
 #include "base/pickle.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/types/expected.h"
 #include "build/build_config.h"
 #include "chrome/browser/web_applications/generated_icon_fix_util.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_integrity_block_data.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolation_data.h"
-#include "chrome/browser/web_applications/mojom/user_display_mode.mojom-shared.h"
-#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
-#include "chrome/browser/web_applications/os_integration/web_app_file_handler_manager.h"
 #include "chrome/browser/web_applications/proto/web_app.pb.h"
 #include "chrome/browser/web_applications/proto/web_app_install_state.pb.h"
+#include "chrome/browser/web_applications/proto/web_app_launch_handler.pb.h"
 #include "chrome/browser/web_applications/proto/web_app_related_applications.pb.h"
+#include "chrome/browser/web_applications/proto/web_app_share_target.pb.h"
+#include "chrome/browser/web_applications/proto/web_app_tab_strip.pb.h"
 #include "chrome/browser/web_applications/proto/web_app_url_pattern.pb.h"
+#include "chrome/browser/web_applications/scope_extension_info.h"
 #include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_chromeos_data.h"
@@ -36,12 +48,11 @@
 #include "chrome/browser/web_applications/web_app_management_type.h"
 #include "chrome/browser/web_applications/web_app_proto_utils.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
-#include "chrome/common/chrome_features.h"
 #include "components/services/app_service/public/cpp/file_handler.h"
 #include "components/services/app_service/public/cpp/protocol_handler_info.h"
 #include "components/services/app_service/public/cpp/share_target.h"
-#include "components/sync/base/data_type.h"
 #include "components/sync/base/time.h"
+#include "components/sync/protocol/web_app_specifics.pb.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "components/webapps/common/web_app_id.h"
 #include "components/webapps/isolated_web_apps/types/iwa_version.h"
@@ -53,11 +64,15 @@
 #include "third_party/blink/public/common/manifest/manifest.h"
 #include "third_party/blink/public/common/permissions_policy/policy_helper_public.h"
 #include "third_party/blink/public/common/safe_url_pattern.h"
-#include "third_party/blink/public/mojom/manifest/capture_links.mojom.h"
-#include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
-#include "third_party/blink/public/mojom/safe_url_pattern.mojom.h"
+#include "third_party/protobuf/src/google/protobuf/repeated_ptr_field.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+
+// TODO(crbug.com/441959098): Consider removing chromeos includes.
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ash/webui/system_apps/public/system_web_app_type.h"
+#include "chromeos/ash/experiences/system_web_apps/types/system_web_app_data.h"
+#endif
 
 namespace web_app {
 
@@ -142,32 +157,6 @@ apps::ShareTarget::Enctype ProtoToEnctype(proto::ShareTarget_Enctype enctype) {
       return apps::ShareTarget::Enctype::kFormUrlEncoded;
     case proto::ShareTarget::ENCTYPE_MULTIPART_FORM_DATA:
       return apps::ShareTarget::Enctype::kMultipartFormData;
-  }
-}
-
-blink::mojom::CaptureLinks ProtoToCaptureLinks(
-    proto::WebApp::CaptureLinks capture_links) {
-  switch (capture_links) {
-    case proto::WebApp_CaptureLinks_NONE:
-      return blink::mojom::CaptureLinks::kNone;
-    case proto::WebApp_CaptureLinks_NEW_CLIENT:
-      return blink::mojom::CaptureLinks::kNewClient;
-    case proto::WebApp_CaptureLinks_EXISTING_CLIENT_NAVIGATE:
-      return blink::mojom::CaptureLinks::kExistingClientNavigate;
-  }
-}
-
-proto::WebApp::CaptureLinks CaptureLinksToProto(
-    blink::mojom::CaptureLinks capture_links) {
-  switch (capture_links) {
-    case blink::mojom::CaptureLinks::kUndefined:
-      NOTREACHED();
-    case blink::mojom::CaptureLinks::kNone:
-      return proto::WebApp_CaptureLinks_NONE;
-    case blink::mojom::CaptureLinks::kNewClient:
-      return proto::WebApp_CaptureLinks_NEW_CLIENT;
-    case blink::mojom::CaptureLinks::kExistingClientNavigate:
-      return proto::WebApp_CaptureLinks_EXISTING_CLIENT_NAVIGATE;
   }
 }
 
@@ -1075,12 +1064,6 @@ std::unique_ptr<WebApp> ParseWebAppProto(const proto::WebApp& proto) {
         ToRunOnOsLoginMode(proto.user_run_on_os_login_mode()));
   }
 
-  if (proto.has_capture_links()) {
-    web_app->SetCaptureLinks(ProtoToCaptureLinks(proto.capture_links()));
-  } else {
-    web_app->SetCaptureLinks(blink::mojom::CaptureLinks::kUndefined);
-  }
-
   if (proto.has_manifest_url()) {
     GURL manifest_url(proto.manifest_url());
     if (manifest_url.is_empty() || !manifest_url.is_valid()) {
@@ -1210,8 +1193,8 @@ std::unique_ptr<WebApp> ParseWebAppProto(const proto::WebApp& proto) {
       return nullptr;
     }
 
-    auto isolation_data_builder = IsolationData::Builder(
-        std::move(*location), std::move(iwa_version->version()));
+    auto isolation_data_builder =
+        IsolationData::Builder(*std::move(location), *std::move(iwa_version));
 
     const google::protobuf::RepeatedPtrField<std::string>& partitions =
         proto.isolation_data().controlled_frame_partitions();
@@ -1268,8 +1251,7 @@ std::unique_ptr<WebApp> ParseWebAppProto(const proto::WebApp& proto) {
 
       isolation_data_builder.SetPendingUpdateInfo(
           IsolationData::PendingUpdateInfo(
-              std::move(*pending_location),
-              std::move((pending_iwa_version->version())),
+              *std::move(pending_location), *std::move(pending_iwa_version),
               std::move(pending_integrity_block_data)));
     }
 
@@ -1369,7 +1351,9 @@ std::unique_ptr<WebApp> ParseWebAppProto(const proto::WebApp& proto) {
     // Exit early if there is a `PendingUpdateInfo` that is completely empty.
     if (!proto.pending_update_info().has_name() &&
         proto.pending_update_info().trusted_icons().empty() &&
-        proto.pending_update_info().manifest_icons().empty()) {
+        proto.pending_update_info().manifest_icons().empty() &&
+        proto.pending_update_info().downloaded_trusted_icons().empty() &&
+        proto.pending_update_info().downloaded_manifest_icons().empty()) {
       return nullptr;
     }
 
@@ -1390,6 +1374,26 @@ std::unique_ptr<WebApp> ParseWebAppProto(const proto::WebApp& proto) {
       }
       for (const auto& icon : proto.pending_update_info().trusted_icons()) {
         if (!icon.has_url() || !icon.has_size_in_px() || !icon.has_purpose()) {
+          return nullptr;
+        }
+      }
+      // If manifest_icons and trusted_icons are populated, then
+      // downloaded_trusted_icon_sizes and downloaded_manifest_icon_sizes must
+      // also be populated.
+      if (proto.pending_update_info().downloaded_trusted_icons().empty() ||
+          proto.pending_update_info().downloaded_manifest_icons().empty()) {
+        return nullptr;
+      }
+
+      for (const auto& icon :
+           proto.pending_update_info().downloaded_manifest_icons()) {
+        if (icon.icon_sizes().empty() || !icon.has_purpose()) {
+          return nullptr;
+        }
+      }
+      for (const auto& icon :
+           proto.pending_update_info().downloaded_trusted_icons()) {
+        if (icon.icon_sizes().empty() || !icon.has_purpose()) {
           return nullptr;
         }
       }
@@ -1419,6 +1423,12 @@ std::unique_ptr<WebApp> ParseWebAppProto(const proto::WebApp& proto) {
   web_app->SetStoredTrustedIconSizes(
       IconPurpose::MASKABLE,
       SortedSizesPx(std::move(trusted_icon_sizes_maskable)));
+
+  auto borderless_url_patterns = ToUrlPatterns(proto.borderless_url_patterns());
+  if (!borderless_url_patterns.has_value()) {
+    return nullptr;
+  }
+  web_app->SetBorderlessUrlPatterns(std::move(borderless_url_patterns.value()));
 
   return web_app;
 }
@@ -1734,12 +1744,6 @@ std::unique_ptr<proto::WebApp> WebAppToProto(const WebApp& web_app) {
         web_app.note_taking_new_note_url().spec());
   }
 
-  if (web_app.capture_links() != blink::mojom::CaptureLinks::kUndefined) {
-    local_data->set_capture_links(CaptureLinksToProto(web_app.capture_links()));
-  } else {
-    local_data->clear_capture_links();
-  }
-
   if (web_app.manifest_url().is_valid()) {
     local_data->set_manifest_url(web_app.manifest_url().spec());
   }
@@ -1971,6 +1975,10 @@ std::unique_ptr<proto::WebApp> WebAppToProto(const WebApp& web_app) {
   for (SquareSizePx size :
        web_app.stored_trusted_icon_sizes(IconPurpose::MASKABLE)) {
     local_data->add_stored_trusted_icon_sizes_maskable(size);
+  }
+
+  for (const auto& pattern : web_app.borderless_url_patterns()) {
+    *(local_data->add_borderless_url_patterns()) = ToUrlPatternProto(pattern);
   }
 
   return local_data;

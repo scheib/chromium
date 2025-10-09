@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "base/check.h"
 #include "base/metrics/histogram_functions.h"
@@ -67,8 +68,25 @@ std::string TokenCountEventToString(IpProtectionTokenCountEvent event) {
       return "Expired";
     case IpProtectionTokenCountEvent::kOrphaned:
       return "Orphaned";
+    case IpProtectionTokenCountEvent::kRecycled:
+      return "Recycled";
   }
   NOTREACHED();
+}
+
+// Converts a BlindSignAuthPhase enum value to its corresponding string
+// representation for histogram naming.
+std::string_view BlindSignAuthPhaseToString(BlindSignAuthPhase phase) {
+  switch (phase) {
+    case BlindSignAuthPhase::kGetInitialData:
+      return "GetInitialData";
+    case BlindSignAuthPhase::kGenerateBlindedTokenRequests:
+      return "GenerateBlindedTokenRequests";
+    case BlindSignAuthPhase::kAuthAndSign:
+      return "AuthAndSign";
+    case BlindSignAuthPhase::kUnblindTokens:
+      return "UnblindTokens";
+  }
 }
 
 }  // namespace
@@ -88,21 +106,10 @@ void IpProtectionTelemetryUma::TokenBatchFetchComplete(
     TryGetAuthTokensResult result,
     std::optional<base::TimeDelta> duration) {
   base::UmaHistogramEnumeration(
-      "NetworkService.IpProtection.TryGetAuthTokensResult", result);
+      "NetworkService.IpProtection.TryGetAuthTokensResult2", result);
   if (duration.has_value()) {
     base::UmaHistogramTimes("NetworkService.IpProtection.TokenBatchRequestTime",
                             *duration);
-  }
-}
-
-void IpProtectionTelemetryUma::AndroidTokenBatchFetchComplete(
-    TryGetAuthTokensAndroidResult result,
-    std::optional<base::TimeDelta> duration) {
-  base::UmaHistogramEnumeration(
-      "NetworkService.AwIpProtection.TryGetAuthTokensResult", result);
-  if (duration.has_value()) {
-    base::UmaHistogramTimes(
-        "NetworkService.AwIpProtection.TokenBatchRequestTime", *duration);
   }
 }
 
@@ -120,64 +127,6 @@ void IpProtectionTelemetryUma::EmptyTokenCache(ProxyLayer value) {
 void IpProtectionTelemetryUma::ProxyResolution(ProxyResolutionResult result) {
   base::UmaHistogramEnumeration("NetworkService.IpProtection.ProxyResolution",
                                 result);
-
-  // Translate the result into eligibility and availability values.
-  ProtectionEligibility eligibility;
-  auto record_availability = [](bool are_auth_tokens_available,
-                                bool is_proxy_list_available) {
-    base::UmaHistogramBoolean(
-        "NetworkService.IpProtection.AreAuthTokensAvailable",
-        are_auth_tokens_available);
-    base::UmaHistogramBoolean(
-        "NetworkService.IpProtection.IsProxyListAvailable",
-        is_proxy_list_available);
-    base::UmaHistogramBoolean(
-        "NetworkService.IpProtection.ProtectionIsAvailableForRequest",
-        are_auth_tokens_available && is_proxy_list_available);
-  };
-
-  switch (result) {
-    case ProxyResolutionResult::kMdlNotPopulated:
-      eligibility = ProtectionEligibility::kUnknown;
-      break;
-    case ProxyResolutionResult::kNoMdlMatch:
-      eligibility = ProtectionEligibility::kIneligible;
-      break;
-    case ProxyResolutionResult::kSettingDisabled:
-      eligibility = ProtectionEligibility::kEligible;
-      break;
-    case ProxyResolutionResult::kProxyListNotAvailable:
-      eligibility = ProtectionEligibility::kEligible;
-      record_availability(
-          /*are_auth_tokens_available=*/false,
-          /*is_proxy_list_available=*/false);
-      break;
-    case ProxyResolutionResult::kTokensNeverAvailable:
-      // fall through to the same as exhausted tokens for the purpose of this
-      // metric.
-    case ProxyResolutionResult::kTokensExhausted:
-      eligibility = ProtectionEligibility::kEligible;
-      record_availability(
-          /*are_auth_tokens_available=*/false,
-          /*is_proxy_list_available=*/true);
-      break;
-    case ProxyResolutionResult::kHasSiteException:
-      eligibility = ProtectionEligibility::kEligible;
-      record_availability(
-          /*are_auth_tokens_available=*/true,
-          /*is_proxy_list_available=*/true);
-      break;
-    case ProxyResolutionResult::kAttemptProxy:
-      eligibility = ProtectionEligibility::kEligible;
-      record_availability(
-          /*are_auth_tokens_available=*/true,
-          /*is_proxy_list_available=*/true);
-      break;
-  }
-
-  base::UmaHistogramEnumeration(
-      "NetworkService.IpProtection.RequestIsEligibleForProtection",
-      eligibility);
 }
 
 void IpProtectionTelemetryUma::GetAuthTokenResultForGeo(
@@ -208,6 +157,15 @@ void IpProtectionTelemetryUma::TokenBatchGenerationComplete(
       "NetworkService.IpProtection.TokenBatchGenerationTime", duration);
 }
 
+void IpProtectionTelemetryUma::TokenBatchGenerationPhaseTime(
+    BlindSignAuthPhase phase,
+    base::TimeDelta duration) {
+  base::UmaHistogramTimes(
+      base::StrCat({"NetworkService.IpProtection.TokenBatchGenerationTime.",
+                    BlindSignAuthPhaseToString(phase)}),
+      duration);
+}
+
 void IpProtectionTelemetryUma::TryGetAuthTokensError(uint32_t hash) {
   base::UmaHistogramSparse("NetworkService.IpProtection.TryGetAuthTokensErrors",
                            hash);
@@ -227,14 +185,6 @@ void IpProtectionTelemetryUma::ProxyListRefreshComplete(
     base::UmaHistogramMediumTimes(
         "NetworkService.IpProtection.ProxyListRefreshTime", *duration);
   }
-}
-
-void IpProtectionTelemetryUma::TokenSpendRate(ProxyLayer proxy_layer,
-                                              int value) {
-  base::UmaHistogramCounts1000(
-      base::StrCat({"NetworkService.IpProtection.",
-                    ProxyLayerToString(proxy_layer), ".TokenSpendRate"}),
-      value);
 }
 
 void IpProtectionTelemetryUma::TokenExpirationRate(ProxyLayer proxy_layer,
@@ -270,24 +220,16 @@ void IpProtectionTelemetryUma::MdlSize(int64_t size) {
                                  /*buckets=*/50);
 }
 
-void IpProtectionTelemetryUma::AndroidAuthClientCreationTime(
+void IpProtectionTelemetryUma::MdlFlatbufferBuildTime(
     base::TimeDelta duration) {
-  base::UmaHistogramMediumTimes(
-      "NetworkService.IpProtection.AndroidAuthClient.CreationTime", duration);
-}
-
-void IpProtectionTelemetryUma::AndroidAuthClientGetInitialDataTime(
-    base::TimeDelta duration) {
-  base::UmaHistogramMediumTimes(
-      "NetworkService.IpProtection.AndroidAuthClient.GetInitialDataTime",
+  base::UmaHistogramTimes(
+      "NetworkService.IpProtection.ProxyAllowList.FlatbufferBuildTime",
       duration);
 }
 
-void IpProtectionTelemetryUma::AndroidAuthClientAuthAndSignTime(
-    base::TimeDelta duration) {
-  base::UmaHistogramMediumTimes(
-      "NetworkService.IpProtection.AndroidAuthClient.AuthAndSignTime",
-      duration);
+void IpProtectionTelemetryUma::MdlUpdateSuccess(bool success) {
+  base::UmaHistogramBoolean(
+      "NetworkService.IpProtection.ProxyAllowList.UpdateSuccess", success);
 }
 
 void IpProtectionTelemetryUma::MdlFirstUpdateTime(base::TimeDelta duration) {
@@ -358,6 +300,11 @@ void IpProtectionTelemetryUma::RecordTokenCountEvent(
   // event would generally be around the batch or cache size which is typically
   // much less than 1000.
   base::UmaHistogramCounts1000(histogram_name, count);
+}
+
+void IpProtectionTelemetryUma::TokenDemandDuringBatchGeneration(int count) {
+  base::UmaHistogramCounts100(
+      "NetworkService.IpProtection.TokenDemandDuringBatchGeneration", count);
 }
 
 }  // namespace ip_protection

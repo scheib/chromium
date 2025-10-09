@@ -1222,18 +1222,32 @@ String StylePropertySerializer::FontValue() const {
       return g_empty_string;
     }
 
-  if (RuntimeEnabledFeatures::CSSFontSizeAdjustEnabled()) {
-    int font_size_adjust_property_index =
-        property_set_.FindPropertyIndex(GetCSSPropertyFontSizeAdjust());
-    DCHECK_NE(font_size_adjust_property_index, -1);
-    PropertyValueForSerializer font_size_adjust_property =
-        property_set_.PropertyAt(font_size_adjust_property_index);
-    const CSSValue& size_adjust_value = font_size_adjust_property.Value();
-    if (IsPropertyNonInitial(size_adjust_value, CSSValueID::kNone) ||
-        size_adjust_value.IsNumericLiteralValue()) {
-      return g_empty_string;
+    if (RuntimeEnabledFeatures::CSSFontSizeAdjustEnabled()) {
+      int font_size_adjust_property_index =
+          property_set_.FindPropertyIndex(GetCSSPropertyFontSizeAdjust());
+      DCHECK_NE(font_size_adjust_property_index, -1);
+      PropertyValueForSerializer font_size_adjust_property =
+          property_set_.PropertyAt(font_size_adjust_property_index);
+      const CSSValue& size_adjust_value = font_size_adjust_property.Value();
+      if (IsPropertyNonInitial(size_adjust_value, CSSValueID::kNone) ||
+          size_adjust_value.IsNumericLiteralValue()) {
+        return g_empty_string;
+      }
     }
-  }
+
+    if (RuntimeEnabledFeatures::FontLanguageOverrideEnabled()) {
+      int font_language_override_property_index =
+          property_set_.FindPropertyIndex(GetCSSPropertyFontLanguageOverride());
+      DCHECK_NE(font_language_override_property_index, -1);
+      PropertyValueForSerializer font_language_override_property =
+          property_set_.PropertyAt(font_language_override_property_index);
+      const CSSValue& language_override_value =
+          font_language_override_property.Value();
+      if (IsPropertyNonInitial(language_override_value, CSSValueID::kNormal) ||
+          language_override_value.IsStringValue()) {
+        return g_empty_string;
+      }
+    }
 
   const StylePropertyShorthand& shorthand = fontShorthand();
   const StylePropertyShorthand::Properties& longhands = shorthand.properties();
@@ -2187,24 +2201,46 @@ String StylePropertySerializer::GetShorthandValueForColumnRule(
 
 String StylePropertySerializer::GetShorthandValueForColumns(
     const StylePropertyShorthand& shorthand) const {
-  DCHECK_EQ(shorthand.length(), 2u);
+  const CSSValue* width =
+      property_set_.GetPropertyCSSValue(GetCSSPropertyColumnWidth());
+  const CSSValue* count =
+      property_set_.GetPropertyCSSValue(GetCSSPropertyColumnCount());
+  const CSSValue* height = nullptr;
 
-  StringBuilder result;
-  for (const CSSProperty* const longhand : shorthand.properties()) {
-    const CSSValue* value = property_set_.GetPropertyCSSValue(*longhand);
-    String value_text = value->CssText();
-    if (const auto* ident_value = DynamicTo<CSSIdentifierValue>(value);
-        ident_value && ident_value->GetValueID() == CSSValueID::kAuto) {
-      continue;
-    }
-    if (!result.empty()) {
-      result.Append(" ");
-    }
-    result.Append(value_text);
+  auto* width_keyword = DynamicTo<CSSIdentifierValue>(width);
+  auto* count_keyword = DynamicTo<CSSIdentifierValue>(count);
+
+  bool width_is_auto =
+      width_keyword && width_keyword->GetValueID() == CSSValueID::kAuto;
+  bool count_is_auto =
+      count_keyword && count_keyword->GetValueID() == CSSValueID::kAuto;
+  bool height_is_auto = true;
+
+  if (RuntimeEnabledFeatures::MulticolColumnWrappingEnabled()) {
+    height = property_set_.GetPropertyCSSValue(GetCSSPropertyColumnHeight());
+    auto* height_keyword = DynamicTo<CSSIdentifierValue>(height);
+    height_is_auto =
+        height_keyword && height_keyword->GetValueID() == CSSValueID::kAuto;
   }
 
-  if (result.empty()) {
-    return "auto";
+  StringBuilder result;
+  if (width_is_auto && count_is_auto) {
+    result.Append("auto");
+  } else {
+    if (!width_is_auto) {
+      result.Append(width->CssText());
+    }
+    if (!count_is_auto) {
+      if (!width_is_auto) {
+        result.Append(" ");
+      }
+      result.Append(count->CssText());
+    }
+  }
+
+  if (!height_is_auto) {
+    result.Append(" / ");
+    result.Append(height->CssText());
   }
 
   return result.ReleaseString();
@@ -2911,11 +2947,14 @@ String StylePropertySerializer::LineClampValue(
 
   const CSSValue* max_lines =
       property_set_.GetPropertyCSSValue(GetCSSPropertyMaxLines());
+  const CSSIdentifierValue* block_ellipsis = To<CSSIdentifierValue>(
+      property_set_.GetPropertyCSSValue(GetCSSPropertyBlockEllipsis()));
   const CSSIdentifierValue* continue_value = To<CSSIdentifierValue>(
       property_set_.GetPropertyCSSValue(GetCSSPropertyContinue()));
 
   if (continue_value->GetValueID() == CSSValueID::kAuto) {
-    if (max_lines->IsIdentifierValue()) {
+    if (max_lines->IsIdentifierValue() &&
+        block_ellipsis->GetValueID() == CSSValueID::kNoEllipsis) {
       DCHECK_EQ(To<CSSIdentifierValue>(max_lines)->GetValueID(),
                 CSSValueID::kNone);
       return "none";
@@ -2926,10 +2965,13 @@ String StylePropertySerializer::LineClampValue(
   CSSValueList* list = CSSValueList::CreateSpaceSeparated();
   if (max_lines->IsNumericLiteralValue()) {
     list->Append(*max_lines);
-  } else {
-    DCHECK_EQ(To<CSSIdentifierValue>(max_lines)->GetValueID(),
-              CSSValueID::kNone);
-    list->Append(*CSSIdentifierValue::Create(CSSValueID::kAuto));
+  }
+
+  if (!list->length() || block_ellipsis->GetValueID() != CSSValueID::kAuto) {
+    if (is_webkit_line_clamp) {
+      return g_empty_string;
+    }
+    list->Append(*block_ellipsis);
   }
 
   if (continue_value->GetValueID() == CSSValueID::kWebkitLegacy) {
@@ -2947,6 +2989,7 @@ String StylePropertySerializer::LineClampValue(
   if (is_webkit_line_clamp) {
     DCHECK_EQ(list->length(), 1u);
   }
+  DCHECK(list->length());
   return list->CssText();
 }
 

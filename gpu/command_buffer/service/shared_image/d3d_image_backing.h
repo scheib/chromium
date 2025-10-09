@@ -39,6 +39,7 @@ class ColorSpace;
 }  // namespace gfx
 
 namespace gpu {
+class D3D11ImageSameAdapterCopyStrategy;
 class SharedContextState;
 struct Mailbox;
 
@@ -48,6 +49,7 @@ struct Mailbox;
 class GPU_GLES2_EXPORT D3DImageBacking final
     : public ClearTrackingSharedImageBacking {
  public:
+  friend class D3D11ImageSameAdapterCopyStrategy;
   // Create a backing wrapping given D3D11 texture, optionally with a shared
   // handle and keyed mutex state. Array slice is used to specify index in
   // texture array used by video decoder.
@@ -150,7 +152,8 @@ class GPU_GLES2_EXPORT D3DImageBacking final
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
       const wgpu::Device& device,
-      wgpu::BackendType backend_type) override;
+      wgpu::BackendType backend_type,
+      scoped_refptr<SharedContextState> context_state) override;
   wgpu::Buffer BeginAccessDawnBuffer(const wgpu::Device& device,
                                      wgpu::BackendType backend_type,
                                      wgpu::BufferUsage usage);

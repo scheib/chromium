@@ -6,16 +6,18 @@ module network.mojom;
 
 import "components/content_settings/core/common/content_settings.mojom";
 import "components/ip_protection/mojom/core.mojom";
+import "components/ip_protection/mojom/data_types.mojom";
+import "mojo/public/mojom/base/big_buffer.mojom";
 import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "mojo/public/mojom/base/unguessable_token.mojom";
 import "mojo/public/mojom/base/values.mojom";
-import "mojo/public/mojom/base/big_buffer.mojom";
 import "sandbox/policy/mojom/context.mojom";
 import "services/network/public/mojom/address_list.mojom";
 import "services/network/public/mojom/cert_verifier_service.mojom";
 import "services/network/public/mojom/clear_data_filter.mojom";
 import "services/network/public/mojom/client_security_state.mojom";
+import "services/network/public/mojom/connection_change_observer_client.mojom";
 import "services/network/public/mojom/cookie_access_observer.mojom";
 import "services/network/public/mojom/cookie_encryption_provider.mojom";
 import "services/network/public/mojom/cookie_manager.mojom";
@@ -49,7 +51,6 @@ import "services/network/public/mojom/proxy_config.mojom";
 import "services/network/public/mojom/proxy_config_with_annotation.mojom";
 import "services/network/public/mojom/proxy_lookup_client.mojom";
 import "services/network/public/mojom/proxy_resolving_socket.mojom";
-import "services/network/public/mojom/connection_change_observer_client.mojom";
 import "services/network/public/mojom/reporting_service.mojom";
 import "services/network/public/mojom/restricted_cookie_manager.mojom";
 import "services/network/public/mojom/restricted_udp_socket.mojom";
@@ -460,6 +461,13 @@ struct NetworkContextParams {
   // Signals to IP Protection if this is an incognito network context.
   bool ip_protection_incognito = false;
 
+  // Contains unused IP Protection auth tokens recycled from a previous
+  // Incognito session, used to "pre-warm" the token cache for this
+  // NetworkContext.
+  map<ip_protection.mojom.ProxyLayer,
+      array<ip_protection.mojom.BlindSignedAuthToken>>
+          initial_ip_protection_tokens;
+
   // Points to the user-data directory of the active profile, where
   // Probabilistic Reveal Tokens will be stored if the
   // `StoreProbabilisticRevealTokens` switch is enabled. This path will be
@@ -612,10 +620,9 @@ struct NetworkContextParams {
   string? cookie_deprecation_label;
 
   // Sets the cookie encryption provider to be used by this network context if
-  // `enable_encrypted_cookies` is also enabled.
-  // If both are set then the `GetEncryptor` method on the supplied
-  // `cookie_encryption_provider` is called to obtain a valid set of keys for
-  // cookie encryption.
+  // `enable_encrypted_cookies` is enabled.
+  // The `GetEncryptor` method on the supplied `cookie_encryption_provider` is
+  // called to obtain a valid set of keys for cookie encryption.
   pending_remote<CookieEncryptionProvider>? cookie_encryption_provider;
 
   // Enables Device Bound Session Credential for this network context.
@@ -643,6 +650,12 @@ struct NetworkContextParams {
   // Modifies the default value of the QUIC connection timeout, this value
   // gets applied while constructing NetworkContext by updating the quic_params.
   int64? quic_idle_connection_timeout_seconds;
+
+  // Defines the current state of Tracking Protection content settings. This is
+  // used by IP Protection, and only set when IP Protection is enabled
+  // for the profile.
+  array<content_settings.mojom.ContentSettingPatternSource>
+      tracking_protection_content_settings;
 };
 
 struct NetworkConditions {
@@ -671,6 +684,16 @@ struct NetworkConditions {
 
   // Allow packet reordering for WebRTC connections.
   bool packet_reordering;
+
+  // Used to tag requests that were affected by these conditions.
+  mojo_base.mojom.UnguessableToken? rule_id;
+};
+
+struct MatchedNetworkConditions {
+  // A URLPattern matching the conditions. An empty pattern matches all
+  // requests.
+  string pattern;
+  NetworkConditions conditions;
 };
 
 struct NetworkDurableMessageConfig {
@@ -946,14 +969,20 @@ struct URLLoaderFactoryParams {
   // If this is true, this URLLoaderFactory should not be reset when
   // calling `ResetURLLoaderFactories()`.
   bool ignore_factory_reset = false;
+
+  // If this is true, the request's main frame origin is recently accessed.
+  bool is_main_frame_origin_recently_accessed = false;
 };
 
 // Represents a Durable Message Collector instance tied to a throttling profile.
 interface DurableMessageCollector {
-    // Retrieve a collected Durable Message for the given DevTools request ID,
-    // if one is available.
-    Retrieve(string devtools_request_id) =>
-        (mojo_base.mojom.BigBuffer? message);
+  // Configures the collector instance.
+  Configure(NetworkDurableMessageConfig config);
+
+  // Retrieve a collected Durable Message for the given DevTools request ID,
+  // if one is available.
+  Retrieve(string devtools_request_id)
+      => (mojo_base.mojom.BigBuffer? message);
 };
 
 // Represents a distinct context for making network requests, with its own
@@ -1061,6 +1090,20 @@ interface NetworkContext {
       => (map<url.mojom.Origin, array<ToplevelRedemptionRecord>>
               issuer_redemption_record_map);
 
+  // Gets the current IP Proxy status from IpProtectionCore.
+  //
+  // Requires kIpPrivacyEnableIppPanelInDevTools to be enabled,
+  // otherwise return status of kUnavailable.
+  // Only returns a kOk status if IP Protection is available and active.
+  GetIpProxyStatus() => (ip_protection.mojom.IpProxyStatus status);
+
+  // Sets whether the network context should bypass IP Protection proxies.
+  // Requires kIpPrivacyEnableIppPanelInDevTools to be enabled to set the
+  // bypass boolean.
+  // `bypass_proxy`: If true, the network context will attempt to bypass
+  //                 IP Protection proxies for all requests.
+  SetBypassIpProtectionProxy(bool bypass_proxy);
+
   // Deletes all Trust Tokens issued by |issuer|.
   //
   // This method is narrower as ClearTrustTokenData. ClearTrustTokenData
@@ -1109,6 +1152,11 @@ interface NetworkContext {
   ComputeHttpCacheSize(
       mojo_base.mojom.Time start_time, mojo_base.mojom.Time end_time)
       => (bool is_upper_bound, int64 size_or_error);
+
+  // Notifies the network context that the browser is idle. This can be used
+  // by underlying services to perform deferred tasks, such as checkpointing
+  // the disk cache's database.
+  NotifyBrowserIdle();
 
   // Notifies the HttpCache of a renderer-level cache hit with `url`
   // and `http_method`, with the network isolation key `key` and
@@ -1284,15 +1332,13 @@ interface NetworkContext {
   // Configures network conditions for the specified throttling profile.
   // The throttling will be applied only to requests that have matching
   // throttling_profile_id.
-  // Passing null NetworkConditions disables the throttling.
   SetNetworkConditions(mojo_base.mojom.UnguessableToken throttling_profile_id,
-                       NetworkConditions? conditions);
+                       array<MatchedNetworkConditions> conditions);
 
-  // Configures network level storage of HTTP request/response bodies.
-  ConfigureDurableMessageCollector(
-        mojo_base.mojom.UnguessableToken throttling_profile_id,
-        NetworkDurableMessageConfig config,
-        pending_receiver<DurableMessageCollector> receiver);
+  // Enables network level storage of HTTP request/response bodies.
+  EnableDurableMessageCollector(
+      mojo_base.mojom.UnguessableToken throttling_profile_id,
+      pending_receiver<DurableMessageCollector> receiver);
 
   // Updates the Accept-Language header to be used for requests.
   SetAcceptLanguage(string new_accept_language);
@@ -1318,6 +1364,9 @@ interface NetworkContext {
   // Creates a Restricted UDP socket that wraps an internal UDP Socket connected
   // or bound to |addr| with |params| depending on the provided |mode|.
   //
+  // if |allow_multicast| is false, then using joinGroup or leaveGroup
+  // on RestrictedUDPSocket will report mojo bad message.
+  //
   // The socket created can only be used for the purpose specified in
   // |traffic_annotation|, and cannot be re-used for other purposes.
   //
@@ -1336,8 +1385,8 @@ interface NetworkContext {
       MutableNetworkTrafficAnnotationTag traffic_annotation,
       RestrictedUDPSocketParams? params,
       pending_receiver<RestrictedUDPSocket> receiver,
-      pending_remote<UDPSocketListener>? listener)
-      => (int32 result, IPEndPoint? local_addr_out);
+      pending_remote<UDPSocketListener>? listener,
+      bool allow_multicast) => (int32 result, IPEndPoint? local_addr_out);
 
   // Creates a TCP server socket that listens on |local_addr|. The socket
   // created can only be used for the purpose specified in |traffic_annotation|,
@@ -1470,6 +1519,7 @@ interface NetworkContext {
       array<HttpHeader> additional_headers,
       int32 process_id,
       url.mojom.Origin origin,
+      ClientSecurityState client_security_state,
       uint32 options,
       MutableNetworkTrafficAnnotationTag traffic_annotation,
       pending_remote<WebSocketHandshakeClient> handshake_client,
@@ -1492,7 +1542,9 @@ interface NetworkContext {
       NetworkAnonymizationKey network_anonymization_key,
       array<WebTransportCertificateFingerprint> fingerprints,
       array<string> application_protocols,
-      pending_remote<WebTransportHandshakeClient> handshake_client);
+      pending_remote<WebTransportHandshakeClient> handshake_client,
+      pending_remote<URLLoaderNetworkServiceObserver>? url_loader_network_observer,
+      ClientSecurityState client_security_state);
 
   // Create a NetLogExporter, which helps export NetLog to an existing file.
   // Note that the log is generally global, including all NetworkContexts
@@ -1592,9 +1644,8 @@ interface NetworkContext {
   // Performs 2-QWAC verification. Returns the verified 2-QWAC certificate
   // chain if `binding` is a valid 2-QWAC binding for `hostname` which binds
   // `tls_certificate`.
-  Verify2QwacCertBinding(string binding,
-                         string hostname,
-                         X509Certificate tls_certificate)
+  Verify2QwacCertBinding(
+      string binding, string hostname, X509Certificate tls_certificate)
       => (X509Certificate verified_cert);
 
   // Adds explicitly-specified data as if it was processed from an
@@ -1670,14 +1721,6 @@ interface NetworkContext {
   // supported in this network context.
   SetCorsNonWildcardRequestHeadersSupport(bool value);
 
-  // Looks up credentials in the HttpAuthCache using the origin and path from
-  // |url|. Only supports basic auth scheme. Only looks up server (not proxy)
-  // auth credentials, and only those that are usable in the scope of
-  // |network_anonymization_key|.
-  LookupServerBasicAuthCredentials(
-      url.mojom.Url url, NetworkAnonymizationKey network_anonymization_key)
-      => (AuthCredentials? credentials);
-
   // Looks up the proxy authentication credentials associated with
   // |proxy_server|, |auth_scheme| and |realm| in the HttpAuthCache.
   // |auth_scheme| is the authentication scheme of the challenge and it's
@@ -1689,7 +1732,6 @@ interface NetworkContext {
       => (AuthCredentials? credentials);
 
   // Enables the checking of static PKP records.
-  [Sync]
   EnableStaticKeyPinningForTesting() => ();
 
   // Verifies the given certificate using the context's CertVerifier.
@@ -1698,17 +1740,14 @@ interface NetworkContext {
                               string ocsp_response,
                               string sct_list) => (int32 error_code);
 
-  [Sync]
   GetTrustAnchorIDsForTesting() => (array<array<uint8>> trust_anchor_ids);
 
   // Adds a Domain Reliability Context.
-  [Sync]
   AddDomainReliabilityContextForTesting(
       url.mojom.Origin origin, url.mojom.Url upload_url) => ();
 
   // Forces all pending Domain Reliability uploads to run now, even if their
   // minimum delay has not yet passed.
-  [Sync]
   ForceDomainReliabilityUploadsForTesting() => ();
 
   // Set the SCT auditing mode for this NetworkContext.
@@ -1744,11 +1783,6 @@ interface NetworkContext {
 
   // Check if there is a preloaded shared dictionary info.
   HasPreloadedSharedDictionaryInfoForTesting() => (bool value);
-
-  // Called when visibility of ResourceSchedulerClient has changed.
-  // `client_token` identifies which client has changed its visibility.
-  ResourceSchedulerClientVisibilityChanged(
-      mojo_base.mojom.UnguessableToken client_token, bool visible);
 
   // Will flush cached client certificate for `host` if `certificate`
   // doesn't match the corresponding cached certificate.

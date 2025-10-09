@@ -476,7 +476,7 @@ enum FieldType {
   // *TAG field types are merely placeholder tagging that the type belongs to
   // the passport entity, but that the existing Autofill classification or logic
   // should be used.
-  PASSPORT_NAME_TAG = 168,
+  // PASSPORT_NAME_TAG = 168 is deprecated
   PASSPORT_NUMBER = 169,
   PASSPORT_ISSUING_COUNTRY = 170,
   PASSPORT_EXPIRATION_DATE = 171,
@@ -490,7 +490,7 @@ enum FieldType {
 
   // Types corresponding to the "Car" entity from
   // components/autofill/core/browser/data_model/autofill_ai/entity_schema.json.
-  VEHICLE_OWNER_TAG = 175,
+  // VEHICLE_OWNER_TAG = 175 is deprecated
   VEHICLE_LICENSE_PLATE = 176,
   VEHICLE_VIN = 177,
   VEHICLE_MAKE = 178,
@@ -498,7 +498,7 @@ enum FieldType {
 
   // Types corresponding to the "Drivers license" entity from
   // components/autofill/core/browser/data_model/autofill_ai/entity_schema.json.
-  DRIVERS_LICENSE_NAME_TAG = 180,
+  // DRIVERS_LICENSE_NAME_TAG = 180 is deprecated
   DRIVERS_LICENSE_REGION = 181,
   DRIVERS_LICENSE_NUMBER = 182,
   DRIVERS_LICENSE_EXPIRATION_DATE = 183,
@@ -532,7 +532,8 @@ enum FieldType {
   // Types corresponding to the "Redress number" entity from
   // components/autofill/core/browser/data_model/autofill_ai/entity_schema.json.
   REDRESS_NUMBER = 195,
-  // Types 195 to 200 are not used on the client yet, but will likely be added
+
+  // Types 196 and 197 are not used on the client yet, but will likely be added
   // in the future.
 
   // ADDRESS_HOME_ZIP = ADDRESS_HOME_ZIP_PREFIX + separator +
@@ -540,6 +541,14 @@ enum FieldType {
   // For the US zip code 94043-4100 the types correspond to 94043 and 4100.
   ADDRESS_HOME_ZIP_PREFIX = 201,
   ADDRESS_HOME_ZIP_SUFFIX = 202,
+
+  // Types corresponding to the "Flight reservation" entity from
+  // components/autofill/core/browser/data_model/autofill_ai/entity_schema.json.
+  FLIGHT_RESERVATION_FLIGHT_NUMBER = 198,
+  FLIGHT_RESERVATION_CONFIRMATION_CODE = 199,
+  FLIGHT_RESERVATION_TICKET_NUMBER = 200,
+  FLIGHT_RESERVATION_DEPARTURE_AIRPORT = 204,
+  FLIGHT_RESERVATION_ARRIVAL_AIRPORT = 205,
 
   // No new types can be added without a corresponding change to the Autofill
   // server.
@@ -551,7 +560,7 @@ enum FieldType {
   // If the newly added type is a storable type of AutofillProfile, update
   // AutofillProfile.StorableTypes in
   // tools/metrics/histograms/metadata/autofill/histograms.xml.
-  MAX_VALID_FIELD_TYPE = 204,
+  MAX_VALID_FIELD_TYPE = 206,
 };
 // LINT.ThenChange(//chrome/common/extensions/api/autofill_private.idl)
 
@@ -575,9 +584,35 @@ enum class FieldTypeGroup {
   kMaxValue = kOneTimePassword,
 };
 
+constexpr FieldType ToSafeFieldType(std::underlying_type_t<FieldType> raw_value,
+                                    FieldType fallback_value);
+
+constexpr HtmlFieldType ToSafeHtmlFieldType(
+    std::underlying_type_t<HtmlFieldType> raw_value,
+    HtmlFieldType fallback_value);
+
 template <>
 struct DenseSetTraits<FieldType>
-    : EnumDenseSetTraits<FieldType, NO_SERVER_DATA, MAX_VALID_FIELD_TYPE> {};
+    : EnumDenseSetTraits<FieldType, NO_SERVER_DATA, MAX_VALID_FIELD_TYPE> {
+  static constexpr bool is_valid(FieldType x) {
+    return x == NO_SERVER_DATA ||
+           ToSafeFieldType(base::to_underlying(x), NO_SERVER_DATA) !=
+               NO_SERVER_DATA;
+  }
+};
+
+template <>
+struct DenseSetTraits<HtmlFieldType>
+    : EnumDenseSetTraits<HtmlFieldType,
+                         HtmlFieldType(0),
+                         HtmlFieldType::kMaxValue> {
+  static constexpr bool is_valid(HtmlFieldType x) {
+    return x == HtmlFieldType::kUnrecognized ||
+           ToSafeHtmlFieldType(base::to_underlying(x),
+                               HtmlFieldType::kUnrecognized) !=
+               HtmlFieldType::kUnrecognized;
+  }
+};
 
 using FieldTypeSet = DenseSet<FieldType>;
 
@@ -654,13 +689,13 @@ constexpr FieldType ToSafeFieldType(std::underlying_type_t<FieldType> raw_value,
            (130 <= t && t <= 132) || t == 134 || (137 <= t && t <= 139) ||
            (147 <= t && t <= 149) || t == 155 || t == 159 || t == 161 ||
            // Deprecated Autofill AI types.
-           t == 162 ||
+           t == 162 || t == 168 || t == 175 || t == 180 ||
            // Types for the country for driver's license and vehicle are not
            // used yet, but will likely be added in the future.
            (187 <= t && t <= 188) ||
-           // Types for date of birth, gender, and flight reservation are not
-           // used yet, but will likely be added in the future.
-           (196 <= t && t <= 200);
+           // Types for date of birth and gender are not used yet, but will
+           // likely be added in the future.
+           (196 <= t && t <= 197);
   };
   return is_invalid(raw_value) ? fallback_value
                                : static_cast<FieldType>(raw_value);  // nocheck
@@ -680,31 +715,6 @@ constexpr HtmlFieldType ToSafeHtmlFieldType(
   return is_invalid(raw_value) ? fallback_value
                                : static_cast<HtmlFieldType>(raw_value);
 }
-
-constexpr inline FieldTypeSet kAllFieldTypes = [] {
-  FieldTypeSet fields;
-  for (std::underlying_type_t<FieldType> i = 0; i < MAX_VALID_FIELD_TYPE; ++i) {
-    if (FieldType field_type = ToSafeFieldType(i, NO_SERVER_DATA);
-        field_type != NO_SERVER_DATA) {
-      fields.insert(field_type);
-    }
-  }
-  return fields;
-}();
-
-constexpr HtmlFieldTypeSet kAllHtmlFieldTypes = [] {
-  HtmlFieldTypeSet fields;
-  using underlying_type_t = std::underlying_type_t<HtmlFieldType>;
-  for (underlying_type_t i = base::to_underlying(HtmlFieldType::kMinValue);
-       i < base::to_underlying(HtmlFieldType::kMaxValue); ++i) {
-    if (HtmlFieldType field_type =
-            ToSafeHtmlFieldType(i, HtmlFieldType::kUnrecognized);
-        field_type != HtmlFieldType::kUnrecognized) {
-      fields.insert(field_type);
-    }
-  }
-  return fields;
-}();
 
 constexpr FieldTypeGroup GroupTypeOfFieldType(FieldType field_type) {
   switch (field_type) {
@@ -802,19 +812,16 @@ constexpr FieldTypeGroup GroupTypeOfFieldType(FieldType field_type) {
     case COMPANY_NAME:
       return FieldTypeGroup::kCompany;
 
-    case PASSPORT_NAME_TAG:
     case PASSPORT_NUMBER:
     case PASSPORT_ISSUING_COUNTRY:
     case PASSPORT_EXPIRATION_DATE:
     case PASSPORT_ISSUE_DATE:
-    case VEHICLE_OWNER_TAG:
     case VEHICLE_LICENSE_PLATE:
     case VEHICLE_VIN:
     case VEHICLE_MAKE:
     case VEHICLE_MODEL:
     case VEHICLE_YEAR:
     case VEHICLE_PLATE_STATE:
-    case DRIVERS_LICENSE_NAME_TAG:
     case DRIVERS_LICENSE_REGION:
     case DRIVERS_LICENSE_NUMBER:
     case DRIVERS_LICENSE_EXPIRATION_DATE:
@@ -826,6 +833,11 @@ constexpr FieldTypeGroup GroupTypeOfFieldType(FieldType field_type) {
     case REDRESS_NUMBER:
     case KNOWN_TRAVELER_NUMBER:
     case KNOWN_TRAVELER_NUMBER_EXPIRATION_DATE:
+    case FLIGHT_RESERVATION_FLIGHT_NUMBER:
+    case FLIGHT_RESERVATION_TICKET_NUMBER:
+    case FLIGHT_RESERVATION_CONFIRMATION_CODE:
+    case FLIGHT_RESERVATION_DEPARTURE_AIRPORT:
+    case FLIGHT_RESERVATION_ARRIVAL_AIRPORT:
       return FieldTypeGroup::kAutofillAi;
 
     case PASSWORD:
@@ -874,17 +886,22 @@ constexpr FieldTypeGroup GroupTypeOfFieldType(FieldType field_type) {
   NOTREACHED();
 }
 
-constexpr FieldTypeSet FieldTypesOfGroup(FieldTypeGroup group) {
+namespace internal {
+consteval std::array<FieldTypeSet,
+                     base::to_underlying(FieldTypeGroup::kMaxValue) + 1>
+FieldTypesByGroupHelper() {
   constexpr auto kMaxValue = base::to_underlying(FieldTypeGroup::kMaxValue);
-  constexpr auto kMap = []() constexpr {
-    std::array<FieldTypeSet, kMaxValue + 1> map{};
-    for (FieldType field_type : kAllFieldTypes) {
-      auto index = base::to_underlying(GroupTypeOfFieldType(field_type));
-      map[index].insert(field_type);
-    }
-    return map;
-  }();
-  return kMap[base::to_underlying(group)];
+  std::array<FieldTypeSet, kMaxValue + 1> map{};
+  for (FieldType field_type : FieldTypeSet::all()) {
+    auto index = base::to_underlying(GroupTypeOfFieldType(field_type));
+    map[index].insert(field_type);
+  }
+  return map;
+}
+}  // namespace internal
+
+constexpr FieldTypeSet FieldTypesOfGroup(FieldTypeGroup group) {
+  return internal::FieldTypesByGroupHelper()[base::to_underlying(group)];
 }
 
 }  // namespace autofill

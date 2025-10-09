@@ -5,6 +5,8 @@
 import {assert} from '//resources/js/assert.js';
 import {CrLitElement, html} from '//resources/lit/v3_0/lit.rollup.js';
 
+import type {SecurityIcon} from './browser.mojom-webui.js';
+import {GuestHandlerRemote} from './browser.mojom-webui.js';
 import {BrowserProxy} from './browser_proxy.js';
 import {getCss} from './webview.css.js';
 
@@ -33,7 +35,7 @@ export class WebviewElement extends CrLitElement {
     };
   }
 
-  protected accessor guestId: number = -1;
+  accessor guestId: number = -1;
   private attached: boolean = false;
 
   override async connectedCallback() {
@@ -74,26 +76,6 @@ export class WebviewElement extends CrLitElement {
       }, 100);
     });
   }
-
-  goBack() {
-    BrowserProxy.getPageHandler().goBack(this.guestId);
-  }
-
-  goForward() {
-    BrowserProxy.getPageHandler().goForward(this.guestId);
-  }
-
-  async canGoBack(): Promise<boolean> {
-    const {canGoBack} =
-        await BrowserProxy.getPageHandler().canGoBack(this.guestId);
-    return canGoBack;
-  }
-
-  async canGoForward(): Promise<boolean> {
-    const {canGoForward} =
-        await BrowserProxy.getPageHandler().canGoForward(this.guestId);
-    return canGoForward;
-  }
 }
 
 export class TabWebviewElement extends WebviewElement {
@@ -102,6 +84,7 @@ export class TabWebviewElement extends WebviewElement {
   }
 
   tabId: string;
+  private guestHandler: GuestHandlerRemote = new GuestHandlerRemote();
 
   constructor(tabId: string) {
     super();
@@ -112,18 +95,55 @@ export class TabWebviewElement extends WebviewElement {
   setActive(active: boolean) {
     if (active) {
       this.classList.add('active');
+      this.$.iframe.focus();
     } else {
       this.classList.remove('active');
     }
   }
 
+  openPageInfoMenu() {
+    this.guestHandler.openPageInfoMenu();
+  }
+
+  async getSecurityIcon(): Promise<SecurityIcon> {
+    const {securityIcon} = await this.guestHandler.getSecurityIcon();
+    return securityIcon;
+  }
+
   private attachTabContents() {
     BrowserProxy.getPageHandler()
-        .getGuestIdForTabId(this.tabId)
+        .getGuestIdForTabId(
+            this.tabId, this.guestHandler.$.bindNewPipeAndPassReceiver())
         .then(({guestId}) => {
           this.guestId = guestId;
           this.tryToAttach();
         });
+  }
+
+  goBack() {
+    this.guestHandler.goBack();
+  }
+
+  goForward() {
+    this.guestHandler.goForward();
+  }
+
+  reload() {
+    this.guestHandler.reload();
+  }
+
+  stopLoading() {
+    this.guestHandler.stopLoading();
+  }
+
+  async canGoBack(): Promise<boolean> {
+    const {canGoBack} = await this.guestHandler.canGoBack();
+    return canGoBack;
+  }
+
+  async canGoForward(): Promise<boolean> {
+    const {canGoForward} = await this.guestHandler.canGoForward();
+    return canGoForward;
   }
 }
 

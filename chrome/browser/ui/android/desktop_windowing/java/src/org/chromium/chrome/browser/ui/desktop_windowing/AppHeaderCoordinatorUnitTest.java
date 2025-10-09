@@ -62,9 +62,9 @@ import org.chromium.chrome.browser.ui.desktop_windowing.AppHeaderUtils.DesktopWi
 import org.chromium.chrome.browser.ui.desktop_windowing.AppHeaderUtils.WindowingMode;
 import org.chromium.components.browser_ui.desktop_windowing.AppHeaderState;
 import org.chromium.components.browser_ui.desktop_windowing.DesktopWindowStateManager;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeStateProvider;
 import org.chromium.ui.base.TestActivity;
 import org.chromium.ui.display.DisplayUtil;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeStateProvider;
 import org.chromium.ui.insets.CaptionBarInsetsRectProvider;
 import org.chromium.ui.insets.InsetObserver;
 import org.chromium.ui.insets.InsetsRectProvider;
@@ -364,6 +364,7 @@ public class AppHeaderCoordinatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void initializeWithDesktopWindowingThenExit() {
         setupWithLeftAndRightBoundingRect();
         doAnswer(
@@ -534,7 +535,7 @@ public class AppHeaderCoordinatorUnitTest {
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET)
+    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET + ":e2e_tablet_width_threshold/-1")
     public void overlappingKeyboard_SwitchToAndFromDesktopWindowingMode_E2ETabletEnabled() {
         verifyDesktopWindowingDisabled(
                 /* error= */ "DesktopWindowing should exit when no insets is supplied.");
@@ -604,7 +605,7 @@ public class AppHeaderCoordinatorUnitTest {
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET)
+    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET + ":e2e_tablet_width_threshold/-1")
     public void overlappingKeyboard_MoveDesktopWindow_E2ETabletEnabled() {
         // Simulate switching to desktop windowing mode.
         setupWithLeftAndRightBoundingRect();
@@ -674,7 +675,7 @@ public class AppHeaderCoordinatorUnitTest {
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET)
+    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET + ":e2e_tablet_width_threshold/-1")
     public void overlappingNavBar_SwitchToAndFromDesktopWindowingMode_E2ETabletEnabled() {
         verifyDesktopWindowingDisabled(
                 /* error= */ "Desktop windowing mode should be disabled initially.");
@@ -740,7 +741,7 @@ public class AppHeaderCoordinatorUnitTest {
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET)
+    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET + ":e2e_tablet_width_threshold/-1")
     public void overlappingNavBar_MoveDesktopWindow_E2ETabletEnabled() {
         // Simulate switching to desktop windowing mode.
         setupWithLeftAndRightBoundingRect();
@@ -781,7 +782,7 @@ public class AppHeaderCoordinatorUnitTest {
     }
 
     @Test
-    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET)
+    @EnableFeatures(ChromeFeatureList.EDGE_TO_EDGE_TABLET + ":e2e_tablet_width_threshold/-1")
     public void overlappingKeyboardAndNavBar_E2ETabletEnabled() {
         // Simulate switching to desktop windowing mode.
         setupWithLeftAndRightBoundingRect();
@@ -950,6 +951,7 @@ public class AppHeaderCoordinatorUnitTest {
         doReturn(blockedRects).when(mInsetsRectProvider).getBoundingRects();
     }
 
+    @SuppressWarnings("DirectInvocationOnMock")
     private void notifyInsetsRectConsumer() {
         verify(mInsetsRectProvider, atLeastOnce()).setConsumer(mInsetRectConsumerCaptor.capture());
         mInsetsRectUpdateConsumed =

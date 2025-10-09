@@ -8,7 +8,6 @@
 
 #include "base/check_op.h"
 #include "base/containers/contains.h"
-#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "components/crash/content/browser/crash_memory_metrics_collector_android.h"
 #include "content/public/browser/browser_thread.h"
@@ -20,12 +19,6 @@ using content::BrowserThread;
 namespace crash_reporter {
 
 namespace {
-
-// Processed terminated by RenderProcessHost::Cleanup() is marked as
-// normal_termination in ChildExitObserver::TerminationInfo.
-BASE_FEATURE(kCleanupToBeNormalTermination,
-             "CleanupToBeNormalTermination",
-             base::FEATURE_DISABLED_BY_DEFAULT);
 
 void PopulateTerminationInfo(
     const content::ChildProcessTerminationInfo& content_info,
@@ -39,6 +32,8 @@ void PopulateTerminationInfo(
   info->renderer_was_subframe = content_info.renderer_was_subframe;
   info->is_spare_renderer = content_info.is_spare_renderer;
   info->has_spare_renderer = content_info.has_spare_renderer;
+  info->last_spare_renderer_creation_info =
+      content_info.last_spare_renderer_creation_info;
 }
 
 }  // namespace
@@ -185,9 +180,7 @@ void ChildExitObserver::ProcessRenderProcessHostLifetimeEndEvent(
     // FastShutdownIfPossible() is marked as FastShutdownStarted() and
     // RenderProcessHost terminating by Cleanup() is marked as IsDeletingSoon().
     info.normal_termination =
-        rph->FastShutdownStarted() ||
-        (rph->IsDeletingSoon() &&
-         base::FeatureList::IsEnabled(kCleanupToBeNormalTermination));
+        rph->FastShutdownStarted() || rph->IsDeletingSoon();
     info.renderer_shutdown_requested = rph->ShutdownRequested();
     info.app_state = base::android::ApplicationStatusListener::GetState();
     PopulateTerminationInfo(*content_info, &info);

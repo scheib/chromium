@@ -18,8 +18,6 @@ import org.chromium.base.ObserverList;
 import org.chromium.base.ValueChangedCallback;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.base.supplier.Supplier;
-import org.chromium.build.annotations.Initializer;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.app.tabmodel.ArchivedTabModelOrchestrator;
@@ -52,11 +50,9 @@ import org.chromium.chrome.browser.tasks.tab_management.TabListCoordinator.TabLi
 import org.chromium.chrome.browser.tasks.tab_management.TabProperties.UiType;
 import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
-import org.chromium.chrome.tab_ui.R;
 import org.chromium.components.browser_ui.desktop_windowing.DesktopWindowStateManager;
 import org.chromium.components.tab_group_sync.TabGroupUiActionHandler;
 import org.chromium.ui.modaldialog.ModalDialogManager;
-import org.chromium.ui.modelutil.LayoutViewBuilder;
 import org.chromium.ui.modelutil.PropertyModel;
 
 import java.lang.annotation.ElementType;
@@ -64,6 +60,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.List;
+import java.util.function.Supplier;
 
 /** Manages message related glue for the {@link TabSwitcher}. */
 @NullMarked
@@ -121,12 +118,14 @@ public class TabSwitcherMessageManager {
             new TabModelObserver() {
                 @Override
                 public void willCloseTab(Tab tab, boolean didCloseAlone) {
-                    TabGroupModelFilter tabGroupModelFilter =
-                            mCurrentTabGroupModelFilterSupplier.get();
-                    assumeNonNull(tabGroupModelFilter);
-                    if (tabGroupModelFilter.getTabModel().getCount() == 1) {
-                        removeAllAppendedMessage();
-                    }
+                    removeMessagesIfTabModelEmpty(/* numTabsToRemove= */ 1);
+                }
+
+                @Override
+                public void willCloseMultipleTabs(boolean allowUndo, List<Tab> tabs) {
+                    // Handles case where all tabs are removed without using 'Close All Tabs'
+                    // option.
+                    removeMessagesIfTabModelEmpty(/* numTabsToRemove= */ tabs.size());
                 }
 
                 @Override
@@ -151,7 +150,7 @@ public class TabSwitcherMessageManager {
     private final MultiWindowModeStateDispatcher mMultiWindowModeStateDispatcher;
     private final SnackbarManager mSnackbarManager;
     private final ModalDialogManager mModalDialogManager;
-    private final MessageCardProviderCoordinator<@MessageType Integer>
+    private final MessageCardProviderCoordinator<@MessageType Integer, @UiType Integer>
             mMessageCardProviderCoordinator;
     private final Callback<@Nullable TabGroupModelFilter> mOnTabGroupModelFilterChanged =
             new ValueChangedCallback<>(this::onTabGroupModelFilterChanged);
@@ -171,11 +170,11 @@ public class TabSwitcherMessageManager {
     private final Supplier<TabGroupUiActionHandler> mTabGroupUiActionHandlerSupplier;
     private final Supplier<LayoutStateProvider> mLayoutStateProviderSupplier;
 
-    private Profile mProfile;
-    private PriceWelcomeMessageController mPriceWelcomeMessageController;
+    private @Nullable Profile mProfile;
+    private @Nullable PriceWelcomeMessageController mPriceWelcomeMessageController;
     private @Nullable IncognitoReauthPromoMessageService mIncognitoReauthPromoMessageService;
     private @Nullable TabGroupSuggestionMessageService mTabGroupSuggestionMessageService;
-    private ArchivedTabsMessageService mArchivedTabsMessageService;
+    private @Nullable ArchivedTabsMessageService mArchivedTabsMessageService;
 
     /**
      * @param activity The Android activity.
@@ -232,16 +231,9 @@ public class TabSwitcherMessageManager {
         mDesktopWindowStateManager = desktopWindowStateManager;
         mLayoutStateProviderSupplier = layoutStateProviderSupplier;
 
-        Supplier<Profile> profileSupplier =
-                () -> {
-                    TabGroupModelFilter tabGroupModelFilter =
-                            mCurrentTabGroupModelFilterSupplier.get();
-                    assumeNonNull(tabGroupModelFilter);
-                    return assumeNonNull(tabGroupModelFilter.getTabModel().getProfile());
-                };
         mMessageCardProviderCoordinator =
-                new MessageCardProviderCoordinator<@MessageType Integer>(
-                        activity, profileSupplier, this::dismissHandler);
+                new MessageCardProviderCoordinator<@MessageType Integer, @UiType Integer>(
+                        activity, this::dismissHandler);
 
         mTabGridIphDialogCoordinator =
                 new TabGridIphDialogCoordinator(activity, mModalDialogManager);
@@ -252,6 +244,17 @@ public class TabSwitcherMessageManager {
         mEdgeToEdgeSupplier = edgeToEdgeSupplier;
         mPaneManagerSupplier = paneManagerSupplier;
         mTabGroupUiActionHandlerSupplier = tabGroupUiActionHandlerSupplier;
+    }
+
+    /**
+     * Register message host delegate for a particular {@link TabListCoordinator}. Should only be
+     * called once per coordinator.
+     *
+     * @param messageHostDelegate The {@link MessageHostDelegate} to register.
+     */
+    public void registerMessageHostDelegate(
+            MessageHostDelegate<@MessageType Integer, @UiType Integer> messageHostDelegate) {
+        mMessageCardProviderCoordinator.bindHostDelegate(messageHostDelegate);
     }
 
     /**
@@ -275,6 +278,7 @@ public class TabSwitcherMessageManager {
             }
         }
         mTabListCoordinatorSupplier.set(tabListCoordinator);
+
         mPriceWelcomeMessageReviewActionProviderSupplier.set(
                 priceWelcomeMessageReviewActionProvider);
 
@@ -303,39 +307,7 @@ public class TabSwitcherMessageManager {
         mTabGridIphDialogCoordinator.setParentView(null);
     }
 
-    /**
-     * Register messages for a particular {@link TabListCoordinator}. Should only be called once per
-     * coordinator.
-     */
-    public void registerMessages(TabListCoordinator tabListCoordinator) {
-        tabListCoordinator.registerItemType(
-                UiType.IPH_MESSAGE,
-                new LayoutViewBuilder<>(R.layout.tab_grid_message_card_item),
-                MessageCardViewBinder::bind);
-
-        tabListCoordinator.registerItemType(
-                UiType.PRICE_MESSAGE,
-                new LayoutViewBuilder<>(R.layout.large_message_card_item),
-                LargeMessageCardViewBinder::bind);
-
-        tabListCoordinator.registerItemType(
-                UiType.INCOGNITO_REAUTH_PROMO_MESSAGE,
-                new LayoutViewBuilder<>(R.layout.large_message_card_item),
-                LargeMessageCardViewBinder::bind);
-
-        tabListCoordinator.registerItemType(
-                UiType.ARCHIVED_TABS_MESSAGE,
-                new LayoutViewBuilder<>(R.layout.archived_tabs_message_card_view),
-                ArchivedTabsCardViewBinder::bind);
-
-        tabListCoordinator.registerItemType(
-                UiType.TAB_GROUP_SUGGESTION_MESSAGE,
-                new LayoutViewBuilder<>(R.layout.tab_grid_message_card_item),
-                MessageCardViewBinder::bind);
-    }
-
     /** Post-native initialization. */
-    @Initializer
     public void initWithNative(Profile profile, @TabListMode int mode) {
         assert profile != null;
         mProfile = profile;
@@ -366,7 +338,7 @@ public class TabSwitcherMessageManager {
         mMessageCardProviderCoordinator.subscribeMessageService(mArchivedTabsMessageService);
 
         IphMessageService iphMessageService =
-                new IphMessageService(profile, mTabGridIphDialogCoordinator);
+                new IphMessageService(this::getCurrentProfile, mTabGridIphDialogCoordinator);
         mMessageCardProviderCoordinator.subscribeMessageService(iphMessageService);
 
         if (IncognitoReauthManager.isIncognitoReauthFeatureAvailable()
@@ -375,7 +347,6 @@ public class TabSwitcherMessageManager {
                     new IncognitoReauthManager(mActivity, profile);
             mIncognitoReauthPromoMessageService =
                     new IncognitoReauthPromoMessageService(
-                            MessageType.INCOGNITO_REAUTH_PROMO_MESSAGE,
                             profile,
                             mActivity,
                             ChromeSharedPreferences.getInstance(),
@@ -414,7 +385,8 @@ public class TabSwitcherMessageManager {
      */
     private void translateStartMergeAnimation(
             @TabId int targetTabId, List<@TabId Integer> tabIdsToMerge, Runnable onAnimationEnd) {
-        if (!mTabListCoordinatorSupplier.hasValue()) return;
+        TabListCoordinator oldTabListCoordinator = mTabListCoordinatorSupplier.get();
+        if (oldTabListCoordinator == null) return;
 
         TabListCoordinator tabListCoordinator = assumeNonNull(mTabListCoordinatorSupplier.get());
         int targetTabIndex = tabListCoordinator.getTabIndexFromTabId(targetTabId);
@@ -443,7 +415,9 @@ public class TabSwitcherMessageManager {
         // TabListCoordinator#resetWithListOfTabs to ensure that the TabList gets observer
         // calls before the TabSwitcherMessageManager.
         removeTabGroupModelFilterObservers(mCurrentTabGroupModelFilterSupplier.get());
-        mPriceWelcomeMessageController.invalidate();
+        if (mPriceWelcomeMessageController != null) {
+            mPriceWelcomeMessageController.invalidate();
+        }
     }
 
     /** Called after resetting the list of tabs. */
@@ -461,7 +435,9 @@ public class TabSwitcherMessageManager {
         mMultiWindowModeStateDispatcher.removeObserver(mMultiWindowModeObserver);
         removeTabGroupModelFilterObservers(mCurrentTabGroupModelFilterSupplier.get());
         mCurrentTabGroupModelFilterSupplier.removeObserver(mOnTabGroupModelFilterChanged);
-        mPriceWelcomeMessageController.destroy();
+        if (mPriceWelcomeMessageController != null) {
+            mPriceWelcomeMessageController.destroy();
+        }
 
         mMessageCardProviderCoordinator.destroy();
         mTabGridIphDialogCoordinator.destroy();
@@ -513,9 +489,9 @@ public class TabSwitcherMessageManager {
         assert tabListCoordinator != null;
 
         sAppendedMessagesForTesting = false;
-        List<MessageService<@MessageType Integer>> messageServices =
+        List<MessageService<@MessageType Integer, @UiType Integer>> messageServices =
                 mMessageCardProviderCoordinator.getMessageServices();
-        for (MessageService<@MessageType Integer> service : messageServices) {
+        for (MessageService<@MessageType Integer, @UiType Integer> service : messageServices) {
             Message<@MessageType Integer> message = service.getNextMessageItem();
             if (message == null || !shouldAppendMessage(message)) continue;
 
@@ -546,7 +522,8 @@ public class TabSwitcherMessageManager {
         TabListCoordinator tabListCoordinator = mTabListCoordinatorSupplier.get();
         assert tabListCoordinator != null;
         assumeNonNull(mIncognitoReauthPromoMessageService);
-        if (mIncognitoReauthPromoMessageService.isIncognitoReauthPromoMessageEnabled(mProfile)) {
+        if (mIncognitoReauthPromoMessageService.isIncognitoReauthPromoMessageEnabled(
+                assumeNonNull(mProfile))) {
             tabListCoordinator.addSpecialListItem(
                     tabListCoordinator.getTabListModelSize(),
                     UiType.INCOGNITO_REAUTH_PROMO_MESSAGE,
@@ -592,8 +569,13 @@ public class TabSwitcherMessageManager {
                 UiType.INCOGNITO_REAUTH_PROMO_MESSAGE, MessageType.INCOGNITO_REAUTH_PROMO_MESSAGE);
         tabListCoordinator.removeSpecialListItem(
                 UiType.ARCHIVED_TABS_MESSAGE, MessageType.ARCHIVED_TABS_MESSAGE);
-        tabListCoordinator.removeSpecialListItem(
-                UiType.TAB_GROUP_SUGGESTION_MESSAGE, MessageType.TAB_GROUP_SUGGESTION_MESSAGE);
+
+        // TODO(crbug.com/441040016): Refactor the lifecycle of the TabGroupSuggestionMessageService
+        // so that we don't need to pass a dismiss runnable.
+        if (mTabGroupSuggestionMessageService != null) {
+            mTabGroupSuggestionMessageService.dismissMessage(
+                    tabListCoordinator.getTabListHighlighter()::unhighlightTabs);
+        }
 
         sAppendedMessagesForTesting = false;
         for (MessageUpdateObserver observer : mObservers) {
@@ -609,14 +591,12 @@ public class TabSwitcherMessageManager {
         if (!shouldShowMessages()) return;
         TabListCoordinator tabListCoordinator = mTabListCoordinatorSupplier.get();
         assert tabListCoordinator != null;
-
-        assert assumeNonNull(mCurrentTabGroupModelFilterSupplier.get()).getTabModel().getProfile()
-                != null;
+        assert getCurrentProfile() != null;
 
         sAppendedMessagesForTesting = false;
-        List<MessageService<@MessageType Integer>> messageServices =
+        List<MessageService<@MessageType Integer, @UiType Integer>> messageServices =
                 mMessageCardProviderCoordinator.getMessageServices();
-        for (MessageService<@MessageType Integer> service : messageServices) {
+        for (MessageService<@MessageType Integer, @UiType Integer> service : messageServices) {
             Message<@MessageType Integer> message = service.getNextMessageItem();
             if (message == null || !shouldAppendMessage(message)) continue;
 
@@ -714,7 +694,21 @@ public class TabSwitcherMessageManager {
         }
     }
 
-    public PriceWelcomeMessageController getPriceWelcomeMessageController() {
+    public @Nullable PriceWelcomeMessageController getPriceWelcomeMessageController() {
         return mPriceWelcomeMessageController;
+    }
+
+    private void removeMessagesIfTabModelEmpty(int numTabsToRemove) {
+        TabGroupModelFilter tabGroupModelFilter = mCurrentTabGroupModelFilterSupplier.get();
+        assumeNonNull(tabGroupModelFilter);
+        if (tabGroupModelFilter.getTabModel().getCount() == numTabsToRemove) {
+            removeAllAppendedMessage();
+        }
+    }
+
+    private Profile getCurrentProfile() {
+        TabGroupModelFilter tabGroupModelFilter = mCurrentTabGroupModelFilterSupplier.get();
+        assumeNonNull(tabGroupModelFilter);
+        return assumeNonNull(tabGroupModelFilter.getTabModel().getProfile());
     }
 }

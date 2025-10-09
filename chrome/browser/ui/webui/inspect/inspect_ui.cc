@@ -34,6 +34,7 @@
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_ui.h"
@@ -628,7 +629,7 @@ void InspectUI::InspectBrowserWithCustomFrontend(const std::string& source_id,
                                                  const GURL& frontend_url) {
   if (!frontend_url.SchemeIs(content::kChromeUIScheme) &&
       !frontend_url.SchemeIs(content::kChromeDevToolsScheme) &&
-      frontend_url.host() != kInspectUiLocalHost) {
+      frontend_url.GetHost() != kInspectUiLocalHost) {
     return;
   }
 

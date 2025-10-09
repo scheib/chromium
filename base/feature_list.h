@@ -71,11 +71,11 @@ enum FeatureState {
 //
 // This macro can be used in two ways:
 //
-// 1. With two arguments, to define a feature whose C++ identifier is derived
-//    from its name. This form is preferred, as it avoids repeating the feature
+// 1. With two arguments, to define a feature whose name is derived from the C++
+//    identifier. This form is preferred, as it avoids repeating the feature
 //    name and helps prevent typos.
 //
-//      BASE_FEATURE(MyFeature, base::FEATURE_DISABLED_BY_DEFAULT);
+//      BASE_FEATURE(kMyFeature, base::FEATURE_DISABLED_BY_DEFAULT);
 //
 //    This is equivalent to:
 //
@@ -95,8 +95,18 @@ enum FeatureState {
 #define BASE_FEATURE_INTERNAL_3_ARGS(feature, name, default_state) \
   constinit const base::Feature feature(                           \
       name, default_state, base::internal::FeatureMacroHandshake::kSecret)
-#define BASE_FEATURE_INTERNAL_2_ARGS(name, default_state) \
-  BASE_FEATURE_INTERNAL_3_ARGS(k##name, #name, default_state)
+
+// TODO(crbug.com/436274260): Use constexpr lambda to avoid the namespace hack
+// after C++23 is supported. See https://godbolt.org/z/W3sdhresP for the syntax.
+#define BASE_FEATURE_INTERNAL_2_ARGS(feature, default_state)                \
+  namespace base_feature_internal_##feature {                               \
+    static_assert(#feature[0] == 'k');                                      \
+    static constexpr base::internal::StringStorage feature##Name(#feature); \
+  }                                                                         \
+  constinit const base::Feature feature(                                    \
+      base_feature_internal_##feature::feature##Name.storage.data(),        \
+      default_state, base::internal::FeatureMacroHandshake::kSecret)
+
 #define GET_BASE_FEATURE_MACRO(_1, _2, _3, NAME, ...) NAME
 #define BASE_FEATURE(...)                                            \
   GET_BASE_FEATURE_MACRO(__VA_ARGS__, BASE_FEATURE_INTERNAL_3_ARGS,  \
@@ -172,11 +182,32 @@ enum FeatureState {
       &field_trial_params_internal::                                   \
           GetFeatureParamWithCacheFor##feature_object_name)
 
+namespace internal {
 // Secret handshake to (try to) ensure all places that construct a base::Feature
 // go through the helper `BASE_FEATURE()` macro above.
-namespace internal {
 enum class FeatureMacroHandshake { kSecret };
-}
+
+// Storage class for feature name. This is needed so we store the feature name
+// "MyFeature" instead of the feature identifier name "kMyFeature" in .rodata.
+template <size_t N>
+struct StringStorage {
+  explicit constexpr StringStorage(base::span<const char, N + 1> feature) {
+    static_assert(N > 2, "Feature name cannot be too short.");
+    for (size_t i = 0; i < N; ++i) {
+      storage[i] = feature[i + 1];
+    }
+  }
+
+  std::array<char, N> storage;
+};
+
+// Deduce how much storage is needed for a given string literal. `feature`
+// includes space for a NUL terminator; `StringStorage` also needs storage
+// for the NUL terminator but drops the first character.
+template <size_t N>
+StringStorage(const char (&feature)[N]) -> StringStorage<N - 1>;
+
+}  // namespace internal
 
 // The Feature struct is used to define the default state for a feature. There
 // must only ever be one struct instance for a given feature name—generally

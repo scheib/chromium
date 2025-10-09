@@ -1057,17 +1057,8 @@ IN_PROC_BROWSER_TEST_P(SystemWebAppManagerUninstallBrowserTest, Uninstall) {
 }
 
 // Test that all registered System Apps can be re-installed.
-class SystemWebAppManagerInstallAllAppsBrowserTest
-    : public TestProfileTypeMixin<SystemWebAppBrowserTestBase> {
- public:
-  SystemWebAppManagerInstallAllAppsBrowserTest() {
-    features_.InitAndEnableFeature(features::kEnableAllSystemWebApps);
-  }
-  ~SystemWebAppManagerInstallAllAppsBrowserTest() override = default;
-
- private:
-  base::test::ScopedFeatureList features_;
-};
+using SystemWebAppManagerInstallAllAppsBrowserTest =
+    TestProfileTypeMixin<SystemWebAppBrowserTestBase>;
 
 // TODO(crbug.com/40162953): At the moment, PRE_Test failures aren't
 // reported in test summary, thus won't fail the CI build job. So we need a
@@ -1872,6 +1863,10 @@ class SystemWebAppIconHealthMetricsTest
         .Post(FROM_HERE, run_loop.QuitClosure());
     run_loop.Run();
   }
+
+ private:
+  base::test::ScopedFeatureList feature_list_{
+      ::features::kWebAppUsePrimaryIcon};
 };
 
 IN_PROC_BROWSER_TEST_P(SystemWebAppIconHealthMetricsTest, ReportsMetrics) {
@@ -1899,7 +1894,7 @@ IN_PROC_BROWSER_TEST_P(SystemWebAppIconHealthMetricsTest,
       SystemWebAppManager::GetWebAppProvider(browser()->profile())
           ->icon_manager()
           .GetIconFilePathForTesting(app_id, web_app::IconPurpose::ANY, 32);
-
+  CHECK(!icon_path.empty());
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
     base::WriteFile(icon_path, "Not a PNG file");

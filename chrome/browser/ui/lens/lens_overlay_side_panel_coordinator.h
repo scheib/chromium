@@ -143,6 +143,12 @@ class LensOverlaySidePanelCoordinator
   // is compared to the URL of the current open tab.
   bool MaybeHandleTextDirectives(const GURL& nav_url);
 
+  // Handles seeking videos on the main browser window based on navigations from
+  // the side panel. Returns true if handled, false otherwise. `nav_url` refers
+  // to the URL that the side panel was set to navigate to. It is compared to
+  // the URL of the current open tab.
+  bool MaybeHandleContextualMediaLink(const GURL& nav_url);
+
   // Whether the lens overlay entry is currently the active entry in the side
   // panel UI.
   bool IsEntryShowing();
@@ -160,6 +166,7 @@ class LensOverlaySidePanelCoordinator
       uint32_t pdf_page_number) override;
   void RequestSendFeedback() override;
   void OnAimMessage(const std::vector<uint8_t>& message) override;
+  void OnImageQueryWithEmptyText() override;
 
   // This method is used to set up communication between this instance and the
   // side panel WebUI. This is called by the WebUIController when the WebUI is
@@ -189,6 +196,9 @@ class LensOverlaySidePanelCoordinator
   // (`file://`). This is used to determine whether to scroll in the main tab or
   // open a new tab.
   void SetLatestPageUrlWithResponse(const GURL& url);
+
+  // Sets whether the lens overlay is showing in the side panel WebUI.
+  virtual void SetIsOverlayShowing(bool is_showing);
 
   // Internal state machine. States are mutually exclusive. Exposed for testing.
   enum class State {
@@ -268,6 +278,13 @@ class LensOverlaySidePanelCoordinator
   // Notifies the side panel WebUI that the AIM handshake has been received.
   virtual void AimHandshakeReceived();
 
+  // Notifies the side panel WebUI that the results have moved to/from the AIM
+  // UI. `on_aim` is true if the results are now in the AIM UI.
+  virtual void AimResultsChanged(bool on_aim);
+
+  // Focuses the results iframe in the side panel.
+  virtual void FocusResultsFrame();
+
  private:
   // Data class for constructing the side panel and storing side panel state for
   // kSuspended state.
@@ -297,10 +314,12 @@ class LensOverlaySidePanelCoordinator
   void DidStartNavigation(
       content::NavigationHandle* navigation_handle) override;
   void DOMContentLoaded(content::RenderFrameHost* render_frame_host) override;
+  void DidFinishNavigation(
+      content::NavigationHandle* navigation_handle) override;
 
   // ChromeWebModalDialogManagerDelegate:
-  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost()
-      override;
+  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost(
+      content::WebContents* web_contents) override;
 
   // Whether the side panel should handle the URL differently since it has a
   // text directive and a URL that matches the current page. `nav_url` refers to

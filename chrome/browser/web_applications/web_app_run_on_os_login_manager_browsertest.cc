@@ -20,17 +20,17 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/startup/first_run_service.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/web_applications/test/isolated_web_app_test_utils.h"
 #include "chrome/browser/ui/web_applications/web_app_browsertest_base.h"
 #include "chrome/browser/ui/web_applications/web_app_run_on_os_login_notification.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_trust_checker.h"
-#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_update_server_mixin.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
 #include "chrome/browser/web_applications/isolated_web_apps/policy/isolated_web_app_policy_constants.h"
 #include "chrome/browser/web_applications/isolated_web_apps/test/isolated_web_app_builder.h"
-#include "chrome/browser/web_applications/isolated_web_apps/test/test_signed_web_bundle_builder.h"
+#include "chrome/browser/web_applications/isolated_web_apps/test/isolated_web_app_test_update_server.h"
 #include "chrome/browser/web_applications/policy/web_app_policy_constants.h"
 #include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
 #include "chrome/browser/web_applications/preinstalled_web_app_manager.h"
@@ -48,6 +48,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
 #include "components/webapps/common/web_app_id.h"
+#include "components/webapps/isolated_web_apps/test_support/signing_keys.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -58,7 +59,6 @@ using testing::AllOf;
 using testing::DoAll;
 using testing::Eq;
 using testing::Field;
-using testing::Invoke;
 using testing::Property;
 using testing::Return;
 using testing::SetArgPointee;
@@ -91,12 +91,12 @@ class MockNetworkConnectionTracker : public network::NetworkConnectionTracker {
   }
 };
 
-class RunOnOsLoginTestHandlerMixin : public IsolatedWebAppUpdateServerMixin {
+class RunOnOsLoginTestHandlerMixin : public InProcessBrowserTestMixin {
  public:
   explicit RunOnOsLoginTestHandlerMixin(
       InProcessBrowserTestMixinHost* mixin_host,
       InProcessBrowserTest* test_base)
-      : IsolatedWebAppUpdateServerMixin(mixin_host),
+      : InProcessBrowserTestMixin(mixin_host),
         test_base_(test_base),
         // ROOL startup done manually to ensure that SetUpOnMainThread is run
         // before.
@@ -106,14 +106,14 @@ class RunOnOsLoginTestHandlerMixin : public IsolatedWebAppUpdateServerMixin {
   void SetUpOnMainThread() override {
     profile_ = test_base_->browser()->profile();
     provider_ = WebAppProvider::GetForTest(profile_);
-    IsolatedWebAppUpdateServerMixin::SetUpOnMainThread();
+    InProcessBrowserTestMixin::SetUpOnMainThread();
   }
 
   void TearDownOnMainThread() override {
     test_base_ = nullptr;
     profile_ = nullptr;
     provider_ = nullptr;
-    IsolatedWebAppUpdateServerMixin::TearDownOnMainThread();
+    InProcessBrowserTestMixin::TearDownOnMainThread();
   }
 
   void AddRoolApp(const std::string& manifest_id,
@@ -168,6 +168,8 @@ class RunOnOsLoginTestHandlerMixin : public IsolatedWebAppUpdateServerMixin {
 
   void ResetSkipRunOnOsLoginStartup() { skip_run_on_os_login_startup_.reset(); }
 
+  IsolatedWebAppTestUpdateServer& iwa_test_server() { return iwa_test_server_; }
+
  private:
   raw_ptr<InProcessBrowserTest> test_base_;
   raw_ptr<Profile> profile_ = nullptr;
@@ -176,6 +178,7 @@ class RunOnOsLoginTestHandlerMixin : public IsolatedWebAppUpdateServerMixin {
   std::unique_ptr<base::test::TestFuture<void>> completed_future_;
   base::test::ScopedFeatureList scoped_feature_list_{
       features::kDesktopPWAsRunOnOsLogin};
+  IsolatedWebAppTestUpdateServer iwa_test_server_;
 };
 
 class WebAppRunOnOsLoginManagerBrowserTest
@@ -241,7 +244,7 @@ class WebAppRunOnOsLoginManagerBrowserTest
     observer.Wait();
   }
 
-  Browser* FindAppBrowser(GURL app_url) {
+  BrowserWindowInterface* FindAppBrowser(GURL app_url) {
     auto web_app = FindAppWithUrlInScope(app_url);
     if (!web_app) {
       return nullptr;
@@ -278,7 +281,7 @@ IN_PROC_BROWSER_TEST_F(
   // Should have 2 browsers: normal and app.
   ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
 
-  Browser* app_browser = FindAppBrowser(GURL(kTestApp));
+  BrowserWindowInterface* app_browser = FindAppBrowser(GURL(kTestApp));
   ASSERT_TRUE(app_browser);
 }
 
@@ -299,7 +302,7 @@ IN_PROC_BROWSER_TEST_F(
 
   // Should have 2 browsers: normal and app.
   ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
-  Browser* app_browser = FindAppBrowser(GURL(kTestApp));
+  BrowserWindowInterface* app_browser = FindAppBrowser(GURL(kTestApp));
 
   ASSERT_TRUE(app_browser);
 }
@@ -328,7 +331,7 @@ IN_PROC_BROWSER_TEST_F(WebAppRunOnOsLoginManagerBrowserTest,
 
   // Should have 2 browsers: normal and app.
   ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
-  Browser* app_browser = FindAppBrowser(GURL(kTestApp));
+  BrowserWindowInterface* app_browser = FindAppBrowser(GURL(kTestApp));
 
   ASSERT_TRUE(app_browser);
 }
@@ -365,7 +368,7 @@ IN_PROC_BROWSER_TEST_F(
 
   // Should have 2 browsers: normal and app.
   ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
-  Browser* app_browser = FindAppBrowser(GURL(kTestApp));
+  BrowserWindowInterface* app_browser = FindAppBrowser(GURL(kTestApp));
 
   ASSERT_TRUE(app_browser);
 }
@@ -410,7 +413,7 @@ IN_PROC_BROWSER_TEST_F(
 
   // Should have 2 browsers: normal and app.
   ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
-  Browser* app_browser = FindAppBrowser(GURL(kTestApp));
+  BrowserWindowInterface* app_browser = FindAppBrowser(GURL(kTestApp));
 
   ASSERT_TRUE(app_browser);
 }
@@ -675,11 +678,11 @@ class IsolatedWebAppRunOnOsLoginManagerBrowserTest
         });
       )");
 
-    run_on_os_login_handler_.AddBundle(
+    run_on_os_login_handler_.iwa_test_server().AddBundle(
         builder.BuildBundle(temp_dir_.Append(kBundleFileName), key_pair_));
   }
 
-  Browser* FindAppBrowser(GURL app_url) {
+  BrowserWindowInterface* FindAppBrowser(GURL app_url) {
     auto web_app = FindAppWithUrlInScope(app_url);
     if (!web_app) {
       return nullptr;
@@ -713,7 +716,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppRunOnOsLoginManagerBrowserTest,
           base::Value::Dict()
               .Set(kPolicyWebBundleIdKey, url_info_->web_bundle_id().id())
               .Set(kPolicyUpdateManifestUrlKey,
-                   run_on_os_login_handler_
+                   run_on_os_login_handler_.iwa_test_server()
                        .GetUpdateManifestUrl(url_info_->web_bundle_id())
                        .spec())));
 
@@ -729,7 +732,7 @@ IN_PROC_BROWSER_TEST_F(IsolatedWebAppRunOnOsLoginManagerBrowserTest,
 
   // Should have 2 browsers: normal and app.
   ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
-  Browser* app_browser = FindAppBrowser(GURL(manifest_id));
+  BrowserWindowInterface* app_browser = FindAppBrowser(GURL(manifest_id));
 
   ASSERT_TRUE(app_browser);
 }

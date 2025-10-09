@@ -34,7 +34,7 @@ const float kMaxModuleEngagementIndex = 50;
 }
 
 @implementation ContentSuggestionsMetricsRecorder {
-  raw_ptr<PrefService> _localState;
+  raw_ptr<PrefService, DanglingUntriaged> _localState;
 }
 
 - (instancetype)initWithLocalState:(PrefService*)localState {
@@ -104,7 +104,16 @@ const float kMaxModuleEngagementIndex = 50;
           kMagicStackModuleEngagementShopCardIndexHistogram, index,
           kMaxModuleEngagementIndex);
       break;
-    case ContentSuggestionsModuleType::kParcelTracking:
+    case ContentSuggestionsModuleType::kAppBundlePromo:
+      UMA_HISTOGRAM_EXACT_LINEAR(
+          kMagicStackModuleEngagementAppBundlePromoIndexHistogram, index,
+          kMaxModuleEngagementIndex);
+      break;
+    case ContentSuggestionsModuleType::kDefaultBrowser:
+      UMA_HISTOGRAM_EXACT_LINEAR(
+          kMagicStackModuleEngagementDefaultBrowserIndexHistogram, index,
+          kMaxModuleEngagementIndex);
+      break;
     case ContentSuggestionsModuleType::kPlaceholder:
     case ContentSuggestionsModuleType::kInvalid:
       break;

@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
@@ -26,14 +27,12 @@ struct EpWorkarounds {
   // TODO(crbug.com/429253567): Specify the minimum package version that
   // supports these features without requiring workarounds.
 
-  bool disable_external_data = false;
   // By default ONNX Resize op supports any axes, but some EPs may only support
   // NCHW layout. `ContextProperties.resample_2d_axes` setting will respect to
   // this limit.
   bool resample2d_limit_to_nchw = false;
 
   EpWorkarounds& operator|=(const EpWorkarounds& other) {
-    disable_external_data |= other.disable_external_data;
     resample2d_limit_to_nchw |= other.resample2d_limit_to_nchw;
     return *this;
   }
@@ -55,9 +54,34 @@ class Environment : public base::subtle::RefCountedThreadSafeBase {
   void AddRef() const;
   void Release() const;
 
+  // Returns a vector of selected execution provider devices for WebNN based on
+  // the specified device type.
+  // In this method, the input `available_devices` are first reordered using
+  // WebNN's custom sorting logic. Repeated calls with the same device set and
+  // the specified device type will return the same ordered devices, regardless
+  // of the input order of `available_devices`. At most 3 EP devices will be
+  // selected.
+  // TODO(crbug.com/444049496): Log these selected EP devices when ORT logging
+  // level is set to VERBOSE or INFO.
+  static std::vector<const OrtEpDevice*> SelectEpDevicesForDeviceType(
+      base::span<const OrtEpDevice* const> available_devices,
+      mojom::Device device_type);
+
+  // Get combined EP workarounds for the EPs that will be selected according to
+  // the given device type.
   EpWorkarounds GetEpWorkarounds(mojom::Device device_type) const;
 
   const OrtEnv* get() const { return env_.get(); }
+
+  struct SessionConfigEntry {
+    base::cstring_view key;
+    base::cstring_view value;
+  };
+
+  // Get all EP-specific session configuration entries for the EPs that will be
+  // selected according to the given device type.
+  std::vector<SessionConfigEntry> GetEpConfigEntries(
+      mojom::Device device_type) const;
 
  private:
   static base::expected<scoped_refptr<Environment>, std::string> Create(

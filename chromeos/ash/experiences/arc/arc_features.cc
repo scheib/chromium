@@ -11,14 +11,13 @@ namespace arc {
 // When enabled, the versions of ChromeOS and ARC are exchanged during
 // handshake. This feature reduces unnecessary inter-process communications.
 BASE_FEATURE(kArcExchangeVersionOnMojoHandshake,
-             "ArcExchangeVersionOnMojoHandshake",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Controls whether to always start ARC automatically, or wait for the user's
 // action to start it later in an on-demand manner. Already enabled by default
 // for managed users. In V2, it will be expand to more users such as unmanaged
 // users.
-BASE_FEATURE(kArcOnDemandV2, "ArcOnDemandV2", base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kArcOnDemandV2, base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Controls whether ARC should be activated on any app launches. If set to
 // false, inactive_interval will be checked.
@@ -37,7 +36,7 @@ BASE_FEATURE_PARAM(base::TimeDelta,
                    base::Days(7));
 
 // Controls whether to start ARC with the GKI kernel.
-BASE_FEATURE(kArcVmGki, "ArcVmGki", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kArcVmGki, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Controls block IO schedulers in ARCVM.
 BASE_FEATURE(kBlockIoScheduler,
@@ -57,16 +56,10 @@ BASE_FEATURE(kBootCompletedBroadcastFeature,
              "ArcBootCompletedBroadcast",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-// Controls experimental Custom Tabs feature for ARC.
-BASE_FEATURE(kCustomTabsExperimentFeature,
-             "ArcCustomTabsExperiment",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
 // Defers the ARC actvation until the user session start up tasks
 // are completed to give more resources to critical tasks for user session
 // starting.
 BASE_FEATURE(kDeferArcActivationUntilUserSessionStartUpTaskCompletion,
-             "DeferArcActivationUntilUserSessionStartUpTaskCompletion",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // We decide whether to defer ARC activation by taking a look at recent
@@ -93,7 +86,7 @@ BASE_FEATURE_PARAM(int,
 // Controls whether attestation will be used on ARCVM.
 BASE_FEATURE(kEnableArcAttestation,
              "ArcAttestation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Controls whether we automatically send ARCVM into Doze mode
 // when it is mostly idle - even if Chrome is still active.
@@ -253,15 +246,11 @@ BASE_FEATURE(kNativeBridgeToggleFeature,
 
 // When enabled, utility processes are spawned to perform hardware decode
 // acceleration on behalf of ARC++/ARCVM instead of using the GPU process.
-BASE_FEATURE(kOutOfProcessVideoDecoding,
-             "OutOfProcessVideoDecoding",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kOutOfProcessVideoDecoding, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // When enabled, Android per-app-language settings will be surfaced in ChromeOS
 // Settings page.
-BASE_FEATURE(kPerAppLanguage,
-             "PerAppLanguage",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kPerAppLanguage, base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kResizeCompat,
              "ArcResizeCompat",
@@ -322,9 +311,7 @@ BASE_FEATURE(kVideoDecoder,
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Controls whether ARC uses MappableSharedImage for video encoding.
-BASE_FEATURE(kVideoEncodeUseMappableSI,
-             "VideoEncodeUseMappableSI",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kVideoEncodeUseMappableSI, base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Feature to continuously log PSI memory pressure data to Chrome.
 BASE_FEATURE(kVmMemoryPSIReports,

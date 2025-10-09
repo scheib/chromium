@@ -343,11 +343,11 @@ LocalFrameMojoHandler::LocalFrameMojoHandler(blink::LocalFrame& frame)
 
   auto* registry = frame.GetInterfaceRegistry();
   registry->AddAssociatedInterface(
-      WTF::BindRepeating(&LocalFrameMojoHandler::BindToLocalFrameReceiver,
-                         WrapWeakPersistent(this)));
-  registry->AddAssociatedInterface(WTF::BindRepeating(
-      &LocalFrameMojoHandler::BindFullscreenVideoElementReceiver,
-      WrapWeakPersistent(this)));
+      BindRepeating(&LocalFrameMojoHandler::BindToLocalFrameReceiver,
+                    WrapWeakPersistent(this)));
+  registry->AddAssociatedInterface(
+      BindRepeating(&LocalFrameMojoHandler::BindFullscreenVideoElementReceiver,
+                    WrapWeakPersistent(this)));
 }
 
 void LocalFrameMojoHandler::Trace(Visitor* visitor) const {
@@ -368,8 +368,8 @@ void LocalFrameMojoHandler::Trace(Visitor* visitor) const {
 
 void LocalFrameMojoHandler::WasAttachedAsLocalMainFrame() {
   frame_->GetInterfaceRegistry()->AddAssociatedInterface(
-      WTF::BindRepeating(&LocalFrameMojoHandler::BindToMainFrameReceiver,
-                         WrapWeakPersistent(this)));
+      BindRepeating(&LocalFrameMojoHandler::BindToMainFrameReceiver,
+                    WrapWeakPersistent(this)));
 }
 
 void LocalFrameMojoHandler::DidDetachFrame() {
@@ -444,8 +444,7 @@ mojom::blink::DevicePostureType LocalFrameMojoHandler::GetDevicePosture() {
   auto task_runner = frame_->GetTaskRunner(TaskType::kInternalDefault);
   DevicePostureProvider()->AddListenerAndGetCurrentPosture(
       device_posture_receiver_.BindNewPipeAndPassRemote(task_runner),
-      WTF::BindOnce(&LocalFrameMojoHandler::OnPostureChanged,
-                    WrapPersistent(this)));
+      BindOnce(&LocalFrameMojoHandler::OnPostureChanged, WrapPersistent(this)));
   return current_device_posture_;
 }
 
@@ -514,8 +513,9 @@ void LocalFrameMojoHandler::GetTextSurroundingSelection(
   // |frame_->SelectionRange().IsNull()|, in other words, if there was no
   // selection.
   if (surrounding_text.IsEmpty()) {
-    // Don't use WTF::String's default constructor so that we make sure that we
-    // always send a valid empty string over the wire instead of a null pointer.
+    // Don't use blink::String's default constructor so that we make sure that
+    // we always send a valid empty string over the wire instead of a null
+    // pointer.
     std::move(callback).Run(g_empty_string, 0, 0);
     return;
   }
@@ -525,9 +525,39 @@ void LocalFrameMojoHandler::GetTextSurroundingSelection(
                           surrounding_text.EndOffsetInTextContent());
 }
 
-void LocalFrameMojoHandler::SendInterventionReport(const String& id,
-                                                   const String& message) {
-  Intervention::GenerateReport(frame_, id, message);
+void LocalFrameMojoHandler::SendInterventionReport(
+    const String& id,
+    const String& message,
+    const std::optional<FrameToken>& child_frame_token) {
+  if (!child_frame_token) {
+    Intervention::GenerateReport(frame_, id, message);
+    return;
+  }
+
+  // If the intervention report pertains to a child frame, append details about
+  // the child frame to the message.
+  if (auto* child_frame = Frame::ResolveFrame(child_frame_token.value())) {
+    auto* child_frame_owner = To<HTMLFrameOwnerElement>(child_frame->Owner());
+    CHECK(child_frame_owner);
+
+    const AtomicString& src_value =
+        child_frame_owner->FastGetAttribute(html_names::kSrcAttr);
+    KURL url = child_frame_owner->GetDocument().CompleteURL(src_value);
+
+    // Any URLs in the report should strip the username, password, and fragment.
+    // https://w3c.github.io/reporting/#capability-urls
+    String sanitized_url = url.StrippedForUseAsReferrer();
+
+    StringBuilder builder;
+    builder.Append(message);
+    builder.Append(" (id=");
+    builder.Append(child_frame_owner->GetIdAttribute());
+    builder.Append(";url=");
+    builder.Append(sanitized_url);
+    builder.Append(")");
+
+    Intervention::GenerateReport(frame_, id, builder.ReleaseString());
+  }
 }
 
 void LocalFrameMojoHandler::SetFrameOwnerProperties(
@@ -576,7 +606,7 @@ void LocalFrameMojoHandler::ShowInterestInElement(int nodeID) {
 
 void LocalFrameMojoHandler::AddMessageToConsole(
     mojom::blink::ConsoleMessageLevel level,
-    const WTF::String& message,
+    const String& message,
     bool discard_duplicates) {
   GetDocument()->AddConsoleMessage(
       MakeGarbageCollected<ConsoleMessage>(
@@ -962,7 +992,7 @@ void LocalFrameMojoHandler::JavaScriptExecuteRequestInIsolatedWorld(
       mojom::blink::UserActivationOption::kDoNotActivate,
       mojom::blink::EvaluationTiming::kSynchronous,
       mojom::blink::LoadEventBlockingOption::kDoNotBlock,
-      WTF::BindOnce(
+      blink::BindOnce(
           [](JavaScriptExecuteRequestInIsolatedWorldCallback callback,
              std::optional<base::Value> value, base::TimeTicks start_time) {
             std::move(callback).Run(value ? std::move(*value) : base::Value());
@@ -1167,7 +1197,7 @@ void LocalFrameMojoHandler::SetNavigationApiHistoryEntriesForRestore(
 }
 
 void LocalFrameMojoHandler::NotifyNavigationApiOfDisposedEntries(
-    const WTF::Vector<WTF::String>& keys) {
+    const Vector<String>& keys) {
   frame_->DomWindow()->navigation()->DisposeEntriesForSessionHistoryRemoval(
       keys);
 }
@@ -1389,13 +1419,13 @@ void LocalFrameMojoHandler::AddResourceTimingEntryForFailedSubframeNavigation(
     base::TimeTicks request_start,
     base::TimeTicks response_start,
     uint32_t response_code,
-    const WTF::String& mime_type,
+    const String& mime_type,
     network::mojom::blink::LoadTimingInfoPtr load_timing_info,
     net::HttpConnectionInfo connection_info,
-    const WTF::String& alpn_negotiated_protocol,
+    const String& alpn_negotiated_protocol,
     bool is_secure_transport,
     bool is_validated,
-    const WTF::String& normalized_server_timing,
+    const String& normalized_server_timing,
     const network::URLLoaderCompletionStatus& completion_status) {
   Frame* subframe = Frame::ResolveFrame(subframe_token);
   if (!subframe || !subframe->Owner()) {

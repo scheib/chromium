@@ -29,6 +29,7 @@
 #include "components/security_state/content/security_state_tab_helper.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/ssl_status.h"
 #include "content/public/browser/storage_partition.h"
@@ -143,7 +144,7 @@ autofill::FormDataImporter* AndroidAutofillClient::GetFormDataImporter() {
   return nullptr;
 }
 
-autofill::StrikeDatabase* AndroidAutofillClient::GetStrikeDatabase() {
+strike_database::StrikeDatabase* AndroidAutofillClient::GetStrikeDatabase() {
   return nullptr;
 }
 
@@ -193,7 +194,7 @@ void AndroidAutofillClient::ShowAutofillSettings(
 void AndroidAutofillClient::ConfirmSaveAddressProfile(
     const autofill::AutofillProfile& profile,
     const autofill::AutofillProfile* original_profile,
-    bool is_migration_to_account,
+    SaveAddressBubbleType save_address_bubble_type,
     AddressProfileSavePromptCallback callback) {
   NOTIMPLEMENTED();
 }
@@ -228,6 +229,10 @@ bool AndroidAutofillClient::IsAutofillProfileEnabled() const {
 
 bool AndroidAutofillClient::IsAutofillPaymentMethodsEnabled() const {
   NOTREACHED();
+}
+
+bool AndroidAutofillClient::IsImportingToWalletEnabled() const {
+  return false;
 }
 
 bool AndroidAutofillClient::IsAutocompleteEnabled() const {

@@ -30,6 +30,7 @@
 #include "base/trace_event/trace_event.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
+#include "components/persistent_cache/backend_params.h"
 #include "components/startup_metric_utils/gpu/startup_metric_utils.h"
 #include "components/version_info/version_info.h"
 #include "components/viz/common/features.h"
@@ -53,11 +54,10 @@
 #include "gpu/ipc/common/memory_stats.h"
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
-#include "gpu/ipc/service/gpu_memory_buffer_factory.h"
 #include "gpu/ipc/service/gpu_watchdog_thread.h"
 #include "gpu/ipc/service/image_decode_accelerator_worker.h"
 #include "gpu/vulkan/buildflags.h"
-#include "ipc/ipc_channel_handle.h"
+#include "ipc/ipc_channel.h"
 #include "ipc/ipc_sync_channel.h"
 #include "media/base/media_log.h"
 #include "media/base/media_switches.h"
@@ -115,6 +115,7 @@
 
 #if BUILDFLAG(SKIA_USE_DAWN)
 #include "gpu/command_buffer/service/dawn_context_provider.h"
+#include "gpu/command_buffer/service/gpu_persistent_cache.h"
 #endif
 
 #if BUILDFLAG(SKIA_USE_METAL)
@@ -241,15 +242,23 @@ GpuServiceImpl::GpuServiceImpl(
     if (dawn_context_provider_) {
       // GpuServiceImpl holds the instance of DawnContextProvider, so it
       // outlives the DawnContextProvider.
-      auto cache_blob_callback = base::BindRepeating(
-          [](GpuServiceImpl* self, const std::string& key,
-             const std::string& blob) {
-            self->StoreBlobToDisk(gpu::kGraphiteDawnGpuDiskCacheHandle, key,
-                                  blob);
-          },
-          base::Unretained(this));
-      auto caching_interface = dawn_caching_interface_factory_->CreateInstance(
-          gpu::kGraphiteDawnGpuDiskCacheHandle, std::move(cache_blob_callback));
+      std::unique_ptr<gpu::webgpu::DawnCachingInterface> caching_interface;
+      if (features::kSkiaGraphiteDawnUsePersistentCache.Get()) {
+        caching_interface = dawn_caching_interface_factory_->CreateInstance(
+            gpu::kGraphiteDawnGpuDiskCacheHandle,
+            std::make_unique<gpu::GpuPersistentCache>("GraphiteDawn"));
+      } else {
+        auto cache_blob_callback = base::BindRepeating(
+            [](GpuServiceImpl* self, const std::string& key,
+               const std::string& blob) {
+              self->StoreBlobToDisk(gpu::kGraphiteDawnGpuDiskCacheHandle, key,
+                                    blob);
+            },
+            base::Unretained(this));
+        caching_interface = dawn_caching_interface_factory_->CreateInstance(
+            gpu::kGraphiteDawnGpuDiskCacheHandle,
+            std::move(cache_blob_callback));
+      }
       dawn_context_provider_->SetCachingInterface(std::move(caching_interface));
     }
 #endif  // BUILDFLAG(SKIA_USE_DAWN)
@@ -277,9 +286,6 @@ GpuServiceImpl::GpuServiceImpl(
         base::SequencedTaskRunner::GetCurrentDefault());
   }
 #endif
-
-  gpu_memory_buffer_factory_ = gpu::GpuMemoryBufferFactory::CreateNativeType(
-      vulkan_context_provider(), io_runner_);
 
   weak_ptr_ = weak_ptr_factory_.GetWeakPtr();
 }
@@ -324,27 +330,6 @@ GpuServiceImpl::~GpuServiceImpl() {
   compositor_gpu_thread_.reset();
   media_gpu_channel_manager_.reset();
   gpu_channel_manager_.reset();
-
-  // Destroy |gpu_memory_buffer_factory_| on the IO thread since its weakptrs
-  // are checked there.
-  {
-    base::WaitableEvent wait;
-    auto destroy_gmb_factory = base::BindOnce(
-        [](std::unique_ptr<gpu::GpuMemoryBufferFactory> gmb_factory,
-           base::WaitableEvent* wait) {
-          gmb_factory.reset();
-          wait->Signal();
-        },
-        std::move(gpu_memory_buffer_factory_), base::Unretained(&wait));
-
-    if (io_runner_ &&
-        io_runner_->PostTask(FROM_HERE, std::move(destroy_gmb_factory))) {
-      // |gpu_memory_buffer_factory_| holds a raw pointer to
-      // |vulkan_context_provider_|. Waiting here enforces the correct order
-      // of destruction.
-      wait.Wait();
-    }
-  }
 
   // WebNN must be destroyed before the scheduler is destroyed.
   webnn_context_provider_.reset();
@@ -420,12 +405,7 @@ void GpuServiceImpl::InitializeWithHost(
   }
 
   if (!shared_image_manager) {
-#if BUILDFLAG(IS_OZONE)
-    shared_image_manager =
-        CreateSharedImageManager(creation_params->supports_overlays);
-#else
     shared_image_manager = CreateSharedImageManager();
-#endif
   }
 
   if (!scheduler) {
@@ -516,8 +496,7 @@ void GpuServiceImpl::InitializeWithHostInternal(
   // initialization has succeeded.
   gpu_channel_manager_ = std::make_unique<gpu::GpuChannelManager>(
       gpu_preferences_, this, watchdog_thread_.get(), main_runner_, io_runner_,
-      scheduler_, sync_point_manager, shared_image_manager,
-      gpu_memory_buffer_factory_.get(), gpu_feature_info_,
+      scheduler_, sync_point_manager, shared_image_manager, gpu_feature_info_,
       &use_shader_cache_shm_count_, std::move(default_offscreen_surface),
       image_decode_accelerator_worker_.get(), vulkan_context_provider(),
       metal_context_provider(), dawn_context_provider(),
@@ -723,33 +702,11 @@ void GpuServiceImpl::GetVideoMemoryUsageStats(
   if (compositor_gpu_thread()) {
     // when DrDC is enabled, add SKIA and SHARED_CONTEXT_STATE memory from
     // CompositorGpuThread.
-    AddVideoMemoryUsageStatsOnCompositorGpu(std::move(callback),
-                                            video_memory_usage_stats);
+    compositor_gpu_thread()->AddVideoMemoryUsageStatsOnCompositorGpu(
+        std::move(callback), video_memory_usage_stats);
   } else {
     std::move(callback).Run(video_memory_usage_stats);
   }
-}
-
-void GpuServiceImpl::AddVideoMemoryUsageStatsOnCompositorGpu(
-    GetVideoMemoryUsageStatsCallback callback,
-    gpu::VideoMemoryUsageStats video_memory_usage_stats) {
-  // Called only when CompositorGpuThread exists.
-  CompositorGpuThread* thread = compositor_gpu_thread();
-  DCHECK(thread);
-  if (!thread->task_runner()->BelongsToCurrentThread()) {
-    thread->task_runner()->PostTask(
-        FROM_HERE,
-        base::BindOnce(&GpuServiceImpl::AddVideoMemoryUsageStatsOnCompositorGpu,
-                       weak_ptr_, std::move(callback),
-                       video_memory_usage_stats));
-    return;
-  }
-
-  uint64_t size = thread->GetSharedContextState()->GetMemoryUsage();
-  video_memory_usage_stats.process_map[base::GetCurrentProcId()].video_memory +=
-      size;
-  video_memory_usage_stats.bytes_allocated += size;
-  std::move(callback).Run(video_memory_usage_stats);
 }
 
 void GpuServiceImpl::StartPeakMemoryMonitor(uint32_t sequence_num) {
@@ -910,6 +867,7 @@ bool GpuServiceImpl::IsExiting() const {
 void GpuServiceImpl::EstablishGpuChannel(int32_t client_id,
                                          uint64_t client_tracing_id,
                                          bool is_gpu_host,
+                                         bool enable_extra_handles_validation,
                                          EstablishGpuChannelCallback callback) {
   // This should always be called on the IO thread first.
   if (io_runner_->BelongsToCurrentThread()) {
@@ -934,14 +892,15 @@ void GpuServiceImpl::EstablishGpuChannel(int32_t client_id,
     main_runner_->PostTask(
         FROM_HERE, base::BindOnce(&GpuServiceImpl::EstablishGpuChannel,
                                   weak_ptr_, client_id, client_tracing_id,
-                                  is_gpu_host, std::move(wrap_callback)));
+                                  is_gpu_host, enable_extra_handles_validation,
+                                  std::move(wrap_callback)));
     return;
   }
 
   auto channel_token = base::UnguessableToken::Create();
   gpu::GpuChannel* gpu_channel = gpu_channel_manager_->EstablishChannel(
-      channel_token, client_id, client_tracing_id, is_gpu_host, gpu_extra_info_,
-      gpu_memory_buffer_factory_.get());
+      channel_token, client_id, client_tracing_id, is_gpu_host,
+      enable_extra_handles_validation, gpu_extra_info_);
 
   if (!gpu_channel) {
     // This returns a null handle, which is treated by the client as a failure
@@ -974,6 +933,26 @@ void GpuServiceImpl::SetChannelClientPid(int32_t client_id,
   // this condition is reasonable.
   DCHECK_NE(client_pid, base::kNullProcessId);
   gpu_channel_manager_->SetChannelClientPid(client_id, client_pid);
+}
+
+void GpuServiceImpl::SetChannelPersistentCacheParams(
+    int32_t client_id,
+    const gpu::GpuDiskCacheHandle& handle,
+    persistent_cache::BackendParams backend_params) {
+  TRACE_EVENT2("gpu", "GpuServiceImpl::SetChannelPersistentCacheParams",
+               "client_id", client_id, "handle_type", GetHandleType(handle));
+#if BUILDFLAG(SKIA_USE_DAWN)
+  // TODO(399642827): Support other cache types.
+  CHECK_EQ(client_id, gpu::kGraphiteDawnClientId);
+  CHECK_EQ(GetHandleType(handle), gpu::GpuDiskCacheType::kDawnGraphite);
+  if (!dawn_context_provider_) {
+    return;
+  }
+
+  auto* cache = dawn_context_provider_->GetCachingInterface();
+  CHECK(cache);
+  cache->InitializePersistentCache(std::move(backend_params));
+#endif
 }
 
 void GpuServiceImpl::SetChannelDiskCacheHandle(
@@ -1035,11 +1014,10 @@ void GpuServiceImpl::WakeUpGpuOnMainThread() {
   }
 }
 
-void GpuServiceImpl::GpuSwitched(gl::GpuPreference active_gpu_heuristic) {
+void GpuServiceImpl::GpuSwitched() {
   if (!main_runner_->BelongsToCurrentThread()) {
     main_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&GpuServiceImpl::GpuSwitched, weak_ptr_,
-                                  active_gpu_heuristic));
+        FROM_HERE, base::BindOnce(&GpuServiceImpl::GpuSwitched, weak_ptr_));
     return;
   }
   DVLOG(1) << "GPU: GPU has switched";
@@ -1048,8 +1026,7 @@ void GpuServiceImpl::GpuSwitched(gl::GpuPreference active_gpu_heuristic) {
     watchdog_thread_->ReportProgress();
 
   if (!in_host_process()) {
-    ui::GpuSwitchingManager::GetInstance()->NotifyGpuSwitched(
-        active_gpu_heuristic);
+    ui::GpuSwitchingManager::GetInstance()->NotifyGpuSwitched();
   }
   GpuServiceImpl::UpdateGPUInfoGL();
 }
@@ -1185,8 +1162,7 @@ void GpuServiceImpl::OnForegroundedOnMainThread() {
 }
 
 #if !BUILDFLAG(IS_ANDROID)
-void GpuServiceImpl::OnMemoryPressure(
-    base::MemoryPressureListener::MemoryPressureLevel level) {
+void GpuServiceImpl::OnMemoryPressure(base::MemoryPressureLevel level) {
   // Forward the notification to the registry of MemoryPressureListeners.
   base::SingleThreadTaskRunner::GetMainThreadDefault()->PostTask(
       FROM_HERE,
@@ -1363,7 +1339,8 @@ gpu::SharedImageManager* GpuServiceImpl::CreateSharedImageManager(
   // requires |thread_safe_manager| to be true.
   bool thread_safe_manager = true;
   owned_shared_image_manager_ = std::make_unique<gpu::SharedImageManager>(
-      thread_safe_manager, display_context_on_another_thread);
+      thread_safe_manager, display_context_on_another_thread,
+      vulkan_context_provider(), io_runner_);
 #if BUILDFLAG(IS_OZONE)
   owned_shared_image_manager_->SetSupportsOverlays(supports_overlays);
 #endif

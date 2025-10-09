@@ -34,6 +34,8 @@
 namespace {
 DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kWebContentsElementId);
 constexpr char kDocumentWithTitle1URL[] = "/title1.html";
+constexpr char kScreenshotElementURL[] =
+    "/test_framework/screenshot_element.html";
 constexpr char kSkipPixelTestsReason[] = "Should only run in pixel_tests.";
 }
 
@@ -76,6 +78,18 @@ IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest, CompareScreenshot_View) {
                   Screenshot(kToolbarAppMenuButtonElementId,
                              /*screenshot_name=*/"AppMenuButton",
                              /*baseline_cl=*/"3924454"));
+}
+
+IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest,
+                       CompareScreenshot_ViewWithClipBounds) {
+  RunTestSequence(SetOnIncompatibleAction(OnIncompatibleAction::kSkipTest,
+                                          kSkipPixelTestsReason),
+                  // This adds a callback that calls
+                  // InteractionTestUtilBrowser::CompareScreenshot().
+                  Screenshot(kToolbarAppMenuButtonElementId,
+                             /*screenshot_name=*/"AppMenuButton",
+                             /*baseline_cl=*/"6956367",
+                             []() { return gfx::Rect(4, 4, 20, 20); }));
 }
 
 class ScreenshotSurfaceTestDialog : public views::BubbleDialogDelegateView {
@@ -143,6 +157,25 @@ IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest,
       // InteractionTestUtilBrowser::CompareScreenshot().
       Screenshot(kWebContentsElementId, /*screenshot_name=*/std::string(),
                  /*baseline_cl=*/"3924454"));
+}
+
+IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest,
+                       CompareScreenshot_WebPageElement) {
+  // Set the browser view to a consistent size.
+  BrowserView* const browser_view =
+      BrowserView::GetBrowserViewForBrowser(browser());
+  browser_view->GetWidget()->SetSize({400, 300});
+
+  const GURL url = embedded_test_server()->GetURL(kScreenshotElementURL);
+  const InteractiveBrowserTestApi::DeepQuery kElementPath = {"#target"};
+
+  RunTestSequence(InstrumentTab(kWebContentsElementId),
+                  SetOnIncompatibleAction(OnIncompatibleAction::kSkipTest,
+                                          kSkipPixelTestsReason),
+                  NavigateWebContents(kWebContentsElementId, url),
+                  ScreenshotWebUi(kWebContentsElementId, kElementPath,
+                                  /*screenshot_name=*/std::string(),
+                                  /*baseline_cl=*/"6907123"));
 }
 
 IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest, ConfirmOmnibox) {

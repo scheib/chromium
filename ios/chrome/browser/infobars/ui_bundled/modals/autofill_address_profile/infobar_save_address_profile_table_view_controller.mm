@@ -112,9 +112,8 @@ const CGFloat kInfobarSaveAddressProfileSeparatorInset = 54;
 
 - (void)viewDidLoad {
   [super viewDidLoad];
-  self.styler.tableViewBackgroundColor = [UIColor colorNamed:kBackgroundColor];
+  self.tableView.backgroundColor = [UIColor colorNamed:kBackgroundColor];
   self.view.backgroundColor = [UIColor colorNamed:kBackgroundColor];
-  self.styler.cellBackgroundColor = [UIColor colorNamed:kBackgroundColor];
   self.tableView.allowsSelection = NO;
   self.tableView.sectionHeaderHeight = 0;
   self.tableView.sectionFooterHeight = 0;
@@ -172,7 +171,7 @@ const CGFloat kInfobarSaveAddressProfileSeparatorInset = 54;
       self.tableView.contentSize.height +
       self.tableView.adjustedContentInset.top +
       self.tableView.adjustedContentInset.bottom;
-  self.tableView.scrollEnabled =
+  self.tableView.bounces =
       tableViewScrollableHeight > self.view.frame.size.height;
 }
 
@@ -196,6 +195,7 @@ const CGFloat kInfobarSaveAddressProfileSeparatorInset = 54;
         cellForRowAtIndexPath:(NSIndexPath*)indexPath {
   UITableViewCell* cell = [super tableView:tableView
                      cellForRowAtIndexPath:indexPath];
+  cell.backgroundColor = [UIColor colorNamed:kBackgroundColor];
   NSInteger itemType = [self.tableViewModel itemTypeForIndexPath:indexPath];
 
   if (itemType == ItemTypeAddressProfileSaveUpdateButton) {
@@ -283,8 +283,10 @@ const CGFloat kInfobarSaveAddressProfileSeparatorInset = 54;
   TableViewModel* model = self.tableViewModel;
 
   [model addSectionWithIdentifier:SectionIdentifierFields];
-  [model addItem:[self updateModalDescriptionItem]
-      toSectionWithIdentifier:SectionIdentifierFields];
+  if (!self.homeProfile && !self.workProfile) {
+    [model addItem:[self updateModalDescriptionItem]
+        toSectionWithIdentifier:SectionIdentifierFields];
+  }
 
   BOOL showOld = [self shouldShowOldSection];
 

@@ -337,18 +337,15 @@ bool VerifyFromAndroidTrustManager(
   }
 
   // Reverse the hash list, to maintain the leaf->root ordering.
-  std::reverse(verify_result->public_key_hashes.begin(),
-               verify_result->public_key_hashes.end());
+  std::ranges::reverse(verify_result->public_key_hashes);
 
   return true;
 }
 
 void GetChainDEREncodedBytes(X509Certificate* cert,
                              std::vector<std::string>* chain_bytes) {
-  chain_bytes->reserve(1 + cert->intermediate_buffers().size());
-  chain_bytes->emplace_back(
-      net::x509_util::CryptoBufferAsStringPiece(cert->cert_buffer()));
-  for (const auto& handle : cert->intermediate_buffers()) {
+  chain_bytes->reserve(cert->cert_buffers().size());
+  for (const auto& handle : cert->cert_buffers()) {
     chain_bytes->emplace_back(
         net::x509_util::CryptoBufferAsStringPiece(handle.get()));
   }

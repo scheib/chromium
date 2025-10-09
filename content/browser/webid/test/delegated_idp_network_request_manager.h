@@ -16,7 +16,7 @@ class Origin;
 namespace content {
 
 // Forwards IdpNetworkRequestManager calls to delegate. The purpose of this
-// class is to enable querying the delegate after FederatedAuthRequestImpl
+// class is to enable querying the delegate after RequestService
 // destroys the DelegatedIdpNetworkRequestManager.
 class DelegatedIdpNetworkRequestManager : public MockIdpNetworkRequestManager {
  public:
@@ -41,7 +41,7 @@ class DelegatedIdpNetworkRequestManager : public MockIdpNetworkRequestManager {
                            int rp_brand_icon_ideal_size,
                            int rp_brand_icon_minimum_size,
                            FetchClientMetadataCallback callback) override;
-  void SendAccountsRequest(const url::Origin& idp_origin,
+  bool SendAccountsRequest(const url::Origin& idp_origin,
                            const GURL& accounts_url,
                            const std::string& client_id,
                            AccountsRequestCallback callback) override;

@@ -42,55 +42,30 @@ bool SharedMemoryImageBackingFactory::IsBufferUsageSupported(
 bool SharedMemoryImageBackingFactory::IsSizeValidForFormat(
     const gfx::Size& size,
     viz::SharedImageFormat format) {
-  auto buffer_format = ToBufferFormat(format);
-  switch (buffer_format) {
-    case gfx::BufferFormat::R_8:
-    case gfx::BufferFormat::R_16:
-    case gfx::BufferFormat::RG_88:
-    case gfx::BufferFormat::RG_1616:
-    case gfx::BufferFormat::BGR_565:
-    case gfx::BufferFormat::RGBA_4444:
-    case gfx::BufferFormat::RGBA_8888:
-    case gfx::BufferFormat::RGBX_8888:
-    case gfx::BufferFormat::BGRA_8888:
-    case gfx::BufferFormat::BGRX_8888:
-    case gfx::BufferFormat::BGRA_1010102:
-    case gfx::BufferFormat::RGBA_1010102:
-    case gfx::BufferFormat::RGBA_F16:
-      return true;
-    case gfx::BufferFormat::YVU_420:
-    case gfx::BufferFormat::YUV_420_BIPLANAR:
-    case gfx::BufferFormat::YUVA_420_TRIPLANAR:
-    case gfx::BufferFormat::P010: {
-      size_t num_planes =
-          gfx::NumberOfPlanesForLinearBufferFormat(buffer_format);
-      for (size_t i = 0; i < num_planes; ++i) {
-        size_t factor = gfx::SubsamplingFactorForBufferFormat(buffer_format, i);
-        if (size.width() % factor || size.height() % factor) {
-          return false;
-        }
-      }
-      return true;
-    }
+  if (format.is_single_plane()) {
+    return true;
   }
-
-  NOTREACHED();
+  auto [width_scale, height_scale] = format.GetSubsamplingScale();
+  if (size.width() % width_scale || size.height() % height_scale) {
+    return false;
+  }
+  return true;
 }
 
 // static
 gfx::GpuMemoryBufferHandle
 SharedMemoryImageBackingFactory::CreateGpuMemoryBufferHandle(
     const gfx::Size& size,
-    gfx::BufferFormat buffer_format,
-    gfx::BufferUsage buffer_usage) {
-  size_t buffer_size = 0u;
-  if (!gfx::BufferSizeForBufferFormatChecked(size, buffer_format,
-                                             &buffer_size)) {
+    viz::SharedImageFormat format) {
+  CHECK(viz::HasEquivalentBufferFormat(format));
+  std::optional<size_t> buffer_size =
+      viz::SharedMemorySizeForSharedImageFormat(format, size);
+  if (!buffer_size) {
     return gfx::GpuMemoryBufferHandle();
   }
 
   auto shared_memory_region =
-      base::UnsafeSharedMemoryRegion::Create(buffer_size);
+      base::UnsafeSharedMemoryRegion::Create(buffer_size.value());
   if (!shared_memory_region.IsValid()) {
     return gfx::GpuMemoryBufferHandle();
   }
@@ -98,8 +73,10 @@ SharedMemoryImageBackingFactory::CreateGpuMemoryBufferHandle(
   gfx::GpuMemoryBufferHandle handle(std::move(shared_memory_region));
   handle.type = gfx::SHARED_MEMORY_BUFFER;
   handle.offset = 0;
-  handle.stride = static_cast<uint32_t>(
-      gfx::RowSizeForBufferFormat(size.width(), buffer_format, 0));
+  handle.stride =
+      static_cast<uint32_t>(viz::SharedMemoryRowSizeForSharedImageFormat(
+                                format, /*plane=*/0, size.width())
+                                .value());
   return handle;
 }
 
@@ -124,7 +101,7 @@ SharedMemoryImageBackingFactory::CreateSharedImage(
     gfx::GpuMemoryBufferHandle handle) {
   CHECK(handle.type == gfx::SHARED_MEMORY_BUFFER);
   SharedMemoryRegionWrapper shm_wrapper;
-  if (!shm_wrapper.Initialize(handle, size, ToBufferFormat(format))) {
+  if (!shm_wrapper.Initialize(handle, size, format)) {
     return nullptr;
   }
   return std::make_unique<SharedMemoryImageBacking>(
@@ -145,13 +122,12 @@ SharedMemoryImageBackingFactory::CreateSharedImage(
     std::string debug_label,
     bool is_thread_safe,
     gfx::BufferUsage buffer_usage) {
-  auto buffer_format = ToBufferFormat(format);
   gfx::GpuMemoryBufferHandle handle;
   if (IsBufferUsageSupported(buffer_usage)) {
-    handle = CreateGpuMemoryBufferHandle(size, buffer_format, buffer_usage);
+    handle = CreateGpuMemoryBufferHandle(size, format);
   }
   SharedMemoryRegionWrapper shm_wrapper;
-  if (!shm_wrapper.Initialize(handle, size, buffer_format)) {
+  if (!shm_wrapper.Initialize(handle, size, format)) {
     return nullptr;
   }
   auto backing = std::make_unique<SharedMemoryImageBacking>(

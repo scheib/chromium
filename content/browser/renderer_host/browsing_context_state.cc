@@ -16,7 +16,6 @@
 
 namespace features {
 BASE_FEATURE(kNewBrowsingContextStateOnBrowsingContextGroupSwap,
-             "NewBrowsingContextStateOnBrowsingContextGroupSwap",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BrowsingContextStateImplementationType GetBrowsingContextMode() {

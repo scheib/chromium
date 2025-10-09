@@ -160,13 +160,11 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
         // base::TimeTicks().
         int64_t creation_timeticks_us;
       } v2;
-      NO_UNIQUE_ADDRESS struct {
-      } v2_marker;
     };
 
     static constexpr size_t kMinIpczHeaderSize = offsetof(IpczHeader, v2);
     static bool IsAtLeastV2(const IpczHeader& header) {
-      return header.size >= offsetof(IpczHeader, v2_marker);
+      return header.size >= offsetof(IpczHeader, v2) + sizeof(header.v2);
     }
 
 #if BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
@@ -262,13 +260,21 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
     size_t payload_size() const;
 
     size_t num_handles() const;
-    bool has_handles() const;
 
-    bool is_legacy_message() const;
+    // Overridden in IpczMessage and TrivialMessage.
+    virtual bool has_handles() const;
+
+    // Returns true iff the LegacyHeader is in use for this message.
+    virtual bool is_legacy_message() const;
+
     LegacyHeader* legacy_header();
     const LegacyHeader* legacy_header() const;
-    Header* header();
-    const Header* header() const;
+
+    // The header() methods are overridden as NOTREACHED() in IpczMessage and
+    // TrivialMessage to disallow other methods calling header() in those two
+    // subclasses.
+    virtual Header* header();
+    virtual const Header* header() const;
 
     // Note: SetHandles() and TakeHandles() invalidate any previous value of
     // handles().
@@ -276,9 +282,6 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
     virtual void SetHandles(
         std::vector<PlatformHandleInTransit> new_handles) = 0;
     virtual std::vector<PlatformHandleInTransit> TakeHandles() = 0;
-    virtual size_t NumHandlesForTransit() const = 0;
-
-    void SetVersionForTest(uint16_t version_number);
 
    protected:
     Message() = default;
@@ -483,17 +486,12 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
   // insufficient number of handles to be available when this call is made, but
   // this is not necessarily an error condition. In such cases this returns
   // |true| but |*handles| will also be reset to null.
-  //
-  // If the implementation sets |*deferred| to |true|, it assumes responsibility
-  // for dispatching the message eventually. It must copy |payload| to retain
-  // it for later transmission.
   virtual bool GetReadPlatformHandles(const void* payload,
                                       size_t payload_size,
                                       size_t num_handles,
                                       const void* extra_header,
                                       size_t extra_header_size,
-                                      std::vector<PlatformHandle>* handles,
-                                      bool* deferred) = 0;
+                                      std::vector<PlatformHandle>* handles) = 0;
 
   // Consumes exactly `num_handles` received handles and appends them to
   // `handles` before returning true. If the Channel doesn't have enough
@@ -512,21 +510,18 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
                                 std::vector<PlatformHandle> handles);
 
  protected:
-  enum class MessageType {
-    kSent,
-    kReceive,
-  };
-
   void RecordSentMessageMetrics(size_t payload_size);
 
  private:
-  // Returns true for ~1/1000 calls. Used to reduce reporting overhead.
-  bool ShouldRecordSubsampledHistograms();
-  // Records histograms that count sent/received messages per process type.
-  // Must be guarded by a call to ShouldRecordSubsampledHistograms().
-  static void LogHistogramForIPCMetrics(MessageType type);
-
   friend class base::RefCountedThreadSafe<Channel>;
+
+  // Records histograms counting sent messages per process type. Must be
+  // subsampled.
+  static void RecordSentMessageProcessType();
+
+  // Records histograms counting received messages per process type. Must be
+  // subsampled.
+  static void RecordReceivedMessageProcessType();
 
   class ReadBuffer;
 
@@ -537,12 +532,6 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
 
   // Handle to the process on the other end of this Channel, iff known.
   base::Process remote_process_;
-
-  mutable base::Lock lock_;
-  // base::MetricsSubSampler uses InsecureRandomGenerator to generate
-  // pseudo-random numbers which leaves the synchronization to the client and is
-  // not thread-safe, hence guarded by lock here.
-  base::MetricsSubSampler sub_sampler_ GUARDED_BY(lock_);
 
   FRIEND_TEST_ALL_PREFIXES(ChannelTest, IpczHeaderCompatibilityTest);
   FRIEND_TEST_ALL_PREFIXES(ChannelTest, TryDispatchMessageWithEnvelope);

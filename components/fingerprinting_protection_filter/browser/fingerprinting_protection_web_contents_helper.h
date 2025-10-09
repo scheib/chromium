@@ -32,9 +32,6 @@ class WebContents;
 }  // namespace content
 
 namespace subresource_filter {
-namespace mojom {
-class ActivationState;
-}  // namespace mojom
 enum class ActivationDecision;
 enum class LoadPolicy;
 }  // namespace subresource_filter
@@ -120,14 +117,6 @@ class FingerprintingProtectionWebContentsHelper
 
   void WillDestroyThrottleManager(ThrottleManager* throttle_manager);
 
-  // Will be called at the latest in the WillProcessResponse stage from a
-  // NavigationThrottle that was registered before the throttle manager's
-  // throttles created in MaybeAppendNavigationThrottles().
-  void NotifyPageActivationComputed(
-      content::NavigationHandle* navigation_handle,
-      const subresource_filter::mojom::ActivationState& activation_state,
-      const subresource_filter::ActivationDecision& activation_decision);
-
   // Called in WillStartRequest or WillRedirectRequest stage from a
   // ChildFrameNavigationFilteringThrottle.
   void NotifyChildFrameNavigationEvaluated(
@@ -152,6 +141,10 @@ class FingerprintingProtectionWebContentsHelper
     return tracking_protection_settings_;
   }
   HostContentSettingsMap* content_settings() { return content_settings_; }
+
+  subresource_filter::LoadPolicy most_recent_child_frame_load_policy() {
+    return most_recent_child_frame_load_policy_;
+  }
 
  protected:
   explicit FingerprintingProtectionWebContentsHelper(
@@ -227,6 +220,10 @@ class FingerprintingProtectionWebContentsHelper
   // Adds an exception for the eTLD+1 of the given URL if the given refresh
   // count exceeds the threshold and an exception was not already added.
   void TryAddRefreshBreakageException(const GURL& url, int refresh_count);
+
+  // Most recent load policy sent to this WebContentsHelper from
+  // |NotifyChildFrameNavigationEvaluated()|.
+  subresource_filter::LoadPolicy most_recent_child_frame_load_policy_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

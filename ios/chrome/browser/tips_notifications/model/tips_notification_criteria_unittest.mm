@@ -6,6 +6,7 @@
 
 #import "base/test/scoped_feature_list.h"
 #import "components/feature_engagement/test/mock_tracker.h"
+#import "components/omnibox/browser/omnibox_pref_names.h"
 #import "components/password_manager/core/common/password_manager_pref_names.h"
 #import "components/prefs/pref_service.h"
 #import "components/safe_browsing/core/common/safe_browsing_prefs.h"
@@ -47,7 +48,7 @@ using ::testing::Return;
 
 // Creates the Feature Engagement Mock Tracker.
 std::unique_ptr<KeyedService> BuildFeatureEngagementMockTracker(
-    web::BrowserState* browser_state) {
+    ProfileIOS* profile) {
   return std::make_unique<feature_engagement::test::MockTracker>();
 }
 
@@ -119,7 +120,8 @@ class TipsNotificationCriteriaTest : public PlatformTest {
   base::test::ScopedFeatureList feature_list_;
   web::WebTaskEnvironment task_environment_;
   IOSChromeScopedTestingLocalState scoped_testing_local_state_;
-  raw_ptr<feature_engagement::test::MockTracker> mock_tracker_;
+  raw_ptr<feature_engagement::test::MockTracker, DanglingUntriaged>
+      mock_tracker_;
   std::unique_ptr<TestProfileIOS> profile_;
   std::unique_ptr<TipsNotificationCriteria> criteria_;
   raw_ptr<syncer::MockSyncService> sync_service_mock_ = nullptr;
@@ -377,7 +379,7 @@ TEST_F(TipsNotificationCriteriaTest,
 // has already made a choice.
 TEST_F(TipsNotificationCriteriaTest,
        TestShouldSendOmniboxPosition_ShouldNotSend) {
-  GetLocalState()->SetBoolean(prefs::kBottomOmnibox, true);
+  GetLocalState()->SetBoolean(omnibox::kIsOmniboxInBottomPosition, true);
   EXPECT_FALSE(criteria_->ShouldSendNotification(
       TipsNotificationType::kOmniboxPosition));
 }
@@ -400,7 +402,7 @@ TEST_F(TipsNotificationCriteriaTest,
   if (ui::GetDeviceFormFactor() != ui::DEVICE_FORM_FACTOR_TABLET) {
     GTEST_SKIP() << "Test is running on a phone, skipping.";
   }
-  GetLocalState()->SetBoolean(prefs::kBottomOmnibox, false);
+  GetLocalState()->SetBoolean(omnibox::kIsOmniboxInBottomPosition, false);
   EXPECT_FALSE(criteria_->ShouldSendNotification(
       TipsNotificationType::kOmniboxPosition));
 }

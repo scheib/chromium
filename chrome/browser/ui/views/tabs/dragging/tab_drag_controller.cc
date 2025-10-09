@@ -55,6 +55,7 @@
 #include "components/tab_groups/tab_group_id.h"
 #include "components/tabs/public/tab_group.h"
 #include "components/tabs/public/tab_interface.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/clipboard/clipboard_constants.h"
@@ -843,16 +844,33 @@ void TabDragController::RestoreFocus() {
     if (is_dragging_new_browser_) {
       content::WebContents* active_contents =
           drag_data_.source_dragged_contents();
-      if (active_contents && !active_contents->FocusLocationBarByDefault()) {
-        active_contents->Focus();
+      if (active_contents) {
+        // If the tab is split, make the last active split tab stay active
+        // instead of the drag source.
+        const tabs::TabInterface* tab =
+            tabs::TabInterface::GetFromContents(active_contents);
+
+        if (tab->IsSplit()) {
+          TabStripModel* tab_strip_model =
+              attached_context_->GetTabStripModel();
+          active_contents = tab_strip_model->GetWebContentsAt(
+              split_tabs::GetIndexOfLastActiveTab(tab_strip_model,
+                                                  tab->GetSplit().value()));
+        }
+
+        if (!active_contents->FocusLocationBarByDefault()) {
+          active_contents->Focus();
+        }
       }
     }
     return;
   }
+
   views::View* old_focused_view = old_focused_view_tracker_->view();
   if (!old_focused_view || !old_focused_view->GetFocusManager()) {
     return;
   }
+
   old_focused_view->GetFocusManager()->SetFocusedView(old_focused_view);
 }
 
@@ -1048,8 +1066,10 @@ void TabDragController::RequestTabThumbnail() {
   }
 }
 
-void TabDragController::OnTabThumbnailAvailable(float window_scale,
-                                                const SkBitmap& thumbnail) {
+void TabDragController::OnTabThumbnailAvailable(
+    float window_scale,
+    const viz::CopyOutputBitmapWithMetadata& result) {
+  const SkBitmap& thumbnail = result.bitmap;
   VLOG(1) << __func__ << " " << thumbnail.width() << "x" << thumbnail.height();
   constexpr size_t kTargetHeightDip = 200;
   constexpr int kRoundedCornerRadius = 4;
@@ -1254,7 +1274,7 @@ void TabDragController::StartDrag() {
 void TabDragController::AttachToNewContext(
     TabDragContext* attached_context,
     std::unique_ptr<TabDragController> controller,
-    std::vector<std::variant<std::unique_ptr<tabs::TabModel>,
+    std::vector<std::variant<std::unique_ptr<DetachedTab>,
                              std::unique_ptr<DetachedTabCollection>>>
         owned_tabs_and_collections) {
   // We should already have detached by the time we get here.
@@ -1292,14 +1312,14 @@ void TabDragController::AttachToNewContext(
 
   for (auto& tab_or_collection : owned_tabs_and_collections) {
     if (auto* tab =
-            std::get_if<std::unique_ptr<tabs::TabModel>>(&tab_or_collection)) {
-      const tabs::TabInterface* tab_ptr = tab->get();
+            std::get_if<std::unique_ptr<DetachedTab>>(&tab_or_collection)) {
+      const WebContents* web_contents = tab->get()->tab->GetContents();
       // If it's a tab - we add it to the tabstrip.
       int add_types = AddTabTypes::ADD_NONE;
       TabDragData& tab_data = *std::find_if(
           drag_data_.tab_drag_data_.begin(), drag_data_.tab_drag_data_.end(),
-          [tab_ptr](TabDragData& tab_data) {
-            return tab_ptr->GetContents() == tab_data.contents;
+          [web_contents](TabDragData& tab_data) {
+            return web_contents == tab_data.contents;
           });
       if (tab_data.pinned) {
         add_types |= AddTabTypes::ADD_PINNED;
@@ -1307,7 +1327,7 @@ void TabDragController::AttachToNewContext(
 
       const size_t inserted_index =
           attached_context_->GetTabStripModel()->InsertDetachedTabAt(
-              index, std::move(*tab), add_types);
+              index, std::move(tab->get()->tab), add_types);
       CHECK_EQ(inserted_index, index);
       update_sad_tab.Run(index);
       index++;
@@ -1374,7 +1394,7 @@ void TabDragController::AttachImpl() {
 }
 
 std::tuple<std::unique_ptr<TabDragController>,
-           std::vector<std::variant<std::unique_ptr<tabs::TabModel>,
+           std::vector<std::variant<std::unique_ptr<DetachedTab>,
                                     std::unique_ptr<DetachedTabCollection>>>>
 TabDragController::Detach(ReleaseCapture release_capture) {
   TRACE_EVENT1("views", "TabDragController::Detach", "release_capture",
@@ -1421,34 +1441,10 @@ TabDragController::Detach(ReleaseCapture release_capture) {
   const std::vector<tab_groups::TabGroupId> groups_to_move =
       attached_model->GetGroupsDestroyedFromRemovingIndices(dragged_indices);
 
-  std::vector<std::variant<std::unique_ptr<tabs::TabModel>,
+  std::vector<std::variant<std::unique_ptr<DetachedTab>,
                            std::unique_ptr<DetachedTabCollection>>>
-      owned_tabs_and_collections;
-  for (TabDragData& tab_drag_datum : drag_data_.tab_drag_data_) {
-    const int index =
-        attached_model->GetIndexOfWebContents(tab_drag_datum.contents);
-
-    if (index == TabStripModel::kNoTab) {
-      // If this is a tab, we already moved it as part of its group.
-      // If this is a header, we will move it when we get to its first tab.
-      continue;
-    }
-
-    const std::optional<tab_groups::TabGroupId> group =
-        attached_model->GetTabGroupForTab(index);
-    if (std::find(groups_to_move.begin(), groups_to_move.end(), group) !=
-        groups_to_move.end()) {
-      owned_tabs_and_collections.emplace_back(
-          attached_model->DetachTabGroupForInsertion(group.value()));
-    } else if (attached_model->GetTabAtIndex(index)->IsSplit()) {
-      owned_tabs_and_collections.emplace_back(
-          attached_model->DetachSplitTabForInsertion(
-              attached_model->GetTabAtIndex(index)->GetSplit().value()));
-    } else {
-      owned_tabs_and_collections.emplace_back(
-          attached_model->DetachTabAtForInsertion(index));
-    }
-  }
+      owned_tabs_and_collections =
+          attached_model->DetachTabsAndCollectionsForInsertion(dragged_indices);
 
   // If we've removed the last Tab from the TabDragContext, hide the
   // frame now.
@@ -2310,7 +2306,7 @@ gfx::Size TabDragController::CalculateDraggedWindowSize(
 
   // Limit the window size to the current display's size, less some insets.
   const gfx::Size work_area =
-      display::Screen::GetScreen()
+      display::Screen::Get()
           ->GetDisplayNearestPoint(last_point_in_screen_)
           .work_area()
           .size();
@@ -2457,9 +2453,8 @@ Browser* TabDragController::CreateBrowserForDrag(TabDragContext* source,
   create_params.restore_id = Browser::kDefaultRestoreId;
 
   // Open the window in the same display.
-  display::Display display =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(
-          source->GetWidget()->GetNativeWindow());
+  display::Display display = display::Screen::Get()->GetDisplayNearestWindow(
+      source->GetWidget()->GetNativeWindow());
   create_params.display_id = display.id();
 #endif
   // Do not copy attached window's show state as the attached window might be a
@@ -2504,7 +2499,7 @@ gfx::Point TabDragController::GetCursorScreenPoint() {
   return aura::Env::GetInstance()->GetLastPointerPoint(
       event_source_, widget_window, /*fallback=*/last_point_in_screen_);
 #else
-  return display::Screen::GetScreen()->GetCursorScreenPoint();
+  return display::Screen::Get()->GetCursorScreenPoint();
 #endif
 }
 
@@ -2560,6 +2555,15 @@ bool TabDragController::CanAttachTo(gfx::NativeWindow window) {
   if (window == GetAttachedBrowserWidget()->GetNativeWindow()) {
     return true;
   }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // TODO(crbug.com/447246798): Don't allow dragging into an overview item as
+  // the implementation is buggy. Triggering this appears to require drag by
+  // touch, as drag by click causes the overview session to end immediately.
+  if (window->GetProperty(chromeos::kIsShowingInOverviewKey)) {
+    return false;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Return false if `other_browser_view` is null or already closed. The latter
   // check is required since the widget may still alive on asynchronous

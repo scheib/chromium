@@ -19,23 +19,34 @@ namespace {
 
 // Domains
 constexpr char kOrtDefaultDomain[] = "";
+// Domain "com.microsoft" is required by EPContext op for exporting the compiled
+// model.
+// https://onnxruntime.ai/docs/execution-providers/EP-Context-Design.html#epcontext-op-schema
 constexpr char kMSDomain[] = "com.microsoft";
 // Domain "com.ms.internal.nhwc" provides alternative implementations of
 // operators that are compatible with NHWC layout. This domain is required for
 // certain operators when using WebGPU EP. See:
 // https://github.com/microsoft/onnxruntime/blob/main/js/web/docs/webgpu-operators.md
 constexpr char kMSInternalNhwcDomain[] = "com.ms.internal.nhwc";
+// Domain "com.microsoft.nchwc" provides a layout optimization for default CPU
+// EP, it's required when the optimization level is set to "ENABLE_ALL".
+// https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html#layout-optimizations
+// TODO(crbug.com/442483649): Remove this domain once the ORT issue is fixed.
+// https://github.com/microsoft/onnxruntime/issues/25914
+constexpr char kMSNchwcDomain[] = "com.microsoft.nchwc";
 
 // Opset versions
 constexpr int32_t kOrtOpsetVersion = 21;
+// The op set version for domain "com.microsoft".
+// https://github.com/microsoft/onnxruntime/blob/main/docs/ContribOperators.md#version-26
+constexpr int32_t kEPContextOpsetVersion = 1;
 // Domain "com.ms.internal.nhwc" provides operator implementations that are
 // functionally equivalent to the standard ai.onnx domain but optimized for NHWC
 // layout. So we should use the same opset version as the default domain.
 constexpr int32_t kMSInternalNhwcDomainOpsetVersion = kOrtOpsetVersion;
-
-// EPContext op is used for exporting the compiled model.
-// https://onnxruntime.ai/docs/execution-providers/EP-Context-Design.html#onnxruntime-ep-context-cache-feature-design
-constexpr int32_t kEPContextOpsetVersion = 1;
+// The op set version for domain "com.microsoft.nchwc".
+// https://github.com/microsoft/onnxruntime/blob/main/docs/OperatorKernels.md#operators-implemented-by-cpuexecutionprovider
+constexpr int32_t kMSNchwcDomainOpsetVersion = 1;
 
 // The minimum size (in bytes) to add the initializer as external data. An
 // initializer less than 128 bytes might be used for shape inferencing which
@@ -85,9 +96,7 @@ ModelEditor::ModelInfo::ModelInfo()
     : external_weights_manager(std::make_unique<ExternalWeightsManager>()) {}
 ModelEditor::ModelInfo::~ModelInfo() = default;
 
-ModelEditor::ModelEditor(bool is_external_data_supported)
-    : model_info_(std::make_unique<ModelInfo>()),
-      is_external_data_supported_(is_external_data_supported) {
+ModelEditor::ModelEditor() : model_info_(std::make_unique<ModelInfo>()) {
   const OrtModelEditorApi* ort_model_editor_api = GetOrtModelEditorApi();
   CHECK_STATUS(ort_model_editor_api->CreateGraph(
       ScopedOrtGraph::Receiver(graph_).get()));
@@ -119,7 +128,6 @@ void ModelEditor::AddInitializer(
   CHECK(!has_built_);
 
   bool use_external_data =
-      is_external_data_supported_ &&
       constant_operand->ByteSpan().size() >= kMinExternalDataSize;
   const OperandDescriptor& descriptor = constant_operand->descriptor();
   ONNXTensorElementDataType data_type =
@@ -140,8 +148,7 @@ void ModelEditor::AddInitializer(base::cstring_view name,
                                  base::span<const uint8_t> data) {
   CHECK(!has_built_);
 
-  bool use_external_data =
-      is_external_data_supported_ && data.size() >= kMinExternalDataSize;
+  bool use_external_data = data.size() >= kMinExternalDataSize;
   if (use_external_data) {
     AddInitializerAsExternalData(name, data_type, shape,
                                  base::HeapArray<uint8_t>::CopiedFrom(data));
@@ -292,11 +299,11 @@ std::unique_ptr<ModelEditor::ModelInfo> ModelEditor::BuildAndTakeModelInfo() {
   CHECK_STATUS(ort_model_editor_api->SetGraphOutputs(
       graph_.get(), graph_outputs.data(), graph_outputs.size()));
 
-  std::array<const char*, 3> domains = {kOrtDefaultDomain, kMSDomain,
-                                        kMSInternalNhwcDomain};
-  std::array<int32_t, 3> opset_versions = {kOrtOpsetVersion,
-                                           kEPContextOpsetVersion,
-                                           kMSInternalNhwcDomainOpsetVersion};
+  std::array<const char*, 4> domains = {kOrtDefaultDomain, kMSDomain,
+                                        kMSInternalNhwcDomain, kMSNchwcDomain};
+  std::array<int32_t, 4> opset_versions = {
+      kOrtOpsetVersion, kEPContextOpsetVersion,
+      kMSInternalNhwcDomainOpsetVersion, kMSNchwcDomainOpsetVersion};
   CHECK_STATUS(ort_model_editor_api->CreateModel(
       domains.data(), opset_versions.data(), domains.size(),
       ScopedOrtModel::Receiver(model_info_->model).get()));

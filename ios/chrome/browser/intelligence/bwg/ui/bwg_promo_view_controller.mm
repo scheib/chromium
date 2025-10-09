@@ -46,8 +46,9 @@ const CGFloat kOuterBoxSize = 64.0;
 // Height of the separator line.
 const CGFloat kSeparatorHeight = 1.0;
 
-// Spacing between primary and secondary buttons.
-const CGFloat kSpacingPrimarySecondaryButtons = 0.0;
+// Spacing for primary and secondary buttons.
+const CGFloat kSpacingPrimarySecondaryButtonsIOS26 = 4.0;
+const CGFloat kSpacingPrimarySecondaryButtonsIOS18 = 0;
 
 // Spacing between the scrollView and the buttons.
 const CGFloat kSpacingScrollViewAndButtons = 24.0;
@@ -437,8 +438,13 @@ const CGFloat kBaselineAdjustment = 10.0;
 - (void)configureButtons {
   UIView* primaryButtonView = [self createPrimaryButton];
   [_mainStackView addArrangedSubview:primaryButtonView];
-  [_mainStackView setCustomSpacing:kSpacingPrimarySecondaryButtons
-                         afterView:primaryButtonView];
+  if (@available(iOS 26, *)) {
+    [_mainStackView setCustomSpacing:kSpacingPrimarySecondaryButtonsIOS26
+                           afterView:primaryButtonView];
+  } else {
+    [_mainStackView setCustomSpacing:kSpacingPrimarySecondaryButtonsIOS18
+                           afterView:primaryButtonView];
+  }
   [_mainStackView addArrangedSubview:[self createSecondaryButton]];
 }
 

@@ -66,6 +66,7 @@
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/test/test_windows.h"
+#include "ui/base/hit_test.h"
 #include "ui/base/ime/dummy_text_input_client.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/dialog_model.h"
@@ -579,7 +580,7 @@ TEST_F(SplitViewControllerTest,
   SkipDividerSnapAnimation();
   EXPECT_EQ(controller->state(), SplitViewController::State::kBothSnapped);
   const auto work_area =
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+      display::Screen::Get()->GetPrimaryDisplay().work_area();
   const int divider_delta = kSplitviewDividerShortSideLength / 2;
   EXPECT_EQ(
       static_cast<float>(window1->GetBoundsInScreen().width() + divider_delta) /
@@ -958,6 +959,43 @@ TEST_F(SplitViewControllerTest, SplitDividerBasicTest) {
   EXPECT_FALSE(split_view_divider()->divider_widget());
 }
 
+// The view divider Widget's NativeWidget can be destroyed before the Widget
+// itself under the CLIENT_OWNS_WIDGET ownership scheme. Assert the split view
+// divider can tolerate destruction of its NativeWidget when exiting the split
+// view state.
+TEST_F(SplitViewControllerTest, SplitDividerHandlesNativeWidgetDestruction) {
+  const gfx::Rect bounds(0, 0, 400, 400);
+  std::unique_ptr<aura::Window> window1(CreateWindow(bounds));
+  std::unique_ptr<aura::Window> window2(CreateWindow(bounds));
+
+  EXPECT_FALSE(split_view_divider()->divider_widget());
+
+  // Enter a split view state with two windows.
+  split_view_controller()->SnapWindow(window1.get(), SnapPosition::kPrimary);
+  EXPECT_TRUE(split_view_divider()->divider_widget());
+  EXPECT_EQ(ui::ZOrderLevel::kNormal,
+            split_view_divider()->divider_widget()->GetZOrderLevel());
+  split_view_controller()->SnapWindow(window2.get(), SnapPosition::kSecondary);
+  EXPECT_TRUE(split_view_divider()->divider_widget());
+  EXPECT_EQ(ui::ZOrderLevel::kNormal,
+            split_view_divider()->divider_widget()->GetZOrderLevel());
+  EXPECT_TRUE(window_util::IsStackedBelow(
+      window1.get(), split_view_divider()->GetDividerWindow()));
+  EXPECT_TRUE(window_util::IsStackedBelow(
+      window2.get(), split_view_divider()->GetDividerWindow()));
+
+  // Close the split view Widget's NativeWidget.
+  EXPECT_TRUE(split_view_divider()->divider_widget());
+  EXPECT_TRUE(split_view_divider()->divider_widget()->GetNativeWindow());
+  split_view_divider()->divider_widget()->CloseNow();
+  EXPECT_FALSE(split_view_divider()->divider_widget());
+
+  // Activating a non-snappable window and exit the split view mode.
+  std::unique_ptr<aura::Window> window3(CreateNonSnappableWindow(bounds));
+  wm::ActivateWindow(window3.get());
+  EXPECT_FALSE(split_view_divider()->divider_widget());
+}
+
 // Tests that the split divider has the correct state when the dragged overview
 // item is destroyed.
 TEST_F(SplitViewControllerTest, DividerStateWhenDraggedOverviewItemDestroyed) {
@@ -1278,7 +1316,7 @@ TEST_F(SplitViewControllerTest, DisplayConfigurationChangeTest) {
 // the internal screen display configuration changes.
 TEST_F(SplitViewControllerTest, InternalDisplayConfigurationChangeTest) {
   UpdateDisplay("407x400");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -1329,7 +1367,7 @@ TEST_F(SplitViewControllerTest, InternalDisplayConfigurationChangeTest) {
 TEST_F(SplitViewControllerTest,
        InternalDisplayConfigurationChangeDuringDividerSnap) {
   UpdateDisplay("407x400");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -1400,7 +1438,7 @@ TEST_F(SplitViewControllerTest,
 TEST_F(SplitViewControllerTest,
        InternalDisplayConfigurationChangeDuringDividerSnapToLeft) {
   UpdateDisplay("407x400");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -1447,7 +1485,7 @@ TEST_F(SplitViewControllerTest,
 TEST_F(SplitViewControllerTest,
        InternalDisplayConfigurationChangeDuringDividerSnapToRight) {
   UpdateDisplay("407x400");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -1840,7 +1878,9 @@ TEST_F(SplitViewControllerTest, LongPressExitsSplitViewWithTransientChild) {
 
   // Add a transient child to |right_window|, and activate it.
   aura::Window* transient_child =
-      aura::test::CreateTestWindowWithId(0, right_window.get());
+      aura::test::CreateTestWindow(
+          {.parent = right_window.get(), .bounds = {100, 100}, .window_id = 0})
+          .release();
   ::wm::AddTransientChild(right_window.get(), transient_child);
   wm::ActivateWindow(transient_child);
 
@@ -1957,7 +1997,7 @@ TEST_F(SplitViewControllerTest, LongPressWithMinimizedWindow) {
 // Test the rotation functionalities in split view mode.
 TEST_F(SplitViewControllerTest, RotationTest) {
   UpdateDisplay("807x407");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -2139,7 +2179,7 @@ TEST_F(SplitViewControllerTest, CanSnapWindowWithUnresizableSnapProperty) {
 // Tests that the snapped window can not be moved outside of work area when its
 // minimum size is larger than its current desired resizing bounds.
 TEST_F(SplitViewControllerTest, ResizingSnappedWindowWithMinimumSizeTest) {
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -2783,7 +2823,7 @@ TEST_F(SplitViewControllerTest, DividerClosestRatioOnWorkArea) {
   // Docked magnifier will put a view port window on the top of the display.
   Shell::Get()->docked_magnifier_controller()->SetEnabled(true);
 
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -2847,7 +2887,7 @@ TEST_F(SplitViewControllerTest, DividerClosestRatioOnWorkArea) {
 // transition can leave it with a stale value which can cause broken behavior.
 TEST_F(SplitViewControllerTest,
        DividerClosestRatioUpdatedForClamshellTabletTransition) {
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -2925,7 +2965,7 @@ TEST_F(SplitViewControllerTest, PinnedWindowDisallowsSplitView) {
 // window is sliding off the screen because it has reached minimum size, then
 // the offset is cleared.
 TEST_F(SplitViewControllerTest, EndSplitViewWhileResizingBeyondMinimum) {
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -2974,7 +3014,7 @@ TEST_F(SplitViewControllerTest, EndSplitViewWhileResizingBeyondMinimum) {
 // Test if presentation time is recorded for multi window resizing and resizing
 // with overview.
 TEST_F(SplitViewControllerTest, ResizeTwoWindows) {
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -3039,7 +3079,7 @@ TEST_F(SplitViewControllerTest, ResizeTwoWindows) {
 // snapped window is sliding off the screen because it has reached minimum size,
 // then the animation is ended and the window offset is cleared.
 TEST_F(SplitViewControllerTest, EndSplitViewDuringDividerSnapAnimation) {
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -3363,7 +3403,7 @@ TEST_F(SplitViewControllerTest, SplitViewDividerObserveSnappedWindow) {
   auto* tablet_mode_controller = Shell::Get()->tablet_mode_controller();
   // Exit tablet mode.
   tablet_mode_controller->SetEnabledForTest(false);
-  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
+  EXPECT_FALSE(display::Screen::Get()->InTabletMode());
 
   const gfx::Rect bounds(0, 0, 400, 400);
   std::unique_ptr<aura::Window> left_window(CreateWindow(bounds));
@@ -3378,7 +3418,7 @@ TEST_F(SplitViewControllerTest, SplitViewDividerObserveSnappedWindow) {
   // Entering tablet mode will start tablet mode split view and the split view
   // divider will be created.
   tablet_mode_controller->SetEnabledForTest(true);
-  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  EXPECT_TRUE(display::Screen::Get()->InTabletMode());
   EXPECT_TRUE(split_view_controller()->InTabletSplitViewMode());
   EXPECT_TRUE(split_view_divider()->divider_widget());
 
@@ -3406,7 +3446,7 @@ TEST_F(SplitViewControllerTest, SnapBetweenDifferentRatios) {
   // divider is positioned at half of the work area width minus the
   // `divider_delta`.
   const gfx::Rect work_area_bounds =
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+      display::Screen::Get()->GetPrimaryDisplay().work_area();
   int divider_origin_x = split_view_divider()
                              ->GetDividerBoundsInScreen(
                                  /*is_dragging=*/false)
@@ -3458,7 +3498,7 @@ TEST_F(SplitViewControllerTest, SwapPartialWindows) {
                                              chromeos::kOneThirdSnapRatio);
   WindowState::Get(window2.get())->OnWMEvent(&snap_secondary_one_third);
   const gfx::Rect work_area_bounds =
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+      display::Screen::Get()->GetPrimaryDisplay().work_area();
   int divider_origin_x = split_view_divider()
                              ->GetDividerBoundsInScreen(
                                  /*is_dragging=*/false)
@@ -3821,7 +3861,7 @@ TEST_F(SplitViewControllerTest, PerformantResize) {
       ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
   UpdateDisplay("900x600");
   const gfx::Rect work_area =
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+      display::Screen::Get()->GetPrimaryDisplay().work_area();
   std::unique_ptr<aura::Window> w1(CreateTestWindow());
   std::unique_ptr<aura::Window> w2(CreateTestWindow());
   SplitViewController* controller = split_view_controller();
@@ -3912,7 +3952,7 @@ TEST_F(SplitViewControllerTest, SnapWindowsWithDifferentParentContainers) {
 
 TEST_F(SplitViewControllerTest, WMSnapEventDeviceOrientationMetricsInTablet) {
   UpdateDisplay("800x600");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -4155,6 +4195,7 @@ TEST_F(SplitViewControllerTest, ResizeChangeOpacityOnTransientChild) {
 
 // The test class that enables the feature flag of portrait mode split view
 // virtual keyboard improvement and the virtual keyboard.
+namespace {
 class SplitViewKeyboardTest : public SplitViewControllerTest {
  public:
   SplitViewKeyboardTest() = default;
@@ -4172,6 +4213,7 @@ class SplitViewKeyboardTest : public SplitViewControllerTest {
     return keyboard::KeyboardUIController::Get();
   }
 };
+}  // namespace
 
 // Tests that when the input field in the bottom window is blocked by the
 // virtual keyboard (the bottom of the caret is less than
@@ -4180,7 +4222,7 @@ class SplitViewKeyboardTest : public SplitViewControllerTest {
 TEST_F(SplitViewKeyboardTest, PushUpBottomWindow) {
   UpdateDisplay("1200x800");
 
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -4274,7 +4316,7 @@ TEST_F(SplitViewKeyboardTest, PushUpBottomWindow) {
 TEST_F(SplitViewKeyboardTest, PushUpBottomWindowLimitHeight) {
   UpdateDisplay("1200x800");
 
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -4368,7 +4410,7 @@ TEST_F(SplitViewKeyboardTest, PushUpBottomWindowLimitHeight) {
 TEST_F(SplitViewKeyboardTest, RestoreByActivatingTopWindow) {
   UpdateDisplay("1200x800");
 
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -4439,7 +4481,7 @@ TEST_F(SplitViewKeyboardTest, RestoreByActivatingTopWindow) {
 // showing keyboard (on-screen keyboard) will not change the split view layout.
 TEST_F(SplitViewKeyboardTest, NoInputField) {
   UpdateDisplay("1200x800");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -4482,7 +4524,7 @@ TEST_F(SplitViewKeyboardTest, NoInputField) {
 // will be updated when the on-screen keyboard is enabled and disabled.
 TEST_F(SplitViewKeyboardTest, ShowHideOnScreenKeyboardWithOverviewEnabled) {
   UpdateDisplay("1200x800");
-  int64_t display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::DisplayManager* display_manager = Shell::Get()->display_manager();
   display::test::ScopedSetInternalDisplayId set_internal(display_manager,
                                                          display_id);
@@ -4549,6 +4591,183 @@ TEST_F(SplitViewKeyboardTest, NoCrashOnClamshellBoundsChange) {
                                            gfx::Size(0, kCaretHeightForTest)));
   input_client->Focus();
   EXPECT_TRUE(keyboard_controller->IsKeyboardVisible());
+}
+
+// Test dragging related functionalities in tablet mode.
+namespace {
+class SplitViewDraggingTest : public SplitViewControllerTest {
+ public:
+  SplitViewDraggingTest() = default;
+  SplitViewDraggingTest(const SplitViewDraggingTest&) = delete;
+  SplitViewDraggingTest& operator=(const SplitViewDraggingTest&) = delete;
+  ~SplitViewDraggingTest() override = default;
+
+ protected:
+  std::unique_ptr<WindowResizer> CreateWindowResizer(aura::Window* window,
+                                                     int window_component) {
+    return ::ash::CreateWindowResizer(window, gfx::PointF(), window_component,
+                                      ::wm::WINDOW_MOVE_SOURCE_TOUCH);
+  }
+
+  // Emulates dragging a tab (or tab group) out of a browser hosting multiple
+  // tabs (or tab groups).
+  std::pair<std::unique_ptr<WindowResizer>, std::unique_ptr<aura::Window>>
+  StartTabDrag(aura::Window* source_window) {
+    source_window->SetProperty(ash::kIsDraggingTabsKey, true);
+    std::unique_ptr<aura::Window> drag_window =
+        CreateAppWindow(gfx::Rect(), chromeos::AppType::BROWSER);
+    source_window->ClearProperty(ash::kIsDraggingTabsKey);
+    drag_window->SetProperty(ash::kIsDraggingTabsKey, true);
+    drag_window->SetProperty(ash::kTabDraggingSourceWindowKey, source_window);
+    return std::make_pair(CreateWindowResizer(drag_window.get(), HTCAPTION),
+                          std::move(drag_window));
+  }
+
+  // Emulates dragging the window to a position relative to its initial
+  // position.
+  void DragWithOffset(WindowResizer* resizer, int delta_x, int delta_y) {
+    gfx::PointF location = resizer->GetInitialLocation();
+    location.set_x(location.x() + delta_x);
+    location.set_y(location.y() + delta_y);
+    resizer->Drag(location, 0);
+  }
+
+  // Emulates completing the tab drag and deletes `resizer`.
+  void CompleteTabDrag(std::unique_ptr<WindowResizer> resizer) {
+    resizer->CompleteDrag();
+    resizer->GetTarget()->ClearProperty(ash::kIsDraggingTabsKey);
+    resizer->GetTarget()->ClearProperty(ash::kTabDraggingSourceWindowKey);
+  }
+};
+}  // namespace
+
+TEST_F(SplitViewDraggingTest, WindowDraggingDisallowed) {
+  std::unique_ptr<aura::Window> window_chrome_app =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::CHROME_APP);
+  std::unique_ptr<aura::Window> window_non_app =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::NON_APP);
+  std::unique_ptr<aura::Window> window_arc =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::ARC_APP);
+  std::unique_ptr<aura::Window> window_browser =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::BROWSER);
+
+  std::unique_ptr<WindowResizer> resizer;
+
+  // The windows are maximized (the default in tablet mode).
+  EXPECT_TRUE(WindowState::Get(window_chrome_app.get())->IsMaximized());
+  EXPECT_TRUE(WindowState::Get(window_non_app.get())->IsMaximized());
+  EXPECT_TRUE(WindowState::Get(window_arc.get())->IsMaximized());
+  EXPECT_TRUE(WindowState::Get(window_browser.get())->IsMaximized());
+
+  // Simulate dragging each window.
+  resizer = CreateWindowResizer(window_chrome_app.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  resizer = CreateWindowResizer(window_non_app.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  resizer = CreateWindowResizer(window_arc.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  resizer = CreateWindowResizer(window_browser.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+
+  // Also simulate dragging the sole tab (or sole tab group) of the browser.
+  window_browser->SetProperty(ash::kIsDraggingTabsKey, true);
+  resizer = CreateWindowResizer(window_browser.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  window_browser->ClearProperty(ash::kIsDraggingTabsKey);
+
+  // Make the windows fullscreen.
+  WMEvent fullscreen_event(WM_EVENT_FULLSCREEN);
+  WindowState::Get(window_chrome_app.get())->OnWMEvent(&fullscreen_event);
+  WindowState::Get(window_non_app.get())->OnWMEvent(&fullscreen_event);
+  WindowState::Get(window_arc.get())->OnWMEvent(&fullscreen_event);
+  WindowState::Get(window_browser.get())->OnWMEvent(&fullscreen_event);
+  EXPECT_TRUE(WindowState::Get(window_chrome_app.get())->IsFullscreen());
+  EXPECT_TRUE(WindowState::Get(window_non_app.get())->IsFullscreen());
+  EXPECT_TRUE(WindowState::Get(window_arc.get())->IsFullscreen());
+  EXPECT_TRUE(WindowState::Get(window_browser.get())->IsFullscreen());
+
+  // Simulate dragging each window.
+  resizer = CreateWindowResizer(window_chrome_app.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  resizer = CreateWindowResizer(window_non_app.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  resizer = CreateWindowResizer(window_arc.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  resizer = CreateWindowResizer(window_browser.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+
+  // Also simulate dragging the sole tab (or sole tab group) of the browser.
+  window_browser->SetProperty(ash::kIsDraggingTabsKey, true);
+  resizer = CreateWindowResizer(window_browser.get(), HTCAPTION);
+  EXPECT_FALSE(resizer.get());
+  window_browser->ClearProperty(ash::kIsDraggingTabsKey);
+}
+
+TEST_F(SplitViewDraggingTest, TabDraggingFromMaximized) {
+  std::unique_ptr<aura::Window> source_window =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::BROWSER);
+  EXPECT_TRUE(WindowState::Get(source_window.get())->IsMaximized());
+
+  auto [resizer, _] = StartTabDrag(source_window.get());
+  EXPECT_TRUE(resizer.get());
+  EXPECT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
+  CompleteTabDrag(std::move(resizer));
+}
+
+TEST_F(SplitViewDraggingTest, TabDraggingFromFloated) {
+  std::unique_ptr<aura::Window> source_window =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::BROWSER);
+  Shell::Get()->float_controller()->ToggleFloat(source_window.get());
+  EXPECT_TRUE(WindowState::Get(source_window.get())->IsFloated());
+
+  auto [resizer, _] = StartTabDrag(source_window.get());
+  EXPECT_TRUE(resizer.get());
+  EXPECT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
+  CompleteTabDrag(std::move(resizer));
+}
+
+TEST_F(SplitViewDraggingTest, TabDraggingFromSnapped) {
+  std::unique_ptr<aura::Window> source_window =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::BROWSER);
+  std::unique_ptr<aura::Window> other_window =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::BROWSER);
+
+  split_view_controller()->SnapWindow(source_window.get(),
+                                      SnapPosition::kPrimary);
+  split_view_controller()->SnapWindow(other_window.get(),
+                                      SnapPosition::kSecondary);
+  EXPECT_TRUE(split_view_controller()->InTabletSplitViewMode());
+  EXPECT_TRUE(WindowState::Get(source_window.get())->IsSnapped());
+  EXPECT_TRUE(WindowState::Get(other_window.get())->IsSnapped());
+
+  auto [resizer, _] = StartTabDrag(source_window.get());
+  EXPECT_TRUE(resizer.get());
+  DragWithOffset(resizer.get(), 100, 100);
+  CompleteTabDrag(std::move(resizer));
+}
+
+TEST_F(SplitViewDraggingTest, NoBackDropDuringTabDragging) {
+  std::unique_ptr<aura::Window> source_window =
+      CreateAppWindow(gfx::Rect(), chromeos::AppType::BROWSER);
+  EXPECT_TRUE(WindowState::Get(source_window.get())->IsMaximized());
+
+  auto [resizer, drag_window] = StartTabDrag(source_window.get());
+  EXPECT_TRUE(resizer.get());
+
+  WindowBackdrop* backdrop = WindowBackdrop::Get(drag_window.get());
+  EXPECT_EQ(backdrop->mode(), WindowBackdrop::BackdropMode::kAuto);
+  EXPECT_EQ(backdrop->type(), WindowBackdrop::BackdropType::kOpaque);
+  EXPECT_TRUE(backdrop->temporarily_disabled());
+
+  DragWithOffset(resizer.get(), 5, 5);
+  EXPECT_TRUE(backdrop->temporarily_disabled());
+  EXPECT_EQ(backdrop->mode(), WindowBackdrop::BackdropMode::kAuto);
+  EXPECT_EQ(backdrop->type(), WindowBackdrop::BackdropType::kOpaque);
+
+  CompleteTabDrag(std::move(resizer));
+  EXPECT_FALSE(backdrop->temporarily_disabled());
+  EXPECT_EQ(backdrop->mode(), WindowBackdrop::BackdropMode::kAuto);
+  EXPECT_EQ(backdrop->type(), WindowBackdrop::BackdropType::kOpaque);
 }
 
 }  // namespace ash

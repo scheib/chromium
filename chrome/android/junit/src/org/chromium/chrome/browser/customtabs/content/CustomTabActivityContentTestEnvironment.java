@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 
 import org.chromium.base.Callback;
 import org.chromium.base.IntentUtils;
@@ -55,7 +56,6 @@ import org.chromium.chrome.browser.customtabs.CustomTabObserver;
 import org.chromium.chrome.browser.customtabs.CustomTabTabPersistencePolicy;
 import org.chromium.chrome.browser.customtabs.CustomTabsConnection;
 import org.chromium.chrome.browser.customtabs.features.minimizedcustomtab.CustomTabMinimizationManagerHolder;
-import org.chromium.chrome.browser.customtabs.shadows.ShadowExternalNavigationDelegateImpl;
 import org.chromium.chrome.browser.flags.ActivityType;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
@@ -113,7 +113,7 @@ public class CustomTabActivityContentTestEnvironment extends TestWatcher {
     @Mock public TabModelInitializer tabModelInitializer;
     @Mock public MockWebContents webContents;
     @Mock public CustomTabMinimizationManagerHolder mMinimizationManagerHolder;
-    @Mock public ProfileProvider profileProvider;
+    @Spy public ProfileProvider profileProvider;
     @Mock public CipherFactory cipherFactory;
     @Mock public PowerManager powerManager;
     @Mock private Profile mProfile;
@@ -185,9 +185,9 @@ public class CustomTabActivityContentTestEnvironment extends TestWatcher {
     @Override
     protected void finished(Description description) {
         AsyncTabParamsManagerSingleton.getInstance().getAsyncTabParams().clear();
-        ShadowExternalNavigationDelegateImpl.setWillChromeHandleIntent(false);
     }
 
+    @SuppressWarnings("DirectInvocationOnMock")
     public CustomTabActivityTabController createTabController() {
         OneshotSupplierImpl<ProfileProvider> profileProviderSupplier = new OneshotSupplierImpl<>();
         profileProviderSupplier.set(profileProvider);
@@ -286,6 +286,7 @@ public class CustomTabActivityContentTestEnvironment extends TestWatcher {
         return tab;
     }
 
+    @SuppressWarnings("DirectInvocationOnMock")
     public Tab prepareTab() {
         Tab tab = mock(Tab.class);
         when(tab.getView()).thenReturn(mock(View.class));

@@ -30,7 +30,7 @@
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/wayland_output.h"
 #include "ui/ozone/platform/wayland/host/wayland_surface.h"
@@ -391,6 +391,9 @@ class WaylandWindow : public PlatformWindow,
   // Triggers window UI resize and relayout in reaction to system-wide font
   // scale changes, eg: accessibility's "large text" setting.
   void OnFontScaleFactorChanged();
+
+  void OnDisplayColorSpacesChanged(
+      scoped_refptr<gfx::DisplayColorSpacesRef> display_color_spaces);
 
   virtual void DumpState(std::ostream& out) const;
 

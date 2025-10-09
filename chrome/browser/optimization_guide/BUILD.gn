@@ -10,7 +10,6 @@ source_set("optimization_guide") {
   sources = [
     "chrome_hints_manager.h",
     "chrome_model_quality_logs_uploader_service.h",
-    "chrome_prediction_model_store.h",
     "model_execution/optimization_guide_global_state.h",
     "model_validator_keyed_service.h",
     "model_validator_keyed_service_factory.h",
@@ -36,6 +35,7 @@ source_set("optimization_guide") {
     "//components/signin/public/identity_manager",
     "//content/public/browser",
     "//mojo/public/cpp/bindings",
+    "//services/on_device_model/public/cpp:buildflags",
     "//ui/base",
     "//ui/webui",
   ]
@@ -48,7 +48,6 @@ source_set("impl") {
   sources = [
     "chrome_hints_manager.cc",
     "chrome_model_quality_logs_uploader_service.cc",
-    "chrome_prediction_model_store.cc",
     "model_execution/optimization_guide_global_state.cc",
     "model_validator_keyed_service.cc",
     "model_validator_keyed_service_factory.cc",
@@ -64,6 +63,7 @@ source_set("impl") {
   deps = [
     ":optimization_guide",
     "//chrome/browser:browser_process",
+    "//chrome/browser:global_features",
     "//chrome/browser/profiles",
     "//chrome/browser/signin",
     "//chrome/browser/sync",
@@ -136,6 +136,7 @@ if (!is_android) {
       ":test_support",
       "//base/test:test_proto",
       "//base/test:test_support",
+      "//chrome/browser/preloading/prefetch:test_support",
       "//chrome/browser/signin/e2e_tests:test_support",
       "//chrome/browser/ui/webauthn",
       "//chrome/test:test_support",

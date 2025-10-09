@@ -14,10 +14,11 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/test/test_future.h"
 #include "base/time/time.h"
-#include "chrome/browser/actor/task_id.h"
 #include "chrome/browser/actor/tools/tool_request.h"
 #include "chrome/browser/actor/ui/event_dispatcher.h"
 #include "chrome/common/actor.mojom-forward.h"
+#include "chrome/common/actor/action_result.h"
+#include "chrome/common/actor/task_id.h"
 #include "components/optimization_guide/proto/features/actions_data.pb.h"
 #include "components/sessions/core/session_id.h"
 #include "components/tabs/public/tab_interface.h"
@@ -46,39 +47,57 @@ auto UiEventDispatcherCallback(
   };
 }
 
-using ActResultFuture = base::test::TestFuture<
-    mojom::ActionResultPtr,
-    std::optional<size_t>,
-    std::vector<optimization_guide::proto::ScriptToolResult>>;
-using PerformActionsFuture = base::test::TestFuture<
-    mojom::ActionResultCode,
-    std::optional<size_t>,
-    std::vector<optimization_guide::proto::ScriptToolResult>>;
+using ActResultFuture =
+    base::test::TestFuture<mojom::ActionResultPtr,
+                           std::optional<size_t>,
+                           std::vector<ActionResultWithLatencyInfo>>;
+using PerformActionsFuture =
+    base::test::TestFuture<mojom::ActionResultCode,
+                           std::optional<size_t>,
+                           std::vector<ActionResultWithLatencyInfo>>;
 
 /////////////////////////
 // Proto action makers
 
-optimization_guide::proto::Actions MakeClick(content::RenderFrameHost& rfh,
-                                             int content_node_id);
-optimization_guide::proto::Actions MakeClick(tabs::TabHandle tab_handle,
-                                             const gfx::Point& click_point);
+optimization_guide::proto::Actions MakeClick(
+    content::RenderFrameHost& rfh,
+    int content_node_id,
+    optimization_guide::proto::ClickAction::ClickType click_type,
+    optimization_guide::proto::ClickAction::ClickCount click_count);
+optimization_guide::proto::Actions MakeClick(
+    tabs::TabHandle tab_handle,
+    const gfx::Point& click_point,
+    optimization_guide::proto::ClickAction::ClickType click_type,
+    optimization_guide::proto::ClickAction::ClickCount click_count);
 optimization_guide::proto::Actions MakeHistoryBack(tabs::TabHandle tab_handle);
 optimization_guide::proto::Actions MakeHistoryForward(
     tabs::TabHandle tab_handle);
 optimization_guide::proto::Actions MakeMouseMove(content::RenderFrameHost& rfh,
                                                  int content_node_id);
-optimization_guide::proto::Actions MakeMouseMove(const gfx::Point& move_point);
+optimization_guide::proto::Actions MakeMouseMove(tabs::TabHandle tab_handle,
+                                                 const gfx::Point& move_point);
 optimization_guide::proto::Actions MakeNavigate(tabs::TabHandle tab_handle,
                                                 std::string_view target_url);
 optimization_guide::proto::Actions MakeCreateTab(SessionID window_id,
                                                  bool foreground);
-optimization_guide::proto::Actions MakeType(content::RenderFrameHost& rfh,
-                                            int content_node_id,
-                                            std::string_view text,
-                                            bool follow_by_enter);
-optimization_guide::proto::Actions MakeType(const gfx::Point& type_point,
-                                            std::string_view text,
-                                            bool follow_by_enter);
+optimization_guide::proto::Actions MakeActivateWindow(SessionID window_id);
+optimization_guide::proto::Actions MakeCreateWindow();
+optimization_guide::proto::Actions MakeCloseWindow(SessionID window_id);
+
+optimization_guide::proto::Actions MakeType(
+    content::RenderFrameHost& rfh,
+    int content_node_id,
+    std::string_view text,
+    bool follow_by_enter,
+    optimization_guide::proto::TypeAction::TypeMode mode =
+        optimization_guide::proto::TypeAction_TypeMode_DELETE_EXISTING);
+optimization_guide::proto::Actions MakeType(
+    tabs::TabHandle tab_handle,
+    const gfx::Point& type_point,
+    std::string_view text,
+    bool follow_by_enter,
+    optimization_guide::proto::TypeAction::TypeMode mode =
+        optimization_guide::proto::TypeAction_TypeMode_DELETE_EXISTING);
 optimization_guide::proto::Actions MakeSelect(content::RenderFrameHost& rfh,
                                               int content_node_id,
                                               std::string_view value);
@@ -90,8 +109,13 @@ optimization_guide::proto::Actions MakeScroll(
 optimization_guide::proto::Actions MakeScrollTo(content::RenderFrameHost& rfh,
                                                 int content_node_id);
 optimization_guide::proto::Actions MakeDragAndRelease(
+    tabs::TabHandle tab_handle,
     const gfx::Point& from_point,
     const gfx::Point& to_point);
+optimization_guide::proto::Actions MakeDragAndRelease(
+    content::RenderFrameHost& rfh,
+    int from_node_id,
+    int to_node_id);
 optimization_guide::proto::Actions MakeWait();
 optimization_guide::proto::Actions MakeAttemptLogin();
 optimization_guide::proto::Actions MakeScriptTool(
@@ -176,6 +200,7 @@ void ExpectOkResult(base::test::TestFuture<mojom::ActionResultPtr>& future);
 void ExpectOkResult(ActResultFuture& future);
 void ExpectErrorResult(ActResultFuture& future,
                        mojom::ActionResultCode expected_code);
+void ExpectOkResult(PerformActionsFuture& future);
 
 // Sets up GLIC_ACTION_PAGE_BLOCK to block the given host.
 void SetUpBlocklist(base::CommandLine* command_line,

@@ -86,11 +86,14 @@ public interface AccountManagerDelegate {
      * Creates an intent that will ask the user to add a new account to the device. See {@link
      * AccountManager#addAccount} for details.
      *
+     * @param prefilledEmail The email address to prefill in the add account flow, or null if no
+     *     email should be prefilled.
      * @param callback The callback to get the created intent. Will be invoked on the main thread.
      *     If there is an issue while creating the intent, callback will receive null.
      */
     @AnyThread
-    void createAddAccountIntent(Callback<@Nullable Intent> callback);
+    void createAddAccountIntent(
+            @Nullable String prefilledEmail, Callback<@Nullable Intent> callback);
 
     /**
      * Asks the user to enter a new password for an account, updating the saved credentials for the
@@ -168,4 +171,17 @@ public interface AccountManagerDelegate {
      */
     @WorkerThread
     default void invalidateAccessTokenForPlatformAccount(String authToken) throws AuthException {}
+
+    /**
+     * Returns a {@link CapabilityResponse} that indicates whether the account has the requested
+     * capability or has an exception.
+     *
+     * <p>TODO(crbug.com/429143376): This method is currently a no-op and will be implemented in
+     * following Cls.
+     */
+    @WorkerThread
+    @CapabilityResponse
+    default int fetchCapability(PlatformAccount account, String capability) {
+        return CapabilityResponse.EXCEPTION;
+    }
 }

@@ -26,7 +26,7 @@
 #import "ios/chrome/browser/authentication/ui_bundled/signin/consistency_promo_signin/consistency_sheet/consistency_sheet_navigation_controller.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/consistency_promo_signin/consistency_sheet/consistency_sheet_presentation_controller.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/consistency_promo_signin/consistency_sheet/consistency_sheet_slide_transition_animator.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin/reauth/reauth_coordinator.h"
+#import "ios/chrome/browser/authentication/ui_bundled/signin/reauth/signin_reauth_coordinator.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_constants.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_coordinator+protected.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_utils.h"
@@ -53,7 +53,7 @@
     ConsistencyDefaultAccountCoordinatorDelegate,
     ConsistencyPromoSigninMediatorDelegate,
     ConsistencyLayoutDelegate,
-    ReauthCoordinatorDelegate,
+    SigninReauthCoordinatorDelegate,
     UINavigationControllerDelegate,
     UIViewControllerTransitioningDelegate>
 
@@ -73,7 +73,7 @@
 // Coordinator to add an account to the device.
 @property(nonatomic, strong) SigninCoordinator* addAccountCoordinator;
 // Coordinator to show a reauth screen.
-@property(nonatomic, strong) ReauthCoordinator* reauthCoordinator;
+@property(nonatomic, strong) SigninReauthCoordinator* reauthCoordinator;
 
 @property(nonatomic, strong)
     ConsistencyPromoSigninMediator* consistencyPromoSigninMediator;
@@ -238,11 +238,8 @@
 #pragma mark - BuggyAuthenticationViewOwner
 
 - (BOOL)viewWillPersist {
-  // This coordinator has no view of its own. So we only need to check whether
-  // the coordinator currently started’s view may have disappeared silently.
-  return (!self.addAccountCoordinator ||
-          self.addAccountCoordinator.viewWillPersist) &&
-         (!self.reauthCoordinator || self.reauthCoordinator.viewWillPersist);
+  // The navigation controller is always presented.
+  return YES;
 }
 
 #pragma mark - AnimatedCoordinator
@@ -292,17 +289,14 @@
 - (void)startReauthFlowWithIdentity:(id<SystemIdentity>)identity {
   // TODO(crbug.com/391342053): Add logging.
   CoreAccountInfo account;
-  account.gaia = GaiaId(identity.gaiaID);
+  account.gaia = identity.gaiaId;
   account.email = base::SysNSStringToUTF8(identity.userEmail);
-  if (self.reauthCoordinator) {
-    if (self.reauthCoordinator.viewWillPersist) {
-      [self.reauthCoordinator stop];
-    } else {
-      // In case of double tap, let the first reauth proceed.
-      return;
-    }
+  if (self.reauthCoordinator.viewWillPersist) {
+    // In case of double tap, let the first reauth proceed.
+    return;
   }
-  self.reauthCoordinator = [[ReauthCoordinator alloc]
+  [self.reauthCoordinator stop];
+  self.reauthCoordinator = [[SigninReauthCoordinator alloc]
       initWithBaseViewController:self.navigationController
                          browser:self.browser
                          account:account
@@ -399,6 +393,7 @@
                                           browser:self.browser
                                      contextStyle:self.contextStyle
                                       accessPoint:self.accessPoint
+                                   prefilledEmail:nil
                              continuationProvider:_continuationProvider];
   __weak ConsistencyPromoSigninCoordinator* weakSelf = self;
   self.addAccountCoordinator.signinCompletion =
@@ -509,12 +504,20 @@
   return self.navigationController.displayStyle;
 }
 
-#pragma mark - ReauthCoordinatorDelegate
+#pragma mark - SigninReauthCoordinatorDelegate
 
-- (void)reauthFinishedWithResult:(ReauthResult)result {
+- (void)reauthFinishedWithResult:(ReauthResult)result gaiaID:(GaiaId*)gaiaID {
   [self stopReauthCoordinator];
   if (result == ReauthResult::kSuccess) {
-    [self startSignIn];
+    ChromeAccountManagerService* accountManagerService =
+        ChromeAccountManagerServiceFactory::GetForProfile(self.profile);
+    BOOL identityValid =
+        accountManagerService->IsValidIdentity(self.selectedIdentity);
+    BOOL identityEqual = [self.defaultAccountCoordinator.selectedIdentity.gaiaID
+        isEqualToString:gaiaID->ToNSString()];
+    if (identityValid && identityEqual && result == ReauthResult::kSuccess) {
+      [self startSignIn];
+    }
   }
 }
 

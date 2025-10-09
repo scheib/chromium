@@ -49,7 +49,6 @@ namespace extensions {
 namespace {
 
 BASE_FEATURE(kExtensionUpdatesImmediatelyUnregisterWorker,
-             "ExtensionUpdatesImmediatelyUnregisterWorker",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace
@@ -288,8 +287,15 @@ void ExtensionRegistrar::RemoveExtension(const ExtensionId& extension_id,
   reloading_extensions_.erase(extension->id());
 
   if (registry_->enabled_extensions().Contains(extension_id)) {
+    // Put the pending removal extension in disabled set because underlying
+    // code of `DeactivateExtension` needs to access it.
+    // See https://crbug.com/443038597
+    registry_->AddDisabled(extension);
+
     registry_->RemoveEnabled(extension_id);
     DeactivateExtension(extension.get(), reason);
+
+    registry_->RemoveDisabled(extension_id);
   } else {
     // The extension was already deactivated from the call to
     // DisableExtension().
@@ -835,6 +841,19 @@ void ExtensionRegistrar::OnGreylistStateRemoved(
                                                    extension_prefs_);
   RemoveDisableReasonAndMaybeEnable(extension_id,
                                     disable_reason::DISABLE_GREYLIST);
+
+  // A user can enable and disable a force-installed extension while it is
+  // greylisted. If a user disables an extension while greylisted, the
+  // extension gets a DISABLE_USER_ACTION disable reason assigned to it. So
+  // remove the DISABLE_USER_ACTION disable reason as well when a
+  // force-installed extension gets "un-greylisted" to allow the extension
+  // to be re-enabled.
+  const Extension* extension = registry_->GetInstalledExtension(extension_id);
+  if (extension && extension_system_->management_policy()->MustRemainEnabled(
+                       extension, nullptr)) {
+    RemoveDisableReasonAndMaybeEnable(extension_id,
+                                      disable_reason::DISABLE_USER_ACTION);
+  }
 }
 
 void ExtensionRegistrar::OnGreylistStateAdded(const std::string& extension_id,
@@ -879,7 +898,11 @@ void ExtensionRegistrar::GreylistExtensionForTest(
     const BitMapBlocklistState& state) {
   blocklist_prefs::SetSafeBrowsingExtensionBlocklistState(extension_id, state,
                                                           extension_prefs_);
-  OnGreylistStateAdded(extension_id, state);
+  if (state == BitMapBlocklistState::NOT_BLOCKLISTED) {
+    OnGreylistStateRemoved(extension_id);
+  } else {
+    OnGreylistStateAdded(extension_id, state);
+  }
 }
 
 void ExtensionRegistrar::OnUnpackedExtensionReloadFailed(

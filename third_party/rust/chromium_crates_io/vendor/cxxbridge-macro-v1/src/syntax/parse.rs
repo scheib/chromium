@@ -303,6 +303,7 @@ fn parse_variant(
 ) -> Result<Variant> {
     let mut cfg = CfgExpr::Unconditional;
     let mut doc = Doc::new();
+    let mut default = false;
     let mut cxx_name = None;
     let mut rust_name = None;
     let attrs = attrs::parse(
@@ -311,6 +312,7 @@ fn parse_variant(
         attrs::Parser {
             cfg: Some(&mut cfg),
             doc: Some(&mut doc),
+            default: Some(&mut default),
             cxx_name: Some(&mut cxx_name),
             rust_name: Some(&mut rust_name),
             ..Default::default()
@@ -341,6 +343,7 @@ fn parse_variant(
     Ok(Variant {
         cfg,
         doc,
+        default,
         attrs,
         name,
         discriminant,
@@ -656,7 +659,7 @@ fn parse_extern_fn(
                 let ty = parse_type(&arg.ty)?;
                 let cfg = CfgExpr::Unconditional;
                 let doc = Doc::new();
-                let attrs = OtherAttrs::none();
+                let attrs = OtherAttrs::new();
                 let visibility = Token![pub](ident.span());
                 let name = pair(Namespace::default(), &ident, None, None);
                 let colon_token = arg.colon_token;
@@ -1017,7 +1020,7 @@ fn parse_impl(cx: &mut Errors, imp: ItemImpl) -> Result<Api> {
     let impl_token = imp.impl_token;
 
     let mut cfg = CfgExpr::Unconditional;
-    attrs::parse(
+    let attrs = attrs::parse(
         cx,
         imp.attrs,
         attrs::Parser {
@@ -1112,6 +1115,7 @@ fn parse_impl(cx: &mut Errors, imp: ItemImpl) -> Result<Api> {
 
     Ok(Api::Impl(Impl {
         cfg,
+        attrs,
         impl_token,
         impl_generics,
         negative,
@@ -1423,7 +1427,7 @@ fn parse_type_fn(ty: &TypeBareFn) -> Result<Type> {
             let ty = parse_type(&arg.ty)?;
             let cfg = CfgExpr::Unconditional;
             let doc = Doc::new();
-            let attrs = OtherAttrs::none();
+            let attrs = OtherAttrs::new();
             let visibility = Token![pub](ident.span());
             let name = pair(Namespace::default(), &ident, None, None);
             Ok(Var {

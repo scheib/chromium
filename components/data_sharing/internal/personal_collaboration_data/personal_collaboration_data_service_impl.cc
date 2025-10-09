@@ -4,6 +4,7 @@
 
 #include "components/data_sharing/internal/personal_collaboration_data/personal_collaboration_data_service_impl.h"
 
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 
@@ -110,35 +111,65 @@ PersonalCollaborationDataServiceImpl::GetAllSpecifics() const {
 void PersonalCollaborationDataServiceImpl::CreateOrUpdateSpecifics(
     SpecificsType specifics_type,
     const std::string& storage_key,
-    const sync_pb::SharedTabGroupAccountDataSpecifics& specifics) {
+    base::OnceCallback<
+        void(sync_pb::SharedTabGroupAccountDataSpecifics* specifics)> mutator) {
+  if (!bridge_->IsInitialized()) {
+    pending_actions_.emplace_back(base::BindOnce(
+        &PersonalCollaborationDataServiceImpl::CreateOrUpdateSpecifics,
+        weak_ptr_factory_.GetWeakPtr(), specifics_type, storage_key,
+        std::move(mutator)));
+    return;
+  }
+
+  const std::string storage_key_with_type =
+      CreateStorageKeyWithType(specifics_type, storage_key);
+  std::optional<sync_pb::SharedTabGroupAccountDataSpecifics> specifics =
+      bridge_->GetTrimmedRemoteSpecifics(storage_key_with_type);
+  if (!specifics.has_value()) {
+    specifics = sync_pb::SharedTabGroupAccountDataSpecifics();
+  }
+
+  // The callers should fill in the specifics data in the callback function.
+  std::move(mutator).Run(&specifics.value());
   switch (specifics_type) {
     case SpecificsType::kSharedTabSpecifics:
-      CHECK(specifics.has_shared_tab_details());
+      CHECK(specifics->has_shared_tab_details());
       break;
     case SpecificsType::kSharedTabGroupSpecifics:
-      CHECK(specifics.has_shared_tab_group_details());
+      CHECK(specifics->has_shared_tab_group_details());
       break;
     default:
       NOTREACHED();
   }
 
-  bridge_->CreateOrUpdateSpecifics(
-      CreateStorageKeyWithType(specifics_type, storage_key), specifics);
+  bridge_->CreateOrUpdateSpecifics(storage_key_with_type, specifics.value());
 }
 
 void PersonalCollaborationDataServiceImpl::DeleteSpecifics(
     SpecificsType specifics_type,
     const std::string& storage_key) {
-  // TODO(haileywang): Implement actual logic.
-  NOTREACHED();
+  if (!bridge_->IsInitialized()) {
+    pending_actions_.emplace_back(base::BindOnce(
+        &PersonalCollaborationDataServiceImpl::DeleteSpecifics,
+        weak_ptr_factory_.GetWeakPtr(), specifics_type, storage_key));
+    return;
+  }
+  bridge_->RemoveSpecifics(
+      CreateStorageKeyWithType(specifics_type, storage_key));
 }
 
 bool PersonalCollaborationDataServiceImpl::IsInitialized() const {
   return bridge_->IsInitialized();
 }
 
+base::WeakPtr<syncer::DataTypeControllerDelegate>
+PersonalCollaborationDataServiceImpl::GetControllerDelegate() {
+  return bridge_->change_processor()->GetControllerDelegate();
+}
+
 void PersonalCollaborationDataServiceImpl::OnInitialized() {
-  for (auto& observer : observers_) {
+  ProcessPendingActions();
+  for (Observer& observer : observers_) {
     observer.OnInitialized();
   }
 }
@@ -155,9 +186,18 @@ void PersonalCollaborationDataServiceImpl::OnEntityAddedOrUpdatedFromSync(
     NOTREACHED();
   }
 
-  for (auto& observer : observers_) {
+  for (Observer& observer : observers_) {
     observer.OnSpecificsUpdated(
         type, GetStorageKeyWithoutType(type, storage_key), data);
+  }
+}
+
+void PersonalCollaborationDataServiceImpl::ProcessPendingActions() {
+  CHECK(bridge_->IsInitialized());
+  while (!pending_actions_.empty()) {
+    base::OnceClosure callback = std::move(pending_actions_.front());
+    pending_actions_.pop_front();
+    std::move(callback).Run();
   }
 }
 

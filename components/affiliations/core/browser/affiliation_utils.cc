@@ -330,7 +330,7 @@ std::string FacetURI::GetAndroidPackageDisplayName() const {
   CHECK(IsValidAndroidFacetURI());
   std::vector<std::string> parts = base::SplitString(
       android_package_name(), ".", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  std::reverse(parts.begin(), parts.end());
+  std::ranges::reverse(parts);
   return base::JoinString(parts, ".");
 }
 
@@ -479,7 +479,7 @@ std::string GetExtendedTopLevelDomain(
     return main_domain;
   }
 
-  std::string full_domain = url.host();
+  std::string full_domain = url.GetHost();
 
   // Something went wrong, and it shouldn't happen. Return early in this case to
   // avoid undefined behaviour.

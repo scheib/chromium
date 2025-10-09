@@ -356,8 +356,7 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
       GURL back_url,
       scoped_refptr<net::HttpResponseHeaders> headers);
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level);
 
   void RecordPotentialPrerenderProcessReuse(bool has_machable_hosts,
                                             const GURL& naivgation_url);
@@ -433,7 +432,8 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // entry for it in the HTTP cache.
   std::unique_ptr<network::SimpleURLLoader> http_cache_query_loader_;
 
-  base::MemoryPressureListener memory_pressure_listener_;
+  base::MemoryPressureListenerRegistration
+      memory_pressure_listener_registration_;
 
   base::ObserverList<Observer> observers_;
 

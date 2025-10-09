@@ -20,6 +20,7 @@
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_throttle.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
@@ -192,7 +193,7 @@ gfx::Size DistillerPageWebContents::GetSizeForNewRenderView(
   // in the executed domdistiller.js won't be 0.
   if (size.IsEmpty()) {
     DVLOG(1) << "Using fullscreen as default RenderView size";
-    size = display::Screen::GetScreen()->GetPrimaryDisplay().size();
+    size = display::Screen::Get()->GetPrimaryDisplay().size();
   }
   return size;
 }

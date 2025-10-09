@@ -14,9 +14,9 @@
 #import "components/bookmarks/common/bookmark_pref_names.h"
 #import "components/commerce/core/proto/price_tracking.pb.h"
 #import "components/unified_consent/pref_names.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/bookmarks/model/bookmark_storage_type.h"
 #import "ios/chrome/browser/bookmarks/ui_bundled/bookmark_earl_grey.h"
 #import "ios/chrome/browser/history/ui_bundled/history_ui_constants.h"
@@ -79,6 +79,7 @@ namespace {
 const char kSearchEngineURL[] = "http://searchengine/?q={searchTerms}";
 const char kSearchEngineHost[] = "searchengine";
 
+char kCountryCode[] = "us";
 char kURL1[] = "http://firstURL";
 char kURL2[] = "http://secondURL";
 char kURL3[] = "http://thirdURL";
@@ -178,9 +179,8 @@ id<GREYMatcher> SearchOnWebSuggestedAction() {
 
 // Returns a matcher for the "Search history" suggested action.
 id<GREYMatcher> SearchHistorySuggestedAction() {
-  return grey_allOf(
-      grey_accessibilityID(kTableViewTabsSearchSuggestedHistoryItemId),
-      grey_sufficientlyVisible(), nil);
+  return grey_allOf(grey_accessibilityID(kTabGridSearchSuggestedHistoryItemId),
+                    grey_sufficientlyVisible(), nil);
 }
 
 // Returns a matcher for the "Search history (`matches_count` Found)" suggested
@@ -224,19 +224,10 @@ void PerformTabGridSearch(NSString* text) {
   [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 }
 
-// Taps the edit button in the tab grid and close the keyboard if it apprears on
-// iOS 26.
+// Taps the edit button in the tab grid.
 void TapVisibleTabGridEditButton() {
   [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
       performAction:grey_tap()];
-
-  if (@available(iOS 19, *)) {
-    // TODO(crbug.com/428928323): Investigate why the keyboard appears. Remove
-    // this workaround when it's not needed anymore.
-    // On iOS 26, the keyboard appears when the "Edit" button is tapped and it
-    // hides the elements behind. Close the keyboard by typing a return key.
-    [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
-  }
 }
 
 #pragma mark - TestResponseProvider
@@ -504,6 +495,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 }
 
 - (void)testPriceDrops {
+  // TODO(crbug.com/439174222) mock ShoppingService rather than
+  // OptimizationGuide.
   commerce::PriceTrackingData price_tracking_data;
   price_tracking_data.mutable_product_update()->set_offer_id(kOfferId);
   price_tracking_data.mutable_product_update()
@@ -518,6 +511,13 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   price_tracking_data.mutable_product_update()
       ->mutable_old_price()
       ->set_amount_micros(kPreviousPriceMicros);
+  price_tracking_data.mutable_buyable_product()->set_country_code(kCountryCode);
+  price_tracking_data.mutable_buyable_product()
+      ->mutable_current_price()
+      ->set_currency_code(kCurrencyCode);
+  price_tracking_data.mutable_buyable_product()
+      ->mutable_current_price()
+      ->set_amount_micros(kCurrentPriceMicros);
 
   std::string serialized_price_tracking_data;
   price_tracking_data.SerializeToString(&serialized_price_tracking_data);
@@ -2413,7 +2413,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
 // Ensures that when users tap on a tab from tab search result and this tab is
 // in another window currently displaying tab grid, the tab is opened.
-- (void)testOpenSearchedTabFromAnotherWindowWhenTabGridIsVisible {
+// TODO(crbug.com/448400563): Re-enable this test.
+- (void)DISABLED_testOpenSearchedTabFromAnotherWindowWhenTabGridIsVisible {
   if (![ChromeEarlGrey areMultipleWindowsSupported]) {
     EARL_GREY_TEST_DISABLED(@"Multiple windows can't be opened.");
   }

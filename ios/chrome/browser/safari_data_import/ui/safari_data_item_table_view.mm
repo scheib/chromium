@@ -179,7 +179,6 @@ UIView* GetCheckmark() {
 - (instancetype)init {
   self = [super initWithFrame:CGRectZero style:ChromeTableViewStyle()];
   if (self) {
-    _itemDictionary = [NSMutableDictionary dictionary];
     self.accessibilityIdentifier =
         GetSafariDataItemTableViewAccessibilityIdentifier();
     self.translatesAutoresizingMaskIntoConstraints = NO;
@@ -194,8 +193,15 @@ UIView* GetCheckmark() {
     self.tableFooterView =
         [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, CGFLOAT_MIN)];
     RegisterTableViewCell<TableViewDetailIconCell>(self);
+    [self reset];
   }
   return self;
+}
+
+- (void)reset {
+  _pendingImportCount = 0;
+  _importedCount = 0;
+  _itemDictionary = [NSMutableDictionary dictionary];
 }
 
 - (void)notifyImportStart {
@@ -242,6 +248,7 @@ UIView* GetCheckmark() {
         << "multiple times";
   }
   switch (item.status) {
+    case SafariDataItemImportStatus::kBlockedByPolicy:
     case SafariDataItemImportStatus::kReady:
       _itemDictionary[itemType] = item;
       _pendingImportCount++;
@@ -318,10 +325,22 @@ UIView* GetCheckmark() {
 /// Helper method that sets up the description for `item`.
 - (void)setupDescriptionForItem:(SafariDataItem*)item
                         forCell:(TableViewDetailIconCell*)cell {
-  NSString* description =
-      item.status == SafariDataItemImportStatus::kImported
-          ? GetDescriptionForImportedItemTypeWithCount(item.type, item.count)
-          : GetDescriptionForUnimportedItemTypeWithCount(item.type, item.count);
+  NSString* description;
+  switch (item.status) {
+    case SafariDataItemImportStatus::kReady:
+    case SafariDataItemImportStatus::kImporting:
+      description =
+          GetDescriptionForUnimportedItemTypeWithCount(item.type, item.count);
+      break;
+    case SafariDataItemImportStatus::kImported:
+      description =
+          GetDescriptionForImportedItemTypeWithCount(item.type, item.count);
+      break;
+    case SafariDataItemImportStatus::kBlockedByPolicy:
+      description = l10n_util::GetNSString(
+          IDS_IOS_SAFARI_IMPORT_IMPORT_ITEM_BLOCKED_BY_POLICY);
+      break;
+  }
   if (item.invalidCount > 0) {
     /// Concatenate string for invalid passwords.
     CHECK_EQ(item.type, SafariDataItemType::kPasswords);
@@ -341,6 +360,7 @@ UIView* GetCheckmark() {
 - (void)setupAccessoryForItem:(SafariDataItem*)item
                       forCell:(TableViewDetailIconCell*)cell {
   switch (item.status) {
+    case SafariDataItemImportStatus::kBlockedByPolicy:
     case SafariDataItemImportStatus::kReady:
       /// No accessory when user has not initiated importing.
       break;
@@ -373,7 +393,6 @@ UIView* GetCheckmark() {
     }
   }
   /// No item to import.
-  _itemDictionary = [NSMutableDictionary dictionary];
   [self.importStageTransitionHandler resetToInitialImportStage:NO];
 }
 

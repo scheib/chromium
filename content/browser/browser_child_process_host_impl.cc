@@ -223,12 +223,10 @@ void BrowserChildProcessHostImpl::TerminateAll() {
 
 void BrowserChildProcessHostImpl::Launch(
     std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
-    std::unique_ptr<base::CommandLine> cmd_line,
-    bool terminate_on_shutdown) {
+    std::unique_ptr<base::CommandLine> cmd_line) {
   LaunchWithFileData(
       std::move(delegate), std::move(cmd_line),
-      /*file_data=*/std::make_unique<ChildProcessLauncherFileData>(),
-      terminate_on_shutdown);
+      /*file_data=*/std::make_unique<ChildProcessLauncherFileData>());
 }
 
 const ChildProcessData& BrowserChildProcessHostImpl::GetData() {
@@ -271,20 +269,17 @@ void BrowserChildProcessHostImpl::ForceShutdown() {
 void BrowserChildProcessHostImpl::LaunchWithFileData(
     std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
     std::unique_ptr<base::CommandLine> cmd_line,
-    std::unique_ptr<ChildProcessLauncherFileData> file_data,
-    bool terminate_on_shutdown) {
+    std::unique_ptr<ChildProcessLauncherFileData> file_data) {
   GetContentClient()->browser()->AppendExtraCommandLineSwitches(cmd_line.get(),
                                                                 data_.id);
   LaunchWithoutExtraCommandLineSwitches(
-      std::move(delegate), std::move(cmd_line), std::move(file_data),
-      terminate_on_shutdown);
+      std::move(delegate), std::move(cmd_line), std::move(file_data));
 }
 
 void BrowserChildProcessHostImpl::LaunchWithoutExtraCommandLineSwitches(
     std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
     std::unique_ptr<base::CommandLine> cmd_line,
-    std::unique_ptr<ChildProcessLauncherFileData> file_data,
-    bool terminate_on_shutdown) {
+    std::unique_ptr<ChildProcessLauncherFileData> file_data) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!in_process_);
 
@@ -296,7 +291,6 @@ void BrowserChildProcessHostImpl::LaunchWithoutExtraCommandLineSwitches(
       switches::kIPCConnectionTimeout,
       switches::kLogBestEffortTasks,
       switches::kPerfettoDisableInterning,
-      switches::kTraceToConsole,
   };
   cmd_line->CopySwitchesFrom(browser_command_line, kForwardSwitches);
 
@@ -329,7 +323,7 @@ void BrowserChildProcessHostImpl::LaunchWithoutExtraCommandLineSwitches(
           : nullptr;
 
   child_process_launcher_ = std::make_unique<ChildProcessLauncher>(
-      std::move(delegate), std::move(cmd_line), data_.id, this,
+      std::move(delegate), std::move(cmd_line), data_.GetChildProcessId(), this,
       std::move(*child_process_host_->GetMojoInvitation()),
       base::BindRepeating(&BrowserChildProcessHostImpl::OnMojoError,
                           weak_factory_.GetWeakPtr(),
@@ -339,8 +333,7 @@ void BrowserChildProcessHostImpl::LaunchWithoutExtraCommandLineSwitches(
           data_.process_type)
           ? metrics_shared_region_
           : nullptr,
-      tracing_config_memory_region_, tracing_output_memory_region_,
-      terminate_on_shutdown);
+      tracing_config_memory_region_, tracing_output_memory_region_);
   ShareMetricsAllocatorToProcess();
 
   if (!has_legacy_ipc_channel_)
@@ -407,14 +400,8 @@ void BrowserChildProcessHostImpl::OnProcessConnected() {
   }
 }
 
-void BrowserChildProcessHostImpl::OnBadMessageReceived(
-    const IPC::Message& message) {
-  std::string log_message = "Bad message received of type: ";
-  if (message.IsValid()) {
-    log_message += base::NumberToString(message.type());
-  } else {
-    log_message += "unknown";
-  }
+void BrowserChildProcessHostImpl::OnBadMessageReceived() {
+  std::string log_message = "Bad message received of type: unknown";
   TerminateOnBadMessageReceived(log_message);
 }
 
@@ -460,6 +447,9 @@ void BrowserChildProcessHostImpl::OnChildDisconnected() {
 #if BUILDFLAG(IS_ANDROID)
     info.has_spare_renderer =
         SpareRenderProcessHostManagerImpl::Get().HasSpareRenderer();
+    info.last_spare_renderer_creation_info =
+        SpareRenderProcessHostManagerImpl::Get()
+            .GetLastSpareRendererCreationInfo();
     exited_abnormally_ = true;
     // Do not treat clean_exit, ie when child process exited due to quitting
     // its main loop, as a crash.
@@ -517,6 +507,11 @@ void BrowserChildProcessHostImpl::OnChildDisconnected() {
         break;
       }
 #endif  // BUILDFLAG(IS_WIN)
+      case base::TERMINATION_STATUS_EVICTED_FOR_MEMORY: {
+        // TODO(crbug.com/394092280): Decide to what to do with preemptive
+        // process kill failures here.
+        break;
+      }
       case base::TERMINATION_STATUS_MAX_ENUM: {
         NOTREACHED();
       }
@@ -623,6 +618,9 @@ void BrowserChildProcessHostImpl::OnProcessLaunchFailed(int error_code) {
 #if BUILDFLAG(IS_ANDROID)
   info.has_spare_renderer =
       SpareRenderProcessHostManagerImpl::Get().HasSpareRenderer();
+  info.last_spare_renderer_creation_info =
+      SpareRenderProcessHostManagerImpl::Get()
+          .GetLastSpareRendererCreationInfo();
 #endif
   DCHECK_EQ(info.status, base::TERMINATION_STATUS_LAUNCH_FAILED);
 

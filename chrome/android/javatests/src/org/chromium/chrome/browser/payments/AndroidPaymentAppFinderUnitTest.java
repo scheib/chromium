@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.payments;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -372,7 +374,7 @@ public class AndroidPaymentAppFinderUnitTest {
     }
 
     private PackageManagerDelegate installPaymentApps(String[] packageNames, String[] methodNames) {
-        assert packageNames.length == methodNames.length;
+        assertThat(packageNames.length).isEqualTo(methodNames.length);
         List<ResolveInfo> activities = new ArrayList<>();
         for (int i = 0; i < packageNames.length; i++) {
             ResolveInfo alicePay = new ResolveInfo();
@@ -530,6 +532,79 @@ public class AndroidPaymentAppFinderUnitTest {
     @Features.EnableFeatures({PaymentFeatureList.SHOW_READY_TO_PAY_DEBUG_INFO})
     public void testQueryBobPayWithOneAppThatHasIsReadyToPayServiceAndShowsDebugInfo() {
         runTestForQueryBobPayWithOneAppThatHasIsReadyToPayService();
+    }
+
+    @SmallTest
+    @Test
+    @UiThreadTest
+    @Features.EnableFeatures({PaymentFeatureList.RESTRICT_IS_READY_TO_PAY_QUERY})
+    public void testQueryBobPay_CanMakePaymentPrefIsTrue() {
+        Mockito.when(mDelegate.prefsCanMakePayment()).thenReturn(true);
+
+        runTestForQueryBobPayWithOneAppThatHasIsReadyToPayService();
+
+        // Verify that IS_READY_TO_PAY service was queried.
+        Mockito.verify(mPackageManagerDelegate, Mockito.atLeastOnce())
+                .getServicesThatCanRespondToIntent(
+                        ArgumentMatchers.argThat(
+                                new IntentArgumentMatcher(
+                                        new Intent(
+                                                WebPaymentIntentHelper.ACTION_IS_READY_TO_PAY))));
+    }
+
+    @SmallTest
+    @Test
+    @UiThreadTest
+    @Features.EnableFeatures({
+        PaymentFeatureList.RESTRICT_IS_READY_TO_PAY_QUERY,
+        PaymentFeatureList.ALLOW_SHOW_WITHOUT_READY_TO_PAY
+    })
+    public void testQueryBobPay_CanMakePaymentPrefIsFalse() {
+        Mockito.when(mDelegate.prefsCanMakePayment()).thenReturn(false);
+
+        runTestForQueryBobPayWithOneAppThatHasIsReadyToPayService();
+
+        // Verify that IS_READY_TO_PAY service was not queried.
+        Mockito.verify(mPackageManagerDelegate, Mockito.never())
+                .getServicesThatCanRespondToIntent(
+                        ArgumentMatchers.argThat(
+                                new IntentArgumentMatcher(
+                                        new Intent(
+                                                WebPaymentIntentHelper.ACTION_IS_READY_TO_PAY))));
+    }
+
+    @SmallTest
+    @Test
+    @UiThreadTest
+    @Features.DisableFeatures({PaymentFeatureList.RESTRICT_IS_READY_TO_PAY_QUERY})
+    public void testQueryBobPay_FeatureDisabledCanMakePaymentPrefIsTrue() {
+        Mockito.when(mDelegate.prefsCanMakePayment()).thenReturn(true);
+        runTestForQueryBobPayWithOneAppThatHasIsReadyToPayService();
+
+        // Verify that IS_READY_TO_PAY service was queried.
+        Mockito.verify(mPackageManagerDelegate, Mockito.times(1))
+                .getServicesThatCanRespondToIntent(
+                        ArgumentMatchers.argThat(
+                                new IntentArgumentMatcher(
+                                        new Intent(
+                                                WebPaymentIntentHelper.ACTION_IS_READY_TO_PAY))));
+    }
+
+    @SmallTest
+    @Test
+    @UiThreadTest
+    @Features.DisableFeatures({PaymentFeatureList.RESTRICT_IS_READY_TO_PAY_QUERY})
+    public void testQueryBobPay_FeatureDisabledCanMakePaymentPrefIsFalse() {
+        Mockito.when(mDelegate.prefsCanMakePayment()).thenReturn(false);
+        runTestForQueryBobPayWithOneAppThatHasIsReadyToPayService();
+
+        // Verify that IS_READY_TO_PAY service was queried.
+        Mockito.verify(mPackageManagerDelegate, Mockito.times(1))
+                .getServicesThatCanRespondToIntent(
+                        ArgumentMatchers.argThat(
+                                new IntentArgumentMatcher(
+                                        new Intent(
+                                                WebPaymentIntentHelper.ACTION_IS_READY_TO_PAY))));
     }
 
     @SmallTest

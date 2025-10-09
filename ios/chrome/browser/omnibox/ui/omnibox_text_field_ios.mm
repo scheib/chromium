@@ -20,6 +20,7 @@
 #import "ios/chrome/browser/autocomplete/model/autocomplete_scheme_classifier_impl.h"
 #import "ios/chrome/browser/omnibox/public/omnibox_ui_features.h"
 #import "ios/chrome/browser/omnibox/public/omnibox_util.h"
+#import "ios/chrome/browser/omnibox/ui/omnibox_text_input_delegate.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/public/features/system_flags.h"
 #import "ios/chrome/browser/shared/ui/util/animation_util.h"
@@ -54,7 +55,8 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 
 }  // namespace
 
-@interface OmniboxTextFieldIOS () <UIGestureRecognizerDelegate>
+@interface OmniboxTextFieldIOS () <UIGestureRecognizerDelegate,
+                                   UITextFieldDelegate>
 
 @property(nonatomic, assign, getter=isPreEditing) BOOL preEditing;
 
@@ -70,31 +72,35 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
   UITapGestureRecognizer* _tapGestureRecognizer;
   /// Whether the pasteboard currently has strings.
   BOOL _pasteboardHasStrings;
-  BOOL _isLensOverlay;
+  OmniboxPresentationContext _presentationContext;
 }
 
-@dynamic delegate;
+@synthesize omniboxTextInputDelegate = _omniboxTextInputDelegate;
+@synthesize omniboxKeyboardDelegate = _omniboxKeyboardDelegate;
+@synthesize clearingPreEditText = _clearingPreEditText;
+@synthesize allowsReturnKeyWithEmptyText = _allowsReturnKeyWithEmptyText;
 
 #pragma mark - Public methods
 
 // Overload to allow for code-based initialization.
-- (instancetype)initWithFrame:(CGRect)frame isLensOverlay:(BOOL)isLensOverlay {
+- (instancetype)initWithFrame:(CGRect)frame
+          presentationContext:(OmniboxPresentationContext)presentationContext {
   return [self initWithFrame:frame
                    textColor:TextColor()
                    tintColor:nil
-               isLensOverlay:isLensOverlay];
+         presentationContext:presentationContext];
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
                     textColor:(UIColor*)textColor
                     tintColor:(UIColor*)tintColor
-                isLensOverlay:(BOOL)isLensOverlay {
+          presentationContext:(OmniboxPresentationContext)presentationContext {
   self = [super initWithFrame:frame];
   if (self) {
     if (tintColor) {
       [self setTintColor:tintColor];
     }
-    _isLensOverlay = isLensOverlay;
+    _presentationContext = presentationContext;
     self.textColor = textColor;
     self.autocorrectionType = UITextAutocorrectionTypeNo;
     self.autocapitalizationType = UITextAutocapitalizationTypeNone;
@@ -140,13 +146,15 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
                name:UIApplicationDidBecomeActiveNotification
              object:nil];
 
-    if (@available(iOS 17, *)) {
-      NSArray<UITrait>* traits = TraitCollectionSetForTraits(
-          @[ UITraitPreferredContentSizeCategory.class ]);
-      [self
-          registerForTraitChanges:(traits)
+    self.delegate = self;
+    [self addTarget:self
+                  action:@selector(textFieldDidChange:)
+        forControlEvents:UIControlEventEditingChanged];
+
+    NSArray<UITrait>* traits = TraitCollectionSetForTraits(
+        @[ UITraitPreferredContentSizeCategory.class ]);
+    [self registerForTraitChanges:(traits)
                        withAction:@selector(updateTextProperitesOnTraitChange)];
-    }
   }
   return self;
 }
@@ -310,7 +318,8 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
   // point, the baseWritingDirectionForPosition doesn't yet return the correct
   // direction if the text field is empty. Instead, treat this as a special case
   // and calculate the direction from the keyboard locale if there is no text.
-  if (self.text.length == 0 || _isLensOverlay) {
+  if (self.text.length == 0 ||
+      _presentationContext == OmniboxPresentationContext::kLensOverlay) {
     NSLocaleLanguageDirection direction = [NSLocale
         characterDirectionForLanguage:self.textInputMode.primaryLanguage];
     return direction == NSLocaleLanguageDirectionRightToLeft
@@ -348,7 +357,8 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 - (void)updateTextDirection {
   // If the keyboard language direction does not match the device
   // language direction, the alignment of the placeholder text will be off.
-  if (self.text.length == 0 || _isLensOverlay) {
+  if (self.text.length == 0 ||
+      _presentationContext == OmniboxPresentationContext::kLensOverlay) {
     NSLocaleLanguageDirection direction = [NSLocale
         characterDirectionForLanguage:self.textInputMode.primaryLanguage];
     if (direction == NSLocaleLanguageDirectionRightToLeft) {
@@ -504,10 +514,8 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
   // Hide the selection UI in pre-edit. UITextField is expected to hide the
   // selection UI when `clearsOnInsertion` is YES, but this behavior is not
   // working on iOS 17.
-  if (@available(iOS 17, *)) {
-    if (self.isPreEditing) {
-      return nil;
-    }
+  if (self.isPreEditing) {
+    return nil;
   }
   return [super selectionRectsForRange:range];
 }
@@ -541,19 +549,6 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
   }
   return [super hitTest:point withEvent:event];
 }
-
-#pragma mark - UITraitCollection
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  [self updateTextProperitesOnTraitChange];
-}
-#endif
 
 #pragma mark - UIGestureRecognizerDelegate
 
@@ -609,10 +604,8 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
   // TODO(crbug.com/40280508): Improve this short term fix.
-  if (@available(iOS 17.0, *)) {
-    if (action == @selector(undoManager)) {
-      return YES;
-    }
+  if (action == @selector(undoManager)) {
+    return YES;
   }
 
   // If the text is not empty and there is selected text, show copy and cut.
@@ -669,11 +662,11 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 // Overridden to allow for custom omnibox copy behavior.  This includes
 // preprending http:// to the copied URL if needed.
 - (void)copy:(id)sender {
-  id<OmniboxTextFieldDelegate> delegate = self.delegate;
+  id<OmniboxTextInputDelegate> delegate = self.omniboxTextInputDelegate;
 
   // Must test for the onCopy method, since it's optional.
-  if ([delegate respondsToSelector:@selector(onCopy)]) {
-    [delegate onCopy];
+  if ([delegate respondsToSelector:@selector(textInputDidCopy:)]) {
+    [delegate textInputDidCopy:self];
   } else {
     [super copy:sender];
   }
@@ -692,9 +685,9 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 
 // Overridden to notify the delegate that a paste is in progress.
 - (void)paste:(id)sender {
-  id delegate = self.delegate;
-  if ([delegate respondsToSelector:@selector(willPaste)]) {
-    [delegate willPaste];
+  id<OmniboxTextInputDelegate> delegate = self.omniboxTextInputDelegate;
+  if ([delegate respondsToSelector:@selector(textInputWillPaste:)]) {
+    [delegate textInputWillPaste:self];
   }
   [super paste:sender];
 }
@@ -703,8 +696,10 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 
 // Used by UIPasteControl to check if can paste.
 - (BOOL)canPasteItemProviders:(NSArray<NSItemProvider*>*)itemProviders {
-  if ([self.delegate respondsToSelector:@selector(canPasteItemProviders:)]) {
-    return [self.delegate canPasteItemProviders:itemProviders];
+  if ([self.omniboxTextInputDelegate
+          respondsToSelector:@selector(textInput:canPasteItemProviders:)]) {
+    return [self.omniboxTextInputDelegate textInput:self
+                              canPasteItemProviders:itemProviders];
   } else {
     return NO;
   }
@@ -712,8 +707,10 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 
 // Used by UIPasteControl to paste.
 - (void)pasteItemProviders:(NSArray<NSItemProvider*>*)itemProviders {
-  if ([self.delegate respondsToSelector:@selector(pasteItemProviders:)]) {
-    [self.delegate pasteItemProviders:itemProviders];
+  if ([self.omniboxTextInputDelegate
+          respondsToSelector:@selector(textInput:pasteItemProviders:)]) {
+    [self.omniboxTextInputDelegate textInput:self
+                          pasteItemProviders:itemProviders];
   }
 }
 
@@ -730,8 +727,9 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
     return;
   }
   // Must test for the onDeleteBackward method, since it's optional.
-  if ([self.delegate respondsToSelector:@selector(onDeleteBackward)]) {
-    [self.delegate onDeleteBackward];
+  if ([self.omniboxTextInputDelegate
+          respondsToSelector:@selector(textInputDidDeleteBackward:)]) {
+    [self.omniboxTextInputDelegate textInputDidDeleteBackward:self];
   }
   [super deleteBackward];
 }
@@ -837,7 +835,7 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
       [self keyCommandRight];
       break;
     case kReturnKey:
-      [self.delegate textFieldDidAcceptInput:self];
+      [self.omniboxTextInputDelegate textInputDidAcceptInput:self];
       break;
   }
 }
@@ -978,18 +976,18 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
 /// suggestions.
 - (void)handleUserInitiatedRemovalOfAdditionalText {
   [self removeAdditionalText];
-  if ([self.delegate
-          respondsToSelector:@selector(textFieldDidRemoveAdditionalText:)]) {
-    [self.delegate textFieldDidRemoveAdditionalText:self];
+  if ([self.omniboxTextInputDelegate
+          respondsToSelector:@selector(textInputDidRemoveAdditionalText:)]) {
+    [self.omniboxTextInputDelegate textInputDidRemoveAdditionalText:self];
   }
 }
 
 /// Accepts the autocomplete text.
 - (void)acceptAutocompleteText {
   [self setText:[self textWithoutAdditionalText].string];
-  if ([self.delegate
-          respondsToSelector:@selector(textFieldDidAcceptAutocomplete:)]) {
-    [self.delegate textFieldDidAcceptAutocomplete:self];
+  if ([self.omniboxTextInputDelegate
+          respondsToSelector:@selector(textInputDidAcceptAutocomplete:)]) {
+    [self.omniboxTextInputDelegate textInputDidAcceptAutocomplete:self];
   }
 }
 
@@ -1047,8 +1045,6 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
          autocompleteLength == 0);
   }
   if (updateText) {
-    self.attributedText = fieldText;
-
     // TODO(crbug.com/330964534): Remove DUMP_WILL_BE_CHECK after investigating
     // crash.
     if (!self.endOfDocument || !self.beginningOfDocument) {
@@ -1057,6 +1053,8 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
           << " text length: " << text.length << " has text position: "
           << (self.beginningOfDocument || self.endOfDocument);
     } else {
+      self.attributedText = fieldText;
+
       UITextPosition* endOfUserText =
           [self positionFromPosition:self.beginningOfDocument
                               offset:beginningOfAutocomplete];
@@ -1107,6 +1105,54 @@ NSString* const kOmniboxFadeAnimationKey = @"OmniboxFadeAnimation";
   [self setFont:self.currentFont];
   // Reset the attributed text to apply the new font.
   [self setAttributedText:self.attributedText];
+}
+
+#pragma mark - OmniboxTextInput
+
+- (UIView*)view {
+  return self;
+}
+
+- (UIView*)viewForVerticalAlignment {
+  return self;
+}
+
+- (UIResponder<UITextInput>*)scribbleInput {
+  return self;
+}
+
+#pragma mark - UITextFieldDelegate
+
+- (void)textFieldDidChange:(id)sender {
+  [self.omniboxTextInputDelegate textInputDidChange:self];
+}
+
+- (BOOL)textField:(UITextField*)textField
+    shouldChangeCharactersInRange:(NSRange)range
+                replacementString:(NSString*)string {
+  return [self.omniboxTextInputDelegate textInput:self
+                          shouldChangeTextInRange:range
+                                replacementString:string];
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField*)textField {
+  return [self.omniboxTextInputDelegate textInputShouldReturn:self];
+}
+
+- (void)textFieldDidBeginEditing:(UITextField*)textField {
+  return [self.omniboxTextInputDelegate textInputDidBeginEditing:self];
+}
+
+- (void)textFieldDidEndEditing:(UITextField*)textField {
+  return [self.omniboxTextInputDelegate textInputDidEndEditing:self];
+}
+
+- (UIMenu*)textField:(UITextField*)textField
+    editMenuForCharactersInRange:(NSRange)range
+                suggestedActions:(NSArray<UIMenuElement*>*)suggestedActions {
+  return [self.omniboxTextInputDelegate textInput:self
+                     editMenuForCharactersInRange:range
+                                 suggestedActions:suggestedActions];
 }
 
 @end

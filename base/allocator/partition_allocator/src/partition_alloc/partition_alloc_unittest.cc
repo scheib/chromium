@@ -390,7 +390,6 @@ class PartitionAllocTest
   PartitionOptions GetCommonPartitionOptions() {
     PartitionOptions opts;
     opts.eventually_zero_freed_memory = PartitionOptions::kEnabled;
-    opts.fewer_memory_regions = PartitionOptions::kDisabled;
     opts.scheduler_loop_quarantine_global_config = {
         .branch_capacity_in_bytes = std::numeric_limits<size_t>::max(),
         .leak_on_destruction = true,
@@ -3933,9 +3932,13 @@ TEST_P(PartitionAllocTest, ZapOnFree) {
     PA_BUILDFLAG(IS_CHROMEOS)
 
 TEST_P(PartitionAllocTest, InaccessibleRegionAfterSlotSpans) {
-  auto* root = allocator.root();
-  ASSERT_FALSE(root->settings.fewer_memory_regions);
+  // There is inaccessible space only when this setting is not enabled,
+  // otherwise we extend the region to use fewer memory regions.
+  if (kUseFewerMemoryRegions) {
+    GTEST_SKIP();
+  }
 
+  auto* root = allocator.root();
   // Look for an allocation size that matches a bucket which doesn't fill its
   // last PartitionPage.  Scan through allocation sizes rather than buckets, as
   // depending on the bucket distribution, some buckets may not be active.
@@ -3987,9 +3990,8 @@ TEST_P(PartitionAllocTest, InaccessibleRegionAfterSlotSpans) {
 }
 
 TEST_P(PartitionAllocTest, FewerMemoryRegions) {
+  static_assert(kUseFewerMemoryRegions);
   auto* root = allocator.root();
-  ASSERT_FALSE(root->settings.fewer_memory_regions);
-  root->settings.fewer_memory_regions = true;
 
   // Look for an allocation size that matches a bucket which doesn't fill its
   // last PartitionPage.  Scan through allocation sizes rather than buckets, as
@@ -4566,9 +4568,7 @@ TEST_P(PartitionAllocTest, RefCountBasic) {
   }
 
   constexpr uint64_t kCookie = 0x1234567890ABCDEF;
-#if !PA_BUILDFLAG(IS_IOS)
   constexpr uint64_t kQuarantined = 0xEFEFEFEFEFEFEFEF;
-#endif  // !PA_BUILDFLAG(IS_IOS)
 
   size_t alloc_size = 64 - ExtraAllocSize(allocator);
   uint64_t* ptr1 =
@@ -4593,10 +4593,8 @@ TEST_P(PartitionAllocTest, RefCountBasic) {
   // The allocation shouldn't be reclaimed, and its contents should be zapped.
   // Retag ptr1 to get its correct MTE tag.
   ptr1 = TagPtr(ptr1);
-#if !PA_BUILDFLAG(IS_IOS)
   EXPECT_NE(*ptr1, kCookie);
   EXPECT_EQ(*ptr1, kQuarantined);
-#endif  // !PA_BUILDFLAG(IS_IOS)
 
   // The allocator should not reuse the original slot since its reference count
   // doesn't equal zero.
@@ -5371,12 +5369,7 @@ TEST_P(PartitionAllocTest, GetReservationStart) {
   allocator.root()->Free(ptr);
 }
 
-#if PA_BUILDFLAG(IS_FUCHSIA)
-// TODO: https://crbug.com/331366007 - re-enable on Fuchsia once bug is fixed.
-TEST_P(PartitionAllocTest, DISABLED_CheckReservationType) {
-#else
 TEST_P(PartitionAllocTest, CheckReservationType) {
-#endif  // PA_BUILDFLAG(IS_FUCHSIA)
   ReservationOffsetTable table = allocator.root()->GetReservationOffsetTable();
   void* ptr = allocator.root()->Alloc(kTestAllocSize, type_name);
   EXPECT_TRUE(ptr);
@@ -5462,6 +5455,21 @@ TEST_P(PartitionAllocTest, CheckReservationType) {
   address_to_check =
       partition_alloc::internal::base::bits::AlignDown(address, kSuperPageSize);
 
+  EXPECT_FALSE(
+      IsManagedByNormalBucketsForTesting(address_to_check, allocator.root()));
+  EXPECT_FALSE(
+      IsManagedByDirectMapForTesting(address_to_check, allocator.root()));
+  EXPECT_FALSE(IsManagedByNormalBucketsOrDirectMapForTesting(address_to_check,
+                                                             allocator.root()));
+
+  // Since death test launches a new process, it may cause memory allocation
+  // and the allocated memory may contain the system pages which have been
+  // just freed, c.f. `allocator.root()->Free(ptr)`. In the case,
+  //   EXPECT_FALSE(
+  //   IsManagedByNormalBucketsForTesting(address_to_check, allocator.root()));
+  // will fail because the `address_to_check` points to an allocated memory
+  // region. This will cause flaky test failure of `CheckReservationType`.
+
   // DCHECKs don't work with EXPECT_DEATH on official builds.
 #if PA_BUILDFLAG(DCHECKS_ARE_ON) && \
     (!defined(OFFICIAL_BUILD) || PA_BUILDFLAG(IS_DEBUG))
@@ -5470,12 +5478,6 @@ TEST_P(PartitionAllocTest, CheckReservationType) {
 #endif  //  PA_BUILDFLAG(DCHECKS_ARE_ON) && (!defined(OFFICIAL_BUILD) ||
         //  PA_BUILDFLAG(IS_DEBUG))
 
-  EXPECT_FALSE(
-      IsManagedByNormalBucketsForTesting(address_to_check, allocator.root()));
-  EXPECT_FALSE(
-      IsManagedByDirectMapForTesting(address_to_check, allocator.root()));
-  EXPECT_FALSE(IsManagedByNormalBucketsOrDirectMapForTesting(address_to_check,
-                                                             allocator.root()));
 }
 
 // Test for crash http://crbug.com/1169003.

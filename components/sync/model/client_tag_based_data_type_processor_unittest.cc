@@ -53,20 +53,16 @@ using testing::NotNull;
 
 const GaiaId::Literal kDefaultAuthenticatedGaiaId("DefaultGaiaId");
 
-const char kKey1[] = "key1";
-const char kKey2[] = "key2";
-const char kKey3[] = "key3";
-const char kKey4[] = "key4";
-const char kKey5[] = "key5";
-const char kValue1[] = "value1";
-const char kValue2[] = "value2";
-const char kValue3[] = "value3";
+constexpr char kKey1[] = "key1";
+constexpr char kKey2[] = "key2";
+constexpr char kKey3[] = "key3";
+constexpr char kKey4[] = "key4";
+constexpr char kKey5[] = "key5";
+constexpr char kValue1[] = "value1";
+constexpr char kValue2[] = "value2";
+constexpr char kValue3[] = "value3";
 
-const char kCacheGuid[] = "TestCacheGuid";
-
-// Typically used for verification after a delete. The specifics given to the
-// worker/processor will not have been initialized and thus empty.
-const EntitySpecifics kEmptySpecifics;
+constexpr char kCacheGuid[] = "TestCacheGuid";
 
 ClientTagHash GetHash(DataType type, const std::string& key) {
   return ClientTagHash::FromUnhashed(
@@ -874,6 +870,10 @@ TEST_F(ClientTagBasedDataTypeProcessorTest, ShouldHandleSynchronousDataLoad) {
 //
 // This results in 1 + 4 = 5 orderings of the events.
 TEST_F(ClientTagBasedDataTypeProcessorTest, ShouldLoadPendingDelete) {
+  // Typically used for verification after a delete. The specifics given to the
+  // worker/processor will not have been initialized and thus empty.
+  const EntitySpecifics kEmptySpecifics;
+
   // Connect.
   ResetStateDeleteItem(kKey1, kValue1);
   InitializeToMetadataLoaded();
@@ -2939,6 +2939,47 @@ TEST_F(ClientTagBasedDataTypeProcessorTest,
       "Sync.DataTypeOrphanMetadata.ModelReadyToSync",
       /*sample=*/DataTypeHistogramValue(GetDataType()),
       /*expected_count=*/2);
+}
+
+TEST_F(ClientTagBasedDataTypeProcessorTest, ShouldResetForMissingStorageKey) {
+  base::HistogramTester histogram_tester;
+
+  const syncer::ClientTagHash kClientTagHash1 =
+      ClientTagHash::FromUnhashed(GetDataType(), "tag1");
+  const syncer::ClientTagHash kClientTagHash2 =
+      ClientTagHash::FromUnhashed(GetDataType(), "tag2");
+  const syncer::ClientTagHash kClientTagHash3 =
+      ClientTagHash::FromUnhashed(GetDataType(), "tag3");
+  sync_pb::EntityMetadata entity_metadata1;
+  entity_metadata1.set_client_tag_hash(kClientTagHash1.value());
+  entity_metadata1.set_creation_time(0);
+  sync_pb::EntityMetadata entity_metadata2;
+  entity_metadata2.set_client_tag_hash(kClientTagHash2.value());
+  entity_metadata2.set_creation_time(0);
+  sync_pb::EntityMetadata entity_metadata3;
+  entity_metadata3.set_client_tag_hash(kClientTagHash3.value());
+  entity_metadata3.set_creation_time(0);
+
+  db()->PutMetadata(kKey1, std::move(entity_metadata1));
+  // One of the storage keys is empty!
+  db()->PutMetadata("", std::move(entity_metadata2));
+  db()->PutMetadata(kKey3, std::move(entity_metadata3));
+
+  InitializeToReadyState();
+
+  // With a missing storage key, metadata should have been cleared.
+  EXPECT_EQ(0U, db()->metadata_count());
+  EXPECT_EQ(0U, ProcessorEntityCount());
+  EXPECT_FALSE(type_processor()->IsTrackingMetadata());
+
+  histogram_tester.ExpectUniqueSample(
+      "Sync.ClearMetadataDueToEmptyStorageKey",
+      /*sample=*/DataTypeHistogramValue(GetDataType()),
+      /*expected_bucket_count=*/1);
+
+  // Initial update.
+  worker()->UpdateFromServer();
+  EXPECT_TRUE(type_processor()->IsTrackingMetadata());
 }
 
 TEST_F(ClientTagBasedDataTypeProcessorTest,

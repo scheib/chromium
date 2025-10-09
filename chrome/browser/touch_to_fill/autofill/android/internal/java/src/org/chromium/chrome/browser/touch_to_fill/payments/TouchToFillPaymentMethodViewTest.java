@@ -18,6 +18,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +31,24 @@ import static org.chromium.chrome.browser.autofill.AutofillTestHelper.createCred
 import static org.chromium.chrome.browser.autofill.AutofillTestHelper.createLocalCreditCard;
 import static org.chromium.chrome.browser.autofill.AutofillTestHelper.createVirtualCreditCard;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BACK_PRESS_HANDLER;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerContextProperties.APPLY_ISSUER_DEACTIVATED_STYLE;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerContextProperties.ISSUER_ICON_ID;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerContextProperties.ISSUER_LINKED;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerContextProperties.ISSUER_NAME;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerContextProperties.ISSUER_SELECTION_TEXT;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerContextProperties.NON_TRANSFORMING_BNPL_ISSUER_CONTEXT_KEYS;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerContextProperties.ON_ISSUER_CLICK_ACTION;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerTosTextItemProperties.BNPL_TOS_ICON_ID;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplIssuerTosTextItemProperties.DESCRIPTION_TEXT;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSelectionProgressHeaderProperties.BNPL_BACK_BUTTON_ENABLED;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSelectionProgressHeaderProperties.BNPL_ON_BACK_BUTTON_CLICKED;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSuggestionProperties.BNPL_ICON_ID;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSuggestionProperties.BNPL_ITEM_COLLECTION_INFO;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSuggestionProperties.IS_ENABLED;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSuggestionProperties.NON_TRANSFORMING_BNPL_SUGGESTION_KEYS;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSuggestionProperties.ON_BNPL_CLICK_ACTION;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSuggestionProperties.PRIMARY_TEXT;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSuggestionProperties.SECONDARY_TEXT;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ButtonProperties.ON_CLICK_ACTION;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ButtonProperties.TEXT_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.CURRENT_SCREEN;
@@ -43,6 +62,7 @@ import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaym
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.CreditCardSuggestionProperties.ON_CREDIT_CARD_CLICK_ACTION;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.CreditCardSuggestionProperties.SECOND_LINE_LABEL;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.DISMISS_HANDLER;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ErrorDescriptionProperties.ERROR_DESCRIPTION_STRING;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.HeaderProperties.IMAGE_DRAWABLE_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.HeaderProperties.TITLE_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.IbanProperties.IBAN_NICKNAME;
@@ -50,27 +70,41 @@ import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaym
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.IbanProperties.NON_TRANSFORMING_IBAN_KEYS;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.IbanProperties.ON_IBAN_CLICK_ACTION;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.ALL_LOYALTY_CARDS;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.BNPL;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.BNPL_ISSUER;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.BNPL_SELECTION_PROGRESS_HEADER;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.BNPL_TOS_TEXT;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.CREDIT_CARD;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.ERROR_DESCRIPTION;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.FILL_BUTTON;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.HEADER;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.IBAN;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.LOYALTY_CARD;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.PROGRESS_ICON;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ItemType.TERMS_LABEL;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.LoyaltyCardProperties.LOYALTY_CARD_NUMBER;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.LoyaltyCardProperties.MERCHANT_NAME;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.LoyaltyCardProperties.NON_TRANSFORMING_LOYALTY_CARD_KEYS;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.LoyaltyCardProperties.ON_LOYALTY_CARD_CLICK_ACTION;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ProgressIconProperties.PROGRESS_CONTENT_DESCRIPTION_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.SHEET_CLOSED_DESCRIPTION_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.SHEET_CONTENT_DESCRIPTION_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.SHEET_FULL_HEIGHT_DESCRIPTION_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.SHEET_HALF_HEIGHT_DESCRIPTION_ID;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.SHEET_ITEMS;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ScreenId.ALL_LOYALTY_CARDS_SCREEN;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ScreenId.BNPL_ISSUER_SELECTION_SCREEN;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ScreenId.BNPL_ISSUER_TOS_SCREEN;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ScreenId.ERROR_SCREEN;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ScreenId.HOME_SCREEN;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ScreenId.PROGRESS_SCREEN;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.TermsLabelProperties.ALL_TERMS_LABEL_KEYS;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.TermsLabelProperties.CARD_BENEFITS_TERMS_AVAILABLE;
 import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.VISIBLE;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodViewBinder.COMPLETE_OPACITY_ALPHA;
+import static org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodViewBinder.GRAYED_OUT_OPACITY_ALPHA;
 
+import android.text.SpannableString;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -102,6 +136,7 @@ import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.ScalableTimeout;
 import org.chromium.chrome.browser.autofill.AutofillUiUtils;
+import org.chromium.chrome.browser.autofill.PersonalDataManager.BnplIssuerContext;
 import org.chromium.chrome.browser.autofill.PersonalDataManager.CreditCard;
 import org.chromium.chrome.browser.autofill.PersonalDataManager.Iban;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
@@ -109,7 +144,9 @@ import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.touch_to_fill.common.FillableItemCollectionInfo;
 import org.chromium.chrome.browser.touch_to_fill.common.TouchToFillResourceProvider;
 import org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.AllLoyaltyCardsItemProperties;
+import org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.BnplSelectionProgressHeaderProperties;
 import org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ButtonProperties;
+import org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.ErrorDescriptionProperties;
 import org.chromium.chrome.browser.touch_to_fill.payments.TouchToFillPaymentMethodProperties.HeaderProperties;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.transit.ChromeTransitTestRules;
@@ -297,6 +334,34 @@ public class TouchToFillPaymentMethodViewTest {
                     /* shouldDisplayTermsAvailable= */ false,
                     LONG_CARD_NAME_CARD.getGUID(),
                     LONG_CARD_NAME_CARD.getIsLocal());
+    private static final AutofillSuggestion BNPL_SUGGESTION =
+            createCreditCardSuggestion(
+                    /* label= */ "Pay later options",
+                    /* secondaryLabel= */ "",
+                    /* subLabel= */ "Available for purchases over $35",
+                    /* secondarySubLabel= */ "",
+                    /* labelContentDescription= */ "",
+                    /* suggestionType= */ SuggestionType.BNPL_ENTRY,
+                    /* customIconUrl= */ new GURL(""),
+                    /* iconId= */ R.drawable.bnpl_icon_generic,
+                    /* applyDeactivatedStyle= */ false,
+                    /* shouldDisplayTermsAvailable= */ false,
+                    /* guid= */ "",
+                    /* isLocalPaymentsMethod= */ false);
+    private static final AutofillSuggestion DEACTIVATED_BNPL_SUGGESTION =
+            createCreditCardSuggestion(
+                    /* label= */ "Pay later options",
+                    /* secondaryLabel= */ "",
+                    /* subLabel= */ "Available for purchases over $35",
+                    /* secondarySubLabel= */ "",
+                    /* labelContentDescription= */ "",
+                    /* suggestionType= */ SuggestionType.BNPL_ENTRY,
+                    /* customIconUrl= */ new GURL(""),
+                    /* iconId= */ R.drawable.bnpl_icon_generic,
+                    /* applyDeactivatedStyle= */ true,
+                    /* shouldDisplayTermsAvailable= */ false,
+                    /* guid= */ "",
+                    /* isLocalPaymentsMethod= */ false);
     private static final Iban LOCAL_IBAN =
             Iban.createLocal(
                     /* guid= */ "000000111111",
@@ -317,6 +382,29 @@ public class TouchToFillPaymentMethodViewTest {
                     /* programLogo= */ new GURL("https://site.com/icon.png"),
                     /* loyaltyCardNumber= */ "1234",
                     /* merchantDomains= */ Collections.emptyList());
+    private static final BnplIssuerContext BNPL_ISSUER_CONTEXT_AFFIRM_LINKED =
+            new BnplIssuerContext(
+                    /* iconId= */ R.drawable.affirm_linked,
+                    /* displayName= */ "Affirm",
+                    /* selectionText= */ "Monthly or 4 installments",
+                    /* isLinked= */ true,
+                    /* isEligible= */ true);
+    private static final BnplIssuerContext BNPL_ISSUER_CONTEXT_AFFIRM_UNLINKED =
+            new BnplIssuerContext(
+                    /* iconId= */ R.drawable.affirm_unlinked,
+                    /* displayName= */ "Affirm",
+                    /* selectionText= */ "Monthly or 4 installments",
+                    /* isLinked= */ false,
+                    /* isEligible= */ true);
+    private static final BnplIssuerContext
+            BNPL_ISSUER_CONTEXT_INELIGIBLE_NOT_SUPPORTED_BY_MERCHANT =
+                    new BnplIssuerContext(
+                            /* iconId= */ R.drawable.affirm_linked,
+                            /* displayName= */ "Affirm",
+                            /* selectionText= */ "Not supported by merchant",
+                            /* isLinked= */ true,
+                            /* isEligible= */ false);
+    private static final String BNPL_ISSUER_TOS_ITEM_TEXT = "Affirm ToS text";
 
     @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
@@ -856,7 +944,7 @@ public class TouchToFillPaymentMethodViewTest {
         BottomSheetTestSupport.waitForOpen(mBottomSheetController);
 
         ImageView icon = mTouchToFillPaymentMethodView.getContentView().findViewById(R.id.favicon);
-        assertThat(icon.getAlpha(), is(0.38f));
+        assertThat(icon.getAlpha(), is(GRAYED_OUT_OPACITY_ALPHA));
         assertThat(getCreditCardSuggestions().getChildAt(0).isEnabled(), is(false));
         assertThat(
                 getSuggestionMainTextAt(0).getText(),
@@ -1203,6 +1291,430 @@ public class TouchToFillPaymentMethodViewTest {
         assertThat(allLoyaltyCardsContainer.getChildCount(), lessThan(loyaltyCardNumber));
     }
 
+    @Test
+    @MediumTest
+    public void testBnplTosScreenShown() {
+        runOnUiThreadBlocking(
+                () -> {
+                    ModelList bnplTosScreenItems = new ModelList();
+                    bnplTosScreenItems.add(
+                            new ListItem(
+                                    BNPL_TOS_TEXT, createBnplIssuerTosTextItemModelWithLinkText()));
+                    bnplTosScreenItems.add(
+                            new ListItem(
+                                    BNPL_TOS_TEXT, createBnplIssuerTosTextItemModelWithFlatText()));
+
+                    mTouchToFillPaymentMethodModel.set(CURRENT_SCREEN, BNPL_ISSUER_TOS_SCREEN);
+                    mTouchToFillPaymentMethodModel.set(SHEET_ITEMS, bnplTosScreenItems);
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        RecyclerView bnplTosScreen =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.touch_to_fill_bnpl_issuer_tos_screen);
+        assertNotNull(bnplTosScreen);
+        assertThat(bnplTosScreen.getAdapter().getItemCount(), is(2));
+
+        TextView textView = bnplTosScreen.getChildAt(0).findViewById(R.id.bnpl_tos_text);
+        assertTrue(textView.isShown());
+        assertThat(textView.getText().toString(), is(BNPL_ISSUER_TOS_ITEM_TEXT));
+        textView = bnplTosScreen.getChildAt(1).findViewById(R.id.bnpl_tos_text);
+        assertTrue(textView.isShown());
+        assertThat(textView.getText().toString(), is(BNPL_ISSUER_TOS_ITEM_TEXT));
+
+        ImageView imageView = bnplTosScreen.getChildAt(0).findViewById(R.id.bnpl_tos_icon);
+        assertTrue(imageView.isShown());
+        imageView = bnplTosScreen.getChildAt(1).findViewById(R.id.bnpl_tos_icon);
+        assertTrue(imageView.isShown());
+    }
+
+    @Test
+    @MediumTest
+    public void testBnplSuggestionView() {
+        runOnUiThreadBlocking(
+                () -> {
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            CREDIT_CARD,
+                                            createCardSuggestionModel(
+                                                    VISA_SUGGESTION,
+                                                    new FillableItemCollectionInfo(
+                                                            /* position= */ 1, /* total= */ 2))));
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            BNPL,
+                                            createBnplSuggestionModel(
+                                                    BNPL_SUGGESTION,
+                                                    new FillableItemCollectionInfo(
+                                                            /* position= */ 2, /* total= */ 2),
+                                                    /* actionCallback= */ CallbackUtils
+                                                            .emptyRunnable())));
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        assertThat(getCreditCardSuggestions().getChildCount(), is(2));
+        assertThat(getSuggestionPrimaryTextAt(1).getText(), is(BNPL_SUGGESTION.getLabel()));
+        assertThat(getSuggestionSecondaryTextAt(1).getText(), is(BNPL_SUGGESTION.getSublabel()));
+        assertContentDescriptionEquals(
+                getSuggestionSecondaryTextAt(1), /* position= */ 2, /* total= */ 2);
+    }
+
+    @Test
+    @MediumTest
+    public void testBnplClickIsHandled() {
+        Runnable actionCallback = mock(Runnable.class);
+        runOnUiThreadBlocking(
+                () -> {
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            BNPL,
+                                            createBnplSuggestionModel(
+                                                    BNPL_SUGGESTION,
+                                                    mItemCollectionInfo,
+                                                    actionCallback)));
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        onView(withText(BNPL_SUGGESTION.getLabel())).perform(createClickActionWithFlags(0));
+        waitForEvent(actionCallback).run();
+    }
+
+    @Test
+    @MediumTest
+    public void testUpdateBnplPaymentMethod() {
+        String updatedSecondaryText =
+                ContextUtils.getApplicationContext()
+                        .getString(
+                                R.string.autofill_bnpl_suggestion_label_for_unavailable_purchase);
+        runOnUiThreadBlocking(
+                () -> {
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            BNPL,
+                                            createBnplSuggestionModel(
+                                                    BNPL_SUGGESTION,
+                                                    mItemCollectionInfo,
+                                                    /* actionCallback= */ CallbackUtils
+                                                            .emptyRunnable())));
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+        ImageView icon =
+                mTouchToFillPaymentMethodView.getContentView().findViewById(R.id.bnpl_icon);
+        assertTrue(getCreditCardSuggestions().getChildAt(0).isEnabled());
+        assertThat(getSuggestionPrimaryTextAt(0).getText(), is(BNPL_SUGGESTION.getLabel()));
+        assertThat(getSuggestionSecondaryTextAt(0).getText(), is(BNPL_SUGGESTION.getSublabel()));
+
+        runOnUiThreadBlocking(
+                () -> {
+                    PropertyModel bnplModel =
+                            mTouchToFillPaymentMethodModel.get(SHEET_ITEMS).get(0).model;
+                    bnplModel.set(IS_ENABLED, false);
+                    bnplModel.set(SECONDARY_TEXT, updatedSecondaryText);
+                });
+
+        assertThat(icon.getAlpha(), is(GRAYED_OUT_OPACITY_ALPHA));
+        assertFalse(getCreditCardSuggestions().getChildAt(0).isEnabled());
+        assertThat(getSuggestionPrimaryTextAt(0).getText(), is(BNPL_SUGGESTION.getLabel()));
+        assertThat(getSuggestionSecondaryTextAt(0).getText(), is(updatedSecondaryText));
+    }
+
+    @Test
+    @MediumTest
+    public void testDeactivatedBnplSuggestionIsStyledCorrectly() {
+        runOnUiThreadBlocking(
+                () -> {
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            BNPL,
+                                            createBnplSuggestionModel(
+                                                    DEACTIVATED_BNPL_SUGGESTION,
+                                                    mItemCollectionInfo,
+                                                    /* actionCallback= */ CallbackUtils
+                                                            .emptyRunnable())));
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        ImageView icon =
+                mTouchToFillPaymentMethodView.getContentView().findViewById(R.id.bnpl_icon);
+        assertThat(icon.getAlpha(), is(GRAYED_OUT_OPACITY_ALPHA));
+        assertFalse(getCreditCardSuggestions().getChildAt(0).isEnabled());
+        assertThat(
+                getSuggestionPrimaryTextAt(0).getText(),
+                is(DEACTIVATED_BNPL_SUGGESTION.getLabel()));
+        assertThat(
+                getSuggestionSecondaryTextAt(0).getText(),
+                is(DEACTIVATED_BNPL_SUGGESTION.getSublabel()));
+    }
+
+    @Test
+    @MediumTest
+    public void testDeactivatedBnplClickIsIgnored() {
+        Runnable actionCallback = mock(Runnable.class);
+        runOnUiThreadBlocking(
+                () -> {
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            BNPL,
+                                            createBnplSuggestionModel(
+                                                    DEACTIVATED_BNPL_SUGGESTION,
+                                                    mItemCollectionInfo,
+                                                    actionCallback)));
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        onView(withText(DEACTIVATED_BNPL_SUGGESTION.getLabel()))
+                .perform(createClickActionWithFlags(0));
+        verify(actionCallback, never()).run();
+    }
+
+    @Test
+    @MediumTest
+    public void testProgressSpinnerIsShown() {
+        runOnUiThreadBlocking(
+                () -> {
+                    ModelList progressScreenItems = new ModelList();
+                    progressScreenItems.add(
+                            new ListItem(
+                                    PROGRESS_ICON,
+                                    createProgressIconModel(
+                                            R.string
+                                                    .autofill_pending_dialog_loading_accessibility_description)));
+
+                    mTouchToFillPaymentMethodModel.set(CURRENT_SCREEN, PROGRESS_SCREEN);
+                    mTouchToFillPaymentMethodModel.set(SHEET_ITEMS, progressScreenItems);
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        RecyclerView bnplProgressScreen =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.touch_to_fill_progress_screen);
+        assertNotNull(bnplProgressScreen);
+        assertThat(bnplProgressScreen.getAdapter().getItemCount(), is(1));
+
+        View progressSpinner = bnplProgressScreen.getChildAt(0).findViewById(R.id.progress_spinner);
+        assertTrue(progressSpinner.isShown());
+        assertEquals(
+                getString(R.string.autofill_pending_dialog_loading_accessibility_description),
+                progressSpinner.getContentDescription());
+    }
+
+    @Test
+    @MediumTest
+    public void testBnplSelectionProgressHeaderBackButtonDisabled() {
+        Runnable actionCallback = mock(Runnable.class);
+        runOnUiThreadBlocking(
+                () -> {
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            BNPL_SELECTION_PROGRESS_HEADER,
+                                            createBnplSelectionProgressHeaderModel(
+                                                    /* backButtonEnabled= */ false,
+                                                    actionCallback)));
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        View backButton =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.bnpl_header_back_button);
+        TextView title =
+                mTouchToFillPaymentMethodView.getContentView().findViewById(R.id.bnpl_header_title);
+
+        assertThat(
+                title.getText().toString(),
+                is(getString(R.string.autofill_bnpl_pay_later_options_text)));
+        assertFalse(backButton.isEnabled());
+        assertThat(backButton.getAlpha(), is(GRAYED_OUT_OPACITY_ALPHA));
+
+        onView(withId(R.id.bnpl_header_back_button)).perform(createClickActionWithFlags(0));
+        verify(actionCallback, never()).run();
+    }
+
+    @Test
+    @MediumTest
+    public void testBnplSelectionProgressHeaderBackButtonEnabled() {
+        Runnable actionCallback = mock(Runnable.class);
+        runOnUiThreadBlocking(
+                () -> {
+                    mTouchToFillPaymentMethodModel
+                            .get(SHEET_ITEMS)
+                            .add(
+                                    new ListItem(
+                                            BNPL_SELECTION_PROGRESS_HEADER,
+                                            createBnplSelectionProgressHeaderModel(
+                                                    /* backButtonEnabled= */ true,
+                                                    actionCallback)));
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        View backButton =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.bnpl_header_back_button);
+        TextView title =
+                mTouchToFillPaymentMethodView.getContentView().findViewById(R.id.bnpl_header_title);
+
+        assertThat(
+                title.getText().toString(),
+                is(getString(R.string.autofill_bnpl_pay_later_options_text)));
+        assertTrue(backButton.isEnabled());
+        assertThat(backButton.getAlpha(), is(COMPLETE_OPACITY_ALPHA));
+
+        onView(withId(R.id.bnpl_header_back_button)).perform(createClickActionWithFlags(0));
+        waitForEvent(actionCallback).run();
+    }
+
+    @Test
+    @MediumTest
+    public void testBnplIssuerSelectionScreenWithLinkedIssuer() {
+        Runnable actionCallback = mock(Runnable.class);
+        runOnUiThreadBlocking(
+                () -> {
+                    ModelList bnplIssuerContexts = new ModelList();
+                    bnplIssuerContexts.add(
+                            new ListItem(
+                                    BNPL_ISSUER,
+                                    createBnplIssuerContextModel(
+                                            BNPL_ISSUER_CONTEXT_AFFIRM_LINKED, actionCallback)));
+                    mTouchToFillPaymentMethodModel.set(
+                            CURRENT_SCREEN, BNPL_ISSUER_SELECTION_SCREEN);
+                    mTouchToFillPaymentMethodModel.set(SHEET_ITEMS, bnplIssuerContexts);
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        RecyclerView bnplIssuerContextsContainer =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.touch_to_fill_bnpl_issuer_selection_screen);
+        assertNotNull(bnplIssuerContextsContainer);
+        assertThat(bnplIssuerContextsContainer.getAdapter().getItemCount(), is(1));
+
+        View issuerItem = bnplIssuerContextsContainer.getChildAt(0);
+        assertBnplIssuerItemMatches(issuerItem, BNPL_ISSUER_CONTEXT_AFFIRM_LINKED, actionCallback);
+    }
+
+    @Test
+    @MediumTest
+    public void testBnplIssuerSelectionScreenWithUnlinkedIssuer() {
+        Runnable actionCallback = mock(Runnable.class);
+        runOnUiThreadBlocking(
+                () -> {
+                    ModelList bnplIssuerContexts = new ModelList();
+                    bnplIssuerContexts.add(
+                            new ListItem(
+                                    BNPL_ISSUER,
+                                    createBnplIssuerContextModel(
+                                            BNPL_ISSUER_CONTEXT_AFFIRM_UNLINKED, actionCallback)));
+                    mTouchToFillPaymentMethodModel.set(
+                            CURRENT_SCREEN, BNPL_ISSUER_SELECTION_SCREEN);
+                    mTouchToFillPaymentMethodModel.set(SHEET_ITEMS, bnplIssuerContexts);
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        RecyclerView bnplIssuerContextsContainer =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.touch_to_fill_bnpl_issuer_selection_screen);
+        assertNotNull(bnplIssuerContextsContainer);
+        assertThat(bnplIssuerContextsContainer.getAdapter().getItemCount(), is(1));
+
+        View issuerItem = bnplIssuerContextsContainer.getChildAt(0);
+        assertBnplIssuerItemMatches(issuerItem, BNPL_ISSUER_CONTEXT_AFFIRM_UNLINKED, actionCallback);
+    }
+
+    @Test
+    @MediumTest
+    public void testBnplIssuerSelectionScreenWithIneligibleIssuer() {
+        Runnable actionCallback = mock(Runnable.class);
+        runOnUiThreadBlocking(
+                () -> {
+                    ModelList bnplIssuerContexts = new ModelList();
+                    bnplIssuerContexts.add(
+                            new ListItem(
+                                    BNPL_ISSUER,
+                                    createBnplIssuerContextModel(
+                                            BNPL_ISSUER_CONTEXT_INELIGIBLE_NOT_SUPPORTED_BY_MERCHANT,
+                                            actionCallback)));
+                    mTouchToFillPaymentMethodModel.set(
+                            CURRENT_SCREEN, BNPL_ISSUER_SELECTION_SCREEN);
+                    mTouchToFillPaymentMethodModel.set(SHEET_ITEMS, bnplIssuerContexts);
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        RecyclerView bnplIssuerContextsContainer =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.touch_to_fill_bnpl_issuer_selection_screen);
+        assertNotNull(bnplIssuerContextsContainer);
+        assertThat(bnplIssuerContextsContainer.getAdapter().getItemCount(), is(1));
+
+        View issuerItem = bnplIssuerContextsContainer.getChildAt(0);
+        assertBnplIssuerItemMatches(
+                issuerItem, BNPL_ISSUER_CONTEXT_INELIGIBLE_NOT_SUPPORTED_BY_MERCHANT, actionCallback);
+    }
+
+    @Test
+    @MediumTest
+    public void testErrorDescriptionIsShown() {
+        final String description =
+                "Pay later is unavailable at this time. Try again or choose another payment"
+                        + " method.";
+
+        runOnUiThreadBlocking(
+                () -> {
+                    final ModelList errorItems = new ModelList();
+                    errorItems.add(
+                            new ListItem(
+                                    ERROR_DESCRIPTION, createErrorDescriptionModel(description)));
+
+                    mTouchToFillPaymentMethodModel.set(CURRENT_SCREEN, ERROR_SCREEN);
+                    mTouchToFillPaymentMethodModel.set(SHEET_ITEMS, errorItems);
+                    mTouchToFillPaymentMethodModel.set(VISIBLE, true);
+                });
+        BottomSheetTestSupport.waitForOpen(mBottomSheetController);
+
+        RecyclerView errorListView =
+                mTouchToFillPaymentMethodView
+                        .getContentView()
+                        .findViewById(R.id.touch_to_fill_error_screen);
+        assertNotNull(errorListView);
+        assertTrue(errorListView.isShown());
+        assertThat(errorListView.getAdapter().getItemCount(), is(1));
+
+        View descriptionView = errorListView.getChildAt(0);
+        TextView descriptionTextView =
+                descriptionView.findViewById(R.id.touch_to_fill_error_description);
+        assertThat(descriptionTextView.getText().toString(), is(description));
+    }
+
     private RecyclerView getCreditCardSuggestions() {
         return mTouchToFillPaymentMethodView
                 .getContentView()
@@ -1223,6 +1735,14 @@ public class TouchToFillPaymentMethodViewTest {
 
     private TextView getSuggestionSecondLineLabelAt(int index) {
         return getCreditCardSuggestions().getChildAt(index).findViewById(R.id.second_line_label);
+    }
+
+    private TextView getSuggestionPrimaryTextAt(int index) {
+        return getCreditCardSuggestions().getChildAt(index).findViewById(R.id.primary_text);
+    }
+
+    private TextView getSuggestionSecondaryTextAt(int index) {
+        return getCreditCardSuggestions().getChildAt(index).findViewById(R.id.secondary_text);
     }
 
     private TextView getCreditCardBenefitsTermsLabel() {
@@ -1297,6 +1817,70 @@ public class TouchToFillPaymentMethodViewTest {
                 .build();
     }
 
+    private static PropertyModel createBnplSuggestionModel(
+            AutofillSuggestion suggestion,
+            FillableItemCollectionInfo collectionInfo,
+            Runnable actionCallback) {
+        PropertyModel.Builder bnplSuggestionModelBuilder =
+                new PropertyModel.Builder(NON_TRANSFORMING_BNPL_SUGGESTION_KEYS)
+                        .with(BNPL_ICON_ID, suggestion.getIconId())
+                        .with(PRIMARY_TEXT, suggestion.getLabel())
+                        .with(SECONDARY_TEXT, suggestion.getSublabel())
+                        .with(ON_BNPL_CLICK_ACTION, actionCallback)
+                        .with(BNPL_ITEM_COLLECTION_INFO, collectionInfo)
+                        .with(IS_ENABLED, !suggestion.applyDeactivatedStyle());
+        return bnplSuggestionModelBuilder.build();
+    }
+
+    private static PropertyModel createProgressIconModel(@StringRes int contentDescription) {
+        return new PropertyModel.Builder(
+                        TouchToFillPaymentMethodProperties.ProgressIconProperties.ALL_KEYS)
+                .with(PROGRESS_CONTENT_DESCRIPTION_ID, contentDescription)
+                .build();
+    }
+
+    private static PropertyModel createBnplIssuerTosTextItemModelWithLinkText() {
+        return new PropertyModel.Builder(
+                        TouchToFillPaymentMethodProperties.BnplIssuerTosTextItemProperties.ALL_KEYS)
+                .with(BNPL_TOS_ICON_ID, R.drawable.add_link)
+                .with(DESCRIPTION_TEXT, new SpannableString(BNPL_ISSUER_TOS_ITEM_TEXT))
+                .build();
+    }
+
+    private static PropertyModel createBnplIssuerTosTextItemModelWithFlatText() {
+        return new PropertyModel.Builder(
+                        TouchToFillPaymentMethodProperties.BnplIssuerTosTextItemProperties.ALL_KEYS)
+                .with(BNPL_TOS_ICON_ID, R.drawable.checklist)
+                .with(DESCRIPTION_TEXT, BNPL_ISSUER_TOS_ITEM_TEXT)
+                .build();
+    }
+
+    private static PropertyModel createBnplSelectionProgressHeaderModel(
+            boolean backButtonEnabled, Runnable actionCallback) {
+        return new PropertyModel.Builder(BnplSelectionProgressHeaderProperties.ALL_KEYS)
+                .with(BNPL_BACK_BUTTON_ENABLED, backButtonEnabled)
+                .with(BNPL_ON_BACK_BUTTON_CLICKED, actionCallback)
+                .build();
+    }
+
+    private static PropertyModel createBnplIssuerContextModel(
+            BnplIssuerContext issuerContext, Runnable actionCallback) {
+        return new PropertyModel.Builder(NON_TRANSFORMING_BNPL_ISSUER_CONTEXT_KEYS)
+                .with(ISSUER_NAME, issuerContext.getDisplayName())
+                .with(ISSUER_SELECTION_TEXT, issuerContext.getSelectionText())
+                .with(ISSUER_ICON_ID, issuerContext.getIconId())
+                .with(ISSUER_LINKED, issuerContext.isLinked())
+                .with(APPLY_ISSUER_DEACTIVATED_STYLE, !issuerContext.isEligible())
+                .with(ON_ISSUER_CLICK_ACTION, actionCallback)
+                .build();
+    }
+
+    private static PropertyModel createErrorDescriptionModel(String description) {
+        return new PropertyModel.Builder(ErrorDescriptionProperties.ALL_KEYS)
+                .with(ERROR_DESCRIPTION_STRING, description)
+                .build();
+    }
+
     private static PropertyModel createFillButtonModel(Runnable actionCallback) {
         return createFillButtonModel(
                 R.string.autofill_payment_method_continue_button, actionCallback);
@@ -1335,5 +1919,42 @@ public class TouchToFillPaymentMethodViewTest {
                                 position,
                                 total),
                 info.getContentDescription());
+    }
+
+    private static void assertBnplIssuerItemMatches(
+            View issuerItem, BnplIssuerContext expectedBnplIssuerContext, Runnable actionCallback) {
+        TextView issuerName = issuerItem.findViewById(R.id.bnpl_issuer_name);
+        assertThat(issuerName.getText().toString(), is(expectedBnplIssuerContext.getDisplayName()));
+
+        TextView issuerSelectionText = issuerItem.findViewById(R.id.bnpl_issuer_selection_text);
+        assertThat(
+                issuerSelectionText.getText().toString(),
+                is(expectedBnplIssuerContext.getSelectionText()));
+
+        ImageView issuerIcon = issuerItem.findViewById(R.id.bnpl_issuer_icon);
+        assertTrue(issuerIcon.isShown());
+
+        TextView issuerLinkedStatusText =
+                issuerItem.findViewById(R.id.bnpl_issuer_linked_status_pill);
+
+        if (expectedBnplIssuerContext.isLinked()) {
+            assertThat(issuerLinkedStatusText.getVisibility(), is(View.VISIBLE));
+        } else {
+            assertThat(issuerLinkedStatusText.getVisibility(), is(View.GONE));
+        }
+
+        if (expectedBnplIssuerContext.isEligible()) {
+            assertThat(issuerIcon.getAlpha(), is(COMPLETE_OPACITY_ALPHA));
+            assertThat(issuerLinkedStatusText.getAlpha(), is(COMPLETE_OPACITY_ALPHA));
+            onView(withText(expectedBnplIssuerContext.getDisplayName()))
+                    .perform(createClickActionWithFlags(0));
+            waitForEvent(actionCallback).run();
+        } else {
+            assertThat(issuerIcon.getAlpha(), is(GRAYED_OUT_OPACITY_ALPHA));
+            assertThat(issuerLinkedStatusText.getAlpha(), is(GRAYED_OUT_OPACITY_ALPHA));
+            onView(withText(expectedBnplIssuerContext.getDisplayName()))
+                    .perform(createClickActionWithFlags(0));
+            verify(actionCallback, never()).run();
+        }
     }
 }

@@ -398,7 +398,7 @@ em::StatefulPartitionInfo ReadStatefulPartitionInfo() {
 // Collects all the display related information.
 void GetDisplayStatus(em::GraphicsStatus* graphics_status) {
   const std::vector<display::Display> displays =
-      display::Screen::GetScreen()->GetAllDisplays();
+      display::Screen::Get()->GetAllDisplays();
   for (const auto& display : displays) {
     em::DisplayInfo* display_info = graphics_status->add_displays();
     display_info->set_resolution_width(display.GetSizeInPixel().width());
@@ -2355,6 +2355,15 @@ bool DeviceStatusCollector::GetVersionInfo(
   tpm_version_info->set_vendor_specific(tpm_version_reply_.vendor_specific());
   tpm_version_info->set_gsc_version(
       ConvertTpmGscDevice(tpm_version_reply_.gsc_device()));
+
+  const std::optional<std::string_view> kernel_key_version =
+      statistics_provider_->GetMachineStatistic(ash::system::kKernelKeyVersion);
+  if (kernel_key_version.has_value()) {
+    tpm_version_info->set_kernel_key_version(kernel_key_version.value());
+  } else {
+    LOG(WARNING) << "Failed to retrieve kernel key version";
+  }
+
   return true;
 }
 

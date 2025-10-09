@@ -25,6 +25,9 @@
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
+#include "chrome/browser/ui/omnibox/omnibox_controller.h"
+#include "chrome/browser/ui/omnibox/omnibox_edit_model.h"
+#include "chrome/browser/ui/omnibox/omnibox_view.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/url_constants.h"
@@ -35,9 +38,6 @@
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
-#include "components/omnibox/browser/omnibox_controller.h"
-#include "components/omnibox/browser/omnibox_edit_model.h"
-#include "components/omnibox/browser/omnibox_view.h"
 #include "components/search_engines/template_url_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -56,8 +56,6 @@ std::u16string AutocompleteResultAsString(const AutocompleteResult& result) {
   }
   return base::UTF8ToUTF16(output);
 }
-
-}  // namespace
 
 class AutocompleteBrowserTest : public extensions::ExtensionBrowserTest {
  protected:
@@ -208,8 +206,6 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, FocusSearch) {
 
   std::u16string query_text = u"foo";
 
-  size_t selection_start, selection_end;
-
   // Focus search when omnibox is blank.
   {
     FocusSearchCheckPreconditions();
@@ -221,9 +217,9 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, FocusSearch) {
     EXPECT_FALSE(omnibox_model->is_keyword_hint());
     EXPECT_TRUE(omnibox_model->is_keyword_selected());
 
-    omnibox_view->GetSelectionBounds(&selection_start, &selection_end);
-    EXPECT_EQ(0U, selection_start);
-    EXPECT_EQ(0U, selection_end);
+    gfx::Range selection = omnibox_view->GetSelectionBounds();
+    EXPECT_EQ(0U, selection.start());
+    EXPECT_EQ(0U, selection.end());
 
     omnibox_view->RevertAll();
   }
@@ -246,9 +242,9 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, FocusSearch) {
     EXPECT_FALSE(omnibox_model->is_keyword_hint());
     EXPECT_TRUE(omnibox_model->is_keyword_selected());
 
-    omnibox_view->GetSelectionBounds(&selection_start, &selection_end);
-    EXPECT_EQ(0U, std::min(selection_start, selection_end));
-    EXPECT_EQ(query_text.length(), std::max(selection_start, selection_end));
+    gfx::Range selection = omnibox_view->GetSelectionBounds();
+    EXPECT_EQ(0U, selection.GetMin());
+    EXPECT_EQ(query_text.size(), selection.GetMax());
 
     omnibox_view->RevertAll();
   }
@@ -265,9 +261,9 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, FocusSearch) {
     EXPECT_FALSE(omnibox_model->is_keyword_hint());
     EXPECT_TRUE(omnibox_model->is_keyword_selected());
 
-    omnibox_view->GetSelectionBounds(&selection_start, &selection_end);
-    EXPECT_EQ(0U, selection_start);
-    EXPECT_EQ(0U, selection_end);
+    gfx::Range selection = omnibox_view->GetSelectionBounds();
+    EXPECT_EQ(0U, selection.start());
+    EXPECT_EQ(0U, selection.end());
 
     location_bar->FocusSearch();
     EXPECT_FALSE(location_bar->navigation_params().destination_url.is_valid());
@@ -276,9 +272,9 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, FocusSearch) {
     EXPECT_FALSE(omnibox_model->is_keyword_hint());
     EXPECT_TRUE(omnibox_model->is_keyword_selected());
 
-    omnibox_view->GetSelectionBounds(&selection_start, &selection_end);
-    EXPECT_EQ(0U, selection_start);
-    EXPECT_EQ(0U, selection_end);
+    selection = omnibox_view->GetSelectionBounds();
+    EXPECT_EQ(0U, selection.start());
+    EXPECT_EQ(0U, selection.end());
 
     omnibox_view->RevertAll();
   }
@@ -296,9 +292,9 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, FocusSearch) {
     EXPECT_FALSE(omnibox_model->is_keyword_hint());
     EXPECT_TRUE(omnibox_model->is_keyword_selected());
 
-    omnibox_view->GetSelectionBounds(&selection_start, &selection_end);
-    EXPECT_EQ(0U, std::min(selection_start, selection_end));
-    EXPECT_EQ(query_text.length(), std::max(selection_start, selection_end));
+    gfx::Range selection = omnibox_view->GetSelectionBounds();
+    EXPECT_EQ(0U, selection.GetMin());
+    EXPECT_EQ(query_text.size(), selection.GetMax());
 
     location_bar->FocusSearch();
     EXPECT_FALSE(location_bar->navigation_params().destination_url.is_valid());
@@ -307,9 +303,9 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, FocusSearch) {
     EXPECT_FALSE(omnibox_model->is_keyword_hint());
     EXPECT_TRUE(omnibox_model->is_keyword_selected());
 
-    omnibox_view->GetSelectionBounds(&selection_start, &selection_end);
-    EXPECT_EQ(0U, std::min(selection_start, selection_end));
-    EXPECT_EQ(query_text.length(), std::max(selection_start, selection_end));
+    selection = omnibox_view->GetSelectionBounds();
+    EXPECT_EQ(0U, selection.GetMin());
+    EXPECT_EQ(query_text.size(), selection.GetMax());
 
     omnibox_view->RevertAll();
   }
@@ -387,3 +383,5 @@ IN_PROC_BROWSER_TEST_F(AutocompleteBrowserTest, MemoryTracing) {
       base::BindOnce(OnMemoryDumpDone, expected_names, run_loop.QuitClosure()));
   run_loop.Run();
 }
+
+}  // namespace

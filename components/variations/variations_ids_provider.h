@@ -12,14 +12,15 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/synchronization/lock.h"
 #include "components/variations/proto/study.pb.h"
 #include "components/variations/synthetic_trials.h"
 #include "components/variations/variations.mojom.h"
 #include "components/variations/variations_associated_data.h"
+#include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 
 namespace variations {
 namespace internal {
@@ -30,6 +31,10 @@ namespace internal {
 inline constexpr int kLowEntropySourceVariationIdRangeMin = 3320978;
 inline constexpr int kLowEntropySourceVariationIdRangeMax = 3328977;
 }  // namespace internal
+
+namespace test {
+class ScopedVariationsIdsProvider;
+}  // namespace test
 
 class VariationsClient;
 
@@ -55,6 +60,8 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
     : public base::FieldTrialList::Observer,
       public SyntheticTrialObserver {
  public:
+  using ClockFunction = base::RepeatingCallback<base::Time()>;
+
   class COMPONENT_EXPORT(VARIATIONS) Observer {
    public:
     // Called when variation ids headers are updated.
@@ -81,7 +88,7 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
 
   // Creates the VariationsIdsProvider instance. This must be called before
   // GetInstance(). Only one instance of VariationsIdsProvider may be created.
-  static VariationsIdsProvider* Create(Mode mode);
+  static VariationsIdsProvider* CreateInstance(Mode mode);
 
   static VariationsIdsProvider* GetInstance();
 
@@ -89,6 +96,10 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   VariationsIdsProvider& operator=(const VariationsIdsProvider&) = delete;
 
   Mode mode() const { return mode_; }
+
+  // Sets the clock function to be used for getting the current time.
+  // TODO: crbug.com/422445605 - Use this to provide a network time clock.
+  void SetClockFunc(ClockFunction clock_func);
 
   // Returns the X-Client-Data headers corresponding to `is_signed_in`: a header
   // that may be sent in first-party requests and a header that may be sent in
@@ -142,12 +153,20 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
     INVALID_SWITCH_ENTRY,  // Invalid entry in `command_line_variation_ids`.
   };
 
+  // TODO: b/315411418 - Restrict access to approved call sites.
   // Sets *additional* variation ids and trigger variation ids to be encoded in
   // the X-Client-Data request header. This is intended for development use to
   // force a server side experiment id. `variation_ids` should be a list of
   // strings of numeric experiment ids. Ids explicitly passed in `variation_ids`
   // and those in the comma-separated `command_line_variation_ids` are added.
   ForceIdsResult ForceVariationIds(
+      const std::vector<std::string>& variation_ids,
+      const std::string& command_line_variation_ids);
+
+  // Alias for the above function, but for testing. All test uses should be via
+  // this function. Once that is the case, the above function will be restricted
+  // to call sites that are approved to use it.
+  ForceIdsResult ForceVariationIdsForTesting(
       const std::vector<std::string>& variation_ids,
       const std::string& command_line_variation_ids);
 
@@ -166,38 +185,22 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   void ResetForTesting();
 
  private:
-  typedef std::pair<VariationID, IDCollectionKey> VariationIDEntry;
+  using VariationIDEntry = std::pair<VariationID, IDCollectionKey>;
+  using VariationIDEntrySet = absl::flat_hash_set<VariationIDEntry>;
 
-  friend class ScopedVariationsIdsProvider;
-
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest, ForceVariationIds_Valid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           ForceVariationIds_ValidCommandLine);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           ForceVariationIds_Invalid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           ForceDisableVariationIds_ValidCommandLine);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           ForceDisableVariationIds_Invalid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           OnFieldTrialGroupFinalized);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           LowEntropySourceValue_Valid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           LowEntropySourceValue_Null);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           GetGoogleAppVariationsString);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest, GetVariationsString);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest, GetVariationsVector);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
-                           GetVariationsVectorForWebPropertiesKeys);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest, GetVariationsVectorImpl);
+  friend class ::variations::test::ScopedVariationsIdsProvider;
 
   explicit VariationsIdsProvider(Mode mode);
   ~VariationsIdsProvider() override;
 
-  static void CreateInstanceForTesting(Mode mode);
-  static void DestroyInstanceForTesting();
+  // Creates a new instance of `VariationsIdsProvider` for testing, returning
+  // the pointer to the previous instance. This should only be called by
+  // `ScopedVariationsIdsProvider`.
+  static VariationsIdsProvider* CreateInstanceForTesting(Mode mode);
+  // Resets the global instance of `VariationsIdsProvider` to the given
+  // instance, for testing. This should only be called by
+  // `ScopedVariationsIdsProvider`.
+  static void DestroyInstanceForTesting(VariationsIdsProvider* previous_instance);
 
   // Returns a space-separated string containing the list of current active
   // variations (as would be reported in the `variation_id` repeated field of
@@ -216,25 +219,44 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
       const std::vector<SyntheticTrialGroup>& trials_removed,
       const std::vector<SyntheticTrialGroup>& groups) override;
 
-  // Prepares the variation IDs cache with initial values if not already done.
-  // This method also registers the caller with the FieldTrialList to receive
-  // new variation IDs.
-  void InitVariationIDsCacheIfNeeded();
+  // Updates `active_variation_ids_set_` and `variations_headers_map_` if
+  // necessary.
+  void MaybeUpdateVariationIDsAndHeaders() EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
-  // Looks up the VariationID associated with `trial_name` and `group_name`, and
-  // if found, adds an entry for it to `variation_ids_set_`.
-  void CacheVariationsId(const std::string& trial_name,
-                         const std::string& group_name);
+  // Helpers to manage the variation ids in `active_variation_ids_set_`. These
+  // are expected to be called from `MaybeUpdateVariationIDsAndHeaders()`.
+  //
+  // Start of helpers for `MaybeUpdateVariationIDsAndHeaders()` {
 
-  // Takes whatever is currently in `variation_ids_set_` and recreates
-  // `variation_ids_header_` with it.  Assumes the the `lock_` is currently
-  // held.
-  void UpdateVariationIDsHeaderValue();
+  // Adds the timeboxed variation ids associated with currently active field
+  // trials to`active_variation_ids_set_`.
+  void AddActiveVariationIds(base::Time current_time)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Adds the low entropy source value to `active_variation_ids_set_` if a
+  // low entropy source value has been set.
+  void AddLowEntropySourceValue() EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Adds the force-enabled variation ids to `active_variation_ids_set_`.
+  void AddForceEnabledVariationIds() EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Adds the synthetic variation ids to `active_variation_ids_set_`.
+  void AddSyntheticVariationIds() EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Removes the force-disabled variation ids from `active_variation_ids_set_`.
+  void RemoveForceDisabledVariationIds() EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Generates a base64-encoded ClientVariations proto to be used as a header
-  // value for the given `is_signed_in` and `is_first_party_context` states.
-  std::string GenerateBase64EncodedProto(bool is_signed_in,
-                                         bool is_first_party_context);
+  // value for the given `is_signed_in` and `context` state. The result is
+  // computed based on the values in `active_variation_ids_set_`, so this method
+  // is expected to be called from `MaybeUpdateVariationIDsAndHeaders()` after
+  // it has updated `active_variation_ids_set_`, to recalculate the cached
+  // header values.
+  std::string GenerateBase64EncodedProto(
+      bool is_signed_in,
+      Study_GoogleWebVisibility context) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // } - End of helpers for `MaybeUpdateVariationIDsAndHeaders`.
 
   // Adds variation ids and trigger variation ids to `target_set`. If
   // `should_dedupe` is true, the ids in `variation_ids` that have already been
@@ -242,7 +264,8 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // any variation ids are malformed or duplicated. Returns true otherwise.
   bool AddVariationIdsToSet(const std::vector<std::string>& variation_ids,
                             bool should_dedupe,
-                            std::set<VariationIDEntry>* target_set);
+                            VariationIDEntrySet* target_set)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Parses a comma-separated string of variation ids and trigger variation ids
   // and adds them to `target_set`. If `should_dedupe` is true, ids that have
@@ -251,18 +274,15 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // true otherwise.
   bool ParseVariationIdsParameter(const std::string& command_line_variation_ids,
                                   bool should_dedupe,
-                                  std::set<VariationIDEntry>* target_set);
+                                  VariationIDEntrySet* target_set)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Returns the value of the X-Client-Data header corresponding to
   // `is_signed_in` and `web_visibility`. Considering `web_visibility` may allow
   // fewer VariationIDs to be sent in third-party contexts.
-  std::string GetClientDataHeaderWhileLocked(
-      bool is_signed_in,
-      Study_GoogleWebVisibility web_visibility);
-
-  // Returns the currently active set of variation ids, which includes ids from
-  // field trials, synthetic trials, and forced ids.
-  std::set<VariationIDEntry> GetAllVariationIds();
+  std::string GetClientDataHeader(bool is_signed_in,
+                                  Study_GoogleWebVisibility web_visibility)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Returns the collection of variation ids matching any of the given
   // `keys`. Each entry in the returned vector will be unique.
@@ -273,7 +293,26 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // ids. This includes ids from field trials, synthetic trials, and forced ids.
   // Note that Google app ids are treated differently. They may be reused as a
   // Google Web id.
-  bool IsDuplicateId(VariationID id);
+  bool IsDuplicateId(VariationID id) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Returns the current time..
+  base::Time GetCurrentTime() const EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Sets the last update time to the given time.
+  void SetLastUpdateTime(base::Time time) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Resets the last update time to base::Time::Min().
+  void ResetLastUpdateTime() EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Sets the next update time to the given time.
+  void SetNextUpdateTime(base::Time time) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // Returns true if the cached variations data (`active_variations_ids_set_`,
+  // and `variations_headers_map_`) are out of date and need to be recomputed.
+  // See the comment in the .cc file for more details about when an update is
+  // needed.
+  bool UpdateIsNeeded(base::Time current_time) const
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   const Mode mode_;
 
@@ -282,26 +321,29 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
 
   // Low entropy source value from client that was used for client-side
   // randomization of variations.
-  std::optional<int> low_entropy_source_value_;
+  std::optional<int> low_entropy_source_value_ GUARDED_BY(lock_);
 
-  // Whether or not we've initialized the caches.
-  bool variation_ids_cache_initialized_ = false;
+  // The last time the caches were updated.
+  base::Time last_update_time_ GUARDED_BY(lock_) = base::Time::Min();
 
-  // Keep a cache of variation IDs that are transmitted in headers to Google.
-  // This consists of a list of valid IDs, and the actual transmitted header.
-  std::set<VariationIDEntry> variation_ids_set_;
+  // The (prospective) next time the caches will need to be updated.
+  base::Time next_update_time_ GUARDED_BY(lock_) = base::Time::Min();
+
+  // A cache of the currently active variations ids. We keep this so that we
+  // don't have to recompute it on every call to GetVariationsVector().
+  VariationIDEntrySet active_variation_ids_set_ GUARDED_BY(lock_);
 
   // Provides the google experiment ids that are force-enabled through
   // ForceVariationIds().
-  std::set<VariationIDEntry> force_enabled_ids_set_;
+  VariationIDEntrySet force_enabled_ids_set_ GUARDED_BY(lock_);
 
   // Variations ids from synthetic field trials.
-  std::set<VariationIDEntry> synthetic_variation_ids_set_;
+  VariationIDEntrySet synthetic_variation_ids_set_ GUARDED_BY(lock_);
 
   // Provides the google experiment ids that are force-disabled by command line.
-  std::set<VariationIDEntry> force_disabled_ids_set_;
+  VariationIDEntrySet force_disabled_ids_set_ GUARDED_BY(lock_);
 
-  // A collection of variations headers. Each header is a base64-encoded
+  // A cache of variations header values. Each header is a base64-encoded
   // ClientVariations proto containing VariationIDs that may be sent to Google
   // web properties. For more details about when this may be sent, see
   // AppendHeaderIfNeeded() in variations_http_headers.cc.
@@ -317,7 +359,13 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // ObserverList is sequence checked so we can't use that here.
   std::vector<Observer*> observer_list_ GUARDED_BY(lock_);
 
-  raw_ptr<const VariationsClient> variations_client_ = nullptr;
+  // Whether this instance is subscribed to the field trial list. This is used
+  // to ensure that the instance is only subscribed once, on first use.
+  bool is_subscribed_to_field_trial_list_ GUARDED_BY(lock_) = false;
+
+  // The clock function to be used for getting the current time. This is used
+  // to provide a network-based clock, as well as for testing.
+  ClockFunction clock_func_ GUARDED_BY(lock_);
 };
 
 }  // namespace variations

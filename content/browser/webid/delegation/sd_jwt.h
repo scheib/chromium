@@ -93,15 +93,19 @@
 */
 namespace content::sdjwt {
 
-// An Elliptic Curve Jwk representation.
+// An public key representation.
 // https://datatracker.ietf.org/doc/html/rfc7517#section-3
-// Could be extended in the future to cover other Jwk key types.
+// Could be extended in the future to cover other Jwk key types:
+// currently supports EC and RSA keys.
 struct CONTENT_EXPORT Jwk {
   std::string kty;
   std::string crv;
   std::string x;
   std::string y;
   std::string d;
+  std::string alg;
+  std::string n;
+  std::string e;
 
   Jwk();
   ~Jwk();
@@ -109,6 +113,7 @@ struct CONTENT_EXPORT Jwk {
 
   static std::optional<Jwk> From(const base::Value::Dict& json);
 
+  base::Value::Dict ToDict() const;
   std::optional<std::string> Serialize() const;
 };
 
@@ -119,9 +124,12 @@ using Base64String = base::StrongAlias<class Base64StringTag, std::string>;
 
 // https://datatracker.ietf.org/doc/html/rfc7519#section-5
 struct CONTENT_EXPORT Header {
-  // https://datatracker.ietf.org/doc/html/rfc7519#section-5.1
   std::string typ;
   std::string alg;
+  // The public key that corresponds to the key used to digitally
+  // sign the JWS.
+  // https://datatracker.ietf.org/doc/html/rfc7515#section-4.1.3
+  std::optional<Jwk> jwk;
 
   Header();
   ~Header();
@@ -176,6 +184,9 @@ struct CONTENT_EXPORT Payload {
 
   // Used in the Key Binding JWT
   Base64String sd_hash;
+
+  // Profile-specific parameters.
+  std::string email;
 
   Payload();
   ~Payload();

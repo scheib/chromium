@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include "base/check_deref.h"
 #include "base/feature_list.h"
@@ -17,6 +18,7 @@
 #include "base/time/time.h"
 #include "components/autofill/core/browser/autofill_field.h"
 #include "components/autofill/core/browser/field_type_utils.h"
+#include "components/autofill/core/browser/form_qualifiers.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/foundations/autofill_client.h"
 #include "components/autofill/core/browser/foundations/autofill_driver.h"
@@ -53,8 +55,7 @@ bool DetermineHeuristicOnlyEmailFormStatus(const FormStructure& form) {
   // applicable  must not run heuristics normally (i.e., their field count is
   // below `kMinRequiredFieldsForHeuristics`), but must be eligible for single
   // field form heuristics.
-  if (form.ShouldRunHeuristics() ||
-      !form.ShouldRunHeuristicsForSingleFields()) {
+  if (ShouldRunHeuristics(form) || !ShouldRunHeuristicsForSingleFields(form)) {
     return false;
   }
   // Having met the prerequisites, now determine if there's a field whose
@@ -93,17 +94,6 @@ void FormEventLoggerBase::OnDidInteractWithAutofillableForm(
     has_logged_interacted_ = true;
     LogUkmInteractedWithForm(form.form_signature());
     Log(FORM_EVENT_INTERACTED_ONCE, form);
-  }
-}
-
-void FormEventLoggerBase::OnDidPollSuggestions(FieldGlobalId field_id) {
-  // Record only one poll user action for consecutive polls of the same field.
-  // This is to avoid recording too many poll actions (for example when a user
-  // types in a field, triggering multiple queries) to make the analysis more
-  // simple.
-  if (field_id != last_polled_field_id_) {
-    RecordPollSuggestions();
-    last_polled_field_id_ = field_id;
   }
 }
 
@@ -181,8 +171,9 @@ void FormEventLoggerBase::SetTimeFromInteractionToSubmission(
 
 void FormEventLoggerBase::OnWillSubmitForm(const FormStructure& form) {
   // Not logging this kind of form if we haven't logged a user interaction.
-  if (!has_logged_interacted_)
+  if (!has_logged_interacted_) {
     return;
+  }
 
   // Not logging twice.
   if (has_logged_will_submit_)
@@ -268,7 +259,7 @@ void FormEventLoggerBase::Log(FormEvent event, const FormStructure& form) {
   }
 
   // Log UKM metrics for only autofillable form events.
-  if (form.IsAutofillable()) {
+  if (IsAutofillable(form)) {
     client().GetFormInteractionsUkmLogger().LogFormEvent(
         driver().GetPageUkmSourceId(), event, GetFormTypesForLogging(form),
         form.form_parsed_timestamp());
@@ -408,7 +399,7 @@ void FormEventLoggerBase::RecordKeyMetrics() {
 }
 
 void FormEventLoggerBase::RecordFillingReadiness(LogBuffer& logs) const {
-  bool has_logged_data_to_fill_available = HasLoggedDataToFillAvailable();
+  const bool has_logged_data_to_fill_available = HasLoggedDataToFillAvailable();
   for (std::string_view form_type : GetParsedFormTypesAsStringViews()) {
     base::UmaHistogramBoolean(
         base::StrCat({"Autofill.KeyMetrics.FillingReadiness.", form_type}),

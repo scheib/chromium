@@ -40,7 +40,6 @@ TEST_F(NtpComposeboxFieldTrialConfigTest, NTPComposeboxConfig_Disabled) {
   base::HistogramTester histogram_tester;
   scoped_config_.Reset();
 
-  EXPECT_FALSE(scoped_config_.Get().enabled);
   omnibox::NTPComposeboxConfig config = scoped_config_.Get().config;
   EXPECT_EQ(config.entry_point().num_page_load_animations(), 3);
 
@@ -57,7 +56,6 @@ TEST_F(NtpComposeboxFieldTrialConfigTest,
   base::HistogramTester histogram_tester;
   scoped_config_.Reset();
 
-  EXPECT_TRUE(scoped_config_.Get().enabled);
   omnibox::NTPComposeboxConfig config = scoped_config_.Get().config;
   EXPECT_EQ(config.entry_point().num_page_load_animations(), 3);
 
@@ -80,6 +78,12 @@ TEST_F(NtpComposeboxFieldTrialConfigTest,
   EXPECT_EQ(composebox.max_num_files(), 1);
   EXPECT_EQ(composebox.input_placeholder_text(),
             l10n_util::GetStringUTF8(IDS_NTP_COMPOSE_PLACEHOLDER_TEXT));
+  EXPECT_EQ(composebox.is_pdf_upload_enabled(), true);
+
+  auto placeholder_config = composebox.placeholder_config();
+  EXPECT_EQ(placeholder_config.change_text_animation_interval_ms(), 4000u);
+  EXPECT_EQ(placeholder_config.fade_text_animation_duration_ms(), 250u);
+  EXPECT_EQ(placeholder_config.placeholders().size(), 6);
 
   histogram_tester.ExpectTotalCount(kConfigParamParseSuccessHistogram, 0);
 }
@@ -138,7 +142,6 @@ TEST_F(NtpComposeboxFieldTrialConfigTest,
   base::HistogramTester histogram_tester;
   scoped_config_.Reset();
 
-  EXPECT_TRUE(scoped_config_.Get().enabled);
   omnibox::NTPComposeboxConfig config = scoped_config_.Get().config;
   EXPECT_EQ(config.entry_point().num_page_load_animations(), 5);
 

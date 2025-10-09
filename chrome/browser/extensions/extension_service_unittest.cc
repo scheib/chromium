@@ -46,6 +46,7 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 #include "chrome/browser/extensions/blocklist.h"
 #include "chrome/browser/extensions/chrome_extension_cookies.h"
@@ -93,6 +94,8 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/scoped_browser_locale.h"
 #include "components/crx_file/id_util.h"
+#include "components/custom_handlers/protocol_handler_registry.h"
+#include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "components/policy/core/common/management/scoped_management_service_override_for_testing.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -138,6 +141,7 @@
 #include "extensions/browser/updater/extension_downloader_test_helper.h"
 #include "extensions/browser/updater/null_extension_cache.h"
 #include "extensions/browser/zipfile_installer.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_features.h"
@@ -190,6 +194,8 @@
 #if BUILDFLAG(ENABLE_PLUGINS)
 #include "content/public/browser/plugin_service.h"
 #endif
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 // The blocklist tests rely on the safe-browsing database.
 #if BUILDFLAG(SAFE_BROWSING_DB_LOCAL)
@@ -498,7 +504,6 @@ class MockProviderVisitor : public ExternalProviderInterface::VisitorInterface {
   ExternalProviderImpl* provider() { return provider_.get(); }
 
  protected:
-  std::unique_ptr<ExternalProviderImpl> provider_;
 
   void SetUp(const std::string& json_data,
              ManifestLocation crx_location,
@@ -516,8 +521,8 @@ class MockProviderVisitor : public ExternalProviderInterface::VisitorInterface {
       const std::string& json_data) {
     // We also parse the file into a dictionary to compare what we get back
     // from the provider.
-    std::optional<base::Value::Dict> json_value =
-        base::JSONReader::ReadDict(json_data);
+    std::optional<base::Value::Dict> json_value = base::JSONReader::ReadDict(
+        json_data, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
     if (!json_value) {
       ADD_FAILURE() << "Unable to deserialize json data";
       return std::nullopt;
@@ -532,6 +537,7 @@ class MockProviderVisitor : public ExternalProviderInterface::VisitorInterface {
   ManifestLocation crx_location_;
   std::optional<base::Value::Dict> prefs_;
   std::unique_ptr<TestingProfile> profile_;
+  std::unique_ptr<ExternalProviderImpl> provider_;
 };
 
 // Mock provider that can simulate incremental update like
@@ -556,7 +562,7 @@ class MockUpdateProviderVisitor : public MockProviderVisitor {
     auto new_prefs = GetDictionaryFromJSON(json_data);
     if (!new_prefs)
       return;
-    provider_->UpdatePrefs(std::move(*new_prefs));
+    provider()->UpdatePrefs(std::move(*new_prefs));
   }
 
   void OnExternalProviderUpdateComplete(
@@ -6066,32 +6072,6 @@ TEST_F(ExtensionServiceTest, MAYBE_LoadsFromCommandLineForUsersWithoutPolicy) {
       ExtensionService::LoadExtensionFlag::kDisableExtensionsExcept, 1);
 }
 
-TEST_F(ExtensionServiceTest, DisableLoadExtensionCommandLineSwitch) {
-  base::HistogramTester histograms;
-  base::test::ScopedFeatureList feature_list(
-      /*enable_feature=*/extensions_features::
-          kDisableLoadExtensionCommandLineSwitch);
-  InitializeEmptyExtensionServiceWithTestingPrefs();
-
-  // Try to load an extension from command line.
-  base::FilePath path =
-      base::MakeAbsoluteFilePath(data_dir().AppendASCII("good_unpacked"));
-  base::CommandLine::ForCurrentProcess()->AppendSwitchPath(
-      switches::kLoadExtension, path);
-  service()->Init();
-
-  ExtensionSystem* extension_system = ExtensionSystem::Get(profile());
-  // Wait until the extension system is ready.
-  base::RunLoop run_loop;
-  extension_system->ready().Post(FROM_HERE, run_loop.QuitClosure());
-  run_loop.Run();
-
-  ASSERT_EQ(0u, loaded_extensions().size());
-  ValidatePrefKeyCount(0);
-
-  histograms.ExpectTotalCount("Extensions.LoadingFromCommandLine", 0);
-}
-
 TEST_F(ExtensionServiceTest, DisableDisableExtensionsExceptCommandLineSwitch) {
   base::test::ScopedFeatureList feature_list(
       /*enable_feature=*/extensions_features::
@@ -6894,9 +6874,20 @@ TEST_F(ExtensionServiceTestSimple, Enabledness) {
   LoadErrorReporter::Init(false);  // no noisy errors
   std::unique_ptr<base::CommandLine> command_line;
 
+  auto profile_builder = []() {
+    TestingProfile::Builder builder;
+    // Use SimpleProtocolHandlerRegistryFactory to prevent OS integration during
+    // the protocol registration process.
+    builder.AddTestingFactory(
+        ProtocolHandlerRegistryFactory::GetInstance(),
+        custom_handlers::SimpleProtocolHandlerRegistryFactory::
+            GetDefaultFactory());
+    return builder;
+  };
+
   // The profile lifetimes must not overlap: services may use global variables.
   {
-    auto profile = std::make_unique<TestingProfile>();
+    auto profile = profile_builder().Build();
     bool ready = false;
     auto on_ready = [](bool* ready) { *ready = true; };
     ExtensionSystem::Get(profile.get())
@@ -6921,7 +6912,7 @@ TEST_F(ExtensionServiceTestSimple, Enabledness) {
   }
 
   {
-    auto profile = std::make_unique<TestingProfile>();
+    auto profile = profile_builder().Build();
     bool ready = false;
     auto on_ready = [](bool* ready) { *ready = true; };
     ExtensionSystem::Get(profile.get())
@@ -6942,7 +6933,7 @@ TEST_F(ExtensionServiceTestSimple, Enabledness) {
   }
 
   {
-    auto profile = std::make_unique<TestingProfile>();
+    auto profile = profile_builder().Build();
     bool ready = false;
     auto on_ready = [](bool* ready) { *ready = true; };
     ExtensionSystem::Get(profile.get())
@@ -6963,7 +6954,7 @@ TEST_F(ExtensionServiceTestSimple, Enabledness) {
   }
 
   {
-    auto profile = std::make_unique<TestingProfile>();
+    auto profile = profile_builder().Build();
     bool ready = false;
     auto on_ready = [](bool* ready) { *ready = true; };
     ExtensionSystem::Get(profile.get())

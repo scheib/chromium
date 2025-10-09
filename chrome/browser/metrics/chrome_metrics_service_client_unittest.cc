@@ -28,6 +28,7 @@
 #include "components/metrics/test/test_enabled_state_provider.h"
 #include "components/metrics/unsent_log_store.h"
 #include "components/prefs/testing_pref_service.h"
+#include "components/regional_capabilities/regional_capabilities_switches.h"
 #include "components/ukm/ukm_service.h"
 #include "components/variations/synthetic_trial_registry.h"
 #include "content/public/test/browser_task_environment.h"
@@ -97,7 +98,7 @@ class ChromeMetricsServiceClientTest : public testing::Test {
     scoped_feature_list_.InitWithFeatures(
         {features::kUmaStorageDimensions,
          features::kClassManagementEnabledMetricsProvider,
-         metrics::dwa::kDwaFeature},
+         metrics::dwa::kDwaFeature, switches::kDynamicProfileCountry},
         {});
 
     // ChromeOs Metrics Provider require g_login_state and power manager client
@@ -105,7 +106,8 @@ class ChromeMetricsServiceClientTest : public testing::Test {
     chromeos::PowerManagerClient::InitializeFake();
     ash::LoginState::Initialize();
 #else
-    scoped_feature_list_.InitAndEnableFeature(metrics::dwa::kDwaFeature);
+    scoped_feature_list_.InitWithFeatures(
+        {metrics::dwa::kDwaFeature, switches::kDynamicProfileCountry}, {});
 #endif  // BUILDFLAG(IS_CHROMEOS)
   }
 
@@ -202,7 +204,7 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
   size_t expected_providers = 2;
 
   // This is the number of metrics providers that are outside any #if macros.
-  expected_providers += 24;
+  expected_providers += 25;
 
   int sample_rate;
   if (ChromeMetricsServicesManagerClient::GetSamplingRatePerMille(
@@ -236,7 +238,7 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
 #endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_CHROMEOS)
-  // AmbientModeMetricsProvider, AssistantServiceMetricsProvider,
+  // AmbientModeMetricsProvider,
   // CrosHealthdMetricsProvider, ChromeOSMetricsProvider,
   // ChromeOSHistogramMetricsProvider, ChromeShelfMetricsProvider,
   // ClassManagementEnabledMetricsProvider,
@@ -246,7 +248,7 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
   // UpdateEngineMetricsProvider, OsSettingsMetricsProvider,
   // UserTypeByDeviceTypeMetricsProvider, WallpaperMetricsProvider,
   // and VmmMetricsProvider.
-  expected_providers += 18;
+  expected_providers += 17;
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if !BUILDFLAG(IS_CHROMEOS)

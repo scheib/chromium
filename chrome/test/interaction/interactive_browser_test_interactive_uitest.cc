@@ -42,7 +42,7 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/vector2d.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/views/bubble/bubble_border.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/controls/webview/webview.h"
@@ -63,6 +63,8 @@ namespace {
 constexpr char kDocumentWithNamedElement[] = "/select.html";
 constexpr char kDocumentWithTitle[] = "/title3.html";
 constexpr char kDocumentWithTextField[] = "/form_interaction.html";
+constexpr char kDocumentWithScrollToElement[] =
+    "/test_framework/scroll_to_element.html";
 }  // namespace
 
 class InteractiveBrowserTestUiTest : public InteractiveBrowserTest {
@@ -168,8 +170,7 @@ IN_PROC_BROWSER_TEST_F(InteractiveBrowserTestUiTest, TestNameAndDrag) {
       Check(base::BindLambdaForTesting([&]() {
         gfx::Rect rect(p1, gfx::Size());
         rect.Inset(-1);
-        const gfx::Point point =
-            display::Screen::GetScreen()->GetCursorScreenPoint();
+        const gfx::Point point = display::Screen::Get()->GetCursorScreenPoint();
         if (!rect.Contains(point)) {
           LOG(ERROR) << "Expected cursor pos " << point.ToString()
                      << " to be roughly " << p1.ToString();
@@ -184,8 +185,7 @@ IN_PROC_BROWSER_TEST_F(InteractiveBrowserTestUiTest, TestNameAndDrag) {
       Check(base::BindLambdaForTesting([&]() {
         gfx::Rect rect(p2, gfx::Size());
         rect.Inset(-1);
-        const gfx::Point point =
-            display::Screen::GetScreen()->GetCursorScreenPoint();
+        const gfx::Point point = display::Screen::Get()->GetCursorScreenPoint();
         if (!rect.Contains(point)) {
           LOG(ERROR) << "Expected cursor pos " << point.ToString()
                      << " to be roughly " << p2.ToString();
@@ -402,8 +402,7 @@ IN_PROC_BROWSER_TEST_F(InteractiveBrowserTestUiTest,
             BrowserView::GetBrowserViewForBrowser(browser());
         const gfx::Rect web_contents_bounds =
             browser_view->contents_web_view()->GetBoundsInScreen();
-        const gfx::Point point =
-            display::Screen::GetScreen()->GetCursorScreenPoint();
+        const gfx::Point point = display::Screen::Get()->GetCursorScreenPoint();
         if (!web_contents_bounds.Contains(point)) {
           LOG(ERROR) << "Expected cursor pos " << point.ToString() << " to in "
                      << web_contents_bounds.ToString();
@@ -510,6 +509,24 @@ IN_PROC_BROWSER_TEST_F(InteractiveBrowserTestUiTest, SendKeyPress) {
       SendKeyPress(kOmniboxElementId, ui::VKEY_A),
       SendKeyPress(kOmniboxElementId, ui::VKEY_B, ui::EF_SHIFT_DOWN),
       CheckViewProperty(kOmniboxElementId, &OmniboxViewViews::GetText, u"aB"));
+}
+
+IN_PROC_BROWSER_TEST_F(InteractiveBrowserTestUiTest, WaitForExistence) {
+  DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kWebContentsId);
+  const GURL url = embedded_test_server()->GetURL(kDocumentWithScrollToElement);
+  const DeepQuery kDomElement = {"#target"};
+
+  RunTestSequence(
+      InstrumentTab(kWebContentsId), NavigateWebContents(kWebContentsId, url),
+      // The element should exist, but not be visible without scrolling.
+      WaitForElementExists(kWebContentsId, kDomElement),
+      EnsureNotVisible(kWebContentsId, kDomElement),
+      // Ensure we can scroll to the element.
+      ScrollIntoView(kWebContentsId, kDomElement),
+      WaitForElementVisible(kWebContentsId, kDomElement),
+      // Remove the element and ensure it no longer exists.
+      ExecuteJsAt(kWebContentsId, kDomElement, "el => { el.remove(); }"),
+      WaitForElementDoesNotExist(kWebContentsId, kDomElement));
 }
 
 // Simple bubble containing a WebView. Allows us to simulate swapping out one

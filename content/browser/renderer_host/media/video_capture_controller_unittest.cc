@@ -95,8 +95,8 @@ class MockVideoCaptureControllerEventHandler
                void(const VideoCaptureControllerID&, media::VideoCaptureError));
   MOCK_METHOD1(OnStarted, void(const VideoCaptureControllerID&));
   MOCK_METHOD1(OnStartedUsingGpuDecode, void(const VideoCaptureControllerID&));
-  MOCK_METHOD2(OnNewSubCaptureTargetVersion,
-               void(const VideoCaptureControllerID&, uint32_t));
+  MOCK_METHOD2(OnNewCaptureVersion,
+               void(const VideoCaptureControllerID&, media::CaptureVersion));
   MOCK_METHOD2(OnFrameDropped,
                void(const VideoCaptureControllerID&,
                     media::VideoCaptureFrameDropReason));
@@ -200,7 +200,7 @@ class VideoCaptureControllerTest
     device_client_ = std::make_unique<media::VideoCaptureDeviceClient>(
         std::make_unique<media::VideoFrameReceiverOnTaskRunner>(
             controller_->GetWeakPtrForIOThread(), GetIOThreadTaskRunner({})),
-        buffer_pool_, std::nullopt);
+        buffer_pool_);
 #endif  // BUILDFLAG(IS_CHROMEOS)
   }
 

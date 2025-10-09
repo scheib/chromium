@@ -32,7 +32,6 @@ import org.chromium.base.test.params.ParameterSet;
 import org.chromium.base.test.params.ParameterizedRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.Restriction;
@@ -178,7 +177,10 @@ public class WarmupManagerTest {
             }
             ThreadUtils.runOnUiThreadBlocking(
                     () -> {
-                        mTabGroupModelFilter.mergeListOfTabsToGroup(tabs, tabs.get(0), false);
+                        mTabGroupModelFilter.mergeListOfTabsToGroup(
+                                tabs,
+                                tabs.get(0),
+                                TabGroupModelFilter.MergeNotificationType.DONT_NOTIFY);
                     });
         }
     }
@@ -258,7 +260,10 @@ public class WarmupManagerTest {
     @UiThreadTest
     public void testInflateLayout() {
         int layoutId = R.layout.custom_tabs_control_container;
-        int toolbarId = R.layout.custom_tabs_toolbar;
+        int toolbarId =
+                ChromeFeatureList.sCctToolbarRefactor.isEnabled()
+                        ? R.layout.new_custom_tab_toolbar
+                        : R.layout.custom_tabs_toolbar;
         mWarmupManager.initializeViewHierarchy(mContext, layoutId, toolbarId);
         Assert.assertTrue(mWarmupManager.hasViewHierarchyWithToolbar(layoutId, mContext));
     }
@@ -458,7 +463,6 @@ public class WarmupManagerTest {
     @Test
     @MediumTest
     @Feature({"SpareTab"})
-    @DisabledTest(message = "https://crbug.com/418750892")
     public void testMetricsRecordedWithSpareTab() {
         Assert.assertNotNull(mActivityTestRule.getActivity().getCurrentTabCreator());
 

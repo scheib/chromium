@@ -102,11 +102,6 @@ const char kSignedInWithCredentialProvider[] =
 // Boolean which stores if the user is allowed to signin to chrome.
 const char kSigninAllowed[] = "signin.allowed";
 
-// Contains last |ListAccounts| data which corresponds to Gaia cookies encoded
-// in jspb.
-const char kGaiaCookieLastListAccountsData[] =
-    "gaia_cookie.last_list_accounts_data";
-
 // Contains last |ListAccounts| data which corresponds to Gaia cookies in
 // base64-encoded protobuf.
 const char kGaiaCookieLastListAccountsBinaryData[] =
@@ -198,5 +193,18 @@ const char kPrefsThemesSearchEnginesAccountStorageEnabled[] =
 // policy. More details can be found at BoundSessionCredentialsEnabled.yaml.
 const char kBoundSessionCredentialsEnabled[] =
     "signin.bound_session_credentials_enabled";
+
+// A boolean that is true if the primary account was set after the
+// sync-to-signin migration, where Sync is deprecated. This value is not cleared
+// on signout.
+//
+// This pref is used to provide a different welcome experience for various
+// groups of users. If false (signed in before the migration) and if the user:
+//   - did not have Sync enabled,
+//   - was not migrated from DICe,
+// they are shown an In-Product Help (IPH) bubble explaining the new benefits.
+// Otherwise, other UIs are used to inform the user of the benefits.
+const char kPrimaryAccountSetAfterSigninMigration[] =
+    "signin.primary_account_set_after_signin_migration";
 
 }  // namespace prefs

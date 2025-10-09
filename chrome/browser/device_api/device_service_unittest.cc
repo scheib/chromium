@@ -34,8 +34,8 @@
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/common/url_constants.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
+#include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/account_id/account_id.h"
 #include "components/content_settings/core/common/pref_names.h"
@@ -56,8 +56,15 @@
 #include "third_party/blink/public/common/features_generated.h"
 #include "url/gurl.h"
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS)
+#include "components/webapps/isolated_web_apps/scheme.h"
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_CHROMEOS)
+
 #if BUILDFLAG(IS_CHROMEOS)
 #include "base/test/scoped_command_line.h"
+#include "chrome/browser/ash/app_mode/kiosk_cryptohome_remover.h"
 #include "chrome/browser/ash/app_mode/web_app/kiosk_web_app_manager.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/common/chrome_switches.h"
@@ -164,12 +171,20 @@ class DeviceAPIServiceTest {
       content::WebContents* web_contents) {
     // Isolated Web Apps require Cross Origin Isolation headers to be included
     // in the response.
-    if (url.SchemeIs(chrome::kIsolatedAppScheme)) {
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS)
+    if (url.SchemeIs(webapps::kIsolatedAppScheme)) {
       web_app::SimulateIsolatedWebAppNavigation(web_contents, url);
     } else {
       content::NavigationSimulator::NavigateAndCommitFromBrowser(web_contents,
                                                                  url);
     }
+#else   //!(BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+        //! BUILDFLAG(IS_CHROMEOS))
+    content::NavigationSimulator::NavigateAndCommitFromBrowser(web_contents,
+                                                               url);
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_CHROMEOS)
 
     DeviceServiceImpl::CreateForTest(web_contents->GetPrimaryMainFrame(),
                                      remote()->BindNewPipeAndPassReceiver(),
@@ -943,7 +958,10 @@ class DeviceAPIServiceWithKioskUserTest : public DeviceAPIServiceParamTest {
     DeviceAPIServiceParamTest::SetUp();
     command_line_.GetProcessCommandLine()->AppendSwitch(
         switches::kForceAppMode);
-    app_manager_ = std::make_unique<ash::KioskWebAppManager>();
+    app_manager_ = std::make_unique<ash::KioskWebAppManager>(
+        TestingBrowserProcess::GetGlobal()->local_state(),
+        TestingBrowserProcess::GetGlobal()->shared_url_loader_factory(),
+        &kiosk_cryptohome_remover_);
   }
 
   void TearDown() override {
@@ -966,6 +984,8 @@ class DeviceAPIServiceWithKioskUserTest : public DeviceAPIServiceParamTest {
  private:
   user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
       fake_user_manager_;
+  ash::KioskCryptohomeRemover kiosk_cryptohome_remover_{
+      TestingBrowserProcess::GetGlobal()->local_state()};
   std::unique_ptr<ash::KioskWebAppManager> app_manager_;
   base::test::ScopedCommandLine command_line_;
 };

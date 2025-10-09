@@ -165,12 +165,16 @@ class CORE_EXPORT HTMLElement : public Element {
 
   void AccessKeyAction(SimulatedClickCreationScope creation_scope) override;
 
+  String accessKeyLabel();
+
   bool ShouldSerializeEndTag() const;
 
   virtual HTMLFormElement* formOwner() const;
   virtual HTMLElement* formForBinding() const;
 
   HTMLFormElement* FindFormAncestor() const;
+
+  static bool IsValidContainerTimingNestingAttribute(const AtomicString& value);
 
   bool HasDirectionAuto() const;
 
@@ -456,6 +460,8 @@ class CORE_EXPORT HTMLElement : public Element {
   void OnPopoverChanged(const AttributeModificationParams&);
   void OnContainerTimingAttrChanged(const AttributeModificationParams&);
   void OnContainerTimingIgnoreAttrChanged(const AttributeModificationParams&);
+  void OnContainerTimingNestingAttrChanged(
+      const AttributeModificationParams& params);
   void OnRoleAttrChanged(const AttributeModificationParams&);
 
   int AdjustedOffsetForZoom(LayoutUnit);

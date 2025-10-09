@@ -148,7 +148,8 @@ struct EligibleMatchesAndActions {
     // action in order to ensure that there's at most one AIM entrypoint shown
     // in the Omnibox.
     bool is_aim_page_action_enabled =
-        OmniboxFieldTrial::IsAimOmniboxEntrypointEnabled(client);
+        OmniboxFieldTrial::IsAimOmniboxEntrypointEnabled(
+            client->GetAimEligibilityService());
     toolbelt_ai_mode =
         toolbelt &&
         ToolbeltActionEligible(
@@ -567,7 +568,7 @@ void ContextualSearchProvider::AddLensEntrypointMatch(
   match.takeover_action =
       base::MakeRefCounted<ContextualSearchOpenLensAction>();
   match.contents =
-      base::UTF8ToUTF16(url_formatter::StripWWW(input.current_url().host()));
+      base::UTF8ToUTF16(url_formatter::StripWWW(input.current_url().GetHost()));
   if (!match.contents.empty()) {
     match.contents_class = {{0, ACMatchClassification::DIM}};
   }

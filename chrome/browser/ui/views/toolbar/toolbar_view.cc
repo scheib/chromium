@@ -41,6 +41,7 @@
 #include "chrome/browser/ui/global_error/global_error_service_factory.h"
 #include "chrome/browser/ui/intent_picker_tab_helper.h"
 #include "chrome/browser/ui/layout_constants.h"
+#include "chrome/browser/ui/omnibox/omnibox_view.h"
 #include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
@@ -54,7 +55,7 @@
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_container.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_coordinator.h"
-#include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
+#include "chrome/browser/ui/views/frame/browser_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/top_container_background.h"
 #include "chrome/browser/ui/views/global_media_controls/media_toolbar_button_contextual_menu.h"
@@ -89,7 +90,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
-#include "components/omnibox/browser/omnibox_view.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/send_tab_to_self/features.h"
@@ -123,7 +123,7 @@
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/tooltip_manager.h"
 #include "ui/views/widget/widget.h"
-#include "ui/views/window/non_client_view.h"
+#include "ui/views/window/frame_view.h"
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 #include "chrome/browser/recovery/recovery_install_global_error_factory.h"
@@ -191,7 +191,7 @@ class TabstripLikeBackground : public views::Background {
                                                                  browser_view_);
     if (!painted) {
       SkColor frame_color =
-          browser_view_->frame()->GetFrameView()->GetFrameColor(
+          browser_view_->browser_widget()->GetFrameView()->GetFrameColor(
               BrowserFrameActiveState::kUseCurrent);
       canvas->DrawColor(frame_color);
     }
@@ -313,7 +313,7 @@ void ToolbarView::Init() {
     // Add the pinned toolbar actions container so that downloads can be shown
     // in popups.
     pinned_toolbar_actions_container_ = container_view_->AddChildView(
-        std::make_unique<PinnedToolbarActionsContainer>(browser_view_));
+        std::make_unique<PinnedToolbarActionsContainer>(browser_view_, this));
     container_view_->SetBackground(
         views::CreateSolidBackground(kColorLocationBarBackground));
     container_view_->SetLayoutManager(std::make_unique<views::FlexLayout>())
@@ -406,7 +406,7 @@ void ToolbarView::Init() {
   }
 
   pinned_toolbar_actions_container_ = container_view_->AddChildView(
-      std::make_unique<PinnedToolbarActionsContainer>(browser_view_));
+      std::make_unique<PinnedToolbarActionsContainer>(browser_view_, this));
 
   if (features::HasTabSearchToolbarButton()) {
     tab_search_button_ =
@@ -1268,12 +1268,13 @@ void ToolbarView::OnTabStripModelChanged(
 
 void ToolbarView::UpdateRecedingCornerRadius() {
   bool tab_strip_has_trailing_frame_buttons =
-      browser_view_->tabstrip()->controller()->IsFrameButtonsRightAligned() ^
-      base::i18n::IsRTL();
+      !browser_view_->browser_widget()
+           ->GetFrameView()
+           ->CaptionButtonsOnLeadingEdge();
   bool tab_strip_has_leading_action_buttons =
       (!tabs::GetTabSearchTrailingTabstrip(browser()->profile()) &&
        !features::HasTabSearchToolbarButton());
-  bool first_tab_selected = browser_->tab_strip_model()->active_index() == 0;
+  bool first_tab_selected = browser_->tab_strip_model()->IsTabInForeground(0);
 
   int new_corner_radius;
 

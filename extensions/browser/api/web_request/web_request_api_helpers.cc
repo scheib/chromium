@@ -41,6 +41,7 @@
 #include "extensions/browser/api/web_request/web_request_info.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/extensions_browser_client.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/extension_id.h"
 #include "net/cookies/cookie_util.h"
@@ -50,6 +51,8 @@
 #include "net/log/net_log_event_type.h"
 #include "services/network/public/cpp/features.h"
 #include "url/url_constants.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 // TODO(battre): move all static functions into an anonymous namespace at the
 // top of this file.
@@ -616,10 +619,6 @@ RequestCookie::RequestCookie(RequestCookie&& other) = default;
 RequestCookie& RequestCookie ::operator=(RequestCookie&& other) = default;
 RequestCookie::~RequestCookie() = default;
 
-bool RequestCookie::operator==(const RequestCookie& other) const {
-  return std::tie(name, value) == std::tie(other.name, other.value);
-}
-
 RequestCookie RequestCookie::Clone() const {
   RequestCookie clone;
   clone.name = name;
@@ -631,13 +630,6 @@ ResponseCookie::ResponseCookie() = default;
 ResponseCookie::ResponseCookie(ResponseCookie&& other) = default;
 ResponseCookie& ResponseCookie ::operator=(ResponseCookie&& other) = default;
 ResponseCookie::~ResponseCookie() = default;
-
-bool ResponseCookie::operator==(const ResponseCookie& other) const {
-  return std::tie(name, value, expires, max_age, domain, path, secure,
-                  http_only) ==
-         std::tie(other.name, other.value, other.expires, other.max_age,
-                  other.domain, other.path, other.secure, other.http_only);
-}
 
 ResponseCookie ResponseCookie::Clone() const {
   ResponseCookie clone;
@@ -658,14 +650,6 @@ FilterResponseCookie::FilterResponseCookie(FilterResponseCookie&& other) =
 FilterResponseCookie& FilterResponseCookie ::operator=(
     FilterResponseCookie&& other) = default;
 FilterResponseCookie::~FilterResponseCookie() = default;
-
-bool FilterResponseCookie::operator==(const FilterResponseCookie& other) const {
-  // This ignores all of the fields of the base class ResponseCookie. Why?
-  // https://crbug.com/916248
-  return std::tie(age_lower_bound, age_upper_bound, session_cookie) ==
-         std::tie(other.age_lower_bound, other.age_upper_bound,
-                  other.session_cookie);
-}
 
 FilterResponseCookie FilterResponseCookie::Clone() const {
   FilterResponseCookie clone;

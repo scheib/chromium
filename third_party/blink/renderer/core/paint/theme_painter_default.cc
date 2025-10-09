@@ -26,10 +26,13 @@
 
 #include <variant>
 
+#include "third_party/blink/public/mojom/css/preferred_contrast.mojom-shared.h"
+#include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom-blink.h"
 #include "third_party/blink/public/platform/web_theme_engine.h"
 #include "third_party/blink/public/resources/grit/blink_image_resources.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/forms/slider_thumb_element.h"
 #include "third_party/blink/renderer/core/html/forms/spin_button_element.h"
@@ -50,7 +53,6 @@
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/rect_conversions.h"
-#include "ui/native_theme/native_theme.h"
 
 namespace blink {
 
@@ -69,12 +71,21 @@ bool IsChecked(const Element& element) {
 }
 
 WebThemeEngine::State GetWebThemeState(const Element& element) {
-  if (element.IsDisabledFormControl())
+  if (element.IsDisabledFormControl()) {
     return WebThemeEngine::kStateDisabled;
-  if (element.IsActive())
+  }
+  if (element.IsActive()) {
     return WebThemeEngine::kStatePressed;
-  if (element.IsHovered())
-    return WebThemeEngine::kStateHover;
+  }
+  if (element.IsHovered()) {
+    // Don't draw a hovered state when the device does not have hover available.
+    if (const Settings* const settings = element.GetDocument().GetSettings();
+        !settings ||
+        (settings->GetAvailableHoverTypes() &
+         static_cast<int>(mojom::blink::HoverType::kHoverHoverType))) {
+      return WebThemeEngine::kStateHover;
+    }
+  }
 
   return WebThemeEngine::kStateNormal;
 }
@@ -91,10 +102,11 @@ SkColor GetContrastingColorFor(const Element& element,
   switch (part) {
     case WebThemeEngine::kPartCheckbox:
     case WebThemeEngine::kPartRadio:
-      return is_disabled ? color_provider->GetColor(
-                               ui::kColorWebNativeControlBackgroundDisabled)
-                         : color_provider->GetColor(
-                               ui::kColorWebNativeControlBackground);
+      return is_disabled
+                 ? color_provider->GetColor(
+                       ui::kColorWebNativeControlCheckboxBackgroundDisabled)
+                 : color_provider->GetColor(
+                       ui::kColorWebNativeControlCheckboxBackground);
     case WebThemeEngine::kPartSliderTrack:
     case WebThemeEngine::kPartSliderThumb:
     case WebThemeEngine::kPartProgressBar:
@@ -323,8 +335,9 @@ bool ThemePainterDefault::PaintCheckbox(const Element& element,
       document.GetColorProviderForPainting(color_scheme);
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartCheckbox,
-      GetWebThemeState(element), unzoomed_rect, &extra_params, color_scheme,
-      document.InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), unzoomed_rect, &extra_params,
+      document.InForcedColorsMode(), color_scheme,
+      document.GetPreferredContrast(), color_provider,
       GetAccentColor(style, document));
   return false;
 }
@@ -362,8 +375,9 @@ bool ThemePainterDefault::PaintRadio(const Element& element,
       document.GetColorProviderForPainting(color_scheme);
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartRadio,
-      GetWebThemeState(element), unzoomed_rect, &extra_params, color_scheme,
-      document.InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), unzoomed_rect, &extra_params,
+      document.InForcedColorsMode(), color_scheme,
+      document.GetPreferredContrast(), color_provider,
       GetAccentColor(style, document));
   return false;
 }
@@ -383,8 +397,9 @@ bool ThemePainterDefault::PaintButton(const Element& element,
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartButton,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      document.InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), rect, &extra_params,
+      document.InForcedColorsMode(), color_scheme,
+      document.GetPreferredContrast(), color_provider,
       GetAccentColor(style, document));
   return false;
 }
@@ -420,8 +435,9 @@ bool ThemePainterDefault::PaintTextField(const Element& element,
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartTextField,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      element.GetDocument().InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), rect, &extra_params,
+      element.GetDocument().InForcedColorsMode(), color_scheme,
+      element.GetDocument().GetPreferredContrast(), color_provider,
       GetAccentColor(style, element.GetDocument()));
   return false;
 }
@@ -462,8 +478,9 @@ bool ThemePainterDefault::PaintMenuList(const Element& element,
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartMenuList,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      document.InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), rect, &extra_params,
+      document.InForcedColorsMode(), color_scheme,
+      document.GetPreferredContrast(), color_provider,
       GetAccentColor(style, document));
   return false;
 }
@@ -486,8 +503,9 @@ bool ThemePainterDefault::PaintMenuListButton(const Element& element,
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartMenuList,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      document.InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), rect, &extra_params,
+      document.InForcedColorsMode(), color_scheme,
+      document.GetPreferredContrast(), color_provider,
       GetAccentColor(style, document));
   return false;
 }
@@ -592,7 +610,7 @@ bool ThemePainterDefault::PaintSliderTrack(const Element& element,
     LayoutBox* input_box = input->GetLayoutBox();
     if (thumb) {
       gfx::Rect thumb_rect = ToPixelSnappedRect(
-          PhysicalRect(thumb->PhysicalLocation(), thumb->Size()));
+          PhysicalRect(thumb->PhysicalLocation(), thumb->StitchedSize()));
       slider.thumb_x = thumb_rect.x() + input_box->PaddingLeft().ToInt() +
                        input_box->BorderLeft().ToInt();
       slider.thumb_y = thumb_rect.y() + input_box->PaddingTop().ToInt() +
@@ -619,8 +637,9 @@ bool ThemePainterDefault::PaintSliderTrack(const Element& element,
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartSliderTrack,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      element.GetDocument().InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), rect, &extra_params,
+      element.GetDocument().InForcedColorsMode(), color_scheme,
+      element.GetDocument().GetPreferredContrast(), color_provider,
       GetAccentColor(style, element.GetDocument()));
   return false;
 }
@@ -668,8 +687,10 @@ bool ThemePainterDefault::PaintSliderThumb(const Element& element,
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartSliderThumb,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      element.GetDocument().InForcedColorsMode(), color_provider, accent_color);
+      GetWebThemeState(element), rect, &extra_params,
+      element.GetDocument().InForcedColorsMode(), color_scheme,
+      element.GetDocument().GetPreferredContrast(), color_provider,
+      accent_color);
   return false;
 }
 
@@ -703,8 +724,9 @@ bool ThemePainterDefault::PaintInnerSpinButton(const Element& element,
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartInnerSpinButton,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      element.GetDocument().InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), rect, &extra_params,
+      element.GetDocument().InForcedColorsMode(), color_scheme,
+      element.GetDocument().GetPreferredContrast(), color_provider,
       GetAccentColor(style, element.GetDocument()));
   return false;
 }
@@ -744,8 +766,9 @@ bool ThemePainterDefault::PaintProgressBar(const Element& element,
       element.GetDocument().GetColorProviderForPainting(color_scheme);
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       paint_info.context.Canvas(), WebThemeEngine::kPartProgressBar,
-      GetWebThemeState(element), rect, &extra_params, color_scheme,
-      element.GetDocument().InForcedColorsMode(), color_provider,
+      GetWebThemeState(element), rect, &extra_params,
+      element.GetDocument().InForcedColorsMode(), color_scheme,
+      element.GetDocument().GetPreferredContrast(), color_provider,
       GetAccentColor(style, element.GetDocument()));
   return false;
 }
@@ -816,7 +839,8 @@ bool ThemePainterDefault::PaintSearchFieldCancelButton(
       (Image::LoadPlatformResource(IDR_SEARCH_CANCEL_PRESSED_HC_LIGHT_MODE)));
   Image* color_scheme_adjusted_cancel_image;
   Image* color_scheme_adjusted_cancel_pressed_image;
-  if (ui::NativeTheme::GetInstanceForWeb()->UserHasContrastPreference()) {
+  if (cancel_button_object.GetDocument().GetPreferredContrast() ==
+      mojom::blink::PreferredContrast::kMore) {
     // TODO(crbug.com/1159597): Ideally we want the cancel button to be the same
     // color as search field text. Since the cancel button is currently painted
     // with a .png, it can't be colored dynamically so currently our only

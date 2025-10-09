@@ -13,9 +13,14 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
+#include "base/functional/bind.h"
 #include "base/functional/callback.h"
+#include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notimplemented.h"
+#include "base/sequence_checker.h"
+#include "base/strings/strcat.h"
+#include "components/optimization_guide/core/optimization_guide_util.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/on_device_model/android/on_device_model_bridge.h"
 #include "services/on_device_model/ml/chrome_ml_types.h"
@@ -30,11 +35,26 @@ namespace on_device_model {
 
 BackendSessionImplAndroid::BackendSessionImplAndroid(
     optimization_guide::proto::ModelExecutionFeature feature,
-    on_device_model::mojom::SessionParamsPtr params)
+    on_device_model::mojom::SessionParamsPtr params,
+    const std::vector<ml::InputPiece>& context_input_pieces)
     : java_session_(
-          OnDeviceModelBridge::CreateSession(feature, std::move(params))) {}
+          OnDeviceModelBridge::CreateSession(feature, params.Clone())),
+      context_input_pieces_(context_input_pieces),
+      feature_(feature),
+      params_(std::move(params)) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  weak_ptr_ = weak_factory_.GetWeakPtr();
+}
+
+BackendSessionImplAndroid::BackendSessionImplAndroid(
+    optimization_guide::proto::ModelExecutionFeature feature,
+    on_device_model::mojom::SessionParamsPtr params)
+    : BackendSessionImplAndroid(feature,
+                                std::move(params),
+                                /*context_input_pieces=*/{}) {}
 
 BackendSessionImplAndroid::~BackendSessionImplAndroid() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_AiCoreSessionWrapper_onNativeDestroyed(env, java_session_);
 }
@@ -53,6 +73,7 @@ void BackendSessionImplAndroid::Generate(
     on_device_model::mojom::GenerateOptionsPtr input,
     mojo::PendingRemote<on_device_model::mojom::StreamingResponder> response,
     base::OnceClosure on_complete) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(!responder_.is_bound()) << "Caller should not call Generate() again "
                                    "before OnComplete() is received.";
   responder_.Bind(std::move(response));
@@ -108,8 +129,13 @@ void BackendSessionImplAndroid::GetProbabilitiesBlocking(
 }
 
 std::unique_ptr<BackendSession> BackendSessionImplAndroid::Clone() {
-  NOTIMPLEMENTED();
-  return nullptr;
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // AiCore doesn't support cloning natively yet. If it does in the future, we
+  // should copy the Java object and call the native Clone function here.
+  // Use `base::WrapUnique` because the constructor is private and
+  // `std::make_unique` cannot access it.
+  return base::WrapUnique(new BackendSessionImplAndroid(
+      feature_, params_.Clone(), context_input_pieces_));
 }
 
 void BackendSessionImplAndroid::AsrStream(
@@ -124,14 +150,37 @@ void BackendSessionImplAndroid::AsrAddAudioChunk(
 }
 
 void BackendSessionImplAndroid::OnResponse(const std::string& response) {
+  sequence_checker_helper_.PostTask(
+      FROM_HERE,
+      base::BindOnce(&BackendSessionImplAndroid::OnResponseOnSequence, weak_ptr_,
+                     response));
+}
+
+void BackendSessionImplAndroid::OnResponseOnSequence(
+    const std::string& response) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto chunk = on_device_model::mojom::ResponseChunk::New();
   chunk->text = response;
   responder_->OnResponse(std::move(chunk));
 }
 
 void BackendSessionImplAndroid::OnComplete(GenerateResult generate_result) {
+  sequence_checker_helper_.PostTask(
+      FROM_HERE,
+      base::BindOnce(&BackendSessionImplAndroid::OnCompleteOnSequence, weak_ptr_,
+                     generate_result));
+}
+
+void BackendSessionImplAndroid::OnCompleteOnSequence(
+    GenerateResult generate_result) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   base::UmaHistogramEnumeration("OnDeviceModel.Android.GenerateResult",
                                 generate_result);
+  base::UmaHistogramEnumeration(
+      base::StrCat({"OnDeviceModel.Android.GenerateResult.",
+                    optimization_guide::GetStringNameForModelExecutionFeature(
+                        feature_)}),
+      generate_result);
   responder_->OnComplete(on_device_model::mojom::ResponseSummary::New());
   responder_.reset();
 }

@@ -482,7 +482,7 @@ bool AutofillPopupControllerImpl::RemoveSuggestion(
           AutofillMetrics::LogDeleteAddressProfileFromPopup();
           break;
         case AutofillMetrics::SingleEntryRemovalMethod::kKeyboardAccessory:
-          AutofillMetrics::LogDeleteAddressProfileFromKeyboardAccessory();
+          NOTREACHED(base::NotFatalUntil::M144);
           break;
         case AutofillMetrics::SingleEntryRemovalMethod::kDeleteButtonClicked:
           NOTREACHED();
@@ -503,6 +503,7 @@ bool AutofillPopupControllerImpl::RemoveSuggestion(
     case FillingProduct::kMerchantPromoCode:
     case FillingProduct::kIban:
     case FillingProduct::kLoyaltyCard:
+    case FillingProduct::kPasskey:
     case FillingProduct::kPassword:
     case FillingProduct::kCompose:
     case FillingProduct::kPlusAddresses:

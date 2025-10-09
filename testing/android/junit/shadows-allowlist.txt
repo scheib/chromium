@@ -8,18 +8,11 @@
 
 # TODO(https://crbug.com/341267427): Reduce this list.
 +com.google.android.apps.chrome.rlz.RevenueStatsInternal
-+org.chromium.base.ApplicationStatus
-+org.chromium.base.PathUtils
 +org.chromium.base.SysUtils
 +org.chromium.base.task.AsyncTask
 +org.chromium.base.task.PostTask
 +org.chromium.base.version_info.VersionInfo
-+org.chromium.chrome.browser.content.WebContentsFactory
-+org.chromium.chrome.browser.contextmenu.ContextMenuHeaderCoordinator
-+org.chromium.chrome.browser.contextualsearch.ContextualSearchSelectionController
-+org.chromium.chrome.browser.device.DeviceConditions
 +org.chromium.chrome.browser.dragdrop.ChromeDragAndDropBrowserDelegate$ClipDataItemBuilder
-+org.chromium.chrome.browser.externalnav.ExternalNavigationDelegateImpl
 +org.chromium.chrome.browser.firstrun.FirstRunUtils
 +org.chromium.chrome.browser.homepage.HomepagePolicyManager
 +org.chromium.chrome.browser.incognito.IncognitoUtils
@@ -45,13 +38,10 @@
 +org.chromium.chrome.browser.rlz.RevenueStats
 +org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory
 +org.chromium.chrome.browser.searchwidget.SearchActivityUtils
-+org.chromium.chrome.browser.share.android_share_sheet.AndroidShareSheetController
 +org.chromium.chrome.browser.share.link_to_text.LinkToTextCoordinator
 +org.chromium.chrome.browser.share.long_screenshots.LongScreenshotsCoordinator
 +org.chromium.chrome.browser.share.qrcode.QrCodeDialog
-+org.chromium.chrome.browser.share.ShareHelper
 +org.chromium.chrome.browser.share.ShareHelper$ChooserActionHelper
-+org.chromium.chrome.browser.share.share_sheet.ShareSheetCoordinator
 +org.chromium.chrome.browser.share.share_sheet.ShareSheetPropertyModelBuilder
 +org.chromium.chrome.browser.tab.SadTab
 +org.chromium.chrome.browser.tab.TabBrowserControlsOffsetHelper

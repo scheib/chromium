@@ -19,11 +19,11 @@ set(ABSL_INTERNAL_DLL_FILES
   "base/internal/endian.h"
   "base/internal/errno_saver.h"
   "base/internal/hide_ptr.h"
-  "base/internal/identity.h"
   "base/internal/iterator_traits.h"
   "base/internal/low_level_alloc.cc"
   "base/internal/low_level_alloc.h"
   "base/internal/low_level_scheduling.h"
+  "base/internal/nullability_traits.h"
   "base/internal/per_thread_tls.h"
   "base/internal/poison.cc"
   "base/internal/poison.h"
@@ -373,6 +373,7 @@ set(ABSL_INTERNAL_DLL_FILES
   "strings/internal/str_split_internal.h"
   "strings/internal/utf8.cc"
   "strings/internal/utf8.h"
+  "strings/resize_and_overwrite.h"
   "synchronization/barrier.cc"
   "synchronization/barrier.h"
   "synchronization/blocking_counter.cc"
@@ -828,6 +829,9 @@ function(absl_make_dll)
       ${_dll_libs}
       ${ABSL_DEFAULT_LINKOPTS}
       $<$<BOOL:${ANDROID}>:-llog>
+      $<$<BOOL:${MINGW}>:-ladvapi32>
+      $<$<BOOL:${MINGW}>:-ldbghelp>
+      $<$<BOOL:${MINGW}>:-lbcrypt>
   )
   set_target_properties(${_dll} PROPERTIES
     LINKER_LANGUAGE "CXX"

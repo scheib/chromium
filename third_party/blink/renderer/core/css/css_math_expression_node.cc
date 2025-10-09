@@ -342,10 +342,58 @@ CalculationResultCategory CSSMathType::Category() const {
   for (uint8_t type_index = 0u; type_index < BaseType::kNumTypes;
        ++type_index) {
     int8_t type_power = base_type_powers_[type_index];
-    types_sum += type_power;
-    if (type_power != 0) {
-      type = BaseType(type_index);
+    if (!type_power) {
+      continue;
     }
+    // If more than one base type has a non-zero power, it's intermediate.
+    if (types_sum != 0) {
+      if (type_index != kPercent) {
+        return kCalcIntermediate;
+      }
+      DCHECK(!percentage_hint_.has_value());
+      // Because we don't provide the percent hint from the "outside"
+      // as css-values expects [1], it's possible for the percentage
+      // hint to be unset even for expressions that involve percentages
+      // as well some other type, e.g.:
+      //
+      //  width: (1% * 1%) / 1px;
+      //
+      // The CSSMathType for the above expression would contain
+      // [percent -> 2, length -> -1] with a null percent hint.
+      // However, the expression is clearly valid for 'width', since
+      // the percentages resolve against lengths. To address this,
+      // we effectively deduce what the percent hint should have been
+      // from the other (non-percent) base type powers:
+      //
+      // If there is more than one non-percent base type with non-zero power,
+      // it's intermediate (handled by early-out above).
+      //
+      // Otherwise, if there is exactly *one* other (non-percent) base type
+      // with a non-zero power, then we assume that percentages were intended
+      // to resolve against that base type, and basically move the powers from
+      // "percent" to the other base type. Continuing the example from before:
+      //
+      //   [percent -> 2, length -> -1] => [percent -> 0, length -> 1]
+      //
+      // However, we do not actually need to modify `base_type_powers_`
+      // according to the above; the remainder of this function only
+      // checks `types_sum`, so it's enough to "pretend" that these numbers
+      // were combined all along.
+      //
+      // Note: This relies on kPercent appearing *last* in the enum.
+      //
+      // Note: Whether or not this deduced category is valid for
+      //       the relevant context will be determined by the call
+      //       site. For example, "width:(1% * 1%) / 1deg" would produce
+      //       kAngle for this algorithm, but ultimately be rejected.
+      //
+      // [1]
+      // https://drafts.csswg.org/css-values-4/#determine-the-type-of-a-calculation
+      types_sum += type_power;
+      break;
+    }
+    type = BaseType(type_index);
+    types_sum += type_power;
   }
   if (types_sum == 0) {
     return kCalcNumber;
@@ -507,6 +555,35 @@ CSSMathType CSSMathType::operator-() const {
   }
   return type;
 }
+
+#if DCHECK_IS_ON()
+std::ostream& operator<<(std::ostream& os, const CSSMathType& type) {
+  if (!type.IsValid()) {
+    os << "InvalidType ";
+  }
+  os << "CSSMathType(";
+  bool first = true;
+  for (uint8_t type_index = 0; type_index < CSSMathType::BaseType::kNumTypes;
+       ++type_index) {
+    int8_t power = type.base_type_powers_[type_index];
+    if (power != 0) {
+      if (!first) {
+        os << ", ";
+      }
+      first = false;
+      os << static_cast<int>(type_index) << "^" << static_cast<int>(power);
+    }
+  }
+  if (type.percentage_hint_) {
+    if (!first) {
+      os << ", ";
+    }
+    os << "percent_hint=" << static_cast<int>(type.percentage_hint_.value());
+  }
+  os << ")";
+  return os;
+}
+#endif
 
 namespace {
 
@@ -754,11 +831,11 @@ void CombineNumericChildrenFromNode(const CSSMathExpressionNode* root,
                                     UnitsHashMap& numeric_children,
                                     UnitsVector& all_children,
                                     bool is_in_nesting = false) {
-  const CSSPrimitiveValue::UnitType unit_type =
-      root->ResolvedUnitTypeForSimplification();
   // Go deeper inside the operation node if possible.
+  // But don't try to go inside complex-typed operations such as 1rem * 1px /
+  // 1px, as those should not be sorted, because we don't know their unit type.
   if (auto* operation = DynamicTo<CSSMathExpressionOperation>(root);
-      operation &&
+      operation && !operation->HasNestedIntermediateResult() &&
       (op == CSSMathOperator::kMultiply ? operation->IsMultiplyOrDivide()
                                         : operation->IsAddOrSubtract())) {
     const CSSMathOperator operation_op = operation->OperatorType();
@@ -776,6 +853,8 @@ void CombineNumericChildrenFromNode(const CSSMathExpressionNode* root,
   }
   // If we have numeric with double value - combine under one unit type.
   if (IsNumericNodeWithDoubleValue(root)) {
+    const CSSPrimitiveValue::UnitType unit_type =
+        root->ResolvedUnitTypeForSimplification();
     double value = op == CSSMathOperator::kSubtract ? -root->DoubleValue()
                                                     : root->DoubleValue();
     if (auto it = numeric_children.find(unit_type);
@@ -802,8 +881,10 @@ void CollectNumericChildrenFromNode(const CSSMathExpressionNode* root,
                                     UnitsVector& complex_children,
                                     bool is_in_nesting = false) {
   // Go deeper inside the operation node if possible.
+  // But don't try to go inside complex-typed operations such as 1rem * 1px /
+  // 1px, as those should not be sorted, because we don't know their unit type.
   if (auto* operation = DynamicTo<CSSMathExpressionOperation>(root);
-      operation &&
+      operation && !operation->HasNestedIntermediateResult() &&
       (op == CSSMathOperator::kMultiply ? operation->IsMultiplyOrDivide()
                                         : operation->IsAddOrSubtract())) {
     const CSSMathOperator operation_op = operation->OperatorType();
@@ -819,10 +900,10 @@ void CollectNumericChildrenFromNode(const CSSMathExpressionNode* root,
                                    is_in_nesting);
     return;
   }
-  CSSPrimitiveValue::UnitType unit_type =
-      root->ResolvedUnitTypeForSimplification();
   // If we have numeric with double value - collect in numeric_children.
   if (IsNumericNodeWithDoubleValue(root)) {
+    CSSPrimitiveValue::UnitType unit_type =
+        root->ResolvedUnitTypeForSimplification();
     if (auto it = numeric_children.find(unit_type);
         it != numeric_children.end()) {
       it->value->emplace_back(op, root);
@@ -941,22 +1022,22 @@ CSSMathExpressionNode* MaybeSimplifySumOrProductNode(
   for (const auto& child : all_children) {
     auto [op, node] = MaybeReplaceNodeWithCombined(
         child.node, child.op, numeric_children, is_multiply);
-    CSSPrimitiveValue::UnitType unit_type =
-        node->ResolvedUnitTypeForSimplification();
 
-    // Skip already used unit types, as they have been already combined.
     if (IsNumericNodeWithDoubleValue(node)) {
+      CSSPrimitiveValue::UnitType unit_type =
+          node->ResolvedUnitTypeForSimplification();
+      // Skip already used unit types, as they have been already combined.
       if (used_units.Contains(unit_type)) {
         continue;
       }
       used_units.insert(unit_type);
-    }
 
-    // Skip a constant factor of unity, unless it is the only factor.
-    if (is_multiply && unit_type == CSSPrimitiveValue::UnitType::kNumber &&
-        node->IsNumericLiteral() && node->DoubleValue() == 1.0 &&
-        (numeric_children.size() + all_children.size()) > 1) {
-      continue;
+      // Skip a constant factor of unity, unless it is the only factor.
+      if (is_multiply && unit_type == CSSPrimitiveValue::UnitType::kNumber &&
+          node->DoubleValue() == 1.0 &&
+          (numeric_children.size() + all_children.size()) > 1) {
+        continue;
+      }
     }
 
     if (!final_node) {
@@ -1816,9 +1897,6 @@ CSSMathExpressionNode* CSSMathExpressionOperation::CreateTrigonometricFunction(
 CSSMathExpressionNode* CSSMathExpressionOperation::CreateSteppedValueFunction(
     Operands&& operands,
     CSSMathOperator op) {
-  if (!RuntimeEnabledFeatures::CSSSteppedValueFunctionsEnabled()) {
-    return nullptr;
-  }
   DCHECK_EQ(operands.size(), 2u);
   if (operands[0]->Category() == kCalcOther ||
       operands[1]->Category() == kCalcOther) {
@@ -1850,10 +1928,6 @@ CSSMathExpressionNode* CSSMathExpressionOperation::CreateSteppedValueFunction(
 CSSMathExpressionNode* CSSMathExpressionOperation::CreateExponentialFunction(
     Operands&& operands,
     CSSValueID function_id) {
-  if (!RuntimeEnabledFeatures::CSSExponentialFunctionsEnabled()) {
-    return nullptr;
-  }
-
   // calc-size() is not allowed as a parameter to exponential functions,
   // since it can only be a base of any calculation.
   // Also, intermediate calculations are not allowed as parameters to
@@ -3000,14 +3074,18 @@ String CSSMathExpressionOperation::CustomCSSText() const {
       // As per
       // https://drafts.csswg.org/css-values-4/#sort-a-calculations-children
       // we should sort the dimensions of the sum node.
-      const CSSMathExpressionOperation* operation = this;
-      // Note: we can hit here, since CSS Typed OM doesn't currently follow
-      // the same simplifications as CSS Values spec.
-      // https://github.com/w3c/csswg-drafts/issues/9451
-      if (!operation->IsOperation()) {
-        return operation->CustomCSSText();
-      }
       UnitsVector terms = CollectSumOrProductInOrder(this);
+      // During sorting, we might have ended up with just one term for the case
+      // of complex-typed operation in form of Xpx * Ypx. That term would be the
+      // same as the original operation, so in this case we need to unwrap it
+      // into a product of two operands. This is a temporary workaround until we
+      // fix the sorting to properly work with complex-typed units.
+      if (terms.size() == 1) {
+        terms = {
+            {CSSMathOperator::kMultiply, operands_.front()},
+            {operator_, operands_.back()},
+        };
+      }
 
       // https://drafts.csswg.org/css-values-4/#serialize-a-calculation-tree
       //
@@ -3992,17 +4070,17 @@ class CSSMathExpressionNodeParser {
       case CSSValueID::kAnchor:
       case CSSValueID::kAnchorSize:
       case CSSValueID::kCalcSize:
-        return true;
+      case CSSValueID::kRound:
+      case CSSValueID::kMod:
+      case CSSValueID::kRem:
       case CSSValueID::kPow:
       case CSSValueID::kSqrt:
       case CSSValueID::kHypot:
       case CSSValueID::kLog:
       case CSSValueID::kExp:
-        return RuntimeEnabledFeatures::CSSExponentialFunctionsEnabled();
-      case CSSValueID::kRound:
-      case CSSValueID::kMod:
-      case CSSValueID::kRem:
-        return RuntimeEnabledFeatures::CSSSteppedValueFunctionsEnabled();
+      case CSSValueID::kSiblingCount:
+      case CSSValueID::kSiblingIndex:
+        return true;
       case CSSValueID::kAbs:
       case CSSValueID::kSign:
         return RuntimeEnabledFeatures::CSSSignRelatedFunctionsEnabled();
@@ -4012,9 +4090,6 @@ class CSSMathExpressionNodeParser {
         return RuntimeEnabledFeatures::CSSMediaProgressNotationEnabled();
       case CSSValueID::kContainerProgress:
         return RuntimeEnabledFeatures::CSSContainerProgressNotationEnabled();
-      case CSSValueID::kSiblingCount:
-      case CSSValueID::kSiblingIndex:
-        return RuntimeEnabledFeatures::CSSSiblingFunctionsEnabled();
       // TODO(crbug.com/1284199): Support other math functions.
       default:
         return false;
@@ -4302,11 +4377,9 @@ class CSSMathExpressionNodeParser {
       context_.Count(WebFeature::kCSSCalcSizeFunction);
       return calc_size;
     }
-    if (RuntimeEnabledFeatures::CSSSiblingFunctionsEnabled()) {
-      if (CSSMathExpressionNode* sibling_function =
-              ParseSiblingIndexOrCount(function_id, stream, state)) {
-        return sibling_function;
-      }
+    if (CSSMathExpressionNode* sibling_function =
+            ParseSiblingIndexOrCount(function_id, stream, state)) {
+      return sibling_function;
     }
 
     // "arguments" refers to comma separated ones.
@@ -4334,31 +4407,25 @@ class CSSMathExpressionNodeParser {
         max_argument_count = 1;
         break;
       case CSSValueID::kPow:
-        DCHECK(RuntimeEnabledFeatures::CSSExponentialFunctionsEnabled());
         max_argument_count = 2;
         min_argument_count = 2;
         break;
       case CSSValueID::kExp:
       case CSSValueID::kSqrt:
-        DCHECK(RuntimeEnabledFeatures::CSSExponentialFunctionsEnabled());
         max_argument_count = 1;
         break;
       case CSSValueID::kHypot:
-        DCHECK(RuntimeEnabledFeatures::CSSExponentialFunctionsEnabled());
         max_argument_count = kMaxExpressionDepth;
         break;
       case CSSValueID::kLog:
-        DCHECK(RuntimeEnabledFeatures::CSSExponentialFunctionsEnabled());
         max_argument_count = 2;
         break;
       case CSSValueID::kRound:
-        DCHECK(RuntimeEnabledFeatures::CSSSteppedValueFunctionsEnabled());
         max_argument_count = 3;
         min_argument_count = 1;
         break;
       case CSSValueID::kMod:
       case CSSValueID::kRem:
-        DCHECK(RuntimeEnabledFeatures::CSSSteppedValueFunctionsEnabled());
         max_argument_count = 2;
         min_argument_count = 2;
         break;
@@ -4454,7 +4521,6 @@ class CSSMathExpressionNodeParser {
       case CSSValueID::kHypot:
       case CSSValueID::kLog:
       case CSSValueID::kExp: {
-        DCHECK(RuntimeEnabledFeatures::CSSExponentialFunctionsEnabled());
         CSSMathExpressionNode* node =
             CSSMathExpressionOperation::CreateExponentialFunction(
                 std::move(nodes), function_id);
@@ -4466,7 +4532,6 @@ class CSSMathExpressionNodeParser {
       case CSSValueID::kRound:
       case CSSValueID::kMod:
       case CSSValueID::kRem: {
-        DCHECK(RuntimeEnabledFeatures::CSSSteppedValueFunctionsEnabled());
         CSSMathOperator op;
         if (function_id == CSSValueID::kRound) {
           DCHECK_GE(nodes.size(), 1u);

@@ -18,7 +18,9 @@
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -69,9 +71,7 @@ class RenderProcessHostInternalObserver;
 // Enables BackForwardCache size for
 //  - desktop: https://crbug.com/1291435.
 //  - android: https://crbug.com/1395281.
-BASE_FEATURE(kBackForwardCacheSize,
-             "BackForwardCacheSize",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kBackForwardCacheSize, base::FEATURE_ENABLED_BY_DEFAULT);
 // Sets BackForwardCache cache_size=6.
 const base::FeatureParam<int> kBackForwardCacheSizeCacheSize{
     &kBackForwardCacheSize, "cache_size", 6};
@@ -294,7 +294,7 @@ base::flat_map<std::string, std::vector<std::string>> ParseCommaSeparatedURLs(
        base::SplitString(comma_separated_urls, ",", base::TRIM_WHITESPACE,
                          base::SPLIT_WANT_ALL)) {
     GURL url = GURL(it);
-    urls[url.host()].push_back(url.path());
+    urls[url.GetHost()].push_back(url.GetPath());
   }
   return urls;
 }
@@ -757,12 +757,34 @@ void BackForwardCacheImpl::UpdateCanStoreToIncludeCacheControlNoStore(
           features::kDeviceBoundSessionTerminationEvictBackForwardCache)) {
     result.No(BackForwardCacheMetrics::NotRestoredReason::
                   kCacheControlNoStoreDeviceBoundSessionTerminated);
-  } else if (render_frame_host->GetCookieChangeInfo()
-                 .http_only_cookie_modification_count_ > 0) {
+    return;
+  }
+
+  const RenderFrameHostImpl::CookieChangeListener::CookieChangeInfo&
+      cookie_change_info = render_frame_host->GetCookieChangeInfo();
+  const std::string kCookieCHangeInfoMetricName =
+      "BackForwardCache.CCNS.CookieChangeInfo.";
+  base::UmaHistogramCounts1000(
+      base::StrCat({kCookieCHangeInfoMetricName, "AllCookies"}),
+      cookie_change_info.cookie_modification_count);
+  base::UmaHistogramCounts1000(
+      base::StrCat(
+          {kCookieCHangeInfoMetricName, "AllCookiesFromMainFrameNavigation"}),
+      cookie_change_info.cookie_modification_removing_count);
+  base::UmaHistogramCounts1000(
+      base::StrCat({kCookieCHangeInfoMetricName, "HttpOnlyCookies"}),
+      cookie_change_info.http_only_cookie_modification_count);
+  base::UmaHistogramCounts1000(
+      base::StrCat({kCookieCHangeInfoMetricName,
+                    "HttpOnlyCookiesFromMainFrameNavigation"}),
+      cookie_change_info.http_only_cookie_modification_removing_count);
+
+  if (cookie_change_info.http_only_cookie_modification_count >
+      cookie_change_info.http_only_cookie_modification_removing_count) {
     result.No(BackForwardCacheMetrics::NotRestoredReason::
                   kCacheControlNoStoreHTTPOnlyCookieModified);
-  } else if (render_frame_host->GetCookieChangeInfo()
-                 .cookie_modification_count_ > 0) {
+  } else if (cookie_change_info.cookie_modification_count >
+             cookie_change_info.cookie_modification_removing_count) {
     // JavaScript cookies are modified but not HTTP cookies. Only restore based
     // on the experiment level.
     if (GetCacheControlNoStoreLevel() <=
@@ -1706,11 +1728,12 @@ bool BackForwardCacheImpl::IsAllowed(const GURL& current_url) {
 bool BackForwardCacheImpl::IsHostPathAllowed(const GURL& current_url) {
   // If the current_url matches the blocked host and path, current_url is
   // not allowed to be cached.
-  const auto& it = blocked_urls_.find(current_url.host());
+  const auto& it = blocked_urls_.find(current_url.GetHost());
   if (it != blocked_urls_.end()) {
     for (const std::string& blocked_path : it->second) {
-      if (base::StartsWith(current_url.path_piece(), blocked_path))
+      if (base::StartsWith(current_url.path(), blocked_path)) {
         return false;
+      }
     }
   }
 
@@ -1723,11 +1746,12 @@ bool BackForwardCacheImpl::IsHostPathAllowed(const GURL& current_url) {
   // the corresponding host and path is the prefix of the allowed url path. We
   // only check for host and path and not any other components including url
   // scheme here.
-  const auto& entry = allowed_urls_.find(current_url.host());
+  const auto& entry = allowed_urls_.find(current_url.GetHost());
   if (entry != allowed_urls_.end()) {
     for (const std::string& allowed_path : entry->second) {
-      if (base::StartsWith(current_url.path_piece(), allowed_path))
+      if (base::StartsWith(current_url.path(), allowed_path)) {
         return true;
+      }
     }
   }
   return false;
@@ -1735,7 +1759,7 @@ bool BackForwardCacheImpl::IsHostPathAllowed(const GURL& current_url) {
 
 bool BackForwardCacheImpl::IsQueryAllowed(const GURL& current_url) {
   std::vector<std::string> cgi_params =
-      base::SplitString(current_url.query_piece(), "&", base::TRIM_WHITESPACE,
+      base::SplitString(current_url.query(), "&", base::TRIM_WHITESPACE,
                         base::SplitResult::SPLIT_WANT_NONEMPTY);
   for (const std::string& cgi_param : cgi_params) {
     if (base::Contains(blocked_cgi_params_, cgi_param))

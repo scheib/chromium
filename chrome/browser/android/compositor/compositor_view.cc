@@ -39,6 +39,7 @@
 #include "ui/android/window_android.h"
 #include "ui/gfx/android/java_bitmap.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gl/gl_features.h"
 
 // Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chrome/android/chrome_jni_headers/CompositorView_jni.h"
@@ -74,6 +75,10 @@ jlong JNI_CompositorView_Init(
   return reinterpret_cast<intptr_t>(view);
 }
 
+jboolean JNI_CompositorView_PreferRgb565ForDisplay(JNIEnv* env) {
+  return features::PreferRGB565ResourcesForDisplay();
+}
+
 CompositorView::CompositorView(JNIEnv* env,
                                const base::android::JavaRef<jobject>& obj,
                                ui::WindowAndroid* window_android,
@@ -90,6 +95,29 @@ CompositorView::CompositorView(JNIEnv* env,
   content::BrowserChildProcessObserver::Add(this);
   obj_.Reset(env, obj);
   compositor_.reset(content::Compositor::Create(this, window_android));
+
+  root_layer_->SetIsDrawable(true);
+  root_layer_->SetBackgroundColor(SkColors::kWhite);
+}
+
+// Constructor for testing.
+CompositorView::CompositorView(JNIEnv* env,
+                               const base::android::JavaRef<jobject>& obj,
+                               ui::WindowAndroid* window_android,
+                               TabContentManager* tab_content_manager,
+                               std::unique_ptr<content::Compositor> compositor)
+    : tab_content_manager_(tab_content_manager),
+      root_layer_(cc::slim::SolidColorLayer::Create()),
+      scene_layer_(nullptr),
+      current_surface_format_(0),
+      content_width_(0),
+      content_height_(0),
+      overlay_video_mode_(false),
+      overlay_immersive_ar_mode_(false),
+      overlay_xr_full_screen_mode_(false) {
+  content::BrowserChildProcessObserver::Add(this);
+  obj_.Reset(env, obj);
+  compositor_ = std::move(compositor);
 
   root_layer_->SetIsDrawable(true);
   root_layer_->SetBackgroundColor(SkColors::kWhite);
@@ -363,9 +391,7 @@ void CompositorView::BrowserChildProcessKilled(
 
   // On Android R surface control layers leak if GPU process crashes, so we need
   // to re-create surface to get rid of them.
-  if (base::android::android_info::sdk_int() ==
-          base::android::android_info::SDK_VERSION_R &&
-      data.process_type == content::PROCESS_TYPE_GPU) {
+  if (data.process_type == content::PROCESS_TYPE_GPU) {
     JNIEnv* env = base::android::AttachCurrentThread();
     compositor_->SetSurface(nullptr, false, nullptr);
     Java_CompositorView_recreateSurface(env, obj_);

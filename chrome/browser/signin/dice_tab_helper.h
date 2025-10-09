@@ -9,6 +9,7 @@
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/timer/timer.h"
+#include "chrome/browser/ui/webui/signin/history_sync_optin_helper.h"
 #include "components/signin/public/base/signin_metrics.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
@@ -34,8 +35,11 @@ class DiceTabHelper : public content::WebContentsUserData<DiceTabHelper>,
                                    const CoreAccountInfo&)>;
   // Callback starting the History syncing. This is a repeating callback,
   // because multiple `ProcessDiceHeaderDelegateImpl` may make copies of it.
-  using EnableHistorySyncOptinCallback = base::RepeatingCallback<
-      void(Profile*, content::WebContents*, const CoreAccountInfo&)>;
+  using EnableHistorySyncOptinCallback =
+      base::RepeatingCallback<void(Profile*,
+                                   content::WebContents*,
+                                   const CoreAccountInfo&,
+                                   signin_metrics::AccessPoint)>;
 
   // Callback displaying a signin error to the user. This is a repeating
   // callback, because multiple `ProcessDiceHeaderDelegateImpl` may make copies
@@ -135,6 +139,8 @@ class DiceTabHelper : public content::WebContentsUserData<DiceTabHelper>,
 
   // Updates the callbacks used by the tab helper.
   void UpdateSyncCallback(EnableSyncCallback enable_sync_callback);
+  void UpdateHistorySyncOptinCallback(
+      EnableHistorySyncOptinCallback history_sync_optin_callback);
   void UpdateSigninErrorCallback(
       ShowSigninErrorCallback show_signin_error_callback);
   // Updates the redirection url, that is used used after enabling Sync or
@@ -147,6 +153,7 @@ class DiceTabHelper : public content::WebContentsUserData<DiceTabHelper>,
   SetScopedInterceptionBubbleTimerForTesting(base::TimeDelta delay);
 
  private:
+
   friend class content::WebContentsUserData<DiceTabHelper>;
   explicit DiceTabHelper(content::WebContents* web_contents);
 

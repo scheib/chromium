@@ -43,7 +43,6 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/content_settings/core/browser/content_settings_provider.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
@@ -65,6 +64,7 @@
 #include "components/subresource_filter/core/browser/subresource_filter_features.h"
 #include "components/url_formatter/elide_url.h"
 #include "components/url_formatter/url_formatter.h"
+#include "components/webapps/isolated_web_apps/scheme.h"
 #include "content/public/browser/permission_controller.h"
 #include "content/public/browser/permission_descriptor_util.h"
 #include "content/public/browser/permission_result.h"
@@ -240,7 +240,6 @@ constexpr auto kContentSettingsTypeGroupNames = std::to_array<
     {ContentSettingsType::SUB_APP_INSTALLATION_PROMPTS, nullptr},
     {ContentSettingsType::DIRECT_SOCKETS, nullptr},
     {ContentSettingsType::REVOKED_ABUSIVE_NOTIFICATION_PERMISSIONS, nullptr},
-    {ContentSettingsType::TOP_LEVEL_TPCD_ORIGIN_TRIAL, nullptr},
     {ContentSettingsType::DISPLAY_MEDIA_SYSTEM_AUDIO, nullptr},
     {ContentSettingsType::STORAGE_ACCESS_HEADER_ORIGIN_TRIAL, nullptr},
     // TODO(crbug.com/368266658): Implement the UI for Direct Sockets PNA.
@@ -259,6 +258,8 @@ constexpr auto kContentSettingsTypeGroupNames = std::to_array<
     // TODO(crbug.com/430494524): Implement the WebUI
     {ContentSettingsType::GEOLOCATION_WITH_OPTIONS, nullptr},
     {ContentSettingsType::DEVICE_ATTRIBUTES, nullptr},
+    {ContentSettingsType::PERMISSION_ACTIONS_HISTORY, nullptr},
+    {ContentSettingsType::SUSPICIOUS_NOTIFICATION_SHOW_ORIGINAL, nullptr},
 });
 
 static_assert(
@@ -280,7 +281,7 @@ bool ShouldShowIwaContentSettingForOrigin(Profile* profile,
                                           std::string_view origin,
                                           ContentSettingsType content_setting) {
   // Show for non-origin-specific lists, IWAs, and non-default values.
-  if (origin.empty() || GURL(origin).SchemeIs(chrome::kIsolatedAppScheme)) {
+  if (origin.empty() || GURL(origin).SchemeIs(webapps::kIsolatedAppScheme)) {
     return true;
   }
   if (!profile) {
@@ -379,7 +380,7 @@ std::string GetDisplayNameForPattern(Profile* profile,
                                      const ContentSettingsPattern& pattern) {
   GURL url(pattern.ToString());
   if (url.is_valid() && (url.SchemeIs(extensions::kExtensionScheme) ||
-                         url.SchemeIs(chrome::kIsolatedAppScheme))) {
+                         url.SchemeIs(webapps::kIsolatedAppScheme))) {
     return GetDisplayNameForGURL(profile, url, /*hostname_only=*/false);
   }
   return pattern.ToString();
@@ -897,7 +898,7 @@ std::string GetStorageAccessDisplayNameForPattern(
     ContentSettingsPattern pattern) {
   GURL url(pattern.ToString());
   if (url.is_valid() && (url.SchemeIs(extensions::kExtensionScheme) ||
-                         url.SchemeIs(chrome::kIsolatedAppScheme))) {
+                         url.SchemeIs(webapps::kIsolatedAppScheme))) {
     return GetDisplayNameForGURL(profile, url, /*hostname_only=*/false);
   }
 

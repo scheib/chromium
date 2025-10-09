@@ -10,14 +10,16 @@
 #import "components/strings/grit/components_strings.h"
 #import "ios/chrome/browser/browser_container/ui_bundled/edit_menu_app_interface.h"
 #import "ios/chrome/browser/popup_menu/ui_bundled/popup_menu_constants.h"
-#import "ios/chrome/browser/settings/ui_bundled/cells/clear_browsing_data_constants.h"
+#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/quick_delete_constants.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_constants.h"
+#import "ios/chrome/browser/toolbar/ui_bundled/public/toolbar_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
+#import "ios/chrome/test/earl_grey/chrome_xcui_actions.h"
 #import "ios/chrome/test/earl_grey/scoped_disable_timer_tracking.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
@@ -35,6 +37,7 @@
 #define EarlGrey [self earlGrey]
 #pragma clang diagnostic pop
 
+using base::test::ios::kWaitForClearBrowsingDataTimeout;
 using base::test::ios::kWaitForUIElementTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 using chrome_test_util::BrowsingDataButtonMatcher;
@@ -154,7 +157,6 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
     }
     return;
   }
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26.0, *)) {
     // In iOS26, the assumption that a scrim coverts the whole window is
     // violated. Therefore, the solution is to tap on the PopoverDismissRegion
@@ -163,15 +165,12 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
         selectElementWithMatcher:grey_accessibilityID(@"PopoverDismissRegion")]
         performAction:grey_tap()];
   } else {
-#endif
     // A scrim covers the whole window and tapping on this scrim dismisses the
     // tools menu.  The "Tools Menu" button happens to be outside of the bounds
     // of the menu and is a convenient place to tap to activate the scrim.
     [[EarlGrey selectElementWithMatcher:chrome_test_util::ToolsMenuButton()]
         performAction:grey_tap()];
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   }
-#endif
 }
 
 - (void)openToolsMenuInWindowWithNumber:(int)windowNumber {
@@ -179,15 +178,8 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
                 chrome_test_util::WindowWithNumber(windowNumber)];
   // TODO(crbug.com/41271107): Add logic to ensure the app is in the correct
   // state, for example DCHECK if no tabs are displayed.
-  [[[EarlGrey
-      selectElementWithMatcher:grey_allOf(chrome_test_util::ToolsMenuButton(),
-                                          grey_sufficientlyVisible(), nil)]
-         usingSearchAction:grey_swipeSlowInDirection(kGREYDirectionDown)
-      onElementWithMatcher:chrome_test_util::
-                               WebStateScrollViewMatcherInWindowWithNumber(
-                                   windowNumber)] performAction:grey_tap()];
-  // TODO(crbug.com/41271101): Add webViewScrollView matcher so we don't have
-  // to always find it.
+  chrome_test_util::TapAtOffsetOf(kToolbarToolsMenuButtonIdentifier,
+                                  windowNumber, CGVectorMake(0.5, 0.5));
 }
 
 - (void)openSettingsMenu {
@@ -217,15 +209,6 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
          usingSearchAction:grey_swipeSlowInDirection(kGREYDirectionDown)
       onElementWithMatcher:chrome_test_util::WebStateScrollViewMatcher()]
       performAction:grey_longPress()];
-
-  if (@available(iOS 26, *)) {
-    // TODO(crbug.com/428928323): Investigate why the keyboard appears. Remove
-    // this workaround when it's not needed anymore.
-    // On iOS 26, the keyboard appears when the new tab button is tapped and it
-    // hides the elements behind. Close the keyboard by typing a return key.
-    [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
-  }
-
   // TODO(crbug.com/41271101): Add webViewScrollView matcher so we don't have
   // to always find it.
 }
@@ -542,14 +525,12 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
     // On iPad, when running on iOS 26+ and building with the iOS 26+ SDK, the
     // search bar is dismissed after clearing the text. The button for clearing
     // text is always displayed.
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
     if (@available(iOS 26, *)) {
       [[EarlGrey
           selectElementWithMatcher:chrome_test_util::SearchBarClearTextButton()]
           performAction:grey_tap()];
       return;
     }
-#endif
 
     // On iPad, when running on iOS < 26 or building with an SDK older than
     // iOS 26, the search bar is cleared and dismissed via the "Cancel" button.
@@ -561,13 +542,11 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
 
     // When running on iOS 26+ and building with the iOS 26+ SDK, tap the
     // "Close" button.
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
     if (@available(iOS 26, *)) {
       [[EarlGrey selectElementWithMatcher:chrome_test_util::CloseButton()]
           performAction:grey_tap()];
       return;
     }
-#endif
 
     // When running on iOS < 26 or building with an SDK older than iOS 26, tap
     // the "Cancel" button.
@@ -586,12 +565,6 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
                  grey_text(l10n_util::GetNSString(
                      IDS_IOS_CLEAR_BROWSING_DATA_TIME_RANGE_SELECTOR_TITLE))]
       performAction:grey_tap()];
-
-  // TODO(crbug.com/428928323): Investigate why the keyboard appears and remove
-  // this workaround when it's not needed anymore.
-  // On iOS 26, the keyboard appears when the 'Time Range' button is tapped and
-  // it hides the elements behind. Close the keyboard by typing a return key.
-  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
 
   NSString* timeRange = l10n_util::GetNSString(
       IDS_IOS_CLEAR_BROWSING_DATA_TIME_RANGE_OPTION_BEGINNING_OF_TIME);
@@ -649,8 +622,8 @@ const int kMaxNumberOfAttemptsAtTypingTextInOmnibox = 3;
                                ? @"Clear browsing data view was not visible"
                                : @"Clear browsing data view was visible";
   bool clearBrowsingDataViewVisibility =
-      base::test::ios::WaitUntilConditionOrTimeout(kWaitForUIElementTimeout,
-                                                   condition);
+      base::test::ios::WaitUntilConditionOrTimeout(
+          kWaitForClearBrowsingDataTimeout, condition);
   EG_TEST_HELPER_ASSERT_TRUE(clearBrowsingDataViewVisibility, errorMessage);
 }
 

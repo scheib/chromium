@@ -14,6 +14,8 @@
 #include "base/functional/callback.h"
 #include "components/facilitated_payments/android/facilitated_payments_app_info_list_android.h"
 #include "components/facilitated_payments/core/browser/facilitated_payments_app_info_list.h"
+#include "components/facilitated_payments/core/metrics/facilitated_payments_metrics.h"
+#include "components/facilitated_payments/core/validation/payment_link_validator.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/android/window_android.h"
 #include "url/android/gurl_android.h"
@@ -108,12 +110,25 @@ DeviceDelegateAndroid::GetSupportedPaymentApps(const GURL& payment_link_url) {
 bool DeviceDelegateAndroid::InvokePaymentApp(std::string_view package_name,
                                              std::string_view activity_name,
                                              const GURL& payment_link_url) {
+  PaymentLinkValidator validator;
   JNIEnv* env = base::android::AttachCurrentThread();
   return Java_DeviceDelegate_invokePaymentApp(
       env, base::android::ConvertUTF8ToJavaString(env, package_name),
       base::android::ConvertUTF8ToJavaString(env, activity_name),
+      base::android::ConvertUTF8ToJavaString(
+          env, SchemeToString(validator.GetScheme(payment_link_url))),
       url::GURLAndroid::FromNativeGURL(env, payment_link_url),
       web_contents_->GetTopLevelNativeWindow()->GetJavaObject());
+}
+
+bool DeviceDelegateAndroid::IsPixSupportAvailableViaGboard() const {
+  if (!web_contents_ || !web_contents_->GetNativeView() ||
+      !web_contents_->GetNativeView()->GetWindowAndroid()) {
+    return false;
+  }
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_DeviceDelegate_isPixSupportAvailableViaGboard(
+      env, web_contents_->GetTopLevelNativeWindow()->GetJavaObject());
 }
 
 }  // namespace payments::facilitated

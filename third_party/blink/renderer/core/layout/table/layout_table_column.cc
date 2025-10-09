@@ -56,8 +56,10 @@ void LayoutTableColumn::Trace(Visitor* visitor) const {
   LayoutBox::Trace(visitor);
 }
 
-void LayoutTableColumn::StyleDidChange(StyleDifference diff,
-                                       const ComputedStyle* old_style) {
+void LayoutTableColumn::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
   if (diff.HasDifference()) {
     if (LayoutTable* table = Table()) {
@@ -83,7 +85,7 @@ void LayoutTableColumn::StyleDidChange(StyleDifference diff,
       }
     }
   }
-  LayoutBox::StyleDidChange(diff, old_style);
+  LayoutBox::StyleDidChange(diff, old_style, style_change_context);
 }
 
 void LayoutTableColumn::ImageChanged(WrappedImagePtr, CanDeferInvalidation) {
@@ -167,7 +169,7 @@ void LayoutTableColumn::UpdateFromElement() {
   }
 }
 
-PhysicalSize LayoutTableColumn::Size() const {
+PhysicalSize LayoutTableColumn::StitchedSize() const {
   NOT_DESTROYED();
   auto* table = Table();
   DCHECK(table);

@@ -9,6 +9,7 @@
 #include "base/auto_reset.h"
 #include "third_party/blink/renderer/core/css/anchor_query.h"
 #include "third_party/blink/renderer/core/dom/layout_tree_builder_traversal.h"
+#include "third_party/blink/renderer/core/layout/anchor_position_scroll_data.h"
 #include "third_party/blink/renderer/core/layout/anchor_query_map.h"
 #include "third_party/blink/renderer/core/layout/geometry/writing_mode_converter.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
@@ -240,20 +241,34 @@ void PhysicalAnchorReference::InsertInReverseTreeOrderInto(
 
 const PhysicalAnchorReference* PhysicalAnchorQuery::AnchorReference(
     const LayoutBox& query_box,
+    const LayoutObject* query_box_actual_containing_block,
     const AnchorKey& key) const {
-  if (const PhysicalAnchorReference* reference =
-          Base::GetAnchorReference(key)) {
-    for (const PhysicalAnchorReference* result = reference; result;
-         result = result->next) {
-      const LayoutObject* layout_object = result->GetLayoutObject();
-      // TODO(crbug.com/384523570): If the layout object has been detached, we
-      // really shouldn't be here.
-      if (layout_object && layout_object != &query_box &&
-          (!result->is_out_of_flow ||
-           layout_object->IsBeforeInPreOrder(query_box))) {
-        return result;
-      }
+  const PhysicalAnchorReference* reference = Base::GetAnchorReference(key);
+  if (!reference) {
+    return nullptr;
+  }
+  for (const PhysicalAnchorReference* result = reference; result;
+       result = result->next) {
+    const LayoutObject* layout_object = result->GetLayoutObject();
+    // TODO(crbug.com/384523570): If the layout object has been detached, we
+    // really shouldn't be here.
+    if (!layout_object || layout_object == &query_box ||
+        (result->is_out_of_flow &&
+         !layout_object->IsBeforeInPreOrder(query_box))) {
+      continue;
     }
+
+    // If an actual containing block has been specified, it means that we may
+    // have found an anchor that isn't acceptable, due to an inconsistency
+    // between the actual (CSS) containing block chain, and the physical
+    // fragment tree structure. This happens for OOFs in block fragmentation.
+    if (query_box_actual_containing_block &&
+        !layout_object->Container()->IsContainedBy(
+            query_box_actual_containing_block)) {
+      continue;
+    }
+
+    return result;
   }
   return nullptr;
 }
@@ -261,8 +276,8 @@ const PhysicalAnchorReference* PhysicalAnchorQuery::AnchorReference(
 const LayoutObject* PhysicalAnchorQuery::AnchorLayoutObject(
     const LayoutBox& query_box,
     const AnchorKey& key) const {
-  if (const PhysicalAnchorReference* reference =
-          AnchorReference(query_box, key)) {
+  if (const PhysicalAnchorReference* reference = AnchorReference(
+          query_box, /*query_box_actual_containing_block=*/nullptr, key)) {
     return reference->GetLayoutObject();
   }
   return nullptr;
@@ -364,6 +379,11 @@ void PhysicalAnchorQuery::SetFromChild(
 }
 
 const PhysicalAnchorQuery* AnchorEvaluatorImpl::AnchorQuery() const {
+  // TODO(crbug.com/436305267): Remove these two members when
+  // StitchedAnchorQueries is removed.
+  DCHECK((!anchor_queries_ && !containing_block_) ||
+         !RuntimeEnabledFeatures::CSSAnchorSimplifiedFragmentationEnabled());
+
   if (anchor_query_)
     return anchor_query_;
   if (anchor_queries_) {
@@ -406,17 +426,21 @@ const PhysicalAnchorReference* AnchorEvaluatorImpl::ResolveAnchorReference(
   if (!anchor_query) {
     return nullptr;
   }
+  DCHECK(RuntimeEnabledFeatures::CSSAnchorSimplifiedFragmentationEnabled() ||
+         !query_box_actual_containing_block_);
   if (anchor_specifier.IsNamed()) {
     return anchor_query->AnchorReference(
-        *query_box_,
+        *query_box_, query_box_actual_containing_block_,
         ToAnchorScopedName(anchor_specifier.GetName(), *query_box_));
   }
   if (anchor_specifier.IsDefault() && position_anchor) {
     return anchor_query->AnchorReference(
-        *query_box_, ToAnchorScopedName(*position_anchor, *query_box_));
+        *query_box_, query_box_actual_containing_block_,
+        ToAnchorScopedName(*position_anchor, *query_box_));
   }
   return anchor_query->AnchorReference(
-      *query_box_, To<Element>(implicit_anchor_->GetNode()));
+      *query_box_, query_box_actual_containing_block_,
+      To<Element>(implicit_anchor_->GetNode()));
 }
 
 const LayoutObject* AnchorEvaluatorImpl::DefaultAnchor(
@@ -513,8 +537,10 @@ std::optional<LayoutUnit> AnchorEvaluatorImpl::EvaluateAnchor(
     }
   }
 
-  PhysicalRect position_area_modified_containing_block_rect =
-      PositionAreaModifiedContainingBlock(position_area_offsets);
+  const bool has_default_anchor = DefaultAnchor(position_anchor);
+  const PhysicalRect position_area_modified_containing_block_rect =
+      PositionAreaModifiedContainingBlock(position_area_offsets,
+                                          has_default_anchor);
 
   const bool is_y_axis = IsYAxis();
 
@@ -577,14 +603,51 @@ std::optional<LayoutUnit> AnchorEvaluatorImpl::EvaluateAnchorSize(
 PhysicalRect AnchorEvaluatorImpl::GetAnchorRect(
     const PhysicalAnchorReference& anchor_reference,
     const ScopedCSSName* position_anchor) const {
-  if (anchor_reference.GetLayoutObject() == DefaultAnchor(position_anchor) &&
-      RuntimeEnabledFeatures::CSSAnchorWithTransformsEnabled()) {
-    return anchor_reference.TransformedBoundingRect();
+  PhysicalRect result;
+  if (RuntimeEnabledFeatures::CSSAnchorWithTransformsEnabled()) {
+    result = anchor_reference.TransformedBoundingRect();
+  } else {
+    result = anchor_reference.RectWithoutTransforms();
   }
-  // TODO(crbug.com/382294252): Do we even need this (with
-  // CSSAnchorWithTransforms)? If the above is safe to do for the default
-  // anchor, it should really be safe for any anchor.
-  return anchor_reference.RectWithoutTransforms();
+
+  if (!RuntimeEnabledFeatures::CSSAnchorUpdateEnabled()) {
+    return result;
+  }
+
+  // Update the anchor rect based on remembered (or current) scroll offsets.
+  PhysicalOffset scroll_offset = [&]() {
+    if (remembered_scroll_offsets_) {
+      if (auto offset = remembered_scroll_offsets_->GetOffsetForAnchor(
+              anchor_reference.element)) {
+        return *offset;
+      }
+    }
+
+    if (used_scroll_offsets_) {
+      if (auto offset = used_scroll_offsets_->GetOffsetForAnchor(
+              anchor_reference.element)) {
+        return *offset;
+      }
+    }
+
+    Element* anchored_element = To<Element>(query_box_->GetNode());
+    LayoutObject* anchor_object = anchor_reference.element->GetLayoutObject();
+    CHECK(anchored_element && anchor_object);
+
+    return AnchorPositionScrollData::ComputeAdjustmentContainersData(
+               anchored_element, *anchor_object)
+        .accumulated_adjustment;
+  }();
+
+  result.Move(-scroll_offset);
+
+  if (!used_scroll_offsets_) {
+    used_scroll_offsets_ =
+        MakeGarbageCollected<OutOfFlowData::RememberedScrollOffsets>();
+  }
+  used_scroll_offsets_->SetOffsetForAnchor(anchor_reference.element,
+                                           scroll_offset);
+  return result;
 }
 
 void AnchorEvaluatorImpl::UpdateAccessibilityAnchor(
@@ -658,6 +721,9 @@ AnchorEvaluatorImpl::ComputePositionAreaOffsetsForLayout(
   const PositionArea physical_position_area =
       position_area.ToPhysical(container_writing_direction_,
                                query_box_->StyleRef().GetWritingDirection());
+  CHECK(!position_area.ContainsAny())
+      << "The 'any' keyword can only be used for anchored(fallback) container "
+         "queries";
 
   PhysicalBoxStrut offsets;
   PhysicalBoxSides behaves_as_auto;
@@ -742,8 +808,10 @@ AnchorEvaluatorImpl::ComputePositionAreaOffsetsForLayout(
 }
 
 PhysicalRect AnchorEvaluatorImpl::PositionAreaModifiedContainingBlock(
-    const std::optional<PositionAreaOffsets>& position_area_offsets) const {
-  PhysicalRect rect = container_rect_;
+    const std::optional<PositionAreaOffsets>& position_area_offsets,
+    bool has_default_anchor) const {
+  PhysicalRect rect =
+      has_default_anchor && scroll_rect_ ? *scroll_rect_ : container_rect_;
 
   // If calculated, reduce the containing-block rect based on the position-area.
   if (position_area_offsets) {

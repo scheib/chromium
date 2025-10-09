@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/byte_count.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
@@ -33,6 +34,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
@@ -71,6 +73,7 @@
 #include "content/browser/indexed_db/indexed_db_value.h"
 #include "content/browser/indexed_db/instance/active_blob_registry.h"
 #include "content/browser/indexed_db/instance/backing_store.h"
+#include "content/browser/indexed_db/instance/backing_store_util.h"
 #include "content/browser/indexed_db/instance/bucket_context.h"
 #include "content/browser/indexed_db/instance/leveldb/cleanup_scheduler.h"
 #include "content/browser/indexed_db/instance/leveldb/compaction_task.h"
@@ -125,6 +128,12 @@ std::string ComputeOriginIdentifier(
     const storage::BucketLocator& bucket_locator) {
   return storage::GetIdentifierFromOrigin(bucket_locator.storage_key.origin()) +
          "@1";
+}
+
+void LogVerificationEvent(
+    BackingStore::InSessionCleanupVerificationEvent event) {
+  base::UmaHistogramEnumeration(
+      "IndexedDB.LevelDB.InSessionCleanupVerificationEvent", event);
 }
 
 // Returns some configuration that is shared across leveldb DB instances. The
@@ -1582,6 +1591,7 @@ BackingStore::DoOpenAndVerify(BucketContext& bucket_context,
   }
   backing_store->db()->scopes()->StartRecoveryAndCleanupTasks();
   backing_store->bucket_context_ = &bucket_context;
+  backing_store->database_path_ = std::move(database_path);
   return {std::move(backing_store), status, std::move(data_loss_info),
           /*is_disk_full=*/false};
 }
@@ -2858,6 +2868,83 @@ bool BackingStore::UpdateEarliestCompactionTime() {
          txn->Commit().ok();
 }
 
+void BackingStore::OnCleanupStarted() {
+  static int cleanup_count = 0;
+  // Verification is a potentially expensive operation which is meant to catch
+  // errors in cleanup (particularly tombstone sweeping) before the in-session
+  // sweeper is launched to a broader audience. To limit the performance impact,
+  // it's only performed on databases under a certain size limit and only at
+  // most once per 100 cleanups (per restart).
+  if (!in_memory() &&
+      base::FeatureList::IsEnabled(kIdbVerifyInSessionDbCleanup) &&
+      (cleanup_count++ % 100 == 0) &&
+      base::ComputeDirectorySize(database_path_) < base::MiB(25).InBytes()) {
+    CHECK(!dbs_snapshot_.has_value());
+    LogVerificationEvent(InSessionCleanupVerificationEvent::kCleanupStarted);
+    StatusOr<base::ListValue> dbs_snapshot =
+        SnapshotAllDatabases(/*before_cleanup=*/true);
+    if (dbs_snapshot.has_value()) {
+      dbs_snapshot_ = *std::move(dbs_snapshot);
+    }
+  }
+}
+
+void BackingStore::OnCleanupDone() {
+  if (dbs_snapshot_.has_value()) {
+    base::ListValue dbs_snapshot_before = *std::move(dbs_snapshot_);
+    dbs_snapshot_.reset();
+    StatusOr<base::ListValue> dbs_snapshot_after =
+        SnapshotAllDatabases(/*before_cleanup=*/false);
+    if (!dbs_snapshot_after.has_value()) {
+      return;
+    }
+    if (*dbs_snapshot_after == dbs_snapshot_before) {
+      LogVerificationEvent(InSessionCleanupVerificationEvent::kMatchedSnapshot);
+    } else {
+      LogVerificationEvent(
+          InSessionCleanupVerificationEvent::kMismatchedSnapshot);
+    }
+  }
+
+  // Update the timers for traditional sweeper.
+  UpdateEarliestSweepTime();
+  UpdateEarliestCompactionTime();
+}
+
+StatusOr<base::ListValue> BackingStore::SnapshotAllDatabases(
+    bool before_cleanup) {
+  auto start = base::TimeTicks::Now();
+
+  base::ListValue dbs_snapshot;
+  StatusOr<std::vector<std::u16string>> names = GetDatabaseNames();
+  if (!names.has_value()) {
+    return base::unexpected(names.error());
+  }
+  for (const std::u16string& name : *names) {
+    StatusOr<std::unique_ptr<indexed_db::BackingStore::Database>> database =
+        CreateOrOpenDatabase(name);
+    if (!database.has_value()) {
+      LogVerificationEvent(
+          before_cleanup
+              ? InSessionCleanupVerificationEvent::kErrorOpeningBefore
+              : InSessionCleanupVerificationEvent::kErrorOpeningAfter);
+      return base::unexpected(database.error());
+    }
+    StatusOr<base::DictValue> snapshot = SnapshotDatabase(**database);
+    if (!snapshot.has_value()) {
+      LogVerificationEvent(
+          before_cleanup
+              ? InSessionCleanupVerificationEvent::kErrorSnapshottingBefore
+              : InSessionCleanupVerificationEvent::kErrorSnapshottingAfter);
+      return base::unexpected(snapshot.error());
+    }
+    dbs_snapshot.Append(*std::move(snapshot));
+  }
+  base::UmaHistogramTimes("IndexedDB.LevelDB.InSessionCleanupSnapshotTime",
+                          base::TimeTicks::Now() - start);
+  return dbs_snapshot;
+}
+
 Status BackingStore::Transaction::PutIndexDataForRecord(
     int64_t object_store_id,
     int64_t index_id,
@@ -3137,14 +3224,14 @@ void BackingStore::Cursor::SavePosition() {
   saved_members_ = {CloneIterator(this), current_key_.Clone()};
 }
 
-bool BackingStore::Cursor::TryResetToLastSavedPosition() {
+Status BackingStore::Cursor::TryResetToLastSavedPosition() {
   if (!saved_members_) {
-    return false;
+    return Status::InvalidArgument("Position not saved");
   }
   std::tie(iterator_, current_key_) = *std::move(saved_members_);
   saved_members_.reset();
   // `CloneIterator()` may have returned nullptr.
-  return iterator_ != nullptr;
+  return iterator_ != nullptr ? Status::OK() : Status::IOError();
 }
 
 BackingStore::Cursor::Cursor(base::WeakPtr<Transaction> transaction,
@@ -3563,12 +3650,10 @@ class ObjectStoreCursorImpl : public BackingStore::Cursor {
   ~ObjectStoreCursorImpl() override = default;
 
   // BackingStore::Cursor:
-  bool TryResetToLastSavedPosition() override {
-    if (!BackingStore::Cursor::TryResetToLastSavedPosition()) {
-      return false;
-    }
+  Status TryResetToLastSavedPosition() override {
+    IDB_RETURN_IF_ERROR(BackingStore::Cursor::TryResetToLastSavedPosition());
     current_value_ = {};
-    return true;
+    return Status::OK();
   }
   IndexedDBValue& GetValue() override { return current_value_; }
   bool LoadCurrentRow(Status* s) override;
@@ -3637,14 +3722,12 @@ class IndexKeyCursorImpl : public BackingStore::Cursor {
     BackingStore::Cursor::SavePosition();
     saved_primary_key_ = primary_key_.Clone();
   }
-  bool TryResetToLastSavedPosition() override {
-    if (!BackingStore::Cursor::TryResetToLastSavedPosition()) {
-      return false;
-    }
+  Status TryResetToLastSavedPosition() override {
+    IDB_RETURN_IF_ERROR(BackingStore::Cursor::TryResetToLastSavedPosition());
     CHECK(saved_primary_key_);
     primary_key_ = *std::move(saved_primary_key_);
     saved_primary_key_.reset();
-    return true;
+    return Status::OK();
   }
   IndexedDBValue& GetValue() override { NOTREACHED(); }
   const IndexedDBKey& GetPrimaryKey() const override { return primary_key_; }
@@ -3753,15 +3836,13 @@ class IndexCursorImpl : public BackingStore::Cursor {
     saved_members_ = {primary_key_.Clone(), current_value_.Clone(),
                       primary_leveldb_key_};
   }
-  bool TryResetToLastSavedPosition() override {
-    if (!BackingStore::Cursor::TryResetToLastSavedPosition()) {
-      return false;
-    }
+  Status TryResetToLastSavedPosition() override {
+    IDB_RETURN_IF_ERROR(BackingStore::Cursor::TryResetToLastSavedPosition());
     CHECK(saved_members_);
     std::tie(primary_key_, current_value_, primary_leveldb_key_) =
         *std::move(saved_members_);
     saved_members_.reset();
-    return true;
+    return Status::OK();
   }
   IndexedDBValue& GetValue() override { return current_value_; }
   const IndexedDBKey& GetPrimaryKey() const override { return primary_key_; }
@@ -4006,7 +4087,8 @@ std::string BackingStore::Database::GetObjectStoreLockIdKey(
   return std::string(chars.begin(), chars.end());
 }
 
-const blink::IndexedDBDatabaseMetadata& BackingStore::Database::GetMetadata() {
+const blink::IndexedDBDatabaseMetadata& BackingStore::Database::GetMetadata()
+    const {
   return metadata_;
 }
 
@@ -4037,7 +4119,7 @@ BackingStore::Transaction::~Transaction() {
   backing_store_->OnTransactionComplete(tombstone_threshold_exceeded_);
 }
 
-void BackingStore::Transaction::Begin(std::vector<PartitionedLock> locks) {
+Status BackingStore::Transaction::Begin(std::vector<PartitionedLock> locks) {
   DCHECK(backing_store_);
   DCHECK(!transaction_.get());
   TRACE_EVENT0("IndexedDB", "BackingStore::Transaction::Begin");
@@ -4060,6 +4142,8 @@ void BackingStore::Transaction::Begin(std::vector<PartitionedLock> locks) {
   for (const auto& iter : backing_store_->in_memory_external_object_map_) {
     in_memory_external_object_map_[iter.first] = iter.second->Clone();
   }
+
+  return Status::OK();
 }
 
 Status BackingStore::MigrateToV4(LevelDBWriteBatch* write_batch) {

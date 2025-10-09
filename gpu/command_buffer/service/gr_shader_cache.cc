@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-
 #include "gpu/command_buffer/service/gr_shader_cache.h"
 
 #include <inttypes.h>
@@ -27,9 +26,7 @@ namespace {
 
 // TODO(b/375264422): Temporary to debug potential shader cache entries
 // mismatch.
-BASE_FEATURE(kGrShaderCacheLoad,
-             "GrShaderCacheLoad",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kGrShaderCacheLoad, base::FEATURE_ENABLED_BY_DEFAULT);
 
 std::string MakeString(const SkData* data) {
   return std::string(static_cast<const char*>(data->data()), data->size());
@@ -176,7 +173,7 @@ void GrShaderCache::CacheClientIdOnDisk(int32_t client_id) {
 }
 
 void GrShaderCache::PurgeMemory(
-    base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+    base::MemoryPressureLevel memory_pressure_level) {
   base::AutoLock auto_lock(lock_);
   size_t original_limit = cache_size_limit_;
 

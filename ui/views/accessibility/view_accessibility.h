@@ -19,7 +19,7 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/platform/ax_platform_node_id.h"
 #include "ui/accessibility/platform/ax_unique_id.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/views/accessibility/ax_attribute_changed_callbacks.h"
 #include "ui/views/accessibility/view_accessibility_utils.h"
 #include "ui/views/views_export.h"
@@ -380,6 +380,7 @@ class VIEWS_EXPORT ViewAccessibility : public WidgetObserver {
       std::optional<std::u16string> old_tooltip_text = std::nullopt);
 
   void OnViewAddedToWidget();
+  void OnViewRemovedFromWidget();
 
   void SetPlaceholder(const std::string& placeholder);
 

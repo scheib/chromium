@@ -26,6 +26,7 @@
 #include "components/subresource_filter/core/mojom/subresource_filter.mojom-shared.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_handle_user_data.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -201,9 +202,6 @@ ThrottleManager* FingerprintingProtectionWebContentsHelper::GetThrottleManager(
     return nullptr;
   }
 
-  // TODO(https://crbug.com/40280666): Consider storing pointers to existing
-  // throttle managers to enable short-circuiting this function in most cases.
-
   if (IsRootNavigationToNewDocument(handle)) {
     auto* container =
         ThrottleManagerInUserDataContainer::GetForNavigationHandle(handle);
@@ -238,17 +236,6 @@ void FingerprintingProtectionWebContentsHelper::WillDestroyThrottleManager(
     ThrottleManager* throttle_manager) {
   bool was_erased = throttle_managers_.erase(throttle_manager);
   CHECK(was_erased);
-}
-
-void FingerprintingProtectionWebContentsHelper::NotifyPageActivationComputed(
-    content::NavigationHandle* navigation_handle,
-    const subresource_filter::mojom::ActivationState& activation_state,
-    const subresource_filter::ActivationDecision& activation_decision) {
-  if (ThrottleManager* throttle_manager =
-          GetThrottleManager(*navigation_handle)) {
-    throttle_manager->OnPageActivationComputed(
-        navigation_handle, activation_state, activation_decision);
-  }
 }
 
 void FingerprintingProtectionWebContentsHelper::
@@ -286,6 +273,7 @@ void FingerprintingProtectionWebContentsHelper::
           std::move(issue));
     }
   }
+  most_recent_child_frame_load_policy_ = load_policy;
 }
 
 void FingerprintingProtectionWebContentsHelper::FrameDeleted(

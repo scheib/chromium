@@ -42,6 +42,7 @@
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/page.h"
 #include "revoked_permissions_service.h"
 #include "url/origin.h"
 
@@ -469,8 +470,14 @@ RevokedPermissionsService::GetRevokedPermissions() {
               hcsm(), GURL(permission.primary_pattern.ToString()))) {
         continue;
       }
-      CHECK(!safety_hub_util::IsUrlRevokedAbusiveNotification(
-          hcsm(), GURL(permission.primary_pattern.ToString())));
+      // Skip origins with revoked abusive site permissions as these were
+      // handled above. This is generally unlikely but it is possible if abusive
+      // notification auto-revocation outside of Safety Hub was triggered in
+      // between disruptive revocation run.
+      if (safety_hub_util::IsUrlRevokedAbusiveNotification(
+              hcsm(), GURL(permission.primary_pattern.ToString()))) {
+        continue;
+      }
       PermissionsData permissions_data;
       permissions_data.primary_pattern = permission.primary_pattern;
       permissions_data.permission_types.insert(

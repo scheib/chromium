@@ -7,7 +7,7 @@
           "reftest",
           "crashtest",
           "--xcode-build-version",
-          "16c5032a"
+          "17a324"
         ],
         "merge": {
           "args": [
@@ -15,6 +15,8 @@
           ],
           "script": "//third_party/blink/tools/merge_web_test_results.py"
         },
+        "module_name": "//ios/chrome/test/wpt:chrome_ios_wpt",
+        "module_scheme": "webtest",
         "name": "wpt_tests_ios",
         "resultdb": {
           "enable": true,
@@ -38,7 +40,7 @@
           "hard_timeout": 14400,
           "named_caches": [
             {
-              "name": "xcode_ios_16c5032a",
+              "name": "xcode_ios_17a324",
               "path": "Xcode.app"
             }
           ],

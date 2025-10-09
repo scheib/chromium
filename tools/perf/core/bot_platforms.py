@@ -416,6 +416,19 @@ def _speedometer_main_crossbench(estimated_runtime=60, arguments=()):
                           arguments=arguments)
 
 
+def _speedometer3_a11y_crossbench(estimated_runtime=60, arguments=()):
+  """Latest Speedometer 3 with accessibility flag enabled."""
+  # TODO(crbug.com/444653101): This configuration runs the same speedometer_3
+  # benchmark as _speedometer3_crossbench, but since the benchmark name is used
+  # as the dict key inside the shard maps, we can't pass 'speedometer_3' to
+  # CrossbenchConfig constructor. We work around this by using alias 'sp3'.
+  arguments += ('--extra-browser-args=--force-renderer-accessibility', )
+  return CrossbenchConfig('speedometer3.a11y.crossbench',
+                          'sp3',
+                          estimated_runtime=estimated_runtime,
+                          arguments=arguments)
+
+
 # MotionMark:
 def _motionmark1_2_crossbench(estimated_runtime=360, arguments=()):
   return CrossbenchConfig('motionmark1.2.crossbench',
@@ -553,6 +566,7 @@ _CROSSBENCH_PIXEL9 = frozenset([
     # _jetstream2_crossbench(arguments=['--fileserver', '--debug']),
     _motionmark1_3_crossbench(arguments=['--fileserver', '--debug']),
     _speedometer3_crossbench(arguments=['--fileserver', '--debug']),
+    _speedometer3_a11y_crossbench(arguments=['--fileserver', '--debug']),
     _loadline_phone_crossbench(arguments=[
         '--cool-down-threshold=moderate',
         '--no-splash',
@@ -576,6 +590,7 @@ _CROSSBENCH_TANGOR = frozenset([
     ]),
 ])
 
+# pylint: disable=line-too-long
 _CROSSBENCH_WEBVIEW = frozenset([
     _crossbench_loading(
         estimated_runtime=750,
@@ -588,8 +603,7 @@ _CROSSBENCH_WEBVIEW = frozenset([
             '--repetitions=50',
             '--cool-down-threshold=moderate',
             '--stories=cnn',
-        ]
-    ),
+        ]),
     _crossbench_embedder(
         estimated_runtime=900,
         arguments=[
@@ -604,9 +618,10 @@ _CROSSBENCH_WEBVIEW = frozenset([
             '--cool-down-threshold=moderate',
             '--http-request-timeout=15s',
             '--action-runner=android',
-        ]
-    ),
+            '--ignore-partial-failures',
+        ]),
 ])
+# pylint: enable=line-too-long
 
 _CHROME_HEALTH_BENCHMARK_CONFIGS_DESKTOP = PerfSuite(
     [_GetBenchmarkConfig('system_health.common_desktop')])
@@ -654,7 +669,7 @@ _LINUX_EXECUTABLE_CONFIGS = frozenset([
     # TODO(crbug.com/40562709): Add views_perftests.
     _base_perftests(200),
     _load_library_perf_tests(),
-    _tint_benchmark(),
+    # (crbug.com/445456830) temporarily disabled _tint_benchmark(),
     _tracing_perftests(5),
 ])
 _LINUX_R350_BENCHMARK_CONFIGS = PerfSuite(
@@ -670,7 +685,7 @@ _MAC_INTEL_BENCHMARK_CONFIGS = PerfSuite(OFFICIAL_BENCHMARK_CONFIGS).Remove([
 _MAC_INTEL_EXECUTABLE_CONFIGS = frozenset([
     _base_perftests(300),
     _dawn_perf_tests(330),
-    _tint_benchmark(),
+    # (crbug.com/445456830) temporarily disabled _tint_benchmark(),
     _views_perftests(),
     _load_library_perf_tests(),
 ])
@@ -713,7 +728,7 @@ _MAC_M1_PRO_BENCHMARK_CONFIGS = PerfSuite([
 _MAC_M1_MINI_2020_EXECUTABLE_CONFIGS = frozenset([
     _base_perftests(300),
     _dawn_perf_tests(330),
-    _tint_benchmark(),
+    # (crbug.com/445456830) temporarily disabled _tint_benchmark(),
     _views_perftests(),
 ])
 _MAC_M2_PRO_BENCHMARK_CONFIGS = PerfSuite(OFFICIAL_BENCHMARK_CONFIGS).Remove([
@@ -724,6 +739,7 @@ _MAC_M2_PRO_BENCHMARK_CONFIGS = PerfSuite(OFFICIAL_BENCHMARK_CONFIGS).Remove([
     'speedometer3-minorms',
 ])
 _MAC_M3_PRO_BENCHMARK_CONFIGS = PerfSuite([])
+_MAC_M4_MINI_BENCHMARK_CONFIGS = PerfSuite(OFFICIAL_BENCHMARK_CONFIGS)
 
 _WIN_10_BENCHMARK_CONFIGS = PerfSuite(OFFICIAL_BENCHMARK_CONFIGS).Remove([
     'v8.runtime_stats.top_25',
@@ -755,7 +771,7 @@ _WIN_11_EXECUTABLE_CONFIGS = frozenset([
     _base_perftests(200),
     _components_perftests(125),
     _dawn_perf_tests(600),
-    _tint_benchmark(),
+    # (crbug.com/445456830) temporarily disabled _tint_benchmark(),
     _views_perftests(),
 ])
 _WIN_ARM64_BENCHMARK_CONFIGS = PerfSuite([
@@ -922,15 +938,17 @@ MAC_M3_PRO = PerfPlatform('mac-m3-pro-perf',
                           4,
                           'mac',
                           crossbench=_CROSSBENCH_BENCHMARKS_ALL)
+MAC_M4_MINI = PerfPlatform('mac-m4-mini-perf',
+                          'Mac M4 mini ARM',
+                          _MAC_M4_MINI_BENCHMARK_CONFIGS,
+                          25,
+                          'mac',
+                          crossbench=_CROSSBENCH_BENCHMARKS_ALL)
 # Win
 WIN_10_LOW_END = PerfPlatform(
     'win-10_laptop_low_end-perf',
     'Low end windows 10 HP laptops. HD Graphics 5500, x86-64-i3-5005U, '
-    'SSD, 4GB RAM.',
-    _WIN_10_LOW_END_BENCHMARK_CONFIGS,
-    # TODO(crbug.com/278947510): Increase the count when m.2 disks stop failing.
-    25,
-    'win')
+    'SSD, 4GB RAM.', _WIN_10_LOW_END_BENCHMARK_CONFIGS, 15, 'win')
 WIN_10_LOW_END_PGO = PerfPlatform(
     'win-10_laptop_low_end-perf-pgo',
     'Low end windows 10 HP laptops. HD Graphics 5500, x86-64-i3-5005U, '
@@ -976,7 +994,8 @@ WIN_11 = PerfPlatform('win-11-perf',
                       20,
                       'win',
                       executables=_WIN_11_EXECUTABLE_CONFIGS,
-                      crossbench=_CROSSBENCH_BENCHMARKS_ALL)
+                      crossbench=_CROSSBENCH_BENCHMARKS_ALL
+                      | {_speedometer3_a11y_crossbench()})
 WIN_11_PGO = PerfPlatform('win-11-perf-pgo',
                           'Windows Dell PowerEdge R350',
                           _WIN_11_BENCHMARK_CONFIGS,
@@ -984,15 +1003,14 @@ WIN_11_PGO = PerfPlatform('win-11-perf-pgo',
                           'win',
                           executables=_WIN_11_EXECUTABLE_CONFIGS,
                           pinpoint_only=True)
-WIN_ARM64_SNAPDRAGON_PLUS = PerfPlatform(
-    'win-arm64-snapdragon-plus-perf',
-    'Windows Dell Snapdragon Plus',
+WIN_ARM64_SNAPDRAGON_ELITE = PerfPlatform(
+    'win-arm64-snapdragon-elite-perf',
+    'Windows Dell Snapdragon Elite',
     _WIN_ARM64_BENCHMARK_CONFIGS,
     1,
     'win',
     executables=_WIN_ARM64_EXECUTABLE_CONFIGS,
-    crossbench=_CROSSBENCH_BENCHMARKS_ALL,
-    is_fyi=True)
+    crossbench=_CROSSBENCH_BENCHMARKS_ALL)
 
 # Android
 ANDROID_BRYA = PerfPlatform(
@@ -1085,7 +1103,7 @@ ANDROID_PIXEL_TANGOR = PerfPlatform(
     executables=_ANDROID_DEFAULT_EXECUTABLE_CONFIGS,
     crossbench=_CROSSBENCH_TANGOR)
 ANDROID_GO_WEMBLEY = PerfPlatform('android-go-wembley-perf', 'Android U',
-                                  _ANDROID_GO_BENCHMARK_CONFIGS, 15, 'android')
+                                  _ANDROID_GO_BENCHMARK_CONFIGS, 13, 'android')
 ANDROID_GO_WEMBLEY_WEBVIEW = PerfPlatform(
     'android-go-wembley_webview-perf', 'Android U',
     _ANDROID_GO_WEBVIEW_BENCHMARK_CONFIGS, 20, 'android')

@@ -215,8 +215,9 @@ void AddFlags(content::WebUIDataSource* html_source, bool is_glic_version) {
   html_source->AddBoolean("askOnStartup",
                           g_browser_process->local_state()->GetBoolean(
                               prefs::kBrowserShowProfilePickerOnStartup));
-  html_source->AddBoolean("profilesReorderingEnabled",
-                          base::FeatureList::IsEnabled(kProfilesReordering));
+  html_source->AddBoolean(
+      "profilesReorderingEnabled",
+      base::FeatureList::IsEnabled(switches::kProfilesReordering));
   html_source->AddBoolean("signInProfileCreationFlowSupported",
                           AccountConsistencyModeManager::IsDiceSignInAllowed());
 
@@ -272,7 +273,7 @@ ProfilePickerUI::ProfilePickerUI(content::WebUI* web_ui)
 
   // `content::WebContents::GetVisibleURL()` is used here because a
   // WebUIController is created before the navigation commits.
-  bool is_glic_version = web_ui->GetWebContents()->GetVisibleURL().query() ==
+  bool is_glic_version = web_ui->GetWebContents()->GetVisibleURL().GetQuery() ==
                          chrome::kChromeUIProfilePickerGlicQuery;
 
   std::unique_ptr<ProfilePickerHandler> handler =
@@ -281,7 +282,7 @@ ProfilePickerUI::ProfilePickerUI(content::WebUI* web_ui)
   web_ui->AddMessageHandler(std::move(handler));
 
   // Same as above for usage of `content::WebContents::GetVisibleURL()`.
-  if (web_ui->GetWebContents()->GetVisibleURL().query() ==
+  if (web_ui->GetWebContents()->GetVisibleURL().GetQuery() ==
       chrome::kChromeUIProfilePickerStartupQuery) {
     profile_picker_handler_->EnableStartupMetrics();
   }

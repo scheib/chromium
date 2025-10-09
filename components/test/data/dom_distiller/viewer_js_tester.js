@@ -15,10 +15,11 @@ suite('ViewerJs', function() {
         '<a href="ftp://example.com">another bad link</a>';
     document.body.appendChild(container);
 
-    sanitizeLinks();
+    sanitizeLinks(container);
 
     assert.equal(
         container.innerHTML,
-        '<a href="http://example.com">good link</a>bad linkanother bad link');
+        '<a href="http://example.com" target="_blank">good link</a>' +
+            'bad linkanother bad link');
   });
 });

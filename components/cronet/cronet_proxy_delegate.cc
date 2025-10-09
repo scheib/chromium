@@ -8,6 +8,7 @@
 #include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
 #include "base/types/expected.h"
+#include "net/base/completion_once_callback.h"
 #include "net/base/net_errors.h"
 #include "net/proxy_resolution/proxy_info.h"
 
@@ -104,25 +105,18 @@ CronetProxyDelegate::OnBeforeTunnelRequest(
 net::Error CronetProxyDelegate::OnTunnelHeadersReceived(
     const net::ProxyChain& proxy_chain,
     size_t proxy_index,
-    const net::HttpResponseHeaders& response_headers) {
+    const net::HttpResponseHeaders& response_headers,
+    net::CompletionOnceCallback callback) {
   TRACE_EVENT_BEGIN("cronet", "CronetProxyDelegate::OnTunnelHeadersReceived",
                     "proxy_chain", proxy_chain.ToDebugString(), "proxy_index",
                     proxy_index);
   CHECK(proxy_chain.opaque_data().has_value());
-  auto result = [&] {
-    if (network_tasks_->OnTunnelHeadersReceived(*proxy_chain.opaque_data(),
-                                                response_headers)) {
-      return net::OK;
-    }
-    // TODO(https://crbug.com/422428959): Decide whether we want to propagate
-    // org.chromium.net.Proxy.Callback canceling a tunnel establishment request
-    // as net::ERR_TUNNEL_CONNECTION_FAILED. This is currently not possible, as
-    // net::ProxyFallback::CanFalloverToNextProxy does not try the next proxy in
-    // the list for net::ERR_TUNNEL_CONNECTION_FAILED, unless the chain is for
-    // IP Protection. For the time being, we return another error for which the
-    // next proxy is in the list is always attempted.
-    return net::ERR_CONNECTION_CLOSED;
-  }();
+  // org.chromium.net.Proxy.Callback#onTunnelHeadersReceived always continues
+  // asynchronously. So, from //net's perspective, this always ends up in
+  // `net::ERR_IO_PENDING`.
+  network_tasks_->OnTunnelHeadersReceived(
+      *proxy_chain.opaque_data(), response_headers, std::move(callback));
+  const auto result = net::ERR_IO_PENDING;
   TRACE_EVENT_END("cronet", "result", result);
   return result;
 }

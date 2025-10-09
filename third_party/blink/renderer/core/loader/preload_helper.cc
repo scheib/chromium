@@ -62,6 +62,7 @@
 #include "third_party/blink/renderer/platform/loader/link_header.h"
 #include "third_party/blink/renderer/platform/loader/subresource_integrity.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 namespace blink {
@@ -623,10 +624,9 @@ void PreloadHelper::ModulePreloadIfNeeded(
     // the error event.
     if (client) {
       modulator->TaskRunner()->PostTask(
-          FROM_HERE,
-          WTF::BindOnce(&SingleModuleClient::NotifyModuleLoadFinished,
-                        WrapPersistent(client), nullptr,
-                        ModuleImportPhase::kEvaluation));
+          FROM_HERE, BindOnce(&SingleModuleClient::NotifyModuleLoadFinished,
+                              WrapPersistent(client), nullptr,
+                              ModuleImportPhase::kEvaluation));
     }
     return;
   }
@@ -700,8 +700,10 @@ void PreloadHelper::ModulePreloadIfNeeded(
                          params.referrer_policy,
                          mojom::blink::FetchPriorityHint::kAuto,
                          RenderBlockingBehavior::kNonBlocking),
-      Referrer::ClientReferrerString(), TextPosition::MinimumPosition(),
-      ModuleImportPhase::kEvaluation);
+      RuntimeEnabledFeatures::ModulePreloadReferrerEnabled()
+          ? Referrer::ClientReferrerString()
+          : Referrer::NoReferrer(),
+      TextPosition::MinimumPosition(), ModuleImportPhase::kEvaluation);
 
   // Step 13. "Fetch a modulepreload module script graph given url, destination,
   // settings object, and options. Wait until the algorithm asynchronously
@@ -962,11 +964,6 @@ void PreloadHelper::FetchCompressionDictionaryIfNeeded(
     const LinkLoadParameters& params,
     Document& document,
     PendingLinkPreload* pending_preload) {
-  if (!CompressionDictionaryTransportFullyEnabled(
-          document.GetExecutionContext())) {
-    return;
-  }
-
   if (!document.Loader() || document.Loader()->Archive()) {
     return;
   }

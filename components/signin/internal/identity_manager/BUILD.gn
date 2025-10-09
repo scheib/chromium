@@ -68,6 +68,7 @@ source_set("identity_manager") {
     "//components/signin/public/identity_manager:tribool",
     "//components/signin/public/webdata",
     "//components/supervised_user/core/common:features",
+    "//components/sync/base:features",
     "//components/unexportable_keys",
     "//components/version_info",
     "//crypto",
@@ -112,6 +113,7 @@ source_set("identity_manager") {
     ]
     deps += [
       "//ash/constants",
+      "//chromeos/ash/components/account_manager",
       "//components/account_manager_core",
     ]
   }
@@ -203,6 +205,7 @@ source_set("unit_tests") {
 
     deps += [
       "//ash/constants",
+      "//chromeos/ash/components/account_manager",
       "//components/account_manager_core:test_support",
     ]
   }

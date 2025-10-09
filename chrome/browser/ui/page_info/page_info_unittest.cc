@@ -22,6 +22,7 @@
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
 #include "chrome/browser/file_system_access/file_system_access_features.h"
+#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/picture_in_picture/auto_picture_in_picture_tab_helper.h"
 #include "chrome/browser/ssl/stateful_ssl_host_state_delegate_factory.h"
 #include "chrome/browser/subresource_filter/subresource_filter_profile_context_factory.h"
@@ -29,7 +30,6 @@
 #include "chrome/browser/ui/page_info/chrome_page_info_ui_delegate.h"
 #include "chrome/browser/usb/usb_chooser_context.h"
 #include "chrome/browser/usb/usb_chooser_context_factory.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
@@ -45,6 +45,7 @@
 #include "components/permissions/features.h"
 #include "components/permissions/permission_recovery_success_rate_tracker.h"
 #include "components/safe_browsing/buildflags.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "components/security_interstitials/content/stateful_ssl_host_state_delegate.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/subresource_filter/content/browser/subresource_filter_content_settings_manager.h"
@@ -90,7 +91,6 @@ using content::SSLStatus;
 using content_settings::SettingSource;
 using testing::_;
 using testing::AnyNumber;
-using testing::Invoke;
 using testing::Mock;
 using testing::NiceMock;
 using testing::Return;
@@ -269,10 +269,8 @@ class PageInfoTest : public ChromeRenderViewHostTestHarness {
     return page_info_.get();
   }
 
-  PageInfo* incognito_page_info() {
-    if (!incognito_page_info_.get()) {
-      // Build the incognito profile manually in order to override testing
-      // factories.
+  content::WebContents* incognito_web_contents() {
+    if (!incognito_web_contents_) {
       TestingProfile::Builder incognito_profile_builder;
       incognito_profile_builder.AddTestingFactories(GetTestingFactories());
       incognito_profile_builder.BuildIncognito(profile());
@@ -282,17 +280,22 @@ class PageInfoTest : public ChromeRenderViewHostTestHarness {
               profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true),
               nullptr);
       CreateWebContentsUserData(incognito_web_contents_.get());
+    }
+    return incognito_web_contents_.get();
+  }
 
+  PageInfo* incognito_page_info() {
+    if (!incognito_page_info_.get()) {
       incognito_mock_ui_ = std::make_unique<NiceMock<MockPageInfoUI>>();
       incognito_mock_ui_->set_permission_info_callback_ = base::BindRepeating(
           &PageInfoTest::SetPermissionInfo, base::Unretained(this));
 
-      auto delegate = std::make_unique<ChromePageInfoDelegate>(
-          incognito_web_contents_.get());
+      auto delegate =
+          std::make_unique<ChromePageInfoDelegate>(incognito_web_contents());
       delegate->SetSecurityStateForTests(security_level_,
                                          visible_security_state_);
       incognito_page_info_ = std::make_unique<PageInfo>(
-          std::move(delegate), incognito_web_contents_.get(), url());
+          std::move(delegate), incognito_web_contents(), url());
       base::RunLoop run_loop;
       incognito_page_info_->InitializeUiState(incognito_mock_ui_.get(),
                                               run_loop.QuitClosure());
@@ -387,6 +390,7 @@ TEST_F(PageInfoTest, PermissionStringsHaveMidSentenceVersion) {
 }
 
 TEST_F(PageInfoTest, NonFactoryDefaultAndRecentlyChangedPermissionsShown) {
+  base::HistogramTester histograms;
   GURL kEmbedded1("https://embedded1.com");
   GURL kEmbedded2("https://embedded2.com");
 
@@ -495,6 +499,124 @@ TEST_F(PageInfoTest, NonFactoryDefaultAndRecentlyChangedPermissionsShown) {
                                        /*is_one_time=*/false);
   EXPECT_EQ(expected_visible_permissions.size() + 1,
             last_permission_info_list().size());
+
+  // Changing NOTIFICATIONS from ALLOW to ASK logs the histogram.
+  histograms.ExpectTotalCount("SafeBrowsing.NotificationRevocationSource", 0);
+  page_info()->OnSitePermissionChanged(ContentSettingsType::NOTIFICATIONS,
+                                       CONTENT_SETTING_ASK,
+                                       /*requesting_origin=*/std::nullopt,
+                                       /*is_one_time=*/false);
+  histograms.ExpectUniqueSample("SafeBrowsing.NotificationRevocationSource",
+                                safe_browsing::NotificationRevocationSource::
+                                    kUserManuallyChangedSiteSetting,
+                                1);
+}
+
+// Test suite for verifying that permissions granted through Page Info are
+// correctly marked as eligible for Safety Hub auto-revocation when the
+// kSafetyHubUnusedPermissionRevocationForAllSurfaces flag is enabled.
+//
+// Only permissions of certain `ContentSettingType` are eligible. They are
+// marked as such upon grant by initializing the `last_visited` timestamp from
+// a default null value to the (coarsened) current time. Once initialized, the
+// timestamp is updated on each navigation to the origin for which the
+// permission was granted. Then permissions with a `last_visited` timestamp
+// older than a certain threshold are eventually auto-revoked by Safety Hub.
+class PageInfoUnusedPermissionRevocationForAllSurfacesTest
+    : public PageInfoTest {
+ protected:
+  void SetUp() override {
+    PageInfoTest::SetUp();
+
+    feature_list_.InitAndEnableFeature(
+        permissions::features::
+            kSafetyHubUnusedPermissionRevocationForAllSurfaces);
+
+    // HistoryService is required for UKM recording when revoking a permission.
+    HistoryServiceFactory::GetInstance()->SetTestingFactory(
+        browser_context(), HistoryServiceFactory::GetDefaultFactory());
+
+    map_ = HostContentSettingsMapFactory::GetForProfile(profile());
+  }
+
+  void TearDown() override {
+    map_ = nullptr;
+    PageInfoTest::TearDown();
+  }
+
+  HostContentSettingsMap* map() { return map_; }
+
+  base::test::ScopedFeatureList feature_list_;
+  raw_ptr<HostContentSettingsMap> map_;
+};
+
+TEST_F(PageInfoUnusedPermissionRevocationForAllSurfacesTest,
+       OnSitePermissionChanged_LastVisited_EligibleType) {
+  {
+    // Simulate the user switching toggle to "Allow".
+    page_info()->OnSitePermissionChanged(ContentSettingsType::GEOLOCATION,
+                                         CONTENT_SETTING_ALLOW, std::nullopt,
+                                         false);
+
+    // Verify that `last_visited` was recorded and lies within the past 7 days.
+    //
+    // The `last_visited` is coarsed by `GetCoarseVisitedTime` [1] due to
+    // privacy. It rounds given timestamp down to the nearest multiple of 7 in
+    // the past. [1]
+    // components/content_settings/core/browser/content_settings_utils.cc
+    content_settings::SettingInfo info;
+    base::Time now = base::Time::Now();
+    map_->GetWebsiteSetting(url(), url(), ContentSettingsType::GEOLOCATION,
+                            &info);
+    EXPECT_GE(info.metadata.last_visited(), now - base::Days(7));
+    EXPECT_LE(info.metadata.last_visited(), now);
+  }
+  {
+    // Simulate the user switching toggle to "Block".
+    page_info()->OnSitePermissionChanged(ContentSettingsType::GEOLOCATION,
+                                         CONTENT_SETTING_BLOCK, std::nullopt,
+                                         false);
+
+    // Verify that 'last_visited` is not recorded unless the value is ALLOW.
+    content_settings::SettingInfo info;
+    map_->GetContentSetting(url(), url(), ContentSettingsType::GEOLOCATION,
+                            &info);
+    EXPECT_EQ(base::Time(), info.metadata.last_visited());
+  }
+}
+
+TEST_F(PageInfoUnusedPermissionRevocationForAllSurfacesTest,
+       OnSitePermissionChanged_LastVisited_IneligibleType) {
+  // Simulate the user switching toggle to "Allow".
+  page_info()->OnSitePermissionChanged(ContentSettingsType::NOTIFICATIONS,
+                                       CONTENT_SETTING_ALLOW, std::nullopt,
+                                       false);
+
+  // Verify that `last_visited` is not recorded for ineligible types
+  // (e.g. NOTIFICATIONS).
+  content_settings::SettingInfo info;
+  map_->GetContentSetting(url(), url(), ContentSettingsType::NOTIFICATIONS,
+                          &info);
+  EXPECT_EQ(base::Time(), info.metadata.last_visited());
+}
+
+TEST_F(PageInfoUnusedPermissionRevocationForAllSurfacesTest,
+       OnSitePermissionChanged_LastVisited_FeatureOff) {
+  feature_list_.Reset();
+  feature_list_.InitAndDisableFeature(
+      permissions::features::
+          kSafetyHubUnusedPermissionRevocationForAllSurfaces);
+
+  // Simulate the user switching toggle to "Allow".
+  page_info()->OnSitePermissionChanged(ContentSettingsType::GEOLOCATION,
+                                       CONTENT_SETTING_ALLOW, std::nullopt,
+                                       false);
+
+  // Verify that `last_visited` is not recorded when the feature is off.
+  content_settings::SettingInfo info;
+  map_->GetContentSetting(url(), url(), ContentSettingsType::GEOLOCATION,
+                          &info);
+  EXPECT_EQ(base::Time(), info.metadata.last_visited());
 }
 
 TEST_F(PageInfoTest, StorageAccessGrantsAreFiltered) {
@@ -716,6 +838,7 @@ TEST_F(PageInfoTest, IncognitoPermissionsDontShowAsk) {
 }
 
 TEST_F(PageInfoTest, OnPermissionsChanged) {
+  base::HistogramTester histograms;
   GURL kEmbedded("https://embedded.com");
 
   // Setup site permissions.
@@ -751,9 +874,9 @@ TEST_F(PageInfoTest, OnPermissionsChanged) {
   // SetPermissionInfo() is called once initially, and then again every time
   // OnSitePermissionChanged() is called.
 #if !BUILDFLAG(IS_ANDROID)
-  EXPECT_CALL(*mock_ui(), SetPermissionInfoStub()).Times(8);
+  EXPECT_CALL(*mock_ui(), SetPermissionInfoStub()).Times(11);
 #else
-  EXPECT_CALL(*mock_ui(), SetPermissionInfoStub()).Times(7);
+  EXPECT_CALL(*mock_ui(), SetPermissionInfoStub()).Times(10);
 #endif
 
   // Execute code under tests.
@@ -812,6 +935,32 @@ TEST_F(PageInfoTest, OnPermissionsChanged) {
       kEmbedded, url(), ContentSettingsType::FILE_SYSTEM_WRITE_GUARD);
   EXPECT_EQ(setting, CONTENT_SETTING_ALLOW);
 #endif
+
+  // Changing NOTIFICATIONS from ALLOW to BLOCK logs the histogram.
+  histograms.ExpectTotalCount("SafeBrowsing.NotificationRevocationSource", 0);
+  page_info()->OnSitePermissionChanged(ContentSettingsType::NOTIFICATIONS,
+                                       CONTENT_SETTING_BLOCK,
+                                       /*requesting_origin=*/std::nullopt,
+                                       /*is_one_time=*/false);
+  histograms.ExpectUniqueSample("SafeBrowsing.NotificationRevocationSource",
+                                safe_browsing::NotificationRevocationSource::
+                                    kUserManuallyChangedSiteSetting,
+                                1);
+
+  // Changing NOTIFICATIONS back to ALLOW then resetting to default (by passing
+  // in std::nullopt as `setting`) logs the histogram.
+  page_info()->OnSitePermissionChanged(ContentSettingsType::NOTIFICATIONS,
+                                       CONTENT_SETTING_ALLOW,
+                                       /*requesting_origin=*/std::nullopt,
+                                       /*is_one_time=*/false);
+  page_info()->OnSitePermissionChanged(ContentSettingsType::NOTIFICATIONS,
+                                       /*setting=*/std::nullopt,
+                                       /*requesting_origin=*/std::nullopt,
+                                       /*is_one_time=*/false);
+  histograms.ExpectUniqueSample("SafeBrowsing.NotificationRevocationSource",
+                                safe_browsing::NotificationRevocationSource::
+                                    kUserManuallyChangedSiteSetting,
+                                2);
 }
 
 TEST_F(PageInfoTest, OnChosenObjectDeleted) {
@@ -1656,7 +1805,7 @@ TEST_F(PageInfoTest, ReEnableWarnings) {
     base::HistogramTester histograms;
     StatefulSSLHostStateDelegate* ssl_state =
         StatefulSSLHostStateDelegateFactory::GetForProfile(profile());
-    const std::string host = GURL(test.url).host();
+    const std::string host = GURL(test.url).GetHost();
 
     ssl_state->RevokeUserAllowExceptionsHard(host);
     ResetMockUI();
@@ -2024,21 +2173,7 @@ TEST_F(PageInfoTest, PermissionUsed30MinutesAgoStrings) {
 }
 
 #if BUILDFLAG(IS_ANDROID)
-TEST_F(PageInfoTest, AutoPictureInPicturePermissionInfoIncognito) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kAutoPictureInPictureAndroid);
-  incognito_page_info()->PresentSitePermissionsForTesting();
-  const auto& permissions = last_permission_info_list();
-  auto it =
-      std::find_if(permissions.begin(), permissions.end(), [](const auto& p) {
-        return p.type == ContentSettingsType::AUTO_PICTURE_IN_PICTURE;
-      });
-  ASSERT_NE(it, permissions.end());
-  EXPECT_EQ(std::get<ContentSetting>(it->default_setting),
-            CONTENT_SETTING_BLOCK);
-}
-
-TEST_F(PageInfoTest, AutoPictureInPicturePermissionInfoRegular) {
+TEST_F(PageInfoTest, AutoPictureInPicturePermissionNotShownIfNotRegistered) {
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndEnableFeature(media::kAutoPictureInPictureAndroid);
   page_info()->PresentSitePermissionsForTesting();
@@ -2047,9 +2182,77 @@ TEST_F(PageInfoTest, AutoPictureInPicturePermissionInfoRegular) {
       std::find_if(permissions.begin(), permissions.end(), [](const auto& p) {
         return p.type == ContentSettingsType::AUTO_PICTURE_IN_PICTURE;
       });
+  // If the site hasn't registered for auto-pip, and the setting is default,
+  // the permission should not be shown.
+  EXPECT_EQ(it, permissions.end());
+}
+
+TEST_F(PageInfoTest, AutoPictureInPicturePermissionShownIfPreviouslySet) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kAutoPictureInPictureAndroid);
+
+  // The site is NOT registered for Auto-PiP, but the user has previously set
+  // the permission for this site.
+  HostContentSettingsMap* content_settings =
+      HostContentSettingsMapFactory::GetForProfile(profile());
+  content_settings->SetContentSettingDefaultScope(
+      url(), url(), ContentSettingsType::AUTO_PICTURE_IN_PICTURE,
+      CONTENT_SETTING_BLOCK);
+
+  page_info()->PresentSitePermissionsForTesting();
+  const auto& permissions = last_permission_info_list();
+  auto it =
+      std::find_if(permissions.begin(), permissions.end(), [](const auto& p) {
+        return p.type == ContentSettingsType::AUTO_PICTURE_IN_PICTURE;
+      });
+
+  // The permission should be shown because it has a non-default setting.
   ASSERT_NE(it, permissions.end());
-  EXPECT_EQ(std::get<ContentSetting>(it->default_setting),
-            CONTENT_SETTING_ALLOW);
+  EXPECT_EQ(it->setting.value(), PermissionSetting{CONTENT_SETTING_BLOCK});
+}
+
+TEST_F(PageInfoTest, AutoPictureInPicturePermissionInfoIncognito) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kAutoPictureInPictureAndroid);
+
+  AutoPictureInPictureTabHelper::CreateForWebContents(incognito_web_contents());
+  auto* tab_helper =
+      AutoPictureInPictureTabHelper::FromWebContents(incognito_web_contents());
+  std::vector<media_session::mojom::MediaSessionAction> actions;
+  actions.push_back(
+      media_session::mojom::MediaSessionAction::kEnterAutoPictureInPicture);
+  tab_helper->MediaSessionActionsChanged(actions);
+
+  incognito_page_info()->PresentSitePermissionsForTesting();
+  const auto& permissions = last_permission_info_list();
+  auto it =
+      std::find_if(permissions.begin(), permissions.end(), [](const auto& p) {
+        return p.type == ContentSettingsType::AUTO_PICTURE_IN_PICTURE;
+      });
+  ASSERT_NE(it, permissions.end());
+  EXPECT_EQ(it->default_setting, PermissionSetting{CONTENT_SETTING_BLOCK});
+}
+
+TEST_F(PageInfoTest, AutoPictureInPicturePermissionInfoRegular) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kAutoPictureInPictureAndroid);
+
+  AutoPictureInPictureTabHelper::CreateForWebContents(web_contents());
+  auto* tab_helper =
+      AutoPictureInPictureTabHelper::FromWebContents(web_contents());
+  std::vector<media_session::mojom::MediaSessionAction> actions;
+  actions.push_back(
+      media_session::mojom::MediaSessionAction::kEnterAutoPictureInPicture);
+  tab_helper->MediaSessionActionsChanged(actions);
+
+  page_info()->PresentSitePermissionsForTesting();
+  const auto& permissions = last_permission_info_list();
+  auto it =
+      std::find_if(permissions.begin(), permissions.end(), [](const auto& p) {
+        return p.type == ContentSettingsType::AUTO_PICTURE_IN_PICTURE;
+      });
+  ASSERT_NE(it, permissions.end());
+  EXPECT_EQ(it->default_setting, PermissionSetting{CONTENT_SETTING_ALLOW});
 }
 #endif
 

@@ -30,19 +30,16 @@ _JAVAC_EXTRACTOR = os.path.join(build_utils.DIR_SOURCE_ROOT, 'third_party',
                                 'android_prebuilts', 'build_tools', 'common',
                                 'framework', 'javac_extractor.jar')
 
+# These warnings cannot be suppressed even for third party code. Deprecation
+# warnings especially do not help since we must support older android version.
+_OUTPUT_FILTER_RE = re.compile(
+    r'^Note: .* uses? or overrides? a deprecated API.*\n|'
+    r'^Note: .* uses? unchecked or unsafe operations.*\n|'
+    r'^Note: Recompile with -Xlint:.* for details.*\n', re.MULTILINE)
+
 
 def ProcessJavacOutput(output, target_name):
-  # These warnings cannot be suppressed even for third party code. Deprecation
-  # warnings especially do not help since we must support older android version.
-  deprecated_re = re.compile(r'Note: .* uses? or overrides? a deprecated API')
-  unchecked_re = re.compile(
-      r'(Note: .* uses? unchecked or unsafe operations.)$')
-  recompile_re = re.compile(r'(Note: Recompile with -Xlint:.* for details.)$')
-
-  def ApplyFilters(line):
-    return not (deprecated_re.match(line) or unchecked_re.match(line)
-                or recompile_re.match(line))
-
+  output = _OUTPUT_FILTER_RE.sub('', output)
   output = build_utils.FilterReflectiveAccessJavaWarnings(output)
 
   # Warning currently cannot be silenced via javac flag.
@@ -54,14 +51,9 @@ def ProcessJavacOutput(output, target_name):
     #                 ^
     output = re.sub(r'.*?Unsafe is internal proprietary API[\s\S]*?\^\n', '',
                     output)
-    output = re.sub(r'\d+ warnings\n', '', output)
+    output = re.sub(r'\d+ warnings?\n', '', output)
 
-  lines = (l for l in output.split('\n') if ApplyFilters(l))
-
-  output_processor = javac_output_processor.JavacOutputProcessor(target_name)
-  lines = output_processor.Process(lines)
-
-  return '\n'.join(lines)
+  return javac_output_processor.Process(target_name, output)
 
 
 def CreateJarFile(jar_path,
@@ -461,6 +453,12 @@ def _RunCompiler(changes,
         raise Exception('need java files for --print-javac-command-line.')
       metadata_parser.ParseAndWriteInfoFile(jar_info_path, java_files, kt_files)
 
+    # TODO(anandrv): This step could also be skipped if tasks_java jar file
+    # isn't in the classpath
+    if java_files and options.location_rewriter_path:
+      build_utils.CheckOutput([options.location_rewriter_path, classes_dir])
+      logging.info('Finished location bytecode rewrite')
+
     if use_errorprone:
       # There is no jar file when running errorprone and jar_path is actually
       # just the stamp file for that target.
@@ -560,6 +558,13 @@ def _ParseOptions(argv):
       '--kotlin-jar-path',
       help='Kotlin jar to be merged into the output jar. This contains the '
       ".class files from this target's .kt files.")
+  parser.add_argument('--location-rewriter-path',
+                      help='Path to the location rewriter wrapper script.')
+  parser.add_argument(
+      '--additional-siso-input',
+      action='append',
+      help='Additional paths to append to SISO input list. These paths are not '
+      'forwarded to javac.')
   parser.add_argument('sources', nargs='*')
 
   options = parser.parse_args(argv)

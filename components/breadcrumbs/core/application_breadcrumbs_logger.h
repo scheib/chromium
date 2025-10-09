@@ -48,8 +48,7 @@ class ApplicationBreadcrumbsLogger {
 
   // Callback which processes and logs memory pressure warnings to the
   // BreadcrumbManager.
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level);
 
 #if defined(TOOLKIT_VIEWS)
   // Callback invoked when a widget is closed.
@@ -62,7 +61,8 @@ class ApplicationBreadcrumbsLogger {
   // The callback invoked whenever a user action is registered.
   base::ActionCallback user_action_callback_;
   // A memory pressure listener which observes memory pressure events.
-  std::unique_ptr<base::MemoryPressureListener> memory_pressure_listener_;
+  std::unique_ptr<base::MemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
 #if defined(TOOLKIT_VIEWS)
   // Widget listener which observes widget events.
   views::AnyWidgetObserver any_widget_observer_;

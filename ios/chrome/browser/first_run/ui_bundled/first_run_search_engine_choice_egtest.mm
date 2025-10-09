@@ -9,14 +9,14 @@
 #import "components/search_engines/search_engine_choice/search_engine_choice_utils.h"
 #import "components/search_engines/search_engines_switches.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_matchers.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_matchers.h"
 #import "ios/chrome/browser/first_run/ui_bundled/first_run_app_interface.h"
 #import "ios/chrome/browser/first_run/ui_bundled/first_run_test_case_base.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/policy/model/policy_earl_grey_utils.h"
-#import "ios/chrome/browser/search_engine_choice/ui_bundled/search_engine_choice_constants.h"
-#import "ios/chrome/browser/search_engine_choice/ui_bundled/search_engine_choice_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/search_engine_choice/test/search_engine_choice_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/search_engine_choice/ui/search_engine_choice_constants.h"
 #import "ios/chrome/browser/settings/ui_bundled/settings_app_interface.h"
 #import "ios/chrome/browser/settings/ui_bundled/settings_table_view_controller_constants.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
@@ -281,13 +281,7 @@
 }
 
 // Tests that incognito can be forced through the FRE with search engine screen.
-// TODO(crbug.com/427943675): Test is flaky on simulator. Reenable the test.
-#if TARGET_OS_SIMULATOR
-#define MAYBE_testIncognitoForcedByPolicy FLAKY_testIncognitoForcedByPolicy
-#else
-#define MAYBE_testIncognitoForcedByPolicy testIncognitoForcedByPolicy
-#endif
-- (void)MAYBE_testIncognitoForcedByPolicy {
+- (void)testIncognitoForcedByPolicy {
   // Configure the policy to force sign-in.
   [self relaunchAppWithPolicyKey:policy::key::kIncognitoModeAvailability
                   xmlPolicyValue:"<integer>2</integer>"];

@@ -13,7 +13,9 @@ import itertools
 import pathlib
 import re
 
-_INCLUDES = re.compile(r'#\s*(?:include|import)(_next)?\s*<([^>]+)>')
+# Almost every sysroot just uses #include <>, but fuchsia uses #include ""
+# sometimes.
+_INCLUDES = re.compile(r'#\s*(?:include|import)(_next)?\s*["<]([^>"]+)[>"]')
 
 
 class CompileStatus(enum.Enum):
@@ -82,8 +84,7 @@ class Header:
 
   @property
   def submodule_name(self):
-    normalized = self.rel.replace('.', '_').replace('/', '_').replace('-', '_')
-    return 'sysroot_' + normalized
+    return self.rel.replace('.', '_').replace('/', '_').replace('-', '_')
 
   @functools.cached_property
   def content(self) -> str:
@@ -199,6 +200,24 @@ class Target:
 
   def __hash__(self):
     return hash(self.name)
+
+  @property
+  def kwargs(self) -> dict[str, set[str]]:
+    """The kwargs associated with a build target.
+
+    eg. if you have kwargs = {"defines": ["FOO"]}, then it outputs:
+
+    target_type(target.name) {
+      defines = ["FOO"]
+    }
+    """
+    kwargs = collections.defaultdict(set)
+    for header in self.headers:
+      for single in header.group:
+        for dep in {single} | single.required_textual_deps:
+          for k, v in dep.kwargs.items():
+            kwargs[k].update(v)
+    return kwargs
 
   @property
   def header_deps(self) -> set[Header]:

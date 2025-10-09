@@ -8,15 +8,19 @@ import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.CUSTOM_ACTION_BUTTONS;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.CUSTOM_ACTION_BUTTONS_VISIBLE;
+import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.DESCRIPTION;
+import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.ICON;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.IS_INCOGNITO;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.MINIMIZE_BUTTON;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.OMNIBOX_ENABLED;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.OPTIONAL_BUTTON_VISIBLE;
+import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.TINT;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.TITLE_VISIBLE;
 import static org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarButtonsProperties.TOOLBAR_WIDTH;
 
 import android.app.Activity;
 import android.content.res.Configuration;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.view.View;
 import android.view.ViewGroup;
@@ -27,7 +31,6 @@ import org.chromium.base.Callback;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplierImpl;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
@@ -53,6 +56,8 @@ import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
 import org.chromium.components.feature_engagement.Tracker;
 import org.chromium.ui.modelutil.PropertyModel;
+
+import java.util.function.Supplier;
 
 @NullMarked
 class CustomTabToolbarButtonsMediator
@@ -114,11 +119,19 @@ class CustomTabToolbarButtonsMediator
     public void onColorSchemeChanged(
             @ColorInt int toolbarColor, @BrandedColorScheme int colorScheme) {
         updateOptionalButtonColors(toolbarColor, colorScheme);
+        var tint = ThemeUtils.getThemedToolbarIconTint(mActivity, colorScheme);
+        mModel.set(TINT, tint);
     }
 
     void setMinimizeButtonEnabled(boolean enabled) {
         mMinimizeButtonEnabled = enabled;
         mModel.set(MINIMIZE_BUTTON, getMinimizeButtonData());
+    }
+
+    void updateCustomActionButton(int index, Drawable drawable, String description) {
+        var model = mModel.get(CUSTOM_ACTION_BUTTONS).get(index);
+        model.set(ICON, drawable);
+        model.set(DESCRIPTION, description);
     }
 
     void setOptionalButtonData(@Nullable ButtonData buttonData) {
@@ -225,7 +238,7 @@ class CustomTabToolbarButtonsMediator
                     // As CPA chip does the expansion animation, the custom action button on
                     // the left of it needs animating too. Adjusting its margin makes it
                     // animate together with the chip.
-                    var view = mView.getCustomActionButtonsParent().getChildAt(0);
+                    var view = assumeNonNull(mView.getCustomActionButtonsParent()).getChildAt(0);
                     var viewLp = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
                     if (type == TransitionType.EXPANDING_ACTION_CHIP
                             || type == TransitionType.COLLAPSING_ACTION_CHIP) {

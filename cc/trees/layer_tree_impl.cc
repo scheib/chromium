@@ -44,6 +44,7 @@
 #include "cc/layers/picture_layer_impl.h"
 #include "cc/layers/render_surface_impl.h"
 #include "cc/layers/scrollbar_layer_impl_base.h"
+#include "cc/layers/touch_action_region.h"
 #include "cc/resources/ui_resource_request.h"
 #include "cc/trees/clip_node.h"
 #include "cc/trees/draw_property_utils.h"
@@ -151,8 +152,7 @@ LayerTreeImpl::LayerTreeImpl(
     viz::BeginFrameArgs begin_frame_args,
     scoped_refptr<SyncedScale> page_scale_factor,
     scoped_refptr<SyncedBrowserControls> top_controls_shown_ratio,
-    scoped_refptr<SyncedBrowserControls> bottom_controls_shown_ratio,
-    scoped_refptr<SyncedElasticOverscroll> elastic_overscroll)
+    scoped_refptr<SyncedBrowserControls> bottom_controls_shown_ratio)
     : host_impl_(&host_impl),
       created_begin_frame_args_(begin_frame_args),
       source_frame_number_(-1),
@@ -165,9 +165,6 @@ LayerTreeImpl::LayerTreeImpl(
       external_page_scale_factor_(1.f),
       device_scale_factor_(1.f),
       painted_device_scale_factor_(1.f),
-      always_push_properties_on_picture_layers_(!base::FeatureList::IsEnabled(
-          features::kDontAlwaysPushPictureLayerImpls)),
-      elastic_overscroll_(elastic_overscroll),
       event_listener_properties_(),
       top_controls_shown_ratio_(std::move(top_controls_shown_ratio)),
       bottom_controls_shown_ratio_(std::move(bottom_controls_shown_ratio)) {
@@ -485,17 +482,12 @@ void LayerTreeImpl::UpdateViewportContainerSizes() {
   // The delta to be added to transform matrix if dynamic safe area is
   // supported.
   auto* property_trees = this->property_trees();
-  float blink_bottom_content_offset;
-  if (settings().dynamic_safe_area_insets_on_scroll_enabled) {
-    // Blink SAI is based on bottom controls shown ratio. Subtract the delta
-    // added by Blink SAI.
-    blink_bottom_content_offset =
-        bottom_content_offset -
-        bottom_controls_height() * bottom_controls_shown_ratio_->Delta();
-  } else {
-    // Blink did NOT update SAI based on bottom controls shown ratio.
-    blink_bottom_content_offset = bottom_controls_layout_height;
-  }
+
+  // Blink SAI is based on bottom controls shown ratio. Subtract the delta
+  // added by Blink SAI.
+  const float blink_bottom_content_offset =
+      bottom_content_offset -
+      bottom_controls_height() * bottom_controls_shown_ratio_->Delta();
 
   const float real_saib =
       std::max(0.0f, max_safe_area_inset_bottom() - bottom_content_offset);
@@ -826,12 +818,10 @@ void LayerTreeImpl::PullLayerTreePropertiesFrom(CommitState& commit_state) {
                               commit_state.max_page_scale_factor);
 
   SetBrowserControlsParams(commit_state.browser_controls_params);
+  SetLoadProgress(commit_state.load_progress);
   set_overscroll_behavior(commit_state.overscroll_behavior);
   PushBrowserControlsFromMainThread(commit_state.top_controls_shown_ratio,
                                     commit_state.bottom_controls_shown_ratio);
-  elastic_overscroll()->PushMainToPending(commit_state.elastic_overscroll);
-  if (IsActiveTree())
-    elastic_overscroll()->PushPendingToActive();
 
   SetDisplayColorSpaces(commit_state.display_color_spaces);
   SetExternalPageScaleFactor(commit_state.external_page_scale_factor);
@@ -939,11 +929,11 @@ void LayerTreeImpl::PushPropertiesTo(LayerTreeImpl* target_tree) {
 
   target_tree->SetBrowserControlsParams(browser_controls_params_);
   target_tree->PushBrowserControls(nullptr, nullptr);
+  target_tree->SetLoadProgress(load_progress_);
 
   target_tree->set_overscroll_behavior(overscroll_behavior_);
 
   target_tree->SetDisplayColorSpaces(display_color_spaces_);
-  target_tree->elastic_overscroll()->PushPendingToActive();
 
   target_tree->set_painted_device_scale_factor(painted_device_scale_factor());
   target_tree->SetDeviceScaleFactor(device_scale_factor());
@@ -1371,6 +1361,18 @@ void LayerTreeImpl::SetBrowserControlsParams(
   }
 }
 
+void LayerTreeImpl::SetLoadProgress(float progress) {
+  if (load_progress_ == progress) {
+    return;
+  }
+
+  load_progress_ = progress;
+
+  if (IsActiveTree()) {
+    host_impl_->progress_bar_manager()->OnLoadProgressChanged(progress);
+  }
+}
+
 void LayerTreeImpl::set_overscroll_behavior(
     const OverscrollBehavior& behavior) {
   overscroll_behavior_ = behavior;
@@ -1609,7 +1611,6 @@ void LayerTreeImpl::ApplySentScrollAndScaleDeltasFromAbortedCommit(
   top_controls_shown_ratio()->AbortCommit(next_bmf, main_frame_applied_deltas);
   bottom_controls_shown_ratio()->AbortCommit(next_bmf,
                                              main_frame_applied_deltas);
-  elastic_overscroll()->AbortCommit(next_bmf, main_frame_applied_deltas);
 
   if (layer_list_.empty())
     return;
@@ -1873,11 +1874,6 @@ void LayerTreeImpl::ClearSurfaceRanges() {
 }
 
 void LayerTreeImpl::AddLayerShouldPushProperties(LayerImpl* layer) {
-  // When pushing from pending to active tree, PictureLayerImpls should only go
-  // into this set when always_push_properties_on_picture_layers() is disabled.
-  DCHECK(!always_push_properties_on_picture_layers() ||
-         !base::Contains(picture_layers_, layer) ||
-         (IsActiveTree() && settings().TreesInVizInClientProcess()));
   layers_that_should_push_properties_.insert(layer);
 }
 
@@ -2441,7 +2437,7 @@ static bool PointIsClippedBySurfaceOrClipRect(
   return PointIsClippedByAncestorClipNode(screen_space_point, layer);
 }
 
-static bool PointHitsRegion(const gfx::PointF& screen_space_point,
+static bool PointHitsRegion(const gfx::RectF& screen_space_touch_rect,
                             const gfx::Transform& screen_space_transform,
                             const Region& layer_space_region,
                             const LayerImpl* layer_impl) {
@@ -2457,8 +2453,10 @@ static bool PointHitsRegion(const gfx::PointF& screen_space_point,
   // Transform the hit test point from screen space to the local space of the
   // given region.
   bool clipped = false;
-  gfx::PointF hit_test_point_in_layer_space = MathUtil::ProjectPoint(
-      inverse_screen_space_transform, screen_space_point, &clipped);
+  const gfx::RectF hit_test_rect_in_layer_space =
+      MathUtil::MapQuad(inverse_screen_space_transform,
+                        gfx::QuadF(screen_space_touch_rect), &clipped)
+          .BoundingBox();
 
   // If ProjectPoint could not project to a valid value, then we assume that
   // this point doesn't hit this region.
@@ -2467,12 +2465,19 @@ static bool PointHitsRegion(const gfx::PointF& screen_space_point,
 
   // We need to walk up the parents to ensure that the layer is not clipped in
   // such a way that it is impossible for the point to hit the layer.
-  if (layer_impl &&
-      PointIsClippedBySurfaceOrClipRect(screen_space_point, layer_impl))
+  if (layer_impl && PointIsClippedBySurfaceOrClipRect(
+                        screen_space_touch_rect.CenterPoint(), layer_impl)) {
     return false;
+  }
 
-  return layer_space_region.Contains(
-      gfx::ToRoundedPoint(hit_test_point_in_layer_space));
+  const gfx::Rect hit_test_touch_rect_in_layer_space(
+      gfx::ToRoundedPoint(hit_test_rect_in_layer_space.origin()),
+      gfx::Size(
+          std::max(
+              1, base::ClampRound(hit_test_rect_in_layer_space.size().width())),
+          std::max(1, base::ClampRound(
+                          hit_test_rect_in_layer_space.size().height()))));
+  return layer_space_region.Intersects(hit_test_touch_rect_in_layer_space);
 }
 
 static bool PointHitsLayer(const LayerImpl* layer,
@@ -2511,7 +2516,7 @@ struct FindClosestMatchingLayerState {
 };
 
 template <typename Functor>
-static void FindClosestMatchingLayer(const gfx::PointF& screen_space_point,
+static void FindClosestMatchingLayer(const gfx::RectF& screen_space_touch_rect,
                                      LayerImpl* root_layer,
                                      const Functor& func,
                                      FindClosestMatchingLayerState* state) {
@@ -2519,16 +2524,22 @@ static void FindClosestMatchingLayer(const gfx::PointF& screen_space_point,
 
   // We want to iterate from front to back when hit testing.
   for (auto* layer : base::Reversed(*root_layer->layer_tree_impl())) {
-    if (!func(layer))
+    // TODO(crbug.com/445727120): We currently only handle proximity based hit
+    // testing for regions within the current layer. We don't handle cases where
+    // the touch_rect center point misses a layer but the rect intersects a
+    // touch region in that layer.
+    if (!func(layer)) {
       continue;
+    }
 
     float distance_to_intersection = 0.f;
     bool hit = false;
     if (layer->Is3dSorted()) {
-      hit =
-          PointHitsLayer(layer, screen_space_point, &distance_to_intersection);
+      hit = PointHitsLayer(layer, screen_space_touch_rect.CenterPoint(),
+                           &distance_to_intersection);
     } else {
-      hit = PointHitsLayer(layer, screen_space_point, nullptr);
+      hit =
+          PointHitsLayer(layer, screen_space_touch_rect.CenterPoint(), nullptr);
     }
 
     if (!hit)
@@ -2562,9 +2573,9 @@ LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPoint(
     return nullptr;
   }
   FindClosestMatchingLayerState state;
-  FindClosestMatchingLayer(screen_space_point, layer_list_[0].get(),
-                           HitTestVisibleScrollableOrTouchableFunctor(),
-                           &state);
+  FindClosestMatchingLayer(
+      gfx::RectF(screen_space_point, gfx::SizeF()), layer_list_[0].get(),
+      HitTestVisibleScrollableOrTouchableFunctor(), &state);
   return state.closest_match;
 }
 
@@ -2572,23 +2583,25 @@ struct FindTouchEventLayerFunctor {
   bool operator()(LayerImpl* layer) const {
     if (!layer->has_touch_action_regions())
       return false;
-    return PointHitsRegion(screen_space_point, layer->ScreenSpaceTransform(),
+    return PointHitsRegion(screen_space_touch_rect,
+                           layer->ScreenSpaceTransform(),
                            layer->GetAllTouchActionRegions(), layer);
   }
-  const gfx::PointF screen_space_point;
+  const gfx::RectF screen_space_touch_rect;
 };
 
 struct FindWheelEventHandlerLayerFunctor {
   bool operator()(LayerImpl* layer) const {
-    return PointHitsRegion(screen_space_point, layer->ScreenSpaceTransform(),
+    return PointHitsRegion(screen_space_touch_rect,
+                           layer->ScreenSpaceTransform(),
                            layer->wheel_event_handler_region(), layer);
   }
-  const gfx::PointF screen_space_point;
+  const gfx::RectF screen_space_touch_rect;
 };
 
 template <typename Functor>
 LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInEventHandlerRegion(
-    const gfx::PointF& screen_space_point,
+    const gfx::RectF& screen_space_touch_rect,
     const Functor& func) {
   if (layer_list_.empty())
     return nullptr;
@@ -2598,22 +2611,29 @@ LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInEventHandlerRegion(
     return nullptr;
   }
   FindClosestMatchingLayerState state;
-  FindClosestMatchingLayer(screen_space_point, layer_list_[0].get(), func,
+  FindClosestMatchingLayer(screen_space_touch_rect, layer_list_[0].get(), func,
                            &state);
   return state.closest_match;
 }
 
 LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInTouchHandlerRegion(
-    const gfx::PointF& screen_space_point) {
-  FindTouchEventLayerFunctor func = {screen_space_point};
-  return FindLayerThatIsHitByPointInEventHandlerRegion(screen_space_point,
+    const gfx::RectF& screen_space_touch_rect) {
+  FindTouchEventLayerFunctor func = {screen_space_touch_rect};
+  return FindLayerThatIsHitByPointInEventHandlerRegion(screen_space_touch_rect,
                                                        func);
+}
+
+LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInTouchHandlerRegion(
+    const gfx::PointF& screen_space_point) {
+  return FindLayerThatIsHitByPointInTouchHandlerRegion(
+      gfx::RectF(screen_space_point, gfx::SizeF()));
 }
 
 LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInWheelEventHandlerRegion(
     const gfx::PointF& screen_space_point) {
-  FindWheelEventHandlerLayerFunctor func = {screen_space_point};
-  return FindLayerThatIsHitByPointInEventHandlerRegion(screen_space_point,
+  const gfx::RectF screen_space_touch_rect(screen_space_point, gfx::SizeF());
+  FindWheelEventHandlerLayerFunctor func = {screen_space_touch_rect};
+  return FindLayerThatIsHitByPointInEventHandlerRegion(screen_space_touch_rect,
                                                        func);
 }
 
@@ -2734,7 +2754,8 @@ bool LayerTreeImpl::PointHitsMainThreadScrollHitTestRegion(
     return false;
   }
 
-  return PointHitsRegion(screen_space_point, layer.ScreenSpaceTransform(),
+  return PointHitsRegion(gfx::RectF(screen_space_point, gfx::SizeF()),
+                         layer.ScreenSpaceTransform(),
                          layer.main_thread_scroll_hit_test_region(), &layer);
 }
 

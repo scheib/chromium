@@ -655,6 +655,12 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsTest,
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsTest,
                        AccessibilityEventsCheckedStateChanged) {
+  // TODO(crbug.com/441088517): Fix the flakiness and enable this on blink.
+  if (GetParam() == ui::AXApiType::kBlink) {
+    GTEST_SKIP() << "Skipping this test case on blink because of flakiness. "
+                 << "See crbug.com/441088517";
+  }
+
   RunEventTest(FILE_PATH_LITERAL("checked-state-changed.html"));
 }
 
@@ -835,6 +841,14 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsTest,
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsTest,
+                       AccessibilitySelectListboxActivateOptions) {
+  base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+      switches::kEnableBlinkFeatures,
+      blink::features::kSelectMobileDesktopParity.name);
+  RunEventTest(FILE_PATH_LITERAL("select-multiple-activate-options.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsTest,
                        AccessibilityEventsIframeSrcChanged) {
   RunEventTest(FILE_PATH_LITERAL("iframe-src-changed.html"));
 }
@@ -967,7 +981,7 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsTest,
 // fail due to the leak.
 // TODO(crbug.com/424781310): Re-enable these tests on Windows once the leak
 // issue is resolved.
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_WIN)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_IOS)
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsWithMaterialDesignTest,
                        MaterialDesignButtonEvents) {
   RunEventTest(FILE_PATH_LITERAL("material-design-button.html"));
@@ -1042,7 +1056,7 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsWithMaterialDesignTest,
                        MaterialDesignChipsEvents) {
   RunEventTest(FILE_PATH_LITERAL("material-design-chips.html"));
 }
-#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_WIN)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_IOS)
 
 // TODO(crbug.com/40841326): disabled on UIA
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityEventsTestExceptUIA,

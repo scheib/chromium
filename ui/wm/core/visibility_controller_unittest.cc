@@ -4,6 +4,7 @@
 
 #include "ui/wm/core/visibility_controller.h"
 
+#include "base/test/run_until.h"
 #include "ui/aura/test/aura_test_base.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/test/test_windows.h"
@@ -32,20 +33,31 @@ TEST_F(VisibilityControllerTest, AnimateTransparencyToZeroAndHideHides) {
   SetChildWindowVisibilityChangesAnimated(root_window());
 
   aura::test::TestWindowDelegate d;
-  std::unique_ptr<aura::Window> window(aura::test::CreateTestWindowWithDelegate(
-      &d, -2, gfx::Rect(0, 0, 50, 50), root_window()));
-  ui::ScopedLayerAnimationSettings settings(window->layer()->GetAnimator());
-  settings.SetTransitionDuration(base::Milliseconds(5));
-
+  std::unique_ptr<aura::Window> window =
+      aura::test::CreateTestWindow({.delegate = &d,
+                                    .parent = root_window(),
+                                    .bounds = {0, 0, 50, 50},
+                                    .window_id = -2});
   EXPECT_TRUE(window->layer()->visible());
   EXPECT_TRUE(window->IsVisible());
+  EXPECT_EQ(1.0, window->layer()->GetTargetOpacity());
+  EXPECT_TRUE(window->layer()->GetAnimator()->IsAnimatingProperty(
+      ui::LayerAnimationElement::OPACITY));
+  {
+    ui::ScopedLayerAnimationSettings settings(window->layer()->GetAnimator());
+    settings.SetTransitionDuration(base::Milliseconds(5));
+    settings.SetPreemptionStrategy(
+        ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
 
-  window->layer()->SetOpacity(0.0);
+    EXPECT_TRUE(window->layer()->visible());
+    EXPECT_TRUE(window->IsVisible());
+    window->layer()->SetOpacity(0.0);
+  }
+  EXPECT_EQ(0.0f, window->layer()->GetTargetOpacity());
   EXPECT_TRUE(window->layer()->visible());
   EXPECT_TRUE(window->IsVisible());
   EXPECT_TRUE(window->layer()->GetAnimator()->
       IsAnimatingProperty(ui::LayerAnimationElement::OPACITY));
-  EXPECT_EQ(0.0f, window->layer()->GetTargetOpacity());
 
   // Check that the visibility is correct after the hide animation has finished.
   window->Hide();
@@ -66,8 +78,11 @@ TEST_F(VisibilityControllerTest, HideAnimationWindowBoundsTest) {
   // Set bound expectation.
   gfx::Rect expected_bounds(4, 5, 123, 245);
   aura::test::TestWindowDelegate d;
-  std::unique_ptr<aura::Window> window(aura::test::CreateTestWindowWithDelegate(
-      &d, -2, expected_bounds, root_window()));
+  std::unique_ptr<aura::Window> window =
+      aura::test::CreateTestWindow({.delegate = &d,
+                                    .parent = root_window(),
+                                    .bounds = expected_bounds,
+                                    .window_id = -2});
   window->Show();
   SetWindowVisibilityChangesAnimated(window.get());
   SetWindowVisibilityAnimationDuration(window.get(), base::Milliseconds(5));
@@ -90,8 +105,11 @@ TEST_F(VisibilityControllerTest, SetWindowVisibilityChagnesAnimated) {
   aura::client::SetVisibilityClient(root_window(), &controller);
 
   aura::test::TestWindowDelegate d;
-  std::unique_ptr<aura::Window> window(aura::test::CreateTestWindowWithDelegate(
-      &d, -2, gfx::Rect(0, 0, 50, 50), root_window()));
+  std::unique_ptr<aura::Window> window =
+      aura::test::CreateTestWindow({.delegate = &d,
+                                    .parent = root_window(),
+                                    .bounds = {0, 0, 50, 50},
+                                    .window_id = -2});
   // Test using Show animation because Hide animation detaches the window's
   // layer.
   window->Hide();

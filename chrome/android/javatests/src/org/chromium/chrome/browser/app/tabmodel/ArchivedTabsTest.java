@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.app.tabmodel;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.chromium.base.ThreadUtils.runOnUiThreadBlocking;
 
 import android.os.Looper;
@@ -14,7 +16,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
@@ -76,8 +77,6 @@ public class ArchivedTabsTest {
 
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.LENIENT);
 
-    @Mock private ArchivedTabModelOrchestrator.Observer mObserver;
-
     private Profile mProfile;
     private FakeDeferredStartupHandler mDeferredStartupHandler;
     private ArchivedTabModelOrchestrator mOrchestrator;
@@ -109,7 +108,7 @@ public class ArchivedTabsTest {
         runOnUiThreadBlocking(
                 () -> {
                     mDeferredStartupHandler.runAllTasks();
-                    assert mOrchestrator.areTabModelsInitialized();
+                    assertThat(mOrchestrator.areTabModelsInitialized()).isTrue();
                     mOrchestrator.getTabArchiveSettings().resetSettingsForTesting();
                     mArchivedTabModel = mOrchestrator.getTabModelSelector().getModel(false);
                     mRegularTabModel = mActivityTestRule.getActivity().getCurrentTabModel();

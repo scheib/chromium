@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 
+#include <algorithm>
 #include <map>
 #include <set>
 #include <utility>
@@ -27,11 +28,11 @@
 #include "base/time/time.h"
 #include "base/trace_event/memory_usage_estimator.h"
 #include "base/uuid.h"
+#include "components/autofill/core/browser/webdata/payments/payments_sync_util.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/data_type.h"
 #include "components/sync/base/data_type_histogram.h"
 #include "components/sync/base/features.h"
-#include "components/sync/base/hash_util.h"
 #include "components/sync/base/sync_invalidation_adapter.h"
 #include "components/sync/base/time.h"
 #include "components/sync/engine/bookmark_update_preprocessing.h"
@@ -87,12 +88,6 @@ void LogEncryptionResult(DataType type, bool success) {
       success);
 }
 
-void LogCrossUserSharingDecryptionResult(
-    CrossUserSharingDecryptionResult result) {
-  base::UmaHistogramEnumeration("Sync.CrossUserSharingDecryptionResult",
-                                result);
-}
-
 void LogNudgedUpdateLatency(DataType type, base::TimeDelta latency) {
   base::UmaHistogramLongTimes(base::StrCat({"Sync.NudgedUpdateLatency.",
                                             DataTypeToHistogramSuffix(type)}),
@@ -141,18 +136,21 @@ void AdaptClientTagForFullUpdateData(DataType data_type,
   if (data_type == AUTOFILL_WALLET_DATA) {
     CHECK(data->specifics.has_autofill_wallet());
     data->client_tag_hash = ClientTagHash::FromUnhashed(
-        AUTOFILL_WALLET_DATA, GetUnhashedClientTagFromAutofillWalletSpecifics(
-                                  data->specifics.autofill_wallet()));
+        AUTOFILL_WALLET_DATA,
+        autofill::GetUnhashedClientTagFromAutofillWalletSpecifics(
+            data->specifics.autofill_wallet()));
   } else if (data_type == AUTOFILL_WALLET_OFFER) {
     CHECK(data->specifics.has_autofill_offer());
     data->client_tag_hash = ClientTagHash::FromUnhashed(
-        AUTOFILL_WALLET_OFFER, GetUnhashedClientTagFromAutofillOfferSpecifics(
-                                   data->specifics.autofill_offer()));
+        AUTOFILL_WALLET_OFFER,
+        autofill::GetUnhashedClientTagFromAutofillOfferSpecifics(
+            data->specifics.autofill_offer()));
   } else if (data_type == AUTOFILL_VALUABLE) {
     CHECK(data->specifics.has_autofill_valuable());
     data->client_tag_hash = ClientTagHash::FromUnhashed(
-        AUTOFILL_VALUABLE, GetUnhashedClientTagFromAutofillValuableSpecifics(
-                               data->specifics.autofill_valuable()));
+        AUTOFILL_VALUABLE,
+        autofill::GetUnhashedClientTagFromAutofillValuableSpecifics(
+            data->specifics.autofill_valuable()));
   } else {
     NOTREACHED();
   }
@@ -278,8 +276,6 @@ bool DecryptIncomingPasswordSharingInvitationSpecifics(
     sync_pb::PasswordSharingInvitationData* unencrypted_invitation_data) {
   if (!invitation.has_encrypted_password_sharing_invitation_data() ||
       !invitation.sender_info().has_cross_user_sharing_public_key()) {
-    LogCrossUserSharingDecryptionResult(
-        CrossUserSharingDecryptionResult::kInvitationMissingFields);
     DLOG(ERROR) << "The invitation is missing required fields";
     return false;
   }
@@ -293,22 +289,16 @@ bool DecryptIncomingPasswordSharingInvitationSpecifics(
                                  .x25519_public_key()),
           invitation.recipient_key_version());
   if (!decrypted) {
-    LogCrossUserSharingDecryptionResult(
-        CrossUserSharingDecryptionResult::kFailedToDecryptInvitation);
     DLOG(ERROR) << "Failed to decrypt the invitation";
     return false;
   }
 
   if (!unencrypted_invitation_data->ParseFromArray(decrypted->data(),
                                                    decrypted->size())) {
-    LogCrossUserSharingDecryptionResult(
-        CrossUserSharingDecryptionResult::kFailedToParseDecryptedInvitation);
     DLOG(ERROR) << "Failed to parse the decrypted invitation";
     return false;
   }
 
-  LogCrossUserSharingDecryptionResult(
-      CrossUserSharingDecryptionResult::kSuccess);
   return true;
 }
 
@@ -347,27 +337,26 @@ DataTypeWorker::DataTypeWorker(DataType type,
     // DataTypeWorker::ctor(), but sync cycle is not scheduled. New sync
     // cycle has to be triggered right after we loaded persisted
     // invalidations.
-    for (int i = 0; i < data_type_state_.invalidations_size(); ++i) {
+    for (const sync_pb::DataTypeState::Invalidation& invalidation :
+         data_type_state_.invalidations()) {
       // Do not populate `received_time` on load from the disk because it is not
       // persisted.
       pending_invalidations_.emplace_back(
           std::make_unique<SyncInvalidationAdapter>(
-              data_type_state_.invalidations(i).hint(),
-              data_type_state_.invalidations(i).has_version()
-                  ? std::optional<int64_t>(
-                        data_type_state_.invalidations(i).version())
+              invalidation.hint(),
+              invalidation.has_version()
+                  ? std::optional<int64_t>(invalidation.version())
                   : std::nullopt),
           /*is_processed=*/false,
           /*received_time=*/std::nullopt);
     }
 
-    bool is_version_order_correct = true;
-    for (size_t i = 1; i < pending_invalidations_.size(); ++i) {
-      is_version_order_correct &= (SyncInvalidation::LessThanByVersion(
-          *pending_invalidations_[i - 1].pending_invalidation,
-          *pending_invalidations_[i].pending_invalidation));
-    }
-    if (!is_version_order_correct) {
+    if (!std::is_sorted(
+            pending_invalidations_.begin(), pending_invalidations_.end(),
+            [](const PendingInvalidation& a, const PendingInvalidation& b) {
+              return SyncInvalidation::LessThanByVersion(
+                  *a.pending_invalidation, *b.pending_invalidation);
+            })) {
       DVLOG(1) << "Cleaning invalidations in `data_type_state` due to "
                   "incorrect version order.";
       pending_invalidations_.clear();

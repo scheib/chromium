@@ -454,9 +454,9 @@ export class SettingsClearBrowsingDataDialogElement extends
     const page = this.$.pages.selectedItem as HTMLElement;
     assert(page);
     switch (page.id) {
-      case 'basic-tab':
+      case 'basicTab':
         return true;
-      case 'advanced-tab':
+      case 'advancedTab':
         return false;
       default:
         assertNotReached();
@@ -627,10 +627,9 @@ export class SettingsClearBrowsingDataDialogElement extends
       case SignedInState.WEB_ONLY_SIGNED_IN:
       case SignedInState.SIGNED_OUT:
       case SignedInState.SIGNED_IN_PAUSED:
+      default:
         return false;
     }
-
-    return false;
   }
 
   /**
@@ -672,10 +671,9 @@ export class SettingsClearBrowsingDataDialogElement extends
         return true;
       case SignedInState.WEB_ONLY_SIGNED_IN:
       case SignedInState.SIGNED_OUT:
+      default:
         return false;
     }
-
-    return false;
   }
 
   private onTimePeriodChanged_() {

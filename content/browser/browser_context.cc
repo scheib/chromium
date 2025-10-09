@@ -29,6 +29,7 @@
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "components/download/public/common/in_progress_download_manager.h"
+#include "components/leveldb_proto/public/proto_database_provider.h"
 #include "components/services/storage/privileged/mojom/indexed_db_control.mojom.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/browser/browser_context_impl.h"
@@ -36,7 +37,7 @@
 #include "content/browser/child_process_host_impl.h"
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/in_memory_federated_permission_context.h"
-#include "content/browser/preloading/prefetch/prefetch_container.h"
+#include "content/browser/preloading/prefetch/prefetch_request.h"
 #include "content/browser/preloading/prefetch/prefetch_service.h"
 #include "content/browser/preloading/prefetch/prefetch_type.h"
 #include "content/browser/push_messaging/push_messaging_router.h"
@@ -217,7 +218,7 @@ BrowserContext::StartBrowserPrefetchRequest(
 
   PrefetchType prefetch_type(PreloadingTriggerType::kEmbedder,
                              /*use_prefetch_proxy=*/false);
-  auto container = std::make_unique<PrefetchContainer>(
+  auto request = PrefetchRequest::CreateBrowserInitiatedWithoutWebContents(
       this, url, prefetch_type, embedder_histogram_suffix,
       blink::mojom::Referrer(), javascript_enabled,
       /*referring_origin=*/std::nullopt, std::move(no_vary_search_hint),
@@ -225,7 +226,7 @@ BrowserContext::StartBrowserPrefetchRequest(
       /*attempt=*/nullptr, additional_headers,
       std::move(request_status_listener), ttl, should_append_variations_header,
       should_disable_block_until_head_timeout);
-  return prefetch_service->AddPrefetchContainerWithHandle(std::move(container));
+  return prefetch_service->AddPrefetchRequestWithHandle(std::move(request));
 }
 
 void BrowserContext::UpdatePrefetchServiceDelegateAcceptLanguageHeader(
@@ -464,6 +465,11 @@ KAnonymityServiceDelegate* BrowserContext::GetKAnonymityServiceDelegate() {
 
 OriginTrialsControllerDelegate*
 BrowserContext::GetOriginTrialsControllerDelegate() {
+  return nullptr;
+}
+
+std::unique_ptr<leveldb_proto::ProtoDatabaseProvider>
+BrowserContext::TakeDefaultProtoDatabaseProvider() {
   return nullptr;
 }
 

@@ -45,8 +45,6 @@ class FormEventLoggerBase {
 
   void OnDidInteractWithAutofillableForm(const FormStructure& form);
 
-  void OnDidPollSuggestions(FieldGlobalId field_id);
-
   void OnDidIdentifyForm(const FormStructure& form,
                          FormIdentificationTime identification_time);
 
@@ -107,13 +105,16 @@ class FormEventLoggerBase {
     return fast_checkout_run_id_;
   }
 
+  // Used for testing purposes to help verify that the correct subclass is
+  // constructed.
+  std::string GetFormTypeNameForTesting() const { return form_type_name_; }
+
  protected:
   virtual ~FormEventLoggerBase();
 
   AutofillClient& client();
   AutofillDriver& driver();
 
-  virtual void RecordPollSuggestions() = 0;
   virtual void RecordParseForm() = 0;
   virtual void RecordShowSuggestions() = 0;
 
@@ -233,9 +234,6 @@ class FormEventLoggerBase {
   AblationGroup ablation_group_ = AblationGroup::kDefault;
   AblationGroup conditional_ablation_group_ = AblationGroup::kDefault;
   std::optional<base::TimeDelta> time_from_interaction_to_submission_;
-
-  // The ID of the last field that was polled for suggestions.
-  FieldGlobalId last_polled_field_id_;
 
   // Used to count consecutive modifications on the same field as one change.
   FieldGlobalId last_field_global_id_modified_by_user_;

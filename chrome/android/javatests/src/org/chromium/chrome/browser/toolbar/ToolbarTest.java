@@ -42,6 +42,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.Batch;
@@ -53,7 +56,10 @@ import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.Restriction;
+import org.chromium.base.ui.KeyboardUtils;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
+import org.chromium.chrome.browser.bookmarks.bar.BookmarkBarSceneLayer;
+import org.chromium.chrome.browser.bookmarks.bar.BookmarkBarSceneLayerJni;
 import org.chromium.chrome.browser.bookmarks.bar.BookmarkBarUtils;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
 import org.chromium.chrome.browser.findinpage.FindToolbar;
@@ -86,7 +92,6 @@ import org.chromium.components.browser_ui.widget.scrim.ScrimManager;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.net.NetworkChangeNotifier;
 import org.chromium.net.test.EmbeddedTestServer;
-import org.chromium.ui.KeyboardUtils;
 import org.chromium.ui.base.DeviceFormFactor;
 
 /** Tests for toolbar manager behavior. */
@@ -98,6 +103,10 @@ public class ToolbarTest {
     public FreshCtaTransitTestRule mActivityTestRule =
             ChromeTransitTestRules.freshChromeTabbedActivityRule();
 
+    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
+
+    @Mock private BookmarkBarSceneLayer.Natives mBookmarkBarSceneLayerJniMock;
+
     private static final String TEST_PAGE = "/chrome/test/data/android/test.html";
     private WebPageStation mPage;
     private ChromeTabbedActivity mActivity;
@@ -105,6 +114,8 @@ public class ToolbarTest {
     @Before
     public void setUp() throws InterruptedException {
         BookmarkBarUtils.setBookmarkBarVisibleForTesting(true);
+        BookmarkBarSceneLayerJni.setInstanceForTesting(mBookmarkBarSceneLayerJniMock);
+
         TabbedRootUiCoordinator.setDisableTopControlsAnimationsForTesting(true);
         mPage = mActivityTestRule.startOnBlankPage();
         mActivity = mActivityTestRule.getActivity();
@@ -170,6 +181,8 @@ public class ToolbarTest {
     @UiThreadTest
     @EnableFeatures(ChromeFeatureList.ANDROID_BOOKMARK_BAR)
     @Restriction({DeviceFormFactor.PHONE})
+    @DisabledTest
+    // TODO(crbug.com/447525636): Re-enable tests.
     public void testControlContainerTopMarginWhenBookmarkBarIsEnabledOnPhone() {
         testControlContainerTopMargin(/* expectBookmarkBar= */ false);
     }

@@ -25,6 +25,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/no_destructor.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
@@ -82,9 +83,11 @@
 #include "net/storage_access_api/status.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/embedded_test_server/controllable_http_response.h"
+#include "net/test/embedded_test_server/default_handlers.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_connection.h"
 #include "net/test/embedded_test_server/http_response.h"
+#include "net/test/embedded_test_server/register_basic_auth_handler.h"
 #include "net/test/gtest_util.h"
 #include "net/test/quic_simple_test_server.h"
 #include "net/test/test_data_directory.h"
@@ -141,6 +144,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
+#include "url/scheme_host_port.h"
 
 namespace network {
 
@@ -808,8 +812,8 @@ class URLLoaderTest : public testing::Test {
     net::HttpNetworkSessionParams params;
     auto quic_context = std::make_unique<net::QuicContext>();
     quic_context->params()->origins_to_force_quic_on.insert(
-        net::HostPortPair(net::QuicSimpleTestServer::GetHost(),
-                          net::QuicSimpleTestServer::GetPort()));
+        url::SchemeHostPort("https", net::QuicSimpleTestServer::GetHost(),
+                            net::QuicSimpleTestServer::GetPort()));
     params.enable_quic = true;
     net::URLRequestContextBuilder context_builder;
     context_builder.set_http_network_session_params(params);
@@ -1600,7 +1604,7 @@ TEST_F(URLLoaderTest, SecureUnknownToLoopbackBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(client()->completion_status().cors_error_status,
               Optional(InsecurePrivateNetworkCorsErrorStatus(
@@ -1643,7 +1647,7 @@ TEST_F(URLLoaderTest, SecureUnknownToLoopbackPreflightWarn) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1662,7 +1666,7 @@ TEST_F(URLLoaderTest, SecureUnknownToLoopbackPreflightBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1678,7 +1682,7 @@ TEST_F(URLLoaderTest, NonSecureUnknownToLoopbackBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(client()->completion_status().cors_error_status,
               Optional(InsecurePrivateNetworkCorsErrorStatus(
@@ -1718,7 +1722,7 @@ TEST_F(URLLoaderTest, NonSecureUnknownToLoopbackPreflightWarn) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1736,7 +1740,7 @@ TEST_F(URLLoaderTest, NonSecureUnknownToLoopbackPreflightBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1753,7 +1757,7 @@ TEST_F(URLLoaderTest, SecurePublicToLoopbackBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(client()->completion_status().cors_error_status,
               Optional(InsecurePrivateNetworkCorsErrorStatus(
@@ -1796,7 +1800,7 @@ TEST_F(URLLoaderTest, SecurePublicToLoopbackPreflightWarn) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1815,7 +1819,7 @@ TEST_F(URLLoaderTest, SecurePublicToLoopbackPreflightBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1831,7 +1835,7 @@ TEST_F(URLLoaderTest, NonSecurePublicToLoopbackBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(client()->completion_status().cors_error_status,
               Optional(InsecurePrivateNetworkCorsErrorStatus(
@@ -1871,7 +1875,7 @@ TEST_F(URLLoaderTest, NonSecurePublicToLoopbackPreflightWarn) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1889,7 +1893,7 @@ TEST_F(URLLoaderTest, NonSecurePublicToLoopbackPreflightBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -1898,7 +1902,11 @@ TEST_F(URLLoaderTest, NonSecurePublicToLoopbackPreflightBlock) {
           mojom::IPAddressSpace::kUnknown, mojom::IPAddressSpace::kLoopback)));
 }
 
-TEST_F(URLLoaderTest, SecureLocalToLoopbackBlock) {
+TEST_F(URLLoaderTest, SecureLocalToLoopbackDefault) {
+  // This test presumes that LNA enforcement is enabled.
+  base::test::ScopedFeatureList feature_list(
+      features::kLocalNetworkAccessChecks);
+
   auto client_security_state = NewSecurityState();
   client_security_state->is_web_secure_context = true;
   client_security_state->ip_address_space = mojom::IPAddressSpace::kLocal;
@@ -1906,11 +1914,9 @@ TEST_F(URLLoaderTest, SecureLocalToLoopbackBlock) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
-            LoadRequest(request));
-  EXPECT_THAT(client()->completion_status().cors_error_status,
-              Optional(InsecurePrivateNetworkCorsErrorStatus(
-                  mojom::IPAddressSpace::kLoopback)));
+  // Local and Loopback are currently merged and LNA checks are not
+  // enforced.
+  EXPECT_EQ(net::OK, LoadRequest(request));
 }
 
 TEST_F(URLLoaderTest, SecureLocalToLoopbackWarn) {
@@ -1939,56 +1945,20 @@ TEST_F(URLLoaderTest, SecureLocalToLoopbackAllow) {
   EXPECT_EQ(net::OK, LoadRequest(request));
 }
 
-TEST_F(URLLoaderTest, SecureLocalToLoopbackPreflightBlock) {
-  auto client_security_state = NewSecurityState();
-  client_security_state->is_web_secure_context = true;
-  client_security_state->ip_address_space = mojom::IPAddressSpace::kLocal;
-  client_security_state->private_network_request_policy =
-      mojom::PrivateNetworkRequestPolicy::kPreflightBlock;
-  set_factory_client_security_state(std::move(client_security_state));
+TEST_F(URLLoaderTest, NonSecureLocalToLoopbackDefault) {
+  // This test presumes that LNA enforcement is enabled.
+  base::test::ScopedFeatureList feature_list(
+      features::kLocalNetworkAccessChecks);
 
-  ResourceRequest request = CreateCrossOriginResourceRequest();
-
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
-            LoadRequest(request));
-  EXPECT_THAT(
-      client()->completion_status().cors_error_status,
-      Optional(CorsErrorStatus(
-          mojom::CorsError::kUnexpectedPrivateNetworkAccess,
-          mojom::IPAddressSpace::kUnknown, mojom::IPAddressSpace::kLoopback)));
-}
-
-TEST_F(URLLoaderTest, SecureLocalToLoopbackPreflightWarn) {
-  auto client_security_state = NewSecurityState();
-  client_security_state->is_web_secure_context = true;
-  client_security_state->ip_address_space = mojom::IPAddressSpace::kLocal;
-  client_security_state->private_network_request_policy =
-      mojom::PrivateNetworkRequestPolicy::kPreflightWarn;
-  set_factory_client_security_state(std::move(client_security_state));
-
-  ResourceRequest request = CreateCrossOriginResourceRequest();
-
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
-            LoadRequest(request));
-  EXPECT_THAT(
-      client()->completion_status().cors_error_status,
-      Optional(CorsErrorStatus(
-          mojom::CorsError::kUnexpectedPrivateNetworkAccess,
-          mojom::IPAddressSpace::kUnknown, mojom::IPAddressSpace::kLoopback)));
-}
-
-TEST_F(URLLoaderTest, NonSecureLocalToLoopbackBlock) {
   auto client_security_state = NewSecurityState();
   client_security_state->ip_address_space = mojom::IPAddressSpace::kLocal;
   set_factory_client_security_state(std::move(client_security_state));
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
-            LoadRequest(request));
-  EXPECT_THAT(client()->completion_status().cors_error_status,
-              Optional(InsecurePrivateNetworkCorsErrorStatus(
-                  mojom::IPAddressSpace::kLoopback)));
+  // Local and Loopback are currently merged and LNA checks are not
+  // enforced.
+  EXPECT_EQ(net::OK, LoadRequest(request));
 }
 
 TEST_F(URLLoaderTest, NonSecureLocalToLoopbackWarn) {
@@ -2013,42 +1983,6 @@ TEST_F(URLLoaderTest, NonSecureLocalToLoopbackAllow) {
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
   EXPECT_EQ(net::OK, LoadRequest(request));
-}
-
-TEST_F(URLLoaderTest, NonSecureLocalToLoopbackPreflightBlock) {
-  auto client_security_state = NewSecurityState();
-  client_security_state->ip_address_space = mojom::IPAddressSpace::kLocal;
-  client_security_state->private_network_request_policy =
-      mojom::PrivateNetworkRequestPolicy::kPreflightBlock;
-  set_factory_client_security_state(std::move(client_security_state));
-
-  ResourceRequest request = CreateCrossOriginResourceRequest();
-
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
-            LoadRequest(request));
-  EXPECT_THAT(
-      client()->completion_status().cors_error_status,
-      Optional(CorsErrorStatus(
-          mojom::CorsError::kUnexpectedPrivateNetworkAccess,
-          mojom::IPAddressSpace::kUnknown, mojom::IPAddressSpace::kLoopback)));
-}
-
-TEST_F(URLLoaderTest, NonSecureLocalToLoopbackPreflightWarn) {
-  auto client_security_state = NewSecurityState();
-  client_security_state->ip_address_space = mojom::IPAddressSpace::kLocal;
-  client_security_state->private_network_request_policy =
-      mojom::PrivateNetworkRequestPolicy::kPreflightWarn;
-  set_factory_client_security_state(std::move(client_security_state));
-
-  ResourceRequest request = CreateCrossOriginResourceRequest();
-
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
-            LoadRequest(request));
-  EXPECT_THAT(
-      client()->completion_status().cors_error_status,
-      Optional(CorsErrorStatus(
-          mojom::CorsError::kUnexpectedPrivateNetworkAccess,
-          mojom::IPAddressSpace::kUnknown, mojom::IPAddressSpace::kLoopback)));
 }
 
 TEST_F(URLLoaderTest, SecureLoopbackToLoopbackBlock) {
@@ -2296,7 +2230,7 @@ TEST_F(URLLoaderTest, SecurePublicToLoopbackPermissionDenied) {
 
   ResourceRequest request = CreateCrossOriginResourceRequest();
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
   EXPECT_THAT(
       client()->completion_status().cors_error_status,
@@ -2330,8 +2264,12 @@ TEST_F(URLLoaderTest, SecurePublicToLoopbackPermissionGranted) {
 }
 
 TEST_F(URLLoaderTest, SecureLocalToLoopbackLNAPermissionNotRequired) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLocalNetworkAccessChecks);
+  base::test::ScopedFeatureList feature_list;
+  base::FieldTrialParams params;
+  params["LocalNetworkAccessChecksWarn"] = "false";
+  feature_list.InitAndEnableFeatureWithParameters(
+      features::kLocalNetworkAccessChecks, params);
+
   auto client_security_state = NewSecurityState();
   client_security_state->ip_address_space = mojom::IPAddressSpace::kLocal;
   client_security_state->private_network_request_policy =
@@ -2500,7 +2438,11 @@ class URLLoaderFakeTransportInfoTest
 // appropriately when they go from a less-private address space to a
 // more-private address space or not. The test is parameterized by
 // (client address space, server address space, expected result) tuple.
-TEST_P(URLLoaderFakeTransportInfoTest, PrivateNetworkRequestLoadsCorrectly) {
+TEST_P(URLLoaderFakeTransportInfoTest, LocalNetworkRequestLoadsCorrectly) {
+  // This test presumes that LNA enforcement is enabled.
+  base::test::ScopedFeatureList feature_list(
+      features::kLocalNetworkAccessChecks);
+
   const auto params = GetParam();
 
   auto client_security_state = NewSecurityState();
@@ -2518,7 +2460,7 @@ TEST_P(URLLoaderFakeTransportInfoTest, PrivateNetworkRequestLoadsCorrectly) {
   if (params.expected_result != net::OK) {
     if (params.expected_result !=
         net::
-            ERR_CACHED_IP_ADDRESS_SPACE_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_POLICY) {
+            ERR_CACHED_IP_ADDRESS_SPACE_BLOCKED_BY_LOCAL_NETWORK_ACCESS_POLICY) {
       // CORS error status shouldn't be set when the cache entry was blocked by
       // private network access policy because we'll retry fetching from the
       // network.
@@ -2613,13 +2555,13 @@ constexpr URLLoaderFakeTransportInfoTestParams
             mojom::IPAddressSpace::kUnknown,
             mojom::IPAddressSpace::kLocal,
             net::TransportType::kDirect,
-            net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+            net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
         },
         {
             mojom::IPAddressSpace::kUnknown,
             mojom::IPAddressSpace::kLoopback,
             net::TransportType::kDirect,
-            net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+            net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
         },
         // Client: kPublic
         {
@@ -2638,13 +2580,13 @@ constexpr URLLoaderFakeTransportInfoTestParams
             mojom::IPAddressSpace::kPublic,
             mojom::IPAddressSpace::kLocal,
             net::TransportType::kDirect,
-            net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+            net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
         },
         {
             mojom::IPAddressSpace::kPublic,
             mojom::IPAddressSpace::kLoopback,
             net::TransportType::kDirect,
-            net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+            net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
         },
         // Client: kLocal
         {
@@ -2669,7 +2611,9 @@ constexpr URLLoaderFakeTransportInfoTestParams
             mojom::IPAddressSpace::kLocal,
             mojom::IPAddressSpace::kLoopback,
             net::TransportType::kDirect,
-            net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+            // Local and Loopback are currently merged and LNA checks are not
+            // enforced.
+            net::OK,
         },
         // Client: kLoopback
         {
@@ -2752,21 +2696,22 @@ constexpr URLLoaderFakeTransportInfoTestParams
             mojom::IPAddressSpace::kLoopback,
             net::TransportType::kCached,
             net::
-                ERR_CACHED_IP_ADDRESS_SPACE_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_POLICY,
+                ERR_CACHED_IP_ADDRESS_SPACE_BLOCKED_BY_LOCAL_NETWORK_ACCESS_POLICY,
         },
         {
             mojom::IPAddressSpace::kPublic,
             mojom::IPAddressSpace::kLoopback,
             net::TransportType::kCached,
             net::
-                ERR_CACHED_IP_ADDRESS_SPACE_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_POLICY,
+                ERR_CACHED_IP_ADDRESS_SPACE_BLOCKED_BY_LOCAL_NETWORK_ACCESS_POLICY,
         },
         {
             mojom::IPAddressSpace::kLocal,
             mojom::IPAddressSpace::kLoopback,
             net::TransportType::kCached,
-            net::
-                ERR_CACHED_IP_ADDRESS_SPACE_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_POLICY,
+            // Local and Loopback are currently merged and LNA checks are not
+            // enforced.
+            net::OK,
         },
         {
             mojom::IPAddressSpace::kLoopback,
@@ -3034,15 +2979,9 @@ TEST_F(URLLoaderTest, WritesToDurableMessage) {
   ASSERT_EQ(accounting_delegate.size(), kGzippedBodyLength);
   ASSERT_EQ(durable_message.encoded_byte_size(),
             static_cast<size_t>(kGzippedBodyLength));
-  ASSERT_EQ(durable_message.byte_size(), body.size());
+  ASSERT_EQ(durable_message.byte_size_for_testing(), body.size());
   // Retrieve the stored body and verify that it is accurate.
-  std::vector<uint8_t> buffer(durable_message.byte_size());
-  EXPECT_TRUE(durable_message.CopyTo(buffer));
-  // TODO(414864477): Returned body should be in decoded form, regardless of
-  // whether body decoding was done or deferred by the Network stack. Once
-  // deferred decoding is implemented in durable messages, add a test for
-  // client-side-decoded response correctness.
-  EXPECT_EQ(buffer, base::as_byte_span(body));
+  EXPECT_EQ(durable_message.Retrieve(), base::as_byte_span(body));
 }
 
 TEST_F(URLLoaderTest, DurableMessageWorksWithMimeSniffing) {
@@ -3059,19 +2998,20 @@ TEST_F(URLLoaderTest, DurableMessageWorksWithMimeSniffing) {
   EXPECT_THAT(client()->response_head()->client_side_content_decoding_types,
               ElementsAre(net::SourceStreamType::kGzip));
   EXPECT_TRUE(did_mime_sniff());
+  EXPECT_THAT(durable_message.GetClientDecodingTypesForTesting(),
+              ElementsAre(net::SourceStreamType::kGzip));
   EXPECT_EQ(encoded_body, ReadTestFile("content-sniffer-test0.html.gz"));
   EXPECT_TRUE(durable_message.is_complete());
   ASSERT_EQ(accounting_delegate.size(), kGzippedBodyLength);
   ASSERT_EQ(durable_message.encoded_byte_size(),
             static_cast<size_t>(kGzippedBodyLength));
-  ASSERT_EQ(durable_message.byte_size(), encoded_body.size());
-  // TODO(414864477): Returned body should be in decoded form, regardless of
-  // whether body decoding was done or deferred by the Network stack. Once
-  // deferred decoding is implemented in durable messages, add a test for
-  // client-side-decoded response correctness.
-  std::vector<uint8_t> buffer(durable_message.byte_size());
-  EXPECT_TRUE(durable_message.CopyTo(buffer));
-  EXPECT_EQ(buffer, base::as_byte_span(encoded_body));
+  ASSERT_EQ(durable_message.byte_size_for_testing(), encoded_body.size());
+  // Retrieve the stored body and verify that it is accurate and contents are in
+  // decoded form.
+  mojo_base::BigBuffer buffer = durable_message.Retrieve();
+  auto decoded_body = ReadTestFile("content-sniffer-test0.html");
+  EXPECT_EQ(buffer.size(), decoded_body.size());
+  EXPECT_EQ(buffer, base::as_byte_span(decoded_body));
 }
 
 // Tests a large response body, which would result in multiple asynchronous
@@ -3121,16 +3061,38 @@ TEST_F(URLLoaderMockSocketTest, DurableMessageWorksWithLotsOfData) {
               ElementsAre(net::SourceStreamType::kGzip));
   EXPECT_TRUE(durable_message.is_complete());
   size_t compressed_size = compressed.size();
-  ASSERT_EQ(static_cast<size_t>(accounting_delegate.size()), compressed_size);
+  ASSERT_EQ(accounting_delegate.size(), static_cast<int64_t>(compressed_size));
   ASSERT_EQ(durable_message.encoded_byte_size(), compressed_size);
-  ASSERT_EQ(durable_message.byte_size(), compressed_size);
-  // TODO(414864477): Returned body should be in decoded form, regardless of
-  // whether body decoding was done or deferred by the Network stack. Once
-  // deferred decoding is implemented in durable messages, add a test for
-  // client-side-decoded response correctness.
-  std::vector<uint8_t> buffer(durable_message.byte_size());
-  EXPECT_TRUE(durable_message.CopyTo(buffer));
-  EXPECT_EQ(buffer, base::as_byte_span(compressed));
+  ASSERT_EQ(durable_message.byte_size_for_testing(), compressed_size);
+  EXPECT_EQ(durable_message.Retrieve(), base::as_byte_span(response_body));
+}
+
+// Tests that client side decoding types are written into DurableMessage and the
+// body is decoded on retrieval.
+TEST_F(URLLoaderTest, DurableMessagePerformsClientSideDecodingGzip) {
+  MockDurableMessageAccountingDelegate accounting_delegate;
+  DevtoolsDurableMessage durable_message("test", accounting_delegate);
+  set_durable_message(durable_message.GetWeakPtr());
+  constexpr size_t kGzippedBodyLength = 60;
+  set_sniff();
+  set_client_side_content_decoding_enabled();
+  std::string encoded_body;
+  EXPECT_EQ(net::OK,
+            Load(test_server()->GetURL("/hello.html.gz"), &encoded_body));
+  EXPECT_THAT(client()->response_head()->client_side_content_decoding_types,
+              ElementsAre(net::SourceStreamType::kGzip));
+  EXPECT_THAT(durable_message.GetClientDecodingTypesForTesting(),
+              ElementsAre(net::SourceStreamType::kGzip));
+  EXPECT_TRUE(durable_message.is_complete());
+  ASSERT_EQ(accounting_delegate.size(),
+            static_cast<int64_t>(kGzippedBodyLength));
+  ASSERT_EQ(durable_message.encoded_byte_size(), kGzippedBodyLength);
+  // Retrieve the stored body and verify that it is accurate and contents are in
+  // decoded form.
+  mojo_base::BigBuffer buffer = durable_message.Retrieve();
+  auto decoded_body = ReadTestFile("hello.html");
+  EXPECT_EQ(buffer.size(), decoded_body.size());
+  EXPECT_EQ(buffer, base::as_byte_span(decoded_body));
 }
 
 // Tests that URLLoader still completes the load without errors/crashing, but
@@ -4580,11 +4542,12 @@ MATCHER_P3(MatchesTrustTokenDetails, origin, issuer, blocked, "") {
       arg, result_listener);
 }
 
-// Responds certificate request with previously set responses.
-class ClientCertAuthObserver : public TestURLLoaderNetworkObserver {
+// Responds certificate request with previously set responses and to HTTP auth
+// challenges as well.
+class ClientCertAndHttpAuthObserver : public TestURLLoaderNetworkObserver {
  public:
-  ClientCertAuthObserver() = default;
-  ~ClientCertAuthObserver() override = default;
+  ClientCertAndHttpAuthObserver() = default;
+  ~ClientCertAndHttpAuthObserver() override = default;
 
   enum class CertificateResponse {
     INVALID = -1,
@@ -4600,6 +4563,7 @@ class ClientCertAuthObserver : public TestURLLoaderNetworkObserver {
     NO_CREDENTIALS,
     CORRECT_CREDENTIALS,
     INCORRECT_CREDENTIALS_THEN_CORRECT_ONES,
+    CORRECT_PROXY_CREDENTIALS,
   };
   void OnAuthRequired(
       const std::optional<base::UnguessableToken>& window_id,
@@ -4615,11 +4579,16 @@ class ClientCertAuthObserver : public TestURLLoaderNetworkObserver {
         auth_credentials_ = std::nullopt;
         break;
       case CredentialsResponse::CORRECT_CREDENTIALS:
+        ASSERT_FALSE(auth_info.is_proxy);
         auth_credentials_ = net::AuthCredentials(u"USER", u"PASS");
         break;
       case CredentialsResponse::INCORRECT_CREDENTIALS_THEN_CORRECT_ONES:
         auth_credentials_ = net::AuthCredentials(u"USER", u"FAIL");
         credentials_response_ = CredentialsResponse::CORRECT_CREDENTIALS;
+        break;
+      case CredentialsResponse::CORRECT_PROXY_CREDENTIALS:
+        ASSERT_TRUE(auth_info.is_proxy);
+        auth_credentials_ = net::AuthCredentials(u"PROXY_USER", u"PROXY_PASS");
         break;
     }
     mojo::Remote<mojom::AuthChallengeResponder> auth_challenge_responder_remote(
@@ -4715,9 +4684,9 @@ class ClientCertAuthObserver : public TestURLLoaderNetworkObserver {
 };
 
 TEST_F(URLLoaderTest, SetAuth) {
-  ClientCertAuthObserver client_auth_observer;
+  ClientCertAndHttpAuthObserver client_auth_observer;
   client_auth_observer.set_credentials_response(
-      ClientCertAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS);
+      ClientCertAndHttpAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS);
 
   ResourceRequest request =
       CreateResourceRequest("GET", test_server()->GetURL(kTestAuthURL));
@@ -4752,9 +4721,9 @@ TEST_F(URLLoaderTest, SetAuth) {
 }
 
 TEST_F(URLLoaderTest, CancelAuth) {
-  ClientCertAuthObserver client_auth_observer;
+  ClientCertAndHttpAuthObserver client_auth_observer;
   client_auth_observer.set_credentials_response(
-      ClientCertAuthObserver::CredentialsResponse::NO_CREDENTIALS);
+      ClientCertAndHttpAuthObserver::CredentialsResponse::NO_CREDENTIALS);
 
   ResourceRequest request =
       CreateResourceRequest("GET", test_server()->GetURL(kTestAuthURL));
@@ -4788,9 +4757,9 @@ TEST_F(URLLoaderTest, CancelAuth) {
 }
 
 TEST_F(URLLoaderTest, TwoChallenges) {
-  ClientCertAuthObserver client_auth_observer;
+  ClientCertAndHttpAuthObserver client_auth_observer;
   client_auth_observer.set_credentials_response(
-      ClientCertAuthObserver::CredentialsResponse::
+      ClientCertAndHttpAuthObserver::CredentialsResponse::
           INCORRECT_CREDENTIALS_THEN_CORRECT_ONES);
 
   ResourceRequest request =
@@ -4827,9 +4796,9 @@ TEST_F(URLLoaderTest, TwoChallenges) {
 TEST_F(URLLoaderTest, NoAuthRequiredForFavicon) {
   constexpr char kFaviconTestPage[] = "/has_favicon.html";
 
-  ClientCertAuthObserver client_auth_observer;
+  ClientCertAndHttpAuthObserver client_auth_observer;
   client_auth_observer.set_credentials_response(
-      ClientCertAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS);
+      ClientCertAndHttpAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS);
 
   ResourceRequest request =
       CreateResourceRequest("GET", test_server()->GetURL(kFaviconTestPage));
@@ -4864,9 +4833,9 @@ TEST_F(URLLoaderTest, NoAuthRequiredForFavicon) {
 }
 
 TEST_F(URLLoaderTest, HttpAuthResponseHeadersAvailable) {
-  ClientCertAuthObserver client_auth_observer;
+  ClientCertAndHttpAuthObserver client_auth_observer;
   client_auth_observer.set_credentials_response(
-      ClientCertAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS);
+      ClientCertAndHttpAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS);
 
   ResourceRequest request =
       CreateResourceRequest("GET", test_server()->GetURL(kTestAuthURL));
@@ -4893,6 +4862,124 @@ TEST_F(URLLoaderTest, HttpAuthResponseHeadersAvailable) {
       client_auth_observer.last_seen_response_headers();
   ASSERT_TRUE(auth_required_headers);
   EXPECT_EQ(auth_required_headers->response_code(), 401);
+}
+
+// Tests that `did_use_server_http_auth` is present on the response when a
+// request receives and responds to an authentication challenge.
+TEST_F(URLLoaderTest, ServerHttpAuthFlagSet) {
+  ClientCertAndHttpAuthObserver client_auth_observer;
+  client_auth_observer.set_credentials_response(
+      ClientCertAndHttpAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS);
+
+  ResourceRequest request =
+      CreateResourceRequest("GET", test_server()->GetURL(kTestAuthURL));
+  base::RunLoop delete_run_loop;
+  mojo::Remote<mojom::URLLoader> loader;
+  context().mutable_factory_params().process_id = kProcessId;
+  context().mutable_factory_params().is_orb_enabled = false;
+  URLLoaderOptions url_loader_options;
+  url_loader_options.url_loader_network_observer = client_auth_observer.Bind();
+  std::unique_ptr<URLLoader> url_loader = url_loader_options.MakeURLLoader(
+      context(), DeleteLoaderCallback(&delete_run_loop, &url_loader),
+      loader.BindNewPipeAndPassReceiver(), request, client()->CreateRemote());
+
+  client()->RunUntilResponseBodyArrived();
+  EXPECT_TRUE(client()->has_received_response());
+  EXPECT_FALSE(client()->has_received_completion());
+  EXPECT_TRUE(client()->response_head()->did_use_server_http_auth);
+
+  // Spin the message loop until the delete callback is invoked, and then delete
+  // the URLLoader.
+  delete_run_loop.Run();
+
+  client()->RunUntilComplete();
+  EXPECT_TRUE(client()->has_received_completion());
+  scoped_refptr<net::HttpResponseHeaders> headers =
+      client()->response_head()->headers;
+  ASSERT_TRUE(headers);
+  EXPECT_EQ(200, headers->response_code());
+  EXPECT_EQ(1, client_auth_observer.on_auth_required_call_counter());
+  ASSERT_FALSE(url_loader);
+}
+
+// Tests that `did_use_server_http_auth` is not present on the response when a
+// request does not use an authentication challenge.
+TEST_F(URLLoaderTest, ServerHttpAuthFlagNotSet) {
+  ResourceRequest request =
+      CreateResourceRequest("GET", test_server()->GetURL("/simple_page.html"));
+  base::RunLoop delete_run_loop;
+  mojo::Remote<mojom::URLLoader> loader;
+  context().mutable_factory_params().process_id = kProcessId;
+  context().mutable_factory_params().is_orb_enabled = false;
+  URLLoaderOptions url_loader_options;
+  std::unique_ptr<URLLoader> url_loader = url_loader_options.MakeURLLoader(
+      context(), DeleteLoaderCallback(&delete_run_loop, &url_loader),
+      loader.BindNewPipeAndPassReceiver(), request, client()->CreateRemote());
+
+  client()->RunUntilResponseBodyArrived();
+  EXPECT_TRUE(client()->has_received_response());
+  EXPECT_FALSE(client()->has_received_completion());
+  EXPECT_FALSE(client()->response_head()->did_use_server_http_auth);
+
+  // Spin the message loop until the delete callback is invoked, and then delete
+  // the URLLoader.
+  delete_run_loop.Run();
+
+  client()->RunUntilComplete();
+  EXPECT_TRUE(client()->has_received_completion());
+  scoped_refptr<net::HttpResponseHeaders> headers =
+      client()->response_head()->headers;
+  ASSERT_TRUE(headers);
+  EXPECT_EQ(200, headers->response_code());
+  ASSERT_FALSE(url_loader);
+}
+
+// Tests that `did_use_server_http_auth` is not present on the response when a
+// request receives and responds to a proxy authentication challenge.
+TEST_F(URLLoaderTest, ServerHttpAuthFlagNotSetForProxy) {
+  net::EmbeddedTestServer proxy_server(net::EmbeddedTestServer::TYPE_HTTP);
+  net::test_server::RegisterProxyBasicAuthHandler(proxy_server, "PROXY_USER",
+                                                  "PROXY_PASS");
+  proxy_server.AddDefaultHandlers(
+      base::FilePath(FILE_PATH_LITERAL("services/test/data")));
+  ASSERT_TRUE(proxy_server.Start());
+
+  net::URLRequestContextBuilder context_builder;
+  context_builder.set_proxy_resolution_service(
+      net::ConfiguredProxyResolutionService::CreateFixedFromPacResultForTest(
+          "PROXY " + proxy_server.host_port_pair().ToString(),
+          TRAFFIC_ANNOTATION_FOR_TESTS));
+  auto test_network_delegate = std::make_unique<net::TestNetworkDelegate>();
+  unowned_test_network_delegate_ = test_network_delegate.get();
+  context_builder.set_network_delegate(std::move(test_network_delegate));
+  context_builder.set_client_socket_factory_for_testing(GetSocketFactory());
+  context().set_url_request_context(nullptr);
+  url_request_context_ = context_builder.Build();
+  context().set_url_request_context(url_request_context_.get());
+
+  ClientCertAndHttpAuthObserver client_auth_observer;
+  client_auth_observer.set_credentials_response(
+      ClientCertAndHttpAuthObserver::CredentialsResponse::
+          CORRECT_PROXY_CREDENTIALS);
+
+  ResourceRequest request = CreateResourceRequest(
+      "GET", test_server()->GetURL(kHostnameWithAliases, "/hello.html"));
+  base::RunLoop delete_run_loop;
+  mojo::Remote<mojom::URLLoader> loader;
+  context().mutable_factory_params().process_id = kProcessId;
+  context().mutable_factory_params().is_orb_enabled = false;
+  URLLoaderOptions url_loader_options;
+  url_loader_options.url_loader_network_observer = client_auth_observer.Bind();
+  std::unique_ptr<URLLoader> url_loader = url_loader_options.MakeURLLoader(
+      context(), DeleteLoaderCallback(&delete_run_loop, &url_loader),
+      loader.BindNewPipeAndPassReceiver(), request, client()->CreateRemote());
+
+  client()->RunUntilComplete();
+  delete_run_loop.Run();
+
+  // This should be false as we do not set the flag for proxy auth.
+  EXPECT_FALSE(client()->response_head()->did_use_server_http_auth);
+  ASSERT_FALSE(url_loader);
 }
 
 // Make sure the client can't call FollowRedirect if there's no pending
@@ -4986,9 +5073,10 @@ TEST_F(URLLoaderTest, ClientAuthRespondTwice) {
   scoped_refptr<TestSSLPrivateKey> private_key =
       base::MakeRefCounted<TestSSLPrivateKey>(identity->ssl_private_key());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::VALID_CERTIFICATE_SIGNATURE);
+      ClientCertAndHttpAuthObserver::CertificateResponse::
+          VALID_CERTIFICATE_SIGNATURE);
   client_cert_observer.set_private_key(private_key);
   client_cert_observer.set_certificate(identity->certificate());
 
@@ -5039,9 +5127,9 @@ TEST_F(URLLoaderTest, ClientAuthDestroyResponder) {
       base::FilePath(FILE_PATH_LITERAL("services/test/data")));
   ASSERT_TRUE(test_server.Start());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::
+      ClientCertAndHttpAuthObserver::CertificateResponse::
           DESTROY_CLIENT_CERT_RESPONDER);
 
   ResourceRequest request =
@@ -5073,9 +5161,9 @@ TEST_F(URLLoaderTest, ClientAuthCancelConnection) {
       base::FilePath(FILE_PATH_LITERAL("services/test/data")));
   ASSERT_TRUE(test_server.Start());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::
+      ClientCertAndHttpAuthObserver::CertificateResponse::
           URL_LOADER_REQUEST_CANCELLED);
 
   ResourceRequest request =
@@ -5106,9 +5194,9 @@ TEST_F(URLLoaderTest, ClientAuthCancelCertificateSelection) {
       base::FilePath(FILE_PATH_LITERAL("services/test/data")));
   ASSERT_TRUE(test_server.Start());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::
+      ClientCertAndHttpAuthObserver::CertificateResponse::
           CANCEL_CERTIFICATE_SELECTION);
 
   ResourceRequest request =
@@ -5148,9 +5236,9 @@ TEST_F(URLLoaderTest, ClientAuthNoCertificate) {
       base::FilePath(FILE_PATH_LITERAL("services/test/data")));
   ASSERT_TRUE(test_server.Start());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::NULL_CERTIFICATE);
+      ClientCertAndHttpAuthObserver::CertificateResponse::NULL_CERTIFICATE);
 
   ResourceRequest request =
       CreateResourceRequest("GET", test_server.GetURL("/defaultresponse"));
@@ -5189,9 +5277,10 @@ TEST_F(URLLoaderTest, ClientAuthCertificateWithValidSignature) {
       base::FilePath(FILE_PATH_LITERAL("services/test/data")));
   ASSERT_TRUE(test_server.Start());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::VALID_CERTIFICATE_SIGNATURE);
+      ClientCertAndHttpAuthObserver::CertificateResponse::
+          VALID_CERTIFICATE_SIGNATURE);
   client_cert_observer.set_private_key(private_key);
   scoped_refptr<net::X509Certificate> certificate =
       test_server.GetCertificate();
@@ -5235,9 +5324,10 @@ TEST_F(URLLoaderTest, ClientAuthCertificateWithInvalidSignature) {
       base::FilePath(FILE_PATH_LITERAL("services/test/data")));
   ASSERT_TRUE(test_server.Start());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::VALID_CERTIFICATE_SIGNATURE);
+      ClientCertAndHttpAuthObserver::CertificateResponse::
+          VALID_CERTIFICATE_SIGNATURE);
   client_cert_observer.set_private_key(private_key);
   scoped_refptr<net::X509Certificate> certificate =
       test_server.GetCertificate();
@@ -5368,12 +5458,12 @@ class StorageAccessHeaderURLLoaderTest : public URLLoaderTest {
   std::unique_ptr<net::test_server::HttpResponse>
   HandleLoadWithStorageAccessRequest(
       const net::test_server::HttpRequest& request) {
-    if (!base::StartsWith(request.GetURL().path(),
+    if (!base::StartsWith(request.GetURL().GetPath(),
                           kStorageAccessRedirectLoadPath)) {
       return nullptr;
     }
     std::string destination =
-        base::UnescapeBinaryURLComponent(request.GetURL().query_piece());
+        base::UnescapeBinaryURLComponent(request.GetURL().query());
     auto http_response =
         std::make_unique<net::test_server::BasicHttpResponse>();
     http_response->set_content_type("text/plain");
@@ -5958,6 +6048,64 @@ INSTANTIATE_TEST_SUITE_P(
                     TestMode::kCredentialsModeOmitWorkaround,
                     TestMode::kCredentialsModeOmitWithFeatureFix));
 
+TEST_F(URLLoaderTest, AcceptCHFrameNotAllowedHintWithFeature) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      features::kOffloadAcceptCHFrameCheck,
+      {{"AcceptCHFrameOffloadNotAllowedHints", "true"}});
+
+  net::TransportInfo info = net::DefaultTransportInfo();
+  info.accept_ch_frame = "Sec-CH-UA-Platform";
+
+  const GURL url("http://accept-ch.test/");
+  net::URLRequestFilter::GetInstance()->AddUrlInterceptor(
+      url, std::make_unique<FakeTransportInfoInterceptor>(info));
+
+  MockAcceptCHFrameObserver observer;
+  set_accept_ch_frame_observer_for_next_request(&observer);
+
+  network::ResourceRequest::TrustedParams::EnabledClientHints enabled_hints;
+  enabled_hints.origin = url::Origin::Create(url);
+  enabled_hints.is_outermost_main_frame = true;
+  enabled_hints.hints = {network::mojom::WebClientHintsType::kUAArch};
+  enabled_hints.not_allowed_hints = {
+      network::mojom::WebClientHintsType::kUAPlatform};
+  set_enabled_client_hints_for_next_request(std::move(enabled_hints));
+
+  EXPECT_THAT(Load(url), IsOk());
+  EXPECT_FALSE(observer.called());
+}
+
+TEST_F(URLLoaderTest, AcceptCHFrameNotAllowedHintWithoutFeature) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      features::kOffloadAcceptCHFrameCheck,
+      {{"AcceptCHFrameOffloadNotAllowedHints", "false"}});
+
+  net::TransportInfo info = net::DefaultTransportInfo();
+  info.accept_ch_frame = "Sec-CH-UA-Platform";
+
+  const GURL url("http://accept-ch.test/");
+  net::URLRequestFilter::GetInstance()->AddUrlInterceptor(
+      url, std::make_unique<FakeTransportInfoInterceptor>(info));
+
+  MockAcceptCHFrameObserver observer;
+  set_accept_ch_frame_observer_for_next_request(&observer);
+
+  network::ResourceRequest::TrustedParams::EnabledClientHints enabled_hints;
+  enabled_hints.origin = url::Origin::Create(url);
+  enabled_hints.is_outermost_main_frame = true;
+  enabled_hints.hints = {network::mojom::WebClientHintsType::kUAArch};
+  enabled_hints.not_allowed_hints = {
+      network::mojom::WebClientHintsType::kUAPlatform};
+  set_enabled_client_hints_for_next_request(std::move(enabled_hints));
+
+  EXPECT_THAT(Load(url), IsOk());
+  EXPECT_TRUE(observer.called());
+  EXPECT_THAT(observer.accept_ch_frame(),
+              ElementsAre(network::mojom::WebClientHintsType::kUAPlatform));
+}
+
 // Tests that a request with CredentialsMode::kOmit still sends client
 // certificates when features::kOmitCorsClientCert is disabled, and when the
 // feature is enabled client certificates are not sent. Also test that when
@@ -5982,9 +6130,10 @@ TEST_P(URLLoaderParameterTest, CredentialsModeOmitRequireClientCert) {
   scoped_refptr<TestSSLPrivateKey> private_key =
       base::MakeRefCounted<TestSSLPrivateKey>(identity->ssl_private_key());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::VALID_CERTIFICATE_SIGNATURE);
+      ClientCertAndHttpAuthObserver::CertificateResponse::
+          VALID_CERTIFICATE_SIGNATURE);
   client_cert_observer.set_private_key(private_key);
   client_cert_observer.set_certificate(identity->certificate());
 
@@ -6042,9 +6191,10 @@ TEST_P(URLLoaderParameterTest, CredentialsModeOmitOptionalClientCert) {
   scoped_refptr<TestSSLPrivateKey> private_key =
       base::MakeRefCounted<TestSSLPrivateKey>(identity->ssl_private_key());
 
-  ClientCertAuthObserver client_cert_observer;
+  ClientCertAndHttpAuthObserver client_cert_observer;
   client_cert_observer.set_certificate_response(
-      ClientCertAuthObserver::CertificateResponse::VALID_CERTIFICATE_SIGNATURE);
+      ClientCertAndHttpAuthObserver::CertificateResponse::
+          VALID_CERTIFICATE_SIGNATURE);
   client_cert_observer.set_private_key(private_key);
   client_cert_observer.set_certificate(identity->certificate());
 
@@ -6182,10 +6332,11 @@ TEST_F(URLLoaderTest, CookieReportingRedirect) {
 
 TEST_F(URLLoaderTest, CookieReportingAuth) {
   for (auto mode :
-       {ClientCertAuthObserver::CredentialsResponse::NO_CREDENTIALS,
-        ClientCertAuthObserver::CredentialsResponse::CORRECT_CREDENTIALS}) {
+       {ClientCertAndHttpAuthObserver::CredentialsResponse::NO_CREDENTIALS,
+        ClientCertAndHttpAuthObserver::CredentialsResponse::
+            CORRECT_CREDENTIALS}) {
     MockCookieObserver cookie_observer(CookieAccessType::kChange);
-    ClientCertAuthObserver client_auth_observer;
+    ClientCertAndHttpAuthObserver client_auth_observer;
     client_auth_observer.set_credentials_response(mode);
 
     GURL url = test_server()->GetURL(
@@ -6478,9 +6629,9 @@ TEST_F(URLLoaderTest, RawResponseCookiesAuth) {
   // Check a valid cookie
   {
     MockDevToolsObserver devtools_observer;
-    ClientCertAuthObserver client_auth_observer;
+    ClientCertAndHttpAuthObserver client_auth_observer;
     client_auth_observer.set_credentials_response(
-        ClientCertAuthObserver::CredentialsResponse::NO_CREDENTIALS);
+        ClientCertAndHttpAuthObserver::CredentialsResponse::NO_CREDENTIALS);
 
     GURL url = test_server()->GetURL(
         "a.test", "/auth-basic?set-cookie-if-challenged&password=PASS");
@@ -6519,9 +6670,9 @@ TEST_F(URLLoaderTest, RawResponseCookiesAuth) {
   // Check a flagged cookie (secure cookie from insecure connection)
   {
     MockDevToolsObserver devtools_observer;
-    ClientCertAuthObserver client_auth_observer;
+    ClientCertAndHttpAuthObserver client_auth_observer;
     client_auth_observer.set_credentials_response(
-        ClientCertAuthObserver::CredentialsResponse::NO_CREDENTIALS);
+        ClientCertAndHttpAuthObserver::CredentialsResponse::NO_CREDENTIALS);
 
     GURL url = test_server()->GetURL(
         "a.test", "/auth-basic?set-secure-cookie-if-challenged&password=PASS");
@@ -7779,7 +7930,7 @@ TEST_F(URLLoaderMockSocketTest, PrivateNetworkRequestPolicyDoesNotCloseSocket) {
   ResourceRequest request = CreateResourceRequest("GET", url);
   request.mode = mojom::RequestMode::kNoCors;
   request.request_initiator = initiator;
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
 
   // Socket should not be closed, since it can be reused.
@@ -8315,7 +8466,7 @@ TEST_F(URLLoaderTest,
   MockDevToolsObserver devtools_observer;
   set_devtools_observer_for_next_request(&devtools_observer);
 
-  EXPECT_EQ(net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+  EXPECT_EQ(net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
             LoadRequest(request));
 
   devtools_observer.WaitUntilPrivateNetworkRequest();

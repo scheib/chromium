@@ -52,6 +52,7 @@
 #include "extensions/browser/pref_names.h"
 #include "extensions/browser/updater/extension_cache.h"
 #include "extensions/browser/updater/extension_update_data.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_id.h"
@@ -68,6 +69,8 @@
 #include "components/user_manager/user_manager.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
+
 using base::RandDouble;
 using base::UnguessableToken;
 using content::BrowserThread;
@@ -77,8 +80,6 @@ using PingResult = extensions::ExtensionDownloaderDelegate::PingResult;
 namespace extensions {
 
 namespace {
-
-bool g_should_immediately_update = false;
 
 // For sanity checking on update frequency - enforced in release mode only.
 #if defined(NDEBUG)
@@ -230,11 +231,7 @@ void ExtensionUpdater::Start() {
   alive_ = true;
   // Check soon, and set up the first delayed check.
   if (!g_skip_scheduled_checks_for_tests) {
-    if (g_should_immediately_update) {
-      CheckNow({});
-    } else {
-      CheckSoon();
-    }
+    CheckSoon();
     ScheduleNextCheck();
   }
 }
@@ -325,11 +322,6 @@ void ExtensionUpdater::SetExtensionCacheForTesting(
 void ExtensionUpdater::SetExtensionDownloaderForTesting(
     std::unique_ptr<ExtensionDownloader> downloader) {
   downloader_.swap(downloader);
-}
-
-// static
-void ExtensionUpdater::UpdateImmediatelyForFirstRun() {
-  g_should_immediately_update = true;
 }
 
 void ExtensionUpdater::SetBackoffPolicyForTesting(

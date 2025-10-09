@@ -103,8 +103,7 @@ import java.util.List;
 @EnableFeatures({ChromeFeatureList.SUPPRESS_TOOLBAR_CAPTURES_AT_GESTURE_END})
 @DisableFeatures({
     ChromeFeatureList.FULLSCREEN_INSETS_API_MIGRATION,
-    ChromeFeatureList.FULLSCREEN_INSETS_API_MIGRATION_ON_AUTOMOTIVE,
-    ChromeFeatureList.LOCK_TOP_CONTROLS_ON_LARGE_TABLETS
+    ChromeFeatureList.FULLSCREEN_INSETS_API_MIGRATION_ON_AUTOMOTIVE
 })
 public class CompositorViewHolderUnitTest {
     // Since these tests don't depend on the heights being pixels, we can use these as dpi directly.
@@ -704,7 +703,7 @@ public class CompositorViewHolderUnitTest {
         // taking up the bottom space.
         int adjustedHeight = fullViewportHeight - KEYBOARD_HEIGHT;
 
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(true);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(true);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(KEYBOARD_HEIGHT);
         when(mCompositorViewHolder.getWidth()).thenReturn(fullViewportWidth);
         when(mCompositorViewHolder.getHeight()).thenReturn(adjustedHeight);
@@ -722,7 +721,7 @@ public class CompositorViewHolderUnitTest {
         reset(mWebContents);
 
         // Hide the keyboard.
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(false);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(false);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(0);
         when(mCompositorViewHolder.getWidth()).thenReturn(fullViewportWidth);
         when(mCompositorViewHolder.getHeight()).thenReturn(fullViewportHeight);
@@ -749,7 +748,7 @@ public class CompositorViewHolderUnitTest {
         // taking up the bottom space.
         int adjustedHeight = fullViewportHeight - KEYBOARD_HEIGHT;
 
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(true);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(true);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(KEYBOARD_HEIGHT);
         when(mCompositorViewHolder.getWidth()).thenReturn(fullViewportWidth);
         // The CompositorViewHolder does not account for the keyboard since the keyboard inset has
@@ -770,7 +769,7 @@ public class CompositorViewHolderUnitTest {
         reset(mWebContents);
 
         // Hide the keyboard.
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(false);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(false);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(0);
         when(mCompositorViewHolder.getWidth()).thenReturn(fullViewportWidth);
         when(mCompositorViewHolder.getHeight()).thenReturn(fullViewportHeight);
@@ -792,7 +791,7 @@ public class CompositorViewHolderUnitTest {
         int viewportWidth = 1080;
 
         // Simulate the keyboard being hidden
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(false);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(false);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(0);
         when(mCompositorViewHolder.getWidth()).thenReturn(viewportWidth);
         when(mCompositorViewHolder.getHeight()).thenReturn(viewportHeight);
@@ -820,7 +819,7 @@ public class CompositorViewHolderUnitTest {
         // simulates a reduced layout height from the keyboard taking up the bottom space.
         int adjustedHeight = fullViewportHeight - KEYBOARD_HEIGHT;
 
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(true);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(true);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(KEYBOARD_HEIGHT);
         mKeyboardInsetSupplier.set(KEYBOARD_HEIGHT);
         when(mCompositorViewHolder.getWidth()).thenReturn(fullViewportWidth);
@@ -848,7 +847,7 @@ public class CompositorViewHolderUnitTest {
         // simulates a reduced layout height from the keyboard taking up the bottom space.
         int adjustedHeight = fullViewportHeight - KEYBOARD_HEIGHT;
 
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(true);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(true);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(KEYBOARD_HEIGHT);
         when(mCompositorViewHolder.getWidth()).thenReturn(fullViewportWidth);
         when(mCompositorViewHolder.getHeight()).thenReturn(adjustedHeight);
@@ -895,7 +894,7 @@ public class CompositorViewHolderUnitTest {
         // simulates a reduced layout height from the keyboard taking up the bottom space.
         int adjustedHeight = fullViewportHeight - KEYBOARD_HEIGHT;
 
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(true);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(true);
         when(mMockKeyboard.calculateTotalKeyboardHeight(any())).thenReturn(KEYBOARD_HEIGHT);
         mKeyboardInsetSupplier.set(KEYBOARD_HEIGHT);
         when(mCompositorViewHolder.getWidth()).thenReturn(fullViewportWidth);
@@ -936,7 +935,10 @@ public class CompositorViewHolderUnitTest {
     }
 
     @Test
-    @DisableFeatures(ChromeFeatureList.SUPPRESS_TOOLBAR_CAPTURES_AT_GESTURE_END)
+    @DisableFeatures({
+        ChromeFeatureList.SUPPRESS_TOOLBAR_CAPTURES_AT_GESTURE_END,
+        ChromeFeatureList.TOOLBAR_STALE_CAPTURE_BUG_FIX
+    })
     public void testInMotionSupplier() {
         mCompositorViewHolder.dispatchTouchEvent(MOTION_EVENT_DOWN);
         mCompositorViewHolder.onInterceptTouchEvent(MOTION_EVENT_DOWN);
@@ -959,6 +961,7 @@ public class CompositorViewHolderUnitTest {
     }
 
     @Test
+    @DisableFeatures(ChromeFeatureList.TOOLBAR_STALE_CAPTURE_BUG_FIX)
     public void testGestureBeginEndInMotionSupplier() {
         when(mWindowAndroid.getActivity()).thenReturn(new WeakReference<>(mActivity));
         mCompositorViewHolder.onNativeLibraryReady(
@@ -975,8 +978,24 @@ public class CompositorViewHolderUnitTest {
     }
 
     @Test
+    @EnableFeatures(ChromeFeatureList.TOOLBAR_STALE_CAPTURE_BUG_FIX)
+    public void testInMotionSupplier_OnTouch() {
+        when(mWindowAndroid.getActivity()).thenReturn(new WeakReference<>(mActivity));
+        mCompositorViewHolder.onNativeLibraryReady(
+                mWindowAndroid, /* tabContentManager= */ null, mPrefService);
+        mCompositorViewHolder.onContentChanged();
+        verify(mTab, atLeast(1)).addObserver(mTabObserverCaptor.capture());
+
+        mTabObserverCaptor.getAllValues().forEach((obs) -> obs.onTouchDown());
+        Assert.assertTrue(mCompositorViewHolder.getInMotionSupplier().get());
+
+        mTabObserverCaptor.getAllValues().forEach((obs) -> obs.onTouchUp());
+        Assert.assertFalse(mCompositorViewHolder.getInMotionSupplier().get());
+    }
+
+    @Test
     public void testOnInterceptHoverEvent() {
-        when(mMockKeyboard.isKeyboardShowing(any(), any())).thenReturn(false);
+        when(mMockKeyboard.isKeyboardShowing(any())).thenReturn(false);
         when(mLayoutManager.onInterceptMotionEvent(
                         MOTION_ACTION_HOVER_ENTER, false, EventType.HOVER))
                 .thenReturn(true);
@@ -1015,6 +1034,7 @@ public class CompositorViewHolderUnitTest {
     }
 
     @Test
+    @DisableFeatures(ChromeFeatureList.TOOLBAR_STALE_CAPTURE_BUG_FIX)
     public void testInMotionOrdering() {
         // With the 'defer in motion' experiment enabled, touch events are routed to android UI
         // after being sent to native/web content.
@@ -1061,6 +1081,7 @@ public class CompositorViewHolderUnitTest {
     }
 
     @Test
+    @DisableFeatures(ChromeFeatureList.TOOLBAR_STALE_CAPTURE_BUG_FIX)
     public void testOnControlsOffsetChanged_NoRequestRenderIfScrolling() {
         mCompositorViewHolder.dispatchTouchEvent(MOTION_EVENT_DOWN);
         mCompositorViewHolder.onControlsOffsetChanged(0, 0, false, 0, 0, false, true, false);

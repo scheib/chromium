@@ -17,13 +17,19 @@
 #include "components/signin/public/base/signin_metrics.h"
 #include "components/signin/public/identity_manager/primary_account_mutator.h"
 #include "components/signin/public/identity_manager/tribool.h"
+#include "components/sync/base/user_selectable_type.h"
 #include "net/cookies/canonical_cookie.h"
 
 class GaiaId;
 class Profile;
+class Browser;
 
 namespace signin {
 class IdentityManager;
+}
+
+namespace syncer {
+class SyncService;
 }
 
 namespace signin_util {
@@ -171,19 +177,36 @@ SignedInState GetSignedInState(const signin::IdentityManager* identity_manager);
 // Returns a string representation of `SignedInState`.
 std::string SignedInStateToString(SignedInState state);
 
+// Checks whether syncing the specified `types` is allowed by policy. May need
+// to called again after a sign in to see if policies are set for the account
+// rather than the device. This method does not take into account the feature
+// flag `ReplaceSyncPromosWithSignInPromos`.
+bool IsSyncingUserSelectableTypesAllowedByPolicy(
+    const syncer::SyncService* sync_service,
+    const syncer::UserSelectableTypeSet& types);
+
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 // Returns if the necessary conditions to show the History Sync Optin screen
 // are met.
-// This method does not take into account any feature flags related to the above
-// screen.
+// This method does not take into account the feature flag
+// `ReplaceSyncPromosWithSignInPromos`.
 // TODO(crbug.com/419741847): Consider using also on mobile and moving the
 // method as necessary.
 bool ShouldShowHistorySyncOptinScreen(Profile& profile);
+
+// Enables the types history, tabs, and saved tab groups for the account
+// currently signed into Chrome. If a type cannot be enabled (e.g. by policy),
+// this does not do anything for that type.
+void EnableHistorySync(syncer::SyncService* sync_service);
 
 // The avatar sync promo is only shown to users with specific sign in states.
 // Requires the feature enabling through
 // `switches::IsAvatarSyncPromoFeatureEnabled()`.
 bool ShouldShowAvatarSyncPromo(Profile* profile);
+
+// Show a simple error message with an "OK" button to the user, displaying
+// `error_message_id`.
+void ShowErrorDialogWithMessage(Browser* browser, int error_message_id);
 #endif  // BUILDFLAG(IS_LINUX) ||  BUILDFLAG(IS_MAC) ||  BUILDFLAG(IS_WIN)
 
 }  // namespace signin_util

@@ -22,7 +22,7 @@ import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ObserverList;
 import org.chromium.base.TraceEvent;
-import org.chromium.base.supplier.Supplier;
+import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.build.annotations.EnsuresNonNullIf;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -30,7 +30,6 @@ import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider
 import org.chromium.chrome.browser.omnibox.ChromeAutocompleteSchemeClassifier;
 import org.chromium.chrome.browser.omnibox.LocationBarDataProvider;
 import org.chromium.chrome.browser.omnibox.NewTabPageDelegate;
-import org.chromium.chrome.browser.omnibox.SearchEngineUtils;
 import org.chromium.chrome.browser.omnibox.UrlBarData;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.paint_preview.TabbedPaintPreview;
@@ -39,9 +38,9 @@ import org.chromium.chrome.browser.pdf.PdfUtils.PdfPageType;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TrustedCdn;
-import org.chromium.chrome.browser.theme.SurfaceColorUpdateUtils;
 import org.chromium.chrome.browser.theme.ThemeUtils;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
+import org.chromium.components.browser_ui.styles.ChromeColors;
 import org.chromium.components.dom_distiller.core.DomDistillerUrlUtils;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.embedder_support.util.UrlUtilities;
@@ -92,7 +91,7 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
             if (this == o) {
                 return true;
             }
-            if (o == null || getClass() != o.getClass()) {
+            if (!(o instanceof SpannableDisplayTextCacheKey)) {
                 return false;
             }
             SpannableDisplayTextCacheKey that = (SpannableDisplayTextCacheKey) o;
@@ -141,7 +140,7 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
     private final NewTabPageDelegate mNtpDelegate;
     private final UrlFormatter mUrlFormatter;
     private final OfflineStatus mOfflineStatus;
-    private final Supplier<@ControlsPosition Integer> mToolbarPositionSupplier;
+    private final ObservableSupplier<@ControlsPosition Integer> mToolbarPositionSupplier;
 
     // Always null if optimizations are disabled. Otherwise, non-null and unchanging following
     // native init. Always tied to the original profile which is safe because no underlying
@@ -192,13 +191,12 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
             NewTabPageDelegate newTabPageDelegate,
             UrlFormatter urlFormatter,
             OfflineStatus offlineStatus,
-            Supplier<@ControlsPosition Integer> toolbarPositionSupplier) {
+            ObservableSupplier<@ControlsPosition Integer> toolbarPositionSupplier) {
         mContext = context;
         mNtpDelegate = newTabPageDelegate;
         mUrlFormatter = urlFormatter;
         mOfflineStatus = offlineStatus;
-        mPrimaryColor =
-                SurfaceColorUpdateUtils.getDefaultThemeColor(context, /* isIncognito= */ false);
+        mPrimaryColor = ChromeColors.getDefaultThemeColor(context, /* isIncognito= */ false);
         mUrlForDisplay = "";
         mFormattedFullUrl = "";
         mToolbarPositionSupplier = toolbarPositionSupplier;
@@ -463,7 +461,7 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
         final @ColorInt int secureColor =
                 OmniboxResourceProvider.getUrlBarSecureColor(mContext, brandedColorScheme);
 
-        int securityLevel = getSecurityLevel(getTab(), isOfflinePage, isReaderModePage());
+        int securityLevel = getSecurityLevel(getTab(), isOfflinePage);
         SpannableDisplayTextCacheKey cacheKey =
                 new SpannableDisplayTextCacheKey(
                         url.getSpec(),
@@ -578,8 +576,7 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
         mIsUsingBrandColor =
                 !isIncognitoBranded()
                         && mPrimaryColor
-                                != SurfaceColorUpdateUtils.getDefaultThemeColor(
-                                        mContext, isIncognitoBranded())
+                                != ChromeColors.getDefaultThemeColor(mContext, isIncognitoBranded())
                         && hasTab()
                         && !mTab.isNativePage();
     }
@@ -596,6 +593,9 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
 
     public void notifyPrimaryColorChanged() {
         for (LocationBarDataProvider.Observer observer : mLocationBarDataObservers) {
+            observer.onPrimaryColorChanged();
+        }
+        for (ToolbarDataProvider.Observer observer : mToolbarDataObservers) {
             observer.onPrimaryColorChanged();
         }
     }
@@ -619,14 +619,9 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
         return PdfUtils.getPdfPageType(mTab.getNativePage());
     }
 
-    private boolean isReaderModePage() {
-        if (!hasTab()) return false;
-        return DomDistillerUrlUtils.isDistilledPage(assumeNonNull(getTab()).getUrl());
-    }
-
     @Override
     public int getSecurityLevel() {
-        return getSecurityLevel(getTab(), isOfflinePage(), isReaderModePage());
+        return getSecurityLevel(getTab(), isOfflinePage());
     }
 
     @Override
@@ -640,13 +635,11 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
     @Override
     public @DrawableRes int getSecurityIconResource(boolean isTablet) {
         boolean isOfflinePage = isOfflinePage();
-        boolean isReaderModePage = isReaderModePage();
         return getSecurityIconResource(
-                getSecurityLevel(getTab(), isOfflinePage, isReaderModePage),
+                getSecurityLevel(getTab(), isOfflinePage),
                 !isTablet,
                 isOfflinePage,
                 isPaintPreview(),
-                isReaderModePage,
                 getPdfPageType());
     }
 
@@ -657,7 +650,7 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
 
     @VisibleForTesting
     @ConnectionSecurityLevel
-    int getSecurityLevel(@Nullable Tab tab, boolean isOfflinePage, boolean isReaderModePage) {
+    int getSecurityLevel(@Nullable Tab tab, boolean isOfflinePage) {
         if (tab == null || isOfflinePage) {
             return ConnectionSecurityLevel.NONE;
         }
@@ -688,7 +681,6 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
             boolean isSmallDevice,
             boolean isOfflinePage,
             boolean isPaintPreview,
-            boolean isReaderModePage,
             int pdfPageType) {
         // Paint Preview appears on top of WebContents and shows a visual representation of the page
         // that has been previously stored locally.
@@ -698,12 +690,6 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
         // on a slow connection. In this case, the previews UI takes precedence.
         if (isOfflinePage) {
             return R.drawable.ic_offline_pin_24dp;
-        }
-
-        // Reader mode is when chrome is viewing distilled content. In this case, a reader mode icon
-        // is shown.
-        if (isReaderModePage) {
-            return R.drawable.ic_reader_mode_24dp;
         }
 
         // Pdf page is a native page used to render downloaded pdf files.
@@ -723,11 +709,7 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
             return R.drawable.omnibox_info;
         }
 
-        boolean skipIconForNeutralState =
-                (mProfile != null
-                                && !SearchEngineUtils.getForProfile(mProfile)
-                                        .shouldShowSearchEngineLogo())
-                        || mNtpDelegate.isCurrentlyVisible();
+        boolean skipIconForNeutralState = mNtpDelegate.isCurrentlyVisible();
 
         return SecurityStatusIcon.getSecurityIconResource(
                 securityLevel,
@@ -898,7 +880,7 @@ public class LocationBarModel implements ToolbarDataProvider, LocationBarDataPro
     }
 
     @Override
-    public Supplier<@ControlsPosition Integer> getToolbarPositionSupplier() {
+    public ObservableSupplier<@ControlsPosition Integer> getToolbarPositionSupplier() {
         return mToolbarPositionSupplier;
     }
 }

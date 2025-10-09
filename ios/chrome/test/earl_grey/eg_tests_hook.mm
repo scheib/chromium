@@ -7,22 +7,23 @@
 #pragma allow_unsafe_buffers
 #endif
 
-#import <MaterialComponents/MaterialSnackbar.h>
-
 #import "base/command_line.h"
 #import "base/files/file_path.h"
 #import "base/files/file_util.h"
 #import "base/logging.h"
 #import "base/strings/string_number_conversions.h"
+#import "base/strings/string_split.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/allow_check_is_test_for_testing.h"
 #import "base/time/time.h"
+#import "components/commerce/core/mock_shopping_service.h"
+#import "components/commerce/core/shopping_service.h"
 #import "components/data_sharing/public/data_sharing_service.h"
 #import "components/data_sharing/test_support/mock_preview_server_proxy.h"
 #import "components/feature_engagement/public/feature_activation.h"
 #import "components/password_manager/core/browser/sharing/fake_recipients_fetcher.h"
 #import "components/password_manager/ios/fake_bulk_leak_check_service.h"
-#import "components/plus_addresses/fake_plus_address_service.h"
+#import "components/plus_addresses/core/browser/fake_plus_address_service.h"
 #import "components/saved_tab_groups/delegate/tab_group_sync_delegate.h"
 #import "components/saved_tab_groups/internal/saved_tab_group_model.h"
 #import "components/saved_tab_groups/internal/tab_group_sync_coordinator.h"
@@ -47,6 +48,7 @@
 #import "ios/chrome/browser/shared/model/browser/browser_list.h"
 #import "ios/chrome/browser/shared/model/browser/browser_list_factory.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_constants.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
 #import "ios/chrome/browser/signin/model/identity_manager_factory.h"
@@ -57,8 +59,13 @@
 #import "ios/chrome/test/app/signin_test_util.h"
 #import "ios/chrome/test/earl_grey/test_switches.h"
 #import "ios/chrome/test/providers/signin/fake_trusted_vault_client_backend.h"
+#import "testing/gmock/include/gmock/gmock.h"
 
 namespace tests_hook {
+
+bool DisableGeminiEligibilityCheck() {
+  return true;
+}
 
 bool DisableAppGroupAccess() {
   return true;
@@ -122,9 +129,9 @@ std::unique_ptr<ProfileOAuth2TokenService> GetOverriddenTokenService(
   return token_service;
 }
 
-bool DisableUpgradeSigninPromo() {
+bool DisableFullscreenSigninPromo() {
   return !base::CommandLine::ForCurrentProcess()->HasSwitch(
-      switches::kEnableUpgradeSigninPromo);
+      switches::kEnableFullscreenSigninPromo);
 }
 
 bool DisableUpdateService() {
@@ -225,6 +232,38 @@ std::unique_ptr<tab_groups::TabGroupSyncService> CreateTabGroupSyncService(
   return sync_service;
 }
 
+std::unique_ptr<commerce::ShoppingService> CreateShoppingService(
+    ProfileIOS* profile) {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (!command_line->HasSwitch(test_switches::kMockShoppingService)) {
+    return nullptr;
+  }
+
+  auto service =
+      std::make_unique<testing::NiceMock<commerce::MockShoppingService>>();
+
+  const std::vector<std::string> args = base::SplitString(
+      command_line->GetSwitchValueASCII(test_switches::kMockShoppingService),
+      ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  for (const std::string& value : args) {
+    if (value == "is-eligible") {
+      service->SetIsShoppingListEligible(true);
+      continue;
+    }
+
+    if (value == "has-empty-price-tracked-bookmarks-results") {
+      service->SetGetAllPriceTrackedBookmarksCallbackValue({});
+      continue;
+    }
+    if (value == "has-empty-subscriptions-results") {
+      service->SetGetAllSubscriptionsCallbackValue({});
+      continue;
+    }
+  }
+
+  return service;
+}
+
 void DataSharingServiceHooks(
     data_sharing::DataSharingService* data_sharing_service) {
   auto preview_server_proxy =
@@ -287,12 +326,6 @@ void SignalAppLaunched() {
 base::TimeDelta PasswordCheckMinimumDuration() {
   // No delays for eg tests.
   return base::Seconds(0);
-}
-
-base::TimeDelta GetOverriddenSnackbarDuration() {
-  // Increase the snackbar duration for EGTests for test to catch it more
-  // easily.
-  return base::Seconds(MDCSnackbarMessageDurationMax);
 }
 
 std::unique_ptr<drive::DriveService> GetOverriddenDriveService() {
@@ -364,6 +397,12 @@ void WipeProfileIfRequested(int argc, char* argv[]) {
 base::TimeDelta
 GetOverriddenDelayForRequestingTurningOnCredentialProviderExtension() {
   return base::Seconds(2);
+}
+
+base::TimeDelta GetSnackbarMessageDuration() {
+  // Makes the snackbar duration longer for EGTests to make sure there is time
+  // detect it, and avoid flakiness.
+  return base::Seconds(30);
 }
 
 }  // namespace tests_hook

@@ -16,7 +16,8 @@ namespace base {
 class MemoryPressureListenerTest : public testing::Test {
  public:
   MemoryPressureListenerTest()
-      : listener_(BindRepeating(&MemoryPressureListenerTest::OnMemoryPressure,
+      : listener_(base::MemoryPressureListenerTag::kTest,
+                  BindRepeating(&MemoryPressureListenerTest::OnMemoryPressure,
                                 Unretained(this))) {}
 
  protected:
@@ -33,58 +34,61 @@ class MemoryPressureListenerTest : public testing::Test {
   }
 
  private:
-  MOCK_METHOD1(OnMemoryPressure,
-               void(MemoryPressureListener::MemoryPressureLevel));
+  MOCK_METHOD1(OnMemoryPressure, void(MemoryPressureLevel));
 
-  SyncMemoryPressureListener listener_;
+  SyncMemoryPressureListenerRegistration listener_;
 };
 
 TEST_F(MemoryPressureListenerTest, NotifyMemoryPressure) {
   // Memory pressure notifications are not suppressed by default.
   EXPECT_FALSE(MemoryPressureListenerRegistry::AreNotificationsSuppressed());
   ExpectNotification(&MemoryPressureListenerRegistry::NotifyMemoryPressure,
-                     MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_MODERATE);
+                     MEMORY_PRESSURE_LEVEL_MODERATE);
   ExpectNotification(
       &MemoryPressureListenerRegistry::SimulatePressureNotification,
-      MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_MODERATE);
+      MEMORY_PRESSURE_LEVEL_MODERATE);
 
   // Enable suppressing memory pressure notifications.
   MemoryPressureListenerRegistry::SetNotificationsSuppressed(true);
   EXPECT_TRUE(MemoryPressureListenerRegistry::AreNotificationsSuppressed());
   ExpectNoNotification(&MemoryPressureListenerRegistry::NotifyMemoryPressure,
-                       MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_MODERATE);
+                       MEMORY_PRESSURE_LEVEL_MODERATE);
   ExpectNotification(
       &MemoryPressureListenerRegistry::SimulatePressureNotification,
-      MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_MODERATE);
+      MEMORY_PRESSURE_LEVEL_MODERATE);
 
   // Disable suppressing memory pressure notifications.
   MemoryPressureListenerRegistry::SetNotificationsSuppressed(false);
   EXPECT_FALSE(MemoryPressureListenerRegistry::AreNotificationsSuppressed());
   ExpectNotification(&MemoryPressureListenerRegistry::NotifyMemoryPressure,
-                     MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_CRITICAL);
+                     MEMORY_PRESSURE_LEVEL_CRITICAL);
   ExpectNotification(
       &MemoryPressureListenerRegistry::SimulatePressureNotification,
-      MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_CRITICAL);
+      MEMORY_PRESSURE_LEVEL_CRITICAL);
 }
 
 TEST_F(MemoryPressureListenerTest, SyncCallbackDeletesListener) {
   base::test::SingleThreadTaskEnvironment task_env;
 
-  auto listener_to_be_deleted = std::make_unique<MemoryPressureListener>(
-      FROM_HERE, BindRepeating([](MemoryPressureListener::MemoryPressureLevel) {
-        FAIL() << "Async callback should not be called.";
-      }));
+  auto listener_to_be_deleted =
+      std::make_unique<MemoryPressureListenerRegistration>(
+          FROM_HERE, base::MemoryPressureListenerTag::kTest,
+          BindRepeating([](MemoryPressureLevel) {
+            FAIL() << "Async callback should not be called.";
+          }));
 
-  auto deleter_listener = std::make_unique<SyncMemoryPressureListener>(
-      BindLambdaForTesting([&](MemoryPressureLevel) {
-        // This should not deadlock.
-        listener_to_be_deleted.reset();
-      }));
+  auto deleter_listener =
+      std::make_unique<SyncMemoryPressureListenerRegistration>(
+          base::MemoryPressureListenerTag::kTest,
+          BindLambdaForTesting([&](MemoryPressureLevel) {
+            // This should not deadlock.
+            listener_to_be_deleted.reset();
+          }));
 
   // This should trigger the sync callback in |deleter_listener|, which will
   // delete |listener_to_be_deleted|.
   ExpectNotification(&MemoryPressureListener::NotifyMemoryPressure,
-                     MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_CRITICAL);
+                     MEMORY_PRESSURE_LEVEL_CRITICAL);
 }
 
 }  // namespace base

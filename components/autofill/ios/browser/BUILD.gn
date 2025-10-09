@@ -57,8 +57,8 @@ source_set("browser") {
     "//components/autofill/ios/form_util:form_handler_feature",
     "//components/autofill/ios/form_util:form_util_feature",
     "//components/feature_engagement/public",
-    "//components/plus_addresses",
-    "//components/plus_addresses/resources/strings",
+    "//components/plus_addresses/core/browser",
+    "//components/plus_addresses/core/browser/resources/strings",
     "//components/prefs",
     "//components/prefs/ios",
     "//components/resources:components_resources_grit",
@@ -128,10 +128,10 @@ source_set("test_support") {
     "new_frame_catcher.h",
     "new_frame_catcher.mm",
     "test_autofill_client_ios.h",
-    "test_autofill_client_ios.mm",
     "test_autofill_java_script_feature_container.h",
     "test_autofill_java_script_feature_container.mm",
     "test_autofill_manager_injector.h",
+    "test_autofill_manager_injector.mm",
   ]
   public_deps = [ ":browser" ]
   deps = [

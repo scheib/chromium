@@ -6,8 +6,7 @@
 
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
-#include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/extensions/browsertest_util.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/profiles/profile.h"
@@ -37,16 +36,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/base_window.h"
 
-#if BUILDFLAG(IS_CHROMEOS)
-#include "ash/wm/window_pin_util.h"
-#include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/extensions/window_controller.h"
-#include "chrome/browser/extensions/window_controller_list.h"
-#include "chrome/browser/ui/browser_command_controller.h"
-#include "chromeos/ui/base/window_pin_type.h"
-#include "ui/aura/window.h"
-#endif
-
 using content::OpenURLParams;
 using content::Referrer;
 using content::WebContents;
@@ -58,6 +47,7 @@ class Window;
 namespace extensions {
 
 class WindowOpenApiTest : public ExtensionApiTest {
+ protected:
   void SetUpOnMainThread() override {
     ExtensionApiTest::SetUpOnMainThread();
     host_resolver()->AddRule("*", "127.0.0.1");
@@ -348,158 +338,5 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest,
   EXPECT_EQ(extension_url, tab->GetPrimaryMainFrame()->GetLastCommittedURL());
   EXPECT_EQ("HOWDIE!!!", content::EvalJs(tab, "document.body.innerText"));
 }
-
-#if BUILDFLAG(IS_CHROMEOS)
-
-namespace {
-
-aura::Window* GetCurrentWindow() {
-  extensions::WindowController* controller = nullptr;
-  for (extensions::WindowController* window :
-       *extensions::WindowControllerList::GetInstance()) {
-    if (window->window()->IsActive()) {
-      controller = window;
-      break;
-    }
-  }
-
-  EXPECT_TRUE(controller);
-
-  return controller->window()->GetNativeWindow();
-}
-
-chromeos::WindowPinType GetCurrentWindowPinType() {
-  chromeos::WindowPinType type = GetWindowPinType(GetCurrentWindow());
-
-  return type;
-}
-
-void SetCurrentWindowPinType(chromeos::WindowPinType type) {
-  if (type == chromeos::WindowPinType::kNone) {
-    UnpinWindow(GetCurrentWindow());
-  } else {
-    PinWindow(GetCurrentWindow(), /*trusted=*/true);
-  }
-}
-
-}  // namespace
-
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, OpenLockedFullscreenWindow) {
-  ASSERT_TRUE(RunExtensionTest("locked_fullscreen/with_permission",
-                               {.custom_arg = "openLockedFullscreenWindow"}))
-      << message_;
-
-  // Make sure the newly created window is "trusted pinned" (which means that
-  // it's in locked fullscreen mode).
-  EXPECT_EQ(chromeos::WindowPinType::kTrustedPinned, GetCurrentWindowPinType());
-}
-
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, UpdateWindowToLockedFullscreen) {
-  ASSERT_TRUE(
-      RunExtensionTest("locked_fullscreen/with_permission",
-                       {.custom_arg = "updateWindowToLockedFullscreen"}))
-      << message_;
-
-  // Make sure the current window is put into the "trusted pinned" state.
-  EXPECT_EQ(chromeos::WindowPinType::kTrustedPinned, GetCurrentWindowPinType());
-}
-
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, RemoveLockedFullscreenFromWindow) {
-  // After locking the window, do a LockedFullscreenStateChanged so the
-  // command_controller state catches up as well.
-  SetCurrentWindowPinType(chromeos::WindowPinType::kTrustedPinned);
-  browser()->command_controller()->LockedFullscreenStateChanged();
-
-  ASSERT_TRUE(
-      RunExtensionTest("locked_fullscreen/with_permission",
-                       {.custom_arg = "removeLockedFullscreenFromWindow"}))
-      << message_;
-
-  // Make sure the current window is removed from locked-fullscreen state.
-  EXPECT_EQ(chromeos::WindowPinType::kNone, GetCurrentWindowPinType());
-}
-
-// Make sure that commands disabling code works in locked fullscreen mode.
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, VerifyCommandsInLockedFullscreen) {
-  // IDC_EXIT is always enabled in regular mode so it's a perfect candidate for
-  // testing.
-  EXPECT_TRUE(browser()->command_controller()->IsCommandEnabled(IDC_EXIT));
-  ASSERT_TRUE(
-      RunExtensionTest("locked_fullscreen/with_permission",
-                       {.custom_arg = "updateWindowToLockedFullscreen"}))
-      << message_;
-
-  // IDC_EXIT should always be disabled in locked fullscreen.
-  EXPECT_FALSE(browser()->command_controller()->IsCommandEnabled(IDC_EXIT));
-
-  // Some other disabled commands.
-  EXPECT_FALSE(browser()->command_controller()->IsCommandEnabled(IDC_FIND));
-  EXPECT_FALSE(
-      browser()->command_controller()->IsCommandEnabled(IDC_ZOOM_PLUS));
-
-  // Verify some allowlisted commands.
-  EXPECT_TRUE(browser()->command_controller()->IsCommandEnabled(IDC_COPY));
-  EXPECT_TRUE(browser()->command_controller()->IsCommandEnabled(IDC_PASTE));
-}
-
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
-                       OpenLockedFullscreenWindowWithoutPermission) {
-  ASSERT_TRUE(RunExtensionTest("locked_fullscreen/without_permission",
-                               {.custom_arg = "openLockedFullscreenWindow"}))
-      << message_;
-
-  // Make sure no new windows get created (so only the one created by default
-  // exists) since the call to chrome.windows.create fails on the javascript
-  // side.
-  EXPECT_EQ(1u, extensions::WindowControllerList::GetInstance()->size());
-}
-
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
-                       UpdateWindowToLockedFullscreenWithoutPermission) {
-  ASSERT_TRUE(
-      RunExtensionTest("locked_fullscreen/without_permission",
-                       {.custom_arg = "updateWindowToLockedFullscreen"}))
-      << message_;
-
-  // chrome.windows.update call fails since this extension doesn't have the
-  // correct permission and hence the current window has NONE as WindowPinType.
-  EXPECT_EQ(chromeos::WindowPinType::kNone, GetCurrentWindowPinType());
-}
-
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
-                       RemoveLockedFullscreenFromWindowWithoutPermission) {
-  SetCurrentWindowPinType(chromeos::WindowPinType::kTrustedPinned);
-  browser()->command_controller()->LockedFullscreenStateChanged();
-
-  ASSERT_TRUE(
-      RunExtensionTest("locked_fullscreen/without_permission",
-                       {.custom_arg = "removeLockedFullscreenFromWindow"}))
-      << message_;
-
-  // The current window is still locked-fullscreen.
-  EXPECT_EQ(chromeos::WindowPinType::kTrustedPinned, GetCurrentWindowPinType());
-}
-#endif  // BUILDFLAG(IS_CHROMEOS)
-
-#if !BUILDFLAG(IS_CHROMEOS)
-// Loading an extension requiring the 'lockWindowFullscreenPrivate' permission
-// on non Chrome OS platforms should always fail since the API is available only
-// on Chrome OS.
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
-                       OpenLockedFullscreenWindowNonChromeOS) {
-  const extensions::Extension* extension = LoadExtension(
-      test_data_dir_.AppendASCII("locked_fullscreen/with_permission"),
-      {.ignore_manifest_warnings = true});
-  ASSERT_TRUE(extension);
-  EXPECT_EQ(2u, extension->install_warnings().size());
-  // TODO(crbug.com/40804030): Remove the check for the deprecated
-  // manifest version when the test extension is updated to MV3.
-  EXPECT_EQ(manifest_errors::kManifestV2IsDeprecatedWarning,
-            extension->install_warnings()[0].message);
-  EXPECT_EQ(std::string("'lockWindowFullscreenPrivate' "
-                        "is not allowed for specified platform."),
-            extension->install_warnings()[1].message);
-}
-#endif
 
 }  // namespace extensions

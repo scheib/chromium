@@ -21,14 +21,26 @@ inline constexpr base::FeatureParam<int>
         &kDeferredSyncStartupCustomDelay,
         "DeferredSyncStartupCustomDelayInSeconds", 1};
 
+// Enables syncing of settings from the user's account.
+BASE_DECLARE_FEATURE(kSyncAccountSettings);
+
 // Enables syncing of Loyalty Cards coming from Google Wallet.
 BASE_DECLARE_FEATURE(kSyncAutofillLoyaltyCard);
+
+// Enables storing valuables in the profile db instead of the account db.
+BASE_DECLARE_FEATURE(kSyncMoveValuablesToProfileDb);
 
 // Enables syncing account-local metadata for shared tab groups.
 BASE_DECLARE_FEATURE(kSyncSharedTabGroupAccountData);
 
 // Enables syncing comments for shared contexts.
 BASE_DECLARE_FEATURE(kSyncSharedComment);
+
+// Enables syncing of AI threads across devices.
+BASE_DECLARE_FEATURE(kSyncAIThread);
+
+// Enables syncing of contextual tasks.
+BASE_DECLARE_FEATURE(kSyncContextualTask);
 
 #if BUILDFLAG(IS_ANDROID)
 // Flag that controls Uno fast-follow features which are:
@@ -65,6 +77,18 @@ BASE_DECLARE_FEATURE(kReplaceSyncPromosWithSignInPromos);
 // preferences user toggle is off. Note that this flag is only meaningful if
 // kEnablePreferencesAccountStorage is enabled.
 BASE_DECLARE_FEATURE(kSyncSupportAlwaysSyncingPriorityPreferences);
+
+// Enables syncing of flight reservations coming from Google Wallet.
+BASE_DECLARE_FEATURE(kSyncWalletFlightReservations);
+
+// Enables syncing of vehicle registrations coming from Google Wallet.
+BASE_DECLARE_FEATURE(kSyncWalletVehicleRegistrations);
+
+// If enabled, the spellcheck custom dictionary will keep the account dictionary
+// separate from the local dictionary.
+// TODO(crbug.com/443954137): This feature doesn't yet do anything. Implement
+// the local and account data separation behind this feature flag.
+BASE_DECLARE_FEATURE(kSpellcheckSeparateLocalAndAccountDictionaries);
 
 // Normally, if kReplaceSyncPromosWithSignInPromos is disabled,
 // UserSelectableType::kBookmarks is disabled by default upon sign-in. This
@@ -156,24 +180,15 @@ inline constexpr base::FeatureParam<int>
 #endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_IOS)
-// Enables a set of improvements to the existing trusted vault error infobar on
-// iOS (displaying it on pages with password forms, adjusting display time,
-// adding dismiss conditions, adding a notification pause after dismissal).
-BASE_DECLARE_FEATURE(kSyncTrustedVaultInfobarImprovements);
-#endif  // BUILDFLAG(IS_IOS)
-
-#if BUILDFLAG(IS_IOS)
 // Enables a message improvements to the existing trusted vault error infobar
 // (informing users that fixing the error will help them to start syncing their
 // passwords).
 BASE_DECLARE_FEATURE(kSyncTrustedVaultInfobarMessageImprovements);
 #endif  // BUILDFLAG(IS_IOS)
 
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
-// Enables syncing of Vehicle Registrations and Flight reservations coming from
-// Google Wallet.
-BASE_DECLARE_FEATURE(kSyncWalletPublicPasses);
-#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+// When enabled, Sync will use OSCryptAsync for encryption/decryption instead
+// of OSCrypt within the sync code.
+BASE_DECLARE_FEATURE(kSyncUseOsCryptAsync);
 
 BASE_DECLARE_FEATURE(kSyncDetermineAccountManagedStatus);
 BASE_DECLARE_FEATURE_PARAM(base::TimeDelta,

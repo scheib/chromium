@@ -83,6 +83,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "ash/constants/ash_features.h"
+#include "chromeos/constants/pref_names.h"
 #endif
 
 #if !BUILDFLAG(IS_CHROMEOS)
@@ -150,7 +151,8 @@ SyncConfigInfo::SyncConfigInfo() = default;
 SyncConfigInfo::~SyncConfigInfo() = default;
 
 bool GetConfiguration(const std::string& json, SyncConfigInfo* config) {
-  std::optional<base::Value> parsed_value = base::JSONReader::Read(json);
+  std::optional<base::Value> parsed_value =
+      base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!parsed_value.has_value() || !parsed_value->is_dict()) {
     DLOG(ERROR) << "GetConfiguration() not passed a Dictionary";
     return false;
@@ -239,8 +241,7 @@ bool IsChangePrimaryAccountAllowed(Profile* profile, const std::string& email) {
       IdentityManagerFactory::GetForProfile(profile);
 
   if (ChromeSigninClientFactory::GetForProfile(profile)
-          ->IsClearPrimaryAccountAllowed(
-              identity_manager->HasPrimaryAccount(ConsentLevel::kSync)) ||
+          ->IsClearPrimaryAccountAllowed() ||
       !identity_manager->HasPrimaryAccount(ConsentLevel::kSignin)) {
     return true;
   }
@@ -658,6 +659,7 @@ base::Value::List PeopleHandler::GetStoredAccountsList() {
   return accounts;
 }
 
+// TODO(crbug.com/419203245): Rename this method once syncing is removed.
 void PeopleHandler::HandleStartSyncingWithEmail(const base::Value::List& args) {
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
   DCHECK(AccountConsistencyModeManager::IsDiceEnabledForProfile(profile_) ||
@@ -667,31 +669,6 @@ void PeopleHandler::HandleStartSyncingWithEmail(const base::Value::List& args) {
 
   DCHECK(IsChangePrimaryAccountAllowed(profile_, email.GetString()))
       << "Changing the primary account is not allowed!";
-
-  // TODO(crbug.com/419203245): Update the UI for this button and the conditions
-  // under which it appears when it triggers the History Sync Optin, instead of
-  // the Sync Consent screen.
-  if (base::FeatureList::IsEnabled(switches::kEnableHistorySyncOptin)) {
-    if (signin_util::ShouldShowHistorySyncOptinScreen(*profile_.get())) {
-      const signin::IdentityManager* identity_manager =
-          IdentityManagerFactory::GetForProfile(profile_);
-      CHECK(identity_manager);
-      CHECK(gaia::AreEmailsSame(
-          identity_manager->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin)
-              .email,
-          email.GetString()));
-
-      Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
-      if (!browser) {
-        return;
-      }
-      browser->GetFeatures()
-          .signin_view_controller()
-          ->ShowModalHistorySyncOptInDialog();
-    }
-    return;
-  }
-
   AccountInfo maybe_account =
       IdentityManagerFactory::GetForProfile(profile_)
           ->FindExtendedAccountInfoByEmailAddress(email.GetString());
@@ -843,7 +820,7 @@ void PeopleHandler::HandleSignout(const base::Value::List& args) {
 
   bool is_clear_primary_account_allowed =
       ChromeSigninClientFactory::GetForProfile(profile_)
-          ->IsClearPrimaryAccountAllowed(is_syncing);
+          ->IsClearPrimaryAccountAllowed();
 
   if (is_syncing) {
     HandleTurnOffSync(delete_profile, is_clear_primary_account_allowed);
@@ -1146,6 +1123,12 @@ void PeopleHandler::OnStateChanged(syncer::SyncService* sync_service) {
   PushTrustedVaultBannerState();
 }
 
+void PeopleHandler::OnSyncShutdown(syncer::SyncService* sync_service) {
+  // Unreachable, since this class is tied to UI which gets destroyed before the
+  // Profile and its KeyedServices.
+  NOTREACHED();
+}
+
 void PeopleHandler::BeforeUnloadDialogCancelled() {
   // The before unload dialog is only shown during the first sync setup.
   DCHECK(IdentityManagerFactory::GetForProfile(profile_)->HasPrimaryAccount(
@@ -1200,15 +1183,13 @@ base::Value::Dict PeopleHandler::GetSyncStatusDictionary() const {
 
   SyncStatusLabels status_labels;
 
-  const std::optional<AvatarSyncErrorType> error =
-      GetAvatarSyncErrorType(profile_);
+  const AvatarSyncErrorType error = GetAvatarSyncErrorType(profile_);
   // Avoid reacting to AvatarSyncErrorType::kSyncPaused in case of no sync
   // consent, as the signin-pending state is not considered to be an error here.
-  if (error.has_value() &&
-      (error.value() != AvatarSyncErrorType::kSyncPaused ||
+  if (error != AvatarSyncErrorType::kNone &&
+      (error != AvatarSyncErrorType::kSyncPaused ||
        identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSync))) {
-    status_labels =
-        GetAvatarSyncErrorLabelsForSettings(profile_, error.value());
+    status_labels = GetAvatarSyncErrorLabelsForSettings(profile_, error);
   } else {
     status_labels = GetSyncStatusLabelsForSettings(
         SyncServiceFactory::GetForProfile(profile_));
@@ -1256,8 +1237,9 @@ base::Value::Dict PeopleHandler::GetSyncStatusDictionary() const {
                   service && service->HasUnrecoverableError());
 #if BUILDFLAG(IS_CHROMEOS)
   if (ash::features::IsFloatingSsoAllowed()) {
-    sync_status.Set("syncCookiesSupported", profile_->GetPrefs()->GetBoolean(
-                                                prefs::kFloatingSsoEnabled));
+    sync_status.Set(
+        "syncCookiesSupported",
+        profile_->GetPrefs()->GetBoolean(chromeos::prefs::kFloatingSsoEnabled));
   }
 #endif  // BUILDFLAG(IS_CHROMEOS)
   return sync_status;

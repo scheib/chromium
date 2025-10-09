@@ -135,8 +135,9 @@ class ChromeBrowsingDataLifetimeManagerTest
     // triggered even if the same pref value is set twice in a row.
     GetProfile()->GetPrefs()->ClearPref(
         browsing_data::prefs::kBrowsingDataLifetime);
-    GetProfile()->GetPrefs()->Set(browsing_data::prefs::kBrowsingDataLifetime,
-                                  *base::JSONReader::Read(pref));
+    GetProfile()->GetPrefs()->Set(
+        browsing_data::prefs::kBrowsingDataLifetime,
+        *base::JSONReader::Read(pref, base::JSON_PARSE_CHROMIUM_EXTENSIONS));
 
     completion_observer.BlockUntilCompletion();
   }
@@ -530,7 +531,7 @@ IN_PROC_BROWSER_TEST_P(ChromeBrowsingDataLifetimeManagerScheduledRemovalTest,
   autofill::AutofillProfile profile(
       "01234567-89ab-cdef-fedc-ba9876543210",
       autofill::AutofillProfile::RecordType::kLocalOrSyncable,
-      AddressCountryCode("US"));
+      autofill::AddressCountryCode("US"));
   autofill::test::SetProfileInfo(
       &profile, "Marion", "Mitchell", "Morrison", "johnwayne@me.xyz", "Fox",
       "123 Zoo St.", "unit 5", "Hollywood", "CA", "91601", "US", "12345678910");
@@ -615,7 +616,7 @@ IN_PROC_BROWSER_TEST_P(ChromeBrowsingDataLifetimeManagerShutdownTest,
   static constexpr char kPref[] = R"([])";
   GetProfile()->GetPrefs()->Set(
       browsing_data::prefs::kClearBrowsingDataOnExitList,
-      *base::JSONReader::Read(kPref));
+      *base::JSONReader::Read(kPref, base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   base::RunLoop().RunUntilIdle();
 }
 
@@ -651,7 +652,7 @@ IN_PROC_BROWSER_TEST_P(ChromeBrowsingDataLifetimeManagerShutdownTest,
       "hosted_app_data"])";
   GetProfile()->GetPrefs()->Set(
       browsing_data::prefs::kClearBrowsingDataOnExitList,
-      *base::JSONReader::Read(kPref));
+      *base::JSONReader::Read(kPref, base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   base::RunLoop().RunUntilIdle();
 }
 

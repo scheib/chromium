@@ -6,13 +6,17 @@
 #include "build/build_config.h"
 #include "cc/base/features.h"
 #include "cc/paint/record_paint_canvas.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
+#include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
 #include "third_party/blink/public/common/input/web_pointer_properties.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_theme_engine.h"
 #include "third_party/blink/public/web/web_script_source.h"
+#include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
+#include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/frame/frame_test_helpers.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
@@ -26,12 +30,14 @@
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
+#include "third_party/blink/renderer/core/scroll/mac_scrollbar_animator.h"
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay_mock.h"
 #include "third_party/blink/renderer/core/testing/color_scheme_helper.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/testing/paint_test_configurations.h"
+#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
@@ -68,10 +74,11 @@ class StubWebThemeEngine : public WebThemeEngine {
              State,
              const gfx::Rect&,
              const ExtraParams*,
+             bool,
              mojom::blink::ColorScheme color_scheme,
-             bool in_forced_colors,
-             const ui::ColorProvider* color_provider,
-             const std::optional<SkColor>& accent_color) override {
+             mojom::blink::PreferredContrast,
+             const ui::ColorProvider*,
+             const std::optional<SkColor>&) override {
     // Make  sure we don't overflow the array.
     DCHECK(part <= kPartProgressBar);
     painted_color_scheme_[part] = color_scheme;
@@ -169,6 +176,21 @@ class ScrollbarsTest : public PaintTestConfigurations, public SimTest {
                         base::TimeTicks::Now());
     event.SetFrameScale(1);
     GetEventHandler().HandleMousePressEvent(event);
+  }
+
+  WebInputEventResult HandleWheelEvent(int x,
+                                       int y,
+                                       int delta_x,
+                                       int delta_y,
+                                       WebMouseWheelEvent::Phase phase) {
+    WebMouseWheelEvent event(
+        WebInputEvent::Type::kMouseWheel, blink::WebInputEvent::kNoModifiers,
+        blink::WebInputEvent::GetStaticTimeStampForTests());
+    event.SetPositionInWidget(x, y);
+    event.delta_x = delta_x;
+    event.delta_y = delta_y;
+    event.phase = phase;
+    return GetEventHandler().HandleWheelEvent(event);
   }
 
   void HandleContextMenuEvent(int x, int y) {
@@ -311,9 +333,9 @@ class ScrollbarsTestWithVirtualTimer : public ScrollbarsTest {
     TimeAdvance();
     scheduler::GetSingleThreadTaskRunnerForTesting()->PostDelayedTask(
         FROM_HERE,
-        WTF::BindOnce(
+        blink::BindOnce(
             &ScrollbarsTestWithVirtualTimer::StopVirtualTimeAndExitRunLoop,
-            WTF::Unretained(this), loop.QuitClosure()),
+            Unretained(this), loop.QuitClosure()),
         delay);
     loop.Run();
   }
@@ -2053,9 +2075,9 @@ TEST_P(ScrollbarsTestWithVirtualTimer, TestNonCompositedOverlayScrollbarsFade) {
   RunTasksForPeriod(kMockOverlayFadeOutDelay);
   EXPECT_TRUE(scrollable_area->ScrollbarsHiddenIfOverlay());
 
-  scrollable_area->SetScrollOffset(ScrollOffset(10, 10),
-                                   mojom::blink::ScrollType::kProgrammatic,
-                                   mojom::blink::ScrollBehavior::kInstant);
+  scrollable_area->SetScrollOffset(
+      ScrollOffset(10, 10), mojom::blink::ScrollType::kProgrammatic,
+      cc::ScrollSourceType::kNone, mojom::blink::ScrollBehavior::kInstant);
 
   EXPECT_FALSE(scrollable_area->ScrollbarsHiddenIfOverlay());
   RunTasksForPeriod(kMockOverlayFadeOutDelay);
@@ -2077,9 +2099,9 @@ TEST_P(ScrollbarsTestWithVirtualTimer, TestNonCompositedOverlayScrollbarsFade) {
 
   // Non-composited scrollbars don't fade out while mouse is over.
   EXPECT_TRUE(scrollable_area->VerticalScrollbar());
-  scrollable_area->SetScrollOffset(ScrollOffset(20, 20),
-                                   mojom::blink::ScrollType::kProgrammatic,
-                                   mojom::blink::ScrollBehavior::kInstant);
+  scrollable_area->SetScrollOffset(
+      ScrollOffset(20, 20), mojom::blink::ScrollType::kProgrammatic,
+      cc::ScrollSourceType::kNone, mojom::blink::ScrollBehavior::kInstant);
   EXPECT_FALSE(scrollable_area->ScrollbarsHiddenIfOverlay());
   scrollable_area->MouseEnteredScrollbar(*scrollable_area->VerticalScrollbar());
   RunTasksForPeriod(kMockOverlayFadeOutDelay);
@@ -2248,7 +2270,8 @@ TEST_P(ScrollbarAppearanceTest, HugeScrollingThumbPosition) {
   Compositor().BeginFrame();
 
   scrollable_area->SetScrollOffset(ScrollOffset(0, 10000000),
-                                   mojom::blink::ScrollType::kProgrammatic);
+                                   mojom::blink::ScrollType::kProgrammatic,
+                                   cc::ScrollSourceType::kNone);
 
   Compositor().BeginFrame();
 
@@ -2268,6 +2291,53 @@ TEST_P(ScrollbarAppearanceTest, HugeScrollingThumbPosition) {
             scrollbar->GetTheme().ThumbPosition(*scrollbar));
 }
 #endif
+
+TEST_P(ScrollbarAppearanceTest,
+       CustomScrollbarUseThemeEngineMinimumThumbLength) {
+  ScopedCustomScrollbarApplyMinimumThumbLengthForTest
+      custom_scrollbar_apply_minmum_thumb_length(true);
+  ENABLE_OVERLAY_SCROLLBARS(true);
+
+  v8::HandleScope handle_scope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
+  WebView().MainFrameViewWidget()->Resize(gfx::Size(800, 600));
+  SimRequest request("https://example.com/test.html", "text/html");
+  LoadURL("https://example.com/test.html");
+  request.Complete(R"HTML(
+    <!DOCTYPE html>
+    <style>
+      *::-webkit-scrollbar { width: 50px; }
+      *::-webkit-scrollbar-thumb { background-color: red; }
+      body { width: 1000000px; height: 1000000px; }
+    </style>)HTML");
+  ScrollableArea* scrollable_area = GetDocument().View()->LayoutViewport();
+
+  Compositor().BeginFrame();
+  ASSERT_TRUE(scrollable_area->VerticalScrollbar());
+  ASSERT_TRUE(scrollable_area->VerticalScrollbar()->IsCustomScrollbar());
+  ASSERT_TRUE(scrollable_area->HorizontalScrollbar());
+  ASSERT_TRUE(scrollable_area->HorizontalScrollbar()->IsCustomScrollbar());
+
+  ScrollbarTheme& theme = scrollable_area->VerticalScrollbar()->GetTheme();
+
+#if !BUILDFLAG(IS_MAC)
+  constexpr auto kExpectedHorizontalLength =
+      StubWebThemeEngine::kMinimumHorizontalLength;
+  constexpr auto kExpectedVerticalLength =
+      StubWebThemeEngine::kMinimumVerticalLength;
+#else
+  Scrollbar* scrollbar = scrollable_area->VerticalScrollbar();
+  // see scrollbar_theme_mac.cc
+  int min_length_for_thumb = 26 * scrollbar->ScaleFromDIP();
+  int kExpectedHorizontalLength = min_length_for_thumb;
+  int kExpectedVerticalLength = min_length_for_thumb;
+#endif
+
+  EXPECT_EQ(kExpectedHorizontalLength,
+            theme.ThumbLength(*scrollable_area->HorizontalScrollbar()));
+  EXPECT_EQ(kExpectedVerticalLength,
+            theme.ThumbLength(*scrollable_area->VerticalScrollbar()));
+}
 
 // A body with width just under the window width should not have scrollbars.
 TEST_P(ScrollbarsTest, WideBodyShouldNotHaveScrollbars) {
@@ -3381,7 +3451,7 @@ TEST_P(ScrollbarsTest, NoNeedsBeginFrameForCustomScrollbarAfterBeginFrame) {
   auto* scrollbar = To<CustomScrollbar>(
       target->GetLayoutBox()->GetScrollableArea()->HorizontalScrollbar());
   LayoutCustomScrollbarPart* thumb = scrollbar->GetPart(kThumbPart);
-  auto thumb_size = thumb->Size();
+  auto thumb_size = thumb->StitchedSize();
   EXPECT_FALSE(thumb->ShouldCheckForPaintInvalidation());
   EXPECT_FALSE(Compositor().NeedsBeginFrame());
 
@@ -3395,7 +3465,7 @@ TEST_P(ScrollbarsTest, NoNeedsBeginFrameForCustomScrollbarAfterBeginFrame) {
   Compositor().BeginFrame();
   EXPECT_FALSE(thumb->ShouldCheckForPaintInvalidation());
   EXPECT_FALSE(Compositor().NeedsBeginFrame());
-  EXPECT_NE(thumb_size, thumb->Size());
+  EXPECT_NE(thumb_size, thumb->StitchedSize());
 }
 
 TEST_P(ScrollbarsTest, CustomScrollbarHypotheticalThickness) {
@@ -3490,9 +3560,9 @@ TEST_P(ScrollbarsTestWithVirtualTimer,
   Scrollbar* scrollbar = scrollable_area->VerticalScrollbar();
 
   // Scroll to bottom.
-  scrollable_area->SetScrollOffset(ScrollOffset(0, 400),
-                                   mojom::blink::ScrollType::kProgrammatic,
-                                   mojom::blink::ScrollBehavior::kInstant);
+  scrollable_area->SetScrollOffset(
+      ScrollOffset(0, 400), mojom::blink::ScrollType::kProgrammatic,
+      cc::ScrollSourceType::kNone, mojom::blink::ScrollBehavior::kInstant);
   EXPECT_EQ(scrollable_area->ScrollOffsetInt(), gfx::Vector2d(0, 200));
 
   HandleMouseMoveEvent(195, 195);
@@ -3518,6 +3588,138 @@ TEST_P(ScrollbarsTestWithVirtualTimer,
   // Let injected scroll gestures run.
   GetWebFrameWidget().FlushInputHandlerTasks();
 }
+
+#if BUILDFLAG(IS_MAC)
+class MockMacScrollbarAnimator : public MacScrollbarAnimator {
+ public:
+  MockMacScrollbarAnimator() = default;
+  virtual ~MockMacScrollbarAnimator() = default;
+
+  void MouseEnteredScrollbar(Scrollbar&) const override {}
+  void MouseExitedScrollbar(Scrollbar&) const override {}
+
+  void DidAddVerticalScrollbar(Scrollbar&) override {}
+  void WillRemoveVerticalScrollbar(Scrollbar&) override {}
+  void DidAddHorizontalScrollbar(Scrollbar&) override {}
+  void WillRemoveHorizontalScrollbar(Scrollbar&) override {}
+
+  void DidChangeUserVisibleScrollOffset(const ScrollOffset&) override {}
+
+  void Dispose() override {}
+
+  MOCK_METHOD0(FadeInScrollbarIfExists, bool());
+};
+
+TEST_P(ScrollbarsTestWithVirtualTimer,
+       FadeInOverlayScrollbarWhenMouseWheelEventMayBeginPhase) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(
+      blink::features::kFadeInScrollbarWhenMouseWheelMayBegin);
+
+  WebView().MainFrameViewWidget()->Resize(gfx::Size(800, 600));
+  SimRequest request("https://example.com/test.html", "text/html");
+  LoadURL("https://example.com/test.html");
+  request.Complete(R"HTML(
+    <!DOCTYPE html>
+    <style> body { height: 3000px; } </style>)HTML");
+  Compositor().BeginFrame();
+
+  ScrollableArea* scrollable_area = GetDocument().View()->LayoutViewport();
+  DCHECK(scrollable_area);
+
+  HitTestResult hit_test_result = HitTest(100, 100);
+  EXPECT_EQ(hit_test_result.InnerElement(), GetDocument().body());
+  EXPECT_EQ(scrollable_area,
+            HitTestResult::GetScrollableArea(GetDocument().body()));
+
+  EXPECT_EQ(
+      WebInputEventResult::kNotHandled,
+      HandleWheelEvent(100, 100, 0, 0, WebMouseWheelEvent::kPhaseMayBegin));
+
+  auto* scrollbar_animator = MakeGarbageCollected<MockMacScrollbarAnimator>();
+  scrollable_area->SetMacScrollbarAnimatorForTesting(scrollbar_animator);
+
+  EXPECT_CALL(*scrollbar_animator, FadeInScrollbarIfExists).Times(0);
+  EXPECT_EQ(
+      WebInputEventResult::kNotHandled,
+      HandleWheelEvent(100, 100, 0, 0, WebMouseWheelEvent::kPhaseMayBegin));
+  testing::Mock::VerifyAndClearExpectations(scrollbar_animator);
+
+  feature_list.Reset();
+
+  bool did_fade_in = false;
+  auto fade_in_scrollbar = [&did_fade_in]() -> bool { return did_fade_in; };
+
+  EXPECT_CALL(*scrollbar_animator, FadeInScrollbarIfExists)
+      .WillOnce(fade_in_scrollbar);
+  EXPECT_EQ(
+      WebInputEventResult::kNotHandled,
+      HandleWheelEvent(100, 100, 0, 0, WebMouseWheelEvent::kPhaseMayBegin));
+  testing::Mock::VerifyAndClearExpectations(scrollbar_animator);
+
+  did_fade_in = true;
+  EXPECT_CALL(*scrollbar_animator, FadeInScrollbarIfExists)
+      .WillOnce(fade_in_scrollbar);
+  EXPECT_EQ(
+      WebInputEventResult::kHandledSystem,
+      HandleWheelEvent(100, 100, 0, 0, WebMouseWheelEvent::kPhaseMayBegin));
+  testing::Mock::VerifyAndClearExpectations(scrollbar_animator);
+}
+
+TEST_P(ScrollbarsTestWithVirtualTimer,
+       FadeInOverlayScrollbarWhenMouseWheelEventMayBeginPhaseOnSlottedText) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(
+      blink::features::kFadeInScrollbarWhenMouseWheelMayBegin);
+
+  WebView().MainFrameViewWidget()->Resize(gfx::Size(800, 600));
+  SimRequest request("https://example.com/test.html", "text/html");
+  LoadURL("https://example.com/test.html");
+  request.Complete(R"HTML(
+    <!DOCTYPE html>
+    <style> body { font-size: 100px; } </style>
+    <test-element id="test-element">test</test-element>
+    <template id="template"><slot id="test-slot"></slot></template>
+    <script>
+      class TestElement extends HTMLElement {
+        constructor() {
+          super();
+          const shadow = this.attachShadow({ mode: 'open' });
+          const tpl = document.getElementById('template');
+          shadow.appendChild(tpl.content.cloneNode(true));
+        }
+      }
+      customElements.define('test-element', TestElement);
+    </script>
+  )HTML");
+  Compositor().BeginFrame();
+
+  auto* test_slot = DynamicTo<HTMLSlotElement>(
+      GetDocument()
+          .getElementById(AtomicString("test-element"))
+          ->GetShadowRoot()
+          ->getElementById(AtomicString("test-slot")));
+  EXPECT_EQ(nullptr, HitTestResult::GetScrollableArea(test_slot));
+
+  HitTestResult hit_test_result = HitTest(50, 50);
+  EXPECT_EQ(test_slot->FirstAssignedNode(), hit_test_result.InnerNode());
+
+  ScrollableArea* scrollable_area = GetDocument().View()->LayoutViewport();
+  DCHECK(scrollable_area);
+
+  EXPECT_EQ(scrollable_area,
+            HitTestResult::GetScrollableArea(hit_test_result.InnerNode()));
+
+  auto* scrollbar_animator = MakeGarbageCollected<MockMacScrollbarAnimator>();
+  scrollable_area->SetMacScrollbarAnimatorForTesting(scrollbar_animator);
+
+  EXPECT_CALL(*scrollbar_animator, FadeInScrollbarIfExists)
+      .WillOnce([]() -> bool { return true; });
+  EXPECT_EQ(WebInputEventResult::kHandledSystem,
+            HandleWheelEvent(50, 50, 0, 0, WebMouseWheelEvent::kPhaseMayBegin));
+  testing::Mock::VerifyAndClearExpectations(scrollbar_animator);
+}
+#endif  // BUILDFLAG(IS_MAC)
 
 class ScrollbarTrackMarginsTest : public ScrollbarsTest {
  public:

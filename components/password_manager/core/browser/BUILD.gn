@@ -71,12 +71,6 @@ static_library("browser") {
     "move_password_to_account_store_helper.h",
     "old_google_credentials_cleaner.cc",
     "old_google_credentials_cleaner.h",
-    "one_time_passwords/otp_form_manager.cc",
-    "one_time_passwords/otp_form_manager.h",
-    "one_time_passwords/otp_manager.cc",
-    "one_time_passwords/otp_manager.h",
-    "one_time_passwords/sms_otp_backend.cc",
-    "one_time_passwords/sms_otp_backend.h",
     "origin_credential_store.cc",
     "origin_credential_store.h",
     "password_autofill_manager.cc",
@@ -203,7 +197,7 @@ static_library("browser") {
     "//components/device_reauth",
     "//components/favicon/core",
     "//components/favicon_base",
-    "//components/os_crypt/sync",
+    "//components/os_crypt/async/browser",
     "//components/password_manager/core/browser:password_switches",
     "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
     "//components/password_manager/core/browser/features:password_features",
@@ -233,7 +227,6 @@ static_library("browser") {
     ]
     public_deps += [ ":split_stores_and_local_upm" ]
     deps += [
-      ":password_manager_buildflags",
       "//components/webauthn/android",
       "//services/metrics/public/cpp:ukm_builders",
     ]
@@ -252,6 +245,7 @@ static_library("browser") {
       "http_credentials_cleaner.cc",
       "http_credentials_cleaner.h",
     ]
+    deps += [ "//content/public/browser" ]
   }
 
   if (!is_chromeos && !is_android) {
@@ -269,7 +263,6 @@ if (is_android) {
       "split_stores_and_local_upm.h",
     ]
     deps = [
-      ":password_manager_buildflags",
       "//base",
       "//components/password_manager/core/browser/features:password_features",
       "//components/password_manager/core/common",
@@ -384,7 +377,7 @@ static_library("hash_password_manager") {
   deps = [
     ":password_hash_data",
     "//base",
-    "//components/os_crypt/sync",
+    "//components/os_crypt/async/common",
     "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/common",
     "//components/prefs",
@@ -491,8 +484,6 @@ source_set("unit_tests") {
     "leak_detection_delegate_unittest.cc",
     "leak_detection_dialog_utils_unittest.cc",
     "old_google_credentials_cleaner_unittest.cc",
-    "one_time_passwords/otp_form_manager_unittest.cc",
-    "one_time_passwords/otp_manager_unittest.cc",
     "origin_credential_store_unittest.cc",
     "passkey_credential_unittest.cc",
     "password_autofill_manager_unittest.cc",
@@ -554,6 +545,7 @@ source_set("unit_tests") {
   deps = [
     ":test_support",
     "//build:branding_buildflags",
+    "//build:chromecast_buildflags",
     "//components/affiliations/core/browser:sql_builder",
     "//components/affiliations/core/browser:test_support",
     "//components/autofill/core/browser",
@@ -563,8 +555,7 @@ source_set("unit_tests") {
     "//components/device_reauth",
     "//components/device_reauth:test_support",
     "//components/favicon/core/test:test_support",
-    "//components/os_crypt/sync",
-    "//components/os_crypt/sync:test_support",
+    "//components/os_crypt/async/browser:test_support",
     "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
     "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/browser/form_parsing",
@@ -616,8 +607,5 @@ source_set("unit_tests") {
 
 buildflag_header("password_manager_buildflags") {
   header = "password_manager_buildflags.h"
-  flags = [
-    "USE_LOGIN_DATABASE_AS_BACKEND=$use_login_database_as_backend",
-    "PASSWORD_MANAGER_USE_INTERNAL_ANDROID_RESOURCES=$password_manager_use_internal_android_resources",
-  ]
+  flags = [ "PASSWORD_MANAGER_USE_INTERNAL_ANDROID_RESOURCES=$password_manager_use_internal_android_resources" ]
 }

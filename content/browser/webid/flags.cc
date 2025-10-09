@@ -69,4 +69,25 @@ bool IsIframeOriginEnabled() {
   return base::FeatureList::IsEnabled(features::kFedCmIframeOrigin);
 }
 
+bool IsNonceInParamsEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmNonceInParams);
+}
+
+bool IsNonStringTokenEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmNonStringToken);
+}
+
+bool IsWellKnownEndpointValidationEnabled() {
+  return base::FeatureList::IsEnabled(
+      features::kFedCmWellKnownEndpointValidation);
+}
+
+bool IsPreservePortsForTestingEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmPreservePortsForTesting);
+}
+
+bool IsErrorAttributeEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmErrorAttribute);
+}
+
 }  // namespace content::webid

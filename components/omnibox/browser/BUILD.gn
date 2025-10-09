@@ -141,8 +141,6 @@ static_library("browser") {
     "actions/omnibox_action_concepts.h",
     "actions/omnibox_action_in_suggest.cc",
     "actions/omnibox_action_in_suggest.h",
-    "actions/omnibox_answer_action.cc",
-    "actions/omnibox_answer_action.h",
     "actions/omnibox_extension_action.cc",
     "actions/omnibox_extension_action.h",
     "actions/omnibox_pedal.cc",
@@ -154,7 +152,6 @@ static_library("browser") {
     "actions/tab_switch_action.h",
     "aim_eligibility_service.cc",
     "aim_eligibility_service.h",
-    "aim_eligibility_service_observer.h",
     "answers_cache.cc",
     "answers_cache.h",
     "autocomplete_classifier.cc",
@@ -249,10 +246,6 @@ static_library("browser") {
     "most_visited_sites_provider.h",
     "omnibox_client.cc",
     "omnibox_client.h",
-    "omnibox_controller.cc",
-    "omnibox_controller.h",
-    "omnibox_edit_model.cc",
-    "omnibox_edit_model.h",
     "omnibox_event_global_tracker.cc",
     "omnibox_event_global_tracker.h",
     "omnibox_field_trial.cc",
@@ -266,16 +259,12 @@ static_library("browser") {
     "omnibox_navigation_observer.h",
     "omnibox_popup_selection.cc",
     "omnibox_popup_selection.h",
-    "omnibox_popup_view.cc",
-    "omnibox_popup_view.h",
     "omnibox_prefs.cc",
     "omnibox_prefs.h",
     "omnibox_text_util.cc",
     "omnibox_text_util.h",
     "omnibox_triggered_feature_service.cc",
     "omnibox_triggered_feature_service.h",
-    "omnibox_view.cc",
-    "omnibox_view.h",
     "on_device_head_model.cc",
     "on_device_head_model.h",
     "on_device_head_provider.cc",
@@ -346,10 +335,20 @@ static_library("browser") {
     "zero_suggest_verbatim_match_provider.h",
   ]
 
+  if (is_ios) {
+    sources += [
+      "gemini_prototype_omnibox_provider.cc",
+      "gemini_prototype_omnibox_provider.h",
+      "gemini_prototype_omnibox_service.h",
+    ]
+  }
+
   public_deps = [
+    ":aim_eligibility_service_features",
     ":buildflags",
     ":location_bar",
     ":mojo_bindings",
+    ":pref_names",
     "//base",
     "//base:i18n",
     "//components/history/core/browser",
@@ -428,40 +427,12 @@ static_library("browser") {
     deps += [ "//components/keep_alive_registry" ]
   }
 
-  if ((!is_android || enable_vr) && !is_ios) {
-    deps += [ ":vector_icons" ]
-  }
-
-  if (is_chrome_branded) {
-    deps += [ "//components/vector_icons" ]
-  }
-
   if (!is_ios) {
     deps += [ "//ui/base/clipboard" ]
   }
 
-  if (use_blink) {
-    sources += [
-      "actions/history_clusters_action.cc",
-      "actions/history_clusters_action.h",
-      "history_cluster_provider.cc",
-      "history_cluster_provider.h",
-    ]
-    deps += [ "//content/public/common" ]
-  }
-
-  if (enable_extensions_core) {
-    deps += [
-      "//extensions/common:common_constants",
-      "//extensions/common:extension_features",
-    ]
-
-    sources += [
-      "omnibox_input_watcher.cc",
-      "omnibox_input_watcher.h",
-      "omnibox_suggestions_watcher.cc",
-      "omnibox_suggestions_watcher.h",
-    ]
+  if ((!is_android || enable_vr) && !is_ios) {
+    deps += [ ":vector_icons" ]
   }
 
   if (build_with_tflite_lib) {
@@ -484,6 +455,47 @@ static_library("browser") {
       "//third_party/tflite_support:tflite_support_proto",
     ]
   }
+
+  if (enable_extensions_core) {
+    deps += [
+      "//extensions/common:common_constants",
+      "//extensions/common:extension_features",
+    ]
+
+    sources += [
+      "omnibox_input_watcher.cc",
+      "omnibox_input_watcher.h",
+      "omnibox_suggestions_watcher.cc",
+      "omnibox_suggestions_watcher.h",
+    ]
+  }
+
+  if (is_chrome_branded) {
+    deps += [ "//components/vector_icons" ]
+  }
+
+  if (use_blink) {
+    sources += [
+      "actions/history_clusters_action.cc",
+      "actions/history_clusters_action.h",
+      "history_cluster_provider.cc",
+      "history_cluster_provider.h",
+    ]
+    deps += [ "//content/public/common" ]
+  }
+}
+
+source_set("pref_names") {
+  sources = [ "omnibox_pref_names.h" ]
+  deps = [ "//base" ]
+}
+
+source_set("aim_eligibility_service_features") {
+  sources = [
+    "aim_eligibility_service_features.cc",
+    "aim_eligibility_service_features.h",
+  ]
+  deps = [ "//base" ]
 }
 
 # A target that contains the minimal amount of code necessary for displaying a
@@ -571,8 +583,8 @@ if (is_android) {
       "android/java/res/drawable/action_call.xml",
       "android/java/res/drawable/action_directions.xml",
       "android/java/res/drawable/action_reviews.xml",
+      "android/java/res/drawable/ic_settings_tune_24dp.xml",
       "android/java/res/drawable/omnibox_dangerous.xml",
-      "android/java/res/drawable/omnibox_https_valid_page_info.xml",
       "android/java/res/values/colors.xml",
       "android/java/res/values/drawables.xml",
     ]
@@ -723,6 +735,8 @@ static_library("test_support") {
   sources = [
     "autocomplete_match_test_util.cc",
     "autocomplete_match_test_util.h",
+    "fake_autocomplete_controller.cc",
+    "fake_autocomplete_controller.h",
     "fake_autocomplete_provider.cc",
     "fake_autocomplete_provider.h",
     "fake_autocomplete_provider_client.cc",
@@ -745,12 +759,6 @@ static_library("test_support") {
     "test_location_bar_model.h",
     "test_omnibox_client.cc",
     "test_omnibox_client.h",
-    "test_omnibox_edit_model.cc",
-    "test_omnibox_edit_model.h",
-    "test_omnibox_popup_view.cc",
-    "test_omnibox_popup_view.h",
-    "test_omnibox_view.cc",
-    "test_omnibox_view.h",
     "test_scheme_classifier.cc",
     "test_scheme_classifier.h",
   ]
@@ -784,11 +792,6 @@ static_library("test_support") {
     "//ui/gfx",
   ]
 
-  if (toolkit_views) {
-    # Needed to get the TOOLKIT_VIEWS define.
-    deps += [ "//ui/views" ]
-  }
-
   if (build_with_tflite_lib) {
     sources += [
       "fake_autocomplete_scoring_model_service.cc",
@@ -796,6 +799,11 @@ static_library("test_support") {
       "fake_on_device_tail_model_service.cc",
       "fake_on_device_tail_model_service.h",
     ]
+  }
+
+  if (toolkit_views) {
+    # Needed to get the TOOLKIT_VIEWS define.
+    deps += [ "//ui/views" ]
   }
 }
 
@@ -826,7 +834,6 @@ source_set("unit_tests") {
   sources = [
     "actions/contextual_search_action_unittest.cc",
     "actions/omnibox_action_in_suggest_unittest.cc",
-    "actions/omnibox_answer_action_unittest.cc",
     "actions/omnibox_extension_action_unittest.cc",
     "actions/omnibox_pedal_provider_unittest.cc",
     "actions/omnibox_pedal_unittest.cc",
@@ -851,8 +858,6 @@ source_set("unit_tests") {
     "document_suggestions_service_unittest.cc",
     "enterprise_search_aggregator_provider_unittest.cc",
     "enterprise_search_aggregator_suggestions_service_unittest.cc",
-    "fake_autocomplete_controller.cc",
-    "fake_autocomplete_controller.h",
     "favicon_cache_unittest.cc",
     "featured_search_provider_unittest.cc",
     "history_embeddings_provider_unittest.cc",
@@ -868,14 +873,11 @@ source_set("unit_tests") {
     "local_history_zero_suggest_provider_unittest.cc",
     "location_bar_model_impl_unittest.cc",
     "most_visited_sites_provider_unittest.cc",
-    "omnibox_controller_unittest.cc",
-    "omnibox_edit_model_unittest.cc",
     "omnibox_field_trial_unittest.cc",
     "omnibox_metrics_provider_unittest.cc",
     "omnibox_popup_selection_unittest.cc",
     "omnibox_text_util_unittest.cc",
     "omnibox_triggered_feature_service_unittest.cc",
-    "omnibox_view_unittest.cc",
     "on_device_head_model_unittest.cc",
     "on_device_head_provider_unittest.cc",
     "on_device_model_update_listener_unittest.cc",
@@ -900,18 +902,6 @@ source_set("unit_tests") {
     "zero_suggest_provider_unittest.cc",
     "zero_suggest_verbatim_match_provider_unittest.cc",
   ]
-
-  if ((!is_android || enable_vr) && !is_ios) {
-    sources += [ "location_bar_model_util_unittest.cc" ]
-  }
-  if (build_with_tflite_lib) {
-    sources += [
-      "autocomplete_scoring_model_executor_unittest.cc",
-      "autocomplete_scoring_model_handler_unittest.cc",
-      "on_device_tail_model_executor_unittest.cc",
-      "on_device_tail_model_service_unittest.cc",
-    ]
-  }
 
   deps = [
     ":browser",
@@ -967,6 +957,7 @@ source_set("unit_tests") {
   ]
 
   if ((!is_android || enable_vr) && !is_ios) {
+    sources += [ "location_bar_model_util_unittest.cc" ]
     deps += [
       ":buildflags",
       "//components/omnibox/browser:vector_icons",
@@ -984,6 +975,15 @@ source_set("unit_tests") {
 
   if (is_chromeos) {
     deps += [ "//chromeos/constants" ]
+  }
+
+  if (build_with_tflite_lib) {
+    sources += [
+      "autocomplete_scoring_model_executor_unittest.cc",
+      "autocomplete_scoring_model_handler_unittest.cc",
+      "on_device_tail_model_executor_unittest.cc",
+      "on_device_tail_model_service_unittest.cc",
+    ]
   }
 
   if (enable_extensions) {
@@ -1034,15 +1034,16 @@ fuzzer_test("search_suggestion_parser_fuzzer") {
 mojom("mojo_bindings") {
   sources = [ "omnibox.mojom" ]
 
-  if (!is_android && !is_ios) {
-    sources += [ "searchbox.mojom" ]
-  }
-
   webui_module_path = "chrome://resources/mojo/components/omnibox/browser"
 
   public_deps = [
     "//mojo/public/mojom/base",
     "//ui/gfx/mojom",
     "//url/mojom:url_mojom_gurl",
+    "//components/omnibox/composebox:mojo_bindings",
   ]
+
+  if (!is_android && !is_ios) {
+    sources += [ "searchbox.mojom" ]
+  }
 }

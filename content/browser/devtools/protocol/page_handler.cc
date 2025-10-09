@@ -1888,6 +1888,9 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
           CacheControlNoStoreDeviceBoundSessionTerminated;
     case Reason::kSharedWorkerMessage:
       return Page::BackForwardCacheNotRestoredReasonEnum::SharedWorkerMessage;
+    case Reason::kSharedWorkerWithNoActiveClient:
+      return Page::BackForwardCacheNotRestoredReasonEnum::
+          SharedWorkerWithNoActiveClient;
   }
 }
 
@@ -1898,15 +1901,16 @@ Page::BackForwardCacheNotRestoredReason BlocklistedFeatureToProtocol(
     case WebSchedulerTrackedFeature::kWebSocket:
       return Page::BackForwardCacheNotRestoredReasonEnum::WebSocket;
     case WebSchedulerTrackedFeature::kWebSocketSticky:
-      return Page::BackForwardCacheNotRestoredReasonEnum::WebSocketSticky;
+      return Page::BackForwardCacheNotRestoredReasonEnum::WebSocketUsedWithCCNS;
     case WebSchedulerTrackedFeature::kWebTransport:
       return Page::BackForwardCacheNotRestoredReasonEnum::WebTransport;
     case WebSchedulerTrackedFeature::kWebTransportSticky:
-      return Page::BackForwardCacheNotRestoredReasonEnum::WebTransportSticky;
+      return Page::BackForwardCacheNotRestoredReasonEnum::
+          WebTransportUsedWithCCNS;
     case WebSchedulerTrackedFeature::kWebRTC:
       return Page::BackForwardCacheNotRestoredReasonEnum::WebRTC;
     case WebSchedulerTrackedFeature::kWebRTCSticky:
-      return Page::BackForwardCacheNotRestoredReasonEnum::WebRTCSticky;
+      return Page::BackForwardCacheNotRestoredReasonEnum::WebRTCUsedWithCCNS;
     case WebSchedulerTrackedFeature::kMainResourceHasCacheControlNoCache:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           MainResourceHasCacheControlNoCache;
@@ -1997,7 +2001,6 @@ Page::BackForwardCacheNotRestoredReason BlocklistedFeatureToProtocol(
       return Page::BackForwardCacheNotRestoredReasonEnum::
           JsNetworkRequestReceivedCacheControlNoStoreResource;
     case WebSchedulerTrackedFeature::kWebSerial:
-    case WebSchedulerTrackedFeature::kWebBluetooth:
       // These features only disable aggressive throttling.
       NOTREACHED();
     case WebSchedulerTrackedFeature::kSmartCard:
@@ -2013,6 +2016,8 @@ Page::BackForwardCacheNotRestoredReason BlocklistedFeatureToProtocol(
           ContentWebAuthenticationAPI;
     case WebSchedulerTrackedFeature::kSharedWorkerMessage:
       return Page::BackForwardCacheNotRestoredReasonEnum::SharedWorkerMessage;
+    case WebSchedulerTrackedFeature::kWebBluetooth:
+      return Page::BackForwardCacheNotRestoredReasonEnum::WebBluetooth;
   }
 }
 
@@ -2181,6 +2186,7 @@ Page::BackForwardCacheNotRestoredReasonType MapNotRestoredReasonToType(
     case Reason::kCacheLimitPrunedOnModerateMemoryPressure:
     case Reason::kCacheLimitPrunedOnCriticalMemoryPressure:
     case Reason::kSharedWorkerMessage:
+    case Reason::kSharedWorkerWithNoActiveClient:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::Circumstantial;
     case Reason::kCacheControlNoStore:
     case Reason::kCacheControlNoStoreCookieModified:
@@ -2237,6 +2243,7 @@ Page::BackForwardCacheNotRestoredReasonType MapBlocklistedFeatureToType(
     case WebSchedulerTrackedFeature::kWebSocket:
     case WebSchedulerTrackedFeature::kKeepaliveRequest:
     case WebSchedulerTrackedFeature::kWebAuthentication:
+    case WebSchedulerTrackedFeature::kWebBluetooth:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::SupportPending;
     case WebSchedulerTrackedFeature::kMainResourceHasCacheControlNoStore:
     case WebSchedulerTrackedFeature::kMainResourceHasCacheControlNoCache:
@@ -2253,7 +2260,6 @@ Page::BackForwardCacheNotRestoredReasonType MapBlocklistedFeatureToType(
     case WebSchedulerTrackedFeature::kWebSocketSticky:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::Circumstantial;
     case WebSchedulerTrackedFeature::kWebSerial:
-    case WebSchedulerTrackedFeature::kWebBluetooth:
       NOTREACHED();
   }
 }

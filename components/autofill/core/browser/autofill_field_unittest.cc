@@ -146,7 +146,7 @@ TEST_F(AutofillFieldTest, GroupsOfHtmlTypes) {
   using enum HtmlFieldType;
   static constexpr DenseSet<HtmlFieldType> kInconsistent = {
       kTransactionAmount, kTransactionCurrency};
-  for (HtmlFieldType t : kAllHtmlFieldTypes) {
+  for (HtmlFieldType t : HtmlFieldTypeSet::all()) {
     SCOPED_TRACE(testing::Message()
                  << "HtmlFieldType: " << FieldTypeToStringView(t));
     if (kInconsistent.contains(t)) {
@@ -187,68 +187,37 @@ TEST_F(AutofillFieldTest, UnionTypesFromServerTypes) {
   EXPECT_THAT(f(NAME_FIRST, USERNAME), ElementsAre(NAME_FIRST));
   EXPECT_THAT(f(USERNAME, NAME_FIRST), ElementsAre(USERNAME));
 
-  {
-    // If kAutofillUnionTypesForAutofillAi is disabled, the Autofill AI
-    // predictions do not affect the overall type.
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndDisableFeature(
-        features::kAutofillUnionTypesForAutofillAi);
-    EXPECT_THAT(f(ADDRESS_HOME_COUNTRY, PASSPORT_ISSUING_COUNTRY),
-                UnorderedElementsAre(ADDRESS_HOME_COUNTRY));
-    EXPECT_THAT(f(PASSPORT_ISSUING_COUNTRY, ADDRESS_HOME_COUNTRY),
-                UnorderedElementsAre(PASSPORT_ISSUING_COUNTRY));
-    EXPECT_THAT(
-        f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_REGION, VEHICLE_PLATE_STATE),
-        UnorderedElementsAre(ADDRESS_HOME_COUNTRY));
-    EXPECT_THAT(f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER,
-                  DRIVERS_LICENSE_REGION, VEHICLE_LICENSE_PLATE),
-                UnorderedElementsAre(ADDRESS_HOME_COUNTRY));
-    EXPECT_THAT(
-        f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER, DRIVERS_LICENSE_REGION,
-          VEHICLE_LICENSE_PLATE, VEHICLE_PLATE_STATE),
-        UnorderedElementsAre(ADDRESS_HOME_COUNTRY));
-  }
+  base::test::ScopedFeatureList feature_list(
+      features::kAutofillAiWithDataSchema);
 
-  {
-    // If kAutofillUnionTypesForAutofillAi is enabled, the Autofill AI
-    // predictions are part of the overall type.
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitWithFeatures({features::kAutofillAiWithDataSchema,
-                                   features::kAutofillUnionTypesForAutofillAi},
-                                  {});
-    EXPECT_THAT(
-        f(ADDRESS_HOME_COUNTRY, PASSPORT_ISSUING_COUNTRY),
-        UnorderedElementsAre(ADDRESS_HOME_COUNTRY, PASSPORT_ISSUING_COUNTRY));
-    EXPECT_THAT(f(PASSPORT_ISSUING_COUNTRY, ADDRESS_HOME_COUNTRY),
-                UnorderedElementsAre(PASSPORT_ISSUING_COUNTRY));
-    // Multiple Autofill AI predictions may coexist.
-    EXPECT_THAT(
-        f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_REGION, VEHICLE_PLATE_STATE),
-        UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_REGION,
-                             VEHICLE_PLATE_STATE));
-    // Conflict resolution: when there are multiple predictions from the same
-    // entities, we take the longest prefix that satisfies the AutofillType
-    // constraints.
-    if (base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-      EXPECT_THAT(f(NAME_FULL, DRIVERS_LICENSE_NUMBER),
-                  UnorderedElementsAre(NAME_FULL));
-    } else {
-      EXPECT_THAT(f(NAME_FULL, DRIVERS_LICENSE_NUMBER),
-                  UnorderedElementsAre(NAME_FULL, DRIVERS_LICENSE_NUMBER));
-    }
-    EXPECT_THAT(
-        f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER, DRIVERS_LICENSE_REGION,
-          VEHICLE_LICENSE_PLATE),
-        UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER));
-    EXPECT_THAT(
-        f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER, DRIVERS_LICENSE_REGION,
-          VEHICLE_LICENSE_PLATE, VEHICLE_PLATE_STATE),
-        UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER));
-    EXPECT_THAT(
-        f(ADDRESS_HOME_COUNTRY, ADDRESS_HOME_STATE, DRIVERS_LICENSE_NUMBER,
-          DRIVERS_LICENSE_REGION, VEHICLE_LICENSE_PLATE, VEHICLE_PLATE_STATE),
-        UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER));
-  }
+  // The Autofill AI predictions are part of the overall type.
+  EXPECT_THAT(
+      f(ADDRESS_HOME_COUNTRY, PASSPORT_ISSUING_COUNTRY),
+      UnorderedElementsAre(ADDRESS_HOME_COUNTRY, PASSPORT_ISSUING_COUNTRY));
+  EXPECT_THAT(f(PASSPORT_ISSUING_COUNTRY, ADDRESS_HOME_COUNTRY),
+              UnorderedElementsAre(PASSPORT_ISSUING_COUNTRY));
+  // Multiple Autofill AI predictions may coexist.
+  EXPECT_THAT(
+      f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_REGION, VEHICLE_PLATE_STATE),
+      UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_REGION,
+                           VEHICLE_PLATE_STATE));
+  // Conflict resolution: when there are multiple predictions from the same
+  // entities, we take the longest prefix that satisfies the AutofillType
+  // constraints.
+  EXPECT_THAT(f(NAME_FULL, DRIVERS_LICENSE_NUMBER),
+              UnorderedElementsAre(NAME_FULL));
+  EXPECT_THAT(
+      f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER, DRIVERS_LICENSE_REGION,
+        VEHICLE_LICENSE_PLATE),
+      UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER));
+  EXPECT_THAT(
+      f(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER, DRIVERS_LICENSE_REGION,
+        VEHICLE_LICENSE_PLATE, VEHICLE_PLATE_STATE),
+      UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER));
+  EXPECT_THAT(
+      f(ADDRESS_HOME_COUNTRY, ADDRESS_HOME_STATE, DRIVERS_LICENSE_NUMBER,
+        DRIVERS_LICENSE_REGION, VEHICLE_LICENSE_PLATE, VEHICLE_PLATE_STATE),
+      UnorderedElementsAre(ADDRESS_HOME_COUNTRY, DRIVERS_LICENSE_NUMBER));
 }
 
 // Tests that if a heuristic type is set, additional server types may influence
@@ -789,15 +758,15 @@ INSTANTIATE_TEST_SUITE_P(
             .expected_source = AutofillPredictionSource::kHeuristics},
         AutofillLocalHeuristicsOverridesParams{
             .html_field_type = HtmlFieldType::kUnspecified,
-            .server_type = PASSPORT_NAME_TAG,
+            .server_type = NAME_FULL,
             .heuristic_type = NAME_FIRST,
-            .expected_result = PASSPORT_NAME_TAG,
+            .expected_result = NAME_FULL,
             .expected_source = AutofillPredictionSource::kServerCrowdsourcing},
         AutofillLocalHeuristicsOverridesParams{
             .html_field_type = HtmlFieldType::kUnspecified,
-            .server_type = PASSPORT_NAME_TAG,
+            .server_type = NAME_FULL,
             .heuristic_type = UNKNOWN_TYPE,
-            .expected_result = PASSPORT_NAME_TAG,
+            .expected_result = NAME_FULL,
             .expected_source = AutofillPredictionSource::kServerCrowdsourcing},
         AutofillLocalHeuristicsOverridesParams{
             .html_field_type = HtmlFieldType::kName,

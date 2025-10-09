@@ -36,7 +36,6 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.supplier.SyncOneshotSupplier;
 import org.chromium.base.supplier.SyncOneshotSupplierImpl;
 import org.chromium.base.supplier.TransitiveObservableSupplier;
@@ -75,6 +74,7 @@ import org.chromium.ui.base.DeviceFormFactor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.DoubleConsumer;
+import java.util.function.Supplier;
 
 /**
  * An abstract {@link Pane} representing a tab switcher for shared logic between the normal and
@@ -101,6 +101,8 @@ public abstract class TabSwitcherPaneBase implements Pane, TabSwitcher, TabSwitc
     private final ObservableSupplierImpl<Boolean> mIsAnimatingSupplier =
             new ObservableSupplierImpl<>();
     private final ObservableSupplierImpl<@Nullable View> mOverlayViewSupplier =
+            new ObservableSupplierImpl<>();
+    private final ObservableSupplierImpl<Boolean> mHubSearchBoxVisibilitySupplier =
             new ObservableSupplierImpl<>();
     private final Callback<Boolean> mVisibilityObserver = this::onVisibilityChanged;
     private final Handler mHandler = new Handler();
@@ -260,7 +262,8 @@ public abstract class TabSwitcherPaneBase implements Pane, TabSwitcher, TabSwitc
         }
 
         if (loadHint == LoadHint.WARM) {
-            if (mTabSwitcherPaneCoordinatorSupplier.hasValue()) {
+            TabSwitcherPaneCoordinator coordinator = mTabSwitcherPaneCoordinatorSupplier.get();
+            if (coordinator != null) {
                 mHandler.postDelayed(mSoftCleanupRunnable, SOFT_CLEANUP_DELAY_MS);
             } else if (shouldEagerlyCreateCoordinator()) {
                 createTabSwitcherPaneCoordinator();
@@ -268,7 +271,8 @@ public abstract class TabSwitcherPaneBase implements Pane, TabSwitcher, TabSwitc
         }
 
         if (loadHint == LoadHint.COLD) {
-            if (mTabSwitcherPaneCoordinatorSupplier.hasValue()) {
+            TabSwitcherPaneCoordinator coordinator = mTabSwitcherPaneCoordinatorSupplier.get();
+            if (coordinator != null) {
                 mHandler.postDelayed(mSoftCleanupRunnable, SOFT_CLEANUP_DELAY_MS);
                 mHandler.postDelayed(mHardCleanupRunnable, HARD_CLEANUP_DELAY_MS);
                 mHandler.postDelayed(mDestroyCoordinatorRunnable, DESTROY_COORDINATOR_DELAY_MS);
@@ -451,18 +455,21 @@ public abstract class TabSwitcherPaneBase implements Pane, TabSwitcher, TabSwitc
                         viewportRect.bottom = windowViewportRect.bottom;
                     }
 
-                    int leftOffset = 0;
+                    int initialLeftOffset = 0;
+                    int finalLeftOffset = 0;
                     int initialTopOffset = 0;
                     int finalTopOffset = 0;
                     if (isShrink) {
                         initialRect = viewportRect;
                         finalRect = coordinator.getTabThumbnailRect(tabId);
-                        leftOffset = initialRect.left;
+                        initialLeftOffset = initialRect.left;
+                        finalLeftOffset = hubRect.left;
                         finalTopOffset = hubRect.top;
                     } else {
                         initialRect = coordinator.getTabThumbnailRect(tabId);
                         finalRect = viewportRect;
-                        leftOffset = finalRect.left;
+                        initialLeftOffset = hubRect.left;
+                        finalLeftOffset = finalRect.left;
                         initialTopOffset = hubRect.top;
                     }
 
@@ -472,8 +479,8 @@ public abstract class TabSwitcherPaneBase implements Pane, TabSwitcher, TabSwitc
                         useFallbackAnimation = true;
                     }
                     // Ignore left offset and just ensure the width is correct. See crbug/1502437.
-                    initialRect.offset(-leftOffset, -initialTopOffset);
-                    finalRect.offset(-leftOffset, -finalTopOffset);
+                    initialRect.offset(-initialLeftOffset, -initialTopOffset);
+                    finalRect.offset(-finalLeftOffset, -finalTopOffset);
                     animationDataSupplier.set(
                             ShrinkExpandAnimationData.createHubShrinkExpandAnimationData(
                                     initialRect,
@@ -643,9 +650,10 @@ public abstract class TabSwitcherPaneBase implements Pane, TabSwitcher, TabSwitc
     /** Creates a {@link TabSwitcherCoordinator}. */
     @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
     void createTabSwitcherPaneCoordinator() {
-        if (mTabSwitcherPaneCoordinatorSupplier.hasValue()) return;
+        TabSwitcherPaneCoordinator coordinator = mTabSwitcherPaneCoordinatorSupplier.get();
+        if (coordinator != null) return;
 
-        TabSwitcherPaneCoordinator coordinator =
+        coordinator =
                 mFactory.create(
                         mRootView,
                         /* resetHandler= */ this,
@@ -665,15 +673,21 @@ public abstract class TabSwitcherPaneBase implements Pane, TabSwitcher, TabSwitc
         }
     }
 
+    @Override
+    public ObservableSupplier<Boolean> getHubSearchBoxVisibilitySupplier() {
+        // TODO(crbug.com/445195388): Implement search visibility supplier for tab switcher for
+        //  search box auto-roll.
+        return mHubSearchBoxVisibilitySupplier;
+    }
+
     /**
      * Destroys the current {@link TabSwitcherCoordinator}. It is safe to call this even if a
      * coordinator does not exist.
      */
     @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
     void destroyTabSwitcherPaneCoordinator() {
-        if (!mTabSwitcherPaneCoordinatorSupplier.hasValue()) return;
-
         TabSwitcherPaneCoordinator coordinator = mTabSwitcherPaneCoordinatorSupplier.get();
+        if (coordinator == null) return;
         assumeNonNull(coordinator);
         mTabSwitcherPaneCoordinatorSupplier.set(null);
         mRootView.removeAllViews();

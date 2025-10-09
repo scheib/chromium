@@ -94,12 +94,16 @@ ChildProcessLauncherFileData::~ChildProcessLauncherFileData() = default;
 bool ChildProcessLauncher::Client::CanUseWarmUpConnection() {
   return true;
 }
+
+bool ChildProcessLauncher::Client::HasSpareRendererPriority() {
+  return false;
+}
 #endif
 
 ChildProcessLauncher::ChildProcessLauncher(
     std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
     std::unique_ptr<base::CommandLine> command_line,
-    int child_process_id,
+    ChildProcessId child_process_id,
     Client* client,
     mojo::OutgoingInvitation mojo_invitation,
     const mojo::ProcessErrorCallback& process_error_callback,
@@ -109,8 +113,7 @@ ChildProcessLauncher::ChildProcessLauncher(
     scoped_refptr<base::RefCountedData<base::ReadOnlySharedMemoryRegion>>
         tracing_config_memory_region,
     scoped_refptr<base::RefCountedData<base::UnsafeSharedMemoryRegion>>
-        tracing_output_memory_region,
-    bool terminate_on_shutdown)
+        tracing_output_memory_region)
     : client_(client),
       starting_(true),
 #if defined(ADDRESS_SANITIZER) || defined(LEAK_SANITIZER) ||  \
@@ -118,7 +121,7 @@ ChildProcessLauncher::ChildProcessLauncher(
     defined(UNDEFINED_SANITIZER) || BUILDFLAG(CLANG_PROFILING)
       terminate_child_on_shutdown_(false)
 #else
-      terminate_child_on_shutdown_(terminate_on_shutdown)
+      terminate_child_on_shutdown_(true)
 #endif
 {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -131,9 +134,9 @@ ChildProcessLauncher::ChildProcessLauncher(
 
   helper_ = base::MakeRefCounted<ChildProcessLauncherHelper>(
       child_process_id, std::move(command_line), std::move(delegate),
-      weak_factory_.GetWeakPtr(), terminate_on_shutdown,
+      weak_factory_.GetWeakPtr(), terminate_child_on_shutdown_,
 #if BUILDFLAG(IS_ANDROID)
-      client_->CanUseWarmUpConnection(),
+      client_->CanUseWarmUpConnection(), client_->HasSpareRendererPriority(),
 #endif
       std::move(mojo_invitation), process_error_callback, std::move(file_data),
       std::move(histogram_memory_region),

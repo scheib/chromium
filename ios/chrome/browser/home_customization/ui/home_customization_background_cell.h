@@ -8,10 +8,10 @@
 #import <UIKit/UIKit.h>
 
 @protocol BackgroundCustomizationConfiguration;
+@class HomeCustomizationFramingCoordinates;
 @protocol HomeCustomizationMutator;
-@class SearchEngineLogoMediator;
-
 @class NewTabPageColorPalette;
+@class SearchEngineLogoMediator;
 
 // Represents a mini preview of how the NTP will look with a particular
 // background selected. This cell is part of the background customization
@@ -21,6 +21,10 @@
 
 // Mutator for communicating with the HomeCustomizationMediator.
 @property(nonatomic, weak) id<HomeCustomizationMutator> mutator;
+
+// Main content view rendered inside the border wrapper.
+// Displays the core visual element.
+@property(nonatomic, strong) UIStackView* innerContentView;
 
 // Sets up and positions the view responsible for displaying the cell's
 // content.
@@ -32,11 +36,17 @@
 - (void)configureWithBackgroundOption:
             (id<BackgroundCustomizationConfiguration>)backgroundConfiguration
              searchEngineLogoMediator:
-                 (SearchEngineLogoMediator*)searchEngineLogoMediator
-                         colorPalette:(NewTabPageColorPalette*)colorPalette;
+                 (SearchEngineLogoMediator*)searchEngineLogoMediator;
 
-// Updates the background image displayed behind the cell’s content.
-- (void)updateBackgroundImage:(UIImage*)image;
+// Updates the background image displayed behind the cell’s content, using the
+// provided framing coordinates to choose a sub-portion of the image to make
+// visible.
+- (void)updateBackgroundImage:(UIImage*)image
+           framingCoordinates:
+               (HomeCustomizationFramingCoordinates*)framingCoordinates;
+
+// Applies the current theme.
+- (void)applyTheme;
 
 @end
 

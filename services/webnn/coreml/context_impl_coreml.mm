@@ -14,6 +14,7 @@
 #include "services/webnn/public/cpp/context_properties.h"
 #include "services/webnn/public/cpp/webnn_types.h"
 #include "services/webnn/public/mojom/webnn_context_provider.mojom.h"
+#include "services/webnn/scoped_sequence.h"
 #include "services/webnn/webnn_constant_operand.h"
 #include "services/webnn/webnn_context_impl.h"
 #include "services/webnn/webnn_context_provider_impl.h"
@@ -21,24 +22,32 @@
 namespace webnn::coreml {
 
 ContextImplCoreml::ContextImplCoreml(
-    mojo::PendingAssociatedReceiver<mojom::WebNNContext> receiver,
-    WebNNContextProviderImpl* context_provider,
+    mojo::PendingReceiver<mojom::WebNNContext> receiver,
+    base::WeakPtr<WebNNContextProviderImpl> context_provider,
     mojom::CreateContextOptionsPtr options,
     gpu::CommandBufferId command_buffer_id,
     std::unique_ptr<ScopedSequence> sequence,
-    scoped_refptr<gpu::SchedulerTaskRunner> task_runner)
+    scoped_refptr<gpu::MemoryTracker> memory_tracker,
+    scoped_refptr<base::SingleThreadTaskRunner> owning_task_runner,
+    gpu::SharedImageManager* shared_image_manager,
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner)
     : WebNNContextImpl(std::move(receiver),
-                       context_provider,
+                       std::move(context_provider),
                        GraphBuilderCoreml::GetContextProperties(),
                        std::move(options),
+                       mojo::ScopedDataPipeConsumerHandle(),
+                       mojo::ScopedDataPipeProducerHandle(),
                        command_buffer_id,
                        std::move(sequence),
-                       std::move(task_runner)) {}
+                       std::move(memory_tracker),
+                       std::move(owning_task_runner),
+                       shared_image_manager,
+                       std::move(main_task_runner)) {}
 
 ContextImplCoreml::~ContextImplCoreml() = default;
 
 base::WeakPtr<WebNNContextImpl> ContextImplCoreml::AsWeakPtr() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
   return weak_factory_.GetWeakPtr();
 }
 
@@ -79,24 +88,10 @@ ContextImplCoreml::CreateTensorImpl(
 }
 
 base::expected<scoped_refptr<WebNNTensorImpl>, mojom::ErrorPtr>
-ContextImplCoreml::CreateTensorFromMailboxImpl(
+ContextImplCoreml::CreateTensorFromSharedImageImpl(
     mojo::PendingAssociatedReceiver<mojom::WebNNTensor> receiver,
     mojom::TensorInfoPtr tensor_info,
-    gpu::Mailbox mailbox) {
-  gpu::SharedImageManager* shared_image_manager =
-      context_provider()->shared_image_manager();
-  CHECK(shared_image_manager);
-
-  // TODO(crbug.com/345352987): give WebNN its own memory source and tracker.
-  std::unique_ptr<gpu::WebNNTensorRepresentation> representation =
-      shared_image_manager->ProduceWebNNTensor(
-          mailbox,
-          context_provider()->shared_context_state()->memory_type_tracker());
-  if (!representation) {
-    return base::unexpected(mojom::Error::New(mojom::Error::Code::kUnknownError,
-                                              "Failed to create tensor."));
-  }
-
+    std::unique_ptr<gpu::WebNNTensorRepresentation> representation) {
   return TensorImplCoreml::Create(std::move(receiver), AsWeakPtr(),
                                   std::move(tensor_info),
                                   std::move(representation));

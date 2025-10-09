@@ -168,7 +168,7 @@ class DOMTreeIterator {
 
  private:
   Node* current_;
-  WTF::Vector<int> path_to_current_node_;
+  Vector<int> path_to_current_node_;
 };
 
 }  // namespace
@@ -573,7 +573,7 @@ void InspectorDOMSnapshotAgent::VisitNode(Node* node,
       SetRare(nodes->getPseudoType(nullptr), index,
               InspectorDOMAgent::ProtocolPseudoElementType(
                   element->GetPseudoIdForStyling()));
-      if (auto tag = To<PseudoElement>(element)->view_transition_name()) {
+      if (auto tag = To<PseudoElement>(element)->GetPseudoArgument()) {
         SetRare(nodes->getPseudoIdentifier(nullptr), index, tag);
       }
     }

@@ -14,6 +14,8 @@ html {
   margin-right: auto;
   padding-left: 16px;  /* Add some horizontal space */
   padding-right: 16px;
+  padding-top: 16px; /* Add vertical spacing for title and bottom sheet peek */
+  padding-bottom: 80px;
   box-sizing: border-box; /* Ensures padding is included in the width */
 }
 
@@ -29,11 +31,6 @@ html {
   html {
     max-width: 800px;
   }
-}
-
-img {
-  width: 100%;
-  height: auto;
 }
 
 /* Margins and paddings. */
@@ -72,6 +69,9 @@ article :is(ul, ol, figure) * {
 
 html {
     font-size: 16px;
+}
+
+body {
     line-height: 1.5rem; /* 18px */
 }
 
@@ -87,10 +87,46 @@ h2, h3, h4, h5, h6 {
     font-weight: bold;
 }
 
-img, figcaption {
-    font-size: 0.75rem; /* 12px */
-    line-height: 1.125rem; /* 18px */
-    font-style: italic;
+/* Styles for images and captions. */
+
+/* Default image styles (base) */
+img {
+  height: auto;
+  max-width: 100%;
+}
+
+/* Styles for inline images */
+img.distilled-inline-img {
+  display: inline;
+  vertical-align: middle;
+  width: auto;
+}
+
+/* Styles for full-width images */
+img.distilled-full-width-img {
+  display: block;
+  width: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  img.distilled-inline-img {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}
+
+img, figcaption, picture:first-child + p:last-child {
+  font-size: 0.75rem; /* 12px */
+  line-height: 1.125rem; /* 18px */
+  font-style: italic;
+}
+
+/*
+  If there are inlined divs in a span (to host an image for example), they will
+  be replaced by a paragraph element which is display: block by default. This
+  style will cause the image to be inline instead.
+*/
+span p {
+  display: inline;
 }
 
 /* list specific styling */

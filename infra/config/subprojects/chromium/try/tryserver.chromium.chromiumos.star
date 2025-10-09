@@ -209,7 +209,7 @@ try_.builder(
     ],
     contact_team_email = "chrome-browser-infra-team@google.com",
     experiments = {
-        "chromium_test.resultdb_module": 100,
+        "chromium_tests.resultdb_module": 100,
     },
     main_list_view = "try",
 )
@@ -220,16 +220,6 @@ try_.builder(
         "ci/chromeos-arm-generic-dbg",
     ],
     gn_args = "ci/chromeos-arm-generic-dbg",
-)
-
-# crbug.com/40207910
-try_.builder(
-    name = "linux-chromeos-dbg-oslogin",
-    mirrors = [
-        "ci/linux-chromeos-dbg-oslogin",
-    ],
-    gn_args = "ci/linux-chromeos-dbg-oslogin",
-    contact_team_email = "chrome-dev-infra-team@google.com",
 )
 
 try_.builder(

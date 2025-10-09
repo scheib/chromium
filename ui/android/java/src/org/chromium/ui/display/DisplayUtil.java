@@ -29,7 +29,6 @@ import org.chromium.base.Log;
 import org.chromium.base.ResettersForTesting;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
-import org.chromium.ui.util.XrUtils;
 
 /**
  * Helper functions relevant to working with displays, but have no parallel in the native
@@ -53,7 +52,7 @@ public abstract class DisplayUtil {
 
     /** Returns true if the device requires UI scaling. */
     public static boolean isUiScaled() {
-        return DeviceInfo.isAutomotive() || XrUtils.isXrDevice();
+        return DeviceInfo.isAutomotive() || DeviceInfo.isXr();
     }
 
     /** Change the UI scaling factor on automotive devices for testing. */
@@ -129,6 +128,18 @@ public abstract class DisplayUtil {
     /** Returns the given value converted from dp to px. */
     public static int dpToPx(DisplayAndroid display, int value) {
         return Math.round(value * display.getDipScale());
+    }
+
+    /**
+     * Returns the display size in inches.
+     *
+     * @param display The display to get the size of.
+     * @return The display size in inches.
+     */
+    public static double getDisplaySizeInInches(DisplayAndroid display) {
+        double xInches = display.getDisplayWidth() / display.getXdpi();
+        double yInches = display.getDisplayHeight() / display.getYdpi();
+        return Math.sqrt(Math.pow(xInches, 2) + Math.pow(yInches, 2));
     }
 
     /**
@@ -372,40 +383,91 @@ public abstract class DisplayUtil {
     }
 
     /**
-     * Translates rectangles between global work area coordinates (as in Web API spec) and local
-     * coordinates (display ID and pixel coordinates relative to the origin of the display).
-     * Currently it uses only the current display which has to be explicitly provided as an
-     * argument. This additional argument will be removed when proper multi-display support is
-     * landed in Android as we will use solely global coordinates provided to determine the target
-     * display.
+     * Converts global dip coordinates (as in Web API spec) to local coordinates (display and pixel
+     * coordinates relative to the origin of the display). Display is chosen by the most
+     * intersection area. If none of the displays intersect with the given area null is returned.
      *
-     * @param globalCoordinatesDp Global coordinates in dp.
-     * @param targetDisplay Target display of the resulting local coordinates.
-     * @return A pair of display ID and local coordinates in px.
+     * @param globalDipCoordinates Global coordinates in dip.
+     * @return A pair of {@link DisplayAndroid} and local coordinates in pixels.
      */
-    public static Pair<Integer, Rect> getLocalCoordinatesPx(
-            RectF globalCoordinatesDp, DisplayAndroid targetDisplay) {
-        return Pair.create(
-                targetDisplay.getDisplayId(),
-                convertDipToPixelDisplayCoordinates(
-                        globalCoordinatesDp, targetDisplay.getDipScale()));
+    public static @Nullable Pair<DisplayAndroid, Rect> convertGlobalDipToLocalPxCoordinates(
+            Rect globalDipCoordinates) {
+        DisplayAndroid display =
+                DisplayAndroidManager.getInstance().getDisplayMatching(globalDipCoordinates);
+
+        if (display == null) {
+            return null;
+        }
+
+        final Rect displayGlobalDipBounds = display.getBounds();
+        final Rect displayLocalPxBounds = display.getLocalBounds();
+        final float displayDipScale = display.getDipScale();
+
+        final RectF floatLocalCoordinatesPx =
+                new RectF(
+                        displayLocalPxBounds.left
+                                + (globalDipCoordinates.left - displayGlobalDipBounds.left)
+                                        * displayDipScale,
+                        displayLocalPxBounds.top
+                                + (globalDipCoordinates.top - displayGlobalDipBounds.top)
+                                        * displayDipScale,
+                        displayLocalPxBounds.right
+                                + (globalDipCoordinates.right - displayGlobalDipBounds.right)
+                                        * displayDipScale,
+                        displayLocalPxBounds.bottom
+                                + (globalDipCoordinates.bottom - displayGlobalDipBounds.bottom)
+                                        * displayDipScale);
+
+        final Rect localCoordinatesPx = new Rect();
+        floatLocalCoordinatesPx.roundOut(localCoordinatesPx);
+
+        return Pair.create(display, localCoordinatesPx);
     }
 
     /**
-     * Convert DIP display coordinates to pixel coordinates.
+     * Converts local coordinates (display and pixel coordinates relative to the origin of the
+     * display) to global dip coordinates (as in Web API spec). Rounds the resulting Rect outwards
+     * to the nearest dip.
      *
-     * @param dipDisplayCoordinates Display coordinates in DIP.
-     * @param displayDensity Display density.
-     * @return Display coordinates in pixels.
+     * @param display Reference display of the local coordinates provided.
+     * @param localCoordinatesPx Display coordinates in pixels.
+     * @return Global coordinates in dips.
      */
-    public static Rect convertDipToPixelDisplayCoordinates(
-            RectF dipDisplayCoordinates, float displayDensity) {
-        int leftPx = Math.round(dipDisplayCoordinates.left * displayDensity);
-        int topPx = Math.round(dipDisplayCoordinates.top * displayDensity);
-        int rightPx = Math.round(dipDisplayCoordinates.right * displayDensity);
-        int bottomPx = Math.round(dipDisplayCoordinates.bottom * displayDensity);
+    public static Rect convertLocalPxToGlobalDipCoordinates(
+            DisplayAndroid display, Rect localCoordinatesPx) {
+        final float displayDipScale = display.getDipScale();
+        final Rect displayBoundsGlobalCoordinatesDip = display.getBounds();
 
-        return new Rect(leftPx, topPx, rightPx, bottomPx);
+        final Rect localCoordinatesDip =
+                scaleToEnclosingRect(localCoordinatesPx, 1.0f / displayDipScale);
+
+        final Rect globalCoordinatesDip = new Rect(localCoordinatesDip);
+        globalCoordinatesDip.offset(
+                displayBoundsGlobalCoordinatesDip.left, displayBoundsGlobalCoordinatesDip.top);
+
+        return globalCoordinatesDip;
+    }
+
+    /**
+     * Scales a given rectangle by a specified factor and rounds the result to the smallest
+     * integer-based rectangle that encloses it.
+     *
+     * @param rect The original {@link android.graphics.Rect} to be scaled.
+     * @param scale The scaling factor.
+     * @return The new {@link android.graphics.Rect} that encloses the scaled rectangle.
+     */
+    public static Rect scaleToEnclosingRect(Rect rect, float scale) {
+        final RectF scaledRect =
+                new RectF(
+                        rect.left * scale,
+                        rect.top * scale,
+                        rect.right * scale,
+                        rect.bottom * scale);
+
+        final Rect enclosingRect = new Rect();
+        scaledRect.roundOut(enclosingRect);
+
+        return enclosingRect;
     }
 
     /**
@@ -454,6 +516,58 @@ public abstract class DisplayUtil {
         } catch (NameNotFoundException e) {
             return false;
         }
+    }
+
+    /**
+     * Adjusts {@code inputRect} to fit inside {@code limitingRect}.
+     *
+     * <p>If {@code inputRect} fits fully inside {@code limitingRect}, this method returns a copy of
+     * {@code inputRect}.
+     *
+     * <p>Otherwise, the returned {@link Rect} will be a copy of {@code inputRect} modified so that
+     * it is fully inside {@code limitingRect} and is the closest match to {@code inputRect},
+     * prioritising preserving original width and height first, then minimizing the Manhattan
+     * distance between {@code inputRect} and the adjusted one.
+     *
+     * <p>If {@code inputRect} is longer than {@code limitingRect} in precisely one axis, the
+     * displacement alongside the other axis will be minimised between {@code inputRect} and the
+     * adjusted one.
+     *
+     * <p>If {@code inputRect} is longer than {@code limitingRect} in both axes, {@code
+     * limitingRect} will be returned.
+     *
+     * @param inputRect The {@link Rect} to adjust.
+     * @param limitingRect The {@link Rect} that defines the bounds.
+     * @return A new {@link Rect}, guaranteed to be fully within {@code limitingRect}.
+     */
+    @SuppressWarnings("CheckResult")
+    public static Rect clampRect(Rect inputRect, Rect limitingRect) {
+        Rect output = new Rect(inputRect);
+
+        output.offset(Math.max(limitingRect.left - output.left, 0), 0);
+        output.offset(Math.min(limitingRect.right - output.right, 0), 0);
+        output.offset(0, Math.max(limitingRect.top - output.top, 0));
+        output.offset(0, Math.min(limitingRect.bottom - output.bottom, 0));
+
+        output.intersect(limitingRect);
+
+        return output;
+    }
+
+    /**
+     * Adjusts the given bounds to fit the given display.
+     *
+     * <p>Please see {@link #clampRect(Rect, Rect)} for how the bounds are adjusted.
+     *
+     * @param boundsPx The rectangle to adjust, in pixels. Its coordinates should be relative to the
+     *     display, with (0, 0) at the top-left corner and positive axes going rightward and
+     *     downward.
+     * @param display The display that defines the containing bounds.
+     * @return A new Rect, guaranteed to be fully within the display bounds. Uses the same
+     *     coordinate system as the initial Rect.
+     */
+    public static Rect clampWindowToDisplay(Rect boundsPx, DisplayAndroid display) {
+        return clampRect(boundsPx, display.getLocalBounds());
     }
 
     public static void setCarmaPhase1Version2ComplianceForTesting(

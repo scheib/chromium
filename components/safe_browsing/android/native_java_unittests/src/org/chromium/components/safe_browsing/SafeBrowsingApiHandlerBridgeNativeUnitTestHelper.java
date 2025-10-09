@@ -23,13 +23,17 @@ public class SafeBrowsingApiHandlerBridgeNativeUnitTestHelper {
      * returns lookup result based on preset values.
      */
     public static class MockSafetyNetApiHandler implements SafetyNetApiHandler {
-        private Observer mObserver;
+        private SafetyNetApiHandler.Observer mObserver;
         // See safe_browsing_api_handler_util.h --> SafetyNetJavaThreatType
         private static final int THREAT_TYPE_CSD_DOWNLOAD_ALLOWLIST = 9;
         private static final int THREAT_TYPE_CSD_ALLOWLIST = 16;
         // The result that will be returned in {@link #isVerifyAppsEnabled(long)} or {@link
         // #enableVerifyApps(long)}.
         private static int sVerifyAppsResult = VerifyAppsResult.FAILED;
+
+        // The results that will be returned in {@link #hasPotentiallyHarmfulApps(long)}}.
+        private static int sHarmfulAppsResultStatus = HasHarmfulAppsResultStatus.FAILED;
+        private static int sHarmfulAppsResult;
 
         // Maps to store preset values, keyed by uri.
         private static final Map<String, Boolean> sCsdAllowlistMap = new HashMap<>();
@@ -45,7 +49,8 @@ public class SafeBrowsingApiHandlerBridgeNativeUnitTestHelper {
         private static String sSafetyNetIdResultOverride;
 
         @Override
-        public @SafetyNetApiHandler.SafetyNetApiState int initialize(Observer observer) {
+        public @SafetyNetApiHandler.SafetyNetApiState int initialize(
+                SafetyNetApiHandler.Observer observer) {
             mObserver = observer;
             if (sSafetyNetApiInitializationState == -1) {
                 setSafetyNetApiInitializationState(
@@ -74,6 +79,12 @@ public class SafeBrowsingApiHandlerBridgeNativeUnitTestHelper {
         @Override
         public void enableVerifyApps(final long callbackId) {
             mObserver.onVerifyAppsEnabledDone(callbackId, sVerifyAppsResult);
+        }
+
+        @Override
+        public void hasPotentiallyHarmfulApps(final long callbackId) {
+            mObserver.onHasHarmfulAppsDone(
+                    callbackId, sHarmfulAppsResultStatus, sHarmfulAppsResult);
         }
 
         @Override
@@ -106,6 +117,11 @@ public class SafeBrowsingApiHandlerBridgeNativeUnitTestHelper {
             sVerifyAppsResult = result;
         }
 
+        public static void setHarmfulAppsResult(int status, int result) {
+            sHarmfulAppsResultStatus = status;
+            sHarmfulAppsResult = result;
+        }
+
         /** Mock the initialization state enum for tests. */
         public static void setSafetyNetApiInitializationState(
                 @SafetyNetApiHandler.SafetyNetApiState int state) {
@@ -123,7 +139,7 @@ public class SafeBrowsingApiHandlerBridgeNativeUnitTestHelper {
      * returns lookup result based on preset values.
      */
     public static class MockSafeBrowsingApiHandler implements SafeBrowsingApiHandler {
-        private Observer mObserver;
+        private SafeBrowsingApiHandler.Observer mObserver;
 
         // Mock time it takes for a lookup request to complete. This value is verified on the native
         // side.
@@ -133,7 +149,7 @@ public class SafeBrowsingApiHandlerBridgeNativeUnitTestHelper {
         private static final Map<String, UrlCheckDoneValues> sPresetValuesMap = new HashMap<>();
 
         @Override
-        public void setObserver(Observer observer) {
+        public void setObserver(SafeBrowsingApiHandler.Observer observer) {
             mObserver = observer;
         }
 
@@ -286,6 +302,11 @@ public class SafeBrowsingApiHandlerBridgeNativeUnitTestHelper {
     @CalledByNative
     static void setVerifyAppsResult(int result) {
         MockSafetyNetApiHandler.setVerifyAppsResult(result);
+    }
+
+    @CalledByNative
+    static void setHarmfulAppsResult(int status, int result) {
+        MockSafetyNetApiHandler.setHarmfulAppsResult(status, result);
     }
 
     @CalledByNative

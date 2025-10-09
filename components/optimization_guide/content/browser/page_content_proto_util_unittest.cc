@@ -85,19 +85,21 @@ content::GlobalRenderFrameHostToken CreateFrameToken() {
 
 base::expected<void, std::string> ConvertAIPageContentToProto(
     blink::mojom::AIPageContentPtr& root_content,
-    AIPageContentResult& page_content) {
+    AIPageContentResult& page_content,
+    const std::optional<GURL>& main_frame_url = {}) {
   auto main_frame_token = CreateFrameToken();
   AIPageContentMap page_content_map;
   page_content_map[main_frame_token] = std::move(root_content);
+
+  const GURL main_url = main_frame_url.value_or(GURL("https://example.com"));
 
   auto get_render_frame_info = base::BindLambdaForTesting(
       [&](int, blink::FrameToken token) -> std::optional<RenderFrameInfo> {
         if (token == main_frame_token.frame_token) {
           RenderFrameInfo render_frame_info;
           render_frame_info.global_frame_token = main_frame_token;
-          render_frame_info.source_origin =
-              url::Origin::Create(GURL("https://example.com"));
-          render_frame_info.url = GURL("https://example.com");
+          render_frame_info.source_origin = url::Origin::Create(main_url);
+          render_frame_info.url = main_url;
           render_frame_info.serialized_server_token =
               main_frame_token.frame_token.ToString();
           render_frame_info.media_data = CreateMediaData();
@@ -299,6 +301,7 @@ TEST(PageContentProtoUtilTest, ConvertImageInfo) {
   auto root_content = CreatePageContent();
   auto image_node =
       CreateContentNode(blink::mojom::AIPageContentAttributeType::kImage);
+  image_node->content_attributes->is_ad_related = true;
   image_node->content_attributes->image_info =
       blink::mojom::AIPageContentImageInfo::New();
   image_node->content_attributes->image_info->image_caption = "image caption";
@@ -320,6 +323,10 @@ TEST(PageContentProtoUtilTest, ConvertImageInfo) {
                 .content_attributes()
                 .attribute_type(),
             optimization_guide::proto::CONTENT_ATTRIBUTE_IMAGE);
+  EXPECT_TRUE(page_content.proto.root_node()
+                  .children_nodes(0)
+                  .content_attributes()
+                  .is_ad_related());
   const auto& image_data = page_content.proto.root_node()
                                .children_nodes(0)
                                .content_attributes()
@@ -461,6 +468,35 @@ TEST(PageContentProtoUtilTest, TitleSet) {
   EXPECT_EQ("Page Title", page_content.proto.main_frame_data().title());
 }
 
+TEST(PageContentProtoUtilTest, MainFrameUrlSet) {
+  constexpr std::string_view kCases[] = {"https://example.com",
+                                         "http://example.com", "about:blank"};
+  for (const auto url : kCases) {
+    SCOPED_TRACE(url);
+    const GURL gurl(url);
+
+    auto root_content = CreatePageContent();
+
+    AIPageContentResult page_content;
+    EXPECT_TRUE(ConvertAIPageContentToProto(root_content, page_content, gurl)
+                    .has_value());
+    EXPECT_TRUE(page_content.proto.main_frame_data().has_url());
+    EXPECT_EQ(gurl, page_content.proto.main_frame_data().url());
+  }
+}
+
+TEST(PageContentProtoUtilTest, MainFrameDataUrlSet) {
+  const GURL data_url("data:text/plain,Hello");
+
+  auto root_content = CreatePageContent();
+
+  AIPageContentResult page_content;
+  EXPECT_TRUE(ConvertAIPageContentToProto(root_content, page_content, data_url)
+                  .has_value());
+  EXPECT_TRUE(page_content.proto.main_frame_data().has_url());
+  EXPECT_EQ("data:", page_content.proto.main_frame_data().url());
+}
+
 TEST(PageContentProtoUtilTest, MediaDataSet) {
   auto root_content = CreatePageContent();
 
@@ -589,24 +625,24 @@ TEST(PageContentProtoUtilTest, ConvertIframeData) {
   auto iframe_token = CreateFrameToken();
   auto iframe_data = blink::mojom::AIPageContentIframeData::New();
   iframe_data->frame_token = iframe_token.frame_token;
-  iframe_data->likely_ad_frame = true;
-  iframe_data->local_frame_data = blink::mojom::AIPageContentFrameData::New();
-  iframe_data->local_frame_data->frame_interaction_info =
+  auto frame_data = blink::mojom::AIPageContentFrameData::New();
+  frame_data->frame_interaction_info =
       blink::mojom::AIPageContentFrameInteractionInfo::New();
-  iframe_data->local_frame_data->frame_interaction_info->selection =
+  frame_data->frame_interaction_info->selection =
       blink::mojom::AIPageContentSelection::New();
-  iframe_data->local_frame_data->frame_interaction_info->selection
-      ->selected_text = "selected text";
-  iframe_data->local_frame_data->frame_interaction_info->selection
-      ->start_dom_node_id = 1;
-  iframe_data->local_frame_data->frame_interaction_info->selection
-      ->end_dom_node_id = 2;
-  iframe_data->local_frame_data->frame_interaction_info->selection
-      ->start_offset = 3;
-  iframe_data->local_frame_data->frame_interaction_info->selection->end_offset =
-      4;
-  root_content->root_node->children_nodes.back()
-      ->content_attributes->iframe_data = std::move(iframe_data);
+  frame_data->frame_interaction_info->selection->selected_text =
+      "selected text";
+  frame_data->frame_interaction_info->selection->start_dom_node_id = 1;
+  frame_data->frame_interaction_info->selection->end_dom_node_id = 2;
+  frame_data->frame_interaction_info->selection->start_offset = 3;
+  frame_data->frame_interaction_info->selection->end_offset = 4;
+  iframe_data->content =
+      blink::mojom::AIPageContentIframeContent::NewLocalFrameData(
+          std::move(frame_data));
+
+  auto& iframe_node = root_content->root_node->children_nodes.back();
+  iframe_node->content_attributes->is_ad_related = true;
+  iframe_node->content_attributes->iframe_data = std::move(iframe_data);
 
   AIPageContentMap page_content_map;
   page_content_map[main_frame_token] = std::move(root_content);
@@ -648,11 +684,14 @@ TEST(PageContentProtoUtilTest, ConvertIframeData) {
                 .content_attributes()
                 .attribute_type(),
             optimization_guide::proto::CONTENT_ATTRIBUTE_IFRAME);
+  EXPECT_TRUE(page_content.proto.root_node()
+                  .children_nodes(0)
+                  .content_attributes()
+                  .is_ad_related());
   const auto& proto_iframe_data = page_content.proto.root_node()
                                       .children_nodes(0)
                                       .content_attributes()
                                       .iframe_data();
-  EXPECT_TRUE(proto_iframe_data.likely_ad_frame());
   const auto& frame_interaction_info =
       proto_iframe_data.frame_data().frame_interaction_info();
   const auto& selection = frame_interaction_info.selection();
@@ -877,6 +916,8 @@ TEST(PageContentProtoUtilTest, ConvertFormControlData) {
       ->text = "option text";
   form_control_node->content_attributes->form_control_data->select_options[0]
       ->is_selected = true;
+  form_control_node->content_attributes->form_control_data->redaction_decision =
+      blink::mojom::AIPageContentRedactionDecision::kNoRedactionNecessary;
   root_content->root_node->children_nodes.emplace_back(
       std::move(form_control_node));
 
@@ -902,6 +943,79 @@ TEST(PageContentProtoUtilTest, ConvertFormControlData) {
   EXPECT_EQ(form_control_data_proto.select_options(0).value(), "option value");
   EXPECT_EQ(form_control_data_proto.select_options(0).text(), "option text");
   EXPECT_TRUE(form_control_data_proto.select_options(0).is_selected());
+  EXPECT_EQ(
+      form_control_data_proto.redaction_decision(),
+      optimization_guide::proto::REDACTION_DECISION_NO_REDACTION_NECESSARY);
+}
+
+TEST(PageContentProtoUtilTest, ConvertFormControlDataRedactionDecision) {
+  auto root_content = CreatePageContent();
+
+  // Test kUnredacted_EmptyPassword
+  auto empty_password_node =
+      CreateContentNode(blink::mojom::AIPageContentAttributeType::kFormControl);
+  empty_password_node->content_attributes->form_control_data =
+      blink::mojom::AIPageContentFormControlData::New();
+  empty_password_node->content_attributes->form_control_data
+      ->form_control_type = blink::mojom::FormControlType::kInputPassword;
+  empty_password_node->content_attributes->form_control_data->field_name =
+      "empty_password_field";
+  empty_password_node->content_attributes->form_control_data->field_value = "";
+  empty_password_node->content_attributes->form_control_data
+      ->redaction_decision =
+      blink::mojom::AIPageContentRedactionDecision::kUnredacted_EmptyPassword;
+  root_content->root_node->children_nodes.emplace_back(
+      std::move(empty_password_node));
+
+  // Test kRedacted_HasBeenPassword
+  auto redacted_password_node =
+      CreateContentNode(blink::mojom::AIPageContentAttributeType::kFormControl);
+  redacted_password_node->content_attributes->form_control_data =
+      blink::mojom::AIPageContentFormControlData::New();
+  redacted_password_node->content_attributes->form_control_data
+      ->form_control_type = blink::mojom::FormControlType::kInputPassword;
+  redacted_password_node->content_attributes->form_control_data->field_name =
+      "redacted_password_field";
+  // field_value is not set when redacted
+  redacted_password_node->content_attributes->form_control_data
+      ->redaction_decision =
+      blink::mojom::AIPageContentRedactionDecision::kRedacted_HasBeenPassword;
+  root_content->root_node->children_nodes.emplace_back(
+      std::move(redacted_password_node));
+
+  AIPageContentResult page_content;
+  EXPECT_TRUE(
+      ConvertAIPageContentToProto(root_content, page_content).has_value());
+
+  EXPECT_EQ(page_content.proto.version(),
+            optimization_guide::proto::ANNOTATED_PAGE_CONTENT_VERSION_1_0);
+  ASSERT_EQ(page_content.proto.root_node().children_nodes_size(), 2);
+
+  // Test first node: kUnredacted_EmptyPassword
+  const auto& empty_password_proto = page_content.proto.root_node()
+                                         .children_nodes(0)
+                                         .content_attributes()
+                                         .form_control_data();
+  EXPECT_EQ(empty_password_proto.form_control_type(),
+            optimization_guide::proto::FORM_CONTROL_TYPE_INPUT_PASSWORD);
+  EXPECT_EQ(empty_password_proto.field_name(), "empty_password_field");
+  EXPECT_EQ(empty_password_proto.field_value(), "");  // Empty password
+  EXPECT_EQ(
+      empty_password_proto.redaction_decision(),
+      optimization_guide::proto::REDACTION_DECISION_UNREDACTED_EMPTY_PASSWORD);
+
+  // Test second node: kRedacted_HasBeenPassword
+  const auto& redacted_password_proto = page_content.proto.root_node()
+                                            .children_nodes(1)
+                                            .content_attributes()
+                                            .form_control_data();
+  EXPECT_EQ(redacted_password_proto.form_control_type(),
+            optimization_guide::proto::FORM_CONTROL_TYPE_INPUT_PASSWORD);
+  EXPECT_EQ(redacted_password_proto.field_name(), "redacted_password_field");
+  EXPECT_EQ(redacted_password_proto.field_value(), "");  // Empty when redacted
+  EXPECT_EQ(
+      redacted_password_proto.redaction_decision(),
+      optimization_guide::proto::REDACTION_DECISION_REDACTED_HAS_BEEN_PASSWORD);
 }
 
 TEST(PageContentProtoUtilTest, ConvertLabel) {

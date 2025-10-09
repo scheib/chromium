@@ -16,10 +16,6 @@ namespace download {
 class DownloadItem;
 }  // namespace download
 
-namespace safe_browsing {
-class SafeBrowsingNavigationObserverManager;
-}  // namespace safe_browsing
-
 namespace enterprise_connectors {
 
 // Implementation of `ContentAnalysisInfoBase` for chrome/ platforms.
@@ -52,6 +48,7 @@ class ContentAreaUserProvider : public ContentAnalysisInfo {
   static std::string GetUser(Profile* profile,
                              content::WebContents* web_contents,
                              const GURL& tab_url);
+  static std::string GetUser(const content::ClipboardEndpoint& endpoint);
 
   ~ContentAreaUserProvider();
 
@@ -73,8 +70,6 @@ class ContentAreaUserProvider : public ContentAnalysisInfo {
 
   explicit ContentAreaUserProvider(
       signin::IdentityManager* im,
-      safe_browsing::SafeBrowsingNavigationObserverManager*
-          nav_observer_manager,
       content::WebContents* web_contents,
       const GURL& tab_url);
 
@@ -90,7 +85,7 @@ class ContentAreaUserProvider : public ContentAnalysisInfo {
 class DownloadContentAreaUserProvider : public ContentAnalysisInfo {
  public:
   explicit DownloadContentAreaUserProvider(
-      const download::DownloadItem& download_item);
+      download::DownloadItem& download_item);
   ~DownloadContentAreaUserProvider();
 
   // ContentAnalysisInfo:
@@ -100,6 +95,8 @@ class DownloadContentAreaUserProvider : public ContentAnalysisInfo {
   content::WebContents* web_contents() const override;
   google::protobuf::RepeatedPtrField<::safe_browsing::ReferrerChainEntry>
   referrer_chain() const override;
+  google::protobuf::RepeatedPtrField<std::string> frame_url_chain()
+      const override;
 
  private:
   // ContentAnalysisInfo:
@@ -109,14 +106,13 @@ class DownloadContentAreaUserProvider : public ContentAnalysisInfo {
   std::string user_action_id() const override;
   std::string email() const override;
   ContentAnalysisRequest::Reason reason() const override;
-  google::protobuf::RepeatedPtrField<std::string> frame_url_chain()
-      const override;
 
   GURL url_;
   GURL tab_url_;
   raw_ptr<signin::IdentityManager> im_;
   google::protobuf::RepeatedPtrField<::safe_browsing::ReferrerChainEntry>
       referrer_chain_;
+  google::protobuf::RepeatedPtrField<std::string> frame_url_chain_;
   base::WeakPtr<content::WebContents> web_contents_;
 };
 

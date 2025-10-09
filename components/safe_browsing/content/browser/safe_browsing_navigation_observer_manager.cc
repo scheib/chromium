@@ -99,7 +99,7 @@ std::string ShortOriginForReporting(const std::string& url) {
   GURL gurl(url);
   if (gurl.SchemeIsLocal()) {
     std::string sha_url = crypto::SHA256HashString(url);
-    return gurl.scheme() + "://" + base::HexEncode(sha_url);
+    return gurl.GetScheme() + "://" + base::HexEncode(sha_url);
   }
   return gurl.DeprecatedGetOriginAsURL().spec();
 }
@@ -111,9 +111,6 @@ std::string ShortOriginForReporting(const std::string& url) {
 // String value of kDownloadReferrerChainDataKey is not used.
 const char ReferrerChainData::kDownloadReferrerChainDataKey[] =
     "referrer_chain_data_key";
-
-const char ReferrerChainData::kDownloadReferrerChainDataKeyForEnterprise[] =
-    "referrer_chain_data_key_for_enterprise";
 
 ReferrerChainData::ReferrerChainData(
     ReferrerChainProvider::AttributionResult attribution_result,
@@ -913,7 +910,7 @@ void SafeBrowsingNavigationObserverManager::MaybeAddToReferrerChain(
     referrer_chain_entry->set_main_frame_url(
         ShortURLForReporting(destination_main_frame_url));
   referrer_chain_entry->set_type(type);
-  auto ip_it = host_to_ip_map_.find(destination_url.host());
+  auto ip_it = host_to_ip_map_.find(destination_url.GetHost());
   if (ip_it != host_to_ip_map_.end()) {
     for (const ResolvedIPAddress& entry : ip_it->second) {
       referrer_chain_entry->add_ip_addresses(entry.ip);

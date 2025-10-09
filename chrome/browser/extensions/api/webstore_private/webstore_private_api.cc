@@ -33,10 +33,9 @@
 #include "chrome/browser/extensions/extension_allowlist.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/extensions/install_approval.h"
-#include "chrome/browser/extensions/install_tracker.h"
+#include "chrome/browser/extensions/install_tracker_factory.h"
 #include "chrome/browser/extensions/manifest_v2_experiment_manager.h"
 #include "chrome/browser/extensions/mv2_experiment_stage.h"
-#include "chrome/browser/extensions/scoped_active_install.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/browser/safe_browsing/safe_browsing_metrics_collector_factory.h"
@@ -64,6 +63,9 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_util.h"
 #include "extensions/browser/extensions_browser_client.h"
+#include "extensions/browser/install_tracker.h"
+#include "extensions/browser/scoped_active_install.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest.h"
 #include "extensions/common/manifest_constants.h"
@@ -80,6 +82,8 @@
 #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #endif
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 using safe_browsing::SafeBrowsingNavigationObserverManager;
 
@@ -442,7 +446,8 @@ WebstorePrivateBeginInstallWithManifest3Function::Run() {
     }
   }
 
-  InstallTracker* tracker = InstallTracker::Get(browser_context());
+  InstallTracker* tracker =
+      InstallTrackerFactory::GetForBrowserContext(browser_context());
   DCHECK(tracker);
   bool is_installed =
       ExtensionRegistry::Get(browser_context())
@@ -491,7 +496,7 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnWebstoreParseSuccess(
   std::string localized_name =
       details().localized_name ? *details().localized_name : std::string();
 
-  std::string error;
+  std::u16string error;
   dummy_extension_ = ExtensionInstallPrompt::GetLocalizedExtensionForDisplay(
       *parsed_manifest_, Extension::FROM_WEBSTORE, id, localized_name,
       std::string(), &error);
@@ -565,7 +570,6 @@ void WebstorePrivateBeginInstallWithManifest3Function::OnWebstoreParseFailure(
   Release();
 }
 
-
 void WebstorePrivateBeginInstallWithManifest3Function::RequestExtensionApproval(
     content::WebContents* web_contents) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -581,7 +585,6 @@ void WebstorePrivateBeginInstallWithManifest3Function::RequestExtensionApproval(
   supervised_user_extensions_delegate->RequestToAddExtensionOrShowError(
       *dummy_extension_, web_contents,
       gfx::ImageSkia::CreateFrom1xBitmap(icon_),
-      SupervisedUserExtensionParentApprovalEntryPoint::kOnWebstoreInstallation,
       std::move(extension_approval_callback));
 #else
   // TODO(crbug.com/410616937): Support supervised user install controls on
@@ -682,7 +685,6 @@ bool WebstorePrivateBeginInstallWithManifest3Function::
 
   return true;
 }
-
 
 void WebstorePrivateBeginInstallWithManifest3Function::OnFrictionPromptDone(
     bool result) {
@@ -901,17 +903,11 @@ void WebstorePrivateBeginInstallWithManifest3Function::
       NOTREACHED();
   }
 
-// TODO(crbug.com/424012380): Enable on Desktop Android.
-#if BUILDFLAG(ENABLE_EXTENSIONS)
   ShowExtensionInstallFrictionDialog(
       contents,
       base::BindOnce(&WebstorePrivateBeginInstallWithManifest3Function::
                          OnFrictionPromptDone,
                      this));
-#else
-  NOTIMPLEMENTED() << "ShowInstallFrictionDialog not supported on Android";
-  OnFrictionPromptDone(true);
-#endif
 }
 
 void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
@@ -929,9 +925,9 @@ void WebstorePrivateBeginInstallWithManifest3Function::ShowInstallDialog(
     // to configure the install prompt to indicate that this is a child
     // asking a parent for installation permission.
     prompt->set_requires_parent_permission(requires_parent_permission);
-    // Record metrics for supervised users that are in "Skip parent approval"-mode
-    // and use the Extension install dialog (that is used by non-supervised
-    // users).
+    // Record metrics for supervised users that are in "Skip parent
+    // approval"-mode and use the Extension install dialog (that is used by
+    // non-supervised users).
     if (supervised_user::AreExtensionsPermissionsEnabled(profile_)) {
       prompt->AddObserver(&supervised_user_extensions_metrics_recorder_);
     }
@@ -1028,7 +1024,8 @@ WebstorePrivateCompleteInstallFunction::Run() {
   }
 
   scoped_active_install_ = std::make_unique<ScopedActiveInstall>(
-      InstallTracker::Get(browser_context()), params->expected_id);
+      InstallTrackerFactory::GetForBrowserContext(browser_context()),
+      params->expected_id);
 
   // Balanced in OnExtensionInstallSuccess() or OnExtensionInstallFailure().
   AddRef();
@@ -1107,7 +1104,7 @@ WebstorePrivateGetBrowserLoginFunction::Run() {
   info.login =
       IdentityManagerFactory::GetForProfile(
           Profile::FromBrowserContext(browser_context())->GetOriginalProfile())
-          ->GetPrimaryAccountInfo(signin::ConsentLevel::kSync)
+          ->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin)
           .email;
   return RespondNow(ArgumentList(GetBrowserLogin::Results::Create(info)));
 }
@@ -1236,9 +1233,10 @@ WebstorePrivateGetReferrerChainFunction::Run() {
 #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
   Profile* profile = Profile::FromBrowserContext(browser_context());
   if (!SafeBrowsingNavigationObserverManager::IsEnabledAndReady(
-          profile->GetPrefs(), g_browser_process->safe_browsing_service()))
+          profile->GetPrefs(), g_browser_process->safe_browsing_service())) {
     return RespondNow(ArgumentList(
         api::webstore_private::GetReferrerChain::Results::Create("")));
+  }
 
   content::RenderFrameHost* outermost_render_frame_host =
       render_frame_host() ? render_frame_host()->GetOutermostMainFrame()
@@ -1341,7 +1339,7 @@ void WebstorePrivateGetExtensionStatusFunction::OnManifestParsed(
     return;
   }
 
-  std::string error;
+  std::u16string error;
   auto dummy_extension = Extension::Create(
       base::FilePath(), mojom::ManifestLocation::kInternal, result->GetDict(),
       Extension::FROM_WEBSTORE, extension_id, &error);

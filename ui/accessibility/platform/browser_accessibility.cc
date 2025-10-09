@@ -1784,6 +1784,8 @@ std::u16string BrowserAccessibility::GetLocalizedStringForRoleDescription()
       return {};
     case ax::mojom::Role::kMenuItemRadio:
       return {};
+    case ax::mojom::Role::kMenuItemSeparator:
+      return {};
     case ax::mojom::Role::kMeter:
       return GetLocalizedString(IDS_AX_ROLE_METER);
     case ax::mojom::Role::kNavigation:
@@ -2001,23 +2003,25 @@ TextAttributeMap BrowserAccessibility::GetSpellingAndGrammarAttributes() const {
     CHECK_EQ(marker_types.size(), marker_ends.size());
 
     for (size_t i = 0; i < marker_types.size(); ++i) {
-      bool is_spelling_error =
+      const bool is_highlight =
+          marker_types[i] &
+          static_cast<int32_t>(ax::mojom::MarkerType::kHighlight);
+      const bool is_spelling_error =
           (marker_types[i] &
            static_cast<int32_t>(ax::mojom::MarkerType::kSpelling)) ||
-          ((marker_types[i] &
-            static_cast<int32_t>(ax::mojom::MarkerType::kHighlight)) &&
+          (is_highlight &&
            highlight_types[i] ==
                static_cast<int32_t>(ax::mojom::HighlightType::kSpellingError));
-      bool is_grammar_error =
+      const bool is_grammar_error =
           (marker_types[i] &
            static_cast<int32_t>(ax::mojom::MarkerType::kGrammar)) ||
-          ((marker_types[i] &
-            static_cast<int32_t>(ax::mojom::MarkerType::kHighlight)) &&
+          (is_highlight &&
            highlight_types[i] ==
                static_cast<int32_t>(ax::mojom::HighlightType::kGrammarError));
 
-      if (!is_spelling_error && !is_grammar_error)
+      if (!is_spelling_error && !is_grammar_error && !is_highlight) {
         continue;
+      }
 
       TextAttributeList start_attributes;
       if (is_spelling_error && is_grammar_error)
@@ -2027,6 +2031,11 @@ TextAttributeMap BrowserAccessibility::GetSpellingAndGrammarAttributes() const {
         start_attributes.push_back(std::make_pair("invalid", "spelling"));
       else if (is_grammar_error)
         start_attributes.push_back(std::make_pair("invalid", "grammar"));
+      else if (is_highlight) {
+        // If there's a highlight with a different type (i.e. not spelling or
+        // grammar error), it's added as ("mark","true").
+        start_attributes.push_back(std::make_pair("mark", "true"));
+      }
 
       int start_offset = marker_starts[i];
       int end_offset = marker_ends[i];

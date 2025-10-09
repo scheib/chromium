@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.tabmodel;
 
+import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.app.Activity;
@@ -15,7 +16,6 @@ import org.chromium.base.SysUtils;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.metrics.TimingMetric;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.Initializer;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -54,17 +54,18 @@ import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
 
 import java.util.Collections;
+import java.util.function.Supplier;
 
 /** This class creates various kinds of new tabs and adds them to the right {@link TabModel}. */
 @NullMarked
 public class ChromeTabCreator extends TabCreator
         implements NeedsTabModel, NeedsTabModelOrderController {
-    final Activity mActivity;
+    protected final Activity mActivity;
     private final WindowAndroid mNativeWindow;
     private final Supplier<TabDelegateFactory> mTabDelegateFactorySupplier;
     private final OneshotSupplier<ProfileProvider> mProfileProviderSupplier;
-    final boolean mIncognito;
-    private final AsyncTabParamsManager mAsyncTabParamsManager;
+    protected final boolean mIncognito;
+    protected final AsyncTabParamsManager mAsyncTabParamsManager;
     private final Supplier<TabModelSelector> mTabModelSelectorSupplier;
     private final Supplier<CompositorViewHolder> mCompositorViewHolderSupplier;
     private final @Nullable MultiInstanceManager mMultiInstanceManager;
@@ -171,8 +172,10 @@ public class ChromeTabCreator extends TabCreator
         }
     }
 
-    private Profile getProfile() {
-        return ProfileProvider.getOrCreateProfile(mProfileProviderSupplier.get(), mIncognito);
+    @Override
+    protected Profile getProfile() {
+        return ProfileProvider.getOrCreateProfile(
+                assertNonNull(mProfileProviderSupplier.get()), mIncognito);
     }
 
     /**
@@ -333,8 +336,10 @@ public class ChromeTabCreator extends TabCreator
                 TabReparentingParams params = (TabReparentingParams) asyncParams;
                 tab = params.getTabToReparent();
 
-                @Nullable
-                TabGroupMetadata tabGroupMetadata = IntentHandler.getTabGroupMetadata(intent);
+                assert intent != null;
+
+                @Nullable TabGroupMetadata tabGroupMetadata =
+                        IntentHandler.getTabGroupMetadata(intent);
                 if (tabGroupMetadata != null && tabGroupMetadata.selectedTabId != tab.getId()) {
                     type = TabLaunchType.FROM_REPARENTING_BACKGROUND;
                 } else {
@@ -609,8 +614,8 @@ public class ChromeTabCreator extends TabCreator
             appId = TabModelImpl.UNKNOWN_APP_ID;
         }
         // Let's try to find an existing tab that was started by that app.
-        for (int i = 0; i < mTabModel.getCount(); i++) {
-            Tab tab = mTabModel.getTabAtChecked(i);
+        int i = 0;
+        for (Tab tab : mTabModel) {
             if (appId.equals(TabAssociatedApp.getAppId(tab))) {
                 // We don't reuse the tab, we create a new one at the same index instead.
                 // Reusing a tab would require clearing the navigation history and clearing the
@@ -633,6 +638,7 @@ public class ChromeTabCreator extends TabCreator
                                 /* allowDialog= */ false);
                 return newTab;
             }
+            ++i;
         }
 
         // No tab for that app, we'll have to create a new one.

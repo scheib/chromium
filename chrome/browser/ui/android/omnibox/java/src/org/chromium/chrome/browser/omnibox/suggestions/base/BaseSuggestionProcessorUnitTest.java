@@ -27,7 +27,6 @@ import org.robolectric.shadows.ShadowLog;
 
 import org.chromium.base.Callback;
 import org.chromium.base.ContextUtils;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
@@ -60,7 +59,7 @@ import org.chromium.url.GURL;
 import org.chromium.url.JUnitTestGURLs;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.function.Supplier;
 
 /** Tests for {@link BaseSuggestionViewProcessor}. */
 @RunWith(BaseRobolectricTestRunner.class)
@@ -129,7 +128,7 @@ public class BaseSuggestionProcessorUnitTest {
                         mContext,
                         mSuggestionHost,
                         mTextProvider,
-                        Optional.of(mImageSupplier),
+                        mImageSupplier,
                         mBookmarkState,
                         mTabSupplier,
                         mShareDelegateSupplier,
@@ -414,6 +413,7 @@ public class BaseSuggestionProcessorUnitTest {
                                     "accessibility",
                                     SuggestTemplateInfo.TemplateAction.ActionType.REVIEWS_VALUE,
                                     "https://google.com",
+                                    /* tabId= */ 0,
                                     /* showAsActionButton= */ false)));
 
             var actions = mModel.get(BaseSuggestionViewProperties.ACTION_BUTTONS);
@@ -433,6 +433,7 @@ public class BaseSuggestionProcessorUnitTest {
                                     "accessibility",
                                     SuggestTemplateInfo.TemplateAction.ActionType.REVIEWS_VALUE,
                                     "https://google.com",
+                                    /* tabId= */ 0,
                                     /* showAsActionButton= */ false),
                             new OmniboxActionInSuggest(
                                     0,
@@ -440,6 +441,7 @@ public class BaseSuggestionProcessorUnitTest {
                                     "accessibility2",
                                     SuggestTemplateInfo.TemplateAction.ActionType.CHROME_AIM_VALUE,
                                     "https://google.com",
+                                    /* tabId= */ 0,
                                     /* showAsActionButton= */ true),
                             new OmniboxActionInSuggest(
                                     0,
@@ -447,6 +449,7 @@ public class BaseSuggestionProcessorUnitTest {
                                     "accessibility3",
                                     SuggestTemplateInfo.TemplateAction.ActionType.CHROME_AIM_VALUE,
                                     "https://google.com",
+                                    /* tabId= */ 0,
                                     /* showAsActionButton= */ true)));
 
             var actions = mModel.get(BaseSuggestionViewProperties.ACTION_BUTTONS);
@@ -456,7 +459,7 @@ public class BaseSuggestionProcessorUnitTest {
 
             Assert.assertEquals("accessibility2", action.accessibilityDescription);
             Assert.assertEquals(
-                    R.drawable.search_spark_black_24dp,
+                    R.drawable.search_spark_rainbow,
                     shadowOf(action.icon.drawable).getCreatedFromResId());
         }
     }

@@ -33,9 +33,9 @@ import org.chromium.components.component_updater.IComponentsProviderService;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
@@ -91,7 +91,7 @@ public class ComponentsProviderService extends Service {
      * default implementation is {@code System.currentTimeMillis()}.
      */
     @VisibleForTesting
-    public static interface Clock {
+    public interface Clock {
         long currentTimeMillis();
     }
 
@@ -209,7 +209,7 @@ public class ComponentsProviderService extends Service {
         if (components == null || components.length == 0) {
             return;
         }
-        final List<File> oldFiles = new LinkedList<>();
+        final List<File> oldFiles = new ArrayList<>();
         for (File component : components) {
             final File[] versions = ComponentsProviderPathUtil.getComponentsNewestFirst(component);
             if (versions == null || versions.length == 0) {

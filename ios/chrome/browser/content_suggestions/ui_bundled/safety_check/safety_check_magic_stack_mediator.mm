@@ -11,6 +11,7 @@
 #import "components/pref_registry/pref_registry_syncable.h"
 #import "components/prefs/ios/pref_observer_bridge.h"
 #import "components/prefs/pref_service.h"
+#import "components/safety_check/safety_check_pref_names.h"
 #import "ios/chrome/app/profile/profile_init_stage.h"
 #import "ios/chrome/app/profile/profile_state.h"
 #import "ios/chrome/app/profile/profile_state_observer.h"
@@ -70,7 +71,7 @@ int ImpressionsCount(const base::Value::List& impressions,
 @end
 
 @implementation SafetyCheckMagicStackMediator {
-  raw_ptr<IOSChromeSafetyCheckManager> _safetyCheckManager;
+  raw_ptr<IOSChromeSafetyCheckManager, DanglingUntriaged> _safetyCheckManager;
   // Observer for Safety Check changes.
   std::unique_ptr<SafetyCheckObserverBridge> _safetyCheckManagerObserver;
   // Bridge to listen to pref changes.
@@ -80,9 +81,9 @@ int ImpressionsCount(const base::Value::List& impressions,
   // Registrar for user pref changes notifications.
   PrefChangeRegistrar _userPrefChangeRegistrar;
   // Local State prefs.
-  raw_ptr<PrefService> _localState;
+  raw_ptr<PrefService, DanglingUntriaged> _localState;
   // User prefs.
-  raw_ptr<PrefService> _userState;
+  raw_ptr<PrefService, DanglingUntriaged> _userState;
   ProfileState* _profileState;
   // Used by the Safety Check (Magic Stack) module for the current Safety Check
   // state.
@@ -134,7 +135,7 @@ int ImpressionsCount(const base::Value::List& impressions,
       _userPrefChangeRegistrar.Init(userState);
 
       _prefObserverBridge->ObserveChangesForPreference(
-          prefs::kHomeCustomizationMagicStackSafetyCheckEnabled,
+          safety_check::prefs::kSafetyCheckHomeModuleEnabled,
           &_userPrefChangeRegistrar);
 
       _safetyCheckState = [self initialSafetyCheckState];
@@ -172,6 +173,10 @@ int ImpressionsCount(const base::Value::List& impressions,
   _notificationsObserver = nil;
 
   _safetyCheckConsumer = nil;
+
+  _safetyCheckState.delegate = nil;
+  _safetyCheckState.audience = nil;
+  _safetyCheckState.safetyCheckConsumerSource = nil;
 
   _safetyCheckManagerObserver.reset();
 
@@ -355,9 +360,9 @@ int ImpressionsCount(const base::Value::List& impressions,
     // has changed.
     [self runningStateChanged:_safetyCheckState.runningState];
   } else if (preferenceName ==
-                 prefs::kHomeCustomizationMagicStackSafetyCheckEnabled &&
+                 safety_check::prefs::kSafetyCheckHomeModuleEnabled &&
              !_userState->GetBoolean(
-                 prefs::kHomeCustomizationMagicStackSafetyCheckEnabled)) {
+                 safety_check::prefs::kSafetyCheckHomeModuleEnabled)) {
     [self.delegate removeSafetyCheckModule];
   }
 }

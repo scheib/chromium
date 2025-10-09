@@ -17,6 +17,7 @@
 #include "chrome/browser/glic/fre/fre_util.h"
 #include "chrome/browser/glic/fre/glic_fre_dialog_view.h"
 #include "chrome/browser/glic/glic_pref_names.h"
+#include "chrome/browser/glic/host/glic_features.mojom.h"
 #include "chrome/browser/glic/host/guest_util.h"
 #include "chrome/browser/glic/public/glic_keyed_service.h"
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
@@ -34,6 +35,7 @@
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/signin/public/identity_manager/test_accounts.h"
+#include "components/sync/base/features.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/test_devtools_protocol_client.h"
 #include "net/dns/mock_host_resolver.h"
@@ -76,12 +78,15 @@ const char kIgnoreCertificateErrorsSPKIListValue[] =
 }  // namespace
 
 GlicE2ETest::GlicE2ETest() {
+  // TODO(https://crbug.com/440578183): ZeroStateSuggestionsV2 is enabled here
+  // due to the associated bug and should be removed here once fixed.
   scoped_feature_list_.InitWithFeatures(
       /*enabled_features=*/{features::kGlic, features::kTabstripComboButton,
                             features::kGlicKeyboardShortcutNewBadge,
                             features::kGlicRollout,
-                            contextual_cueing::kContextualCueing},
-      /*disabled_features=*/{});
+                            contextual_cueing::kContextualCueing,
+                            mojom::features::kZeroStateSuggestionsV2},
+      /*disabled_features=*/{syncer::kReplaceSyncPromosWithSignInPromos});
 }
 
 GlicE2ETest::~GlicE2ETest() = default;
@@ -302,15 +307,17 @@ void GlicE2ETest::ThrottleWebContentsNetwork(
 }
 
 void GlicE2ETest::ThrottleGlicNetwork() {
-  auto* glic_view =
-      glic::GlicKeyedServiceFactory::GetGlicKeyedService(browser()->profile())
-          ->window_controller()
-          .GetGlicView();
-  CHECK(glic_view);
-  content::WebContents* web_contents =
-      glic_view->GetWebContents()->GetInnerWebContents()[0];
-  CHECK(web_contents);
-  ThrottleWebContentsNetwork(web_contents);
+  auto* glic_service =
+      glic::GlicKeyedServiceFactory::GetGlicKeyedService(browser()->profile());
+  for (auto* host : glic_service->host_manager().GetAllHosts()) {
+    auto* webui_contents = host->webui_contents();
+    if (webui_contents) {
+      content::WebContents* inner_contents =
+          webui_contents->GetInnerWebContents()[0];
+      CHECK(inner_contents);
+      ThrottleWebContentsNetwork(inner_contents);
+    }
+  }
 }
 
 }  // namespace glic::test

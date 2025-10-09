@@ -118,6 +118,8 @@ class UI_ANDROID_EXPORT WindowAndroid : public ViewAndroid {
 
   void OnWindowPointerLockRelease(JNIEnv* env);
 
+  void OnWindowPositionChanged(JNIEnv* env);
+
   void ShowToast(const std::string text);
 
   // Return whether the specified Android permission is granted.
@@ -155,6 +157,10 @@ class UI_ANDROID_EXPORT WindowAndroid : public ViewAndroid {
   void ReleasePointerLock(ViewAndroid& view_android);
 
   bool SetHasKeyboardCapture(bool keyboard_capture);
+
+  // Returns bounds of this window in global dp coordinates (takes display
+  // topology into account).
+  std::optional<gfx::Rect> GetBoundsInScreenCoordinates();
 
   class TestHooks {
    public:

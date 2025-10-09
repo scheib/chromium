@@ -826,6 +826,10 @@ class PermissionUmaUtil {
       base::Time current_time,
       HostContentSettingsMap* hcsm);
 
+  // Records whether the 'Reload this page' info bar was shown after a quiet
+  // permission prompt was granted.
+  static void RecordPageReloadInfoBarShown(bool shown);
+
   // Records UKM metrics for ContentSettingsTypes that have user facing
   // permission prompts triggered by the user clicking on the Embedded
   // Permission Element. The passed in `permission` must be such that
@@ -881,6 +885,12 @@ class PermissionUmaUtil {
       PredictionModelType model_type,
       bool success);
 
+  // Records the size of the rendered text when it was fetched successfully and
+  // was suitable as input for model execution.
+  static void RecordRenderedTextSize(PredictionModelType model_type,
+                                     RequestType request_type,
+                                     size_t text_size);
+
   // Records whether we needed to cancel the previous passage embeddings model
   // call before starting a new one.
   static void RecordTryCancelPreviousEmbeddingsModelExecution(
@@ -906,11 +916,24 @@ class PermissionUmaUtil {
   // during the Aiv4 workflow.
   static void RecordPassageEmbeddingsCalculationTimeout(bool timeout);
 
+  // Records whether the passage embedder metadata was valid when the AIv4
+  // workflow was initiated.
+  static void RecordPassageEmbedderMetadataValid(bool valid);
+
+  // Records whether the UI selection logic of the
+  // PermissionBasedPredictionUiSelector ran into a timeout.
+  static void RecordPredictionServiceTimeout(bool timeout);
+
   // Records if the browser was active at the time the prompt started displaying
   static void RecordPromptShownInActiveBrowser(
       RequestTypeForUma request_type,
       bool embedded_permission_element_initiated,
       bool active);
+
+  // Records that a permission prompt was auto-rejected because an actor
+  // is operating on the tab.
+  static void RecordPermissionAutoRejectForActor(ContentSettingsType permission,
+                                                 bool is_actor_operating);
 
   // A scoped class that will check the current resolved content setting on
   // construction and report a revocation metric accordingly if the revocation

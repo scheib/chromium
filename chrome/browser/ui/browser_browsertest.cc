@@ -175,6 +175,13 @@
 #include "base/test/file_path_reparse_point_win.h"
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ash/constants/ash_switches.h"
+#include "chrome/test/base/testing_profile.h"
+#include "components/user_manager/user_names.h"
+
+#endif
+
 using base::ASCIIToUTF16;
 using content::HostZoomMap;
 using content::NavigationController;
@@ -406,12 +413,6 @@ class BrowserTest : public extensions::ExtensionBrowserTest,
     }
     NOTREACHED();
   }
-
-  // BrowserListObserver:
-  MOCK_METHOD(void,
-              OnBrowserCloseCancelled,
-              (Browser * browser, BrowserClosingStatus reason),
-              (override));
 
  private:
   web_app::OsIntegrationTestOverrideBlockingRegistration faked_os_integration_;
@@ -989,6 +990,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, BeforeUnloadVsBeforeReload) {
 
   // Accept the navigation so we end up on a page without a beforeunload hook.
   alert->view()->AcceptAppModalDialog();
+  EXPECT_TRUE(content::WaitForLoadStop(contents));
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserTest, NotifiesBrowserDidClose) {
@@ -1225,8 +1227,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, MAYBE_AppIdSwitch) {
   base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
   command_line.AppendSwitchASCII(switches::kAppId, app_id);
 
-  ui_test_utils::BrowserChangeObserver browser_change(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  ui_test_utils::BrowserCreatedObserver browser_created_observer;
   base::test::TestFuture<void> launch_done;
   web_app::startup::SetStartupDoneCallbackForTesting(launch_done.GetCallback());
   EXPECT_TRUE(StartupBrowserCreator().ProcessCmdLineImpl(
@@ -1234,7 +1235,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, MAYBE_AppIdSwitch) {
       {browser()->profile(), StartupProfileMode::kBrowserWindow}, {}));
 
   ASSERT_TRUE(launch_done.Wait());
-  Browser* app_browser = browser_change.Wait();
+  Browser* app_browser = browser_created_observer.Wait();
   EXPECT_TRUE(app_browser->is_type_app());
 
 #if BUILDFLAG(IS_WIN)
@@ -2704,7 +2705,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, DISABLED_ChangeDisplayMode) {
       ->EnterFullscreen(
           url::Origin(),
           EXCLUSIVE_ACCESS_BUBBLE_TYPE_BROWSER_FULLSCREEN_EXIT_INSTRUCTION,
-          display::kInvalidDisplayId);
+          FullscreenTabParams());
 
   // Sync navigation just to make sure IPC has passed (updated
   // display mode is delivered to RP).
@@ -3223,12 +3224,17 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, PreventCloseYieldsCancelledEvent) {
       web_app::LaunchWebAppBrowser(profile(), ash::kCalculatorAppId);
   ASSERT_TRUE(browser);
 
-  EXPECT_EQ(BrowserClosingStatus::kDeniedByPolicy,
-            browser->HandleBeforeClose());
-  EXPECT_CALL(*this, OnBrowserCloseCancelled(
-                         browser, BrowserClosingStatus::kDeniedByPolicy))
-      .Times(1);
+  int times_called = 0;
+  base::CallbackListSubscription browser_close_canelled_subscription =
+      browser->RegisterBrowserCloseCancelled(base::BindLambdaForTesting(
+          [&](BrowserWindowInterface* bwi,
+              BrowserWindowInterface::ClosingStatus status) {
+            EXPECT_EQ(BrowserWindowInterface::ClosingStatus::kDeniedByPolicy,
+                      status);
+            times_called++;
+          }));
   browser->OnWindowClosing();
+  EXPECT_EQ(1, times_called);
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
@@ -3252,4 +3258,70 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, BrowserCloseEmitsClosedNotificationsOnce) {
   EXPECT_EQ(1u, chrome::GetTotalBrowserCount());
   CloseBrowserSynchronously(browser());
   EXPECT_EQ(0u, chrome::GetTotalBrowserCount());
+}
+
+// Asserts that browser propagates browser closed notifications in the case the
+// object is synchronously destroyed via `SynchronouslyDestroyBrowser()`.
+IN_PROC_BROWSER_TEST_F(BrowserTest,
+                       BrowserCloseEmitsClosedNotificationsWhenDestroyed) {
+  Browser* const new_browser = CreateBrowser(GetProfile());
+
+  // Assert a closed event is delivered in the case the browser is synchronously
+  // destroyed.
+  base::MockCallback<BrowserWindowInterface::BrowserDidCloseCallback>
+      browser_did_close_callback;
+  EXPECT_CALL(browser_did_close_callback, Run).Times(1);
+  base::CallbackListSubscription subscription =
+      new_browser->RegisterBrowserDidClose(browser_did_close_callback.Get());
+
+  EXPECT_EQ(2u, chrome::GetTotalBrowserCount());
+  new_browser->SynchronouslyDestroyBrowser();
+  EXPECT_EQ(1u, chrome::GetTotalBrowserCount());
+}
+
+class GuestSessionBrowserTest : public BrowserTest {
+ public:
+#if BUILDFLAG(IS_CHROMEOS)
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    command_line->AppendSwitch(ash::switches::kGuestSession);
+    command_line->AppendSwitchASCII(ash::switches::kLoginUser,
+                                    user_manager::kGuestUserName);
+    command_line->AppendSwitchASCII(ash::switches::kLoginProfile,
+                                    TestingProfile::kTestUserProfileDir);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  void SetUpOnMainThread() override {
+    BrowserTest::SetUpOnMainThread();
+#if BUILDFLAG(IS_CHROMEOS)
+    guest_browser_ = browser();
+#else
+    guest_browser_ = CreateGuestBrowser();
+#endif  // BUILDFLAG(IS_CHROMEOS)
+  }
+
+  void TearDownOnMainThread() override {
+    guest_browser_ = nullptr;
+    BrowserTest::TearDownOnMainThread();
+  }
+
+  Browser* guest_browser() { return guest_browser_; }
+
+ private:
+  raw_ptr<Browser> guest_browser_ = nullptr;
+};
+
+// Tests that Browser::Create creates a guest session browser.
+IN_PROC_BROWSER_TEST_F(GuestSessionBrowserTest, CreateGuestSessionBrowser) {
+  // Creating a guest session browser should succeed and the instantiated
+  // browser should be using an OTR profile.
+  Profile* guest_profile = guest_browser()->profile();
+  EXPECT_TRUE(guest_browser());
+  EXPECT_TRUE(guest_profile->IsGuestSession());
+  EXPECT_TRUE(guest_profile->IsOffTheRecord());
+
+  // Try creating a browser in original non-OTR guest profile - it should fail.
+  EXPECT_EQ(Browser::CreationStatus::kErrorProfileUnsuitable,
+            Browser::GetCreationStatusForProfile(
+                guest_profile->GetOriginalProfile()));
 }

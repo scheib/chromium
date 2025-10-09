@@ -182,7 +182,7 @@ class LocationBarCoordinatorTest : public PlatformTest {
 
   web::WebTaskEnvironment task_environment_;
   IOSChromeScopedTestingLocalState scoped_testing_local_state_;
-  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+  variations::test::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   LocationBarCoordinator* coordinator_;
   std::unique_ptr<TestProfileIOS> profile_;
@@ -210,7 +210,7 @@ TEST_F(LocationBarCoordinatorTest, RemoveLastWebState) {
 // variations header.
 TEST_F(LocationBarCoordinatorTest, LoadGoogleUrl) {
   ASSERT_EQ(VariationsIdsProvider::ForceIdsResult::SUCCESS,
-            VariationsIdsProvider::GetInstance()->ForceVariationIds(
+            VariationsIdsProvider::GetInstance()->ForceVariationIdsForTesting(
                 /*variation_ids=*/{"100"}, /*command_line_variation_ids=*/""));
 
   GURL url("https://www.google.com/");
@@ -245,7 +245,7 @@ TEST_F(LocationBarCoordinatorTest, LoadGoogleUrl) {
 // header.
 TEST_F(LocationBarCoordinatorTest, LoadNonGoogleUrl) {
   ASSERT_EQ(VariationsIdsProvider::ForceIdsResult::SUCCESS,
-            VariationsIdsProvider::GetInstance()->ForceVariationIds(
+            VariationsIdsProvider::GetInstance()->ForceVariationIdsForTesting(
                 /*variation_ids=*/{"100"}, /*command_line_variation_ids=*/""));
 
   GURL url("https://www.nongoogle.com/");

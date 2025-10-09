@@ -16,11 +16,10 @@ import androidx.core.os.BuildCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import org.chromium.base.ApkInfo;
-import org.chromium.base.BuildInfo;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.Log;
 import org.chromium.base.ResettersForTesting;
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.blink.mojom.ViewportFit;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -36,6 +35,7 @@ import org.chromium.ui.display.DisplayUtil;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.function.Supplier;
 
 /**
  * A util helper class to know if e2e is on and eligible for current session and to record metrics
@@ -96,20 +96,6 @@ public class EdgeToEdgeUtils {
     }
 
     /**
-     * Whether the draw edge to edge infrastructure is on. When this is enabled, Chrome will start
-     * drawing edge to edge on start up.
-     *
-     * <p>To check if Chrome is aware of edge-to-edge, use {@link
-     * org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeStateProvider#get()}
-     *
-     * @deprecated Avoid new usage. Check corresponding feature flags inline.
-     */
-    @Deprecated
-    public static boolean isChromeEdgeToEdgeFeatureEnabled() {
-        return isBottomChinFeatureEnabled() || isEdgeToEdgeEverywhereEnabled();
-    }
-
-    /**
      * Whether the edge-to-edge bottom chin is enabled.
      *
      * <p>When enabled, Chrome will replace the OS navigation bar with a thin "Chin" layer in the
@@ -150,9 +136,8 @@ public class EdgeToEdgeUtils {
             return false;
         }
 
-        return isBottomChinFeatureEnabled()
-                && !BuildInfo.getInstance().isAutomotive
-                && !hasTappableNavigationBar(activity.getWindow());
+        if (!isBottomChinFeatureEnabled()) return false;
+        return !DeviceInfo.isAutomotive() && !hasTappableNavigationBar(activity.getWindow());
     }
 
     /**
@@ -210,7 +195,7 @@ public class EdgeToEdgeUtils {
             return false;
         }
 
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             return false;
         }
 
@@ -275,7 +260,7 @@ public class EdgeToEdgeUtils {
                     IneligibilityReason.NUM_TYPES);
         }
 
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             eligible = false;
             RecordHistogram.recordEnumeratedHistogram(
                     INELIGIBLE_REASON_HISTOGRAM,

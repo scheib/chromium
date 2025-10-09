@@ -13,6 +13,7 @@ import androidx.annotation.LayoutRes;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.blink.mojom.DisplayMode;
 import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.ui.desktop_windowing.AppHeaderUtils;
@@ -120,12 +121,54 @@ public class WebAppHeaderUtils {
     }
 
     /**
+     * Checks whether window controls overlay is enabled. This includes checking feature flag and
+     * type of web app that's running right now.
+     *
+     * @param intentDataProvider contains intent data related to the current browser service.
+     * @return true when window controls overla flag is enabled and currently running a TWA,
+     *     otherwise false.
+     */
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    public static boolean isWindowControlsOverlayEnabled(
+            BrowserServicesIntentDataProvider intentDataProvider) {
+        @DisplayMode.EnumType int displayMode = intentDataProvider.getResolvedDisplayMode();
+
+        return intentDataProvider.isTrustedWebActivity()
+                && displayMode == DisplayMode.WINDOW_CONTROLS_OVERLAY
+                && isWindowControlsOverlayFlagEnabled();
+    }
+
+    /** Checks whether the window controls overlay feature flag is enabled. */
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    public static boolean isWindowControlsOverlayFlagEnabled() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+                && ChromeFeatureList.sAndroidWindowControlsOverlay.isEnabled();
+    }
+
+    /** Checks whether a display mode that requires the custom web app header is enabled. */
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    public static boolean isWebAppHeaderEnabled(
+            BrowserServicesIntentDataProvider intentDataProvider) {
+        return isMinimalUiEnabled(intentDataProvider)
+                || isWindowControlsOverlayEnabled(intentDataProvider);
+    }
+
+    /**
      * Provides layout id of the webapp header.
      *
      * @return webapp header layout resource id.
      */
     public static @LayoutRes int getWebAppHeaderLayoutId() {
         return R.layout.web_app_main_layout;
+    }
+
+    /**
+     * Provides layout id of the webapp content.
+     *
+     * @return webapp content resource id.
+     */
+    public static int getWebAppHeaderContentId() {
+        return R.id.web_app_content;
     }
 
     /**
@@ -138,7 +181,7 @@ public class WebAppHeaderUtils {
      */
     public static boolean isMinimalUiVisible(
             BrowserServicesIntentDataProvider intentDataProvider,
-            DesktopWindowStateManager desktopWindowStateManager) {
+            @Nullable DesktopWindowStateManager desktopWindowStateManager) {
         return isMinimalUiEnabled(intentDataProvider)
                 && AppHeaderUtils.isAppInDesktopWindow(desktopWindowStateManager);
     }

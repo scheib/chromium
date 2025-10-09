@@ -28,16 +28,17 @@
 #include "components/safe_browsing/core/common/utils.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/signin/public/identity_manager/oauth_consumer_ids.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "components/signin/public/identity_manager/scope_set.h"
 #include "components/sync/base/user_selectable_type.h"
 #include "components/sync/service/sync_service.h"
 #include "components/sync/service/sync_user_settings.h"
-#include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -146,8 +147,7 @@ class RequestImpl : public TailoredSecurityService::Request {
     access_token_fetcher_ =
         identity_manager_->CreateAccessTokenFetcherForAccount(
             GetAccountForRequest(identity_manager_),
-            /*oauth_consumer_name=*/"tailored_security_service",
-            {GaiaConstants::kChromeSafeBrowsingOAuth2Scope},
+            signin::OAuthConsumerId::kTailoredSecurityService,
             base::BindOnce(&RequestImpl::OnAccessTokenFetchComplete,
                            base::Unretained(this)),
             signin::AccessTokenFetcher::Mode::kImmediate);
@@ -171,10 +171,9 @@ class RequestImpl : public TailoredSecurityService::Request {
     // If the response code indicates that the token might not be valid,
     // invalidate the token and try again.
     if (response_code_ == net::HTTP_UNAUTHORIZED && ++auth_retry_count_ <= 1) {
-      signin::ScopeSet oauth_scopes;
-      oauth_scopes.insert(GaiaConstants::kChromeSafeBrowsingOAuth2Scope);
       identity_manager_->RemoveAccessTokenFromCache(
-          GetAccountForRequest(identity_manager_), oauth_scopes, access_token_);
+          GetAccountForRequest(identity_manager_),
+          signin::OAuthConsumerId::kTailoredSecurityService, access_token_);
       access_token_.clear();
       Start();
       return;
@@ -487,9 +486,8 @@ void TailoredSecurityService::SetTailoredSecurityBitForTesting(
 
   auto enable_tailored_security_service =
       base::Value::Dict().Set("history_recording_enabled", is_enabled);
-  std::string post_data;
-  base::JSONWriter::Write(enable_tailored_security_service, &post_data);
-  request->SetPostData(post_data);
+  request->SetPostData(
+      base::WriteJson(enable_tailored_security_service).value_or(""));
 
   request->Start();
   Request* request_ptr = request.get();
@@ -500,8 +498,8 @@ void TailoredSecurityService::SetTailoredSecurityBitForTesting(
 base::Value::Dict TailoredSecurityService::ReadResponse(Request* request) {
   base::Value::Dict result;
   if (request->GetResponseCode() == net::HTTP_OK) {
-    std::optional<base::Value> json_value =
-        base::JSONReader::Read(request->GetResponseBody());
+    std::optional<base::Value> json_value = base::JSONReader::Read(
+        request->GetResponseBody(), base::JSON_PARSE_CHROMIUM_EXTENSIONS);
     if (json_value && json_value.value().is_dict())
       result = std::move(json_value->GetDict());
     else

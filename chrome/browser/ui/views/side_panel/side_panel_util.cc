@@ -24,11 +24,18 @@
 #include "chrome/browser/ui/views/side_panel/side_panel_coordinator.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_registry.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_ui.h"
+#include "chrome/browser/ui/webui_browser/webui_browser.h"
+#include "chrome/common/chrome_features.h"
 #include "components/history_clusters/core/features.h"
 #include "components/history_clusters/core/history_clusters_service.h"
 #include "components/prefs/pref_service.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/actions/actions.h"
+
+#if BUILDFLAG(ENABLE_GLIC)
+#include "chrome/browser/glic/public/glic_enabling.h"
+#include "chrome/browser/ui/views/side_panel/glic/glic_legacy_side_panel_coordinator.h"
+#endif
 
 // static
 void SidePanelUtil::PopulateGlobalEntries(Browser* browser,
@@ -42,6 +49,12 @@ void SidePanelUtil::PopulateGlobalEntries(Browser* browser,
   browser->browser_window_features()
       ->bookmarks_side_panel_coordinator()
       ->CreateAndRegisterEntry(window_registry);
+
+  if (webui_browser::IsWebUIBrowserEnabled()) {
+    // TODO(webium): Consider supporting additional side panels beyond reading
+    // list and bookmarks.
+    return;
+  }
 
   // Add history clusters.
   if (HistoryClustersSidePanelCoordinator::IsSupported(browser->profile()) &&
@@ -64,6 +77,15 @@ void SidePanelUtil::PopulateGlobalEntries(Browser* browser,
         ->comments_side_panel_coordinator()
         ->CreateAndRegisterEntry(window_registry);
   }
+#if BUILDFLAG(ENABLE_GLIC)
+  if (glic::GlicEnabling::IsEnabledForProfile(browser->profile()) &&
+      browser->is_type_normal() &&
+      !base::FeatureList::IsEnabled(features::kGlicMultiInstance)) {
+    browser->browser_window_features()
+        ->glic_side_panel_coordinator()
+        ->CreateAndRegisterEntry(browser, window_registry);
+  }
+#endif
 }
 
 SidePanelContentProxy* SidePanelUtil::GetSidePanelContentProxy(
@@ -159,10 +181,6 @@ void SidePanelUtil::RecordEntryShowTriggeredMetrics(
                       ".ShowTriggered"}),
         trigger.value());
   }
-}
-
-void SidePanelUtil::RecordComboboxShown() {
-  base::UmaHistogramBoolean("SidePanel.ComboboxMenuShown", true);
 }
 
 void SidePanelUtil::RecordPinnedButtonClicked(SidePanelEntry::Id id,

@@ -7,7 +7,6 @@
 #import "base/metrics/field_trial_params.h"
 
 BASE_FEATURE(kLensFiltersAblationModeEnabled,
-             "LensFiltersAblationModeEnabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 const char kLensFiltersAblationMode[] = "LensFilterAblationMode";
@@ -18,7 +17,6 @@ int LensFiltersAblationMode() {
 }
 
 BASE_FEATURE(kLensTranslateToggleModeEnabled,
-             "LensTranslateToggleModeEnabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 const char kLensTranslateToggleMode[] = "LensTranslateToggleMode";
@@ -29,73 +27,48 @@ int LensTranslateToggleMode() {
 }
 
 BASE_FEATURE(kLensWebPageLoadOptimizationEnabled,
-             "LensWebPageLoadOptimizationEnabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensUnaryApisWithHttpTransportEnabled,
-             "LensUnaryApisWithHttpTransportEnabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kLensUnaryHttpTransportEnabled,
-             "LensUnaryHttpTransportEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kLensUnaryHttpTransportEnabled, base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kLensUnaryApiSalientTextEnabled,
-             "LensUnaryApiSalientTextEnabled",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kLensUnaryApiSalientTextEnabled, base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensSingleTapTextSelectionDisabled,
-             "LensSingleTapTextSelectionDisabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensGestureTextSelectionDisabled,
-             "LensGestureTextSelectionDisabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensUnaryClientDataHeaderEnabled,
-             "LensUnaryClientDataHeaderEnabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensBlockFetchObjectsInteractionRPCsOnSeparateHandshake,
-             "LensBlockFetchObjectsInteractionRPCsOnSeparateHandshake",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensPrewarmHardStickinessInInputSelection,
-             "LensPrewarmHardStickinessInInputSelection",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensPrewarmHardStickinessInQueryFormulation,
-             "LensPrewarmHardStickinessInQueryFormulation",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kLensFetchSrpApiEnabled,
-             "LensFetchSrpApiEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kLensFetchSrpApiEnabled, base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kLensExactMatchesEnabled,
-             "LensExactMatchesEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kLensExactMatchesEnabled, base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensCameraNoStillOutputRequired,
-             "LensCameraNoStillOutputRequired",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensCameraUnbinnedCaptureFormatsPreferred,
-             "LensCameraUnbinnedCaptureFormatsPreferred",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kLensContinuousZoomEnabled,
-             "LensContinuousZoomEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kLensContinuousZoomEnabled, base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kLensInitialLvfZoomLevel90Percent,
-             "LensInitialLvfZoomLevel90Percent",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kLensTripleCameraEnabled,
-             "LensTripleCameraEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kLensTripleCameraEnabled, base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kLensStrokesAPIEnabled,
-             "LensStrokesAPIEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kLensStrokesAPIEnabled, base::FEATURE_DISABLED_BY_DEFAULT);

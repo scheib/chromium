@@ -306,10 +306,12 @@ bool LayoutEmbeddedContent::NodeAtPoint(
                                             accumulated_offset, phase);
 }
 
-void LayoutEmbeddedContent::StyleDidChange(StyleDifference diff,
-                                           const ComputedStyle* old_style) {
+void LayoutEmbeddedContent::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
-  LayoutReplaced::StyleDidChange(diff, old_style);
+  LayoutReplaced::StyleDidChange(diff, old_style, style_change_context);
   const ComputedStyle& new_style = StyleRef();
 
   if (Frame* frame = GetFrameOwnerElement()->ContentFrame())
@@ -377,17 +379,6 @@ PhysicalRect LayoutEmbeddedContent::ReplacedContentRectFrom(
   if (ChildFrameView() && View() && IsEffectiveRootScroller()) {
     content_rect.offset = PhysicalOffset();
     content_rect.size = View()->ViewRect().size;
-  }
-
-  // SVG documents in <object>/<embed> elements should behave like images,
-  // respecting CSS properties like object-fit and object-position.
-  // To achieve this, we apply the base class' replaced element sizing logic
-  // with pixel snapping.
-  if (RuntimeEnabledFeatures::SVGEmbeddedAsReplacedElementEnabled() &&
-      GetFrameOwnerElement() && GetFrameOwnerElement()->contentDocument() &&
-      GetFrameOwnerElement()->contentDocument()->IsSVGDocument()) {
-    return PreSnappedRectForPersistentSizing(
-        LayoutReplaced::ReplacedContentRectFrom(base_content_rect));
   }
 
   if (const std::optional<PhysicalSize> frozen_size = FrozenFrameSize()) {

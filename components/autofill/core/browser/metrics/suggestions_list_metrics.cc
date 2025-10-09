@@ -17,33 +17,6 @@
 
 namespace autofill::autofill_metrics {
 
-SuggestionRankingContext::SuggestionRankingContext() = default;
-SuggestionRankingContext::SuggestionRankingContext(
-    const SuggestionRankingContext&) = default;
-SuggestionRankingContext& SuggestionRankingContext::operator=(
-    const SuggestionRankingContext&) = default;
-SuggestionRankingContext::~SuggestionRankingContext() = default;
-
-// static
-SuggestionRankingContext::RelativePosition
-SuggestionRankingContext::GetRelativePositionEnum(size_t legacy_index,
-                                                  size_t new_index) {
-  // A lower index means that the suggestion was ranked higher.
-  if (new_index < legacy_index) {
-    return SuggestionRankingContext::RelativePosition::kRankedHigher;
-  } else if (new_index > legacy_index) {
-    return SuggestionRankingContext::RelativePosition::kRankedLower;
-  }
-  return SuggestionRankingContext::RelativePosition::kRankedSame;
-}
-
-bool SuggestionRankingContext::RankingsAreDifferent() const {
-  return std::ranges::any_of(
-      suggestion_rankings_difference_map, [](const auto& pair) {
-        return pair.second != RelativePosition::kRankedSame;
-      });
-}
-
 void LogSuggestionsCount(size_t num_suggestions,
                          FillingProduct filling_product) {
   switch (filling_product) {
@@ -67,6 +40,7 @@ void LogSuggestionsCount(size_t num_suggestions,
     case FillingProduct::kIdentityCredential:
     case FillingProduct::kDataList:
     case FillingProduct::kOneTimePassword:
+    case FillingProduct::kPasskey:
       NOTREACHED();
   }
 }
@@ -101,6 +75,7 @@ void LogSuggestionAcceptedIndex(int index,
     case FillingProduct::kNone:
     case FillingProduct::kDataList:
     case FillingProduct::kOneTimePassword:
+    case FillingProduct::kPasskey:
       // It is NOTREACHED because all other types should be handled separately.
       NOTREACHED();
   }
@@ -109,13 +84,6 @@ void LogSuggestionAcceptedIndex(int index,
 
   base::UmaHistogramBoolean("Autofill.SuggestionAccepted.OffTheRecord",
                             off_the_record);
-}
-
-void LogAutofillRankingSuggestionDifference(
-    SuggestionRankingContext::RelativePosition ranking_difference) {
-  base::UmaHistogramEnumeration(
-      "Autofill.SuggestionAccepted.SuggestionRankingDifference.CreditCard",
-      ranking_difference);
 }
 
 void LogAddressAutofillOnTypingSuggestionAccepted(

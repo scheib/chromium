@@ -24,19 +24,20 @@
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
 #include "ui/ozone/platform/wayland/host/wayland_window_manager.h"
+#include "ui/ozone/public/native_pixmap_usage_utils.h"
 
 #if defined(WAYLAND_GBM)
-#include "ui/gfx/buffer_format_util.h"
+#include "ui/gfx/buffer_types.h"
 #include "ui/gfx/linux/drm_util_linux.h"
 #include "ui/gfx/linux/gbm_device.h"  // nogncheck
 #include "ui/ozone/platform/wayland/gpu/gbm_pixmap_wayland.h"
 #include "ui/ozone/platform/wayland/gpu/gbm_surfaceless_wayland.h"
 #include "ui/ozone/public/ozone_platform.h"
-#endif
+#endif  // WAYLAND_GBM
 
 #if BUILDFLAG(ENABLE_VULKAN)
 #include "ui/ozone/platform/wayland/gpu/vulkan_implementation_wayland.h"
-#endif
+#endif  // ENABLE_VULKAN
 
 namespace ui {
 
@@ -81,9 +82,8 @@ class GLOzoneEGLWayland : public GLOzoneEGL {
   bool LoadGLES2Bindings(const gl::GLImplementationParts& impl) override;
 
  private:
-  const raw_ptr<WaylandConnection, AcrossTasksDanglingUntriaged> connection_;
-  const raw_ptr<WaylandBufferManagerGpu, AcrossTasksDanglingUntriaged>
-      buffer_manager_;
+  const raw_ptr<WaylandConnection> connection_;
+  const raw_ptr<WaylandBufferManagerGpu> buffer_manager_;
   gl::EGLDisplayPlatform native_display_;
 };
 
@@ -272,7 +272,8 @@ scoped_refptr<gfx::NativePixmap> WaylandSurfaceFactory::CreateNativePixmap(
     scoped_refptr<GbmPixmapWayland> pixmap =
         base::MakeRefCounted<GbmPixmapWayland>(buffer_manager_);
 
-    if (!pixmap->InitializeBuffer(widget, size, format, usage,
+    auto native_usage = BufferUsageToNativePixmapUsage(usage);
+    if (!pixmap->InitializeBuffer(widget, size, format, native_usage,
                                   framebuffer_size)) {
       return nullptr;
     }
@@ -359,6 +360,13 @@ WaylandSurfaceFactory::GetSupportedFormatsForTexturing() const {
 #else
   return {};
 #endif
+}
+
+void WaylandSurfaceFactory::SetBufferManagerForTesting(
+    WaylandBufferManagerGpu* buffer_manager) {
+  buffer_manager_ = buffer_manager;
+  egl_implementation_.reset(
+      new GLOzoneEGLWayland(connection_, buffer_manager_));
 }
 
 }  // namespace ui

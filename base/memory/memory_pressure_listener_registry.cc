@@ -6,7 +6,9 @@
 
 #include <atomic>
 
+#include "base/feature_list.h"
 #include "base/memory/memory_pressure_level.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/trace_event/interned_args_helper.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_pressure_level_proto.h"
@@ -19,6 +21,13 @@ namespace {
 
 std::atomic<bool> g_notifications_suppressed = false;
 
+BASE_FEATURE(kSuppressMemoryListeners, base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE_PARAM(std::string,
+                   kSuppressMemoryListenersMask,
+                   &kSuppressMemoryListeners,
+                   "suppress_memory_listeners_mask",
+                   "");
 }  // namespace
 
 MemoryPressureListenerRegistry::MemoryPressureListenerRegistry() = default;
@@ -49,7 +58,7 @@ void MemoryPressureListenerRegistry::NotifyMemoryPressure(
 }
 
 void MemoryPressureListenerRegistry::AddObserver(
-    SyncMemoryPressureListener* listener) {
+    SyncMemoryPressureListenerRegistration* listener) {
   CHECK(
       !SingleThreadTaskRunner::HasMainThreadDefault() ||
       SingleThreadTaskRunner::GetMainThreadDefault()->BelongsToCurrentThread());
@@ -57,13 +66,30 @@ void MemoryPressureListenerRegistry::AddObserver(
 }
 
 void MemoryPressureListenerRegistry::RemoveObserver(
-    SyncMemoryPressureListener* listener) {
+    SyncMemoryPressureListenerRegistration* listener) {
   listeners_.RemoveObserver(listener);
 }
 
 void MemoryPressureListenerRegistry::DoNotifyMemoryPressure(
     MemoryPressureLevel memory_pressure_level) {
-  listeners_.Notify(&SyncMemoryPressureListener::Notify, memory_pressure_level);
+  if (base::FeatureList::IsEnabled(kSuppressMemoryListeners)) {
+    auto mask = kSuppressMemoryListenersMask.Get();
+    for (auto& listener : listeners_) {
+      const size_t tag_index = static_cast<size_t>(listener.tag());
+      // Only Notify observers that aren't suppressed. An observer is suppressed
+      // if its tag is present in the mask, the value is not '0'. A value of '1'
+      // suppresses non critical levels, and a value of '2' supressess all
+      // levels.
+      if (tag_index >= mask.size() || mask[tag_index] == '0' ||
+          (mask[tag_index] == '1' &&
+           memory_pressure_level == MEMORY_PRESSURE_LEVEL_CRITICAL)) {
+        listener.Notify(memory_pressure_level);
+      }
+    }
+  } else {
+    listeners_.Notify(&SyncMemoryPressureListenerRegistration::Notify,
+                      memory_pressure_level);
+  }
 }
 
 // static

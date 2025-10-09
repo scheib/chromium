@@ -17,8 +17,8 @@
 #include "base/observer_list_types.h"
 #include "base/supports_user_data.h"
 #include "base/types/pass_key.h"
-#include "chrome/browser/actor/task_id.h"
 #include "chrome/common/actor.mojom.h"
+#include "chrome/common/actor/task_id.h"
 #include "content/public/browser/render_frame_host.h"
 #include "url/gurl.h"
 
@@ -56,10 +56,13 @@ class AggregatedJournal {
     // End an pending entry with additional details. This can only be called
     // once and will be automatically called from the destructor if it hasn't
     // been called.
-    void EndEntry(std::string_view details);
+    void EndEntry(std::vector<mojom::JournalDetailsPtr> details);
 
     AggregatedJournal& GetJournal();
     TaskId GetTaskId();
+
+    const std::string& event_name() const { return event_name_; }
+    base::TimeTicks begin_time() const { return begin_time_; }
 
    private:
     base::PassKey<AggregatedJournal> pass_key_;
@@ -68,6 +71,7 @@ class AggregatedJournal {
     TaskId task_id_;
     mojom::JournalTrack track_;
     std::string event_name_;
+    base::TimeTicks begin_time_;
   };
 
   // Observing class for new entries.
@@ -88,14 +92,14 @@ class AggregatedJournal {
       TaskId task_id,
       mojom::JournalTrack track,
       std::string_view event_name,
-      std::string_view details);
+      std::vector<mojom::JournalDetailsPtr> details);
 
   // Log an instant event.
   void Log(const GURL& url,
            TaskId task_id,
            mojom::JournalTrack track,
            std::string_view event_name,
-           std::string_view details);
+           std::vector<mojom::JournalDetailsPtr> details);
 
   // Screenshots need to be an instant event with a custom event name to be
   // decoded in perfetto.
@@ -118,7 +122,7 @@ class AggregatedJournal {
                    TaskId task_id,
                    mojom::JournalTrack track,
                    const std::string& event_name,
-                   std::string_view details);
+                   std::vector<mojom::JournalDetailsPtr> details);
 
  private:
   void AddEntry(std::unique_ptr<Entry>);

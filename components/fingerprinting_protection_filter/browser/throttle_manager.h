@@ -154,6 +154,14 @@ class ThrottleManager : public base::SupportsUserData::Data,
     return ruleset_handle_.get();
   }
 
+  // Will be called at the latest in the WillProcessResponse stage from a
+  // NavigationThrottle that was registered before the throttle manager's
+  // throttles created in MaybeAppendNavigationThrottles().
+  void OnPageActivationComputed(
+      content::NavigationHandle* navigation_handle,
+      const subresource_filter::mojom::ActivationState& activation_state,
+      const subresource_filter::ActivationDecision& activation_decision);
+
  protected:
   FRIEND_TEST_ALL_PREFIXES(
       ThrottleManagerEnabledTest,
@@ -183,11 +191,6 @@ class ThrottleManager : public base::SupportsUserData::Data,
   // frame Page doesn't own a throttle manager)
   void OnPageCreated(content::Page& page);
 
-  // Similar to above, called from the WebContentsHelper.
-  void OnPageActivationComputed(
-      content::NavigationHandle* navigation_handle,
-      const subresource_filter::mojom::ActivationState& activation_state,
-      const subresource_filter::ActivationDecision& activation_decision);
 
  private:
   friend FingerprintingProtectionWebContentsHelper;
@@ -306,9 +309,6 @@ class ThrottleManager : public base::SupportsUserData::Data,
   std::unique_ptr<subresource_filter::VerifiedRuleset::Handle> ruleset_handle_;
 
   std::unique_ptr<subresource_filter::PageLoadStatistics> statistics_;
-
-  // TODO(https://crbug.com/40280666): Add statistics once they are available in
-  // a shared SubresourceFilter directory.
 
   // True if the current committed main frame load in this WebContents has
   // notified the delegate that a subresource was disallowed. The callback

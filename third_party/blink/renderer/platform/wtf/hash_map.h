@@ -195,7 +195,7 @@ class HashMap {
   // Erases all elements for which pred(element) returns true.
   //
   // The predicate should have a signature compatible with:
-  //   bool pred(const WTF::KeyValuePair<KeyType, MappedType>&);
+  //   bool pred(const blink::KeyValuePair<KeyType, MappedType>&);
   template <typename Pred>
   void erase_if(Pred pred);
 
@@ -580,20 +580,10 @@ bool operator==(const HashMap<T, U, V, W, X>& a,
 }
 
 template <typename T, typename U, typename V, typename W, typename X>
-inline bool operator!=(const HashMap<T, U, V, W, X>& a,
-                       const HashMap<T, U, V, W, X>& b) {
-  return !(a == b);
-}
-
-template <typename T, typename U, typename V, typename W, typename X>
 inline void swap(HashMap<T, U, V, W, X>& a, HashMap<T, U, V, W, X>& b) {
   a.swap(b);
 }
 
 }  // namespace blink
-
-namespace WTF {
-using blink::HashMap;
-}  // namespace WTF
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_HASH_MAP_H_

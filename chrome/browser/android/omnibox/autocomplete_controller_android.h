@@ -50,9 +50,11 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
              bool prefer_keyword,
              bool allow_exact_keyword_match,
              bool want_asynchronous_matches);
-  void StartPrefetch(JNIEnv* env,
-                     const base::android::JavaRef<jstring>& j_current_url,
-                     jint j_page_classification);
+  void StartPrefetch(
+      JNIEnv* env,
+      const base::android::JavaRef<jstring>& j_current_url,
+      jint j_page_classification,
+      const base::android::JavaParamRef<jobject>& j_web_contents);
   base::android::ScopedJavaLocalRef<jobject> Classify(
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& j_text);
@@ -74,7 +76,8 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
       jint j_page_classification,
       jlong elapsed_time_since_first_modified,
       jint completed_length,
-      const base::android::JavaParamRef<jobject>& j_web_contents);
+      const base::android::JavaParamRef<jobject>& j_web_contents,
+      jlong omnibox_action_ptr);
   jboolean OnSuggestionTouchDown(
       JNIEnv* env,
       uintptr_t match_ptr,

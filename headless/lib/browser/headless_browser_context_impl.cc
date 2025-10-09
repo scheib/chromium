@@ -77,7 +77,7 @@ HeadlessBrowserContextImpl::HeadlessBrowserContextImpl(
           ? base::FilePath()
           : path_;
   request_context_manager_ = std::make_unique<HeadlessRequestContextManager>(
-      context_options_.get(), user_data_path);
+      context_options_.get(), user_data_path, browser->os_crypt_async());
   profile_metrics::SetBrowserProfileType(
       this, IsOffTheRecord() ? profile_metrics::BrowserProfileType::kIncognito
                              : profile_metrics::BrowserProfileType::kRegular);
@@ -180,7 +180,7 @@ HeadlessBrowserContextImpl::CreateZoomLevelDelegate(
   return nullptr;
 }
 
-base::FilePath HeadlessBrowserContextImpl::GetPath() {
+base::FilePath HeadlessBrowserContextImpl::GetPath() const {
   return path_;
 }
 

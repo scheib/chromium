@@ -229,23 +229,23 @@ bool SupportedInMeta(CSPDirectiveName directive) {
 // Return the error message specific to one CSP |directive|.
 // $1: Blocked URL.
 // $2: Blocking policy.
-const char* ErrorMessage(CSPDirectiveName directive) {
+std::string ErrorMessage(CSPDirectiveName directive,
+                         mojom::ContentSecurityPolicyType type) {
+  std::string action;
   switch (directive) {
     case CSPDirectiveName::FencedFrameSrc:
-      return "Refused to frame '$1' as a fenced frame because it violates the "
-             "following Content Security Policy directive: \"$2\".";
+      action = "Framing '$1' as a fenced frame";
+      break;
     case CSPDirectiveName::FormAction:
-      return "Refused to send form data to '$1' because it violates the "
-             "following Content Security Policy directive: \"$2\".";
+      action = "Sending form data to '$1'";
+      break;
     case CSPDirectiveName::FrameAncestors:
-      return "Refused to frame '$1' because an ancestor violates the following "
-             "Content Security Policy directive: \"$2\".";
     case CSPDirectiveName::FrameSrc:
-      return "Refused to frame '$1' because it violates the "
-             "following Content Security Policy directive: \"$2\".";
+      action = "Framing '$1'";
+      break;
     case CSPDirectiveName::ConnectSrc:
-      return "Refused to connect to '$1' because it violates the "
-             "following Content Security Policy directive: \"$2\".";
+      action = "Connecting to '$1'";
+      break;
 
     case CSPDirectiveName::BaseURI:
     case CSPDirectiveName::BlockAllMixedContent:
@@ -274,6 +274,15 @@ const char* ErrorMessage(CSPDirectiveName directive) {
     case CSPDirectiveName::Unknown:
       NOTREACHED();
   };
+
+  return base::StrCat(
+      {action, " violates the following ",
+       type == mojom::ContentSecurityPolicyType::kReport ? "report-only " : "",
+       "Content Security Policy directive: \"$2\". ",
+       type == mojom::ContentSecurityPolicyType::kReport
+           ? "The violation has been logged, but no further action has been "
+             "taken."
+           : "The request has been blocked."});
 }
 
 void ReportViolation(CSPContext* context,
@@ -289,7 +298,7 @@ void ReportViolation(CSPContext* context,
   GURL blocked_url = (directive_name == CSPDirectiveName::FrameAncestors)
                          ? GURL(ToString(*policy->self_origin))
                          : url;
-  std::string blocked_url_scheme = blocked_url.scheme();
+  std::string blocked_url_scheme = blocked_url.GetScheme();
   auto safe_source_location =
       source_location ? source_location->Clone() : mojom::SourceLocation::New();
 
@@ -297,12 +306,8 @@ void ReportViolation(CSPContext* context,
                                             safe_source_location.get());
 
   std::stringstream message;
-
-  if (policy->header->type == mojom::ContentSecurityPolicyType::kReport)
-    message << "[Report Only] ";
-
   message << base::ReplaceStringPlaceholders(
-      ErrorMessage(directive_name),
+      ErrorMessage(directive_name, policy->header->type),
       {ElideURLForReportViolation(blocked_url),
        ToString(effective_directive_name) + " " +
            ToString(policy->directives[effective_directive_name])},
@@ -340,13 +345,13 @@ const GURL ExtractInnerURL(const GURL& url) {
     return *inner_url;
   else
     // TODO(arthursonzogni): revisit this once GURL::inner_url support blob-URL.
-    return GURL(url.path());
+    return GURL(url.GetPath());
 }
 
 std::string InnermostScheme(const GURL& url) {
   if (url.SchemeIsFileSystem() || url.SchemeIsBlob())
-    return ExtractInnerURL(url).scheme();
-  return url.scheme();
+    return ExtractInnerURL(url).GetScheme();
+  return url.GetScheme();
 }
 
 // Extensions can load their own internal content into the document. They
@@ -1003,7 +1008,7 @@ void WarnIfDirectiveValueNotEmpty(
 }
 
 mojom::CSPSourcePtr ComputeSelfOrigin(const GURL& url) {
-  if (url.scheme() == url::kFileScheme) {
+  if (url.GetScheme() == url::kFileScheme) {
     // Forget the host for file schemes. Host can anyway only be `localhost` or
     // empty and this is platform dependent.
     //
@@ -1012,8 +1017,8 @@ mojom::CSPSourcePtr ComputeSelfOrigin(const GURL& url) {
     return mojom::CSPSource::New(url::kFileScheme, "", url::PORT_UNSPECIFIED,
                                  "", false, false);
   }
-  return mojom::CSPSource::New(url.scheme(), url.host(), url.EffectiveIntPort(),
-                               "", false, false);
+  return mojom::CSPSource::New(url.GetScheme(), url.GetHost(),
+                               url.EffectiveIntPort(), "", false, false);
 }
 
 std::string UnrecognizedDirectiveErrorMessage(

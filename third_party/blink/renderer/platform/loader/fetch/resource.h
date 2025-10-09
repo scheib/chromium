@@ -207,11 +207,13 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   // - `first` is the priority with the fix of https://crbug.com/1369823.
   // - `second` is the priority without the fix, ignoring the priority from
   //   ImageLoader.
-  virtual std::pair<ResourcePriority, ResourcePriority> PriorityFromObservers()
-      const {
-    return std::make_pair(ResourcePriority(), ResourcePriority());
+  virtual std::pair<std::optional<ResourcePriority>,
+                    std::optional<ResourcePriority>>
+  PriorityFromObservers() const {
+    return std::make_pair(std::nullopt, std::nullopt);
   }
 
+  virtual bool HasNonDegenerateContentSize() const { return false; }
   virtual bool IsAboveSpeculativeDecodeSizeThreshold() const { return false; }
 
   // If this Resource is already finished when AddClient is called, the
@@ -310,12 +312,11 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   // Returns true if |this| resource is matched with the given parameters.
   virtual void MatchPreload(const FetchParameters&);
 
-  bool CanReuseRedirectChain(UseCounter& use_counter) const;
-  bool MustRevalidateDueToCacheHeaders(bool allow_stale,
-                                       UseCounter& use_counter) const;
-  bool ShouldRevalidateStaleResponse(UseCounter& use_counter) const;
+  bool CanReuseRedirectChain() const;
+  bool MustRevalidateDueToCacheHeaders(bool allow_stale) const;
+  bool ShouldRevalidateStaleResponse() const;
   virtual bool CanUseCacheValidator() const;
-  base::TimeDelta FreshnessLifetime(UseCounter& use_counter) const;
+  base::TimeDelta FreshnessLifetime() const;
   bool IsCacheValidator() const {
     return revalidation_status_ == RevalidationStatus::kRevalidating;
   }

@@ -554,6 +554,7 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void OnMouseDown(Node&) {}
 
   virtual void DidUpdateBrowserControls() const {}
+  virtual void DidUpdateLoadProgress(float) {}
 
   virtual void DidUpdateMaxSafeAreaInsets(
       const gfx::InsetsF& max_safe_area_insets) const {}
@@ -575,9 +576,6 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
                              base::OnceCallback<void(bool)> callback,
                              bool speculative) {
     std::move(callback).Run(false);
-  }
-  virtual bool SpeculativeDecodeRequestInFlight(LocalFrame* frame) const {
-    return false;
   }
 
   // The `callback` will be fired when the corresponding renderer frame for the

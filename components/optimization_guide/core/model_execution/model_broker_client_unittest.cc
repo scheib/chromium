@@ -7,16 +7,35 @@
 #include "base/task/current_thread.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
+#include "components/optimization_guide/core/delivery/model_provider_registry.h"
+#include "components/optimization_guide/core/model_execution/model_execution_features.h"
+#include "components/optimization_guide/core/model_execution/model_execution_prefs.h"
 #include "components/optimization_guide/core/model_execution/test/fake_model_assets.h"
 #include "components/optimization_guide/core/model_execution/test/fake_model_broker.h"
 #include "components/optimization_guide/core/model_execution/test/fake_remote.h"
 #include "components/optimization_guide/core/model_execution/test/feature_config_builder.h"
+#include "components/optimization_guide/core/model_execution/test/request_builder.h"
+#include "components/optimization_guide/core/model_execution/test/response_holder.h"
 #include "components/optimization_guide/proto/model_execution.pb.h"
 #include "components/optimization_guide/public/mojom/model_broker.mojom-shared.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace optimization_guide {
 
+namespace {
+
+// An config that should be detected as invalid at execution time.
+proto::OnDeviceModelExecutionFeatureConfig InvalidTestConfig() {
+  // This config is missing input and output config,
+  proto::OnDeviceModelExecutionFeatureConfig config;
+  config.set_feature(proto::MODEL_EXECUTION_FEATURE_TEST);
+  config.set_can_skip_text_safety(true);
+  return config;
+}
+
+}  // namespace
+
+// Verify that a ModelBrokerClient that is not connected fails callbacks.
 TEST(ModelBrokerClientTest, DisconnectedClient) {
   base::test::TaskEnvironment task_environment_;
 
@@ -34,6 +53,8 @@ TEST(ModelBrokerClientTest, DisconnectedClient) {
   ASSERT_FALSE(future.Get());
 }
 
+// Verify that when requesting a session while assets are still pending, the
+// client will wait for the assets before resolving the callback.
 TEST(ModelBrokerClientTest, PendingClient) {
   base::test::TaskEnvironment task_environment_;
   FakeAdaptationAsset fake_asset({.config = SimpleComposeConfig()});
@@ -56,6 +77,7 @@ TEST(ModelBrokerClientTest, PendingClient) {
   EXPECT_TRUE(client.HasSubscriber(mojom::ModelBasedCapabilityKey::kTest));
 }
 
+// Verify that CreateSession works when all the assets are provided.
 TEST(ModelBrokerClientTest, ReadyWithSetupClient) {
   base::test::TaskEnvironment task_environment_;
   FakeAdaptationAsset test_asset({
@@ -76,6 +98,117 @@ TEST(ModelBrokerClientTest, ReadyWithSetupClient) {
   client.CreateSession(mojom::ModelBasedCapabilityKey::kTest, std::nullopt,
                        future.GetCallback());
   ASSERT_TRUE(future.Take());
+}
+
+// Verify that the remote fallback is used when some assets are broken.
+TEST(ModelBrokerClientTest, UsesRemoteFallbackWhenNeeded) {
+  base::test::TaskEnvironment task_environment_;
+  FakeAdaptationAsset test_asset({
+      .config = InvalidTestConfig(),
+  });
+
+  ExpectedRemoteFallback fallback;
+  FakeModelBroker fake_broker(test_asset);
+  ModelBrokerClient client(
+      fake_broker.BindAndPassRemote(),
+      CreateSessionArgs(nullptr, fallback.CreateExecuteRemoteFn()));
+  base::test::TestFuture<ModelBrokerClient::CreateSessionResult> session_future;
+
+  // Requesting the feature we've provided assets for should succeed.
+  client.CreateSession(mojom::ModelBasedCapabilityKey::kTest, std::nullopt,
+                       session_future.GetCallback());
+  auto session = session_future.Take();
+  ASSERT_TRUE(session);
+
+  ResponseHolder response;
+  session->ExecuteModel(proto::ExampleForTestingRequest(),
+                        response.GetStreamingCallback());
+
+  auto fallback_call = fallback.Take();
+  EXPECT_EQ(fallback_call.feature, ModelBasedCapabilityKey::kTest);
+  std::move(fallback_call.callback)
+      .Run(OptimizationGuideModelExecutionResult(
+               base::ok(ComposeResponse("remote response")), nullptr),
+           nullptr);
+
+  ASSERT_TRUE(response.GetFinalStatus());
+  EXPECT_EQ(*response.value(), "remote response");
+}
+
+// Verify that the remote fallback is not used in on-device only mode
+TEST(ModelBrokerClientTest, UsesRemoteFallbackNotUsedWithOnDeviceOnly) {
+  base::test::TaskEnvironment task_environment_;
+  FakeAdaptationAsset test_asset({
+      .config = InvalidTestConfig(),
+  });
+
+  FakeModelBroker fake_broker(test_asset);
+  ModelBrokerClient client(fake_broker.BindAndPassRemote(),
+                           CreateSessionArgs(nullptr, FailOnRemoteFallback()));
+  base::test::TestFuture<ModelBrokerClient::CreateSessionResult> session_future;
+
+  // Requesting the feature we've provided assets for should succeed.
+  SessionConfigParams config_params = SessionConfigParams{
+      .execution_mode = SessionConfigParams::ExecutionMode::kOnDeviceOnly,
+  };
+  client.CreateSession(mojom::ModelBasedCapabilityKey::kTest, config_params,
+                       session_future.GetCallback());
+  auto session = session_future.Take();
+  ASSERT_TRUE(session);
+
+  ResponseHolder response;
+  session->ExecuteModel(proto::ExampleForTestingRequest(),
+                        response.GetStreamingCallback());
+
+  // The execution should just fail without invoking the remote.
+  ASSERT_FALSE(response.GetFinalStatus());
+}
+
+// Sometimes a feature is not supported for certain base models (e.g. EE model).
+// Attempts to create a Session for such features should fully resolve as
+// unavailable.
+TEST(ModelBrokerClientTest, UnavailableAdaptationRejectsSession) {
+  base::test::TaskEnvironment task_environment{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  // Note: We pass a compose asset here, so the kTest feature will still be in
+  // kPendingAsset status.
+  FakeAdaptationAsset compose_asset{{
+      .config = SimpleComposeConfig(),
+  }};
+  FakeModelBroker broker{compose_asset};
+  // Mark feature used to trigger download.
+  // broker.broker_state().usage_tracker().OnDeviceEligibleFeatureUsed(
+  //     ModelBasedCapabilityKey::kTest);
+  OptimizationGuideLogger logger;
+  ModelProviderRegistry model_provider_{&logger};
+  auto asset_manager = broker.CreateAssetManager(&model_provider_);
+
+  mojo::PendingReceiver<mojom::ModelBroker> pending_broker;
+  ModelBrokerClient broker_client(
+      broker.BindAndPassRemote(),
+      CreateSessionArgs(logger.GetWeakPtr(), FailOnRemoteFallback()));
+
+  base::test::TestFuture<
+      std::unique_ptr<OptimizationGuideModelExecutor::Session>>
+      session_future;
+  broker_client.CreateSession(mojom::ModelBasedCapabilityKey::kTest,
+                              std::nullopt, session_future.GetCallback());
+
+  // Session should not resolve yet, because test adaptation asset has a
+  // kUpdatePending status.
+  task_environment.FastForwardBy(base::Hours(1));
+  ASSERT_FALSE(session_future.IsReady());
+
+  // Emulate receiving info that a adaptation is not available from server.
+  // Provider removes the target when the server says no matching model is
+  // available.
+  model_provider_.RemoveModel(
+      *features::internal::GetOptimizationTargetForCapability(
+          ModelBasedCapabilityKey::kTest));
+
+  // Session should resolve to unavailable.
+  auto session = session_future.Take();
+  ASSERT_FALSE(session);
 }
 
 }  // namespace optimization_guide

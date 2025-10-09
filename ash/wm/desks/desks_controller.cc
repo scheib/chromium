@@ -242,7 +242,7 @@ bool IsParentSwitchableContainer(const aura::Window* window) {
 
 bool IsApplistActiveInTabletMode(const aura::Window* active_window) {
   DCHECK(active_window);
-  if (!display::Screen::GetScreen()->InTabletMode()) {
+  if (!display::Screen::Get()->InTabletMode()) {
     return false;
   }
 
@@ -638,7 +638,6 @@ void DesksController::NewDesk(DesksCreationRemovalSource source,
     SetDeviceUsesDesksPref(prefs, true);
     desks_restore_util::UpdatePrimaryUserDeskGuidsPrefs();
     desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
-    desks_restore_util::UpdatePrimaryUserDeskLacrosProfileIdPrefs();
     desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
     UMA_HISTOGRAM_ENUMERATION(kNewDeskHistogramName, source);
     ReportDesksCountHistogram();
@@ -713,7 +712,6 @@ void DesksController::ReorderDesk(int old_index, int new_index) {
   // right order.
   desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
   desks_restore_util::UpdatePrimaryUserDeskGuidsPrefs();
-  desks_restore_util::UpdatePrimaryUserDeskLacrosProfileIdPrefs();
   desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
 
   // 2. For multi-profile switching, update all affected active desk index in
@@ -1429,7 +1427,7 @@ bool DesksController::OnSingleInstanceAppLaunchingFromSavedDesk(
           case chromeos::WindowStateType::kInactive:
           case chromeos::WindowStateType::kFullscreen:
           case chromeos::WindowStateType::kPinned:
-          case chromeos::WindowStateType::kTrustedPinned:
+          case chromeos::WindowStateType::kLockedFullscreen:
           case chromeos::WindowStateType::kPip:
             NOTREACHED();
         }
@@ -1966,7 +1964,6 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
 
   desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
   desks_restore_util::UpdatePrimaryUserDeskGuidsPrefs();
-  desks_restore_util::UpdatePrimaryUserDeskLacrosProfileIdPrefs();
   desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
 
   DCHECK_LE(available_container_ids_.size(), desks_util::GetMaxNumberOfDesks());

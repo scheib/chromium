@@ -38,6 +38,7 @@
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/pref_names.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_features.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
@@ -46,6 +47,8 @@
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/mv2_experiment_stage.h"
 #endif
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 namespace {
@@ -138,7 +141,8 @@ void VerifyPendingList(const std::map<ExtensionId, ExtensionRequestData>&
 
 void SetExtensionSettings(const std::string& settings_string,
                           TestingProfile* profile) {
-  std::optional<base::Value> settings = base::JSONReader::Read(settings_string);
+  std::optional<base::Value> settings = base::JSONReader::Read(
+      settings_string, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   ASSERT_TRUE(settings.has_value());
   profile->GetTestingPrefService()->SetManagedPref(
       pref_names::kExtensionManagement,
@@ -380,8 +384,8 @@ class WebstorePrivateBeginInstallWithManifest3Test
   }
 
   void SetExtensionSettings(const std::string& settings_string) {
-    std::optional<base::Value> settings =
-        base::JSONReader::Read(settings_string);
+    std::optional<base::Value> settings = base::JSONReader::Read(
+        settings_string, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
     ASSERT_TRUE(settings);
     profile()->GetTestingPrefService()->SetManagedPref(
         pref_names::kExtensionManagement,

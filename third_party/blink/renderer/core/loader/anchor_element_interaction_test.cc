@@ -100,8 +100,7 @@ class AnchorElementInteractionTest : public SimTest {
 
     MainFrame().GetFrame()->GetBrowserInterfaceBroker().SetBinderForTesting(
         mojom::blink::AnchorElementInteractionHost::Name_,
-        WTF::BindRepeating(&AnchorElementInteractionTest::Bind,
-                           WTF::Unretained(this)));
+        BindRepeating(&AnchorElementInteractionTest::Bind, Unretained(this)));
     WebView().MainFrameViewWidget()->Resize(gfx::Size(400, 400));
 
     // Check our invariant about dwell times, otherwise tests that use them
@@ -252,7 +251,9 @@ TEST_F(AnchorElementInteractionTest, RightClick) {
   base::RunLoop().RunUntilIdle();
 
   ASSERT_EQ(hosts_.size(), 1u);
-  EXPECT_EQ(hosts_[0]->calls_.size(), 0u);
+  for (const auto& call : hosts_[0]->calls_) {
+    EXPECT_NE(call.type, PointerEventType::kOnPointerDown);
+  }
 }
 
 TEST_F(AnchorElementInteractionTest, NestedAnchorElementCheck) {
@@ -725,10 +726,7 @@ class AnchorElementInteractionViewportHeuristicsTest
  public:
   AnchorElementInteractionViewportHeuristicsTest() {
     feature_list_.InitWithFeaturesAndParameters(
-        {{features::kNavigationPredictor,
-          {{"random_anchor_sampling_period", "1"},
-           {"intersection_observation_after_fcp_only", "true"},
-           {"post_fcp_observation_delay", "10ms"}}},
+        {{features::kNavigationPredictor, GetParamsForNavigationPredictor()},
          {features::kNavigationPredictorNewViewportFeatures, {}},
          {features::kPreloadingViewportHeuristics,
           {{"delay", "100ms"},
@@ -736,10 +734,17 @@ class AnchorElementInteractionViewportHeuristicsTest
            {"distance_from_ptr_down_hi", "0"},
            {"largest_anchor_threshold", "0.5"}}}},
         {});
+    config_scope_ = std::make_unique<ViewportHeuristicConfigTestingScope>();
   }
 
   static constexpr int kViewportWidth = 400;
   static constexpr int kViewportHeight = 400;
+
+  std::map<std::string, std::string> GetParamsForNavigationPredictor() {
+    return {{"random_anchor_sampling_period", "1"},
+            {"intersection_observation_after_fcp_only", "true"},
+            {"post_fcp_observation_delay", "10ms"}};
+  }
 
   void DispatchPointerDown(gfx::PointF coordinates) {
     GetDocument().GetFrame()->GetEventHandler().HandleMousePressEvent(
@@ -849,6 +854,7 @@ class AnchorElementInteractionViewportHeuristicsTest
 
  private:
   base::test::ScopedFeatureList feature_list_;
+  std::unique_ptr<ViewportHeuristicConfigTestingScope> config_scope_;
 };
 
 TEST_F(AnchorElementInteractionViewportHeuristicsTest, BasicTest) {
@@ -1008,9 +1014,11 @@ TEST_F(AnchorElementInteractionViewportHeuristicsTest,
 
 TEST_F(AnchorElementInteractionViewportHeuristicsTest,
        PredictorDisabledIfAllAnchorsNotSampledIn) {
+  std::map<std::string, std::string> params = GetParamsForNavigationPredictor();
+  params["random_anchor_sampling_period"] = "2";
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndEnableFeatureWithParameters(
-      features::kNavigationPredictor, {{"random_anchor_sampling_period", "2"}});
+      features::kNavigationPredictor, params);
 
   String body = R"HTML(
     <body style="margin: 0px">

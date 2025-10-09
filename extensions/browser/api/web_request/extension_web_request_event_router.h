@@ -23,9 +23,12 @@
 #include "extensions/browser/api/declarative_webrequest/request_stage.h"
 #include "extensions/browser/api/web_request/web_request_api_helpers.h"
 #include "extensions/browser/extension_event_histogram_value.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_id.h"
 #include "extensions/common/url_pattern_set.h"
 #include "net/base/completion_once_callback.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace content {
 class BrowserContext;
@@ -502,10 +505,10 @@ class WebRequestEventRouter : public KeyedService {
                           const ExtensionId& extension_id,
                           const std::string& sub_event_name);
 
-  // Removes the listener from `listeners` that matches the given criteria.
+  // Removes all listeners from `listeners` that matches the given criteria.
   // Optional criteria are ignored if not provided. Removes the matching
-  // listener, if any. Expects a maximum of one listener to match.
-  static std::unique_ptr<EventListener> RemoveMatchingListener(
+  // listeners, if any.
+  static std::vector<std::unique_ptr<EventListener>> RemoveMatchingListeners(
       Listeners& listeners,
       const ExtensionId& extension_id,
       const std::string& sub_event_name,

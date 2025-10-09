@@ -36,7 +36,7 @@ import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridgeJni;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.permissions.EmbeddedPermissionDialogMediator;
 import org.chromium.components.permissions.PermissionDialogController;
@@ -88,7 +88,7 @@ public class EmbeddedPermissionPromptTest {
     private void setNativeContentSetting(
             @ContentSettingsType.EnumType int type,
             final String origin,
-            @ContentSettingValues int value) {
+            @ContentSetting int value) {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     if (type == ContentSettingsType.GEOLOCATION_WITH_OPTIONS) {
@@ -124,7 +124,7 @@ public class EmbeddedPermissionPromptTest {
                 mActivityTestRule.runJavaScriptCodeInCurrentTab("checkGeolocation();");
             }
             default -> {
-                assert false : "Unreached";
+                throw new AssertionError("Unreached");
             }
         }
         permissionUpdateWaiter.waitForNumUpdates(0);
@@ -150,7 +150,7 @@ public class EmbeddedPermissionPromptTest {
             final String page,
             final String nodeId,
             @ContentSettingsType.EnumType int type,
-            @ContentSettingValues int value,
+            @ContentSetting int value,
             final String expectedPromptText,
             final String expectedPositiveButtonText,
             final String expectedPositiveEphemeralButtonText,
@@ -200,7 +200,7 @@ public class EmbeddedPermissionPromptTest {
             final String page,
             final String nodeId,
             @ContentSettingsType.EnumType int type,
-            @ContentSettingValues int value,
+            @ContentSetting int value,
             final EmbeddedPermissiontResponse response,
             final String expectedPromptText,
             final String expectedPositiveButtonText,
@@ -275,7 +275,7 @@ public class EmbeddedPermissionPromptTest {
                             PermissionTestRule.PromptDecision.ALLOW_ONCE, activity);
                 }
                 default -> {
-                    assert false : "Unexpected response ";
+                    throw new AssertionError("Unexpected response ");
                 }
             }
             waitForTitleUpdate(expectedTitle, activity);
@@ -283,7 +283,7 @@ public class EmbeddedPermissionPromptTest {
                 checkPermission(type, expectedPermission, activity);
             }
         } finally {
-            setNativeContentSetting(type, url, ContentSettingValues.DEFAULT);
+            setNativeContentSetting(type, url, ContentSetting.DEFAULT);
         }
     }
 
@@ -307,7 +307,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.ASK,
+                ContentSetting.ASK,
                 response,
                 LOOPBACK_ADDRESS + " wants to use your device's location",
                 "Allow while visiting the site",
@@ -337,7 +337,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.BLOCK,
+                ContentSetting.BLOCK,
                 response,
                 "You previously didn't allow location for this site",
                 "Continue not allowing",
@@ -367,7 +367,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.ALLOW,
+                ContentSetting.ALLOW,
                 response,
                 "You have allowed location on " + LOOPBACK_ADDRESS,
                 "Continue allowing",
@@ -391,9 +391,8 @@ public class EmbeddedPermissionPromptTest {
             case "geolocation":
                 return getGeolocationType();
             default:
-                assert false : "Unreached";
+                throw new AssertionError("Unreached");
         }
-        return ContentSettingsType.DEFAULT;
     }
 
     @Test
@@ -414,7 +413,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.ASK,
+                ContentSetting.ASK,
                 LOOPBACK_ADDRESS + " wants to use your device's location",
                 "Allow while visiting the site",
                 "Allow this time",
@@ -439,7 +438,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.BLOCK,
+                ContentSetting.BLOCK,
                 "You previously didn't allow location for this site",
                 "Continue not allowing",
                 /* expectedPositiveEphemeralButtonText */ "",
@@ -464,7 +463,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.ALLOW,
+                ContentSetting.ALLOW,
                 "You have allowed location on " + LOOPBACK_ADDRESS,
                 "Continue allowing",
                 /* expectedPositiveEphemeralButtonText */ "",
@@ -493,7 +492,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.BLOCK,
+                ContentSetting.BLOCK,
                 "To use your location on this site, give " + productName + " access",
                 "Android settings",
                 /* expectedPositiveEphemeralButtonText */ "",
@@ -515,7 +514,7 @@ public class EmbeddedPermissionPromptTest {
                 TEST_PAGE,
                 "geolocation",
                 stringToContentSettingsType("geolocation"),
-                ContentSettingValues.ALLOW,
+                ContentSetting.ALLOW,
                 "To use your location on this site, give " + productName + " access",
                 "Android settings",
                 /* expectedPositiveEphemeralButtonText */ "",

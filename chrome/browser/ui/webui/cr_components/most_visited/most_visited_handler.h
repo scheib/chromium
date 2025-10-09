@@ -10,7 +10,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "chrome/browser/preloading/new_tab_page_preload/new_tab_page_preload_pipeline_manager.h"
 #include "chrome/browser/ui/search/ntp_user_data_logger.h"
 #include "chrome/browser/web_applications/preinstalled_web_app_manager.h"
 #include "chrome/common/search/ntp_logging_events.h"
@@ -23,6 +22,7 @@
 
 class GURL;
 class Profile;
+class NewTabPagePreloadPipelineManager;
 
 namespace content {
 class WebContents;
@@ -45,8 +45,9 @@ class MostVisitedHandler : public most_visited::mojom::MostVisitedPageHandler,
   MostVisitedHandler& operator=(const MostVisitedHandler&) = delete;
   ~MostVisitedHandler() override;
 
-  // See MostVisitedSites::EnableCustomLinks.
-  void EnableCustomLinks(bool enable);
+  // See MostVisitedSites::EnableTileTypes.
+  void EnableTileTypes(
+      const ntp_tiles::MostVisitedSites::EnableTileTypesOptions& options);
   // See MostVisitedSites::SetShortcutsVisible.
   void SetShortcutsVisible(bool visible);
 
@@ -64,6 +65,8 @@ class MostVisitedHandler : public most_visited::mojom::MostVisitedPageHandler,
                              const std::string& new_title,
                              UpdateMostVisitedTileCallback callback) override;
   void PrerenderMostVisitedTile(
+      most_visited::mojom::MostVisitedTilePtr tile) override;
+  void PrefetchMostVisitedTile(
       most_visited::mojom::MostVisitedTilePtr tile) override;
   void PreconnectMostVisitedTile(
       most_visited::mojom::MostVisitedTilePtr tile) override;
@@ -87,6 +90,8 @@ class MostVisitedHandler : public most_visited::mojom::MostVisitedPageHandler,
           sections) override;
   void OnIconMadeAvailable(const GURL& site_url) override;
 
+  NewTabPagePreloadPipelineManager* GetNewTabPagePreloadPipelineManager();
+
   raw_ptr<Profile> profile_;
   // web_app::PreinstalledWebAppManager::Observer
   void OnMigrationRun() override;
@@ -105,7 +110,6 @@ class MostVisitedHandler : public most_visited::mojom::MostVisitedPageHandler,
                           web_app::PreinstalledWebAppManager::Observer>
       preinstalled_web_app_observer_{this};
 
-  base::WeakPtr<NewTabPagePreloadPipelineManager> new_tab_page_preload_manager_;
   base::WeakPtrFactory<MostVisitedHandler> weak_ptr_factory_{this};
 };
 

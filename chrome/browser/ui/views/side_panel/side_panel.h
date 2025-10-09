@@ -54,10 +54,17 @@ class SidePanel : public views::AccessiblePaneView,
     keyboard_resized_ = keyboard_resized;
   }
 
+  template <typename T>
+  T* GetHeaderView() {
+    return views::AsViewClass<T>(header_view_);
+  }
+
   // Add a header view that gets painted over the side panel border. The top
   // border area grows to accommodate the additional height of the header,
   // pushing the other side panel content down.
   void AddHeaderView(std::unique_ptr<views::View> view);
+
+  void SetHeaderVisibility(bool visible);
 
   // Gets the upper bound of the content area size if the side panel is shown
   // right now. If the side panel is not showing, returns the minimum width

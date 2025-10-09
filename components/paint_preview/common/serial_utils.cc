@@ -15,7 +15,7 @@
 #include "third_party/skia/include/codec/SkCodec.h"
 #include "third_party/skia/include/codec/SkGifDecoder.h"
 #include "third_party/skia/include/codec/SkJpegDecoder.h"
-#include "third_party/skia/include/codec/SkPngDecoder.h"
+#include "third_party/skia/include/codec/SkPngRustDecoder.h"
 #include "third_party/skia/include/codec/SkWebpDecoder.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkData.h"
@@ -24,6 +24,7 @@
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkMatrix.h"
 #include "third_party/skia/include/core/SkPictureRecorder.h"
+#include "third_party/skia/include/core/SkStream.h"
 #include "third_party/skia/include/core/SkString.h"
 #include "third_party/skia/include/core/SkTypeface.h"
 #include "third_party/skia/include/private/chromium/Slug.h"
@@ -51,6 +52,7 @@ struct SerializedRectData {
 
 // Serializes a SkPicture representing a subframe as a custom data placeholder.
 sk_sp<SkData> SerializePictureAsRectData(SkPicture* picture, void* ctx) {
+  TRACE_EVENT0("paint_preview", "SerializePictureAsRectData");
   const PictureSerializationContext* context =
       reinterpret_cast<PictureSerializationContext*>(ctx);
 
@@ -114,6 +116,7 @@ sk_sp<SkData> SerializeTypeface(SkTypeface* typeface, void* ctx) {
 static sk_sp<SkTypeface> DeserializeTypeface(const void* data,
                                              size_t length,
                                              void* ctx) {
+  TRACE_EVENT0("paint_preview", "DeserializeTypeface");
   // TODO(bungeman,kjlubick) This should not be how the Skia deserial proc
   // works.
   SkStream* stream = *(reinterpret_cast<SkStream**>(const_cast<void*>(data)));
@@ -132,12 +135,13 @@ static bool is_supported_codec(sk_sp<SkData> data) {
   CHECK(data);
   return SkBmpDecoder::IsBmp(data->data(), data->size()) ||
          SkGifDecoder::IsGif(data->data(), data->size()) ||
-         SkPngDecoder::IsPng(data->data(), data->size()) ||
+         SkPngRustDecoder::IsPng(data->data(), data->size()) ||
          SkJpegDecoder::IsJpeg(data->data(), data->size()) ||
          SkWebpDecoder::IsWebp(data->data(), data->size());
 }
 
 sk_sp<SkData> SerializeImage(SkImage* image, void* ctx) {
+  TRACE_EVENT0("paint_preview", "SerializeImage");
   ImageSerializationContext* context =
       reinterpret_cast<ImageSerializationContext*>(ctx);
   // Ignore texture backed content if any slipped through. This shouldn't occur
@@ -185,6 +189,7 @@ sk_sp<SkData> SerializeImage(SkImage* image, void* ctx) {
 }
 
 sk_sp<SkImage> DeserializeImage(const void* bytes, size_t length, void*) {
+  TRACE_EVENT0("paint_preview", "DeserializeImage");
   // Although we usually serialize images to the PNG format, if an image was
   // already encoded as a JPEG or WEBP, those bytes are written to the
   // SKP as-is, so we should try to decode those as well.
@@ -198,8 +203,9 @@ sk_sp<SkImage> DeserializeImage(const void* bytes, size_t length, void*) {
         codec->getInfo().makeAlphaType(kPremul_SkAlphaType);
     return std::get<0>(codec->getImage(targetInfo));
   };
-  if (SkPngDecoder::IsPng(bytes, length)) {
-    return get_image(SkPngDecoder::Decode(data, nullptr));
+  if (SkPngRustDecoder::IsPng(bytes, length)) {
+    return get_image(SkPngRustDecoder::Decode(
+        std::make_unique<SkMemoryStream>(std::move(data)), nullptr));
   }
   if (SkBmpDecoder::IsBmp(bytes, length)) {
     return get_image(SkBmpDecoder::Decode(data, nullptr));
@@ -221,6 +227,7 @@ sk_sp<SkImage> DeserializeImage(const void* bytes, size_t length, void*) {
 sk_sp<SkPicture> DeserializePictureAsRectData(const void* data,
                                               size_t length,
                                               void* ctx) {
+  TRACE_EVENT0("paint_preview", "DeserializePictureAsRectData");
   SerializedRectData rect_data;
   if (length < sizeof(rect_data)) {
     return MakeEmptyPicture();
@@ -243,6 +250,7 @@ sk_sp<SkPicture> DeserializePictureAsRectData(const void* data,
 sk_sp<SkPicture> GetPictureFromDeserialContext(const void* data,
                                                size_t length,
                                                void* ctx) {
+  TRACE_EVENT0("paint_preview", "GetPictureFromDeserialContext");
   SerializedRectData rect_data;
   if (length < sizeof(rect_data)) {
     return MakeEmptyPicture();

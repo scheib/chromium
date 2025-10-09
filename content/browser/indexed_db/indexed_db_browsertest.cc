@@ -45,6 +45,7 @@
 #include "content/browser/browser_main_loop.h"
 #include "content/browser/indexed_db/indexed_db_leveldb_coding.h"
 #include "content/browser/indexed_db/instance/bucket_context.h"
+#include "content/browser/indexed_db/instance/leveldb/backing_store.h"
 #include "content/browser/indexed_db/instance/leveldb/cleanup_scheduler.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_context.h"
@@ -150,7 +151,7 @@ class IndexedDBBrowserTestBase : public ContentBrowserTest {
     NavigateToURLBlockUntilNavigationsComplete(the_browser, test_url, 2);
     VLOG(0) << "Navigation done.";
     std::string result =
-        the_browser->web_contents()->GetLastCommittedURL().ref();
+        the_browser->web_contents()->GetLastCommittedURL().GetRef();
     if (result != "pass") {
       std::string js_result = EvalJs(the_browser, "getLog()").ExtractString();
       FAIL() << "Failed: " << js_result;
@@ -493,53 +494,6 @@ IN_PROC_BROWSER_TEST_P(IndexedDBBrowserTest, Bug941965Test) {
   incognito_browser->Close();
 }
 
-IN_PROC_BROWSER_TEST_P(IndexedDBBrowserTest, SchedulingPriority) {
-  // This test page just opens a connection.
-  const GURL url = GetTestUrl("indexeddb", "simple_test.html");
-  NavigateToURLBlockUntilNavigationsComplete(shell(), url, 1);
-  auto control_test = GetControlTest();
-
-  // This test could use a TestFuture inside RunUntil, but Mac doesn't like that
-  // type of message loop nesting. Therefore the RunUntils below asynchronously
-  // update this variable using this closure, and the value returned, if any,
-  // will be checked on the next iteration of the RunUntil body.
-  std::optional<int> priority;
-  base::RepeatingCallback<void(std::optional<int>)> update_priority =
-      base::BindLambdaForTesting(
-          [&priority](std::optional<int> fetched_priority) {
-            priority = fetched_priority;
-          });
-
-  // Since the test page is foregrounded/visible, it should get a priority of
-  // 0.
-  ASSERT_TRUE(base::test::RunUntil([&]() {
-    if (priority == 0) {
-      return true;
-    }
-    control_test->GetSchedulingPriorityForTesting(update_priority);
-    return false;
-  }));
-
-  // This part is just designed to flush out any pending
-  // `GetSchedulingPriorityForTesting()` calls. `control_test.FlushForTesting()`
-  // would be sufficient except that its implementation is also async.
-  base::test::TestFuture<std::optional<int>> future;
-  control_test->GetSchedulingPriorityForTesting(future.GetCallback());
-  EXPECT_TRUE(future.Wait());
-  priority.reset();
-
-  // Hide the page and wait for the update to come through.
-  shell()->web_contents()->UpdateWebContentsVisibility(Visibility::HIDDEN);
-
-  ASSERT_TRUE(base::test::RunUntil([&]() {
-    if (priority && *priority > 0) {
-      return true;
-    }
-    control_test->GetSchedulingPriorityForTesting(update_priority);
-    return false;
-  }));
-}
-
 class IndexedDBBrowserTestWithLowQuota : public IndexedDBBrowserTest {
  public:
   IndexedDBBrowserTestWithLowQuota() = default;
@@ -731,8 +685,11 @@ class IndexedDBBrowserTestsWithCleanupScheduler
     : public IndexedDBLevelDBOnlyTest {
  public:
   IndexedDBBrowserTestsWithCleanupScheduler() {
-    scoped_feature_list_.InitAndEnableFeature(
-        content::indexed_db::level_db::kIdbInSessionDbCleanup);
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/
+        {content::indexed_db::level_db::kIdbInSessionDbCleanup,
+         content::indexed_db::level_db::kIdbVerifyInSessionDbCleanup},
+        /*disabled_features=*/{});
   }
 
  protected:
@@ -743,6 +700,7 @@ class IndexedDBBrowserTestsWithCleanupScheduler
 // More details in `index_deletion_regression_tests.js`.
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestsWithCleanupScheduler,
                        RollbackTrasactionDuringTombstoneSweep) {
+  base::HistogramTester histograms;
   const GURL kTestUrl =
       GetTestUrl("indexeddb", "index_deletion_regression_tests.html");
   EXPECT_TRUE(NavigateToURL(shell(), kTestUrl));
@@ -757,12 +715,23 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestsWithCleanupScheduler,
   ASSERT_TRUE(
       ExecJs(shell(), base::StringPrintf("runRollbackTest(%d, %d)", num_entries,
                                          delay_for_sweeper_run)));
+
+  // The transaction rollback interrupts the cleanup, and cleanup will be
+  // completed after a short delay.
+  EXPECT_TRUE(base::test::RunUntil([&]() {
+    return histograms.GetBucketCount(
+               "IndexedDB.LevelDB.InSessionCleanupVerificationEvent",
+               level_db::BackingStore::InSessionCleanupVerificationEvent::
+                   kMatchedSnapshot) > 0;
+  }));
 }
 
 // Regression test for crbug.com/413540372.
 // More details in `index_deletion_regression_tests.js`.
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestsWithCleanupScheduler,
                        TransactionInterleavedWithSweeper) {
+  base::HistogramTester histograms;
+
   const GURL kTestUrl =
       GetTestUrl("indexeddb", "index_deletion_regression_tests.html");
   EXPECT_TRUE(NavigateToURL(shell(), kTestUrl));
@@ -783,6 +752,29 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestsWithCleanupScheduler,
       shell(), base::StringPrintf("runInterleavedTest(%d, %d, %d)", num_entries,
                                   delay_before_interleaved_updates,
                                   delay_to_finish_sweeper)));
+
+  // Make sure the clean up completes.
+  EXPECT_TRUE(base::test::RunUntil([&]() {
+    return histograms.GetBucketCount(
+               "IndexedDB.LevelDB.InSessionCleanupVerificationEvent",
+               level_db::BackingStore::InSessionCleanupVerificationEvent::
+                   kMatchedSnapshot) > 0;
+  }));
+
+  histograms.ExpectTotalCount("IndexedDB.LevelDB.InSessionCleanupSnapshotTime",
+                              2);
+  histograms.ExpectTotalCount(
+      "IndexedDB.LevelDB.InSessionCleanupVerificationEvent", 2);
+  histograms.ExpectBucketCount(
+      "IndexedDB.LevelDB.InSessionCleanupVerificationEvent",
+      level_db::BackingStore::InSessionCleanupVerificationEvent::
+          kCleanupStarted,
+      1);
+  histograms.ExpectBucketCount(
+      "IndexedDB.LevelDB.InSessionCleanupVerificationEvent",
+      level_db::BackingStore::InSessionCleanupVerificationEvent::
+          kMatchedSnapshot,
+      1);
 }
 
 class IndexedDBBrowserTestWithCorruptLevelDB : public
@@ -952,7 +944,8 @@ IN_PROC_BROWSER_TEST_P(IndexedDBBrowserTestWithGCExposed, ForceCloseWithBlob) {
   // the same blob is read again.
   std::ignore = EvalJs(shell(), "testThenGc()");
   while (true) {
-    std::string result = shell()->web_contents()->GetLastCommittedURL().ref();
+    std::string result =
+        shell()->web_contents()->GetLastCommittedURL().GetRef();
     if (!result.empty()) {
       EXPECT_EQ(result, "pass");
       break;
@@ -1310,7 +1303,7 @@ IN_PROC_BROWSER_TEST_P(IndexedDBBrowserTest, LargeSlicedFile) {
   same_tab_observer.Wait();
 
   // This part is copied from `SimpleTest()`.
-  std::string result = shell()->web_contents()->GetLastCommittedURL().ref();
+  std::string result = shell()->web_contents()->GetLastCommittedURL().GetRef();
   if (result != "pass") {
     std::string js_result = EvalJs(shell(), "getLog()").ExtractString();
     FAIL() << "Failed: " << js_result;

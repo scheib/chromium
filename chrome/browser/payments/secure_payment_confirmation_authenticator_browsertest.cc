@@ -13,6 +13,7 @@
 #include "components/payments/core/journey_logger.h"
 #include "components/payments/core/secure_payment_confirmation_metrics.h"
 #include "content/public/browser/scoped_authenticator_environment_for_testing.h"
+#include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
 #include "device/fido/virtual_fido_device_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -96,7 +97,8 @@ class SecurePaymentConfirmationAuthenticatorTestBase
             .ExtractString();
     ASSERT_EQ(std::string::npos, response.find("Error")) << response;
 
-    std::optional<base::Value> value = base::JSONReader::Read(response);
+    std::optional<base::Value> value =
+        base::JSONReader::Read(response, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
     ASSERT_TRUE(value.has_value());
     ASSERT_TRUE(value->is_dict());
     const auto& value_dict = value->GetDict();
@@ -240,7 +242,8 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationAuthenticatorGetTest,
           .ExtractString();
 
   ASSERT_EQ(std::string::npos, response.find("Error"));
-  std::optional<base::Value> value = base::JSONReader::Read(response);
+  std::optional<base::Value> value =
+      base::JSONReader::Read(response, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   ASSERT_TRUE(value.has_value());
   ASSERT_TRUE(value->is_dict());
   const base::Value::Dict& value_dict = value->GetDict();
@@ -308,7 +311,8 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationAuthenticatorGetTest,
           .ExtractString();
 
   ASSERT_EQ(std::string::npos, response.find("Error"));
-  std::optional<base::Value> value = base::JSONReader::Read(response);
+  std::optional<base::Value> value =
+      base::JSONReader::Read(response, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   ASSERT_TRUE(value.has_value());
   ASSERT_TRUE(value->is_dict());
 
@@ -358,7 +362,8 @@ IN_PROC_BROWSER_TEST_F(
           .ExtractString();
 
   ASSERT_EQ(std::string::npos, response.find("Error"));
-  std::optional<base::Value> value = base::JSONReader::Read(response);
+  std::optional<base::Value> value =
+      base::JSONReader::Read(response, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   ASSERT_TRUE(value.has_value());
   ASSERT_TRUE(value->is_dict());
 

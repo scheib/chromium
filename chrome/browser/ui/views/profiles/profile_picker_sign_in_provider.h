@@ -7,6 +7,7 @@
 
 #include <optional>
 
+#include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
@@ -21,6 +22,9 @@
 struct CoreAccountInfo;
 class DiceTabHelper;
 class ProfilePickerWebContentsHost;
+class SigninUIError;
+
+BASE_DECLARE_FEATURE(kProfilePickerGaiaBlankContinueUrl);
 
 namespace content {
 struct ContextMenuParams;
@@ -43,7 +47,8 @@ class ProfilePickerSignInProvider : public content::WebContentsDelegate,
   using SignedInCallback =
       base::OnceCallback<void(Profile*,
                               const CoreAccountInfo&,
-                              std::unique_ptr<content::WebContents>)>;
+                              std::unique_ptr<content::WebContents>,
+                              const SigninUIError&)>;
 
   // Creates a new provider that will render the Gaia sign-in flow in `host` for
   // a profile at `profile_path`.
@@ -99,8 +104,8 @@ class ProfilePickerSignInProvider : public content::WebContentsDelegate,
                               content::InvalidateTypes changed_flags) override;
 
   // ChromeWebModalDialogManagerDelegate:
-  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost()
-      override;
+  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost(
+      content::WebContents* web_contents) override;
 
   // Initializes the flow with the newly created or loaded profile.
   void OnProfileInitialized(StepSwitchFinishedCallback switch_finished_callback,
@@ -110,12 +115,21 @@ class ProfilePickerSignInProvider : public content::WebContentsDelegate,
   // in a browser (e.g. for SAML).
   void FinishFlow(const CoreAccountInfo& account_info);
 
-  // Callback for the `DiceTabHelper`. Calls `FinishFlow()`.
-  void FinishFlowInPicker(Profile* profile,
-                          signin_metrics::AccessPoint access_point,
-                          signin_metrics::PromoAction promo_action,
-                          content::WebContents* contents,
-                          const CoreAccountInfo& account_info);
+  // Callbacks for the `DiceTabHelper`. Calls `FinishFlow()`.
+  void FinishFlowInPickerWithSyncConfirmation(
+      Profile* profile,
+      signin_metrics::AccessPoint access_point,
+      signin_metrics::PromoAction promo_action,
+      content::WebContents* contents,
+      const CoreAccountInfo& account_info);
+  void FinishFlowInPickerWithHistorySyncOptin(
+      Profile* profile,
+      content::WebContents* contents,
+      const CoreAccountInfo& account_info,
+      signin_metrics::AccessPoint access_point);
+  void ShowSigninError(Profile* profile,
+                       content::WebContents* contents,
+                       const SigninUIError& error);
 
   void OnSignInContentsFreedUp();
 

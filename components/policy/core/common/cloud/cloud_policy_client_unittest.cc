@@ -21,9 +21,9 @@
 #include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/memory/ref_counted.h"
-#include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_callback_support.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -59,6 +59,8 @@
 #include "chromeos/ash/components/system/fake_statistics_provider.h"
 #endif
 
+using base::test::RunOnceClosure;
+using base::test::TaskEnvironment;
 using testing::_;
 using testing::Contains;
 using testing::DoAll;
@@ -100,6 +102,9 @@ constexpr CloudPolicyClient::MacAddress kDockMacAddress = {170, 187, 204,
                                                            221, 238, 255};
 constexpr char kDockMacAddressStr[] = "AABBCCDDEEFF";
 constexpr char kManufactureDate[] = "fake-manufacture-date";
+constexpr char kFlexSysVendor[] = "fake-flex-sys-vendor";
+constexpr char kFlexProductName[] = "fake-flex-product-name";
+constexpr char kFlexProductVersion[] = "fake-flex-product-version";
 constexpr char kOAuthToken[] = "fake-oauth-token";
 constexpr char kDMToken[] = "fake-dm-token";
 constexpr char kDeviceDMToken[] = "fake-device-dm-token";
@@ -284,6 +289,10 @@ em::DeviceManagementRequest GetTokenBasedDeviceRegistrationRequest() {
   register_request->set_brand_code(kBrandCode);
   register_request->set_ethernet_mac_address(kEthernetMacAddressStr);
   register_request->set_dock_mac_address(kDockMacAddressStr);
+  register_request->mutable_smbios_info()->set_sys_vendor(kFlexSysVendor);
+  register_request->mutable_smbios_info()->set_product_name(kFlexProductName);
+  register_request->mutable_smbios_info()->set_product_version(
+      kFlexProductVersion);
   register_request->set_lifetime(
       em::DeviceRegisterRequest::LIFETIME_INDEFINITE);
   register_request->set_flavor(
@@ -476,7 +485,8 @@ class CloudPolicyClientTest : public testing::Test {
 
   CloudPolicyClientTest()
       : CloudPolicyClientTest(
-            std::make_unique<base::test::SingleThreadTaskEnvironment>()) {}
+            std::make_unique<base::test::SingleThreadTaskEnvironment>(
+                TaskEnvironment::TimeSource::MOCK_TIME)) {}
 
   void RegisterClient(const std::string& device_dm_token) {
     StrictMock<MockCloudPolicyClientObserverWithObservation> client_observer(
@@ -492,11 +502,15 @@ class CloudPolicyClientTest : public testing::Test {
 
   void RegisterClient() { RegisterClient(kDeviceDMToken); }
 
-  void CreateClient() { CreateClient(kAttestedDeviceId, kManufactureDate); }
+  void CreateClient() {
+    CreateClient(kAttestedDeviceId, kManufactureDate, "", "", "");
+  }
 
   // Flex devices don't have VPD so will not have attested device ID or
   // manufacture date.
-  void CreateFlexClient() { CreateClient("", ""); }
+  void CreateFlexClient() {
+    CreateClient("", "", kFlexSysVendor, kFlexProductName, kFlexProductVersion);
+  }
 
   base::Value::Dict MakeDefaultRealtimeReport() {
     base::Value::Dict context;
@@ -540,36 +554,34 @@ class CloudPolicyClientTest : public testing::Test {
   void RunClientTaskAndWaitRegistration(base::OnceClosure task) {
     NiceMock<MockCloudPolicyClientObserverWithObservation> client_observer(
         client_.get());
-    base::RunLoop run_loop;
+    base::test::TestFuture<void> future;
     EXPECT_CALL(client_observer, OnRegistrationStateChanged)
-        .WillOnce([&run_loop]() { run_loop.Quit(); });
+        .WillOnce(RunOnceClosure(future.GetCallback()));
 
     std::move(task).Run();
-    run_loop.Run();
+    EXPECT_TRUE(future.Wait());
   }
 
   void RunClientTaskAndWaitPolicyFetch(base::OnceClosure task) {
     NiceMock<MockCloudPolicyClientObserverWithObservation> client_observer(
         client_.get());
-    base::RunLoop run_loop;
-    EXPECT_CALL(client_observer, OnPolicyFetched).WillOnce([&run_loop]() {
-      run_loop.Quit();
-    });
+    base::test::TestFuture<void> future;
+    EXPECT_CALL(client_observer, OnPolicyFetched)
+        .WillOnce(RunOnceClosure(future.GetCallback()));
 
     std::move(task).Run();
-    run_loop.Run();
+    EXPECT_TRUE(future.Wait());
   }
 
   void RunClientTaskAndWaitError(base::OnceClosure task) {
     NiceMock<MockCloudPolicyClientObserverWithObservation> client_observer(
         client_.get());
-    base::RunLoop run_loop;
-    EXPECT_CALL(client_observer, OnClientError).WillOnce([&run_loop]() {
-      run_loop.Quit();
-    });
+    base::test::TestFuture<void> future;
+    EXPECT_CALL(client_observer, OnClientError)
+        .WillOnce(RunOnceClosure(future.GetCallback()));
 
     std::move(task).Run();
-    run_loop.Run();
+    EXPECT_TRUE(future.Wait());
   }
 
   void ExpectAndCaptureJob(const em::DeviceManagementResponse& response) {
@@ -641,16 +653,20 @@ class CloudPolicyClientTest : public testing::Test {
 
  private:
   void CreateClient(std::string_view attested_device_id,
-                    std::string_view manufacture_date) {
+                    std::string_view manufacture_date,
+                    std::string_view flex_sys_vendor,
+                    std::string_view flex_product_name,
+                    std::string_view flex_product_version) {
     service_.ScheduleInitialization(0);
-    base::RunLoop().RunUntilIdle();
+    task_environment_->FastForwardBy(base::Seconds(60));
 
     shared_url_loader_factory_ =
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
             &url_loader_factory_);
     client_ = std::make_unique<CloudPolicyClient>(
         kMachineID, kMachineModel, kBrandCode, attested_device_id,
-        kEthernetMacAddress, kDockMacAddress, manufacture_date, &service_,
+        kEthernetMacAddress, kDockMacAddress, manufacture_date, flex_sys_vendor,
+        flex_product_name, flex_product_version, &service_,
         shared_url_loader_factory_,
         base::BindRepeating(
             &MockDeviceDMTokenCallbackObserver::OnDeviceDMTokenRequested,
@@ -663,8 +679,8 @@ class CloudPolicyClientTest : public testing::Test {
 class CloudPolicyClientMultipleThreadsTest : public CloudPolicyClientTest {
  public:
   CloudPolicyClientMultipleThreadsTest()
-      : CloudPolicyClientTest(std::make_unique<base::test::TaskEnvironment>()) {
-  }
+      : CloudPolicyClientTest(std::make_unique<base::test::TaskEnvironment>(
+            TaskEnvironment::TimeSource::MOCK_TIME)) {}
 };
 
 TEST_F(CloudPolicyClientTest, Init) {
@@ -1523,10 +1539,9 @@ TEST_F(CloudPolicyClientTest, RetryRegistration) {
 
   StrictMock<MockCloudPolicyClientObserverWithObservation> client_observer(
       client_.get());
-  base::RunLoop run_loop;
-  EXPECT_CALL(client_observer, OnClientError).WillOnce([&run_loop]() {
-    run_loop.Quit();
-  });
+  base::test::TestFuture<void> future;
+  EXPECT_CALL(client_observer, OnClientError)
+      .WillOnce(RunOnceClosure(future.GetCallback()));
 
   CloudPolicyClient::RegistrationParameters register_user(
       em::DeviceRegisterRequest::USER,
@@ -1534,8 +1549,8 @@ TEST_F(CloudPolicyClientTest, RetryRegistration) {
   client_->Register(register_user, std::string() /* no client_id*/,
                     kOAuthToken);
   // Verify that registration request is still pending.
-  base::RunLoop().RunUntilIdle();
-  EXPECT_FALSE(run_loop.AnyQuitCalled());
+  task_environment_->FastForwardBy(base::Seconds(60));
+  EXPECT_FALSE(future.IsReady());
 
   EXPECT_EQ(DeviceManagementService::JobConfiguration::TYPE_REGISTRATION,
             job_type);
@@ -1555,7 +1570,7 @@ TEST_F(CloudPolicyClientTest, RetryRegistration) {
 
   // Expect failure with yet another retry.
   service_.SendJobResponseNow(&job, net::ERR_NETWORK_CHANGED, 0);
-  run_loop.Run();
+  EXPECT_TRUE(future.Wait());
   EXPECT_FALSE(job.IsActive());
   EXPECT_FALSE(client_->is_registered());
 }
@@ -2557,7 +2572,8 @@ TEST_P(CloudPolicyClientUploadSecurityEventReportDeprecatedTest,
   EXPECT_EQ(auth_data_, DMAuth::FromDMToken(kDMToken));
   EXPECT_EQ(DM_STATUS_SUCCESS, client_->last_dm_status());
 
-  std::optional<base::Value> payload = base::JSONReader::Read(job_payload_);
+  std::optional<base::Value> payload = base::JSONReader::Read(
+      job_payload_, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   ASSERT_TRUE(payload);
   const base::Value::Dict& payload_dict = payload->GetDict();
 
@@ -2649,7 +2665,8 @@ TEST_F(CloudPolicyClientTest, UploadSecurityEventReportNoResponse) {
   EXPECT_EQ(auth_data_, DMAuth::FromDMToken(kDMToken));
   EXPECT_EQ(DM_STATUS_SUCCESS, client_->last_dm_status());
 
-  std::optional<base::Value> payload = base::JSONReader::Read(job_payload_);
+  std::optional<base::Value> payload = base::JSONReader::Read(
+      job_payload_, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   ASSERT_TRUE(payload);
   const base::Value::Dict& payload_dict = payload->GetDict();
 
@@ -2848,8 +2865,8 @@ TEST_F(CloudPolicyClientTest, RealtimeReportMergeDeprecated) {
 
   // The second config should trump the first.
   DeviceManagementService::JobConfiguration* job_config = config.get();
-  std::optional<base::Value> payload =
-      base::JSONReader::Read(job_config->GetPayload());
+  std::optional<base::Value> payload = base::JSONReader::Read(
+      job_config->GetPayload(), base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   ASSERT_TRUE(payload);
   const base::Value::Dict& payload_dict = payload->GetDict();
 
@@ -3523,13 +3540,11 @@ TEST_F(CloudPolicyClientTest, DeterminePromotionEligibilityRequest) {
   base::test::TestFuture<const em::GetUserEligiblePromotionsResponse>
       result_future;
 
-  base::RunLoop run_loop;
-  client_->DeterminePromotionEligibility(
-      result_future.GetCallback().Then(run_loop.QuitClosure()));
+  client_->DeterminePromotionEligibility(result_future.GetCallback());
 
   client_->SetOAuthTokenAsAdditionalAuth(kOAuthToken);
-  run_loop.Run();
 
+  EXPECT_TRUE(result_future.Wait());
   EXPECT_EQ(DeviceManagementService::JobConfiguration::
                 TYPE_DETERMINE_PROMOTION_ELIGIBILITY,
             job_type_);

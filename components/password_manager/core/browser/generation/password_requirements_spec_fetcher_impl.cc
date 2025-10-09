@@ -22,6 +22,7 @@
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+#include "net/http/http_response_headers.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -123,9 +124,9 @@ void PasswordRequirementsSpecFetcherImpl::Fetch(GURL origin,
   }
 
   // Canonicalize away trailing periods in hostname.
-  while (!origin.host_piece().empty() && origin.host_piece().back() == '.') {
+  while (!origin.host().empty() && origin.host().back() == '.') {
     std::string_view new_host =
-        origin.host_piece().substr(0, origin.host_piece().length() - 1);
+        origin.host().substr(0, origin.host().length() - 1);
     GURL::Replacements replacements;
     replacements.SetHostStr(new_host);
     origin = origin.ReplaceComponents(replacements);
@@ -229,7 +230,7 @@ void PasswordRequirementsSpecFetcherImpl::OnFetchComplete(
     DCHECK(!origin.HostIsIPAddress());
     // |host| is a std::string instead of std::string_view as the protbuf::Map
     // implementation does not support StringPieces as parameters for find.
-    std::string host = origin.host();
+    std::string host = origin.GetHost();
     auto host_iter = shard.specs().find(host);
     if (host_iter != shard.specs().end()) {
       const PasswordRequirementsSpec& spec = host_iter->second;

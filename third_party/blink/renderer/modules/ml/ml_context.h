@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/containers/span.h"
+#include "base/memory/scoped_refptr.h"
 #include "services/webnn/public/cpp/context_properties.h"
 #include "services/webnn/public/cpp/ml_tensor_usage.h"
 #include "services/webnn/public/cpp/operand_descriptor.h"
@@ -33,6 +34,10 @@
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
+
+namespace gpu {
+class ClientSharedImage;
+}  // namespace gpu
 
 namespace blink {
 
@@ -120,6 +125,14 @@ class MODULES_EXPORT MLContext : public ScriptWrappable {
 
   void OnGraphCreated(MLGraph* graph);
 
+  const mojo::ScopedDataPipeProducerHandle& write_tensor_producer() const {
+    return write_tensor_producer_;
+  }
+
+  const mojo::ScopedDataPipeConsumerHandle& read_tensor_consumer() const {
+    return read_tensor_consumer_;
+  }
+
  private:
   using LostProperty = ScriptPromiseProperty<MLContextLostInfo, IDLUndefined>;
 
@@ -130,6 +143,7 @@ class MODULES_EXPORT MLContext : public ScriptWrappable {
                             ScriptPromiseResolver<blink::MLTensor>* resolver,
                             webnn::OperandDescriptor validated_descriptor,
                             webnn::MLTensorUsage usage,
+                            scoped_refptr<gpu::ClientSharedImage> shared_image,
                             webnn::mojom::blink::CreateTensorResultPtr result);
 
   V8MLDeviceType device_type_;
@@ -139,8 +153,11 @@ class MODULES_EXPORT MLContext : public ScriptWrappable {
 
   // The `WebNNContext` is a initialized context that can be used by the
   // hardware accelerated OS machine learning API.
-  HeapMojoAssociatedRemote<webnn::mojom::blink::WebNNContext> context_remote_;
+  HeapMojoRemote<webnn::mojom::blink::WebNNContext> context_remote_;
   webnn::ContextProperties properties_;
+
+  mojo::ScopedDataPipeProducerHandle write_tensor_producer_;
+  mojo::ScopedDataPipeConsumerHandle read_tensor_consumer_;
 
   // Identifies this `WebNNContext` mojo instance in the service process.
   const blink::WebNNContextToken webnn_handle_;

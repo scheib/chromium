@@ -4,7 +4,6 @@
 <translation id="1000436330784933699">यहां Lens खोला जा सकता है.</translation>
 <translation id="1042296835509784301">इससे Chromium में Password Manager खुलता है.</translation>
 <translation id="1047130070405668746">Chromium चुनें</translation>
-<translation id="1086486568852410168">Google Lens की मदद से खोजें</translation>
 <translation id="1091252999271033193">इसका मतलब है कि Chromium हर बार, साइट के मोबाइल वर्शन का अनुरोध करेगा.</translation>
 <translation id="1115463765356382667">Chromium का ज़्यादा से ज़्यादा फ़ायदा पाने के लिए, यहां सुझाई गई कार्रवाइयों को पूरा करें.</translation>
 <translation id="1185134272377778587">क्रोमियम के बारे में</translation>
@@ -42,6 +41,7 @@
 <translation id="1843424232666537147">क्रोमियम में ऐसी सुविधाएं हैं जो आपको अपने इंटरनेट डेटा को प्रबंधित करने और वेबपृष्ठों को तेज़ी से लोड करने में आपकी सहायता करती हैं. <ph name="BEGIN_LINK" />ज़्यादा जानें<ph name="END_LINK" /></translation>
 <translation id="1847960401032164406">Chromium में Maps</translation>
 <translation id="1867772173333403444">4. Chromium चुनें</translation>
+<translation id="1965068424387304464">Chromium की सलाह: पासवर्ड सेव करें</translation>
 <translation id="2006345422933397527">क्रोमियम अपडेट की जांच नहीं कर सका. देखें कि आप इंटरनेट से कनेक्ट हैं या नहीं.</translation>
 <translation id="2042889939382983733">अपना Chromium इतिहास देखें</translation>
 <translation id="2052320862053429062">Chrome समय-समय पर यह जांच करता है कि आपके पासवर्ड, ऑनलाइन पब्लिश हुई सूचियों में शामिल हैं या नहीं. ऐसा करते समय, आपके पासवर्ड और उपयोगकर्ता नाम को एन्क्रिप्ट (सुरक्षित) किया जाता है, ताकि कोई उन्हें देख न सके, यहां तक कि Google भी नहीं.</translation>
@@ -88,7 +88,6 @@ Chromium के अनुभव को बेहतर बनाने के �
 <translation id="2977470724722393594">क्रोमियम अप टू डेट है</translation>
 <translation id="3044857325852340337">Chromium का डेटा मिटाया गया</translation>
 <translation id="3054480780637153380">iOS पर Chromium Settings खोलें. इसके बाद, "Default Browser App" पर टैप करें और Chromium चुनें.</translation>
-<translation id="3102849287235003384">सभी वेबसाइटों पर, अपने Google खाते से साइन आउट करने के लिए, <ph name="BEGIN_LINK" />Chromium से साइन आउट करें<ph name="END_LINK" />.</translation>
 <translation id="3115956258722352278">क्या आपको Chromium को अपना डिफ़ॉल्ट ब्राउज़र बनाना है?</translation>
 <translation id="3180939591219927904">"Chromium बंद करने पर अपने गुप्त टैब लॉक करें" को चालू करें</translation>
 <translation id="328933489847748230">{count,plural, =1{अभी Chromium की 1 विंडो दिखाई जा रही है}one{अभी Chromium की {count} विंडो दिखाई जा रही है}other{अभी Chromium की {count} विंडो दिखाई जा रही हैं}}</translation>
@@ -118,6 +117,7 @@ Chromium के अनुभव को बेहतर बनाने के �
 <translation id="3816686541346279443">Chromium आपको पासवर्ड सेव करने का विकल्प देगा.</translation>
 <translation id="3827545470516145620">आपको इस डिवाइस पर मानक सुरक्षा दी जा रही है</translation>
 <translation id="3833326979834193417">Chromium हर दिन अपने-आप सुरक्षा जांच करता है, ताकि आपको डेटा के गलत इस्तेमाल, नुकसान पहुंचाने वाली वेबसाइटों वगैरह से सुरक्षित रखा जा सके. 'सेटिंग' में जाकर, सुरक्षा जांच के बारे में ज़्यादा जानें.</translation>
+<translation id="3837584850181228767">Chromium की सलाह: बेहतर सुरक्षित ब्राउज़िंग की सुविधा इस्तेमाल करें</translation>
 <translation id="3845223911364528001">फ़ाइल अपलोड करने के लिए, Chromium पर वापस जाएं</translation>
 <translation id="3855938650519180865">Chromium में नया क्या है</translation>
 <translation id="3886689467633467988">बुकमार्क वगैरह अपने सभी डिवाइसों पर पाने के लिए, इस साइट और Chromium में साइन इन करें.</translation>
@@ -198,6 +198,9 @@ Chromium के अनुभव को बेहतर बनाने के �
 <translation id="5671188105328420281">Chromium से जुड़ी जानकारी</translation>
 <translation id="5688047395118852662">यह कार्ड आपको Chromium का ज़्यादा से ज़्यादा फ़ायदा पाने के सुझाव दिखाता है.</translation>
 <translation id="5700709190537129682">क्रोमियम आपके पासवर्ड की जांच नहीं कर सकता</translation>
+<translation id="5731004036450828399">अपनी पासकी सुरक्षित रखने के लिए, आपको पहले एक रिकवरी पिन बनाना होगा.
+
+        पासकी, Password Manager में सेव की जाती हैं. इनकी मदद से, किसी भी डिवाइस पर Chromium में लॉगिन किया जा सकता है.</translation>
 <translation id="584550191241316896">आपने Chromium में साइन इन किया है</translation>
 <translation id="5862307444128926510">क्रोमियम में आपका स्वागत है</translation>
 <translation id="5889847953983052353">मेट्रिक रिपोर्ट करने की सुविधा चालू होने पर:
@@ -263,8 +266,8 @@ Chromium के अनुभव को बेहतर बनाने के �
 <translation id="7269362888766543920">कुछ ऐड-ऑन के कारण क्रोमियम बंद हो जाता है. कृपया उन्हें अनइंस्टॉल करके देखें.</translation>
 <translation id="7285031092584344905">अन्य ऐप्लिकेशन में अपने Chromium पासवर्ड वगैरह ऐक्सेस करें.</translation>
 <translation id="7337881442233988129">Chromium</translation>
-<translation id="7357211569052832586">चयनित डेटा को क्रोमियम और सिंक किए हुए डिवाइस से निकाल दिया गया है. आपके Google खाते में history.google.com पर की जाने वाली खोजों अन्य Google सेवाओं की गतिविधि जैसेे ब्राउज़िंग इतिहास के अन्य प्रारूप हो सकते हैं.</translation>
 <translation id="7395825497086981028"><ph name="EMAIL" /> के लिए आपके पासवर्ड को पासवर्ड मैनेजर में सेव किया जाएगा.</translation>
+<translation id="7434848749522628428">यह पासकी, <ph name="USER_EMAIL" /> के Password Manager में सेव की जाएगी</translation>
 <translation id="7504829997542308412">Chromium खोलें</translation>
 <translation id="7531461704633548377">Chromium की मदद से दिखाया गया पेज</translation>
 <translation id="7554983317097061001">Chromium के बारे में सलाह: Chromium को डॉक पर मूव करें</translation>
@@ -298,6 +301,7 @@ Chromium के अनुभव को बेहतर बनाने के �
 <translation id="8254729934443216898">Chromium का ज़्यादा से ज़्यादा फ़ायदा पाने में मदद करने वाली नई सुविधाओं के बारे में जानें.</translation>
 <translation id="8293572045658095405">Chromium का गुप्त मोड खुला है</translation>
 <translation id="830951810931292870">यह शॉर्टकट, डाले गए यूआरएल को Chromium के गुप्त मोड में खोलता है.</translation>
+<translation id="8385503371191508165">Password Manager की मदद से पासकी सेव करना शुरू करें</translation>
 <translation id="8390323835464055390">किसी भी ऐप्लिकेशन में सेव किए गए पासवर्ड और पासकी की मदद से साइन इन करने के लिए, 'Chromium में ऑटोमैटिक भरने की सुविधा' का इस्तेमाल करें</translation>
 <translation id="8409374867500149834">नुकसान पहुंचाने वाली वेबसाइटों से बचने के लिए, आपके पास Chromium की सबसे बेहतरीन सुरक्षा है</translation>
 <translation id="8543509361021925846">{THRESHOLD,plural, =1{ऐसा तब होता है, जब Chromium का इस्तेमाल {THRESHOLD} मिनट तक नहीं किया जाता. आपके साइन इन रहने के दौरान सिर्फ़ इस डिवाइस पर सेव किया गया डेटा मिटा दिया जाएगा. इसमें ब्राउज़िंग का इतिहास और पासवर्ड शामिल हो सकते हैं.}one{ऐसा तब होता है, जब Chromium का इस्तेमाल {THRESHOLD} मिनट तक नहीं किया जाता. आपके साइन इन रहने के दौरान सिर्फ़ इस डिवाइस पर सेव किया गया डेटा मिटा दिया जाएगा. इसमें ब्राउज़िंग का इतिहास और पासवर्ड शामिल हो सकते हैं.}other{ऐसा तब होता है, जब Chromium का इस्तेमाल {THRESHOLD} मिनट तक नहीं किया जाता. आपके साइन इन रहने के दौरान सिर्फ़ इस डिवाइस पर सेव किया गया डेटा मिटा दिया जाएगा. इसमें ब्राउज़िंग का इतिहास और पासवर्ड शामिल हो सकते हैं.}}</translation>

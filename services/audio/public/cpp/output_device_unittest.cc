@@ -24,7 +24,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 using testing::_;
-using testing::Invoke;
 using testing::Mock;
 using testing::NotNull;
 using testing::StrictMock;
@@ -239,21 +238,23 @@ TEST_F(AudioServiceOutputDeviceTest, MAYBE_VerifyDataFlow) {
                                        .count = 123};
     EXPECT_CALL(env.render_callback,
                 Render(kDelay, env.time_stamp, glitch_info, NotNull()))
-        .WillOnce(WithArg<3>(Invoke([](media::AudioBus* client_bus) -> int {
+        .WillOnce(WithArg<3>([](media::AudioBus* client_bus) -> int {
           // Place some test data in the bus so that we can check that it was
           // copied to the audio service side.
-          std::fill_n(client_bus->channel(0), client_bus->frames(), kAudioData);
-          std::fill_n(client_bus->channel(1), client_bus->frames(), kAudioData);
+          std::ranges::fill(client_bus->channel_span(0), kAudioData);
+          std::ranges::fill(client_bus->channel_span(1), kAudioData);
           return client_bus->frames();
-        })));
+        }));
     env.reader->RequestMoreData(kDelay, env.time_stamp, glitch_info);
     env.reader->Read(test_bus.get(), false);
 
     Mock::VerifyAndClear(&env.render_callback);
-    for (int frame = 0; frame < kFrames; ++frame) {
-      UNSAFE_TODO(EXPECT_EQ(kAudioData, test_bus->channel(0)[frame]));
-      UNSAFE_TODO(EXPECT_EQ(kAudioData, test_bus->channel(1)[frame]));
-    }
+    constexpr auto samples_match = [](float sample) {
+      return sample == kAudioData;
+    };
+
+    EXPECT_TRUE(std::ranges::all_of(test_bus->channel_span(0), samples_match));
+    EXPECT_TRUE(std::ranges::all_of(test_bus->channel_span(1), samples_match));
   }
 }
 
@@ -297,7 +298,7 @@ TEST_F(AudioServiceOutputDeviceTest, CreateBitStreamStream) {
                                        .count = 123};
     EXPECT_CALL(env.render_callback,
                 Render(kDelay, env.time_stamp, glitch_info, NotNull()))
-        .WillOnce(WithArg<3>(Invoke([](media::AudioBus* renderer_bus) -> int {
+        .WillOnce(WithArg<3>([](media::AudioBus* renderer_bus) -> int {
           EXPECT_TRUE(renderer_bus->is_bitstream_format());
           // Place some test data in the bus so that we can check that it was
           // copied to the browser side.
@@ -305,7 +306,7 @@ TEST_F(AudioServiceOutputDeviceTest, CreateBitStreamStream) {
           renderer_bus->SetBitstreamSize(kBitstreamDataSize);
           std::ranges::fill(renderer_bus->bitstream_data(), kAudioByteData);
           return renderer_bus->frames();
-        })));
+        }));
     env.reader->RequestMoreData(kDelay, env.time_stamp, glitch_info);
     env.reader->Read(test_bus.get(), false);
 

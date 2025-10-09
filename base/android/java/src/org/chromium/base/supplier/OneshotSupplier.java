@@ -6,8 +6,9 @@ package org.chromium.base.supplier;
 
 import org.chromium.base.Callback;
 import org.chromium.build.annotations.NullMarked;
-import org.chromium.build.annotations.NullUnmarked;
 import org.chromium.build.annotations.Nullable;
+
+import java.util.function.Supplier;
 
 /**
  * OneshotSupplier wraps an asynchronously provided, non-null object {@code T}, notifying observers
@@ -59,14 +60,11 @@ public interface OneshotSupplier<T> extends Supplier<@Nullable T> {
      * @param callback The callback to be called (either async or sync).
      */
     default void runSyncOrOnAvailable(Callback<T> callback) {
-        if (hasValue()) {
-            callback.onResult(get());
+        T value = get();
+        if (value != null) {
+            callback.onResult(value);
         } else {
             onAvailable(callback);
         }
     }
-
-    @Override
-    @NullUnmarked // TODO(430320400): Introduces a lot of warnings.
-    T get();
 }

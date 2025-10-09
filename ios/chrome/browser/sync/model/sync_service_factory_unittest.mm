@@ -53,7 +53,7 @@ class SyncServiceFactoryTest : public PlatformTest {
  protected:
   // Returns the collection of default datatypes.
   syncer::DataTypeSet DefaultDatatypes() {
-    static_assert(56 == syncer::GetNumDataTypes(),
+    static_assert(58 == syncer::GetNumDataTypes(),
                   "When adding a new type, you probably want to add it here as "
                   "well (assuming it is already enabled).");
 
@@ -74,9 +74,6 @@ class SyncServiceFactoryTest : public PlatformTest {
     datatypes.Put(syncer::AUTOFILL_WALLET_METADATA);
     datatypes.Put(syncer::AUTOFILL_WALLET_OFFER);
     datatypes.Put(syncer::BOOKMARKS);
-    if (base::FeatureList::IsEnabled(commerce::kProductSpecifications)) {
-      datatypes.Put(syncer::PRODUCT_COMPARISON);
-    }
     datatypes.Put(syncer::CONTACT_INFO);
     datatypes.Put(syncer::DEVICE_INFO);
     datatypes.Put(syncer::HISTORY);
@@ -106,6 +103,12 @@ class SyncServiceFactoryTest : public PlatformTest {
     }
     if (base::FeatureList::IsEnabled(syncer::kSyncSharedComment)) {
       datatypes.Put(syncer::SHARED_COMMENT);
+    }
+    if (base::FeatureList::IsEnabled(syncer::kSyncAIThread)) {
+      datatypes.Put(syncer::AI_THREAD);
+    }
+    if (base::FeatureList::IsEnabled(syncer::kSyncContextualTask)) {
+      datatypes.Put(syncer::CONTEXTUAL_TASK);
     }
     return datatypes;
   }

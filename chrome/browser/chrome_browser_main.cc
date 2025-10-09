@@ -36,6 +36,7 @@
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
 #include "chrome/browser/component_updater/registration.h"
 #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
+#include "chrome/browser/first_run/bookmark_importer.h"
 #include "chrome/browser/first_run/first_run_features.h"
 #include "chrome/browser/language/url_language_histogram_factory.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
@@ -139,6 +140,8 @@
 #include <vector>
 
 #include "base/no_destructor.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/apps/app_service/publishers/publisher_host_factory_impl.h"
 #include "chrome/browser/profiles/delete_profile_helper.h"
 #include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "chrome/browser/resources_integrity.h"
@@ -239,6 +242,7 @@
 #endif  // BUILDFLAG(ENABLE_BACKGROUND_MODE)
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "extensions/browser/pref_names.h"
 #include "extensions/components/javascript_dialog_extensions_client/javascript_dialog_extension_client_impl.h"
 #endif
 
@@ -393,8 +397,6 @@ StartupProfileInfo CreateInitialProfile(
   if (profile_info.mode == StartupProfileMode::kError &&
       !last_used_profile_set) {
     profile_info = GetFallbackStartupProfile();
-    base::UmaHistogramEnumeration(
-        "ProfilePicker.StartupMode.FallbackProfileUsed", profile_info.mode);
   }
 
   if (profile_info.mode == StartupProfileMode::kError) {
@@ -452,13 +454,7 @@ void ProcessSingletonNotificationCallbackImpl(
   StartupProfilePathInfo startup_profile_path_info =
       GetStartupProfilePath(current_directory, command_line,
                             /*ignore_profile_picker=*/false);
-  DCHECK_NE(startup_profile_path_info.reason, StartupProfileModeReason::kError);
-  base::UmaHistogramEnumeration(
-      "ProfilePicker.StartupMode.NotificationCallback",
-      StartupProfileModeFromReason(startup_profile_path_info.reason));
-  base::UmaHistogramEnumeration(
-      "ProfilePicker.StartupReason.NotificationCallback",
-      startup_profile_path_info.reason);
+  DCHECK_NE(startup_profile_path_info.mode, StartupProfileMode::kError);
 
   StartupBrowserCreator::ProcessCommandLineAlreadyRunning(
       command_line, current_directory, startup_profile_path_info);
@@ -802,10 +798,6 @@ void ChromeBrowserMainParts::PostCreateMainMessageLoop() {
   // platforms (e.g. chromeos) may have already initialized this.
   if (!device_event_log::IsInitialized())
     device_event_log::Initialize(0 /* default max entries */);
-
-  // Set up and register ERP reporting client.
-  reporting_client_ =
-      reporting::ReportingClient::Create(content::GetUIThreadTaskRunner({}));
 
   for (auto& chrome_extra_part : chrome_extra_parts_)
     chrome_extra_part->PostCreateMainMessageLoop();
@@ -1208,6 +1200,11 @@ void ChromeBrowserMainParts::PreProfileInit() {
   g_browser_process->profile_manager()
       ->GetDeleteProfileHelper()
       .CleanUpDeletedProfiles();
+
+  // Inject the publisher dependency to AppService.
+  publisher_host_factory_resetter_ =
+      apps::AppServiceProxyFactory::GetInstance()->SetPublisherHostFactory(
+          std::make_unique<apps::PublisherHostFactoryImpl>());
 #endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -1528,8 +1525,6 @@ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
   // and more directly Profile.CreateAndInitializeProfile.
   StartupProfileInfo profile_info = CreateInitialProfile(
       user_data_dir_, *base::CommandLine::ForCurrentProcess());
-  base::UmaHistogramEnumeration(
-      "ProfilePicker.StartupMode.CreateInitialProfile", profile_info.mode);
 
   if (profile_info.mode == StartupProfileMode::kError)
     return content::RESULT_CODE_NORMAL_EXIT;
@@ -1597,9 +1592,22 @@ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
 
       if (base::FeatureList::IsEnabled(features::kBookmarksImportOnFirstRun) &&
           !master_prefs_->import_bookmarks_dict.empty()) {
-        first_run::StartBookmarksImportFromDict(
+        first_run::StartBookmarkImportFromDict(
             profile, std::move(master_prefs_->import_bookmarks_dict));
       }
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+      if (base::FeatureList::IsEnabled(features::kInitialExternalExtensions)) {
+        profile->GetPrefs()->SetString(
+            extensions::pref_names::kInitialInstallProviderName,
+            std::move(master_prefs_->initial_extensions_provider_name));
+        // Store the initial extension IDs into the profile's prefs so that
+        // InitialExternalExtensionLoader can later pick them up.
+        profile->GetPrefs()->SetList(
+            extensions::pref_names::kInitialInstallList,
+            std::move(master_prefs_->initial_extensions));
+      }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
     }
 
     // Note: This can pop-up the first run consent dialog on Linux & Mac.
@@ -1858,6 +1866,8 @@ void ChromeBrowserMainParts::PostMainMessageLoopRun() {
 
   restart_last_session_ = browser_shutdown::ShutdownPreThreadsStop();
   browser_process_->StartTearDown();
+
+  publisher_host_factory_resetter_.reset();
 #endif  // BUILDFLAG(IS_ANDROID)
 }
 

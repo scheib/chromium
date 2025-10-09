@@ -268,9 +268,8 @@ class PasswordSuggestionBottomSheetMediatorTest : public PlatformTest {
                               ios::HistoryServiceFactory::GetDefaultFactory());
     builder.AddTestingFactory(
         IOSChromeProfilePasswordStoreFactory::GetInstance(),
-        base::BindRepeating(
-            &password_manager::BuildPasswordStore<
-                web::BrowserState, password_manager::TestPasswordStore>));
+        base::BindOnce(&password_manager::BuildPasswordStore<
+                       ProfileIOS, password_manager::TestPasswordStore>));
     builder.SetPrefService(std::move(prefs));
     profile_ = std::move(builder).Build();
 
@@ -285,10 +284,10 @@ class PasswordSuggestionBottomSheetMediatorTest : public PlatformTest {
     // Set up the frames manager so frames can be used.
     auto frames_manager = std::make_unique<web::FakeWebFramesManager>();
     frames_manager_ptr_ = frames_manager.get();
-    web_state_->SetWebFramesManager(std::move(frames_manager));
+    web_state_->SetWebFramesManager(web::ContentWorld::kIsolatedWorld,
+                                    std::move(frames_manager));
 
-    // Create the PasswordTabHelper so the password provider is available when
-    // the sheet V2 is used.
+    // Create the PasswordTabHelper so the password provider is available.
     PasswordTabHelper::CreateForWebState(web_state_.get());
 
     consumer_ =
@@ -340,8 +339,7 @@ class PasswordSuggestionBottomSheetMediatorTest : public PlatformTest {
                 profile_.get(), ServiceAccessType::EXPLICIT_ACCESS)
                 .get()));
 
-    // Set up the fill data for the real password provider used by password
-    // sheet V2 when the mediator is tested with providers.
+    // Set up the fill data for the real password provider.
     if ([suggestion_providers_ count] > 0) {
       ASSERT_EQ(1u, [suggestion_providers_ count]);
       PasswordSuggestionBottomSheetMediatorTestSuggestionProvider* provider =
@@ -413,9 +411,9 @@ class PasswordSuggestionBottomSheetMediatorTest : public PlatformTest {
   FakeWebStateListDelegate web_state_list_delegate_;
   std::unique_ptr<WebStateList> web_state_list_;
   std::unique_ptr<web::FakeWebState> web_state_;
-  raw_ptr<web::WebState> web_state_ptr_;
-  raw_ptr<web::FakeWebFramesManager> frames_manager_ptr_;
-  raw_ptr<web::FakeWebFrame> main_frame_ptr_;
+  raw_ptr<web::WebState, DanglingUntriaged> web_state_ptr_;
+  raw_ptr<web::FakeWebFramesManager, DanglingUntriaged> frames_manager_ptr_;
+  raw_ptr<web::FakeWebFrame, DanglingUntriaged> main_frame_ptr_;
   scoped_refptr<password_manager::TestPasswordStore> store_;
   id consumer_;
   NSArray<id<FormSuggestionProvider>>* suggestion_providers_;

@@ -22,6 +22,7 @@
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
+#include "components/os_crypt/async/common/encryptor.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync/base/data_type.h"
 #include "components/sync/engine/configure_reason.h"
@@ -51,6 +52,10 @@ namespace network {
 class NetworkConnectionTracker;
 class SharedURLLoaderFactory;
 }  // namespace network
+
+namespace os_crypt_async {
+class OSCryptAsync;
+}  // namespace os_crypt_async
 
 namespace syncer {
 
@@ -93,6 +98,7 @@ class SyncServiceImpl : public SyncService,
         nullptr;
     version_info::Channel channel = version_info::Channel::UNKNOWN;
     std::string debug_identifier;
+    raw_ptr<os_crypt_async::OSCryptAsync> os_crypt_async = nullptr;
   };
 
   explicit SyncServiceImpl(InitParams init_params);
@@ -131,7 +137,8 @@ class SyncServiceImpl : public SyncService,
   DataTypeSet GetActiveDataTypes() const override;
   DataTypeSet GetTypesWithPendingDownloadForInitialSync() const override;
   void OnDataTypeRequestsSyncStartup(DataType type) override;
-  void TriggerRefresh(const DataTypeSet& types) override;
+  void TriggerRefresh(TriggerRefreshSource source,
+                      const DataTypeSet& types) override;
   void DataTypePreconditionChanged(DataType type) override;
   void SetInvalidationsForSessionsEnabled(bool enabled) override;
   void SendExplicitPassphraseToPlatformClient() override;
@@ -345,13 +352,15 @@ class SyncServiceImpl : public SyncService,
 
   void ClearUnrecoverableError();
 
-  // Posts a task to create the sync engine, if IsEngineAllowedToRun() is true
-  // and there is no engine yet (no-op otherwise). This method posts a task so
-  // callers can set up other state as necessary before the engine starts.
+  // Asynchronously tries to start the sync engine, if IsEngineAllowedToRun() is
+  // true and there is no engine yet (no-op otherwise). This is asynchronous to
+  // allow OSCrypt to be initialized first and set to up other state as
+  // necessary before the engine starts.
   void TryStart();
 
   // The actual synchronous implementation of TryStart().
-  void TryStartImpl();
+  void TryStartImpl(base::TimeTicks try_start_time,
+                    std::vector<os_crypt_async::Encryptor> encryptors);
 
   // Whether sync has been authenticated with an account ID.
   bool IsSignedIn() const;
@@ -395,6 +404,9 @@ class SyncServiceImpl : public SyncService,
 
   std::optional<CreateHttpPostProviderFactory>
       create_http_post_provider_factory_override_for_test_;
+
+  // The global OSCryptAsync instance.
+  raw_ptr<os_crypt_async::OSCryptAsync> os_crypt_async_;
 
   // The class that handles getting, setting, and persisting sync preferences.
   SyncPrefs sync_prefs_;

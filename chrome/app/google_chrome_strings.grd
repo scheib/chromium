@@ -381,6 +381,18 @@ chromium_strings.grd. -->
       <message name="IDS_SESSION_CRASHED_VIEW_UMA_OPTIN" desc="Text besides the checkbox to let users optin to UMA in the restore from previous crash bubble.">
         Help make Google Chrome better by sending crash reports and <ph name="UMA_LINK">$1<ex>usage statistics</ex></ph> to Google
       </message>
+      <!-- Reset Profile Settings strings -->
+      <message name="IDS_RESET_PROFILE_SETTINGS_EXPLANATION_IN_BULLET_POINTS" desc="A label formatted with bullet points describing the consequences of the 'reset profile settings' feature">
+        This action will:
+        <ph name="LINE_BREAKS">&lt;br&gt;&lt;br&gt;</ph>
+          • Reset some Chrome settings and Chrome shortcuts
+          <ph name="LINE_BREAK">&lt;br&gt;</ph>
+          • Disable extensions
+          <ph name="LINE_BREAK">&lt;br&gt;</ph>
+          • Delete cookies and other temporary site data
+          <ph name="LINE_BREAKS">&lt;br&gt;&lt;br&gt;</ph>
+          Bookmarks, history, and saved passwords won't be affected.
+      </message>
       <if expr="not is_chromeos">
         <!-- Browser Window Title Format -->
         <message name="IDS_BROWSER_WINDOW_TITLE_FORMAT" desc="The format for titles displayed in tabs and popup windows">
@@ -627,9 +639,6 @@ Google Chrome is unable to recover your settings.
         <message name="IDS_SAME_VERSION_REPAIR_FAILED" desc="Error displayed if installation fails due to Chrome running.">
           Can not install the same Google Chrome version that is currently running. Please close Google Chrome and try again.
         </message>
-        <message name="IDS_SETUP_PATCH_FAILED" desc="Error message when setup.exe fails to patch itself.">
-          Installation failed due to unspecified error. Please download Google Chrome again.
-        </message>
         <message name="IDS_INSTALL_OS_NOT_SUPPORTED" desc="Error displayed if OS is not supported">
           Google Chrome requires Windows 10 or higher.
         </message>
@@ -661,6 +670,14 @@ Google Chrome is unable to recover your settings.
         <message name="IDS_TRACING_SERVICE_DESCRIPTION"
                  desc="The description of the Windows system tracing service. Displayed in the Windows Services management console.">
           Provides system tracing services for <ph name="BROWSER_NAME">$1<ex>Google Chrome</ex></ph>. If this service is disabled, performance traces created by the browser will not include system-wide events such as context switch and ready thread events.
+        </message>
+      </if>
+      <if expr="not is_android">
+        <message name="IDS_PASSWORD_MANAGER_IMPORT_DIALOG_TITLE" desc="The title of the file selection dialog for importing passwords">
+          Import Passwords To Chrome
+        </message>
+        <message name="IDS_PASSWORD_MANAGER_EXPORT_DIALOG_TITLE" desc="The title of the file selection dialog for exporting passwords">
+          Export Passwords From Chrome
         </message>
       </if>
       <!-- Options Dialog -->
@@ -971,6 +988,34 @@ Google Chrome is unable to recover your settings.
         </message>
       </if>
 
+      <!-- Page menu. Android has separate strings for its menu -->
+      <if expr="not is_android">
+        <if expr="use_titlecase">
+          <then>
+            <message name="IDS_CUSTOMIZE_CHROME" desc="In Title Case: The text label of the Customize Chrome menu item">
+              C&amp;ustomize Your Chrome
+            </message>
+            <message name="IDS_OTHER_CHROME_PROFILES_TITLE" desc="In Title Case: The title of the Other Chrome profiles section">
+              Other Chrome Profiles
+            </message>
+            <message name="IDS_MANAGE_CHROME_PROFILES" desc="In Title Case: The text label of the manage chrome profile item">
+              &amp;Manage Chrome Profiles
+            </message>
+          </then>
+          <else>
+            <message name="IDS_CUSTOMIZE_CHROME" desc="The text label of the Customize Chrome menu item">
+              C&amp;ustomize your Chrome
+            </message>
+            <message name="IDS_OTHER_CHROME_PROFILES_TITLE" desc="The title of the Other Chrome profiles section">
+              Other Chrome profiles
+            </message>
+            <message name="IDS_MANAGE_CHROME_PROFILES" desc="The text label of the manage chrome profile item">
+              &amp;Manage Chrome profiles
+            </message>
+          </else>
+        </if>
+      </if>
+
       <message name="IDS_VIEW_PASSWORDS" desc="Item in the app menu which shows Password Manager page">
         Google P&amp;assword Manager
       </message>
@@ -1004,6 +1049,20 @@ Google Chrome is unable to recover your settings.
       </message>
       <message name="IDS_INSTALLER_DOWNLOADER_LINK" desc="Text for the link in the installer downloader infobar to learn more about installing Chrome">
         Learn more about installing Chrome
+      </message>
+
+      <!-- Session Restore Infobar -->
+      <message name="IDS_SESSION_RESTORE_TURN_OFF_RESTORE_FROM_SESSION" desc="Message that appears in the session restore infobar when the user has restored their tabs once.">
+        Continue where you left off: Chrome restored your tabs from your last session. You can turn this off in
+      </message>
+      <message name="IDS_SESSION_RESTORE_TURN_OFF_RESTORE_FROM_RESTART" desc="Message that appears in the session restore infobar when the user has restored their tabs multiple times.">
+        Continue where you left off: Chrome restores your tabs every time you restart. To turn this off, go to
+      </message>
+      <message name="IDS_SESSION_RESTORE_TURN_ON" desc="Message that appears in the session restore infobar to get the user to opt-in into session restore.">
+        Continue where you left off: Chrome can restore your tabs every time you restart. To turn this on, go to
+      </message>
+      <message name="IDS_SESSION_RESTORE_LINK" desc="Text for the link in the session restore infobar to open the Settings page.">
+         Settings.
       </message>
 
       <!-- Enterprise sign-in dialog -->
@@ -1078,6 +1137,9 @@ Google Chrome is unable to recover your settings.
       <message name="IDS_NTP_CUSTOMIZE_BUTTON_LABEL" desc="Label for button on the New Tab Page that opens dialog to customize Chrome browser.">
         Customize Chrome
       </message>
+      <message name="IDS_NTP_MODULES_SETUP_LIST_TITLE" desc="Title shown at the top of the Setup List card.">
+        Make Chrome Yours
+      </message>
 
       <!-- Signin Email Confirmation tab modal dialog -->
       <if expr="not is_chromeos">
@@ -1138,7 +1200,7 @@ Google Chrome is unable to recover your settings.
           To stay safer online with your parent’s choices, sign in to Chrome
         </message>
         <message name="IDS_SIGNIN_DICE_WEB_INTERCEPT_BUBBLE_CHROME_SIGNIN_IPH_TEXT_SIGNIN_REMINDER" desc="This string is the body text of a reminder message, which is intended to help users understand that they have been signed in to Chrome. The user previously signed in to a Google service (like Gmail or Maps), and saw the Chrome Signin Bubble intercept; when asked whether the user wanted to sign in to Chrome as well, the user selected yes. After a period of time, this reminder message appears at the top right of Chrome (pointing at the Profile Menu) to remind the user that they made this choice a while ago. This body text string comes after the 'Welcome back, USER_NAME' string. We are focusing on the benefit that user enjoys, now that they're signed in to Chrome. The tone should be welcoming.">
-          While you're signed in, you can use your passwords and more from your Google Account in Chrome. You can change this at any time in settings.
+          While you're signed in, you can use your passwords and more from your Google Account in Chrome. You can change this anytime in settings.
         </message>
         <message name="IDS_SIGNIN_DICE_WEB_INTERCEPT_BUBBLE_CHROME_SIGNIN_IPH_TEXT_SIGNIN_REMINDER_SCREENREADER" desc="This string is the accessibility text of a reminder message, which is intended to help users understand that they have been signed in to Chrome.">
           While you're signed in, you can use your passwords and more from your Google Account in Chrome. <ph name="SHORTCUT">$1<ex>CTRL+SHIFT+M</ex></ph> can change your Google services settings.
@@ -1280,7 +1342,7 @@ Google Chrome is unable to recover your settings.
       </if>
 
       <message name="IDS_APP_ALSO_DELETE_APPS_DATA" desc="Checkbox text to ask the user during uninstall; Whether they want to remove associated data for the app being uninstalled. Only used when uninstalling an app associated with a particular website.">
-        Remove this apps data from Chrome
+        Remove this app's data from Chrome
       </message>
 
       <!-- App shortcuts -->
@@ -1684,8 +1746,18 @@ Google Chrome is unable to recover your settings.
         </message>
         <message name="IDS_LOCAL_NETWORK_ACCESS_PERMISSION_DESC" desc="Text shown in the macOS permission dialog, describing why Chrome needs the permission to access local network.">
           This will allow you to select from available devices and display content on them.
-    </message>
+        </message>
       </if>
+
+      <!-- Side panel strings -->
+      <message name="IDS_SIDE_PANEL_CUSTOMIZE_CHROME_TITLE" desc="The name of the Customize Chrome feature in the side panel combo box.">
+        Customize Chrome
+      </message>
+
+      <!-- History Strings -->
+      <message name="IDS_HISTORY_HISTORY_MENU_ITEM" desc="Label displayed in history sidebar button to display history.">
+        Chrome history
+      </message>
 
       <!-- Lens Overlay Strings -->
       <if expr="not is_android">
@@ -1729,6 +1801,10 @@ Google Chrome is unable to recover your settings.
         <message name="IDS_LENS_OVERLAY_FEEDBACK_TOAST_MESSAGE"
           desc="The message on the toast prompting the user to share their thoughts by sending feedback.">
           Share your thoughts
+        </message>
+        <message name="IDS_LENS_OVERLAY_FEEDBACK_TOAST_MESSAGE_ALT"
+          desc="The message on the toast asking the user if the results are useful and to send feedback.">
+          Are these results useful?
         </message>
         <message name="IDS_LENS_OVERLAY_SEND_FEEDBACK_BUTTON_LABEL"
           desc="The label for the button that on click opens a feedback form for the user to send feedback about the feature.">
@@ -1933,6 +2009,10 @@ Google Chrome is unable to recover your settings.
           desc="The label of the Lens overlay entrypoint in the omnibox offering homework help">
           Homework help
         </message>
+        <message name="IDS_CONTENT_LENS_OVERLAY_ASK_GOOGLE_ENTRYPOINT_LABEL"
+          desc="The label of the Lens overlay entrypoint in the omnibox, allowing users to ask Google about the page">
+          Ask Google
+        </message>
         <message name="IDS_SIDE_PANEL_LENS_OVERLAY_TOOLBAR_TOOLTIP"
           desc="The tooltip for the Lens overlay toolbar button.">
           Search with Google Lens
@@ -1974,12 +2054,14 @@ Google Chrome is unable to recover your settings.
           desc="Label for the Lens overlay command, through which the video will be searched using Google Lens.">
           Search this video with Google Lens
         </message>
+      </if>
 
-        <message name="IDS_AI_MODE_ENTRYPOINT_LABEL"
-          desc="The label of the AI mode entrypoint in the omnibox">
-          AI Mode
-        </message>
+      <message name="IDS_AI_MODE_ENTRYPOINT_LABEL"
+        desc="The label of the AI mode entrypoint in the omnibox" formatter_data="android_java">
+        AI Mode
+      </message>
 
+      <if expr="not is_android">
         <!-- Lens Side Panel Error Page -->
         <message name="IDS_SIDE_PANEL_LENS_OVERLAY_GENERIC_ERROR_PAGE_FIRST_LINE"
             desc="Text shown on the side panel for the Lens feature when there is a network or other server error. The texts informs the user that an error has occured.">
@@ -2049,6 +2131,13 @@ Google Chrome is unable to recover your settings.
         <message name="IDS_LENS_CONTEXTUAL_SEARCH_DEFAULT_QUERY"
           desc="Default query for Lens searchbox to request help with the current page context.">
           help me with this
+        </message>
+        <message name="IDS_LENS_CONTEXTUAL_SEARCH_ZERO_STATE_QUERY"
+          is_accessibility_with_no_ui="true"
+          desc="Default query for Lens searchbox to request help with the current page context in a low intent state.">
+          **Summarize:** In a single sentence under 30 words, describe the primary subject and purpose of the content in the screenshot.
+
+          **Suggest Questions:** Generate a bulleted list of 3-5 thought-provoking questions a user could ask to better understand the screenshot. These questions should include at least one that is specifically about a visual object, its design, or its placement.
         </message>
 
         <!-- AI Mode Strings -->
@@ -2209,9 +2298,33 @@ Google Chrome is unable to recover your settings.
       </if>
 
       <!-- Chrome parent extension/app install blocking dialog. -->
-      <if expr="enable_extensions">
+      <if expr="enable_extensions_core">
         <message name="IDS_EXTENSION_PERMISSIONS_BLOCKED_BY_PARENT_PROMPT_MESSAGE" desc="Text for the dialog indicating that a parent has blocked extensions and apps.">
          Your parent has turned off "Permissions for sites, apps and extensions" for Chrome
+        </message>
+
+        <message name="IDS_EXTENSION_EXTERNAL_INSTALL_PROMPT_TITLE_APP" desc="Titlebar of the prompt window for an externally installed app">
+          Another program on your computer added an app that may change the way Chrome works.
+
+<ph name="EXTENSION_NAME">$1<ex>Babylon Toolbar</ex></ph>
+        </message>
+        <message name="IDS_EXTENSION_EXTERNAL_INSTALL_PROMPT_TITLE_EXTENSION" desc="Titlebar of the prompt window for an externally installed extension">
+          Another program on your computer added an extension that may change the way Chrome works.
+
+<ph name="EXTENSION_NAME">$1<ex>Babylon Toolbar</ex></ph>
+        </message>
+        <message name="IDS_EXTENSION_EXTERNAL_INSTALL_PROMPT_TITLE_THEME" desc="Titlebar of the prompt window for an externally installed theme">
+          Another program on your computer added a theme that may change the way Chrome works.
+
+<ph name="EXTENSION_NAME">$1<ex>Babylon Toolbar</ex></ph>
+        </message>
+        <message name="IDS_EXTENSION_EXTERNAL_INITIAL_INSTALL_PROMPT_TITLE_EXTENSION" desc="">
+          <ph name="PARTNER_NAME">$1<ex>Google</ex></ph> has added an extension that may change the way Chrome works.
+
+<ph name="EXTENSION_NAME">$2<ex>Babylon Toolbar</ex></ph>
+        </message>
+        <message name="IDS_EXTENSION_EXTERNAL_INSTALL_PROMPT_ABORT_BUTTON" desc="Button on the external install prompt to remove an extension installed by a third party.">
+          Remove from Chrome
         </message>
       </if>
 
@@ -2516,6 +2629,9 @@ Google Chrome is unable to recover your settings.
                  desc="Error message displayed in the main dialog when the downloaded file fails hash verification.">
           The downloaded file failed verification.
         </message>
+        <message name="IDS_UPDATER_DISK_FULL" desc="Error displayed if there is not enough disk space to install and application or download an update.">
+          Not enough disk space.
+        </message>
         <message name="IDS_GENERIC_DOWNLOAD_ERROR"
                  desc="Error message displayed in the main dialog when the update client returns an error while downloading.">
           Download error: <ph name="DOWNLOAD_ERROR">$1<ex>error-internal</ex></ph>.
@@ -2668,13 +2784,13 @@ Google Chrome is unable to recover your settings.
 
       <!-- Glic Strings -->
       <if expr="enable_glic">
-        <message name="IDS_GLIC_PROMO_TITLE" desc="Gemini promo title." translateable="false">
+        <message name="IDS_GLIC_PROMO_TITLE" desc="Gemini promo title.">
           Try Gemini in Google Chrome
         </message>
-        <message name="IDS_GLIC_TAB_STRIP_BUTTON_TOOLTIP" translateable="false" desc="This is the tooltip shown when hovering over the Gemini entry button in the tab strip while the Gemini window is closed.">
+        <message name="IDS_GLIC_TAB_STRIP_BUTTON_TOOLTIP" desc="This is the tooltip shown when hovering over the Gemini entry button in the tab strip while the Gemini window is closed.">
           Open Gemini in Chrome
         </message>
-        <message name="IDS_GLIC_TAB_STRIP_BUTTON_TOOLTIP_CLOSE" translateable="false" desc="This is the tooltip shown when hovering over the Gemini entry button in the tab strip while the Gemini window is open.">
+        <message name="IDS_GLIC_TAB_STRIP_BUTTON_TOOLTIP_CLOSE" desc="This is the tooltip shown when hovering over the Gemini entry button in the tab strip while the Gemini window is open.">
           Close Gemini in Chrome
         </message>
 
@@ -2683,48 +2799,48 @@ Google Chrome is unable to recover your settings.
         </message>
 
         <!-- Glic status tray icon strings -->
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed.">
           Open Gemini in Chrome
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CANARY" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed. It indicates that this is the Canary version of the browser.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CANARY" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed. It indicates that this is the Canary version of the browser.">
           Open Gemini in Chrome Canary
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_DEV" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed. It indicates that this is the Dev version of the browser.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_DEV" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed. It indicates that this is the Dev version of the browser.">
           Open Gemini in Chrome Dev
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_BETA" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed. It indicates that this is the Beta version of the browser.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_BETA" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is closed. It indicates that this is the Beta version of the browser.">
           Open Gemini in Chrome Beta
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open.">
           Close Gemini in Chrome
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE_CANARY" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open. It indicates that this is the Canary version of the browser.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE_CANARY" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open. It indicates that this is the Canary version of the browser.">
           Close Gemini in Chrome Canary
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE_DEV" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open. It indicates that this is the Dev version of the browser.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE_DEV" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open. It indicates that this is the Dev version of the browser.">
           Close Gemini in Chrome Dev
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE_BETA" translateable="false" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open. It indicates that this is the Beta version of the browser.">
+        <message name="IDS_GLIC_STATUS_ICON_TOOLTIP_CLOSE_BETA" desc="This is the tooltip that is shown when the Gemini status icon is hovered and the Gemini window is open. It indicates that this is the Beta version of the browser.">
           Close Gemini in Chrome Beta
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_MENU_SHOW" translateable="false" desc="This is the menu item for showing the Gemini experience in Chrome.">
+        <message name="IDS_GLIC_STATUS_ICON_MENU_SHOW" desc="This is the menu item for showing the Gemini experience in Chrome.">
           Open Gemini in Chrome
         </message>
-        <message name="IDS_GLIC_STATUS_ICON_MENU_CLOSE" translateable="false" desc="This is the menu item for closing the Gemini window.">
+        <message name="IDS_GLIC_STATUS_ICON_MENU_CLOSE" desc="This is the menu item for closing the Gemini window.">
           Close Gemini in Chrome
         </message>
-        <message name ="IDS_GLIC_INELIGIBLE_PROFILE_NOTICE" translateable="false" desc="This is the text of the Gemini ineligible profile notice.">
+        <message name ="IDS_GLIC_INELIGIBLE_PROFILE_NOTICE" desc="This is the text of the Gemini ineligible profile notice.">
           To use Gemini in Chrome, sign in with a different Google Account
         </message>
 
         <!-- Experimental Glic settings -->
-        <message name="IDS_SETTINGS_GLIC_PAGE_TITLE" translateable="false" desc="Title of the Gemini settings subpage. Also shown in tab strip.">
+        <message name="IDS_SETTINGS_GLIC_PAGE_TITLE" desc="Title of the Gemini settings subpage. Also shown in tab strip.">
           Gemini in Chrome
         </message>
-        <message name="IDS_SETTINGS_GLIC_SECTION_TITLE" translateable="false" desc="Text of the Gemini section header on the AI settings page.">
+        <message name="IDS_SETTINGS_GLIC_SECTION_TITLE" desc="Text of the Gemini section header on the AI settings page.">
           Gemini in Chrome
         </message>
-        <message name="IDS_SETTINGS_GLIC_ROW_LABEL" translateable="false" desc="Label of the Gemini row button on the AI settings page leading to the Gemini subpage.">
+        <message name="IDS_SETTINGS_GLIC_ROW_LABEL" desc="Label of the Gemini row button on the AI settings page leading to the Gemini subpage.">
           Gemini in Chrome
         </message>
 
@@ -2779,6 +2895,33 @@ Google Chrome is unable to recover your settings.
       <message name="IDS_DICE_MIGRATION_CONFIRMATION_TOAST_BUTTON" desc="The text on the button of the confirmation toast shown after the user clicks on the accept button on the Dice Migration dialog, that allows the users to control the sync settings or sign out of Chrome.">
         Manage
       </message>
+
+      <!-- Profile menu strings -->
+      <if expr="not is_android">
+        <if expr="use_titlecase">
+          <message name="IDS_PROFILE_MENU_ACCOUNT_SETTINGS_BUTTON" desc="Button in the avatar menu bubble view for opening Chrome account settings.">
+            Your Account in Chrome
+          </message>
+        </if>
+        <if expr="not use_titlecase">
+          <message name="IDS_PROFILE_MENU_ACCOUNT_SETTINGS_BUTTON" desc="Button in the avatar menu bubble view for opening Chrome account settings.">
+            Your account in Chrome
+          </message>
+        </if>
+      </if>
+
+      <!--Desktop to iOS promo strings-->
+      <if expr="not is_android">
+        <message name="IDS_IOS_DESKTOP_ESB_PROMO_BUBBLE_DESCRIPTION_QR" desc="The description for the iOS desktop ESB promo bubble with a QR code.">
+          Download Chrome on your phone to add an extra layer of protection when you're on the go
+        </message>
+        <message name="IDS_IOS_DESKTOP_ESB_PROMO_BUBBLE_DESCRIPTION_REMINDER" desc="The description for the iOS desktop ESB promo bubble with a reminder button.">
+          Stay safer on the go with Enhanced Safe Browsing on Chrome for iOS
+        </message>
+        <message name="IDS_IOS_DESKTOP_PASSWORD_PROMO_BUBBLE_FOOTER_DESCRIPTION_REMINDER" desc="The description for the footer of the iOS desktop password promo bubble.">
+          Sign in faster to sites using saved passwords for Chrome on iOS
+        </message>
+      </if>
     </messages>
   </release>
 </grit>

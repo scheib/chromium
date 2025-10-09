@@ -7,13 +7,35 @@
 #import <Foundation/Foundation.h>
 
 #import "base/check.h"
+#import "base/files/file_util.h"
+#import "base/functional/bind.h"
 #import "base/functional/callback_forward.h"
 #import "base/logging.h"
+#import "base/metrics/histogram_functions.h"
+#import "base/task/thread_pool.h"
+#import "base/threading/scoped_blocking_call.h"
+#import "ios/chrome/browser/home_customization/coordinator/home_customization_data_conversion.h"
 #import "ios/chrome/browser/home_customization/model/home_background_customization_service.h"
 #import "ios/chrome/browser/home_customization/model/home_background_data.h"
-#import "ios/chrome/browser/home_customization/model/home_customization_background_photo_framing_coordinates.h"
 #import "ios/chrome/browser/home_customization/model/user_uploaded_image_manager.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_background_photo_framing_mutator.h"
+#import "ios/chrome/browser/home_customization/ui/home_customization_framing_coordinates.h"
+
+namespace {
+
+// Records the file size to UMA histogram if it exists.
+void RecordUserUploadedImageManagerFileSize(base::FilePath full_image_path) {
+  base::ScopedBlockingCall may_block(FROM_HERE, base::BlockingType::MAY_BLOCK);
+
+  std::optional<int64_t> file_size = base::GetFileSize(full_image_path);
+  if (file_size.has_value()) {
+    base::UmaHistogramMemoryKB(
+        "IOS.HomeCustomization.Background.UserUploaded.ImageSizeInKB",
+        file_size.value() / 1024);
+  }
+}
+
+}  // namespace
 
 @implementation HomeCustomizationBackgroundPhotoFramingMediator {
   raw_ptr<UserUploadedImageManager> _userUploadedImageManager;
@@ -41,32 +63,37 @@
 
 - (void)saveImage:(UIImage*)image
     withFramingCoordinates:(HomeCustomizationFramingCoordinates*)coordinates
-                completion:(base::OnceClosure)completion {
+                completion:(base::OnceCallback<void(BOOL success)>)completion {
   DCHECK(image);
   DCHECK(coordinates);
 
   __weak __typeof(self) weakSelf = self;
   _userUploadedImageManager->StoreUserUploadedImage(
-      image, base::BindOnce(
-                 ^(base::OnceClosure finalCompletion, base::FilePath path) {
-                   [weakSelf imageSavedAtPath:path
-                           framingCoordinates:coordinates
-                                   completion:std::move(finalCompletion)];
-                 },
-                 std::move(completion)));
+      image, base::BindOnce(^BOOL(base::FilePath path) {
+               return [weakSelf imageSavedAtPath:path
+                              framingCoordinates:coordinates];
+             }).Then(std::move(completion)));
 }
 
 #pragma mark - Private
 
-- (void)imageSavedAtPath:(base::FilePath)imagePath
-      framingCoordinates:(HomeCustomizationFramingCoordinates*)coordinates
-              completion:(base::OnceClosure)completion {
+// Completion handler for when the image is saved. Returns YES if the save is
+// successful and NO otherwise.
+- (BOOL)imageSavedAtPath:(base::FilePath)imagePath
+      framingCoordinates:(HomeCustomizationFramingCoordinates*)coordinates {
   if (!imagePath.empty() && _backgroundService) {
     _backgroundService->SetCurrentUserUploadedBackground(
-        imagePath.value(), [coordinates toFramingCoordinates]);
-    _backgroundService->StoreCurrentTheme();
+        imagePath.value(),
+        FramingCoordinatesFromHomeCustomizationFramingCoordinates(coordinates));
+
+    base::FilePath fullImagePath =
+        _userUploadedImageManager->GetFullImagePath(imagePath);
+    base::ThreadPool::PostTask(
+        FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
+        base::BindOnce(&RecordUserUploadedImageManagerFileSize, fullImagePath));
   }
-  std::move(completion).Run();
+
+  return !imagePath.empty();
 }
 
 @end

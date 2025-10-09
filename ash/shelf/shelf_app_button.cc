@@ -9,7 +9,6 @@
 #include <iterator>
 #include <memory>
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/shelf_types.h"
@@ -833,7 +832,7 @@ gfx::Rect ShelfAppButton::CalculateSmallRippleArea() const {
   // Add padding to the ink drop for the left-most and right-most app buttons in
   // the shelf when there is a non-zero padding between the app icon and the
   // end of scrollable shelf.
-  if (display::Screen::GetScreen()->InTabletMode() && padding > 0) {
+  if (display::Screen::Get()->InTabletMode() && padding > 0) {
     // Note that `current_index` may be nullopt while the button is fading out
     // after it's been removed from the model - for example, see
     // https://crbug.com/1355561.
@@ -922,7 +921,7 @@ bool ShelfAppButton::ImageModelHasPlaceholderIcon() const {
 }
 
 float ShelfAppButton::GetIconDimensionByAppState() const {
-  if (is_promise_app_ && features::ArePromiseIconsEnabled()) {
+  if (is_promise_app_) {
     if (ImageModelHasPlaceholderIcon()) {
       return kPromiseIconDimensionPending;
     }
@@ -1330,8 +1329,7 @@ void ShelfAppButton::MaybeHideInkDropWhenGestureEnds() {
 }
 
 void ShelfAppButton::UpdateProgressRingBounds() {
-  if ((!is_promise_app_ && !forced_progress_indicator_value_) ||
-      !features::ArePromiseIconsEnabled()) {
+  if ((!is_promise_app_ && !forced_progress_indicator_value_)) {
     return;
   }
 

@@ -104,6 +104,7 @@ struct DetachedTabCollection {
 struct DetachedTab {
   DetachedTab(int index_before_any_removals,
               int index_at_time_of_removal,
+              bool was_pinned_at_time_of_removal,
               std::unique_ptr<tabs::TabModel> tab,
               TabStripModelChange::RemoveReason remove_reason,
               tabs::TabInterface::DetachReason tab_detach_reason,
@@ -124,6 +125,9 @@ struct DetachedTab {
   // tabs are being simultaneously removed, the index reflects previously
   // removed tabs in this batch.
   const int index_at_time_of_removal;
+
+  // True if this tab was pinned when it was removed from the tab strip.
+  const bool was_pinned_at_time_of_removal;
 
   // Reasons for detaching a tab. These may differ, for e.g. when a
   // tab is detached for re-insertion into a browser of different type,
@@ -276,13 +280,6 @@ class TabStripModel {
       int add_types,
       std::optional<tab_groups::TabGroupId> group = std::nullopt);
 
-  // Creates a group object so that group_model can link it with once group
-  // collection owns it.
-  // TODO(crbug.com/392952244): Remove this after replacing callers with
-  // detaching and attaching groups.
-  void AddTabGroup(const tab_groups::TabGroupId group_id,
-                   tab_groups::TabGroupVisualData visual_data);
-
   // Adds a TabModel from another tabstrip at the specified location. See
   // InsertWebContentsAt.
   int InsertDetachedTabAt(
@@ -357,10 +354,15 @@ class TabStripModel {
   // Detaches the WebContents at the specified index and immediately deletes it.
   void DetachAndDeleteWebContentsAt(int index);
 
+  std::vector<std::variant<std::unique_ptr<DetachedTab>,
+                           std::unique_ptr<DetachedTabCollection>>>
+  DetachTabsAndCollectionsForInsertion(const std::vector<int>& tab_indices);
+
   // Makes the tab at the specified index the active tab. |gesture_detail.type|
   // contains the gesture type that triggers the tab activation.
   // |gesture_detail.time_stamp| contains the timestamp of the user gesture, if
-  // any.
+  // any. If |index| refers to a tab in a split view, it won't be activated if
+  // the other tab is blocked.
   void ActivateTabAt(
       int index,
       TabStripUserGestureDetails gesture_detail = TabStripUserGestureDetails(
@@ -446,6 +448,8 @@ class TabStripModel {
   // Cause a tab to display a UI indication to the user that it needs their
   // attention.
   void SetTabNeedsAttentionAt(int index, bool attention);
+  void SetTabGroupNeedsAttention(const tab_groups::TabGroupId& group,
+                                 bool attention);
 
   // Close all tabs at once. Code can use closing_all() above to defer
   // operations that might otherwise by invoked by the flurry of detach/select
@@ -499,6 +503,9 @@ class TabStripModel {
 
   // Returns true if the tab at |index| is blocked by a tab modal dialog.
   bool IsTabBlocked(int index) const;
+
+  // Returns true if the tab at |index| is in the foreground.
+  bool IsTabInForeground(int index) const;
 
   // Returns true if the tab at |index| is allowed to be closed.
   bool IsTabClosable(int index) const;
@@ -715,6 +722,11 @@ class TabStripModel {
   // relying on group id.
   std::optional<const tab_groups::TabGroupId> FindGroupIdFor(
       const tabs::TabCollection::Handle& collection_handle,
+      base::PassKey<tabs_api::TabStripModelAdapterImpl>) const;
+
+  tabs::TabCollectionHandle GetPinnedTabsCollectionHandle(
+      base::PassKey<tabs_api::TabStripModelAdapterImpl>) const;
+  tabs::TabCollectionHandle GetUnpinnedTabsCollectionHandle(
       base::PassKey<tabs_api::TabStripModelAdapterImpl>) const;
 
   // View API //////////////////////////////////////////////////////////////////
@@ -1226,9 +1238,6 @@ class TabStripModel {
       const std::optional<tab_groups::TabGroupId> initial_group,
       const std::optional<tab_groups::TabGroupId> new_group);
 
-  // Updates the `group_model` by decrementing the tab count of `group`.
-  void RemoveTabFromGroupModel(const tab_groups::TabGroupId& group);
-
   // Updates the `group_model` by incrementing the tab count of `group`.
   void AddTabToGroupModel(const tab_groups::TabGroupId& group);
 
@@ -1350,6 +1359,12 @@ class TabStripModel {
       int final_index,
       const std::optional<tab_groups::TabGroupId> group,
       bool pin);
+
+  // Returns whether a tab is eligible for activation. If a tab is in a split
+  // view then it cannot be activated if the other tab is blocked.
+  bool CanActivateTabAt(int index);
+
+  void NotifyForegroundTabsWillEnterBackground();
 
   // The WebContents data currently hosted within this TabStripModel. This must
   // be kept in sync with |selection_model_|.

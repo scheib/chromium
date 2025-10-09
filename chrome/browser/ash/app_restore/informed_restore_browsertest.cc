@@ -30,10 +30,13 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/webui/ash/settings/pref_names.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/ash/util/ash_test_util.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_navigation_observer.h"
@@ -109,9 +112,22 @@ class InformedRestoreTest : public InProcessBrowserTest {
   base::test::ScopedFeatureList feature_list_{features::kSanitize};
 };
 
-// TODO(crbug.com/413281717): Test is flaky
 // Creates 2 browser windows that will be restored in the main test.
-IN_PROC_BROWSER_TEST_F(InformedRestoreTest, DISABLED_PRE_LaunchBrowsers) {
+//
+// TODO(crbug.com/431933537): Disabled on MSAN due to a renderer crash. The
+// crash is caused by a use-of-uninitialized-value in
+// blink::CSSParserImpl::ParseStyleSheet when parsing default stylesheets,
+// indicating an underlying Blink issue rather than a problem with the test
+// logic.
+//
+// A separate bug (crbug.com/431933537) is filed to specifically track the
+// blink::CSSParserImpl::ParseStyleSheet issue.
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_PRE_LaunchBrowsers DISABLED_PRE_LaunchBrowsers
+#else
+#define MAYBE_PRE_LaunchBrowsers PRE_LaunchBrowsers
+#endif
+IN_PROC_BROWSER_TEST_F(InformedRestoreTest, MAYBE_PRE_LaunchBrowsers) {
   EXPECT_TRUE(BrowserList::GetInstance()->empty());
 
   Profile* profile = ProfileManager::GetActiveUserProfile();
@@ -123,10 +139,23 @@ IN_PROC_BROWSER_TEST_F(InformedRestoreTest, DISABLED_PRE_LaunchBrowsers) {
   AppLaunchInfoSaveWaiter::Wait();
 }
 
-// TODO(crbug.com/413281717): Test is flaky
 // Verify that with two elements in the full restore file, we enter overview on
 // login. Then when we click the restore button, we restore two browsers.
-IN_PROC_BROWSER_TEST_F(InformedRestoreTest, DISABLED_LaunchBrowsers) {
+//
+// TODO(crbug.com/431933537): Disabled on MSAN due to a renderer crash. The
+// crash is caused by a use-of-uninitialized-value in
+// blink::CSSParserImpl::ParseStyleSheet when parsing default stylesheets,
+// indicating an underlying Blink issue rather than a problem with the test
+// logic.
+//
+// A separate bug (crbug.com/431933537) is filed to specifically track the
+// blink::CSSParserImpl::ParseStyleSheet issue.
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_LaunchBrowsers DISABLED_LaunchBrowsers
+#else
+#define MAYBE_LaunchBrowsers LaunchBrowsers
+#endif
+IN_PROC_BROWSER_TEST_F(InformedRestoreTest, MAYBE_LaunchBrowsers) {
   EXPECT_TRUE(BrowserList::GetInstance()->empty());
 
   // Verify we have entered overview. The restore button will be null if we
@@ -298,9 +327,8 @@ IN_PROC_BROWSER_TEST_F(InformedRestoreTest, PRE_WindowStates) {
   AppLaunchInfoSaveWaiter::Wait();
 }
 
-// TODO(crbug.com/330516096): Test is flaky.
 // Tests that the browser windows are restored to their old window states.
-IN_PROC_BROWSER_TEST_F(InformedRestoreTest, DISABLED_WindowStates) {
+IN_PROC_BROWSER_TEST_F(InformedRestoreTest, WindowStates) {
   EXPECT_TRUE(BrowserList::GetInstance()->empty());
 
   // Verify we have entered overview. The restore button will be null if we
@@ -494,14 +522,20 @@ IN_PROC_BROWSER_TEST_F(InformedRestoreTest, PRE_AppInfo) {
   test::InstallSystemAppsForTesting(profile);
   test::CreateSystemWebApp(profile, SystemWebAppType::MEDIA);
   test::CreateSystemWebApp(profile, SystemWebAppType::SETTINGS);
+
+  ui_test_utils::BrowserCreatedObserver browser_created_observer;
   test::CreateSystemWebApp(profile, SystemWebAppType::CAMERA);
+  BrowserWindowInterface* const camera_app_browser =
+      browser_created_observer.Wait();
+
   test::CreateSystemWebApp(profile, SystemWebAppType::PRINT_MANAGEMENT);
   auto* browser_list = BrowserList::GetInstance();
   ASSERT_EQ(4u, browser_list->size());
 
   // Activate the Camera app so it appears at the front of the activation list.
-  browser_list->get(2u)->window()->Activate();
-  ASSERT_EQ(browser_list->GetLastActive(), browser_list->get(2u));
+  camera_app_browser->GetWindow()->Activate();
+  ASSERT_EQ(GetLastActiveBrowserWindowInterfaceWithAnyProfile(),
+            camera_app_browser);
 
   // Immediate save to full restore file to bypass the 2.5 second throttle.
   AppLaunchInfoSaveWaiter::Wait();

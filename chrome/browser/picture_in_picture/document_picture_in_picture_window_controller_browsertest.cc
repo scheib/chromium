@@ -548,7 +548,7 @@ IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
   ASSERT_TRUE(browser_view);
 
   auto* pip_frame_view = static_cast<PictureInPictureBrowserFrameView*>(
-      browser_view->frame()->GetFrameView());
+      browser_view->browser_widget()->GetFrameView());
   ASSERT_TRUE(pip_frame_view);
 
   ClickButton(
@@ -597,7 +597,7 @@ IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
                        MaximumWindowOuterBounds) {
   const BrowserWindow* const browser_window = browser()->window();
   const gfx::NativeWindow native_window = browser_window->GetNativeWindow();
-  const display::Screen* const screen = display::Screen::GetScreen();
+  const display::Screen* const screen = display::Screen::Get();
   const display::Display display =
       screen->GetDisplayNearestWindow(native_window);
   const gfx::Size maximum_window_size =
@@ -634,7 +634,7 @@ IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
   auto* browser_view = static_cast<BrowserView*>(
       BrowserWindow::FindBrowserWindowWithWebContents(pip_web_contents));
   auto* pip_frame_view = static_cast<PictureInPictureBrowserFrameView*>(
-      browser_view->frame()->GetFrameView());
+      browser_view->browser_widget()->GetFrameView());
 
   // Get the document picture in picture window title and the location to be
   // clicked.
@@ -644,10 +644,11 @@ IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
 
   // Simulate a click on the document picture in picture window title, and
   // verify that the context menu is not shown.
-  pip_frame_view->frame()->ShowContextMenuForViewImpl(
+  pip_frame_view->browser_widget()->ShowContextMenuForViewImpl(
       window_title, click_location, ui::mojom::MenuSourceType::kMouse);
 
-  EXPECT_EQ(false, pip_frame_view->frame()->IsMenuRunnerRunningForTesting());
+  EXPECT_EQ(false,
+            pip_frame_view->browser_widget()->IsMenuRunnerRunningForTesting());
 }
 
 IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
@@ -662,7 +663,7 @@ IN_PROC_BROWSER_TEST_F(DocumentPictureInPictureWindowControllerBrowserTest,
   auto* browser_view = static_cast<BrowserView*>(
       BrowserWindow::FindBrowserWindowWithWebContents(pip_web_contents));
   auto* pip_frame_view = static_cast<PictureInPictureBrowserFrameView*>(
-      browser_view->frame()->GetFrameView());
+      browser_view->browser_widget()->GetFrameView());
   // Make the window manager forget about the window controller, which will
   // cause it to fail to close the window when asked.
   PictureInPictureWindowManager::GetInstance()
@@ -838,7 +839,7 @@ IN_PROC_BROWSER_TEST_P(DocumentPictureInPictureWindowControllerBrowserTest,
                        MAYBE_VerifyWindowMargins) {
   const BrowserWindow* const browser_window = browser()->window();
   const gfx::NativeWindow native_window = browser_window->GetNativeWindow();
-  const display::Screen* const screen = display::Screen::GetScreen();
+  const display::Screen* const screen = display::Screen::Get();
   const display::Display display =
       screen->GetDisplayNearestWindow(native_window);
 

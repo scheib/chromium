@@ -36,7 +36,6 @@ import org.chromium.url.Origin;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -307,29 +306,27 @@ public class AwBrowserContext implements BrowserContextHandle {
      * @param headers Map of HTTP header name-value pairs.
      * @return An exception if validation fails. Otherwise, an empty Optional.
      */
-    public static Optional<IllegalArgumentException> validateAdditionalHeaders(
+    public static @Nullable IllegalArgumentException validateAdditionalHeaders(
             Map<String, String> headers) {
-        if (headers == null) return Optional.empty();
+        if (headers == null) return null;
         for (Map.Entry<String, String> header : headers.entrySet()) {
             String headerName = header.getKey();
             String headerValue = header.getValue();
             if (headerName != null && BAD_HEADER_CHAR.matcher(headerName).find()) {
-                return Optional.of(
-                        new IllegalArgumentException(
-                                BAD_HEADER_MSG + "Invalid header name '" + headerName + "'."));
+                return new IllegalArgumentException(
+                        BAD_HEADER_MSG + "Invalid header name '" + headerName + "'.");
             }
             if (headerValue != null && BAD_HEADER_CHAR.matcher(headerValue).find()) {
-                return Optional.of(
-                        new IllegalArgumentException(
-                                BAD_HEADER_MSG
-                                        + "Header '"
-                                        + headerName
-                                        + "' has invalid value '"
-                                        + headerValue
-                                        + "'"));
+                return new IllegalArgumentException(
+                        BAD_HEADER_MSG
+                                + "Header '"
+                                + headerName
+                                + "' has invalid value '"
+                                + headerValue
+                                + "'");
             }
         }
-        return Optional.empty();
+        return null;
     }
 
     @NonNull
@@ -353,18 +350,8 @@ public class AwBrowserContext implements BrowserContextHandle {
         AwGeolocationPermissions.migrateGeolocationPreferences(oldGlobalPrefs, mSharedPreferences);
     }
 
-    /** Used by {@link AwServiceWorkerSettings#setRequestedWithHeaderOriginAllowList(Set)} */
-    Set<String> updateServiceWorkerXRequestedWithAllowListOriginMatcher(
-            Set<String> allowedOriginRules) {
-        String[] badRules =
-                AwBrowserContextJni.get()
-                        .updateServiceWorkerXRequestedWithAllowListOriginMatcher(
-                                mNativeAwBrowserContext, allowedOriginRules.toArray(new String[0]));
-        return Set.of(badRules);
-    }
-
     public void setOriginMatchedHeader(
-            @NonNull String headerName, String headerValue, @NonNull Set<String> rules) {
+            @NonNull String headerName, @NonNull String headerValue, @NonNull Set<String> rules) {
         ThreadUtils.assertOnUiThread();
         if (headerName.isBlank()) {
             throw new IllegalArgumentException("Blank HTTP header names are not allowed.");
@@ -387,15 +374,49 @@ public class AwBrowserContext implements BrowserContextHandle {
         }
     }
 
+    public void addOriginMatchedHeader(
+            @NonNull String headerName, @NonNull String headerValue, @NonNull Set<String> rules) {
+        ThreadUtils.assertOnUiThread();
+        if (headerName.isBlank()) {
+            throw new IllegalArgumentException("Blank HTTP header names are not allowed.");
+        }
+        if (!AwBrowserContextJni.get().isValidHttpHeaderName(headerName)) {
+            throw new IllegalArgumentException("Invalid HTTP header name: " + headerName);
+        }
+        if (!AwBrowserContextJni.get().isValidHttpHeaderValue(headerValue)) {
+            throw new IllegalArgumentException("Invalid HTTP header value: " + headerValue);
+        }
+
+        List<String> rejected =
+                AwBrowserContextJni.get()
+                        .addOriginMatchedHeader(
+                                mNativeAwBrowserContext, headerName, headerValue, rules);
+
+        if (!rejected.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Invalid origin patterns: " + String.join("; ", rejected));
+        }
+    }
+
+    public List<AwOriginMatchedHeader> findOriginMatchedHeaders(
+            @Nullable String name, @Nullable String value) {
+        if (value != null && name == null) {
+            throw new IllegalArgumentException("Name must be provided if value is provided");
+        }
+        return AwBrowserContextJni.get()
+                .findOriginMatchedHeaders(mNativeAwBrowserContext, name, value);
+    }
+
     public boolean hasOriginMatchedHeader(@NonNull String headerName) {
         ThreadUtils.assertOnUiThread();
         return AwBrowserContextJni.get()
                 .hasOriginMatchedHeader(mNativeAwBrowserContext, headerName);
     }
 
-    public void clearOriginMatchedHeader(@NonNull String headerName) {
+    public void clearOriginMatchedHeader(@NonNull String headerName, @Nullable String headerValue) {
         ThreadUtils.assertOnUiThread();
-        AwBrowserContextJni.get().clearOriginMatchedHeader(mNativeAwBrowserContext, headerName);
+        AwBrowserContextJni.get()
+                .clearOriginMatchedHeader(mNativeAwBrowserContext, headerName, headerValue);
     }
 
     public void clearAllOriginMatchedHeaders() {
@@ -486,13 +507,17 @@ public class AwBrowserContext implements BrowserContextHandle {
 
     @CalledByNative
     private int getGeolocationPermission(@JniType("std::string") String origin) {
-        AwGeolocationPermissions permissions = getGeolocationPermissions();
-        if (!permissions.hasOrigin(origin)) {
-            return PermissionStatus.ASK;
+        // This will trigger a disk read if the geolocation permissions have not been read before.
+        // See https://crbug.com/450091066.
+        try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
+            AwGeolocationPermissions permissions = getGeolocationPermissions();
+            if (!permissions.hasOrigin(origin)) {
+                return PermissionStatus.ASK;
+            }
+            return permissions.isOriginAllowed(origin)
+                    ? PermissionStatus.GRANTED
+                    : PermissionStatus.DENIED;
         }
-        return permissions.isOriginAllowed(origin)
-                ? PermissionStatus.GRANTED
-                : PermissionStatus.DENIED;
     }
 
     @NativeMethods
@@ -506,9 +531,6 @@ public class AwBrowserContext implements BrowserContextHandle {
         String getDefaultContextRelativePath();
 
         long getQuotaManagerBridge(long nativeAwBrowserContext);
-
-        String[] updateServiceWorkerXRequestedWithAllowListOriginMatcher(
-                long nativeAwBrowserContext, String[] rules);
 
         void clearPersistentOriginTrialStorageForTesting(long nativeAwBrowserContext);
 
@@ -524,11 +546,26 @@ public class AwBrowserContext implements BrowserContextHandle {
                 @JniType("std::string") @NonNull String headerValue,
                 @JniType("std::vector<std::string>") @NonNull Set<String> rules);
 
+        @JniType("std::vector<std::string>")
+        List<String> addOriginMatchedHeader(
+                long nativeAwBrowserContext,
+                @JniType("std::string") @NonNull String headerName,
+                @JniType("std::string") @NonNull String headerValue,
+                @JniType("std::vector<std::string>") @NonNull Set<String> rules);
+
         boolean hasOriginMatchedHeader(
                 long nativeAwBrowserContext, @JniType("std::string") @NonNull String headerName);
 
+        @JniType("std::vector<scoped_refptr<android_webview::AwOriginMatchedHeader>>")
+        List<AwOriginMatchedHeader> findOriginMatchedHeaders(
+                long nativeAwBrowserContext,
+                @Nullable @JniType("std::optional<std::string>") String name,
+                @Nullable @JniType("std::optional<std::string>") String value);
+
         void clearOriginMatchedHeader(
-                long nativeAwBrowserContext, @JniType("std::string") String headerName);
+                long nativeAwBrowserContext,
+                @JniType("std::string") String headerName,
+                @Nullable @JniType("std::optional<std::string>") String headerValue);
 
         void clearAllOriginMatchedHeaders(long nativeAwBrowserContext);
 

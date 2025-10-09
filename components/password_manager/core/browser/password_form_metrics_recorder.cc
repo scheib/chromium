@@ -31,6 +31,10 @@
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 
+#if !BUILDFLAG(IS_IOS)
+#include "content/public/browser/login_metrics.h"
+#endif  // !BUILDFLAG(IS_IOS)
+
 using autofill::FieldPropertiesFlags;
 using autofill::FormData;
 using autofill::FormFieldData;
@@ -67,12 +71,6 @@ PasswordFormMetricsRecorder::BubbleDismissalReason GetBubbleDismissalReason(
       break;
 
     // These should not reach here:
-    case metrics_util::CLICKED_DONE_OBSOLETE:
-    case metrics_util::CLICKED_OK_OBSOLETE:
-    case metrics_util::CLICKED_UNBLOCKLIST_OBSOLETE:
-    case metrics_util::CLICKED_CREDENTIAL_OBSOLETE:
-    case metrics_util::AUTO_SIGNIN_TOAST_CLICKED_OBSOLETE:
-    case metrics_util::CLICKED_BRAND_NAME_OBSOLETE:
     case metrics_util::NUM_UI_RESPONSES:
     case metrics_util::CLICKED_ABOUT_PASSWORD_CHANGE:
       NOTREACHED();
@@ -282,6 +280,41 @@ std::string PasswordFieldTypeToString(
   }
 }
 
+#if !BUILDFLAG(IS_IOS)
+
+content::BrowserAssistedLoginType FillingAssistanceToLoginAssistance(
+    PasswordFormMetricsRecorder::FillingAssistance filling_assistance) {
+  using FillingAssistance = PasswordFormMetricsRecorder::FillingAssistance;
+  switch (filling_assistance) {
+    case FillingAssistance::kAutomatic:
+    case FillingAssistance::kManual:
+      // Fully assisted means that the username and password are filled either
+      // automatically or from the default selection UI (e.g. autofill popup).
+      return content::BrowserAssistedLoginType::kPasswordFullyAssisted;
+    case FillingAssistance::kUsernameTypedPasswordFilled:
+    case FillingAssistance::kManualFallbackUsed:
+      // Partially assisted means that the user interacted with the form or the
+      // browser UI.
+      return content::BrowserAssistedLoginType::kPasswordPartiallyAssisted;
+    case FillingAssistance::kKnownPasswordTyped:
+    case FillingAssistance::kNoSavedCredentials:
+    case FillingAssistance::kNewPasswordTypedWhileCredentialsExisted:
+    case FillingAssistance::kNoSavedCredentialsAndBlocklisted:
+    case FillingAssistance::kNoSavedCredentialsAndBlocklistedBySmartBubble:
+      return content::BrowserAssistedLoginType::kPasswordManuallyEntered;
+    case FillingAssistance::kNoUserInputNoFillingInPasswordFields:
+      // If the password was not typed by the user and not filled by Chrome,
+      // then it was filled by an extension.
+      return content::BrowserAssistedLoginType::
+          kPasswordNeitherManuallyEnteredNorGPMAssisted;
+
+    default:
+      return content::BrowserAssistedLoginType::kUnknown;
+  }
+}
+
+#endif  // !BUILDFLAG(IS_IOS)
+
 }  // namespace
 
 PasswordFormMetricsRecorder::PasswordFormMetricsRecorder(
@@ -340,8 +373,6 @@ PasswordFormMetricsRecorder::~PasswordFormMetricsRecorder() {
         ukm_entry_builder_.SetUser_Action_CorrectedUsernameInForm(
             action.second);
         break;
-      case DetailedUserAction::kObsoleteTriggeredManualFallbackForUpdating:
-        NOTREACHED();
     }
   }
 
@@ -405,6 +436,14 @@ PasswordFormMetricsRecorder::~PasswordFormMetricsRecorder() {
         std::get<FillingAssistance>(filling_assistance_);
     UMA_HISTOGRAM_ENUMERATION("PasswordManager.FillingAssistance",
                               filling_assistance);
+
+#if !BUILDFLAG(IS_IOS)
+    // TODO(crbug.com/395030973): Also emit on iOS.
+    UMA_HISTOGRAM_ENUMERATION(
+        content::kBrowserAssistedLoginTypeHistogram,
+        FillingAssistanceToLoginAssistance(filling_assistance));
+#endif  // !BUILDFLAG(IS_IOS)
+
     ukm_entry_builder_.SetManagerFill_Assistance(
         static_cast<int64_t>(filling_assistance));
 
@@ -525,11 +564,6 @@ void PasswordFormMetricsRecorder::MarkGenerationAvailable() {
 void PasswordFormMetricsRecorder::SetGeneratedPasswordStatus(
     GeneratedPasswordStatus status) {
   generated_password_status_ = status;
-}
-
-void PasswordFormMetricsRecorder::SetManagerAction(
-    ManagerAction manager_action) {
-  manager_action_ = manager_action;
 }
 
 void PasswordFormMetricsRecorder::LogSubmitPassed() {
@@ -1095,8 +1129,6 @@ void PasswordFormMetricsRecorder::RecordPasswordBubbleShown(
       break;
 
     // Other reasons to show a bubble:
-    // TODO(crbug.com/40123456): Decide how to collect metrics for this new UI.
-    case metrics_util::AUTOMATIC_SAVE_UNSYNCED_CREDENTIALS_LOCALLY:
     case metrics_util::MANUAL_MANAGE_PASSWORDS:
     case metrics_util::AUTOMATIC_GENERATED_PASSWORD_CONFIRMATION:
     case metrics_util::MANUAL_GENERATED_PASSWORD_CONFIRMATION:
@@ -1123,9 +1155,6 @@ void PasswordFormMetricsRecorder::RecordPasswordBubbleShown(
       // Do nothing.
       return;
 
-    // Obsolete display dispositions:
-    case metrics_util::MANUAL_BLOCKLISTED_OBSOLETE:
-    case metrics_util::AUTOMATIC_CREDENTIAL_REQUEST_OBSOLETE:
     case metrics_util::NUM_DISPLAY_DISPOSITIONS:
       NOTREACHED();
   }

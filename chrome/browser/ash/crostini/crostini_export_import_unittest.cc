@@ -11,6 +11,8 @@
 #include "base/files/scoped_temp_file.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/current_thread.h"
+#include "base/test/test_file_util.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
@@ -58,6 +60,9 @@ struct ImportProgressOptionalArguments {
   uint64_t available_space{};
   uint64_t min_required_space{};
 };
+
+constexpr char zstd_filename[] =
+    "crostini_export_import_unittest_tarball.img.zst";
 
 class CrostiniExportImportTest : public testing::Test {
  public:
@@ -219,6 +224,7 @@ class CrostiniExportImportTest : public testing::Test {
     guest_os::GuestOsSharePathFactory::GetForProfile(profile())->Shutdown();
     task_environment_.RunUntilIdle();
     base::DeleteFile(tarball_);
+    base::DeleteFile(zstdfile_);
     test_helper_.reset();
     profile_.reset();
     user_manager_.Reset();
@@ -239,6 +245,7 @@ class CrostiniExportImportTest : public testing::Test {
   guest_os::GuestId default_container_id_;
   guest_os::GuestId custom_container_id_;
   base::FilePath tarball_;
+  base::FilePath zstdfile_;
 
   content::BrowserTaskEnvironment task_environment_;
 };
@@ -435,6 +442,74 @@ TEST_F(CrostiniExportImportTest, TestImportDiskImageSuccess) {
   EXPECT_TRUE(zipfile.Create());
   crostini_export_import_->FileSelected(ui::SelectedFileInfo(zipfile.path()),
                                         0);
+  task_environment_.RunUntilIdle();
+  base::WeakPtr<CrostiniExportImportNotificationController> controller =
+      GetController(default_container_id_);
+  ASSERT_NE(controller, nullptr);
+  EXPECT_EQ(controller->status(),
+            CrostiniExportImportStatusTracker::Status::RUNNING);
+
+  std::string notification_id;
+  {
+    const message_center::Notification& notification =
+        GetNotification(default_container_id_);
+    notification_id = notification.id();
+    EXPECT_EQ(notification.progress(), 0);
+    EXPECT_TRUE(notification.pinned());
+  }
+
+  // 50% done.
+  SendDiskImageProgress(default_container_id_,
+                        vm_tools::concierge::DISK_STATUS_IN_PROGRESS, 50);
+  ASSERT_NE(controller, nullptr);
+  EXPECT_EQ(controller->status(),
+            CrostiniExportImportStatusTracker::Status::RUNNING);
+  {
+    const message_center::Notification& notification =
+        GetNotification(default_container_id_);
+    EXPECT_EQ(notification.id(), notification_id);
+    EXPECT_EQ(notification.progress(), 50);
+    EXPECT_TRUE(notification.pinned());
+  }
+
+  // Close notification and update progress. Should not update notification.
+  controller->get_delegate()->Close(false);
+  SendDiskImageProgress(default_container_id_,
+                        vm_tools::concierge::DISK_STATUS_IN_PROGRESS, 60);
+  ASSERT_NE(controller, nullptr);
+  EXPECT_EQ(controller->status(),
+            CrostiniExportImportStatusTracker::Status::RUNNING);
+  {
+    const message_center::Notification& notification =
+        GetNotification(default_container_id_);
+    EXPECT_EQ(notification.id(), notification_id);
+    EXPECT_EQ(notification.progress(), 50);
+    EXPECT_TRUE(notification.pinned());
+  }
+
+  // Done.
+  SendDiskImageProgress(default_container_id_,
+                        vm_tools::concierge::DISK_STATUS_CREATED, 100);
+  EXPECT_EQ(GetController(default_container_id_), nullptr);
+  EXPECT_EQ(controller, nullptr);
+  {
+    const std::optional<message_center::Notification> ui_notification =
+        notification_display_service_->GetNotification(notification_id);
+    ASSERT_NE(ui_notification, std::nullopt);
+    EXPECT_FALSE(ui_notification->pinned());
+    std::string msg("Linux apps & files have been successfully replaced");
+    EXPECT_EQ(ui_notification->message(), base::UTF8ToUTF16(msg));
+  }
+}
+
+TEST_F(CrostiniExportImportTest, TestImportZstdFileSuccess) {
+  SetImportResponse();
+  crostini_export_import_->FillOperationData(ExportImportType::IMPORT);
+  // We require the file to exist here.
+  zstdfile_ = base::GetTempDirForTesting().Append(zstd_filename);
+  base::WriteFile(zstdfile_, "");
+  crostini_export_import_->FileSelected(ui::SelectedFileInfo(zstdfile_), 0);
+
   task_environment_.RunUntilIdle();
   base::WeakPtr<CrostiniExportImportNotificationController> controller =
       GetController(default_container_id_);
@@ -778,7 +853,8 @@ TEST_F(CrostiniExportImportTest, TestExportCustomVmContainerSuccess) {
   EXPECT_TRUE(base::PathExists(tarball_));
 }
 
-TEST_F(CrostiniExportImportTest, TestExportFail) {
+// TODO(crbug.com/440792198): Disabled for flakiness.
+TEST_F(CrostiniExportImportTest, DISABLED_TestExportFail) {
   crostini_export_import_->FillOperationData(ExportImportType::EXPORT);
   crostini_export_import_->FileSelected(ui::SelectedFileInfo(tarball_), 0);
   task_environment_.RunUntilIdle();
@@ -816,7 +892,9 @@ TEST_F(CrostiniExportImportTest, TestExportFail) {
   EXPECT_FALSE(base::PathExists(tarball_));
 }
 
-TEST_F(CrostiniExportImportTest, TestExportCancelled) {
+// TODO(crbug.com/441657411): Disabled as flaky since the replacement of
+// RunUntilIdle.
+TEST_F(CrostiniExportImportTest, DISABLED_TestExportCancelled) {
   crostini_export_import_->FillOperationData(ExportImportType::EXPORT,
                                              custom_container_id_);
   crostini_export_import_->FileSelected(ui::SelectedFileInfo(tarball_), 0);
@@ -887,7 +965,8 @@ TEST_F(CrostiniExportImportTest, TestExportCancelled) {
   EXPECT_FALSE(base::PathExists(tarball_));
 }
 
-TEST_F(CrostiniExportImportTest, TestExportDoneBeforeCancelled) {
+// TODO(crbug.com/440792198): Disabled for flakiness.
+TEST_F(CrostiniExportImportTest, DISABLED_TestExportDoneBeforeCancelled) {
   crostini_export_import_->FillOperationData(ExportImportType::EXPORT);
   crostini_export_import_->FileSelected(ui::SelectedFileInfo(tarball_), 0);
   task_environment_.RunUntilIdle();

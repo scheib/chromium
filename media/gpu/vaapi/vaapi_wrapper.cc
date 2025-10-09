@@ -71,7 +71,6 @@
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/libva_protected_content/va_protected_content.h"
 #include "third_party/libyuv/include/libyuv.h"
-#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/linux/drm_util_linux.h"
@@ -1628,7 +1627,7 @@ bool VADisplayStateSingleton::Initialize() {
   int major_version, minor_version;
   VAStatus va_res = vaInitialize(va_display, &major_version, &minor_version);
   if (va_res != VA_STATUS_SUCCESS) {
-    VLOGF(1) << "vaInitialize failed: " << vaErrorStr(va_res);
+    LOG(ERROR) << "vaInitialize failed: " << vaErrorStr(va_res);
     return false;
   }
 
@@ -1650,6 +1649,9 @@ bool VADisplayStateSingleton::Initialize() {
   const base::Version build_time_version({VA_MAJOR_VERSION, VA_MINOR_VERSION});
   CHECK(build_time_version.IsValid());
   if (!IsLibVACompatible(runtime_version, build_time_version)) {
+    LOG(ERROR) << "Installed VAAPI version is too old."
+               << " min supported version: " << build_time_version
+               << " installed version: " << runtime_version;
     return false;
   }
 

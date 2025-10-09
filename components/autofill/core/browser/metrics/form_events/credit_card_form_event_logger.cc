@@ -17,7 +17,6 @@
 #include "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
 #include "components/autofill/core/browser/form_import/form_data_importer.h"
 #include "components/autofill/core/browser/foundations/browser_autofill_manager.h"
-#include "components/autofill/core/browser/integrators/optimization_guide/autofill_optimization_guide.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics_utils.h"
 #include "components/autofill/core/browser/metrics/form_events/form_events.h"
@@ -32,6 +31,7 @@
 #include "components/autofill/core/browser/payments/constants.h"
 #include "components/autofill/core/browser/payments/credit_card_access_manager.h"
 #include "components/autofill/core/browser/payments/payments_autofill_client.h"
+#include "components/autofill/core/browser/payments/save_and_fill_manager.h"
 #include "components/autofill/core/common/autofill_internals/log_message.h"
 #include "components/autofill/core/common/autofill_internals/logging_scope.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
@@ -57,7 +57,6 @@ void CreditCardFormEventLogger::OnBnplSuggestionShown() {
 
 void CreditCardFormEventLogger::OnDidFetchSuggestion(
     const std::vector<Suggestion>& suggestions,
-    bool with_offer,
     bool with_cvc,
     bool with_card_info_retrieval_enrolled,
     bool is_virtual_card_standalone_cvc_field,
@@ -130,15 +129,10 @@ void CreditCardFormEventLogger::OnDidShowSuggestions(
   // Log if any of the suggestions had benefit available.
   if (!has_logged_suggestion_shown_for_benefits_) {
     if (metadata_logging_context_.DidShowCardWithBenefitAvailable()) {
-      Log(FORM_EVENT_SUGGESTION_FOR_CARD_WITH_BENEFIT_AVAILABLE_SHOWN_ONCE,
-          form);
       LogCardBenefitFormEventMetrics(CardMetadataLoggingEvent::kShown,
                                      metadata_logging_context_);
     }
     has_logged_suggestion_shown_for_benefits_ = true;
-  }
-  if (metadata_logging_context_.DidShowCardWithBenefitAvailable()) {
-    Log(FORM_EVENT_SUGGESTION_FOR_CARD_WITH_BENEFIT_AVAILABLE_SHOWN, form);
   }
 
   // Log if any of the suggestions contains card info retrieval enrolled card.
@@ -153,19 +147,10 @@ void CreditCardFormEventLogger::OnDidShowSuggestions(
   }
 
   if (!has_logged_suggestions_shown_on_bnpl_eligible_merchant_ &&
-      IsEligibleForBnpl()) {
+      payments::BnplManager::IsEligibleForBnpl(owner_->client())) {
     LogBnplFormEvent(BnplFormEvent::kSuggestionsShown);
     has_logged_suggestions_shown_on_bnpl_eligible_merchant_ = true;
   }
-}
-
-bool CreditCardFormEventLogger::IsEligibleForBnpl() {
-  payments::BnplManager* bnpl_manager = owner_->GetPaymentsBnplManager();
-  if (!bnpl_manager) {
-    return false;
-  }
-
-  return bnpl_manager->IsEligibleForBnpl();
 }
 
 void CreditCardFormEventLogger::OnDidSelectCardSuggestion(
@@ -198,24 +183,11 @@ void CreditCardFormEventLogger::OnDidSelectCardSuggestion(
               form);
         }
 
-        // Log masked server card selected once events for benefits.
-        if (metadata_logging_context_.SelectedCardHasBenefitAvailable()) {
-          Log(FORM_EVENT_SUGGESTION_FOR_SERVER_CARD_WITH_BENEFIT_AVAILABLE_SELECTED_ONCE,
-              form);
-        }
         // Log when a masked server card was selected after benefits were shown.
         if (metadata_logging_context_.DidShowCardWithBenefitAvailable()) {
-          Log(FORM_EVENT_SUGGESTION_FOR_SERVER_CARD_SELECTED_AFTER_CARD_WITH_BENEFIT_AVAILABLE_SHOWN_ONCE,
-              form);
           LogCardBenefitFormEventMetrics(CardMetadataLoggingEvent::kSelected,
                                          metadata_logging_context_);
         }
-      }
-
-      // Log masked server card selected events for benefits.
-      if (metadata_logging_context_.SelectedCardHasBenefitAvailable()) {
-        Log(FORM_EVENT_SUGGESTION_FOR_SERVER_CARD_WITH_BENEFIT_AVAILABLE_SELECTED,
-            form);
       }
 
       // Log card info retrieval enrolled card is selected.
@@ -336,6 +308,7 @@ void CreditCardFormEventLogger::OnDidFillFormFillingSuggestion(
   signin_state_for_metrics_ = signin_state_for_metrics;
 
   filled_credit_card_ = credit_card;
+  trigger_source_ = trigger_source;
 
   client().GetFormInteractionsUkmLogger().LogDidFillSuggestion(
       driver().GetPageUkmSourceId(), form, field, record_type);
@@ -348,6 +321,21 @@ void CreditCardFormEventLogger::OnDidFillFormFillingSuggestion(
        .field = field,
        .newly_filled_fields = newly_filled_fields,
        .safe_fields = safe_filled_fields});
+
+  if (trigger_source_ == AutofillTriggerSource::kCreditCardSaveAndFill) {
+    // If the fill is triggered by the Save and Fill flow. We log form filling
+    // separately as the it is not triggered by regular Autofill credit card
+    // suggestions. Also Save and Fill flow is offered only on full credit card
+    // forms. These factors could pollute the existing card
+    // retrieval / filling / submission metrics.
+    auto* save_and_fill_manager =
+        client().GetPaymentsAutofillClient()->GetSaveAndFillManager();
+    // If the `trigger_source` is kCreditCardSaveAndFill, then
+    // `save_and_fill_manager` must exist.
+    CHECK(save_and_fill_manager);
+    save_and_fill_manager->LogCreditCardFormFilled();
+    return;
+  }
 
   latest_filled_card_was_masked_server_card_ = false;
   latest_filled_card_was_card_info_retrieval_enrolled_ = false;
@@ -510,7 +498,7 @@ void CreditCardFormEventLogger::OnDidFillFormFillingSuggestion(
   base::RecordAction(
       base::UserMetricsAction("Autofill_FilledCreditCardSuggestion"));
 
-  if (trigger_source != AutofillTriggerSource::kFastCheckout) {
+  if (trigger_source_ != AutofillTriggerSource::kFastCheckout) {
     ++form_interaction_counts_.autofill_fills;
   }
   UpdateFlowId();
@@ -591,11 +579,6 @@ CreditCardFormEventLogger::GetFilledCreditCardForTesting() {
   return filled_credit_card_;
 }
 
-void CreditCardFormEventLogger::RecordPollSuggestions() {
-  base::RecordAction(
-      base::UserMetricsAction("Autofill_PolledCreditCardSuggestions"));
-}
-
 void CreditCardFormEventLogger::RecordParseForm() {
   base::RecordAction(base::UserMetricsAction("Autofill_ParsedCreditCardForm"));
 }
@@ -606,6 +589,11 @@ void CreditCardFormEventLogger::RecordShowSuggestions() {
 }
 
 void CreditCardFormEventLogger::LogWillSubmitForm(const FormStructure& form) {
+  if (trigger_source_ == AutofillTriggerSource::kCreditCardSaveAndFill) {
+    // If it is a Save and Fill flow. Don't log any will-submit metrics.
+    return;
+  }
+
   if (!has_logged_form_filling_suggestion_filled_) {
     Log(FORM_EVENT_NO_SUGGESTION_WILL_SUBMIT_ONCE, form);
   } else if (logged_suggestion_filled_was_masked_server_card_) {
@@ -659,6 +647,14 @@ void CreditCardFormEventLogger::LogWillSubmitForm(const FormStructure& form) {
 }
 
 void CreditCardFormEventLogger::LogFormSubmitted(const FormStructure& form) {
+  if (trigger_source_ == AutofillTriggerSource::kCreditCardSaveAndFill) {
+    auto* save_and_fill_manager =
+        client().GetPaymentsAutofillClient()->GetSaveAndFillManager();
+    CHECK(save_and_fill_manager);
+    save_and_fill_manager->LogCreditCardFormSubmitted();
+    return;
+  }
+
   if (!has_logged_form_filling_suggestion_filled_) {
     Log(FORM_EVENT_NO_SUGGESTION_SUBMITTED_ONCE, form);
   } else if (logged_suggestion_filled_was_masked_server_card_) {

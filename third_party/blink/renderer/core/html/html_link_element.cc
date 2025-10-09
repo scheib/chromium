@@ -47,6 +47,7 @@
 #include "third_party/blink/renderer/core/loader/link_loader.h"
 #include "third_party/blink/renderer/core/loader/render_blocking_resource_manager.h"
 #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
+#include "third_party/blink/renderer/core/scheduler/task_attribution_util.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/scheduler/public/task_attribution_info.h"
@@ -55,33 +56,6 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
-
-namespace {
-
-std::optional<scheduler::TaskAttributionTracker::TaskScope>
-MaybeCreateTaskAttributionScope(ExecutionContext* context,
-                                scheduler::TaskAttributionInfo* task_state) {
-  if (!task_state || !context || context->IsContextDestroyed()) {
-    return std::nullopt;
-  }
-  // `task_state` being non-null implies that task tracking is enabled.
-  auto* tracker =
-      scheduler::TaskAttributionTracker::From(context->GetIsolate());
-  CHECK(tracker);
-
-  // Don't create a new (nested) task scope if we're still in the parent task,
-  // otherwise we risk clobbering other propagated task state.
-  //
-  // TODO(crbug.com/1439971): Make this safe to do or move the logic into the
-  // task attribution implementation.
-  if (tracker->CurrentTaskState() == task_state) {
-    return std::nullopt;
-  }
-  return tracker->CreateTaskScope(
-      task_state, scheduler::TaskAttributionTracker::TaskScopeType::kMiscEvent);
-}
-
-}  // namespace
 
 HTMLLinkElement::HTMLLinkElement(Document& document,
                                  const CreateElementFlags flags)
@@ -284,12 +258,8 @@ bool HTMLLinkElement::LoadLink(const LinkLoadParameters& params) {
   // prelaods, etc.), but it is called by `LinkStyle` before `LoadStyleSheet()`,
   // so just capture the state here.
   if (result && !IsCreatedByParser()) {
-    if (auto* context = GetDocument().GetExecutionContext()) {
-      if (auto* tracker =
-              scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
-        load_initiator_task_state_ = tracker->CurrentTaskState();
-      }
-    }
+    load_initiator_task_state_ =
+        CaptureCurrentTaskState(GetDocument().GetExecutionContext());
   }
   return result;
 }
@@ -432,9 +402,10 @@ void HTMLLinkElement::DispatchEventWithTaskState(
       UseCounter::Count(GetDocument(), WebFeature::kLinkPrefetchErrorEvent);
     }
   }
-  std::optional<scheduler::TaskAttributionTracker::TaskScope>
-      task_attribution_scope = MaybeCreateTaskAttributionScope(
-          GetDocument().GetExecutionContext(), task_state);
+  std::optional<scheduler::TaskAttributionTracker::TaskScope> task_scope(
+      SetCurrentTaskStateIfTopLevel(task_state,
+                                    GetDocument().GetExecutionContext(),
+                                    TaskScopeType::kMiscEvent));
   DispatchEvent(*Event::Create(type));
 }
 
@@ -467,7 +438,7 @@ void HTMLLinkElement::ScheduleEvent() {
       .GetTaskRunner(TaskType::kDOMManipulation)
       ->PostTask(
           FROM_HERE,
-          WTF::BindOnce(
+          BindOnce(
               &HTMLLinkElement::DispatchPendingEvent, WrapPersistent(this),
               std::make_unique<IncrementLoadEventDelayCount>(GetDocument()),
               WrapPersistent(TakeLoadInitiatorTaskState())));

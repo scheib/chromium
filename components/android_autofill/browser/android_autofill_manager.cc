@@ -143,11 +143,11 @@ void AndroidAutofillManager::OnFocusOnNonFormFieldImpl() {
     provider->OnFocusOnNonFormField(this);
 }
 
-void AndroidAutofillManager::OnDidFillAutofillFormDataImpl(
+void AndroidAutofillManager::OnDidAutofillFormImpl(
     const FormData& form,
     const base::TimeTicks timestamp) {
   if (auto* provider = GetAutofillProvider())
-    provider->OnDidFillAutofillFormData(this, form, timestamp);
+    provider->OnDidAutofillForm(this, form, timestamp);
 }
 
 void AndroidAutofillManager::OnHidePopupImpl() {
@@ -279,6 +279,8 @@ AndroidFormEventLogger* AndroidAutofillManager::GetEventFormLogger(
       return payments_logger_.get();
     case FormType::kPasswordForm:
       return password_logger_.get();
+    // TODO(crbug.com/443693025): Add event logger for OTP fields
+    case FormType::kOneTimePasswordForm:
     case FormType::kUnknownFormType:
       return nullptr;
   }

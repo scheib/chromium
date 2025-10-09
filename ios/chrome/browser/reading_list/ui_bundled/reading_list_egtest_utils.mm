@@ -21,9 +21,8 @@ namespace reading_list_test_utils {
 id<GREYMatcher> AddedToLocalReadingListSnackbar() {
   NSString* snackbarMessage =
       l10n_util::GetNSString(IDS_IOS_READING_LIST_SNACKBAR_MESSAGE);
-  return grey_allOf(
-      grey_accessibilityID(@"MDCSnackbarMessageTitleAutomationIdentifier"),
-      grey_text(snackbarMessage), nil);
+  return grey_allOf(chrome_test_util::SnackbarViewMatcher(),
+                    grey_descendant(grey_text(snackbarMessage)), nil);
 }
 
 id<GREYMatcher> ReadingListItem(NSString* entryTitle) {
@@ -34,13 +33,13 @@ id<GREYMatcher> ReadingListItem(NSString* entryTitle) {
 id<GREYMatcher> VisibleReadingListItem(NSString* entryTitle) {
   return grey_allOf(grey_accessibilityID(entryTitle),
                     grey_kindOfClassName(@"TableViewURLCell"),
-                    grey_sufficientlyVisible(), nil);
+                    grey_minimumVisiblePercent(0.95), nil);
 }
 
 id<GREYMatcher> VisibleLocalItemIcon(NSString* title) {
   return grey_allOf(grey_ancestor(ReadingListItem(title)),
                     grey_accessibilityID(kTableViewURLCellMetadataImageID),
-                    grey_sufficientlyVisible(), nil);
+                    grey_minimumVisiblePercent(0.95), nil);
 }
 
 // Opens the reading list menu.
@@ -75,9 +74,8 @@ void AddURLToReadingListWithSnackbarDismiss(const GURL& URL, NSString* email) {
         base::i18n::MessageFormatter::FormatWithNamedArgs(
             pattern, "count", 1, "email", base::SysNSStringToUTF16(email));
     NSString* snackbarMessage = base::SysUTF16ToNSString(utf16Text);
-    matcher = grey_allOf(
-        grey_accessibilityID(@"MDCSnackbarMessageTitleAutomationIdentifier"),
-        grey_text(snackbarMessage), nil);
+    matcher = grey_allOf(chrome_test_util::SnackbarViewMatcher(),
+                         grey_descendant(grey_text(snackbarMessage)), nil);
   } else {
     matcher = reading_list_test_utils::AddedToLocalReadingListSnackbar();
   }

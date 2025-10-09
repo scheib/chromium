@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.tab.tab_restore;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.chromium.base.ThreadUtils.runOnUiThreadBlocking;
 
 import androidx.test.filters.MediumTest;
@@ -16,7 +18,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.Token;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
@@ -50,6 +51,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * End to end tests for {@link HistoricalTabSaverImpl} and its interactions with TabRestoreService.
@@ -84,7 +86,7 @@ public class HistoricalTabSaverImplTest {
         mTabModelSelector = mInitialPage.getTabModelSelector();
         mTabModel = mInitialPage.getTabModel();
         TabRestoreServiceUtils.clearEntries(mTabModelSelector);
-        mTab = mInitialPage.loadedTabElement.get();
+        mTab = mInitialPage.loadedTabElement.value();
         mHistoricalTabSaver = new HistoricalTabSaverImpl(mTabModel);
     }
 
@@ -483,7 +485,7 @@ public class HistoricalTabSaverImplTest {
 
         Assert.assertEquals("Entry count mismatch.", expectedEntries.size(), actualEntries.size());
         for (int i = 0; i < expectedEntries.size(); ++i) {
-            assert expectedEntries.get(i).size() != 0;
+            assertThat(expectedEntries.get(i)).isNotEmpty();
 
             if (expectedEntries.get(i).size() != 1) {
                 assertBulkClosureEquals(i, expectedEntries.get(i), actualEntries.get(i));

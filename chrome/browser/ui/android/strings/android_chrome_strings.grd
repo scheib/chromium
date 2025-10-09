@@ -219,6 +219,9 @@ CHAR_LIMIT guidelines:
       <message name="IDS_PREFS_NEW_LABEL" desc="The label displayed next to the title of newly added preferences.">
         <ph name="PREF_TITLE">%1$s</ph>  <ph name="BEGIN_NEW">&lt;new&gt;</ph>New<ph name="END_NEW">&lt;/new&gt;</ph>
       </message>
+      <message name="IDS_SEARCH_IN_SETTINGS_HINT" desc='Hint text in search in settings widget. [CHAR_LIMIT=32]'>
+        Search settings
+      </message>
 
       <!-- Notification channels -->
       <message name="IDS_NOTIFICATION_CATEGORY_GROUP_GENERAL" desc='Subheading for "General" section of a list of notification categories. [CHAR_LIMIT=32]'>
@@ -804,6 +807,9 @@ For more settings that use data to improve your Chrome experience, go to <ph nam
       <message name="IDS_BOOKMARK_BAR_SETTING" desc="Title for the bookmark bar setting.">
         Show bookmarks bar
       </message>
+      <message name="IDS_BOOKMARK_BAR_SETTING_SUBTITLE" desc="Subtitle hint for the bookmark bar setting.">
+        Hidden on narrow screens
+      </message>
 
       <!-- Themes settings -->
       <message name="IDS_THEME_SETTINGS" desc="Title for the Theme settings. [CHAR_LIMIT=32]">
@@ -960,14 +966,8 @@ For example, some websites may respond to this request by showing you ads that a
       <message name="IDS_SETTINGS_FLEDGE_PAGE_TOGGLE_LABEL" desc="The label for a new setting.">
         Site-suggested ads
       </message>
-      <message name="IDS_SETTINGS_FLEDGE_PAGE_TOGGLE_SUB_LABEL" desc="A description of the new Site-suggested ads setting. This text appears beneath the name of the new setting, 'Site-suggested ads', and is associated with the control that a user can turn on or off. * 'determine what you like': Based on your interaction with a site, that site can define your interests any way it wants. For example, if you put a pair of red running shoes in a shopping cart, the site might define an interest as 'red_running_shoes_size_36'. * 'suggest ads as you continue browsing': 1) you interact with a site and if defines an interest for you. That information is saved with Chrome. 2) You continue browsing. 3) a new site you visit checks with Chrome if 'Site-suggested ads' is turned on and then can request information related to that user. 4) The site might end up showing ads related to 'red_running_shoes_size_36'. **** CONTEXT PRIVACY SANDBOX **** Chrome’s Privacy Sandbox initiative 1) deprecates third-party cookies in Chrome, 2) supports free and open content on the web (by finding better ways to support ads online), 3) while providing stronger privacy protections for users. You can see a high-level description of this public project at www.privacysanbox.com. **** NEW SETTINGS SECTION IN CHROME **** 3 new ad-specific settings appear on an “Ad privacy” page in Chrome settings. For an equivalent structure, see “Security” on chrome://settings/privacy that opens chrome://settings/security. Likewise, “Ad privacy” on chrome://settings/privacy will open chrome://settings/AdPrivacy.">
-        Sites you visit can determine what you like and then suggest ads as you continue browsing
-      </message>
       <message name="IDS_SETTINGS_FLEDGE_PAGE_CURRENT_SITES_HEADING" desc="A label for a list of sites the user has visited. The list of sites looks similar to the user's browsing history, but this is a distinct list. * 'browsing history' is a list of the sites the user has visited. See the Help-center definition here: https://support.google.com/chrome/answer/95589 * This list of 'Sites' is a subset of the user's browsing history. 1) Only sites that use the 'Site-suggested ads' API (https://developer.chrome.com/docs/privacy-sandbox/fledge/) can appear on this list. 2) This list is based on recent sites the user has visited and sites older than 4 weeks are regularly deleted.">
         Sites
-      </message>
-      <message name="IDS_SETTINGS_FLEDGE_PAGE_CURRENT_SITES_DESCRIPTION" desc="A paragraph beneath the 'Sites' label. It explains how users can control the sites that appear in the list. * 'block sites': When a user blocks a site, that site may no longer save info with Chrome about the user's visit. As the user continues to browse, they will not see ads suggested by the blocked site. * 'auto-deletes': We included the 'auto' to reinforce that this is part of a system and the deletion is done regularly. ">
-        You can block sites you don’t want. Chrome also auto-deletes sites from the list that are older than 30 days. <ph name="BEGIN_LINK">&lt;link&gt;</ph>Learn more<ph name="END_LINK">&lt;/link&gt;</ph>
       </message>
       <message name="IDS_SETTINGS_FLEDGE_PAGE_CURRENT_SITES_DESCRIPTION_DISABLED" desc="1 of 3 possible descriptions that appear beneath the 'Sites' title. If this setting is off, no sites appear. The link opens a dialog box that provides more information about Site-suggested ads.">
         When on, a list of sites you visit that guess your interests appears here
@@ -995,15 +995,6 @@ For example, some websites may respond to this request by showing you ads that a
       </message>
       <message name="IDS_SETTINGS_FLEDGE_PAGE_LEARN_MORE_HEADING" desc="The title of a dialog box that explains site-suggested ads in more detail.">
         More about site-suggested ads
-      </message>
-      <message name="IDS_SETTINGS_FLEDGE_PAGE_LEARN_MORE_BULLET_1" desc="1 of 3 paragraphs on the Learn more page for Site-suggested ads. * 'It's common...' this sentence is intended to be reassuring. Many sites the user visits are retaining some information about the user, such as their preferred language if the site has a language picker. If cookies are allowed, this info might be stored with a first-party cookie on the user's device. Sites can also store limited information with Chrome.">
-        It’s common for sites you visit to remember things you’re interested in, to personalize your experience. Sites can also store information with Chrome about your interests.
-      </message>
-      <message name="IDS_SETTINGS_FLEDGE_PAGE_LEARN_MORE_BULLET_2" desc="2 of 3 paragraphs on the Learn more page for Site-suggested ads.">
-        For example, if you visit a site that sells long-distance running shoes, the site might decide that you’re interested in running marathons. Later, if you visit a different site, that site can show you an ad for running shoes suggested by the first site.
-      </message>
-      <message name="IDS_SETTINGS_FLEDGE_PAGE_LEARN_MORE_BULLET_3" desc="3 of 3 paragraphs on the Learn more page for Site-suggested ads. * 'Auto-deletes': This could just read 'Chrome deletes...' but we include the 'auto' to suggest that the deletion happens regularly and as part of the system. * 'A site you visit again...': We want to reassure the user. We just told them sites are automatically deleted. And yet, a user might see the same site in the list month after month if they visit that site regularly.">
-        Chrome auto-deletes sites that are older than 30 days. A site you visit again might reappear on the list. Or you can block a site from suggesting ads for you. Learn more about <ph name="BEGIN_LINK">&lt;link&gt;</ph>managing your ad privacy in Chrome.<ph name="END_LINK">&lt;/link&gt;</ph>
       </message>
       <message name="IDS_SETTINGS_FLEDGE_PAGE_BLOCK_SITE_A11Y_LABEL" desc="A button label read by screen readers that indicates which site will get blocked. The list is of sites the user has recently visited and that use the Site-suggested ads API to suggest ads to other sites as the user continues browsing.">
         Block <ph name="DOMAIN">%1$s<ex>example.com</ex></ph>
@@ -1266,21 +1257,6 @@ Your Google account may have other forms of browsing history like searches and a
       <message name="IDS_PRIVACY_GUIDE_HISTORY_SYNC_ITEM_THREE" desc="Third bullet point that describes the details of the history sync toggle.">
         The URLs you visit are saved to your Google Account
       </message>
-      <message name="IDS_PRIVACY_GUIDE_COOKIES_INTRO" desc="Text introducing the cookies control.">
-        Choose when to block third-party cookies
-      </message>
-      <message name="IDS_PRIVACY_GUIDE_COOKIES_BLOCK_INCOGNITO_TITLE" desc="Title for the radio button for blocking third-party cookies in incognito.">
-        Block while using Incognito
-      </message>
-      <message name="IDS_PRIVACY_GUIDE_COOKIES_BLOCK_INCOGNITO_DESCRIPTION" desc="Description for the radio button for blocking third-party cookies in incognito.">
-        While in Incognito, sites can’t use your cookies to see your browsing activity across different sites, for example, to personalize ads. Features on some sites may break.
-      </message>
-      <message name="IDS_PRIVACY_GUIDE_COOKIES_BLOCK_ALWAYS_TITLE" desc="Title for the radio button for blocking third-party cookies always.">
-        Block all the time
-      </message>
-      <message name="IDS_PRIVACY_GUIDE_COOKIES_BLOCK_ALWAYS_DESCRIPTION" desc="Description for the radio button for blocking third-party cookies always.">
-        Sites can only use your cookies to see your browsing activity only on their own site
-      </message>
       <message name="IDS_PRIVACY_GUIDE_SAFE_BROWSING_INTRO" desc="Text introducing the Safe Browsing control.">
         Choose your Safe Browsing protection
       </message>
@@ -1383,9 +1359,6 @@ Your Google account may have other forms of browsing history like searches and a
       </message>
       <message name="IDS_SAFETY_CHECK_PASSWORDS_ERROR_SIGNED_OUT" desc="Text to display when the password check is unable to run because the usere is signed out.">
         Sign in to your Google account to check your passwords
-      </message>
-      <message name="IDS_SAFETY_CHECK_PASSWORDS_UPDATE_PLAY_SERVICES" desc="Text to display when the password check is unable to run because Google Play services version is not supported.">
-        Update Google Play services to check your passwords
       </message>
       <message name="IDS_SAFETY_CHECK_UPDATES_UPDATED" desc="Text to display when the updates check confirms that the latest version is already installed.">
         Chrome is up to date
@@ -1631,7 +1604,9 @@ Your Google account may have other forms of browsing history like searches and a
         Chrome will let you know about sites that may be sending too many notifications
       </message>
       <message name="IDS_SAFETY_HUB_NOTIFICATIONS_REVIEW_WARNING_SUMMARY" desc="Summary for the notifications module in the Safety Hub dashboard. It is displayed when the user has some notification permissions that need to be reviewed.">
-        You can stop these sites from sending future notifications
+        {NUM_SITES, plural,
+        =1 {You can stop this site from sending future notifications}
+        other {You can stop these sites from sending future notifications}}
       </message>
       <message name="IDS_SAFETY_HUB_PERMISSIONS_OK_SUMMARY" desc="Summary for the permissions module in the Safety Hub dashboard. It is displayed when the user has no automatically revoked permissions that need to be reviewed.">
         Chrome automatically removes permissions from sites that abuse notifications or that you haven’t visited recently
@@ -2393,12 +2368,6 @@ Your Google account may have other forms of browsing history like searches and a
       <message name="IDS_ACCOUNT_ADVANCED_HEADER" desc="Heading of a section with settings related to the user's Google Account and data.">
         Control your data &amp; account
       </message>
-      <message name="IDS_SIGN_IN_GOOGLE_ACTIVITY_CONTROLS_TITLE" desc="Title of Google activity controls preference in signed in accounts settings screen">
-        Google activity controls
-      </message>
-      <message name="IDS_SIGN_IN_GOOGLE_ACTIVITY_CONTROLS_SUMMARY" desc="Message of Google activity controls preference in signed in accounts settings screen">
-        Control how your browsing history is used to personalize Search and more
-      </message>
       <message name="IDS_SYNC_ENCRYPTION" desc="Preference category name for sync encryption. [CHAR_LIMIT=32]">
         Encryption
       </message>
@@ -2855,14 +2824,8 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_PASSWORD_FILLING_REAUTH_PROMPT_TITLE" desc="The title of the authentication dialog displayed before the password manager fills a saved password into a website.">
         Verify it’s you
       </message>
-      <message name="IDS_PASSWORD_MANAGER_OUTDATED_GMS_DIALOG_DESCRIPTION" desc="Description text of the dialog appearing when the Google Play Services needs to be updated to use the Google Password Manager. Dialog suggests to update the Google Play Services.">
-        To manage your passwords, update Google Play services
-      </message>
       <message name="IDS_PASSWORD_MANAGER_OUTDATED_GMS_POSITIVE_BUTTON" desc="Label for the positive ('update') button of the dialog appearing when the Google Play Services needs to be updated to use the Google Password Manager. This is also used in the corresponding sync error card. Clicking on this button opens the Google Play services page in the Google Play Store.">
         Update
-      </message>
-      <message name="IDS_PASSWORD_MANAGER_OUTDATED_GMS_NEGATIVE_BUTTON" desc="Label for the negative ('not now') button of the dialog appearing when the Google Play Services needs to be updated to use the Google Password Manager. Clicking on this button dismisses the dialog without further actions.">
-        Not now
       </message>
 
       <!-- Runtime permission strings -->
@@ -2894,6 +2857,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       </message>
       <message name="IDS_CONTEXTMENU_OPEN_IN_INCOGNITO_TAB" desc="Context sensitive menu item to open the selected link in a new Incognito tab. [CHAR_LIMIT=30]">
         Open in Incognito tab
+      </message>
+      <message name="IDS_CONTEXTMENU_OPEN_IN_INCOGNITO_WINDOW" desc="Context sensitive menu item to open the selected link in a new Incognito window. [CHAR_LIMIT=30]">
+        Open in Incognito window
       </message>
       <message name="IDS_CONTEXTMENU_CALL" desc="Context sensitive menu for calling phone number. [CHAR_LIMIT=30]">
         Call
@@ -2991,6 +2957,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_CONTEXTMENU_UNPIN" desc="This string is shown in the context menu to remove an existing Custom Tile.">
         Unpin
       </message>
+      <message name="IDS_CONTEXTMENU_VIEW_PAGE_SOURCE" desc="This string is shown in the context menu to display non-editable HTML source code for the current page. [CHAR_LIMIT=30]">
+        View page source
+      </message>
       <message name="IDS_CONTEXTMENU_INSPECT_ELEMENT" desc="This string is shown in the context menu to inspect an element in a web page using the developer tools. [CHAR_LIMIT=30]">
         Inspect
       </message>
@@ -3016,14 +2985,23 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_SANS_SERIF" desc="Title of the selector button that will change the typeface of distilled pages to use a SansSerif font.">
         Sans Serif
       </message>
+      <message name="IDS_SANS_SERIF_LOWERCASE" desc="Title of the font style selection button in reader mode preferences. Differs in capitalization from IDS_SANS_SERIF. No translation needed since this is a proper noun.">
+        Sans serif
+      </message>
       <message name="IDS_SERIF" desc="Title of the selector button that will change the typeface of distilled pages to use a Serif font.">
         Serif
       </message>
       <message name="IDS_MONOSPACE" desc="Title of the selector button that will change the typeface of distilled pages to use a Monospace font.">
         Monospace
       </message>
+      <message name="IDS_MONOSPACE_SHORTENED" desc="A shortened version of IDS_MONOSPACE, for use in UI buttons where space is limited. No translation needed since this is a proper noun.">
+        Mono
+      </message>
       <message name="IDS_TEXT_SIZE_SIGNIFIER" desc="A typical letter of the alphabet.  This is drawn on either end of a slider bar that allows the user to change the font size.  On one end, it is drawn smaller and on the other end larger.">
         A
+      </message>
+      <message name="IDS_FONT_STYLE_SIGNIFIER" desc="Uppercase and lowercase string of a typical letter of the alphabet.  This is drawn to demonstrate different font styles within the reader mode prefs. No translation needed.">
+        Aa
       </message>
 
       <!-- Add to Home screen strings -->
@@ -3555,9 +3533,6 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       </message>
       <message name="IDS_DEVICE_LOCK_CREATE_LOCK_BUTTON" desc="Text for the button that navigates the user to create a profile lock on the device.">
         Create a car profile lock
-      </message>
-      <message name="IDS_DIALOG_NOT_NOW" desc="Label for the negative ('not now') button of a dialog that prompts user action. Clicking on this button dismisses the dialog without further actions.">
-        Not now
       </message>
 
       <!-- Strings for a missing device lock. -->
@@ -4124,7 +4099,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
         Move group to another window
       </message>
       <message name="IDS_MENU_MANAGE_ALL_WINDOWS" desc="Menu item for bringing up instance switcher UI. [CHAR_LIMIT=27]">
-        Manage windows (<ph name="INSTANCE_COUNTS">%1$d<ex>3</ex></ph>)
+        Manage windows
       </message>
       <message name="IDS_MENU_FORWARD" desc="Tooltip for the button to advance to the next web page. Verb. [CHAR_LIMIT=27]">
         Forward
@@ -4140,6 +4115,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       </message>
       <message name="IDS_MENU_PAGE_INFO" desc="Tooltip on Android for the button to view information about the current web page. Info is short for information.  [CHAR_LIMIT=27]">
         Page info
+      </message>
+      <message name="IDS_MENU_APP_INFO" desc="Tooltip on Android for the button to view information about the current app. Info is short for information.  [CHAR_LIMIT=27]">
+        App info
       </message>
       <message name="IDS_MENU_STOP_REFRESH" desc="Tooltip on Android for the button to stop refreshing the current web page. [CHAR_LIMIT=27]">
         Stop refreshing
@@ -4395,14 +4373,17 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       </message>
 
       <!-- Bookmark bar strings -->
-      <message name="IDS_BOOKMARK_BAR_BUTTON_ICON_CONTENT_DESCRIPTION" desc="The content description for a bookmark bar button icon.">
-        Bookmark bar button icon
-      </message>
       <message name="IDS_BOOKMARK_BAR_ALL_BOOKMARKS_BUTTON_TITLE" desc="The title for the 'All Bookmarks' button in the bookmark bar.">
-        All Bookmarks
+        All bookmarks
       </message>
       <message name="IDS_BOOKMARK_BAR_OVERFLOW_BUTTON_CONTENT_DESCRIPTION" desc="The content description for the bookmark bar overflow button.">
-        Bookmark bar overflow button
+        More bookmarks
+      </message>
+      <message name="IDS_BOOKMARK_BAR_FOLDER_CONTENT_DESCRIPTION" desc="Accessibility label for a folder that appears in the bookmarks bar.">
+        <ph name="FOLDER_TITLE">%1$s<ex>My bookmarks</ex></ph> folder
+      </message>
+      <message name="IDS_BOOKMARK_BAR_CONTENT_DESCRIPTION" desc="Accessibility label for the encompassing view of the entire bookmark bar.">
+        Bookmarks Bar
       </message>
 
       <!-- Power bookmarks strings -->
@@ -4754,9 +4735,6 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_ACCESSIBILITY_NEW_INCOGNITO_TAB_PAGE" desc="Accessibility text to read aloud when the user focuses the new Incognito tab view.">
         New Incognito tab
       </message>
-      <message name="IDS_ACCESSIBILITY_INCOGNITO_3PC_SETTINGS" desc="Content description of the cookie controls icon displayed on the new incognito tab which navigates to the third-party cookies settings.">
-        Third-party cookies settings
-      </message>
       <message name="IDS_ACCESSIBILITY_TOOLBAR_BTN_NEW_TAB" desc="Content description for the new tab button.">
         New tab
       </message>
@@ -4853,8 +4831,32 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_INCOGNITO" desc="Content description for tabs that are not selected in Incognito mode">
         <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Incognito Tab
       </message>
-      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_INCOGNITO_SELECTED" desc="Content description for the tab that is selected in Incognito mode">
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_SELECTED_INCOGNITO" desc="Content description for the tabs that are selected in Incognito mode">
         <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Selected Incognito Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_PINNED" desc="Content description for tabs that are pinned">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Pinned Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_PINNED_SELECTED" desc="Content description for pinned tabs that are selected">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Pinned Selected Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_PINNED_INCOGNITO" desc="Content description for pinned tabs that are not selected in Incognito mode">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Pinned Incognito Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_PINNED_SELECTED_INCOGNITO" desc="Content description for the pinned tabs that are selected in Incognito mode">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Pinned Selected Incognito Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_MULTISELECTED" desc="Content description for tabs that are multiselected">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Multiselected Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_MULTISELECTED_INCOGNITO" desc="Content description for tabs that are multiselected in Incognito mode">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Multiselected Incognito Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_MULTISELECTED_PINNED" desc="Content description for tabs that are multiselected and pinned">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Multiselected Pinned Tab
+      </message>
+      <message name="IDS_ACCESSIBILITY_TABSTRIP_TAB_MULTISELECTED_PINNED_INCOGNITO" desc="Content description for tabs that are multiselected and pinned in Incognito mode">
+        <ph name="TAB_TITLE">%1$s<ex>Welcome to Facebook</ex></ph>, Multiselected Pinned Incognito Tab
       </message>
 
       <!-- Accessibility strings used in both tablet and phone tab strips -->
@@ -5116,14 +5118,6 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
         Navigation history is closed
       </message>
 
-      <!-- Rtl Gesture Nav Iph -->
-      <message name="IDS_RTL_GESTURE_NAV_IPH_DIALOG_TITLE" desc="Title string for help dialog of educating users on how to navigate by gesture in RTL mode.">
-        A new way to swipe
-      </message>
-      <message name="IDS_RTL_GESTURE_NAV_IPH_DIALOG_CONTENT" desc="Content string for help dialog of educating users on how to navigate by gesture in RTL mode.">
-        Now, a right swipe takes you backward to see previous pages you’ve visited and a left swipe moves you forward
-      </message>
-
       <!-- Ephemeral Tab -->
       <message name="IDS_EPHEMERAL_TAB_SHEET_DESCRIPTION" desc="The content description of the preview tab bottom sheet.">
         Preview tab
@@ -5338,6 +5332,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       </message>
 
       <!-- WebAPK/TWA related strings -->
+      <message name="IDS_APP_INFO_SETTINGS" desc="Label for 3-dot menu item that opens Android's settings to view information about the current app. Info is short for information.">
+        More app info
+      </message>
       <message name="IDS_TWA_RUNNING_IN_CHROME" desc="Message on a snackbar indicating that the current Activity may use Chrome data (the rest of the app may not be).">
         Running in Chrome
       </message>
@@ -5376,6 +5373,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <!-- Keyboard shortcuts in Android N-->
       <message name="IDS_KEYBOARD_SHORTCUT_OPEN_NEW_WINDOW" desc="A text label that appears next to the keyboard shortcut to open a new window in Chrome. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Open a new window
+      </message>
+      <message name="IDS_KEYBOARD_SHORTCUT_CLOSE_WINDOW" desc="A text label that appears next to the keyboard shortcut to close the current Chrome window. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
+        Close current window
       </message>
       <message name="IDS_KEYBOARD_SHORTCUT_OPEN_NEW_TAB" desc="A text label that appears next to the keyboard shortcut to open a new tab in Chrome. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Open a new tab
@@ -5425,11 +5425,17 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_KEYBOARD_SHORTCUT_HISTORY_MANAGER" desc="A text label that appears next to the keyboard shorcut that will open up the history page. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Open History
       </message>
+      <message name="IDS_KEYBOARD_SHORTCUT_SHOW_DOWNLOADS" desc="Label for the keyboard shortcut to open the downloads page.">
+        Open Downloads
+      </message>
       <message name="IDS_KEYBOARD_SHORTCUT_HISTORY_GO_BACK" desc="A text label that appears next to the keyboard shorcut that will go to the previous page in your browser History. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Go to previous page
       </message>
       <message name="IDS_KEYBOARD_SHORTCUT_HISTORY_GO_FORWARD" desc="A text label that appears next to the keyboard shorcut that will go to the next page in your browser History. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Go to next page
+      </message>
+      <message name="IDS_KEYBOARD_SHORTCUT_CLEAR_BROWSING_DATA" desc="A text label that appears next to the keyboard shorcut that will go to the clear browing data page. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
+        Delete browsing data
       </message>
       <message name="IDS_KEYBOARD_SHORTCUT_SAVE_PAGE" desc="A text label that appears next to the keyboard shortcut that will save the page. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Open options to save
@@ -5458,11 +5464,17 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_KEYBOARD_SHORTCUT_TOGGLE_BOOKMARK_BAR" desc="A text label that appears next to the keyboard shortcut that will toggle the bookmark bar. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Show or hide Bookmarks bar
       </message>
+      <message name="IDS_KEYBOARD_SHORTCUT_VIEW_SOURCE" desc="A text label that appears next to the keyboard shortcut that will display non-editable HTML source code for the current page. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
+        View page source
+      </message>
       <message name="IDS_KEYBOARD_SHORTCUT_DEVELOPER_TOOLS" desc="A text label that appears next to the keyboard shortcut that will open Developer Tools. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Open Developer Tools
       </message>
       <message name="IDS_KEYBOARD_SHORTCUT_TASK_MANAGER" desc="A text label that appears next to the keyboard shortcut that will open Task Manager. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
         Open Task Manager
+      </message>
+      <message name="IDS_KEYBOARD_SHORTCUT_SEND_FEEDBACK" desc="A text label that appears next to the keyboard shortcut that will open a feedback form. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
+        Send feedback
       </message>
       <message name="IDS_KEYBOARD_SHORTCUT_TAB_GROUP_HEADER" desc="A text label that appears above a list of shortcuts that are related to the tab window. This group is part of several groups of keyboard shortcuts all shown in a dialog.">
         Tab and window shortcuts
@@ -5475,6 +5487,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       </message>
       <message name="IDS_KEYBOARD_SHORTCUT_DEVELOPER_GROUP_HEADER" desc="A text label that appears above a list of shortcuts that are related to tools used by developers. This group is part of several groups of keyboard shortcuts all shown in a dialog.">
         Developer shortcuts
+      </message>
+      <message name="IDS_KEYBOARD_SHORTCUT_TOGGLE_MULTISELECT" desc="A text label that appears above a list of shortcuts that are related to the tab strip. The shortcut description is shown in a system dialog along with all other supported shortcuts. [CHAR_LIMIT=55]">
+        Toggle tab selection
       </message>
 
       <if expr="enable_arcore">
@@ -5593,6 +5608,12 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
           =1 {<ph name="INCOGNITO_TAB_COUNT">%1$s<ex>2</ex></ph> incognito and <ph name="TAB_COUNT_ONE">%2$s<ex>1</ex></ph> other tab will be closed}
           other {<ph name="INCOGNITO_TAB_COUNT">%1$s<ex>4</ex></ph> incognito and <ph name="TAB_COUNT_MANY">%2$s<ex>4</ex></ph> other tabs will be closed}}
       </message>
+      <message name="IDS_INSTANCE_SWITCHER_ITEM_CLOSE_CONTENT_DESCRIPTION" desc="Accessibility label of the close icon on the instance list item.">
+        Close <ph name="INSTANCE_TITLE">%1$s<ex>Window</ex></ph>
+      </message>
+      <message name="IDS_INSTANCE_SWITCHER_ITEM_MORE_MENU_CONTENT_DESCRIPTION" desc="Accessibility label of the 'more' menu button on the instance list item.">
+        More options for <ph name="INSTANCE_TITLE">%1$s<ex>Window</ex></ph>
+      </message>
 
       <!-- Multi-instance message strings -->
       <message name="IDS_MULTI_INSTANCE_RESTORATION_MESSAGE_TITLE" desc="Title of the message shown when the number of persisted instances exceeds the max instance count after an instance limit downgrade.">
@@ -5601,8 +5622,14 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_MULTI_INSTANCE_RESTORATION_MESSAGE_DESCRIPTION" desc="Description of the message shown when the number of persisted instances exceeds the max instance count after an instance limit downgrade.">
         Select manage to see all windows
       </message>
-      <message name="IDS_MULTI_INSTANCE_RESTORATION_MESSAGE_BUTTON" desc="Text on the button that will open the instance switcher dialog.">
+      <message name="IDS_MULTI_INSTANCE_MESSAGE_BUTTON" desc="Text on the button that will open the instance switcher dialog.">
         Manage
+      </message>
+      <message name="IDS_MULTI_INSTANCE_CREATION_LIMIT_MESSAGE_TITLE" desc="Title of the message shown when max instances exist during an attempt to create a new instance.">
+        <ph name="MAX_INSTANCE_COUNT">%1$s<ex>5</ex></ph> window limit reached
+      </message>
+      <message name="IDS_MULTI_INSTANCE_CREATION_LIMIT_MESSAGE_DESCRIPTION" desc="Description of the message shown when max instances exist during an attempt to create a new instance.">
+        Close a window or manage windows
       </message>
 
       <!-- In-Product Help strings -->
@@ -6217,6 +6244,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_ACCOUNT_SELECTION_SHEET_TITLE_EXPLICIT_CONTINUE" desc="Header for continue sheet. Sheet is shown to prompt user to continue to a website using an account from an identity provider.">
         Continue to <ph name="SITE_ETLD_PLUS_ONE">%1$s<ex>rp.example</ex></ph> with <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE">%2$s<ex>idp.com</ex></ph>
       </message>
+    <message name="IDS_ACCOUNT_SELECTION_SHEET_SUBTITLE_FOR_EMBED" desc="Subtitle for account selection sheet. Explains the relationship between the embedder website and the embedded iframe.">
+      <ph name="SITE_ETLD_PLUS_ONE">%1$s<ex>rp.example</ex></ph> embeds content from <ph name="IFRAME_ETLD_PLUS_ONE">%2$s<ex>iframe.example</ex></ph>
+    </message>
     <message name="IDS_ACCOUNT_SELECTION_DATA_SHARING_NAME" desc="A user's name, to be used in a list of items shared with a website">
       name
     </message>
@@ -6925,7 +6955,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
           =1 {Not used for 1 day or more}
           other {Not used for # days or more}}
       </message>
-      <message name="IDS_ARCHIVED_TAB_CARD_SUBTITLE_WITH_TAB_GROUPS" desc="Shown in the tab switcher to inform the user how long the relevant tabs and tab groups have been inactive for.">
+      <message name="IDS_ARCHIVED_TAB_CARD_SUBTITLE_WITH_TAB_GROUPS" desc="Shown in the tab switcher to inform the user how long the relevant tabs and tab groups have been inactive for. [CHAR_LIMIT=32]">
         {INACTIVE_TIME_DAYS, plural,
           =1 {Tabs and groups not used for 1 day or more}
           other {Tabs and groups not used for # days or more}}
@@ -7004,25 +7034,69 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
 
       <!-- Reader mode -->
       <message name="IDS_READER_MODE_BOTTOM_SHEET_TITLE" desc="Title of the Reading Mode bottom sheet. [CHAR_LIMIT=27]">
-        Reading mode
+        Reading Mode
       </message>
-      <message name="IDS_READER_MODE_BOTTOM_SHEET_CONTENT_DESCRIPTION" desc="Content description of the Reading Mode bottom sheet.">
-        Reading mode bottom sheet
+      <message name="IDS_READER_MODE_BOTTOM_SHEET_CONTENT_DESCRIPTION" desc="Content description of the Reading Mode bottom sheet informing the user to swipe up to open the preferences bottom sheet.">
+        Reading mode swipe up for preferences
       </message>
       <message name="IDS_READER_MODE_BOTTOM_SHEET_CLOSED_CONTENT_DESCRIPTION" desc="Content description of the Reading Mode bottom sheet when closed.">
-        Reading mode bottom sheet closed
+        Reading mode preferences closed
       </message>
       <message name="IDS_READER_MODE_BOTTOM_SHEET_HALF_HEIGHT_CONTENT_DESCRIPTION" desc="Content description of the Reading Mode bottom sheet when opened at half height.">
-        Reading mode bottom sheet opened at half height
+        Reading mode preferences opened at half height
       </message>
       <message name="IDS_READER_MODE_BOTTOM_SHEET_FULL_HEIGHT_CONTENT_DESCRIPTION" desc="Content description of the Reading Mode bottom sheet when opened at full height.">
-        Reading mode bottom sheet opened at full height
+        Reading mode preferences opened at full height
       </message>
       <message name="IDS_READER_MODE_UNAVAILABLE_SNACKBAR_MESSAGE" desc="Snackbar message that shown when the user attempts to enter reader mode, but content extraction fails.">
-        Reader mode is unavailable
+        Reading mode is unavailable
       </message>
       <message name="IDS_READER_MODE_MENU_IPH" desc="In-product help shown to inform the user that reading mode is always available in the app menu.">
         Reading mode is always available here
+      </message>
+
+      <!-- Tips notifications -->
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_CONTENT_DESCRIPTION" desc="Content description of the Tips Promo bottom sheet informing the user on feature background and how to turn it on.">
+        Tips notifications feature promo and usage steps bottom sheet
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_CLOSED_CONTENT_DESCRIPTION" desc="Content description of the Tips Promo bottom sheet when closed.">
+        Tips notifications promo closed
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_HALF_HEIGHT_CONTENT_DESCRIPTION" desc="Content description of the Tips Promo bottom sheet when opened at half height.">
+        Tips notifications promo opened at half height
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_FULL_HEIGHT_CONTENT_DESCRIPTION" desc="Content description of the Tips Promo bottom sheet when opened at full height.">
+        Tips notifications promo opened at full height
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_POSITIVE_BUTTON_TEXT" desc="Button text for the Tips Promo bottom sheet to go to the settings page.">
+        Go to settings
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_NEGATIVE_BUTTON_TEXT" desc="Button text for the Tips Promo bottom sheet to go to an education page on the tip feature usage.">
+        Show me how
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_TITLE_ESB" desc="Title of the Enhanced Safe Browsing feature tip main page promo. [CHAR_LIMIT=32]">
+        Get Chrome\u2019s strongest security
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_DESCRIPTION_ESB" desc="Description of the Enhanced Safe Browsing feature tip main page promo.">
+        Add an extra layer of protection against online threats with enhanced protection
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_TITLE_QUICK_DELETE" desc="Title of the Quick Delete feature tip main page promo. [CHAR_LIMIT=32]">
+        Quickly delete your browsing data
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_DESCRIPTION_QUICK_DELETE" desc="Description of the Quick Delete feature tip main page promo.">
+        You can delete some or all of your history, cookies, site data, and more
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_TITLE_LENS" desc="Title of the Google Lens feature tip main page promo. [CHAR_LIMIT=32]">
+        Search with Google Lens
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_DESCRIPTION_LENS" desc="Description of the Google Lens feature tip main page promo.">
+        Shop, translate, and identify what you see using your camera and photo gallery
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_TITLE_BOTTOM_OMNIBOX" desc="Title of the Bottom Omnibox feature tip main page promo. [CHAR_LIMIT=32]">
+        Choose your address bar position
+      </message>
+      <message name="IDS_TIPS_PROMO_BOTTOM_SHEET_DESCRIPTION_BOTTOM_OMNIBOX" desc="Description of the Bottom Omnibox feature tip main page promo.">
+        Switch the position of your address bar to the top or bottom for a customized browsing experience
       </message>
     </messages>
   </release>

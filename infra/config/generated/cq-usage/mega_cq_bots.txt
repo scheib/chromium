@@ -1,4 +1,5 @@
 chromium/try/android-10-arm64-rel
+chromium/try/android-10-x86-nofieldtrial-rel
 chromium/try/android-10-x86-rel
 chromium/try/android-11-x86-rel
 chromium/try/android-12-x64-rel
@@ -45,6 +46,10 @@ chromium/try/android-cronet-x86-dbg-nougat-tests
 chromium/try/android-cronet-x86-dbg-oreo-tests
 chromium/try/android-cronet-x86-dbg-pie-tests
 chromium/try/android-cronet-x86-rel
+chromium/try/android-desktop-arm64-clobber-rel
+chromium/try/android-desktop-arm64-official
+chromium/try/android-desktop-x64-clobber-rel
+chromium/try/android-desktop-x64-official
 chromium/try/android-desktop-x64-rel
 chromium/try/android-official
 chromium/try/android-webview-10-x86-rel-tests
@@ -104,6 +109,7 @@ chromium/try/linux-chromeos-compile-dbg
 chromium/try/linux-chromeos-dbg
 chromium/try/linux-chromeos-rel
 chromium/try/linux-clobber-rel
+chromium/try/linux-crossbench
 chromium/try/linux-dcheck-off-rel
 chromium/try/linux-extended-tracing-rel
 chromium/try/linux-full-remote-rel
@@ -161,6 +167,7 @@ chromium/try/win-clobber-rel
 chromium/try/win-libfuzzer-asan-rel
 chromium/try/win-official
 chromium/try/win-rel
+chromium/try/win10-dbg
 chromium/try/win11-rel
 chromium/try/win32-clobber-rel
 chromium/try/win32-official

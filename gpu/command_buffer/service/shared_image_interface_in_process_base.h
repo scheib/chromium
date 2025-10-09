@@ -44,7 +44,7 @@ class GPU_GLES2_EXPORT SharedImageInterfaceInProcessBase
       const SharedImageInfo& si_info,
       SurfaceHandle surface_handle,
       gfx::BufferUsage buffer_usage,
-      std::optional<SharedImagePoolId> pool_id) final;
+      std::optional<SharedImagePoolId> pool_id) override;
   scoped_refptr<ClientSharedImage> CreateSharedImage(
       const SharedImageInfo& si_info,
       gpu::SurfaceHandle surface_handle,
@@ -91,6 +91,8 @@ class GPU_GLES2_EXPORT SharedImageInterfaceInProcessBase
   SyncToken GenUnverifiedSyncToken() final;
   SyncToken GenVerifiedSyncToken() final;
   void VerifySyncToken(SyncToken& sync_token) final;
+  bool CanVerifySyncToken(const gpu::SyncToken& sync_token) final;
+  void VerifyFlush() final;
   void WaitSyncToken(const SyncToken& sync_token) final;
   const SharedImageCapabilities& GetCapabilities() final;
 
@@ -141,7 +143,7 @@ class GPU_GLES2_EXPORT SharedImageInterfaceInProcessBase
 
   CommandBufferId command_buffer_id() const { return command_buffer_id_; }
 
-  // Sequence checker for tasks that run on the gpu "thread".
+  // Sequence checker for tasks that run on the gpu thread.
   SEQUENCE_CHECKER(gpu_sequence_checker_);
 
  private:

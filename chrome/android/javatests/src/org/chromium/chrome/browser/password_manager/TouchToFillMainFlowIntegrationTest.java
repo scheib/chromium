@@ -80,7 +80,7 @@ public class TouchToFillMainFlowIntegrationTest {
     @Before
     public void setUp() {
         mStartingPage = mActivityTestRule.startOnBlankPage();
-        PasswordManagerTestHelper.setAccountForPasswordStore(SigninTestRule.TEST_ACCOUNT_EMAIL);
+        PasswordManagerTestHelper.setAccountForPasswordStore(TestAccounts.ACCOUNT1.getEmail());
         PasswordManagerTestUtilsBridge.disableServerPredictions();
         mSigninTestRule.addAccountThenSignin(TestAccounts.ACCOUNT1);
 
@@ -96,7 +96,7 @@ public class TouchToFillMainFlowIntegrationTest {
                                     mStartingPage.getActivity().getWindowAndroid());
                 });
 
-        mWebContents = mStartingPage.webContentsElement.get();
+        mWebContents = mStartingPage.webContentsElement.value();
 
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {

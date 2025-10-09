@@ -40,6 +40,7 @@ source_set("impl") {
     "chrome_page_info_ui_delegate.cc",
   ]
   deps = [
+    "//chrome/browser/bluetooth",
     "//chrome/browser/page_info",
     "//chrome/browser/privacy_sandbox:headers",
     "//chrome/browser/serial",
@@ -80,6 +81,7 @@ source_set("impl") {
     "//chrome/browser/ui:ui_features",
     "//chrome/browser/ui:url_identity",
     "//chrome/browser/ui/hats",
+    "//chrome/browser/usb",
     "//chrome/common",
     "//chrome/common:chrome_features",
     "//chrome/common:constants",
@@ -115,7 +117,9 @@ source_set("unit_tests") {
     "//chrome/browser/content_settings",
     "//chrome/browser/content_settings:content_settings_factory",
     "//chrome/browser/file_system_access",
+    "//chrome/browser/history",
     "//chrome/browser/picture_in_picture",
+    "//chrome/browser/usb",
     "//chrome/common:chrome_features",
     "//chrome/common:constants",
     "//chrome/test:test_support",
@@ -126,6 +130,7 @@ source_set("unit_tests") {
     "//components/permissions:permissions_common",
     "//components/prefs",
     "//components/safe_browsing:buildflags",
+    "//components/safe_browsing/core/browser:safe_browsing_metrics_collector",
     "//components/security_interstitials/content:security_interstitial_page",
     "//components/strings:components_strings",
     "//components/subresource_filter/content/browser",

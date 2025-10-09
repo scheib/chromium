@@ -79,7 +79,7 @@ class TestTabModel : public TabModel {
 
   // TODO(crbug.com/415351293): Implement these.
   // TabListInterface implementation.
-  void OpenTab(const GURL& url, int index) override;
+  tabs::TabInterface* OpenTab(const GURL& url, int index) override;
   void DiscardTab(tabs::TabHandle tab) override;
   tabs::TabInterface* DuplicateTab(tabs::TabHandle tab) override;
   tabs::TabInterface* GetTab(int index) override;
@@ -96,8 +96,18 @@ class TestTabModel : public TabModel {
       const std::set<tabs::TabHandle>& tabs) override;
   void Ungroup(const std::set<tabs::TabHandle>& tabs) override;
   void MoveGroupTo(tab_groups::TabGroupId group_id, int index) override;
+  void MoveTabToWindow(tabs::TabHandle tab,
+                       SessionID destination_window_id,
+                       int destination_index) override;
+  void MoveTabGroupToWindow(tab_groups::TabGroupId group_id,
+                            SessionID destination_window_id,
+                            int destination_index) override;
 
+// BrowserWindowInterface is available on desktop Android, but not other Android
+// builds.
+#if BUILDFLAG(IS_DESKTOP_ANDROID)
   void AssociateWithBrowserWindow(BrowserWindowInterface* browser_window);
+#endif
 
  private:
   // A fake value for the current number of tabs.
@@ -181,7 +191,7 @@ class OwningTestTabModel : public TabModel {
 
   // TODO(crbug.com/415351293): Implement these.
   // TabListInterface implementation.
-  void OpenTab(const GURL& url, int index) override;
+  tabs::TabInterface* OpenTab(const GURL& url, int index) override;
   void DiscardTab(tabs::TabHandle tab) override;
   tabs::TabInterface* DuplicateTab(tabs::TabHandle tab) override;
   tabs::TabInterface* GetTab(int index) override;
@@ -198,6 +208,12 @@ class OwningTestTabModel : public TabModel {
       const std::set<tabs::TabHandle>& tabs) override;
   void Ungroup(const std::set<tabs::TabHandle>& tabs) override;
   void MoveGroupTo(tab_groups::TabGroupId group_id, int index) override;
+  void MoveTabToWindow(tabs::TabHandle tab,
+                       SessionID destination_window_id,
+                       int destination_index) override;
+  void MoveTabGroupToWindow(tab_groups::TabGroupId group_id,
+                            SessionID destination_window_id,
+                            int destination_index) override;
 
  private:
   void SelectTab(TabAndroid* tab, TabModel::TabSelectionType selection_type);

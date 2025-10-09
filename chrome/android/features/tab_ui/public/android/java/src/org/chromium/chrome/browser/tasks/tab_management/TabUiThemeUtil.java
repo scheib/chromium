@@ -13,7 +13,6 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.res.ResourcesCompat;
 
 import org.chromium.build.annotations.NullMarked;
-import org.chromium.chrome.browser.theme.SurfaceColorUpdateUtils;
 import org.chromium.chrome.browser.ui.theme.ChromeSemanticColorUtils;
 import org.chromium.components.browser_ui.styles.ChromeColors;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
@@ -68,7 +67,7 @@ public class TabUiThemeUtil {
         if (isIncognito) {
             return ContextCompat.getColor(context, R.color.tab_strip_tablet_bg_incognito);
         }
-        return SurfaceColorUpdateUtils.getTabStripBackgroundColorDefault(context);
+        return SemanticColorUtils.getColorSurfaceContainerHigh(context);
     }
 
     private static @ColorInt int getTabStripBackgroundColorUnfocused(
@@ -77,12 +76,19 @@ public class TabUiThemeUtil {
         if (isIncognito) {
             return ContextCompat.getColor(context, R.color.tab_strip_tablet_bg_unfocused_incognito);
         }
-        return SurfaceColorUpdateUtils.getTabStripBackgroundColorUnfocused(context);
+        @ColorInt int darkThemeColor = SemanticColorUtils.getColorSurfaceContainerLow(context);
+        @ColorInt int lightThemeColor = SemanticColorUtils.getColorSurfaceContainer(context);
+        return ColorUtils.inNightMode(context) ? darkThemeColor : lightThemeColor;
     }
 
     /** Returns the tab strip selected tab color. */
     public static @ColorInt int getTabStripSelectedTabColor(Context context, boolean isIncognito) {
-        return SurfaceColorUpdateUtils.getDefaultThemeColor(context, isIncognito);
+        return ChromeColors.getDefaultThemeColor(context, isIncognito);
+    }
+
+    /** Returns the dragged tab background color. */
+    public static @ColorInt int getDraggedTabBackgroundColor(Context context) {
+        return SemanticColorUtils.getColorSurfaceBright(context);
     }
 
     /**
@@ -94,7 +100,7 @@ public class TabUiThemeUtil {
     public static @ColorInt int getTabStripMultiSelectedTabColor(
             Context context, boolean isIncognito) {
         int baseColor = getTabStripBackgroundColor(context, isIncognito);
-        int overlayColor = SurfaceColorUpdateUtils.getDefaultThemeColor(context, isIncognito);
+        int overlayColor = ChromeColors.getDefaultThemeColor(context, isIncognito);
         float overlayAlpha =
                 ResourcesCompat.getFloat(context.getResources(), R.dimen.multi_selected_tab_alpha);
 
@@ -104,12 +110,15 @@ public class TabUiThemeUtil {
     /** Returns the tab strip multi-selected and hovered tab color. */
     public static @ColorInt int getTabStripMultiSelectedHoveredTabColor(
             Context context, boolean isIncognito) {
-        int baseColor = SurfaceColorUpdateUtils.getDefaultThemeColor(context, isIncognito);
-
-        float alpha =
+        int baseColor = getTabStripMultiSelectedTabColor(context, isIncognito);
+        int overlayColor =
+                isIncognito
+                        ? context.getColor(R.color.baseline_primary_80)
+                        : ChromeSemanticColorUtils.getTabInactiveHoverColor(context);
+        float overlayAlpha =
                 ResourcesCompat.getFloat(
-                        context.getResources(), R.dimen.multi_selected_tab_hovered_alpha);
-        return ColorUtils.setAlphaComponentWithFloat(baseColor, alpha);
+                        context.getResources(), R.dimen.multi_selected_tab_hover_overlay_alpha);
+        return ColorUtils.getColorWithOverlay(baseColor, overlayColor, overlayAlpha);
     }
 
     /** Returns the tab strip title text color. */

@@ -36,15 +36,9 @@ using redaction_internal::IPAddress;
 namespace redaction {
 
 namespace features {
-COMPONENT_EXPORT(REDACTION_TOOL)
-BASE_FEATURE(kEnableCreditCardRedaction,
-             "EnableCreditCardRedaction",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableCreditCardRedaction, base::FEATURE_ENABLED_BY_DEFAULT);
 
-COMPONENT_EXPORT(REDACTION_TOOL)
-BASE_FEATURE(kEnableIbanRedaction,
-             "EnableIbanRedaction",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableIbanRedaction, base::FEATURE_ENABLED_BY_DEFAULT);
 }  // namespace features
 
 namespace {
@@ -359,6 +353,22 @@ CustomPatternWithAlias kCustomPatternsWithContext[] = {
      "(" IPV4ADDRESS ")"
      "([^-\\.0-9]|$)",
      PIIType::kIPAddress},
+
+    // Redacts PII from kernel logs for virtual input devices (e.g., Bluetooth).
+    // Matches lines like:
+    //   input: Edman Paes dos Anjos’s Keyboard as
+    //   /devices/virtual/misc/uhid/0005:...
+    // Redacts the name part only.
+    {"Bluetooth HID Device",
+     "(input: )([^\\r\\n]+?)(\\s+as\\s+/devices/virtual/misc/uhid/0005:.*?)",
+     PIIType::kBluetoothHidDevice},
+
+    // Redacts PII from kernel logs for explicit Bluetooth HID devices.
+    // Matches lines like:
+    //   ... [Edman Paes dos Anjos’s Keyboard] on ...
+    // Redacts the name part found inside the brackets.
+    {"Bluetooth HID Device", R"((BLUETOOTH HID.+?\[)([^\]]+)(\]))",
+     PIIType::kBluetoothHidDevice},
 };
 
 bool MaybeUnmapAddress(IPAddress* addr) {
@@ -449,7 +459,7 @@ std::string MaybeScrubIPAddress(const std::string& addr) {
   IPAddress input_addr;
   if (input_addr.AssignFromIPLiteral(addr) && input_addr.IsValid()) {
     bool mapped = MaybeUnmapAddress(&input_addr);
-    bool translated = !mapped ? MaybeUntranslateAddress(&input_addr) : false;
+    bool translated = !mapped && MaybeUntranslateAddress(&input_addr);
     for (const auto& range : *kNonIdentifyingIPRanges) {
       if (IPAddressMatchesPrefix(input_addr, range.ip_addr,
                                  range.prefix_length)) {

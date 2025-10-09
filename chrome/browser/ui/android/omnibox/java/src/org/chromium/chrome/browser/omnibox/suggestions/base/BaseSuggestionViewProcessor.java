@@ -38,7 +38,6 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.GURL;
 
 import java.util.List;
-import java.util.Optional;
 
 /** A class that handles base properties and model for most suggestions. */
 @NullMarked
@@ -47,7 +46,7 @@ public abstract class BaseSuggestionViewProcessor implements SuggestionProcessor
     protected final Context mContext;
     protected final SuggestionHost mSuggestionHost;
     private final ActionChipsProcessor mActionChipsProcessor;
-    private final Optional<OmniboxImageSupplier> mImageSupplier;
+    private final @Nullable OmniboxImageSupplier mImageSupplier;
     private final int mDesiredFaviconWidthPx;
     private final int mDecorationImageSizePx;
     private final int mSuggestionSizePx;
@@ -262,7 +261,10 @@ public abstract class BaseSuggestionViewProcessor implements SuggestionProcessor
             fetchImage(model, suggestion.getImageUrl());
         }
 
-        addActionButtonIfAvailable(suggestion, model, position);
+        // Action button should not be provided in the hub.
+        if (input.getPageClassification() != PageClassification.ANDROID_HUB_VALUE) {
+            addActionButtonIfAvailable(suggestion, model, position);
+        }
     }
 
     private void addActionButtonIfAvailable(
@@ -275,9 +277,13 @@ public abstract class BaseSuggestionViewProcessor implements SuggestionProcessor
                     model,
                     List.of(
                             new Action(
-                                    OmniboxDrawableState.forSmallIcon(
-                                            mContext, action.icon.iconRes, true),
+                                    OmniboxDrawableState.forSmallIconWithIncognitoVariant(
+                                            mContext,
+                                            action.icon.buttonIconRes,
+                                            action.icon.incognitoButtonIconRes,
+                                            action.icon.tintWithTextColor),
                                     action.accessibilityHint,
+                                    null,
                                     () -> {
                                         mSuggestionHost.onOmniboxActionClicked(action, position);
                                     })));
@@ -288,15 +294,11 @@ public abstract class BaseSuggestionViewProcessor implements SuggestionProcessor
 
     @Override
     @CallSuper
-    public void onOmniboxSessionStateChange(boolean activated) {
-        mActionChipsProcessor.onOmniboxSessionStateChange(activated);
-    }
+    public void onOmniboxSessionStateChange(boolean activated) {}
 
     @Override
     @CallSuper
-    public void onSuggestionsReceived() {
-        mActionChipsProcessor.onSuggestionsReceived();
-    }
+    public void onSuggestionsReceived() {}
 
     /**
      * Apply In-Place highlight to matching sections of Suggestion text.
@@ -344,17 +346,16 @@ public abstract class BaseSuggestionViewProcessor implements SuggestionProcessor
      * @param url Target URL the suggestion points to.
      */
     protected void fetchSuggestionFavicon(PropertyModel model, GURL url) {
-        mImageSupplier.ifPresent(
-                s ->
-                        s.fetchFavicon(
-                                url,
-                                icon -> {
-                                    if (icon != null) {
-                                        setOmniboxDrawableState(
-                                                model,
-                                                OmniboxDrawableState.forFavIcon(mContext, icon));
-                                    }
-                                }));
+        if (mImageSupplier != null) {
+            mImageSupplier.fetchFavicon(
+                    url,
+                    icon -> {
+                        if (icon != null) {
+                            setOmniboxDrawableState(
+                                    model, OmniboxDrawableState.forFavIcon(mContext, icon));
+                        }
+                    });
+        }
     }
 
     /**
@@ -365,16 +366,15 @@ public abstract class BaseSuggestionViewProcessor implements SuggestionProcessor
      * @param imageUrl the URL of the image to retrieve and decode
      */
     protected void fetchImage(PropertyModel model, GURL imageUrl) {
-        mImageSupplier.ifPresent(
-                s ->
-                        s.fetchImage(
-                                imageUrl,
-                                bitmap -> {
-                                    if (bitmap != null) {
-                                        setOmniboxDrawableState(
-                                                model,
-                                                OmniboxDrawableState.forImage(mContext, bitmap));
-                                    }
-                                }));
+        if (mImageSupplier != null) {
+            mImageSupplier.fetchImage(
+                    imageUrl,
+                    bitmap -> {
+                        if (bitmap != null) {
+                            setOmniboxDrawableState(
+                                    model, OmniboxDrawableState.forImage(mContext, bitmap));
+                        }
+                    });
+        }
     }
 }

@@ -201,6 +201,7 @@ fontDisplay
 fontFamily
 fontFeatureSettings
 fontKerning
+fontLanguageOverride
 fontOpticalSizing
 fontPalette
 fontSize
@@ -261,6 +262,9 @@ insetInline
 insetInlineEnd
 insetInlineStart
 interactivity
+interestDelay
+interestDelayEnd
+interestDelayStart
 interpolateSize
 isolation
 item

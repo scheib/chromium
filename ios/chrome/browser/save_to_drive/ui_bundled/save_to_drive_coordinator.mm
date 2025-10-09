@@ -47,7 +47,7 @@
 @end
 
 @implementation SaveToDriveCoordinator {
-  raw_ptr<web::DownloadTask> _downloadTask;
+  raw_ptr<web::DownloadTask, DanglingUntriaged> _downloadTask;
   SaveToDriveMediator* _mediator;
   AccountPickerCoordinator* _accountPickerCoordinator;
   FileDestinationPickerViewController* _destinationPicker;
@@ -135,7 +135,6 @@
             (AccountPickerCoordinator*)accountPickerCoordinator
                didSelectIdentity:(id<SystemIdentity>)identity
                     askEveryTime:(BOOL)askEveryTime {
-  CHECK(identity);
   [_mediator saveWithSelectedIdentity:identity];
 }
 

@@ -213,9 +213,6 @@
         Chrome has features that help you manage your internet data and how quickly you're able to load webpages.
 <ph name="BEGIN_LINK">BEGIN_LINK</ph>Learn more<ph name="END_LINK">END_LINK</ph>
       </message>
-      <message name="IDS_IOS_BEST_FEATURES_LENS_TITLE" desc="Title for the Lens Chrome iOS Best Features Promo">
-        Search with Google Lens
-      </message>
       <message name="IDS_IOS_BEST_FEATURES_LOCKED_INCOGNITO_FIRST_STEP" desc="The first step to setting up Locked Incognito tabs">
         Open Chrome Settings
       </message>
@@ -257,12 +254,6 @@
       </message>
       <message name="IDS_IOS_CHANGE_COMPROMISED_PASSWORD_DESCRIPTION_BRANDED" desc="Text inside Password Details screen shown when password was compromised. [iOS only]" meaning="Text which explains the user that current password is compromised and it should be changed.">
           Your password was exposed in a data breach. Google Password Manager recommends changing it now.
-      </message>
-      <message name="IDS_IOS_CLEAR_BROWSING_DATA_FOOTER_SIGN_OUT_EVERY_WEBSITE" desc="Footer message in the settings to clear browsing data that allows user to sign out of Chrome to sign out their Google account from all websites. [iOS only]">
-        To sign out of your Google Account on all websites, <ph name="BEGIN_LINK">BEGIN_LINK</ph>sign out of Chrome<ph name="END_LINK">END_LINK</ph>.
-      </message>
-      <message name="IDS_IOS_CLEAR_BROWSING_DATA_HISTORY_NOTICE_DESCRIPTION" desc="Description of the dialog informing the user that their Chrome browsing history was deleted, but other forms of history can still be found on Google My Activity.">
-        The selected data has been removed from Chrome and synced devices. Your Google Account may have other forms of browsing history like searches and activity from other Google services at history.google.com.
       </message>
       <message name="IDS_IOS_CLEAR_BROWSING_DATA_HISTORY_NOTICE_TITLE" desc="Title of a dialog that informs the user that the deletion of Chrome's browsing data has been completed.">
         Deleted Chrome data
@@ -733,6 +724,9 @@ Only someone with your passphrase can read your encrypted data. The passphrase i
       <message name="IDS_IOS_NOTIFICATIONS_OPT_IN_TIPS_SETTINGS_TOGGLE_MESSSAGE" desc="The label for the notification opt-in toggle message for tips notifications.">
         Tips on getting the most out of Chrome.
       </message>
+      <message name="IDS_IOS_NOTIFICATIONS_TIPS_AUTOFILL_TITLE" desc="Text for the title of a Tips notification that encourages the user to save their passwords.">
+        Chrome Tip: Save Passwords
+      </message>
       <message name="IDS_IOS_NOTIFICATIONS_TIPS_CPE_BODY" desc="Text for the body of a Tips notification that encourages the user to enable the CPE.">
         To easily get your saved passwords in other apps, choose Chrome for Autofill.
       </message>
@@ -756,6 +750,9 @@ Only someone with your passphrase can read your encrypted data. The passphrase i
       </message>
       <message name="IDS_IOS_NOTIFICATIONS_TIPS_ENHANCED_SAFE_BROWSING_TITLE" desc="Text for the title of a Tips notification that encourages the user to enable Enhanced Safe Browsing">
         Chrome Tip: Get Chrome's strongest security
+      </message>
+      <message name="IDS_IOS_NOTIFICATIONS_TIPS_ENHANCED_SAFE_BROWSING_TITLE_FROM_DESKTOP" desc="Text for the title of a Tips notification that encourages the user to enable Enhanced Safe Browsing.">
+        Chrome Tip: Enhanced Safe Browsing
       </message>
       <message name="IDS_IOS_NOTIFICATIONS_TIPS_LENS_OVERLAY_TITLE" desc="Text for the title of a Tips notification that encourages the user to use the Lens Overlay feature.">
         Chrome Tip: Search what you see
@@ -804,6 +801,17 @@ Only someone with your passphrase can read your encrypted data. The passphrase i
       </message>
       <message name="IDS_IOS_PARCEL_TRACKING_INFOBAR_PACKAGE_ALREADY_TRACKED_SUBTITLE" desc="Text for the subtitle string of the Parcel Tracking 'Package Already Tracked' infobar.">
         This package has already been tracked on Chrome.
+      </message>
+      <message name="IDS_IOS_PASSKEY_ENROLLMENT_FOOTER_MESSAGE" desc="Message displayed at the bottom of the passkey enrollement welcome screen, but just over the primary action button. Lets the user know to which account the passkey they're creating will be saved in if they do to tap the primary action button and keep going with the enrollment process.">
+        This passkey will be saved to Google Password Manager for <ph name="USER_EMAIL">$1<ex>peter.parker@gmail.com</ex></ph>
+      </message>
+      <message name="IDS_IOS_PASSKEY_ENROLLMENT_TITLE" desc="Title of the screen shown when the user needs to create their Google Password Manager pin to set up and use passkeys with their Google Account.">
+        Start saving passkeys with Google Password Manager
+      </message>
+      <message name="IDS_IOS_PASSKEY_PARTIAL_BOOTSTRAPPING_SUBTITLE" desc="Subtitle of the screen shown when the user needs to create their Google Password Manager pin to set up passkeys on their device.">
+        To keep your passkeys safe, you’ll first need to create a recovery PIN.
+
+        Passkeys are saved in Google Password Manager, which lets you use them in Chrome on any device.
       </message>
       <message name="IDS_IOS_PASSWORD_BOTTOM_SHEET_TITLE" desc="Title of the password bottom sheet. [iOS only]">
           Google Password Manager
@@ -1063,17 +1071,11 @@ For more settings that use data to improve your Chrome experience, go to <ph nam
       <message name="IDS_IOS_SET_UP_LIST_DESCRIPTION" desc="Description for the Set Up List - a list of tasks the user might want to complete when first using Chrome.">
           Complete these suggested actions below to get the most out of Chrome.
       </message>
-      <message name="IDS_IOS_SET_UP_LIST_HIDE_MODULE_CONTEXT_MENU_TITLE" desc="Title for the long-press context menu for the Set Up List module.">
-          This card shows you suggestions on how to get the most out of Chrome.
-      </message>
       <message name="IDS_IOS_SET_UP_LIST_NOTIFICATIONS_DESCRIPTION" desc="Description for the Set Up List item that encourages the user to enable Chrome notifications.">
         Keep up with price tracking updates and Chrome tips.
       </message>
       <message name="IDS_IOS_SET_UP_LIST_NOTIFICATIONS_SHORT_DESCRIPTION" desc="Description for the Set Up List item that encourages the user to enable Chrome notifications.">
         Keep up with helpful Chrome tips and more.
-      </message>
-      <message name="IDS_IOS_SET_UP_LIST_TIPS_TITLE" desc="Title for the Set Up List (a variation that mentions Tips) - a list of tasks the user might want to complete when first using Chromium.">
-        Chrome Tips
       </message>
       <message name="IDS_IOS_SHORT_PRODUCT_NAME" desc="The Chrome application short name">
         Chrome

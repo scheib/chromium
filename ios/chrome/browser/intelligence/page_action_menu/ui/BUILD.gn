@@ -4,8 +4,11 @@
 
 source_set("ui") {
   sources = [
+    "page_action_menu_consumer.h",
     "page_action_menu_entrypoint_view.h",
     "page_action_menu_entrypoint_view.mm",
+    "page_action_menu_feature.h",
+    "page_action_menu_feature.mm",
     "page_action_menu_mutator.h",
     "page_action_menu_view_controller.h",
     "page_action_menu_view_controller.mm",
@@ -14,6 +17,7 @@ source_set("ui") {
   deps = [
     "//build:branding_buildflags",
     "//ios/chrome/app/strings",
+    "//ios/chrome/browser/intelligence/bwg/metrics",
     "//ios/chrome/browser/intelligence/bwg/utils:constants",
     "//ios/chrome/browser/intelligence/features",
     "//ios/chrome/browser/intelligence/page_action_menu/utils",

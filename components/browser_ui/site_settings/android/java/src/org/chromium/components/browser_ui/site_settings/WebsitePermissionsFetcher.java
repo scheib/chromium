@@ -15,7 +15,7 @@ import org.chromium.base.CommandLine;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.components.browsing_data.content.BrowsingDataInfo;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.content_settings.SessionModel;
 import org.chromium.components.permissions.PermissionsAndroidFeatureList;
@@ -25,17 +25,16 @@ import org.chromium.content_public.browser.ContentFeatureList;
 import org.chromium.content_public.browser.ContentFeatureMap;
 import org.chromium.content_public.browser.HostZoomMap;
 import org.chromium.content_public.common.ContentSwitches;
-import org.chromium.device.DeviceFeatureList;
-import org.chromium.device.DeviceFeatureMap;
 import org.chromium.url.Origin;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 
 /**
@@ -354,17 +353,6 @@ public class WebsitePermissionsFetcher {
                 return;
             }
 
-            // The serial guard permission controls access to the Web Serial API, which enables
-            // sites to request access to connect specific serial ports. Users are presented with a
-            // chooser prompt in which they must select the serial port they would like to allow the
-            // site to connect to. Therefore, this permission also displays a list of permitted
-            // serial ports that each site can connect to.
-            // Remove this check after the flag is removed.
-            if (contentSettingsType == ContentSettingsType.SERIAL_GUARD
-                    && !DeviceFeatureMap.isEnabled(DeviceFeatureList.BLUETOOTH_RFCOMM_ANDROID)) {
-                return;
-            }
-
             switch (websitePermissionsType) {
                 case CONTENT_SETTING_EXCEPTION:
                     queue.add(new ExceptionInfoFetcher(contentSettingsType));
@@ -388,7 +376,7 @@ public class WebsitePermissionsFetcher {
         private Website findOrCreateSite(
                 String origin,
                 @Nullable String embedder,
-                @ContentSettingValues @Nullable Integer contentSetting) {
+                @ContentSetting @Nullable Integer contentSetting) {
             // Ensure that the origin parameter is actually an origin or a wildcard.
             // The purpose of the check is to prevent duplicate entries in the list when getting a
             // mix of origins and hosts. Except, in the case of the Zoom category, where we want to
@@ -434,7 +422,7 @@ public class WebsitePermissionsFetcher {
                             mBrowserContextHandle, contentSettingsType)) {
                 String address = exception.getPrimaryPattern();
                 String embedder = exception.getSecondaryPattern();
-                @ContentSettingValues
+                @ContentSetting
                 @Nullable Integer contentSetting = null;
 
                 if (isEmbeddedPermission
@@ -466,8 +454,7 @@ public class WebsitePermissionsFetcher {
                 // To avoid collapsing addresses with and without wildcards into the same row,
                 // convert the embedder to add the scheme or the wildcard to create a
                 // unique key (and thus row) per pattern.
-                if (mSiteSettingsDelegate.isDisplayWildcardInContentSettingsEnabled()
-                        && embedder != null) {
+                if (embedder != null && !embedder.isEmpty()) {
                     embedder =
                             containsPatternWildcards(embedder)
                                     ? embedder
@@ -505,9 +492,18 @@ public class WebsitePermissionsFetcher {
          * A queue used to store the sequence of tasks to run to fetch the website preferences. Each
          * task is run sequentially, and some of the tasks may run asynchronously.
          */
-        private static class TaskQueue extends LinkedList<Task> {
+        private static class TaskQueue {
+            private final Queue<Task> mTasks = new ArrayDeque<>();
+
+            void add(Task task) {
+                mTasks.add(task);
+            }
+
             void next() {
-                if (!isEmpty()) removeFirst().runAsync(this);
+                Task t = mTasks.poll();
+                if (t != null) {
+                    t.runAsync(this);
+                }
             }
         }
 

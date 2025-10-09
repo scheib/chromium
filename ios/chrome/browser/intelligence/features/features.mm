@@ -9,17 +9,13 @@
 #import "base/time/time.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 
-BASE_FEATURE(kEnhancedCalendar,
-             "EnhancedCalendar",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEnhancedCalendar, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsEnhancedCalendarEnabled() {
   return base::FeatureList::IsEnabled(kEnhancedCalendar);
 }
 
-BASE_FEATURE(kPageActionMenu,
-             "PageActionMenu",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kPageActionMenu, base::FEATURE_DISABLED_BY_DEFAULT);
 
 const char kPageActionMenuDirectEntryPointParam[] =
     "PageActionMenuDirectEntryPoint";
@@ -31,9 +27,26 @@ bool IsPageActionMenuEnabled() {
   return base::FeatureList::IsEnabled(kPageActionMenu);
 }
 
-BASE_FEATURE(kGeminiCrossTab,
-             "GeminiCrossTab",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kProactiveSuggestionsFramework, base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsProactiveSuggestionsFrameworkEnabled() {
+  return base::FeatureList::IsEnabled(kProactiveSuggestionsFramework);
+}
+
+BASE_FEATURE(kAskGeminiChip, base::FEATURE_DISABLED_BY_DEFAULT);
+
+const char kAskGeminiChipUseSnackbar[] = "AskGeminiChipUseSnackbar";
+
+bool IsAskGeminiChipEnabled() {
+  return base::FeatureList::IsEnabled(kAskGeminiChip);
+}
+
+bool IsAskGeminiSnackbarEnabled() {
+  return base::GetFieldTrialParamByFeatureAsBool(
+      kAskGeminiChip, kAskGeminiChipUseSnackbar, false);
+}
+
+BASE_FEATURE(kGeminiCrossTab, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsGeminiCrossTabEnabled() {
   if (!IsPageActionMenuEnabled()) {
@@ -75,6 +88,9 @@ BWGPromoConsentVariations BWGPromoConsentVariationsParam() {
   if (param == 4) {
     return BWGPromoConsentVariations::kForceFRE;
   }
+  if (param == 5) {
+    return BWGPromoConsentVariations::kSkipNewUserDelay;
+  }
   return BWGPromoConsentVariations::kDisabled;
 }
 
@@ -83,9 +99,12 @@ bool ShouldForceBWGPromo() {
          BWGPromoConsentVariations::kForceFRE;
 }
 
-BASE_FEATURE(kBWGPromoConsent,
-             "BWGPromoConsent",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+bool ShouldSkipBWGPromoNewUserDelay() {
+  return BWGPromoConsentVariationsParam() ==
+         BWGPromoConsentVariations::kSkipNewUserDelay;
+}
+
+BASE_FEATURE(kBWGPromoConsent, base::FEATURE_DISABLED_BY_DEFAULT);
 
 const char kExplainGeminiEditMenuParams[] = "PositionForExplainGeminiEditMenu";
 
@@ -101,35 +120,55 @@ PositionForExplainGeminiEditMenu ExplainGeminiEditMenuPosition() {
   return PositionForExplainGeminiEditMenu::kDisabled;
 }
 
-BASE_FEATURE(kExplainGeminiEditMenu,
-             "ExplainGeminiEditMenu",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kExplainGeminiEditMenu, base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kBWGPreciseLocation,
-             "BWGPreciseLocation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kBWGPreciseLocation, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsBWGPreciseLocationEnabled() {
   CHECK(IsPageActionMenuEnabled());
   return base::FeatureList::IsEnabled(kBWGPreciseLocation);
 }
 
-BASE_FEATURE(kPageContextAnchorTags,
-             "PageContextAnchorTags",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kPageContextAnchorTags, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsPageContextAnchorTagsEnabled() {
   return base::FeatureList::IsEnabled(kPageContextAnchorTags);
 }
 
-BASE_FEATURE(kGeminiForManagedAccounts,
-             "GeminiForManagedAccounts",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kGeminiForManagedAccounts, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsGeminiAvailableForManagedAccounts() {
   return base::FeatureList::IsEnabled(kGeminiForManagedAccounts);
 }
 
-BASE_FEATURE(kAIHubNewBadge,
-             "AIHubNewBadge",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAIHubNewBadge, base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool ShouldDeleteGeminiConsentPref() {
+  return base::FeatureList::IsEnabled(kDeleteGeminiConsentPref);
+}
+
+BASE_FEATURE(kDeleteGeminiConsentPref, base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kSmartTabGrouping, base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsSmartTabGroupingEnabled() {
+  return base::FeatureList::IsEnabled(kSmartTabGrouping);
+}
+
+BASE_FEATURE(kPersistTabContext, base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsPersistTabContextEnabled() {
+  if (IsSmartTabGroupingEnabled()) {
+    return true;
+  }
+  return base::FeatureList::IsEnabled(kPersistTabContext);
+}
+
+BASE_FEATURE(kGeminiNavigationPromo, base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsGeminiNavigationPromoEnabled() {
+  if (!IsPageActionMenuEnabled()) {
+    return false;
+  }
+  return base::FeatureList::IsEnabled(kGeminiNavigationPromo);
+}

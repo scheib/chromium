@@ -18,7 +18,7 @@
 #include "components/segmentation_platform/public/trigger.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/webid/identity_request_dialog_controller.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 using AccountSelectionCallback =
     content::IdentityRequestDialogController::AccountSelectionCallback;
@@ -48,16 +48,18 @@ class IdentityDialogController
   // This enum describes the user action taken when the UI shown uses
   // segmentation platform's UI volume recommendation and is used for
   // histograms. Do not remove or modify existing values, but you may add new
-  // values at the end. This enum should be kept in sync with FedCmUserAction in
-  // tools/metrics/histograms/enums.xml.
+  // values at the end.
+  // LINT.IfChange(UserAction)
+
   enum class UserAction {
     // kSuccess = 0,  // Deprecated.
     kIgnored = 1,
     kClosed = 2,
     kSuccess = 3,
-
     kMaxValue = kSuccess
   };
+
+  // LINT.ThenChange(//tools/metrics/histograms/metadata/blink/enums.xml:FedCmUserAction)
 
   // content::IdentityRequestDelegate
   int GetBrandIconMinimumSize(blink::mojom::RpMode rp_mode) override;

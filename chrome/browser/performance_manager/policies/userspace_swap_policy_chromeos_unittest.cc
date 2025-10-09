@@ -82,7 +82,6 @@ class MockUserspaceSwapPolicy : public UserspaceSwapPolicy {
     // Create a simple starting config that can be modified as needed for tests.
     // NOTE: We only initialize the configuration options which are used by the
     // policy.
-    UNSAFE_TODO(memset(&test_config_, 0, sizeof(test_config_)));
 
     test_config_.enabled = true;
     test_config_.graph_walk_frequency = base::Seconds(10);
@@ -230,7 +229,7 @@ TEST_F(UserspaceSwapPolicyTest, ValidateGraphWalkFrequencyModeratePressure) {
   // Triger memory pressure and we should observe the walk since we've never
   // walked before.
   base::MemoryPressureListener::SimulatePressureNotification(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE);
+      base::MEMORY_PRESSURE_LEVEL_MODERATE);
   auto initial_walk_time = base::TimeTicks::Now();
   FastForwardBy(base::Seconds(1));
   ASSERT_EQ(initial_walk_time, policy()->get_last_graph_walk());
@@ -240,7 +239,7 @@ TEST_F(UserspaceSwapPolicyTest, ValidateGraphWalkFrequencyModeratePressure) {
   // notification.
   FastForwardBy(base::Seconds(1));
   base::MemoryPressureListener::SimulatePressureNotification(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE);
+      base::MEMORY_PRESSURE_LEVEL_MODERATE);
   // Since it's been less than the graph walk frequency we don't expect to walk.
   ASSERT_EQ(initial_walk_time, policy()->get_last_graph_walk());
 
@@ -248,7 +247,7 @@ TEST_F(UserspaceSwapPolicyTest, ValidateGraphWalkFrequencyModeratePressure) {
   // again.
   FastForwardBy(policy()->config().graph_walk_frequency);
   base::MemoryPressureListener::SimulatePressureNotification(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE);
+      base::MEMORY_PRESSURE_LEVEL_MODERATE);
 
   FastForwardBy(base::Seconds(1));
   ASSERT_NE(initial_walk_time, policy()->get_last_graph_walk());
@@ -273,7 +272,7 @@ TEST_F(UserspaceSwapPolicyTest, OnlySwapWhenEligibleToSwap) {
 
   // Trigger moderate memory pressure to start the graph walk.
   base::MemoryPressureListener::SimulatePressureNotification(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE);
+      base::MEMORY_PRESSURE_LEVEL_MODERATE);
   FastForwardBy(base::Seconds(1));
 }
 
@@ -293,7 +292,7 @@ TEST_F(UserspaceSwapPolicyTest, OnlySwapWhenEligibleToSwapTrue) {
 
   // Trigger moderate memory pressure to start the graph walk.
   base::MemoryPressureListener::SimulatePressureNotification(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE);
+      base::MEMORY_PRESSURE_LEVEL_MODERATE);
   FastForwardBy(base::Seconds(1));
 }
 
@@ -401,7 +400,7 @@ TEST_F(UserspaceSwapPolicyTest, ValidateProcessSwapFrequency) {
   for (int i = 0; i < 3; ++i) {
     FastForwardBy(policy()->config().graph_walk_frequency);
     base::MemoryPressureListener::SimulatePressureNotification(
-        base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE);
+        base::MEMORY_PRESSURE_LEVEL_MODERATE);
   }
 }
 

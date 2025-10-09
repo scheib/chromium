@@ -6,11 +6,13 @@ import("//build/buildflag_header.gni")
 import("//build/config/android/config.gni")
 import("//build/config/c++/c++.gni")
 import("//build/config/c++/modules.gni")
+import("//build/config/cast.gni")
 import("//build/config/chrome_build.gni")
 import("//build/config/chromeos/args.gni")
 import("//build/config/clang/clang.gni")
 import("//build/config/compiler/compiler.gni")
 import("//build/config/coverage/coverage.gni")
+import("//build/config/cronet/config.gni")
 import("//build/config/dcheck_always_on.gni")
 import("//build/config/gclient_args.gni")
 import("//build/config/host_byteorder.gni")
@@ -18,7 +20,6 @@ import("//build/config/pch.gni")
 import("//build/config/rust.gni")
 import("//build/config/ui.gni")
 import("//build/config/unwind.gni")
-import("//build/toolchain/cros/cros_config.gni")
 import("//build/toolchain/rbe.gni")
 import("//build/toolchain/toolchain.gni")
 import("//build_overrides/build.gni")
@@ -93,7 +94,8 @@ declare_args() {
   # nonsensical for said projects.
   clang_use_default_sample_profile =
       chrome_pgo_phase == 0 && build_with_chromium && is_official_build &&
-      ((is_android && !is_high_end_android) || chromeos_is_browser_only)
+      ((is_android && !is_high_end_android) || chromeos_is_browser_only) &&
+      !is_cronet_build
 
   # This configuration is used to select a default profile in Chrome OS based on
   # the microarchitectures we are using. This is only used if
@@ -200,10 +202,7 @@ declare_args() {
   # warning serves as a flip switch to allow a gradual migration of targets
   # away from the opt-in wexit_time_destructors config, and into the default
   # compiler config.
-  # TODO(crbug.com/40031409): This argument will eventually default to true,
-  # but ultimately the goal is for it to eventually be removed, once this mode
-  # is stable enough.
-  is_wexit_time_destructors_default = false
+  is_wexit_time_destructors_default = true
 }
 
 declare_args() {
@@ -272,7 +271,7 @@ assert(!(llvm_force_head_revision && use_remoteexec && host_os != "linux"),
 # Since this is referenced both when passing the file and when deciding which
 # warnings to enable, store it in a separate variable here.
 use_clang_warning_suppression_file =
-    !llvm_android_mainline && is_clang && clang_warning_suppression_file != ""
+    is_clang && clang_warning_suppression_file != ""
 
 # default_include_dirs ---------------------------------------------------------
 #
@@ -325,7 +324,12 @@ config("compiler") {
     configs += [ "//build/config/win:compiler" ]
   } else if (is_android) {
     configs += [ "//build/config/android:compiler" ]
-  } else if (is_linux || is_chromeos) {
+  } else if (is_chromeos) {
+    configs += [
+      "//build/config/linux:compiler",
+      "//build/config/chromeos:compiler",
+    ]
+  } else if (is_linux) {
     configs += [ "//build/config/linux:compiler" ]
   } else if (is_mac) {
     configs += [ "//build/config/mac:compiler" ]
@@ -580,6 +584,21 @@ config("compiler") {
   # ---------------------------------------
   if (is_chromeos) {
     cflags += [ "-Werror=poison-system-directories" ]
+
+    # Enable std::vector []-operator bounds checking.
+    cflags_cc += [ "-D__google_stl_debug_vector=1" ]
+
+    # Use -fdebug-types-section to avoid out-of-range relocations
+    # (crbug.com/1050819). When using ThinLTO, pass the equivalent
+    # to the code generator.
+    if (use_thin_lto) {
+      ldflags += [
+        "-Wl,-mllvm",
+        "-Wl,-generate-type-units",
+      ]
+    } else {
+      cflags += [ "-fdebug-types-section" ]
+    }
   }
 
   if (is_chromeos_device && current_toolchain == default_toolchain) {
@@ -663,9 +682,7 @@ config("compiler") {
 
     # TODO(crbug.com/40283598): This causes binary size growth and potentially
     # other problems.
-    # TODO(crbug.com/40284925): This isn't supported by Cronet's mainline llvm version.
-    if (default_toolchain != "//build/toolchain/cros:target" &&
-        !llvm_android_mainline) {
+    if (default_toolchain != "//build/toolchain/cros:target") {
       cflags += [
         "-mllvm",
         "-split-threshold-for-reg-with-hint=0",
@@ -690,8 +707,7 @@ config("compiler") {
     # TODO(crbug.com/376278218): This causes segfault on Linux ARM builds.
     # It also causes segfault on Linux s390x:
     # https://github.com/llvm/llvm-project/issues/149511
-    if (is_linux && use_lld && !llvm_android_mainline && current_cpu != "arm" &&
-        current_cpu != "s390x") {
+    if (is_linux && use_lld && current_cpu != "arm" && current_cpu != "s390x") {
       cflags += [ "-Wa,--crel,--allow-experimental-crel" ]
     }
   }
@@ -736,7 +752,7 @@ config("compiler") {
       assert(!use_cxx23)
       cflags_cc += [ "/std:c++17" ]
     } else if (use_cxx23) {
-      cflags_cc += [ "/std:c++23" ]
+      cflags_cc += [ "/std:c++23preview" ]
     } else {
       cflags_cc += [ "/std:c++20" ]
     }
@@ -1150,10 +1166,23 @@ config("compiler") {
     # abort instead of unwinding when panic occurs. In official builds, panics
     # abort immediately (this is configured in the stdlib) to keep binary size
     # down. So we unconditionally match behaviour in unofficial too.
-    rustflags += [
-      "-Cpanic=abort",
-      "-Zpanic_abort_tests",
-    ]
+    # AOSP does not allow the usage of unstable features. This means that
+    # we can't enable `immediate-abort` when building cronet in AOSP until
+    # it has been stabilized.
+    #
+    # TODO(crbug.com/447558108): Use immediate-abort in AOSP once stabilized.
+    if (is_official_build && !is_cronet_for_aosp_build) {
+      rustflags += [
+        "-Zunstable-options",
+        "-Cpanic=immediate-abort",
+        "-Zpanic_abort_tests",
+      ]
+    } else {
+      rustflags += [
+        "-Cpanic=abort",
+        "-Zpanic_abort_tests",
+      ]
+    }
   }
 
   # crbug.com/397463803: Set this until CrOS' user enumeration is done; its
@@ -1198,6 +1227,14 @@ config("libcxx_hardening") {
   # performance penalty but are considered a bare minimum for security.
   if (use_safe_libstdcxx) {
     defines += [ "_GLIBCXX_ASSERTIONS=1" ]
+  }
+
+  # Propagate all definitions for hardening to the swift compiler.
+  if (is_ios) {
+    swiftflags = []
+    foreach(_define, defines) {
+      swiftflags += [ "-Xcc=-D$_define" ]
+    }
   }
 }
 
@@ -1705,6 +1742,12 @@ config("compiler_deterministic") {
       # This removes absolute paths from .pcm files.
       "-Xclang",
       "-fmodule-file-home-is-cwd",
+
+      # Set a fixed dummy path to get deterministic module files even if the
+      # build happens in a different directory. See https://crbug.com/448270644
+      # for more context.
+      "-Xclang",
+      "-fmodules-cache-path=/not_exist_dummy_dir",
     ]
   }
 }
@@ -1763,7 +1806,8 @@ config("clang_revision") {
           "clang_revision=\"$_clang_revision\" but clang_version=\"$clang_version\". clang_version in build/toolchain/toolchain.gni is likely outdated.")
     }
 
-    if (toolchain_has_rust && _perform_consistency_checks) {
+    if (toolchain_has_rust && _perform_consistency_checks &&
+        !rust_force_head_revision) {
       # Ensure that the synced rust version matches what's in git.
       _rust_revision_lines =
           filter_include(read_file("//tools/rust/update_rust.py", "list lines"),
@@ -1921,7 +1965,7 @@ config("runtime_library") {
   # the C++ symbols. This config ensures the C++ symbols exist and are strong in
   # order to cause that replacement to occur by explicitly linking in clang's
   # compiler-rt library.
-  if (is_clang && !is_cronet_build) {
+  if (is_clang && !(is_a_target_toolchain && is_cronet_build)) {
     configs += [ "//build/config/clang:compiler_builtins" ]
   }
 
@@ -2004,8 +2048,6 @@ config("tot_warnings") {
   # Entries should generally require both is_clang and llvm_force_head_revision,
   # but may have additional constraints as well (e.g. only some OSes)
   if (is_clang && llvm_force_head_revision) {
-    # TODO(crbug.com/432275627): Fix and re-enable.
-    cflags += [ "-Wno-uninitialized-const-pointer" ]
   }
 }
 
@@ -2135,6 +2177,9 @@ config("default_warnings") {
 
       # TODO(crbug.com/376641662): Fix and re-enable.
       "-Wno-nontrivial-memcall",
+
+      # TODO(crbug.com/432275627): Fix and re-enable.
+      "-Wno-uninitialized-const-pointer",
     ]
 
     cflags_cc += [
@@ -2166,7 +2211,7 @@ config("default_warnings") {
       ]
     }
 
-    if (is_component_build && use_clang_warning_suppression_file && !is_win) {
+    if (is_component_build && use_clang_warning_suppression_file) {
       # Warn for globally unique objects which might get duplicated if built
       # into different components, due to hidden visibility. Only applicable
       # to component builds.
@@ -2190,17 +2235,6 @@ config("default_warnings") {
       ldflags += [ "-Wno-version-check" ]
     }
 
-    # Some builders, such as Cronet, use a different version of Clang than
-    # Chromium. This can cause minor errors when compiling Chromium changes. We
-    # want to avoid these errors.
-    if (llvm_android_mainline) {
-      cflags += [
-        "-Wno-error=unknown-warning-option",
-        "-Wno-error=unused-command-line-argument",
-        "-Wno-error=unknown-pragmas",
-      ]
-    }
-
     # Disable the GNU line marker warning when building a target with Icecc,
     # ccache, or both. This warning appears frequently when compiling
     # files that use GNU-style line markers with Clang and Icecc. It can
@@ -2210,9 +2244,10 @@ config("default_warnings") {
       cflags += [ "-Wno-gnu-line-marker" ]
     }
 
-    if (is_wexit_time_destructors_default) {
+    if (is_wexit_time_destructors_default &&
+        use_clang_warning_suppression_file) {
       # TODO(crbug.com/40031409): We are migrating towards making this warning
-      # enabled by default, and once that is completed, the warning
+      # enabled by default. Once that is completed, the warning
       # should always be added for clang builds.
       cflags += [ "-Wexit-time-destructors" ]
     }
@@ -2313,7 +2348,7 @@ config("chromium_code") {
       # ChromeOS's toolchain supports a high-quality _FORTIFY_SOURCE=3
       # implementation with a few custom glibc patches. Use that if it's
       # available.
-      if (is_chromeos_device && !lacros_use_chromium_toolchain) {
+      if (is_chromeos_device) {
         fortify_level = "3"
       }
       defines += [ "_FORTIFY_SOURCE=" + fortify_level ]
@@ -2691,6 +2726,14 @@ if (is_win) {
 
     common_optimize_on_ldflags += [ "-Wl,--gc-sections" ]
   }
+
+  if (chrome_pgo_phase == 1 && target_os == "android") {
+    # LLVM's SLP vectorizer is causing compiler hangs when run on PGO
+    # instrumented code. Disable it until that's fixed. This does not affect the
+    # data generated by the instrumentation, but may slow it down slightly.
+    # TODO(crbug.com/445202451): Remove this after rolling in a fixed compiler.
+    common_optimize_on_cflags += [ "-fno-slp-vectorize" ]
+  }
 }
 
 config("default_stack_frames") {
@@ -2752,7 +2795,7 @@ config("optimize") {
     # -Os in clang is more of a size-conscious -O2 than "size at any cost"
     # (AKA -Oz).
 
-    if (is_fuchsia) {
+    if (is_fuchsia || enable_cast_receiver) {
       cflags = [ "-Oz" ] + common_optimize_on_cflags
     } else {
       cflags = [ "-Os" ] + common_optimize_on_cflags
@@ -3071,16 +3114,25 @@ config("symbols") {
       swiftflags = [ "-g" ]
     }
 
+    split_dwarf_flags = []
     if (use_debug_fission) {
-      cflags += [ "-gsplit-dwarf" ]
+      split_dwarf_flags += [ "-gsplit-dwarf" ]
+
+      # When building for ChromeOS, turn off split DWARF inlining.
+      # Breakpad does not correctly handle files generated with
+      # that feature (https://g-issues.chromium.org/issues/41312543).
+      if (is_chromeos) {
+        split_dwarf_flags += [ "-fno-split-dwarf-inlining" ]
+      }
     }
+    cflags += split_dwarf_flags
     asmflags = cflags
     ldflags = []
 
     # Split debug info with all thinlto builds except apple.
     # thinlto requires -gsplit-dwarf in ldflags.
     if (use_debug_fission && use_thin_lto && !is_apple) {
-      ldflags += [ "-gsplit-dwarf" ]
+      ldflags += split_dwarf_flags
     }
 
     _enable_gdb_index = symbol_level == 2 && !is_apple && use_lld && !is_wasm

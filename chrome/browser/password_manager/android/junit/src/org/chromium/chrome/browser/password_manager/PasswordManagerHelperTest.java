@@ -5,13 +5,9 @@
 package org.chromium.chrome.browser.password_manager;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -56,7 +52,6 @@ import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.chrome.browser.loading_modal.LoadingModalDialogCoordinator;
 import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.CredentialManagerBackendException;
 import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.CredentialManagerError;
-import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.pwm_disabled.PasswordCsvDownloadFlowController;
 import org.chromium.chrome.browser.pwm_disabled.PasswordCsvDownloadFlowControllerFactory;
@@ -64,14 +59,10 @@ import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.components.browser_ui.settings.SettingsCustomTabLauncher;
 import org.chromium.components.browser_ui.settings.SettingsNavigation;
-import org.chromium.components.browser_ui.test.BrowserUiDummyFragmentActivity;
-import org.chromium.components.prefs.PrefService;
+import org.chromium.components.browser_ui.test.BrowserUiTestFragmentActivity;
 import org.chromium.components.signin.base.CoreAccountInfo;
-import org.chromium.components.sync.DataType;
 import org.chromium.components.sync.SyncService;
 import org.chromium.components.sync.UserSelectableType;
-import org.chromium.components.user_prefs.UserPrefs;
-import org.chromium.components.user_prefs.UserPrefsJni;
 import org.chromium.google_apis.gaia.GaiaId;
 import org.chromium.google_apis.gaia.GoogleServiceAuthError;
 import org.chromium.google_apis.gaia.GoogleServiceAuthErrorState;
@@ -103,10 +94,6 @@ public class PasswordManagerHelperTest {
 
     @Mock private Profile mProfile;
 
-    @Mock private PrefService mPrefService;
-
-    @Mock private UserPrefs.Natives mUserPrefsJniMock;
-
     @Mock private PasswordManagerUtilBridge.Natives mPasswordManagerUtilBridgeJniMock;
 
     @Mock private SyncService mSyncServiceMock;
@@ -125,8 +112,6 @@ public class PasswordManagerHelperTest {
     @Mock private LoadingModalDialogCoordinator mLoadingModalDialogCoordinator;
     private LoadingModalDialogCoordinator.Observer mLoadingDialogCoordinatorObserver;
 
-    @Mock private CustomTabIntentHelper mCustomTabIntentHelper;
-
     private SettingsCustomTabLauncher mSettingsCustomTabLauncher;
 
     private PasswordManagerHelper mPasswordManagerHelper;
@@ -134,10 +119,10 @@ public class PasswordManagerHelperTest {
     @Before
     public void setUp() throws CredentialManagerBackendException {
         // TODO(crbug.com/40940922): Parametrise the tests for local and account.
-        UserPrefsJni.setInstanceForTesting(mUserPrefsJniMock);
         PasswordManagerUtilBridgeJni.setInstanceForTesting(mPasswordManagerUtilBridgeJniMock);
+        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(anyBoolean()))
+                .thenReturn(true);
         mPasswordManagerHelper = new PasswordManagerHelper(mProfile);
-        when(mUserPrefsJniMock.get(mProfile)).thenReturn(mPrefService);
         SyncServiceFactory.setInstanceForTesting(mSyncServiceMock);
         when(mSyncServiceMock.isEngineInitialized()).thenReturn(true);
         when(mSyncServiceMock.getAuthError())
@@ -166,33 +151,6 @@ public class PasswordManagerHelperTest {
 
         SettingsNavigationFactory.setInstanceForTesting(mSettingsNavigationMock);
         mSettingsCustomTabLauncher = (Context context, String url) -> {};
-    }
-
-    @Test
-    public void testSyncCheckNoSyncConsent() {
-        when(mSyncServiceMock.hasSyncConsent()).thenReturn(false);
-        assertFalse(
-                PasswordManagerHelper.isSyncingPasswordsWithNoCustomPassphrase(mSyncServiceMock));
-    }
-
-    @Test
-    public void testActivelySyncingPasswordsWithNoCustomPassphrase() {
-        when(mSyncServiceMock.hasSyncConsent()).thenReturn(true);
-        when(mSyncServiceMock.getActiveDataTypes()).thenReturn(Set.of(DataType.PASSWORDS));
-        when(mSyncServiceMock.isEngineInitialized()).thenReturn(true);
-        when(mSyncServiceMock.isUsingExplicitPassphrase()).thenReturn(false);
-        assertTrue(
-                PasswordManagerHelper.isSyncingPasswordsWithNoCustomPassphrase(mSyncServiceMock));
-    }
-
-    @Test
-    public void testActivelySyncingPasswordsWithCustomPassphrase() {
-        when(mSyncServiceMock.hasSyncConsent()).thenReturn(true);
-        when(mSyncServiceMock.getActiveDataTypes()).thenReturn(Set.of(DataType.PASSWORDS));
-        when(mSyncServiceMock.isEngineInitialized()).thenReturn(true);
-        when(mSyncServiceMock.isUsingExplicitPassphrase()).thenReturn(true);
-        assertFalse(
-                PasswordManagerHelper.isSyncingPasswordsWithNoCustomPassphrase(mSyncServiceMock));
     }
 
     @Test
@@ -252,7 +210,7 @@ public class PasswordManagerHelperTest {
                 HistogramWatcher.newBuilder()
                         .expectIntRecord(
                                 PasswordMetricsUtil.ACCOUNT_GET_INTENT_ERROR_HISTOGRAM,
-                                CredentialManagerError.UNCATEGORIZED)
+                                CredentialManagerError.NO_ACCOUNT_NAME)
                         .expectIntRecord(
                                 PasswordMetricsUtil.ACCOUNT_GET_INTENT_SUCCESS_HISTOGRAM, 0)
                         .expectNoRecords(PasswordMetricsUtil.ACCOUNT_GET_INTENT_LATENCY_HISTOGRAM)
@@ -261,7 +219,7 @@ public class PasswordManagerHelperTest {
                                         .ACCOUNT_LAUNCH_CREDENTIAL_MANAGER_SUCCESS_HISTOGRAM)
                         .build();
         chooseToSyncPasswords();
-        returnErrorWhenFetchingIntentForAccount(CredentialManagerError.UNCATEGORIZED);
+        returnErrorWhenFetchingIntentForAccount(CredentialManagerError.NO_ACCOUNT_NAME);
 
         mPasswordManagerHelper.showPasswordSettings(
                 ContextUtils.getApplicationContext(),
@@ -710,32 +668,13 @@ public class PasswordManagerHelperTest {
     }
 
     @Test
-    public void testUseAccountSettings() {
-        when(mSyncServiceMock.isEngineInitialized()).thenReturn(false);
-
-        assertTrue(PasswordManagerHelper.canUseAccountSettings());
-    }
-
-    @Test
-    public void testCannotUseAccountSettingsWithNoBackend() {
-        when(mSyncServiceMock.isEngineInitialized()).thenReturn(false);
-
-        when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(false);
-
-        assertFalse(PasswordManagerHelper.canUseAccountSettings());
-    }
-
-    @Test
     public void testShowDownloadCsvDialogIfCsvIsPresentAndPwmNotAvailable() {
         when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(true);
-        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(false);
-        when(mPrefService.getBoolean(Pref.UPM_UNMIGRATED_PASSWORDS_EXPORTED)).thenReturn(true);
+        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(true)).thenReturn(false);
         LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(true);
 
         FragmentActivity testActivity =
-                Robolectric.buildActivity(BrowserUiDummyFragmentActivity.class).setup().get();
+                Robolectric.buildActivity(BrowserUiTestFragmentActivity.class).setup().get();
         setUpUpdatableGmsCore(testActivity);
 
         PasswordCsvDownloadFlowController mockController =
@@ -761,13 +700,11 @@ public class PasswordManagerHelperTest {
     @Test
     public void testShowDownloadCsvDialogIfCsvIsPresentAndPwmAvailable() {
         when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(true);
-        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(true);
+        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(true)).thenReturn(true);
         LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(true);
 
         FragmentActivity testActivity =
-                Robolectric.buildActivity(BrowserUiDummyFragmentActivity.class).setup().get();
+                Robolectric.buildActivity(BrowserUiTestFragmentActivity.class).setup().get();
         setUpUpdatableGmsCore(testActivity);
 
         PasswordCsvDownloadFlowController mockController =
@@ -793,14 +730,11 @@ public class PasswordManagerHelperTest {
     @Test
     public void testShowDownloadCsvDialogIfCsvIsPresentAndNoGms() {
         when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(true);
-        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(false);
-        when(mPrefService.getBoolean(Pref.UPM_UNMIGRATED_PASSWORDS_EXPORTED)).thenReturn(true);
+        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(true)).thenReturn(false);
         LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(true);
 
         FragmentActivity testActivity =
-                Robolectric.buildActivity(BrowserUiDummyFragmentActivity.class).setup().get();
+                Robolectric.buildActivity(BrowserUiTestFragmentActivity.class).setup().get();
 
         PasswordCsvDownloadFlowController mockController =
                 mock(PasswordCsvDownloadFlowController.class);
@@ -825,14 +759,11 @@ public class PasswordManagerHelperTest {
     @Test
     public void testShowPwmUnavailableDialogNoCsvNoGms() {
         when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(true);
-        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(false);
-        when(mPrefService.getBoolean(Pref.UPM_UNMIGRATED_PASSWORDS_EXPORTED)).thenReturn(true);
+        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(true)).thenReturn(false);
         LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(false);
 
         FragmentActivity testActivity =
-                Robolectric.buildActivity(BrowserUiDummyFragmentActivity.class).setup().get();
+                Robolectric.buildActivity(BrowserUiTestFragmentActivity.class).setup().get();
 
         mPasswordManagerHelper.showPasswordSettings(
                 testActivity,
@@ -851,14 +782,11 @@ public class PasswordManagerHelperTest {
     @Test
     public void testShowPwmUnavailableDialogNoCsvUpdatableGms() {
         when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(true);
-        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(false);
-        when(mPrefService.getBoolean(Pref.UPM_UNMIGRATED_PASSWORDS_EXPORTED)).thenReturn(true);
+        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(true)).thenReturn(false);
         LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(false);
 
         FragmentActivity testActivity =
-                Robolectric.buildActivity(BrowserUiDummyFragmentActivity.class).setup().get();
+                Robolectric.buildActivity(BrowserUiTestFragmentActivity.class).setup().get();
         setUpUpdatableGmsCore(testActivity);
         mPasswordManagerHelper.showPasswordSettings(
                 testActivity,
@@ -874,48 +802,9 @@ public class PasswordManagerHelperTest {
                 dialogModel.get(ModalDialogProperties.TITLE));
     }
 
-    @Test
-    public void testDoesntShowDialogIfExportNotFinished() {
-        when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(true);
-        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(false);
-        when(mPrefService.getBoolean(Pref.UPM_UNMIGRATED_PASSWORDS_EXPORTED)).thenReturn(false);
-        LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(false);
-
-        FragmentActivity testActivity =
-                Robolectric.buildActivity(BrowserUiDummyFragmentActivity.class).setup().get();
-        setUpUpdatableGmsCore(testActivity);
-        mPasswordManagerHelper.showPasswordSettings(
-                testActivity,
-                ManagePasswordsReferrer.CHROME_SETTINGS,
-                mModalDialogManagerSupplier,
-                /* managePasskeys= */ false,
-                TEST_NO_EMAIL_ADDRESS,
-                mSettingsCustomTabLauncher);
-
-        // Check that the unavailability dialog is not shown.
-        PropertyModel dialogModel = mModalDialogManager.getCurrentDialogForTest();
-        assertNull(dialogModel);
-
-        // Check that the download CSV dialog is not shown.
-        PasswordCsvDownloadFlowController mockController =
-                mock(PasswordCsvDownloadFlowController.class);
-        PasswordCsvDownloadFlowControllerFactory.setControllerForTesting(mockController);
-        verify(mockController, never())
-                .showDialogAndStartFlow(
-                        any(), any(), anyBoolean(), anyBoolean(), eq(mSettingsCustomTabLauncher));
-
-        // Check that the management UI is not shown (the pwm is unavailable).
-        verify(mCredentialManagerLauncherMock, never())
-                .getLocalCredentialManagerIntent(anyInt(), any(), any());
-    }
-
     private void setUpPwmAvailableWithoutUnmigratedPasswords() {
         when(mBackendSupportHelperMock.isBackendPresent()).thenReturn(true);
-        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(true);
+        when(mPasswordManagerUtilBridgeJniMock.isPasswordManagerAvailable(true)).thenReturn(true);
         LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(false);
     }
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright 2025 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
@@ -8,6 +8,7 @@ import argparse
 import logging
 from util import jj_log
 from util import run_command
+from util import run_jj
 
 
 def _fetch(shallow: bool) -> None:
@@ -21,7 +22,7 @@ def _fetch(shallow: bool) -> None:
                            ignore_working_copy=True)
     assert len(history_limit) == 1
     history_limit = history_limit[0]['commit_id']
-    args.append(f'--shallow_exclude={history_limit}')
+    args.append(f'--shallow-exclude={history_limit}')
   run_command(args)
 
 
@@ -32,11 +33,9 @@ def main(args):
 
   logging.info('Rebasing onto main@origin')
   rebase_source = 'mutable()' if args.all else '@'
-  run_command(
-      ['jj', 'rebase', '-b', rebase_source, '-d', 'trunk()', '--skip-emptied'])
+  run_jj(['rebase', '-b', rebase_source, '-d', 'trunk()', '--skip-emptied'])
   # Skip-emptied with merge commits can produce weird shapes.
-  run_command(
-      ['jj', '--ignore-working-copy', 'simplify-parents', '-r', 'mutable()'])
+  run_jj(['simplify-parents', '-r', 'mutable()'], ignore_working_copy=True)
 
   while True:
     # This can fail if you've changed third-party repos. Since git fetch can be

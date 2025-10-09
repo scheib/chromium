@@ -34,8 +34,6 @@
 #include "base/trace_event/trace_log.h"
 #include "build/build_config.h"
 #include "components/embedder_support/switches.h"
-#include "components/tracing/common/trace_to_console.h"
-#include "components/tracing/common/tracing_switches.h"
 #include "content/app/content_main_runner_impl.h"
 #include "content/public/app/content_main_delegate.h"
 #include "content/public/common/content_switches.h"
@@ -103,8 +101,7 @@ void SetupSignalHandlers() {
   CHECK_EQ(0, sigemptyset(&empty_signal_set));
   CHECK_EQ(0, sigprocmask(SIG_SETMASK, &empty_signal_set, nullptr));
 
-  struct sigaction sigact;
-  UNSAFE_TODO(memset(&sigact, 0, sizeof(sigact)));
+  struct sigaction sigact = {};
   sigact.sa_handler = SIG_DFL;
   static const int signals_to_reset[] = {SIGHUP,  SIGINT,  SIGQUIT, SIGILL,
                                          SIGABRT, SIGFPE,  SIGSEGV, SIGALRM,
@@ -342,13 +339,6 @@ NO_STACK_PROTECTOR int RunContentProcess(
 
     base::trace_event::TraceLog::GetInstance()->AddOwnedEnabledStateObserver(
         base::WrapUnique(new TracingEnabledStateObserver));
-
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            ::switches::kTraceToConsole)) {
-      base::trace_event::TraceConfig trace_config =
-          tracing::GetConfigForTraceToConsole();
-      base::trace_event::TraceLog::GetInstance()->SetEnabled(trace_config);
-    }
   }
 
   if (IsSubprocess())

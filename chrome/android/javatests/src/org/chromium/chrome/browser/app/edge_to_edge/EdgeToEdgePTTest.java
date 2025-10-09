@@ -47,7 +47,6 @@ import org.chromium.ui.test.util.DeviceRestriction;
 })
 @EnableFeatures({
     "DynamicSafeAreaInsets",
-    "DynamicSafeAreaInsetsOnScroll",
     "DrawCutoutEdgeToEdge",
     ChromeFeatureList.EDGE_TO_EDGE_BOTTOM_CHIN
 })
@@ -96,7 +95,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On ntp the bottom chin should be VISIBLE_IF_OTHERS_VISIBLE.",
                 LayerVisibility.VISIBLE_IF_OTHERS_VISIBLE,
-                chinOnNtp.bottomChinElement.get().getLayerVisibility());
+                chinOnNtp.bottomChinElement.value().getLayerVisibility());
 
         // Navigate the page to another web page, ensure the page has the chin visible.
         var pair =
@@ -106,7 +105,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On a regular page the bottom chin should be always VISIBLE.",
                 LayerVisibility.VISIBLE,
-                chinOnWebPage.bottomChinElement.get().getLayerVisibility());
+                chinOnWebPage.bottomChinElement.value().getLayerVisibility());
 
         TransitAsserts.assertFinalDestination(regularPage);
     }
@@ -120,7 +119,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On ntp the bottom chin should be VISIBLE_IF_OTHERS_VISIBLE.",
                 LayerVisibility.VISIBLE_IF_OTHERS_VISIBLE,
-                chinOnNtp.bottomChinElement.get().getLayerVisibility());
+                chinOnNtp.bottomChinElement.value().getLayerVisibility());
 
         // Navigate the page to another web page, ensure the page has the chin visible.
         // On the hub, there's no "page", so don't set an expectation whether the page is opt-in.
@@ -129,7 +128,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On the hub the bottom chin should be always VISIBLE_IF_OTHERS_VISIBLE.",
                 LayerVisibility.VISIBLE_IF_OTHERS_VISIBLE,
-                chinOnHub.bottomChinElement.get().getLayerVisibility());
+                chinOnHub.bottomChinElement.value().getLayerVisibility());
 
         TransitAsserts.assertFinalDestination(tabSwitcher);
     }
@@ -143,7 +142,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On ntp the bottom chin should be VISIBLE_IF_OTHERS_VISIBLE.",
                 LayerVisibility.VISIBLE_IF_OTHERS_VISIBLE,
-                chinOnNtp.bottomChinElement.get().getLayerVisibility());
+                chinOnNtp.bottomChinElement.value().getLayerVisibility());
 
         // Navigate the page to another web page, ensure the page has the chin visible.
         var optInPage =
@@ -153,7 +152,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On a opt-in page the bottom chin should be VISIBLE_IF_OTHERS_VISIBLE.",
                 LayerVisibility.VISIBLE_IF_OTHERS_VISIBLE,
-                chinOnOptInPage.bottomChinElement.get().getLayerVisibility());
+                chinOnOptInPage.bottomChinElement.value().getLayerVisibility());
 
         TransitAsserts.assertFinalDestination(optInPage);
     }
@@ -167,7 +166,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On the blank page (not opt-in e2e), chin should be visible.",
                 LayerVisibility.VISIBLE,
-                chinOnBlankPage.bottomChinElement.get().getLayerVisibility());
+                chinOnBlankPage.bottomChinElement.value().getLayerVisibility());
 
         // Navigate the page to another web page, ensure the page has the chin visible.
         var optInPage =
@@ -177,7 +176,7 @@ public class EdgeToEdgePTTest {
         assertEquals(
                 "On a opt-in page the bottom chin should be VISIBLE_IF_OTHERS_VISIBLE.",
                 LayerVisibility.VISIBLE_IF_OTHERS_VISIBLE,
-                chinOnOptInPage.bottomChinElement.get().getLayerVisibility());
+                chinOnOptInPage.bottomChinElement.value().getLayerVisibility());
 
         TransitAsserts.assertFinalDestination(optInPage);
     }

@@ -14,6 +14,7 @@
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/types/pass_key.h"
+#include "content/browser/preloading/preload_serving_metrics_holder.h"
 #include "content/browser/preloading/prerender/prerender_attributes.h"
 #include "content/browser/preloading/prerender/prerender_final_status.h"
 #include "content/browser/preloading/speculation_rules/speculation_rules_tags.h"
@@ -396,7 +397,8 @@ class CONTENT_EXPORT PrerenderHost {
   }
 
   bool should_pause_javascript_execution() const {
-    return attributes_.should_pause_javascript_execution;
+    return attributes_.prerender_action_type ==
+           blink::mojom::SpeculationAction::kPrerenderUntilScript;
   }
 
   bool IsInitialNavigation(const NavigationRequest& navigation_request) const;
@@ -414,6 +416,11 @@ class CONTENT_EXPORT PrerenderHost {
   // Called when we stop blocking navigation while waiting for headers.
   void OnWaitingForHeadersFinished(WaitingForHeadersFinishedReason reason);
 
+  // Whether to allow cross-origin subframes to be prerendered.
+  bool AllowCrossOriginSubframeNavigation() const {
+    return allow_cross_origin_subframe_navigation_;
+  }
+
   // Returns true iff prefetch ahead of prerender is not available for this
   // prerender and this prerender should be aborted.
   //
@@ -429,6 +436,18 @@ class CONTENT_EXPORT PrerenderHost {
                                    FrameTreeNode& navigating_frame_tree_node);
 
   void NotifyReused();
+
+  // Called just before cancellation
+  void OnWillBeCancelled(const PrerenderCancellationReason& reason);
+
+  const PreloadPipelineInfo& preload_pipeline_info() const {
+    return *attributes_.preload_pipeline_info.get();
+  }
+
+  // Returns whether the initiator page is overriding user agents. The initiator
+  // page may be retrieved differently between renderer-initiated and
+  // browser-initiated prerender.
+  bool IsInitiatorOverridingUserAgent();
 
   base::WeakPtr<PrerenderHost> GetWeakPtr();
 
@@ -587,6 +606,11 @@ class CONTENT_EXPORT PrerenderHost {
   bool were_headers_received_ = false;
 
   const bool host_reused_ = false;
+
+  std::unique_ptr<PreloadServingMetrics>
+      prerender_initial_preload_serving_metrics_;
+  // True if cross-origin subframe navigations are allowed.
+  bool allow_cross_origin_subframe_navigation_ = false;
 
   base::WeakPtrFactory<PrerenderHost> weak_factory_{this};
 };

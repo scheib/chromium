@@ -17,7 +17,6 @@
 #include <sys/param.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
-#include <unistd.h>
 
 #include <algorithm>
 #include <iostream>
@@ -25,6 +24,7 @@
 
 #include "base/check.h"
 #include "base/files/file_util.h"
+#include "base/memory/page_size.h"
 #include "base/notimplemented.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
@@ -54,16 +54,17 @@
 
 namespace {
 
-uint64_t AmountOfVirtualMemory() {
+base::ByteCount AmountOfVirtualMemory() {
   struct rlimit limit;
   int result = getrlimit(RLIMIT_DATA, &limit);
   if (result != 0) {
     NOTREACHED();
   }
-  return limit.rlim_cur == RLIM_INFINITY ? 0 : limit.rlim_cur;
+  return base::ByteCount::FromUnsigned(
+      limit.rlim_cur == RLIM_INFINITY ? 0 : limit.rlim_cur);
 }
 using LazyVirtualMemory =
-    base::internal::LazySysInfoValue<uint64_t, AmountOfVirtualMemory>;
+    base::internal::LazySysInfoValue<base::ByteCount, AmountOfVirtualMemory>;
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 bool IsStatsZeroIfUnlimited(const base::FilePath& path) {
@@ -201,7 +202,7 @@ int SysInfo::NumberOfProcessors() {
 #endif  // !BUILDFLAG(IS_OPENBSD)
 
 // static
-uint64_t SysInfo::AmountOfVirtualMemory() {
+ByteCount SysInfo::AmountOfVirtualMemory() {
   static_assert(std::is_trivially_destructible<LazyVirtualMemory>::value);
   static LazyVirtualMemory virtual_memory;
   return virtual_memory.value();
@@ -295,7 +296,7 @@ std::string SysInfo::OperatingSystemArchitecture() {
 
 // static
 size_t SysInfo::VMAllocationGranularity() {
-  return checked_cast<size_t>(getpagesize());
+  return GetPageSize();
 }
 
 #if !BUILDFLAG(IS_APPLE)

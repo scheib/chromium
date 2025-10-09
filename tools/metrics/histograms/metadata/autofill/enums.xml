@@ -165,18 +165,18 @@ chromium-metrics-reviews@google.com.
 
 <!-- LINT.ThenChange(//components/autofill/core/browser/webdata/autofill_ai/entity_table.cc:DecryptionStatus) -->
 
-<!-- LINT.IfChange(AutofillAiEntityType) -->
-
 <enum name="AutofillAiEntityType">
+<!-- Generated from components/autofill/core/browser/data_model/autofill_ai/entity_schema.json.
+Called by update_autofill_enums.py.-->
+
   <int value="0" label="Passport"/>
-  <int value="1" label="Driver's License"/>
-  <int value="2" label="Vehicle Information"/>
-  <int value="3" label="National ID Card"/>
+  <int value="1" label="Driver's license"/>
+  <int value="2" label="Vehicle"/>
+  <int value="3" label="National Id Card"/>
   <int value="4" label="Known Traveler Number"/>
   <int value="5" label="Redress Number"/>
+  <int value="6" label="Flight Reservation"/>
 </enum>
-
-<!-- LINT.ThenChange(//components/autofill/core/browser/data_model/autofill_ai/entity_type.cc:EntityType) -->
 
 <enum name="AutofillAiModelExecutionStatus">
   <int value="0"
@@ -224,6 +224,27 @@ chromium-metrics-reviews@google.com.
   <int value="1" label="Has suggestion, user doesn't select it"/>
   <int value="2" label="Has suggestion, user selects it"/>
 </enum>
+
+<!-- LINT.IfChange(AutofillBubbleType) -->
+
+<enum name="AutofillBubbleType">
+  <summary>
+    The different types of bubbles that can be shown by the Autofill bubble
+    manager.
+  </summary>
+  <int value="0" label="SaveUpdateAddress"/>
+  <int value="1" label="SaveIban"/>
+  <int value="2" label="SaveUpdateCard"/>
+  <int value="3" label="SaveUpdateAutofillAi"/>
+  <int value="4" label="VirtualCardEnrollConfirmation"/>
+  <int value="5" label="MandatoryReauth"/>
+  <int value="6" label="OfferNotification"/>
+  <int value="7" label="FilledCardInformation"/>
+  <int value="8" label="Password"/>
+  <int value="9" label="WalletablePassConsent"/>
+</enum>
+
+<!-- LINT.ThenChange(//chrome/browser/ui/autofill/bubble_controller_base.h:BubbleType) -->
 
 <enum name="AutofillCardholderNameFixFlowPromptEvent">
   <int value="0" label="Shown"/>
@@ -325,7 +346,7 @@ chromium-metrics-reviews@google.com.
   <int value="4" label="Profiles from different categories available."/>
   <int value="5" label="Only a kAccountHome profile available"/>
   <int value="6" label="Only a kAccountWork profile available"/>
-  <int value="7" label="Only a kAccountNameEmail profile was used"/>
+  <int value="7" label="Only a kAccountNameEmail profile available"/>
 </enum>
 
 <enum name="AutofillCreditCardAuthenticationEvents">
@@ -921,6 +942,21 @@ Called by update_autofill_enums.py.-->
   <int value="12480"
       label="REDRESS_NUMBER: Not autofilled or autofilled value edited"/>
   <int value="12481" label="REDRESS_NUMBER: Autofilled value accepted"/>
+  <int value="12672"
+      label="FLIGHT_RESERVATION_FLIGHT_NUMBER: Not autofilled or autofilled
+             value edited"/>
+  <int value="12673"
+      label="FLIGHT_RESERVATION_FLIGHT_NUMBER: Autofilled value accepted"/>
+  <int value="12736"
+      label="FLIGHT_RESERVATION_CONFIRMATION_CODE: Not autofilled or
+             autofilled value edited"/>
+  <int value="12737"
+      label="FLIGHT_RESERVATION_CONFIRMATION_CODE: Autofilled value accepted"/>
+  <int value="12800"
+      label="FLIGHT_RESERVATION_TICKET_NUMBER: Not autofilled or autofilled
+             value edited"/>
+  <int value="12801"
+      label="FLIGHT_RESERVATION_TICKET_NUMBER: Autofilled value accepted"/>
   <int value="12864"
       label="ADDRESS_HOME_ZIP_PREFIX: Not autofilled or autofilled value
              edited"/>
@@ -936,13 +972,16 @@ Called by update_autofill_enums.py.-->
              autofilled value edited"/>
   <int value="12993"
       label="KNOWN_TRAVELER_NUMBER_EXPIRATION_DATE: Autofilled value accepted"/>
-</enum>
-
-<enum name="AutofillDeveloperEngagement">
-  <int value="0" label="Fillable form parsed without type hints"/>
-  <int value="1" label="Fillable form parsed with type hints"/>
-  <int value="2"
-      label="(Obsolete) Includes UPI-VPA type hint (removed 04/2024)"/>
+  <int value="13056"
+      label="FLIGHT_RESERVATION_DEPARTURE_AIRPORT: Not autofilled or
+             autofilled value edited"/>
+  <int value="13057"
+      label="FLIGHT_RESERVATION_DEPARTURE_AIRPORT: Autofilled value accepted"/>
+  <int value="13120"
+      label="FLIGHT_RESERVATION_ARRIVAL_AIRPORT: Not autofilled or autofilled
+             value edited"/>
+  <int value="13121"
+      label="FLIGHT_RESERVATION_ARRIVAL_AIRPORT: Autofilled value accepted"/>
 </enum>
 
 <enum name="AutofillDynamicElementType">
@@ -1257,12 +1296,22 @@ Called by update_autofill_enums.py.-->
   <int value="3105" label="KNOWN_TRAVELER_NUMBER: accepted"/>
   <int value="3120" label="REDRESS_NUMBER: edited"/>
   <int value="3121" label="REDRESS_NUMBER: accepted"/>
+  <int value="3168" label="FLIGHT_RESERVATION_FLIGHT_NUMBER: edited"/>
+  <int value="3169" label="FLIGHT_RESERVATION_FLIGHT_NUMBER: accepted"/>
+  <int value="3184" label="FLIGHT_RESERVATION_CONFIRMATION_CODE: edited"/>
+  <int value="3185" label="FLIGHT_RESERVATION_CONFIRMATION_CODE: accepted"/>
+  <int value="3200" label="FLIGHT_RESERVATION_TICKET_NUMBER: edited"/>
+  <int value="3201" label="FLIGHT_RESERVATION_TICKET_NUMBER: accepted"/>
   <int value="3216" label="ADDRESS_HOME_ZIP_PREFIX: edited"/>
   <int value="3217" label="ADDRESS_HOME_ZIP_PREFIX: accepted"/>
   <int value="3232" label="ADDRESS_HOME_ZIP_SUFFIX: edited"/>
   <int value="3233" label="ADDRESS_HOME_ZIP_SUFFIX: accepted"/>
   <int value="3248" label="KNOWN_TRAVELER_NUMBER_EXPIRATION_DATE: edited"/>
   <int value="3249" label="KNOWN_TRAVELER_NUMBER_EXPIRATION_DATE: accepted"/>
+  <int value="3264" label="FLIGHT_RESERVATION_DEPARTURE_AIRPORT: edited"/>
+  <int value="3265" label="FLIGHT_RESERVATION_DEPARTURE_AIRPORT: accepted"/>
+  <int value="3280" label="FLIGHT_RESERVATION_ARRIVAL_AIRPORT: edited"/>
+  <int value="3281" label="FLIGHT_RESERVATION_ARRIVAL_AIRPORT: accepted"/>
 </enum>
 
 <enum name="AutofillEmailOrLoyaltyCardAcceptanceMetricValue">
@@ -2127,9 +2176,14 @@ Called by update_autofill_enums.py.-->
   <int value="193" label="NATIONAL_ID_CARD_ISSUING_COUNTRY"/>
   <int value="194" label="KNOWN_TRAVELER_NUMBER"/>
   <int value="195" label="REDRESS_NUMBER"/>
+  <int value="198" label="FLIGHT_RESERVATION_FLIGHT_NUMBER"/>
+  <int value="199" label="FLIGHT_RESERVATION_CONFIRMATION_CODE"/>
+  <int value="200" label="FLIGHT_RESERVATION_TICKET_NUMBER"/>
   <int value="201" label="ADDRESS_HOME_ZIP_PREFIX"/>
   <int value="202" label="ADDRESS_HOME_ZIP_SUFFIX"/>
   <int value="203" label="KNOWN_TRAVELER_NUMBER_EXPIRATION_DATE"/>
+  <int value="204" label="FLIGHT_RESERVATION_DEPARTURE_AIRPORT"/>
+  <int value="205" label="FLIGHT_RESERVATION_ARRIVAL_AIRPORT"/>
 </enum>
 
 <enum name="AutofillFilledCardInformationBubbleFieldClicked">
@@ -2322,25 +2376,26 @@ Called by update_autofill_enums.py.-->
   <int value="87" label="Masked server card suggestion selected"/>
   <int value="88" label="Masked server card suggestion selected (once)"/>
   <int value="89"
-      label="Suggestions containing cards with a benefit available were shown"/>
+      label="(DEPRECATED) Suggestions containing cards with a benefit
+             available were shown"/>
   <int value="90"
       label="(DEPRECATED) Suggestions were shown, and no card had a benefit
              available"/>
   <int value="91"
-      label="Suggestions containing cards with a benefit available were shown
-             (once)"/>
+      label="(DEPRECATED) Suggestions containing cards with a benefit
+             available were shown (once)"/>
   <int value="92"
       label="(DEPRECATED) Suggestions were shown, and no card had a benefit
              available (once)"/>
   <int value="93"
-      label="Suggestion for a masked server card with a benefit available was
-             selected"/>
+      label="(DEPRECATED) Suggestion for a masked server card with a benefit
+             available was selected"/>
   <int value="94"
       label="(DEPRECATED) Suggestion for a masked server card with no benefit
              available was selected"/>
   <int value="95"
-      label="Suggestion for a masked server card with a benefit available was
-             selected (once)"/>
+      label="(DEPRECATED) Suggestion for a masked server card with a benefit
+             available was selected (once)"/>
   <int value="96"
       label="(DEPRECATED) Suggestion for a masked server card with no benefit
              available was selected (once)"/>
@@ -2371,9 +2426,9 @@ Called by update_autofill_enums.py.-->
       label="(DEPRECATED) Form was submitted after a suggestion for a masked
              server card with no benefit available was filled (once)"/>
   <int value="105"
-      label="Suggestion for a masked server card was selected after
-             suggestions containing cards with a benefit available were shown
-             (once)"/>
+      label="(DEPRECATED) Suggestion for a masked server card was selected
+             after suggestions containing cards with a benefit available were
+             shown (once)"/>
   <int value="106"
       label="Suggestion for a masked server card was filled after suggestions
              containing cards with a benefit available were shown (once)"/>
@@ -2597,6 +2652,8 @@ Called by update_autofill_enums.py.-->
   <int value="11" label="ProfileMigration"/>
   <int value="12" label="ProfileMigrationAndSilentUpdate"/>
   <int value="13" label="HomeAndWorkSuperset"/>
+  <int value="14" label="NameEmailSuperset"/>
+  <int value="15" label="HomeWorkNameEmailMerge"/>
 </enum>
 
 <enum name="AutofillProfileRecordType">
@@ -2673,6 +2730,20 @@ Called by update_autofill_enums.py.-->
   <int value="3" label="Unexpected errors"/>
 </enum>
 
+<enum name="AutofillSaveCardPromptResultDesktopEnum">
+  <int value="0" label="Accepted"/>
+  <int value="1" label="Cancelled"/>
+  <int value="2" label="Closed"/>
+  <int value="3" label="Not interacted"/>
+  <int value="4" label="Lost focus"/>
+  <int value="5" label="Unknown"/>
+</enum>
+
+<enum name="AutofillSaveCardPromptResultEnum">
+  <int value="0" label="Accepted"/>
+  <int value="1" label="Closed"/>
+</enum>
+
 <enum name="AutofillSaveCardRequestExpirationDateReason">
   <int value="0" label="Has empty month only"/>
   <int value="1" label="Has empty year only"/>
@@ -2686,6 +2757,8 @@ Called by update_autofill_enums.py.-->
   <int value="2" label="Not shown, required delay has not passed"/>
   <int value="3" label="Not shown, CVC missing for possible card update"/>
 </enum>
+
+<!-- TODO(crbug.com/430588721): Clean up use of AutofillSavePaymentMethodPromptResultEnum once refactored save card metrics have rolled out. -->
 
 <enum name="AutofillSavePaymentMethodPromptResultEnum">
   <int value="0" label="Accepted"/>
@@ -2808,6 +2881,17 @@ Called by update_autofill_enums.py.-->
              (ERROR)"/>
 </enum>
 
+<!-- LINT.IfChange(AutofillSettingsReferrer) -->
+
+<enum name="AutofillSettingsReferrer">
+  <int value="0" label="ProfileMenu"/>
+  <int value="1" label="SettingsMenu"/>
+  <int value="2" label="AutofillAndPasswordsPage"/>
+  <int value="3" label="FillingFlowDropdown"/>
+</enum>
+
+<!-- LINT.ThenChange(/components/autofill/core/browser/metrics/autofill_settings_metrics.h:AutofillSettingsReferrer,/chrome/browser/resources/settings/metrics_browser_proxy.ts:AutofillSettingsReferrer) -->
+
 <enum name="AutofillSettingsVisibleTypes">
   <int value="0" label="Undefined"/>
   <int value="1" label="Name"/>
@@ -2877,6 +2961,15 @@ Called by update_autofill_enums.py.-->
 </enum>
 
 <!-- LINT.ThenChange(/components/autofill/core/browser/metrics/prediction_quality_metrics.h:FieldPredictionOverlapHeader) -->
+
+<!-- LINT.IfChange(AutofillStrikeDatabaseBlockReason) -->
+
+<enum name="AutofillStrikeDatabaseBlockReason">
+  <int value="0" label="Max strike limit reached"/>
+  <int value="1" label="Required delay not met"/>
+</enum>
+
+<!-- LINT.ThenChange(/components/autofill/core/browser/metrics/autofill_metrics.h:AutofillStrikeDatabaseBlockReason) -->
 
 <enum name="AutofillSubmissionSource">
   <int value="0" label="Same document navigation"/>
@@ -3157,6 +3250,8 @@ Called by update_autofill_enums.py.-->
   <int value="311" label="RemoveEntityInstancesModifiedBetween: Failure"/>
   <int value="312" label="CleanupForCrbug411681430: Success"/>
   <int value="313" label="CleanupForCrbug411681430: Failure"/>
+  <int value="314" label="CleanupForCrbug445879524: Success"/>
+  <int value="315" label="CleanupForCrbug445879524: Failure"/>
 </enum>
 
 <!-- LINT.ThenChange(/components/autofill/core/browser/webdata/autofill_webdata_backend_impl.cc:Result) -->
@@ -3356,11 +3451,6 @@ Called by update_autofill_enums.py.-->
 <enum name="BooleanSubmitted">
   <int value="0" label="Not submitted"/>
   <int value="1" label="Submitted"/>
-</enum>
-
-<enum name="BooleanSuppressed">
-  <int value="0" label="No suppressions"/>
-  <int value="1" label="Suppressed"/>
 </enum>
 
 <!-- LINT.IfChange(CardBenefitFormEvent) -->
@@ -3808,12 +3898,22 @@ Called by update_autofill_enums.py.-->
   <int value="777" label="KNOWN_TRAVELER_NUMBER: Accepted"/>
   <int value="780" label="REDRESS_NUMBER: Ignored"/>
   <int value="781" label="REDRESS_NUMBER: Accepted"/>
+  <int value="792" label="FLIGHT_RESERVATION_FLIGHT_NUMBER: Ignored"/>
+  <int value="793" label="FLIGHT_RESERVATION_FLIGHT_NUMBER: Accepted"/>
+  <int value="796" label="FLIGHT_RESERVATION_CONFIRMATION_CODE: Ignored"/>
+  <int value="797" label="FLIGHT_RESERVATION_CONFIRMATION_CODE: Accepted"/>
+  <int value="800" label="FLIGHT_RESERVATION_TICKET_NUMBER: Ignored"/>
+  <int value="801" label="FLIGHT_RESERVATION_TICKET_NUMBER: Accepted"/>
   <int value="804" label="ADDRESS_HOME_ZIP_PREFIX: Ignored"/>
   <int value="805" label="ADDRESS_HOME_ZIP_PREFIX: Accepted"/>
   <int value="808" label="ADDRESS_HOME_ZIP_SUFFIX: Ignored"/>
   <int value="809" label="ADDRESS_HOME_ZIP_SUFFIX: Accepted"/>
   <int value="812" label="KNOWN_TRAVELER_NUMBER_EXPIRATION_DATE: Ignored"/>
   <int value="813" label="KNOWN_TRAVELER_NUMBER_EXPIRATION_DATE: Accepted"/>
+  <int value="816" label="FLIGHT_RESERVATION_DEPARTURE_AIRPORT: Ignored"/>
+  <int value="817" label="FLIGHT_RESERVATION_DEPARTURE_AIRPORT: Accepted"/>
+  <int value="820" label="FLIGHT_RESERVATION_ARRIVAL_AIRPORT: Ignored"/>
+  <int value="821" label="FLIGHT_RESERVATION_ARRIVAL_AIRPORT: Accepted"/>
 </enum>
 
 <!-- LINT.IfChange(FormSubmissionOutcomeIOS) -->
@@ -4115,14 +4215,38 @@ Called by update_autofill_enums.py.-->
   <int value="4" label="User-edited select field"/>
 </enum>
 
+<!-- LINT.IfChange(SaveAndFillDialogResult) -->
+
+<enum name="SaveAndFillDialogResult">
+  <int value="0" label="User accepted the dialog and provided a CVC"/>
+  <int value="1" label="User accepted the dialog but did not provide a CVC"/>
+  <int value="2" label="User canceled the dialog"/>
+</enum>
+
+<!-- LINT.ThenChange(/components/autofill/core/browser/metrics/payments/save_and_fill_metrics.h:SaveAndFillDialogResult) -->
+
 <!-- LINT.IfChange(SaveAndFillFormEvent) -->
 
 <enum name="SaveAndFillFormEvent">
-  <int value="0" label="The Save and Fill suggestion was shown."/>
-  <int value="1" label="The Save and Fill suggestion was accepted."/>
+  <int value="0" label="The Save and Fill suggestion was shown"/>
+  <int value="1" label="The Save and Fill suggestion was accepted"/>
+  <int value="2" label="The form was filled after Save and Fill finished"/>
+  <int value="3" label="The form was submitted after Save and Fill finished"/>
 </enum>
 
 <!-- LINT.ThenChange(/components/autofill/core/browser/metrics/payments/save_and_fill_metrics.h:SaveAndFillFormEvent) -->
+
+<!-- LINT.IfChange(SaveAndFillSuggestionNotShownReason) -->
+
+<enum name="SaveAndFillSuggestionNotShownReason">
+  <int value="0"
+      label="The user has at least one credit card saved in their profile"/>
+  <int value="1" label="The user has reached the maximum number of strikes"/>
+  <int value="2" label="The user is in incognito mode"/>
+  <int value="3" label="The credit card form is not complete"/>
+</enum>
+
+<!-- LINT.ThenChange(/components/autofill/core/browser/metrics/payments/save_and_fill_metrics.h:SaveAndFillSuggestionNotShownReason) -->
 
 <!-- LINT.IfChange(SaveCreditCardPromptResultIOS) -->
 

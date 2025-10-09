@@ -18,10 +18,11 @@ namespace content {
 
 class FederatedIdentityPermissionContextDelegate;
 class FederatedIdentityApiPermissionContextDelegate;
-class FederatedAuthRequestImpl;
 class RenderFrameHost;
 
 namespace webid {
+
+class RequestService;
 
 // A class that fetches accounts from a set of IDPs. Currently only handles
 // config and well-known fetches.
@@ -62,7 +63,7 @@ class AccountsFetcher {
       FederatedIdentityApiPermissionContextDelegate* api_permission_delegate,
       FederatedIdentityPermissionContextDelegate* permission_delegate,
       FedCmFetchingParams fetching_params,
-      FederatedAuthRequestImpl* federated_auth_request_impl);
+      RequestService* federated_auth_request_impl);
   ~AccountsFetcher();
 
   // Fetch well-known, config, accounts and client metadata endpoints for
@@ -130,7 +131,7 @@ class AccountsFetcher {
       std::unique_ptr<IdentityProviderInfo> idp_info,
       std::optional<bool> old_idp_signin_status,
       blink::mojom::FederatedAuthRequestResult result,
-      std::optional<content::FedCmRequestIdTokenStatus> token_status,
+      std::optional<webid::RequestIdTokenStatus> token_status,
       const IdpNetworkRequestManager::FetchStatus& status);
 
   void OnIdpMismatch(std::unique_ptr<IdentityProviderInfo> idp_info);
@@ -145,7 +146,7 @@ class AccountsFetcher {
   // Populated in OnAllConfigAndWellKnownFetched().
   base::flat_map<GURL, GURL> metrics_endpoints_;
 
-  // Owned by FederatedAuthRequestImpl.
+  // Owned by RequestService.
   raw_ref<RenderFrameHost> render_frame_host_;
   raw_ptr<IdpNetworkRequestManager> network_manager_;
   raw_ptr<FederatedIdentityApiPermissionContextDelegate>
@@ -154,7 +155,7 @@ class AccountsFetcher {
 
   FedCmFetchingParams params_;
 
-  raw_ptr<FederatedAuthRequestImpl> federated_auth_request_impl_;
+  raw_ptr<RequestService> federated_auth_request_impl_;
 
   base::WeakPtrFactory<AccountsFetcher> weak_ptr_factory_{this};
 };

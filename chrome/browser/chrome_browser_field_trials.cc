@@ -21,6 +21,7 @@
 #include "chrome/browser/metrics/chrome_metrics_service_client.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
+#include "components/feed/feed_feature_list.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/persistent_histograms.h"
 #include "components/variations/feature_overrides.h"
@@ -120,10 +121,9 @@ void ChromeBrowserFieldTrials::RegisterFeatureOverrides(
     feature_overrides.DisableFeature(features::kEyeDropper);
   }
 #elif BUILDFLAG(IS_ANDROID)  // BUILDFLAG(IS_LINUX)
-  // TODO(crbug.com/422902880): Remove when tablet rollout is complete.
-  feature_overrides.EnableFeature(
-      base::features::kUseSharedRebindServiceConnection);
-  feature_overrides.EnableFeature(features::kGroupRebindingForGroupImportance);
+  // Update child process binding state before unbinding.
+  // TODO(crbug.com/427087091): Remove when webview rollout is complete.
+  feature_overrides.EnableFeature(base::features::kUpdateStateBeforeUnbinding);
 #if BUILDFLAG(IS_DESKTOP_ANDROID)
   // Nota bene: Anything here is expected to be short-lived, unless deemed too
   // risky to launch to non-desktop platforms. New features being added here
@@ -131,15 +131,15 @@ void ChromeBrowserFieldTrials::RegisterFeatureOverrides(
   // override in the generic IS_ANDROID block below, guarded by an appropriate
   // runtime check.
 
-  // Enables the Bookmark Bar and related toggle in settings.
-  // TODO(crbug.com/411262183): Remove after Bookmarks Bar rollout is complete.
-  feature_overrides.EnableFeature(chrome::android::kAndroidAppearanceSettings);
-  feature_overrides.EnableFeature(chrome::android::kAndroidBookmarkBar);
-
   // If enabled, then use desktop page webprefs for Android devices that have
   // large displays, specifically tablets and desktops.
   feature_overrides.EnableFeature(
       blink::features::kAndroidDesktopWebPrefsLargeDisplays);
+
+  // Enables the caret browsing a11y feature - can use arrow keys to navigate
+  // through web pages.
+  // TODO(crbug.com/369139090): Remove when rollout is complete
+  feature_overrides.EnableFeature(features::kAndroidCaretBrowsing);
 
   // If enabled, render processes associated only with tabs in unfocused windows
   // will be downgraded to "vis" priority, rather than remaining at "fg". This
@@ -165,6 +165,8 @@ void ChromeBrowserFieldTrials::RegisterFeatureOverrides(
   // factors.
   feature_overrides.EnableFeature(chrome::android::kProcessRankPolicyAndroid);
   feature_overrides.EnableFeature(chrome::android::kProtectedTabsAndroid);
+  feature_overrides.EnableFeature(features::kSubframePriorityContribution);
+  feature_overrides.EnableFeature(features::kSubframeImportance);
   // TODO(crbug.com/422903297): Remove when tablet rollout is complete.
   feature_overrides.EnableFeature(features::kRendererProcessLimitOnAndroid);
   // Enable V8 optimizations for high-end Android Desktop devices.
@@ -184,6 +186,8 @@ void ChromeBrowserFieldTrials::RegisterFeatureOverrides(
   // implemented.
   feature_overrides.EnableFeature(
       chrome::android::kLockTopControlsOnLargeTablets);
+  feature_overrides.EnableFeature(
+      chrome::android::kLockTopControlsOnLargeTabletsV2);
   // Bypass the WebAudio output buffer, to reduce audio latency.
   // TODO(crbug.com/436988695): Remove when the long term solution is
   // implemented.
@@ -192,10 +196,47 @@ void ChromeBrowserFieldTrials::RegisterFeatureOverrides(
   // TODO(crbug.com/437004266): Remove when the feature is stable.
   feature_overrides.EnableFeature(
       features::kAlwaysUseAudioManagerOutputFramesPerBuffer);
+  // TODO(crbug.com/440210010): Remove when the feature experiment is done.
+  feature_overrides.EnableFeature(features::kAudioStereoInputStreamParameters);
   // Enables picture-in-picture in the right-click context menu.
   // TODO(crbug.com/403851785): Remove when the feature is verified to be stable
   // on desktop Android.
   feature_overrides.EnableFeature(media::kContextMenuPictureInPictureAndroid);
+  // Disables the enhanced pip transition and uses the default animation.
+  // TODO(crbug.com/440384447): Remove when enhanced pip transition is fixed.
+  feature_overrides.DisableFeature(media::kAllowEnhancedPipTransition);
+  // Enable by default for desktop platforms, pending a phone / foldable /
+  // tablet rollout using the same flag.
+  // TODO(crbug.com/413776899): Remove when rollout on other form factors is
+  // complete.
+  feature_overrides.EnableFeature(chrome::android::kInstanceSwitcherV2);
+  // TODO(crbug.com/442327273): Remove when rollout is complete to all form
+  // factors.
+  feature_overrides.EnableFeature(
+      autofill::features::kAutofillAndroidDesktopKeyboardAccessoryRevamp);
+  // TODO(crbug.com/444486763): Remove when rollout is complete to all form
+  // factors.
+  feature_overrides.EnableFeature(chrome::android::kAndroidTabHighlighting);
+  // TODO(b/441672693): Remove when the feature is stable on other form factors.
+  feature_overrides.EnableFeature(features::kAndroidAudioDeviceListener);
+  // Enable by default for desktop platforms, pending a tablet rollout using the
+  // same flag.
+  // TODO(crbug.com/445475304): Remove when tablet rollout is complete.
+  feature_overrides.EnableFeature(feed::kAndroidOpenIncognitoAsWindow);
+  feature_overrides.EnableFeature(chrome::android::kTabStripIncognitoMigration);
+  // TODO(crbug.com/427242080): Remove when tablet rollout is complete.
+  feature_overrides.EnableFeature(
+      chrome::android::kAndroidPinnedTabsTabletTabStrip);
+  // TODO(crbug.com/433879656): Remove when this feature on LFF device is
+  // stable.
+  feature_overrides.EnableFeature(features::kFluidResize);
+
+  // Three flags are required for the bookmarks bar feature.
+  // TODO(crbug.com/430059235): Remove once feature is launched to 100% on all
+  // form factors.
+  feature_overrides.EnableFeature(chrome::android::kAndroidBookmarkBar);
+  feature_overrides.EnableFeature(chrome::android::kAndroidAppearanceSettings);
+  feature_overrides.EnableFeature(chrome::android::kTopControlsRefactor);
 #endif  // BUILDFLAG(IS_DESKTOP_ANDROID)
   // Desktop-first features which are past incubation should either end up here,
   // or to a finch trial that enables it for all form factors.

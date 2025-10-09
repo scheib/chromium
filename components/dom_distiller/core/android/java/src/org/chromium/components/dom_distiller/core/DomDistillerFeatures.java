@@ -53,6 +53,10 @@ public class DomDistillerFeatures {
 
     // Feature params -- alphabetical ordering.
 
+    /** Whether the CPA should be shown. */
+    public static final MutableBooleanParamWithSafeDefault sReaderModeDistillInAppShowCpa =
+            sReaderModeDistillInApp.newBooleanParam("show_cpa", true);
+
     /** The number of times the CPA can be shown without interaction before being suppressed. */
     public static final MutableIntParamWithSafeDefault sReaderModeDistillInAppCpaShowLimit =
             sReaderModeDistillInApp.newIntParam("cpa_show_limit", 3);
@@ -62,10 +66,21 @@ public class DomDistillerFeatures {
             sReaderModeDistillInApp.newIntParam(
                     "tracking_window_ms", (int) TimeUnit.DAYS.toMillis(1));
 
+    /**
+     * The number of times that the CPA can be temporarily suppressed before being permanently
+     * suppressed..
+     */
+    public static final MutableIntParamWithSafeDefault sReaderModeDistillInAppSuppressionLimit =
+            sReaderModeDistillInApp.newIntParam("suppression_limit", 3);
+
     /** The window of time to suppress the CPA after it's been shown without interaction. */
     public static final MutableIntParamWithSafeDefault sReaderModeDistillInAppSuppressionWindowMs =
             sReaderModeDistillInApp.newIntParam(
                     "suppression_window_ms", (int) TimeUnit.DAYS.toMillis(3));
+
+    public static final MutableIntParamWithSafeDefault sReaderModeDistillInAppHideCpaDelayMs =
+            sReaderModeDistillInApp.newIntParam(
+                    "hide_cpa_delay_ms", (int) TimeUnit.SECONDS.toMillis(5));
 
     public static final MutableBooleanParamWithSafeDefault
             sReaderModeImprovementsTriggerOnMobileFriendlyPages =

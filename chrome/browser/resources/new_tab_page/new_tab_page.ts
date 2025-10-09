@@ -10,8 +10,8 @@
  */
 
 export {CustomizeButtonsElement} from 'chrome://new-tab-page/shared/customize_buttons/customize_buttons.js';
-export {SearchboxElement} from 'chrome://resources/cr_components/searchbox/searchbox.js';
-export {SearchboxBrowserProxy} from 'chrome://resources/cr_components/searchbox/searchbox_browser_proxy.js';
+export {PlaceholderTextCycler, SearchboxElement} from 'chrome://resources/cr_components/searchbox/searchbox.js';
+export {createAutocompleteMatch, SearchboxBrowserProxy} from 'chrome://resources/cr_components/searchbox/searchbox_browser_proxy.js';
 export {SearchboxIconElement} from 'chrome://resources/cr_components/searchbox/searchbox_icon.js';
 export {SearchboxMatchElement} from 'chrome://resources/cr_components/searchbox/searchbox_match.js';
 export {CrAutoImgElement} from 'chrome://resources/cr_elements/cr_auto_img/cr_auto_img.js';
@@ -27,7 +27,7 @@ export {DoodleShareDialogElement} from './doodle_share_dialog.js';
 export {IframeElement} from './iframe.js';
 export {ProcessedFile, processFile} from './image_processor.js';
 export {LogoElement} from './logo.js';
-export {recordBoolean, recordDuration, recordEnumeration, recordLoadDuration, recordOccurrence, recordPerdecage, recordSmallCount, recordSparseValueWithPersistentHash, recordValue} from './metrics_utils.js';
+export {recordBoolean, recordDuration, recordEnumeration, recordLinearValue, recordLoadDuration, recordLogValue, recordOccurrence, recordPerdecage, recordSmallCount, recordSparseValueWithPersistentHash} from './metrics_utils.js';
 export {NewTabPageProxy} from './new_tab_page_proxy.js';
 export {checkTransparency, isBMP, isPNG, isWebP} from './transparency.js';
 export {$$} from './utils.js';

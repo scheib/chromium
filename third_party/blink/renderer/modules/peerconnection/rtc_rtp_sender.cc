@@ -71,7 +71,6 @@ namespace features {
 // Killswitch for requesting key frames via setParameterOptions.
 // TODO(crbug.com/1354101): remove after rollout.
 BASE_FEATURE(kWebRtcRequestKeyFrameViaSetParameterOptions,
-             "WebRtcRequestKeyFrameViaSetParameterOptions",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace features
@@ -472,16 +471,18 @@ ToRtpParameters(ExecutionContext* context,
   std::optional<webrtc::DegradationPreference> degradation_preference;
 
   if (parameters->hasDegradationPreference()) {
-    if (parameters->degradationPreference() == "balanced") {
-      degradation_preference = webrtc::DegradationPreference::BALANCED;
-    } else if (parameters->degradationPreference() == "maintain-framerate") {
-      degradation_preference =
-          webrtc::DegradationPreference::MAINTAIN_FRAMERATE;
-    } else if (parameters->degradationPreference() == "maintain-resolution") {
-      degradation_preference =
-          webrtc::DegradationPreference::MAINTAIN_RESOLUTION;
-    } else {
-      NOTREACHED();
+    switch (parameters->degradationPreference().AsEnum()) {
+      case V8RTCDegradationPreference::Enum::kBalanced:
+        degradation_preference = webrtc::DegradationPreference::BALANCED;
+        break;
+      case V8RTCDegradationPreference::Enum::kMaintainFramerate:
+        degradation_preference =
+            webrtc::DegradationPreference::MAINTAIN_FRAMERATE;
+        break;
+      case V8RTCDegradationPreference::Enum::kMaintainResolution:
+        degradation_preference =
+            webrtc::DegradationPreference::MAINTAIN_RESOLUTION;
+        break;
     }
   }
 
@@ -497,7 +498,7 @@ webrtc::RtpCodec ToWebrtcRtpCodec(const RTCRtpCodec* codec) {
     return webrtc_codec;
   }
   webrtc_codec.name = codec->mimeType().Substring(slash_index + 1).Utf8();
-  WTF::String codec_type = codec->mimeType().Substring(0, slash_index);
+  String codec_type = codec->mimeType().Substring(0, slash_index);
 
   if (codec_type == "video") {
     webrtc_codec.kind = webrtc::MediaType::VIDEO;
@@ -513,10 +514,10 @@ webrtc::RtpCodec ToWebrtcRtpCodec(const RTCRtpCodec* codec) {
     webrtc_codec.num_channels = codec->channels();
   }
   if (codec->hasSdpFmtpLine()) {
-    WTF::Vector<WTF::String> fmtp_splits;
+    Vector<String> fmtp_splits;
     codec->sdpFmtpLine().Split(";", true, fmtp_splits);
     for (const auto& fmtp_split : fmtp_splits) {
-      WTF::String parameter = fmtp_split.StripWhiteSpace();
+      String parameter = fmtp_split.StripWhiteSpace();
       auto equal_index = parameter.Find("=");
       std::string name, value;
       if (equal_index == kNotFound) {
@@ -599,7 +600,7 @@ RTCRtpHeaderExtensionParameters* ToRtpHeaderExtensionParameters(
 }
 
 void SetRtpCodec(RTCRtpCodec& codec, const webrtc::RtpCodec& webrtc_codec) {
-  codec.setMimeType(WTF::String::FromUTF8(webrtc_codec.mime_type()));
+  codec.setMimeType(String::FromUTF8(webrtc_codec.mime_type()));
   if (webrtc_codec.clock_rate)
     codec.setClockRate(webrtc_codec.clock_rate.value());
   if (webrtc_codec.num_channels)
@@ -661,21 +662,13 @@ RTCRtpSender::RTCRtpSender(RTCPeerConnection* pc,
   LogMessage(base::StringPrintf(
       "%s({require_encoded_insertable_streams=%s})", __func__,
       base::ToString(require_encoded_insertable_streams).c_str()));
-  if (!base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback)) {
-    if (encoded_audio_transformer_) {
-      RegisterEncodedAudioStreamCallback();
-    } else {
-      CHECK(encoded_video_transformer_);
-      RegisterEncodedVideoStreamCallback();
-    }
-  }
 
   if (!require_encoded_insertable_streams) {
     // Schedule a task to short circuit encoded streams if JS doesn't
     // synchronously create them.
     encoded_transform_shortcircuit_runner->PostTask(
-        FROM_HERE, WTF::BindOnce(&RTCRtpSender::MaybeShortCircuitEncodedStreams,
-                                 WrapPersistent(this)));
+        FROM_HERE, BindOnce(&RTCRtpSender::MaybeShortCircuitEncodedStreams,
+                            WrapPersistent(this)));
   }
 }
 
@@ -740,21 +733,24 @@ RTCRtpSendParameters* RTCRtpSender::getParameters() {
   parameters->setTransactionId(webrtc_parameters->transaction_id.c_str());
 
   if (webrtc_parameters->degradation_preference.has_value()) {
-    WTF::String degradation_preference_str;
+    V8RTCDegradationPreference::Enum degradation_preference_enum;
     switch (webrtc_parameters->degradation_preference.value()) {
       case webrtc::DegradationPreference::MAINTAIN_FRAMERATE:
-        degradation_preference_str = "maintain-framerate";
+        degradation_preference_enum =
+            V8RTCDegradationPreference::Enum::kMaintainFramerate;
         break;
       case webrtc::DegradationPreference::MAINTAIN_RESOLUTION:
-        degradation_preference_str = "maintain-resolution";
+        degradation_preference_enum =
+            V8RTCDegradationPreference::Enum::kMaintainResolution;
         break;
       case webrtc::DegradationPreference::BALANCED:
-        degradation_preference_str = "balanced";
+        degradation_preference_enum =
+            V8RTCDegradationPreference::Enum::kBalanced;
         break;
-      default:
+      case webrtc::DegradationPreference::DISABLED:
         NOTREACHED();
     }
-    parameters->setDegradationPreference(degradation_preference_str);
+    parameters->setDegradationPreference(degradation_preference_enum);
   }
   RTCRtcpParameters* rtcp = RTCRtcpParameters::Create();
   rtcp->setCname(webrtc_parameters->rtcp.cname.c_str());
@@ -897,8 +893,8 @@ ScriptPromise<RTCStatsReport> RTCRtpSender::getStats(
   auto* resolver =
       MakeGarbageCollected<ScriptPromiseResolver<RTCStatsReport>>(script_state);
   auto promise = resolver->Promise();
-  sender_->GetStats(WTF::BindOnce(WebRTCStatsReportCallbackResolver,
-                                  WrapPersistent(resolver)));
+  sender_->GetStats(
+      BindOnce(WebRTCStatsReportCallbackResolver, WrapPersistent(resolver)));
   return promise;
 }
 
@@ -1049,7 +1045,7 @@ RTCRtpCapabilities* RTCRtpSender::getCapabilities(ScriptState* state,
       base::checked_cast<wtf_size_t>(rtc_capabilities->codecs.size()));
   for (const auto& rtc_codec : rtc_capabilities->codecs) {
     auto* codec = RTCRtpCodecCapability::Create();
-    codec->setMimeType(WTF::String::FromUTF8(rtc_codec.mime_type()));
+    codec->setMimeType(String::FromUTF8(rtc_codec.mime_type()));
     if (rtc_codec.clock_rate)
       codec->setClockRate(rtc_codec.clock_rate.value());
 
@@ -1077,7 +1073,7 @@ RTCRtpCapabilities* RTCRtpSender::getCapabilities(ScriptState* state,
       rtc_capabilities->header_extensions.size()));
   for (const auto& rtc_header_extension : rtc_capabilities->header_extensions) {
     auto* header_extension = RTCRtpHeaderExtensionCapability::Create();
-    header_extension->setUri(WTF::String::FromUTF8(rtc_header_extension.uri));
+    header_extension->setUri(String::FromUTF8(rtc_header_extension.uri));
     header_extensions.push_back(header_extension);
   }
   capabilities->setHeaderExtensions(header_extensions);
@@ -1110,18 +1106,6 @@ void RTCRtpSender::MaybeShortCircuitEncodedStreams() {
   }
 }
 
-void RTCRtpSender::RegisterEncodedAudioStreamCallback() {
-  CHECK(!base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback));
-  // TODO(crbug.com/347915599): Delete this method once
-  // kWebRtcEncodedTransformDirectCallback is fully launched.
-
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK_EQ(kind_, "audio");
-  encoded_audio_transformer_->SetTransformerCallback(
-      CrossThreadBindRepeating(&RTCRtpSender::OnAudioFrameFromEncoder,
-                               WrapCrossThreadWeakPersistent(this)));
-}
-
 void RTCRtpSender::UnregisterEncodedAudioStreamCallback() {
   // Threadsafe as this might be called from the realm to which a stream has
   // been transferred.
@@ -1141,12 +1125,9 @@ void RTCRtpSender::SetAudioUnderlyingSource(
     base::AutoLock locker(audio_underlying_source_lock_);
     audio_from_encoder_underlying_source_->OnSourceTransferStarted();
     audio_from_encoder_underlying_source_ = new_underlying_source;
-    if (base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback)) {
-      encoded_audio_transformer_->SetTransformerCallback(
-          CrossThreadBindRepeating(
-              &RTCEncodedAudioUnderlyingSource::OnFrameFromSource,
-              audio_from_encoder_underlying_source_));
-    }
+    encoded_audio_transformer_->SetTransformerCallback(CrossThreadBindRepeating(
+        &RTCEncodedAudioUnderlyingSource::OnFrameFromSource,
+        audio_from_encoder_underlying_source_));
   }
 
   encoded_audio_transformer_->SetSourceTaskRunner(
@@ -1201,12 +1182,9 @@ RTCInsertableStreams* RTCRtpSender::CreateEncodedAudioStreams(
                 std::move(disconnect_callback)));
     encoded_streams_->setReadable(readable_stream);
 
-    if (base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback)) {
-      encoded_audio_transformer_->SetTransformerCallback(
-          CrossThreadBindRepeating(
-              &RTCEncodedAudioUnderlyingSource::OnFrameFromSource,
-              audio_from_encoder_underlying_source_));
-    }
+    encoded_audio_transformer_->SetTransformerCallback(CrossThreadBindRepeating(
+        &RTCEncodedAudioUnderlyingSource::OnFrameFromSource,
+        audio_from_encoder_underlying_source_));
   }
 
   WritableStream* writable_stream;
@@ -1237,30 +1215,6 @@ RTCInsertableStreams* RTCRtpSender::CreateEncodedAudioStreams(
   return encoded_streams_;
 }
 
-void RTCRtpSender::OnAudioFrameFromEncoder(
-    std::unique_ptr<webrtc::TransformableAudioFrameInterface> frame) {
-  // TODO(crbug.com/347915599): Delete this method once
-  // kWebRtcEncodedTransformDirectCallback is fully launched.
-  CHECK(!base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback));
-
-  base::AutoLock locker(audio_underlying_source_lock_);
-  if (audio_from_encoder_underlying_source_) {
-    audio_from_encoder_underlying_source_->OnFrameFromSource(std::move(frame));
-  }
-}
-
-void RTCRtpSender::RegisterEncodedVideoStreamCallback() {
-  // TODO(crbug.com/347915599): Delete this method once
-  // kWebRtcEncodedTransformDirectCallback is fully launched.
-  CHECK(!base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback));
-
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK_EQ(kind_, "video");
-  encoded_video_transformer_->SetTransformerCallback(
-      CrossThreadBindRepeating(&RTCRtpSender::OnVideoFrameFromEncoder,
-                               WrapCrossThreadWeakPersistent(this)));
-}
-
 void RTCRtpSender::UnregisterEncodedVideoStreamCallback() {
   // Threadsafe as this might be called from the realm to which a stream has
   // been transferred.
@@ -1280,12 +1234,9 @@ void RTCRtpSender::SetVideoUnderlyingSource(
     base::AutoLock locker(video_underlying_source_lock_);
     video_from_encoder_underlying_source_->OnSourceTransferStarted();
     video_from_encoder_underlying_source_ = new_underlying_source;
-    if (base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback)) {
-      encoded_video_transformer_->SetTransformerCallback(
-          CrossThreadBindRepeating(
-              &RTCEncodedVideoUnderlyingSource::OnFrameFromSource,
-              video_from_encoder_underlying_source_));
-    }
+    encoded_video_transformer_->SetTransformerCallback(CrossThreadBindRepeating(
+        &RTCEncodedVideoUnderlyingSource::OnFrameFromSource,
+        video_from_encoder_underlying_source_));
   }
 
   encoded_video_transformer_->SetSourceTaskRunner(
@@ -1340,12 +1291,9 @@ RTCInsertableStreams* RTCRtpSender::CreateEncodedVideoStreams(
                 std::move(disconnect_callback)));
     encoded_streams_->setReadable(readable_stream);
 
-    if (base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback)) {
-      encoded_video_transformer_->SetTransformerCallback(
-          CrossThreadBindRepeating(
-              &RTCEncodedVideoUnderlyingSource::OnFrameFromSource,
-              video_from_encoder_underlying_source_));
-    }
+    encoded_video_transformer_->SetTransformerCallback(CrossThreadBindRepeating(
+        &RTCEncodedVideoUnderlyingSource::OnFrameFromSource,
+        video_from_encoder_underlying_source_));
   }
 
   WritableStream* writable_stream;
@@ -1387,9 +1335,9 @@ void RTCRtpSender::setTransform(RTCRtpScriptTransform* transform,
     transform_ = nullptr;
     return;
   }
-  if (transform->IsAttached()) {
+  if (transform->HasBeenUsed()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "Transform is already in use");
+                                      "Transform cannot be reused");
     return;
   }
   if (transform_) {
@@ -1409,18 +1357,6 @@ void RTCRtpSender::setTransform(RTCRtpScriptTransform* transform,
       CrossThreadBindOnce(&RTCRtpSender::UnregisterEncodedVideoStreamCallback,
                           WrapCrossThreadWeakPersistent(this)),
       encoded_video_transformer_);
-}
-
-void RTCRtpSender::OnVideoFrameFromEncoder(
-    std::unique_ptr<webrtc::TransformableVideoFrameInterface> frame) {
-  // TODO(crbug.com/347915599): Delete this method once
-  // kWebRtcEncodedTransformDirectCallback is fully launched.
-  CHECK(!base::FeatureList::IsEnabled(kWebRtcEncodedTransformDirectCallback));
-
-  base::AutoLock locker(video_underlying_source_lock_);
-  if (video_from_encoder_underlying_source_) {
-    video_from_encoder_underlying_source_->OnFrameFromSource(std::move(frame));
-  }
 }
 
 void RTCRtpSender::LogMessage(const std::string& message) {

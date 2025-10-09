@@ -12,8 +12,10 @@
 
 #include "base/containers/span.h"
 #include "base/dcheck_is_on.h"
+#include "third_party/blink/renderer/core/animation/animation_trigger.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/dom/named_animation_trigger_map.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/layout/anchor_evaluator_impl.h"
 #include "third_party/blink/renderer/core/layout/break_token.h"
@@ -113,19 +115,18 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
     PropagatedData(
         const GCedHeapVector<Member<LayoutBoxModelObject>>* sticky_descendants,
         const GCedHeapVector<Member<Element>>* snap_areas,
-        const Member<const LayoutObject> scroll_initial_target)
+        const Member<const LayoutObject> scroll_initial_target,
+        const GCedNamedAnimationTriggerMap* named_triggers)
         : sticky_descendants(sticky_descendants),
           snap_areas(snap_areas),
-          scroll_initial_target(scroll_initial_target) {}
-    void Trace(Visitor* visitor) const {
-      visitor->Trace(sticky_descendants);
-      visitor->Trace(snap_areas);
-      visitor->Trace(scroll_initial_target);
-    }
+          scroll_initial_target(scroll_initial_target),
+          named_triggers(named_triggers) {}
+    void Trace(Visitor* visitor) const;
     Member<const GCedHeapVector<Member<LayoutBoxModelObject>>>
         sticky_descendants;
     Member<const GCedHeapVector<Member<Element>>> snap_areas;
     Member<const LayoutObject> scroll_initial_target;
+    Member<const GCedNamedAnimationTriggerMap> named_triggers;
   };
 
   PhysicalFragment(FragmentBuilder* builder,
@@ -266,6 +267,7 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
   }
 
   bool IsGrid() const { return layout_object_->IsLayoutGrid(); }
+  bool IsMasonry() const { return layout_object_->IsLayoutMasonry(); }
 
   bool IsTextControlContainer() const;
   bool IsTextControlPlaceholder() const;
@@ -445,7 +447,7 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
   // is concerned.
   bool IsMonolithic() const;
 
-  // Returns true this fragment is used as the implicit anchor for another
+  // Returns true this fragment might be used as the implicit anchor for another
   // element in CSS anchor positioning.
   // Should only be called during layout as it inspects DOM.
   bool IsImplicitAnchor() const;
@@ -585,9 +587,6 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
       bool operator==(const ConstIterator& other) const {
         return current_ == other.current_;
       }
-      bool operator!=(const ConstIterator& other) const {
-        return current_ != other.current_;
-      }
 
      private:
       void SkipInvalidAndSetPostLayout() {
@@ -626,10 +625,6 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
 
   const BreakToken* GetBreakToken() const { return break_token_.Get(); }
 
-  base::span<const PhysicalFragmentLink> Children() const;
-
-  PostLayoutChildLinkList PostLayoutChildren() const;
-
   // Returns true if we have any floating descendants which need to be
   // traversed during the float paint phase.
   bool HasFloatingDescendantsForPaint() const {
@@ -647,9 +642,6 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
   bool DependsOnPercentageBlockSize() const {
     return depends_on_percentage_block_size_;
   }
-
-  void SetChildrenInvalid() const;
-  bool ChildrenValid() const { return children_valid_; }
 
   const GCedHeapVector<Member<LayoutBoxModelObject>>* StickyDescendants()
       const {
@@ -729,6 +721,10 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
     return oof_data_->AnchorQuery();
   }
 
+  const GCedNamedAnimationTriggerMap* NamedTriggers() const {
+    return propagated_data_ ? propagated_data_->named_triggers.Get() : nullptr;
+  }
+
   const FragmentedOofData* GetFragmentedOofData() const;
 
   // Return true if there are nested multicol container descendants with OOFs
@@ -743,23 +739,6 @@ class CORE_EXPORT PhysicalFragment : public GarbageCollected<PhysicalFragment> {
   ~PhysicalFragment() = default;
 
   const ComputedStyle& SlowEffectiveStyle() const;
-
-  void AddOutlineRectsForNormalChildren(
-      OutlineRectCollector& collector,
-      const PhysicalOffset& additional_offset,
-      OutlineType outline_type,
-      const LayoutBoxModelObject* containing_block) const;
-  void AddOutlineRectsForCursor(OutlineRectCollector& collector,
-                                const PhysicalOffset& additional_offset,
-                                OutlineType outline_type,
-                                const LayoutBoxModelObject* containing_block,
-                                InlineCursor* cursor) const;
-  void AddOutlineRectsForDescendant(
-      const PhysicalFragmentLink& descendant,
-      OutlineRectCollector& collector,
-      const PhysicalOffset& additional_offset,
-      OutlineType outline_type,
-      const LayoutBoxModelObject* containing_block) const;
 
   static bool DependsOnPercentageBlockSize(const FragmentBuilder&);
 

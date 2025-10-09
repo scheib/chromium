@@ -6,14 +6,13 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <utility>
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/functional/bind.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/no_destructor.h"
@@ -22,7 +21,6 @@
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/updater/extension_updater.h"
 #include "chrome/browser/first_run/first_run_features.h"
@@ -35,8 +33,6 @@
 #include "chrome/browser/importer/importer_uma.h"
 #include "chrome/browser/importer/profile_writer.h"
 #include "chrome/browser/prefs/chrome_pref_service_factory.h"
-#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
-#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/shell_integration.h"
@@ -52,32 +48,26 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/installer/util/initial_preferences.h"
 #include "chrome/installer/util/initial_preferences_constants.h"
-#include "components/bookmarks/browser/bookmark_model.h"
-#include "components/bookmarks/browser/bookmark_model_load_waiter.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/startup_metric_utils/browser/startup_metric_utils.h"
+#include "extensions/buildflags/buildflags.h"
 #include "google_apis/gaia/gaia_auth_util.h"
-#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/browser_features.h"
+#include "components/crx_file/id_util.h"
+#include "extensions/browser/pref_names.h"
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 namespace content {
 class BrowserContext;
 }
 
 using base::UserMetricsAction;
-using first_run::internal::FirstRunImportBookmarksResult;
 
 namespace {
-
-// Keys required for importing bookmarks from Initial Preferences on First Run.
-constexpr char kImportBookmarksChildrenKey[] = "children";
-constexpr char kImportBookmarksTypeKey[] = "type";
-constexpr char kImportBookmarksNameKey[] = "name";
-constexpr char kImportBookmarksUrlKey[] = "url";
-constexpr char kImportBookmarksFolderType[] = "folder";
-constexpr char kImportBookmarksUrlType[] = "url";
-constexpr char kImportBookmarksBookmarksKey[] = "first_run_bookmarks";
 
 // A bitfield formed from values in AutoImportState to record the state of
 // AutoImport. This is used in testing to verify import startup actions that
@@ -279,92 +269,6 @@ bool IsFirstRunSentinelPresent() {
   return !GetFirstRunSentinelFilePath(&sentinel) || base::PathExists(sentinel);
 }
 
-void RecordImportBookmarksResult(FirstRunImportBookmarksResult result) {
-  base::UmaHistogramEnumeration("FirstRun.ImportBookmarksDict", result);
-}
-
-bool AddUrlToBookmarkModelIfValid(int index,
-                                  const std::string& url,
-                                  const std::string& name,
-                                  const bookmarks::BookmarkNode* parent,
-                                  bookmarks::BookmarkModel& model) {
-  const GURL gurl = GURL(url);
-  if (gurl.is_valid()) {
-    model.AddURL(parent, index, base::UTF8ToUTF16(name), gurl);
-    return true;
-  }
-  return false;
-}
-
-// Recursive helper that walks the JSON dictionary and creates matching bookmark
-// nodes.
-void ImportBookmarksAndFoldersRecursively(
-    const base::Value::Dict& folder_node_dict,
-    const bookmarks::BookmarkNode* parent,
-    bookmarks::BookmarkModel& model) {
-  const base::Value::List* children =
-      folder_node_dict.FindList(kImportBookmarksChildrenKey);
-  if (!children) {
-    return;
-  }
-
-  CHECK(parent);
-  size_t index = parent->children().size();
-
-  for (const auto& child_value : *children) {
-    const base::Value::Dict* child_dict = child_value.GetIfDict();
-    if (!child_dict) {
-      continue;
-    }
-
-    const std::string* type = child_dict->FindString(kImportBookmarksTypeKey);
-    const std::string* name = child_dict->FindString(kImportBookmarksNameKey);
-    if (!type || !name) {
-      continue;
-    }
-
-    if (*type == kImportBookmarksUrlType) {
-      const std::string* url = child_dict->FindString(kImportBookmarksUrlKey);
-      if (url &&
-          AddUrlToBookmarkModelIfValid(index, *url, *name, parent, model)) {
-        ++index;
-      }
-    } else if (*type == kImportBookmarksFolderType) {
-      const bookmarks::BookmarkNode* new_folder =
-          model.AddFolder(parent, index, base::UTF8ToUTF16(*name));
-      if (new_folder) {
-        ImportBookmarksAndFoldersRecursively(*child_dict, new_folder, model);
-        ++index;
-      }
-    }
-  }
-}
-
-void ImportBookmarksFromDict(
-    const std::unique_ptr<ScopedProfileKeepAlive> scoped_profile,
-    const base::Value::Dict bookmarks_dict,
-    bookmarks::BookmarkModel* bookmark_model) {
-  const base::Value::Dict* bookmarks_to_import =
-      bookmarks_dict.FindDictByDottedPath(kImportBookmarksBookmarksKey);
-
-  if (!bookmarks_to_import ||
-      !bookmarks_to_import->FindList(kImportBookmarksChildrenKey)) {
-    RecordImportBookmarksResult(FirstRunImportBookmarksResult::kInvalidDict);
-    return;
-  }
-
-  bookmark_model->BeginExtensiveChanges();
-  absl::Cleanup end_changes = [bookmark_model] {
-    bookmark_model->EndExtensiveChanges();
-  };
-
-  const bookmarks::BookmarkNode* parent = bookmark_model->bookmark_bar_node();
-  ImportBookmarksAndFoldersRecursively(*bookmarks_to_import, parent,
-                                       *bookmark_model);
-
-  RecordImportBookmarksResult(FirstRunImportBookmarksResult::kSuccess);
-}
-
 }  // namespace
 
 namespace first_run {
@@ -397,6 +301,18 @@ void SetupInitialPrefsFromInstallPrefs(
       out_prefs->import_bookmarks_dict = bookmarks_dict->Clone();
     }
   }
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  if (base::FeatureList::IsEnabled(features::kInitialExternalExtensions)) {
+    out_prefs->initial_extensions_provider_name =
+        install_prefs.GetInitialExtensionsProviderName();
+
+    if (const base::Value::List* initial_extensions =
+            install_prefs.GetInitialExtensionsList()) {
+      out_prefs->initial_extensions = initial_extensions->Clone();
+    }
+  }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_MAC)
   if (install_prefs.GetBool(prefs::kConfirmToQuitEnabled, &value) && value)
@@ -524,17 +440,19 @@ ProcessInitialPreferencesResult ProcessInitialPreferences(
 
     initial_dictionary.Remove(installer::initial_preferences::kBookmarksBlock);
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+    // Extensions are not copied verbatim into prefs. Their installation
+    // is managed by the `InitialExternalExtensionsLoader` which will load
+    // extension ids from the local prefs.
+    initial_dictionary.RemoveByDottedPath(
+        installer::initial_preferences::kExtensionsBlock);
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
     if (!chrome_prefs::InitializePrefsFromMasterPrefs(
             profiles::GetDefaultProfileDir(user_data_dir),
             std::move(initial_dictionary),
             g_browser_process->os_crypt_async())) {
       DLOG(ERROR) << "Failed to initialize from initial preferences.";
-    }
-
-    const base::Value::Dict* extensions = nullptr;
-    if (initial_prefs->GetExtensionsBlock(extensions)) {
-      DVLOG(1) << "Extensions block found in initial preferences";
-      extensions::ExtensionUpdater::UpdateImmediatelyForFirstRun();
     }
 
     internal::SetupInitialPrefsFromInstallPrefs(*initial_prefs, out_prefs);
@@ -595,31 +513,6 @@ void AutoImport(
 
   if (!import_bookmarks_path.empty())
     ImportFromFile(profile, import_bookmarks_path);
-}
-
-void StartBookmarksImportFromDict(Profile* profile,
-                                  base::Value::Dict bookmarks_dict) {
-  bookmarks::BookmarkModel* bookmark_model =
-      BookmarkModelFactory::GetForBrowserContext(profile);
-
-  // TODO(crbug.com/436662488): Monitor and replace this with a CHECK if no hits
-  // in few milestones.
-  // BookmarkModel will be null for the system profile.
-  if (!bookmark_model) {
-    RecordImportBookmarksResult(FirstRunImportBookmarksResult::kInvalidProfile);
-    return;
-  }
-
-  auto scoped_profile = std::make_unique<ScopedProfileKeepAlive>(
-      profile, ProfileKeepAliveOrigin::kWaitingForBookmarksImportOnFirstRun);
-
-  // Transferring ownership of ScopedProfileKeepAlive to callback ensures
-  // Profile stays alive while bookmarks are imported.
-  bookmarks::ScheduleCallbackOnBookmarkModelLoad(
-      *bookmark_model,
-      base::BindOnce(&ImportBookmarksFromDict, std::move(scoped_profile),
-                     std::move(bookmarks_dict),
-                     base::Unretained(bookmark_model)));
 }
 
 void DoPostImportTasks(bool make_chrome_default_for_user) {

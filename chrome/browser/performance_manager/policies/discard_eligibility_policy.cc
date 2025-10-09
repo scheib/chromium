@@ -10,8 +10,10 @@
 #include "components/performance_manager/public/graph/node_data_describer_registry.h"
 #include "components/url_matcher/url_matcher.h"
 #include "components/url_matcher/url_util.h"
+#include "content/public/browser/web_contents.h"
 
 #if BUILDFLAG(ENABLE_GLIC)
+#include "chrome/browser/glic/public/glic_keyed_service.h"
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
 #include "components/tabs/public/tab_interface.h"
 #endif
@@ -20,16 +22,12 @@ namespace performance_manager::policies {
 
 namespace {
 
-BASE_FEATURE(kIgnoreDiscardAttemptMarker,
-             "IgnoreDiscardAttemptMarker",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kIgnoreDiscardAttemptMarker, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Not intended for launch.
 // This feature can be used during testing to ensure realistic priority
 // ordering of tabs even when devtools is connected.
-BASE_FEATURE(kAllowDevtoolsConnectedDiscard,
-             "AllowDevtoolsConnectedDiscard",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAllowDevtoolsConnectedDiscard, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // NodeAttachedData used to indicate that there's already been an attempt to
 // discard a PageNode.

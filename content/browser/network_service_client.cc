@@ -124,9 +124,11 @@ NetworkServiceClient::NetworkServiceClient()
 
   if (IsOutOfProcessNetworkService()) {
     net::CertDatabase::GetInstance()->AddObserver(this);
-    memory_pressure_listener_ = std::make_unique<base::MemoryPressureListener>(
-        FROM_HERE, base::BindRepeating(&NetworkServiceClient::OnMemoryPressure,
-                                       base::Unretained(this)));
+    memory_pressure_listener_registration_ =
+        std::make_unique<base::MemoryPressureListenerRegistration>(
+            FROM_HERE, base::MemoryPressureListenerTag::kNetworkServiceClient,
+            base::BindRepeating(&NetworkServiceClient::OnMemoryPressure,
+                                base::Unretained(this)));
   }
 
   webrtc_connections_observer_ =
@@ -162,7 +164,7 @@ void NetworkServiceClient::OnClientCertStoreChanged() {
 }
 
 void NetworkServiceClient::OnMemoryPressure(
-    base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+    base::MemoryPressureLevel memory_pressure_level) {
   GetNetworkService()->OnMemoryPressure(memory_pressure_level);
 }
 
@@ -353,6 +355,7 @@ void NetworkServiceClient::Clone(
 }
 
 void NetworkServiceClient::OnWebSocketConnectedToPrivateNetwork(
+    const GURL& request_url,
     network::mojom::IPAddressSpace ip_address_space) {}
 
 void NetworkServiceClient::OnUrlLoaderConnectedToPrivateNetwork(

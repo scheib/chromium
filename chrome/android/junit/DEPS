@@ -1,7 +1,6 @@
 include_rules = [
   "+chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java",
   "+chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java",
-  "+chrome/android/java/src/org/chromium/chrome/browser/privacy_sandbox/TrackingProtectionSnackbarController.java",
   "+chrome/browser/android/lifecycle",
   "+chrome/browser/ui/android/appmenu/java/src/org/chromium/chrome/browser/ui/appmenu/AppMenuDelegate.java",
   "+chrome/android/java/src/org/chromium/chrome/browser/ssl/ChromeSecurityStateModelDelegate.java",
@@ -27,6 +26,7 @@ include_rules = [
   "+components/browser_ui/settings/android",
   "+components/browser_ui/test/android",
   "+components/browser_ui/widget/android",
+  "+components/permissions/android/java",
   "+components/collaboration/public/android/java",
   "+components/commerce/core",
   "+components/content_relationship_verification/android/java/src/org/chromium/components/content_relationship_verification",
@@ -53,6 +53,7 @@ include_rules = [
   "+content/public/android/java/src/org/chromium/content_public",
   "+content/public/android/java/src/org/chromium/content/browser/RenderCoordinatesImpl.java",
   "+content/public/android/java/src/org/chromium/content/browser/webcontents/WebContentsImpl.java",
+  "+content/public/android/java/src/org/chromium/content/browser/GestureListenerManagerImpl.java",
 
   "+google_apis/gaia/android/java",
 ]

@@ -25,6 +25,8 @@
 // Autofill popup and keyboard accessory images.
 // We use Android's |VectorDrawableCompat| for the following images that are
 // displayed using |DropdownAdapter|.
+LINK_RESOURCE_ID(IDR_AUTOFILL_AFFIRM_LINKED, R.drawable.affirm_linked)
+LINK_RESOURCE_ID(IDR_AUTOFILL_AFFIRM_UNLINKED, R.drawable.affirm_unlinked)
 LINK_RESOURCE_ID(IDR_AUTOFILL_CC_AMEX_OLD, R.drawable.amex_card)
 LINK_RESOURCE_ID(IDR_AUTOFILL_CC_AMEX, R.drawable.amex_card)
 LINK_RESOURCE_ID(IDR_AUTOFILL_CC_DINERS_OLD, R.drawable.diners_card)
@@ -54,6 +56,12 @@ LINK_RESOURCE_ID(IDR_AUTOFILL_CC_VERVE, R.drawable.verve_card)
 LINK_RESOURCE_ID(IDR_AUTOFILL_CC_VISA_OLD, R.drawable.visa_card)
 LINK_RESOURCE_ID(IDR_AUTOFILL_CC_VISA, R.drawable.visa_card)
 LINK_RESOURCE_ID(IDR_AUTOFILL_GOOGLE_PAY, R.drawable.google_pay)
+LINK_RESOURCE_ID(IDR_AUTOFILL_KLARNA_LINKED, R.drawable.klarna_linked)
+LINK_RESOURCE_ID(IDR_AUTOFILL_KLARNA_UNLINKED, R.drawable.klarna_unlinked)
+LINK_RESOURCE_ID(IDR_AUTOFILL_METADATA_BNPL_GENERIC,
+                 R.drawable.bnpl_icon_generic)
+LINK_RESOURCE_ID(IDR_AUTOFILL_METADATA_BNPL_GENERIC_OLD,
+                 R.drawable.bnpl_icon_generic)
 LINK_RESOURCE_ID(IDR_AUTOFILL_METADATA_CC_AMEX_OLD,
                  R.drawable.amex_metadata_card)
 LINK_RESOURCE_ID(IDR_AUTOFILL_METADATA_CC_AMEX, R.drawable.amex_metadata_card)
@@ -96,6 +104,8 @@ LINK_RESOURCE_ID(IDR_AUTOFILL_METADATA_CC_VISA_OLD,
 LINK_RESOURCE_ID(IDR_AUTOFILL_METADATA_CC_VISA, R.drawable.visa_metadata_card)
 LINK_RESOURCE_ID(IDR_AUTOFILL_IBAN_OLD, R.drawable.iban_icon)
 LINK_RESOURCE_ID(IDR_AUTOFILL_IBAN, R.drawable.iban_icon)
+LINK_RESOURCE_ID(IDR_AUTOFILL_ZIP_LINKED, R.drawable.zip_linked)
+LINK_RESOURCE_ID(IDR_AUTOFILL_ZIP_UNLINKED, R.drawable.zip_unlinked)
 
 // Use DECLARE_RESOURCE_ID here as these resources are used for android only.
 DECLARE_RESOURCE_ID(IDR_ANDROID_AUTOFILL_CC_SCAN_NEW,
@@ -122,3 +132,6 @@ DECLARE_RESOURCE_ID(IDR_ANDROID_AUTOFILL_CREATE, R.drawable.ic_edit_24dp)
 // Home and work icons.
 DECLARE_RESOURCE_ID(IDR_ANDROID_AUTOFILL_HOME, R.drawable.home_logo)
 DECLARE_RESOURCE_ID(IDR_ANDROID_AUTOFILL_WORK, R.drawable.work_logo)
+
+// APC password recovery icon
+DECLARE_RESOURCE_ID(IDR_ANDROID_PASSWORD_HISTORY, R.drawable.ic_history_24dp)

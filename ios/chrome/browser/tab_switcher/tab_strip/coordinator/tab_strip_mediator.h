@@ -7,9 +7,9 @@
 
 #import <Foundation/Foundation.h>
 
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/tab_strip_group_cell_data_source.h"
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/tab_strip_mutator.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_collection_drag_drop_handler.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/tab_strip_group_cell_data_source.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/tab_strip_mutator.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_switcher_item_snapshot_and_favicon_data_source.h"
 
 class Browser;
@@ -22,7 +22,6 @@ enum class TabGroupActionType;
 @protocol TabStripConsumer;
 @protocol TabStripMediatorDelegate;
 class UrlLoadingBrowserAgent;
-class WebStateList;
 
 namespace base {
 class Uuid;
@@ -51,10 +50,6 @@ class WebStateID;
                 TabSwitcherItemSnapShotAndFaviconDataSource,
                 TabStripMutator,
                 TabStripTabGroupCellDataSource>
-
-// The WebStateList that this mediator listens for any changes on the total
-// number of Webstates.
-@property(nonatomic, assign) WebStateList* webStateList;
 
 // The ProfileIOS model for the corresponding browser.
 @property(nonatomic, assign) ProfileIOS* profile;

@@ -22,9 +22,8 @@ source_set("save_card") {
     "//ios/chrome/browser/overlays/ui_bundled:coordinators",
     "//ios/chrome/browser/overlays/ui_bundled/infobar_banner:mediators",
     "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/snackbar",
     "//ios/chrome/browser/shared/ui/symbols",
-    "//ios/chrome/browser/shared/ui/util:snackbar_util",
-    "//ios/third_party/material_components_ios",
     "//ui/base",
   ]
 }
@@ -57,8 +56,7 @@ source_set("unit_tests") {
     "//ios/chrome/browser/overlays/model/test",
     "//ios/chrome/browser/overlays/ui_bundled/test",
     "//ios/chrome/browser/shared/public/commands",
-    "//ios/chrome/browser/shared/ui/util:snackbar_util",
-    "//ios/third_party/material_components_ios",
+    "//ios/chrome/browser/shared/public/snackbar",
     "//testing/gmock",
     "//testing/gtest",
     "//third_party/ocmock",

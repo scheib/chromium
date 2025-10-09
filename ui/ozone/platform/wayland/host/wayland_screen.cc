@@ -16,6 +16,8 @@
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "components/device_event_log/device_event_log.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "ui/base/linux/linux_desktop.h"
 #include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/base/ui_base_features.h"
@@ -29,7 +31,7 @@
 #include "ui/gfx/font_render_params.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/linux/linux_ui.h"
 #include "ui/ozone/platform/wayland/host/dump_util.h"
 #include "ui/ozone/platform/wayland/host/org_kde_kwin_idle.h"
@@ -39,8 +41,7 @@
 #include "ui/ozone/platform/wayland/host/wayland_output.h"
 #include "ui/ozone/platform/wayland/host/wayland_output_manager.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
-#include "ui/ozone/platform/wayland/host/wayland_zcr_color_management_output.h"
-#include "ui/ozone/platform/wayland/host/wayland_zcr_color_manager.h"
+#include "ui/ozone/platform/wayland/host/wayland_wp_color_management_output.h"
 #include "ui/ozone/platform/wayland/host/zwp_idle_inhibit_manager.h"
 
 #if BUILDFLAG(USE_DBUS)
@@ -129,10 +130,7 @@ WaylandScreen::WaylandScreen(WaylandConnection* connection)
   }
 }
 
-WaylandScreen::~WaylandScreen() {
-  // Destroy the idle inhibitor early.  See https://crbug.com/433643249
-  idle_inhibitor_.reset();
-}
+WaylandScreen::~WaylandScreen() = default;
 
 void WaylandScreen::OnOutputAddedOrUpdated(
     const WaylandOutput::Metrics& metrics) {
@@ -233,9 +231,18 @@ void WaylandScreen::AddOrUpdateDisplay(const WaylandOutput::Metrics& metrics) {
   changed_display.UpdateWorkAreaFromInsets(metrics.insets);
 
   gfx::DisplayColorSpaces color_spaces;
-  color_spaces.SetOutputBufferFormats(image_format_no_alpha_.value(),
-                                      image_format_alpha_.value());
-  changed_display.SetColorSpaces(color_spaces);
+  if (auto* wayland_output =
+          connection_->wayland_output_manager()->GetOutput(metrics.output_id)) {
+    if (auto* output = wayland_output->wp_color_management_output()) {
+      if (auto* output_color_spaces = output->GetDisplayColorSpaces()) {
+        color_spaces = *output_color_spaces;
+      }
+    }
+  }
+  color_spaces.SetOutputFormats(
+      viz::GetSharedImageFormat(image_format_no_alpha_.value()),
+      viz::GetSharedImageFormat(image_format_alpha_.value()));
+  changed_display.SetColorSpaces(std::move(color_spaces));
 
   // There are 2 cases where |changed_display| must be set as primary:
   // 1. When it is the first one being added to the |display_list_|. Or
@@ -264,6 +271,10 @@ void WaylandScreen::AddOrUpdateDisplay(const WaylandOutput::Metrics& metrics) {
   }
   display_id_map_[metrics.output_id] = metrics.display_id;
   display_list_.AddOrUpdateDisplay(changed_display, type);
+}
+
+void WaylandScreen::ResetConnection() {
+  connection_ = nullptr;
 }
 
 WaylandOutput::Id WaylandScreen::GetOutputIdForDisplayId(int64_t display_id) {
@@ -437,31 +448,19 @@ bool WaylandScreen::SetScreenSaverSuspended(bool suspend) {
     return false;
 
   if (suspend) {
-    // Wayland inhibits idle behaviour on certain output, and implies that a
-    // surface bound to that output should obtain the inhibitor and hold it
-    // until it no longer needs to prevent the output to go idle.
-    // We assume that the idle lock is initiated by the user, and therefore the
-    // surface that we should use is the one owned by the window that is focused
-    // currently.
-    const auto* window_manager = connection_->window_manager();
-    DCHECK(window_manager);
-    const auto* current_window = window_manager->GetCurrentFocusedWindow();
-    if (!current_window) {
-      LOG(WARNING) << "Cannot inhibit going idle when no window is focused";
-      return false;
-    }
-    DCHECK(current_window->root_surface());
-    idle_inhibitor_ = connection_->zwp_idle_inhibit_manager()->CreateInhibitor(
-        current_window->root_surface()->surface());
+    connection_->zwp_idle_inhibit_manager()->CreateInhibitor();
   } else {
-    idle_inhibitor_.reset();
+    connection_->zwp_idle_inhibit_manager()->RemoveInhibitor();
   }
 
   return true;
 }
 
 bool WaylandScreen::IsScreenSaverActive() const {
-  return idle_inhibitor_ != nullptr;
+  // idle_inhibitor prevents screen saver from engaging, but does not indicate
+  // whether screen saver is active or not. Assume not here.
+  NOTIMPLEMENTED_LOG_ONCE();
+  return false;
 }
 
 base::TimeDelta WaylandScreen::CalculateIdleTime() const {

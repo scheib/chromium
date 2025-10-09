@@ -33,12 +33,9 @@
 #include "chrome/browser/permissions/crowd_deny_preload_data.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/push_messaging/push_messaging_app_identifier.h"
-#include "chrome/browser/push_messaging/push_messaging_constants.h"
-#include "chrome/browser/push_messaging/push_messaging_features.h"
 #include "chrome/browser/push_messaging/push_messaging_service_factory.h"
 #include "chrome/browser/push_messaging/push_messaging_service_impl.h"
 #include "chrome/browser/push_messaging/push_messaging_unsubscribed_entry.h"
-#include "chrome/browser/push_messaging/push_messaging_utils.h"
 #include "chrome/browser/safe_browsing/test_safe_browsing_service.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -63,6 +60,11 @@
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/permissions/permission_request_manager.h"
+#include "components/push_messaging/app_identifier.h"
+#include "components/push_messaging/app_identifier_test_support.h"
+#include "components/push_messaging/push_messaging_constants.h"
+#include "components/push_messaging/push_messaging_features.h"
+#include "components/push_messaging/push_messaging_utils.h"
 #include "components/site_engagement/content/site_engagement_score.h"
 #include "components/site_engagement/content/site_engagement_service.h"
 #include "content/public/browser/browsing_data_remover.h"
@@ -164,7 +166,9 @@ void InstanceIDResultCallback(base::OnceClosure done_callback,
 
 }  // namespace
 
-class PushMessagingBrowserTestBase : public InProcessBrowserTest {
+class PushMessagingBrowserTestBase
+    : public InProcessBrowserTest,
+      public push_messaging::AppIdentifierTestSupport {
  public:
   PushMessagingBrowserTestBase()
       : scoped_testing_factory_installer_(
@@ -273,7 +277,7 @@ class PushMessagingBrowserTestBase : public InProcessBrowserTest {
   }
 
   gcm::GCMAppHandler* GetAppHandler() {
-    return gcm_driver_->GetAppHandler(kPushMessagingAppIdentifierPrefix);
+    return gcm_driver_->GetAppHandler(push_messaging::kAppIdentifierPrefix);
   }
 
   permissions::PermissionRequestManager* GetPermissionRequestManager() {
@@ -311,7 +315,7 @@ class PushMessagingBrowserTestBase : public InProcessBrowserTest {
                        std::string* out_token = nullptr);
 
   blink::mojom::PushSubscriptionPtr GetSubscriptionForAppIdentifier(
-      const PushMessagingAppIdentifier& app_identifier) {
+      const push_messaging::AppIdentifier& app_identifier) {
     blink::mojom::PushSubscriptionPtr result;
     base::RunLoop run_loop;
     push_service_->GetPushSubscriptionFromAppIdentifier(
@@ -326,15 +330,15 @@ class PushMessagingBrowserTestBase : public InProcessBrowserTest {
   }
 
   // Deletes an Instance ID from the GCM Store but keeps the push subscription
-  // stored in the PushMessagingAppIdentifier map and Service Worker DB.
+  // stored in the push_messaging::AppIdentifier map and Service Worker DB.
   // Calls should be wrapped in the ASSERT_NO_FATAL_FAILURE() macro.
   void DeleteInstanceIDAsIfGCMStoreReset(const std::string& app_id);
 
-  PushMessagingAppIdentifier GetAppIdentifierForServiceWorkerRegistration(
+  push_messaging::AppIdentifier GetAppIdentifierForServiceWorkerRegistration(
       int64_t service_worker_registration_id);
 
   void SendMessageAndWaitUntilHandled(
-      const PushMessagingAppIdentifier& app_identifier,
+      const push_messaging::AppIdentifier& app_identifier,
       const gcm::IncomingMessage& message);
 
   net::EmbeddedTestServer* https_server() const { return https_server_.get(); }
@@ -477,7 +481,7 @@ void PushMessagingBrowserTestBase::SetupOrphanedPushSubscription(
       base::BindOnce(&DidRegister, run_loop.QuitClosure()));
   run_loop.Run();
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(), requesting_origin,
           service_worker_registration_id);
@@ -498,9 +502,8 @@ void PushMessagingBrowserTestBase::LegacySubscribeSuccessfully(
   GURL requesting_origin =
       https_server()->GetURL("/").DeprecatedGetOriginAsURL();
   int64_t service_worker_registration_id = 0LL;
-  PushMessagingAppIdentifier app_identifier =
-      PushMessagingAppIdentifier::LegacyGenerateForTesting(
-          requesting_origin, service_worker_registration_id);
+  push_messaging::AppIdentifier app_identifier = LegacyGenerateForTesting(
+      requesting_origin, service_worker_registration_id);
   push_service_->IncreasePushSubscriptionCount(1, true /* is_pending */);
 
   std::string subscription_id;
@@ -515,7 +518,8 @@ void PushMessagingBrowserTestBase::LegacySubscribeSuccessfully(
     ASSERT_EQ(gcm::GCMClient::SUCCESS, register_result);
   }
 
-  app_identifier.PersistToPrefs(GetBrowser()->profile());
+  PushMessagingAppIdentifier::PersistToPrefs(app_identifier,
+                                             GetBrowser()->profile());
   push_service_->IncreasePushSubscriptionCount(1, false /* is_pending */);
   push_service_->DecreasePushSubscriptionCount(1, true /* was_pending */);
 
@@ -554,11 +558,11 @@ void PushMessagingBrowserTestBase::EndpointToToken(const std::string& endpoint,
     *out_token = endpoint.substr(last_slash + 1);
 }
 
-PushMessagingAppIdentifier
+push_messaging::AppIdentifier
 PushMessagingBrowserTestBase::GetAppIdentifierForServiceWorkerRegistration(
     int64_t service_worker_registration_id) {
   GURL origin = https_server()->GetURL("/").DeprecatedGetOriginAsURL();
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(), origin, service_worker_registration_id);
   EXPECT_FALSE(app_identifier.is_null());
@@ -568,7 +572,7 @@ PushMessagingBrowserTestBase::GetAppIdentifierForServiceWorkerRegistration(
 void PushMessagingBrowserTestBase::DeleteInstanceIDAsIfGCMStoreReset(
     const std::string& app_id) {
   // Delete the Instance ID directly, keeping the push subscription stored in
-  // the PushMessagingAppIdentifier map and the Service Worker database. This
+  // the push_messaging::AppIdentifier map and the Service Worker database. This
   // simulates the GCM Store getting reset but failing to clear push
   // subscriptions, either because the store got reset before
   // 93ec793ac69a542b2213297737178a55d069fd0d (Chrome 56), or because a race
@@ -591,7 +595,7 @@ void PushMessagingBrowserTestBase::DeleteInstanceIDAsIfGCMStoreReset(
 }
 
 void PushMessagingBrowserTestBase::SendMessageAndWaitUntilHandled(
-    const PushMessagingAppIdentifier& app_identifier,
+    const push_messaging::AppIdentifier& app_identifier,
     const gcm::IncomingMessage& message) {
   base::RunLoop run_loop;
   push_service()->SetMessageCallbackForTesting(run_loop.QuitClosure());
@@ -743,7 +747,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, SubscribeWithInvalidation) {
       SubscribeSuccessfully(PushSubscriptionKeyFormat::kBinary, &token2));
   ASSERT_EQ(token1, token2);
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(),
           https_server()->GetURL("/").DeprecatedGetOriginAsURL(),
@@ -1102,7 +1106,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, SubscribePersisted) {
   std::string token1;
   ASSERT_NO_FATAL_FAILURE(
       SubscribeSuccessfully(PushSubscriptionKeyFormat::kBinary, &token1));
-  PushMessagingAppIdentifier sw0_identifier =
+  push_messaging::AppIdentifier sw0_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
   EXPECT_EQ(sw0_identifier.app_id(), gcm_driver_->last_gettoken_app_id());
 
@@ -1122,7 +1126,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, SubscribePersisted) {
   ASSERT_NO_FATAL_FAILURE(
       SubscribeSuccessfully(PushSubscriptionKeyFormat::kBinary, &token2));
   EXPECT_NE(token1, token2);
-  PushMessagingAppIdentifier sw2_identifier =
+  push_messaging::AppIdentifier sw2_identifier =
       GetAppIdentifierForServiceWorkerRegistration(2LL);
   EXPECT_EQ(sw2_identifier.app_id(), gcm_driver_->last_gettoken_app_id());
 
@@ -1132,7 +1136,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, SubscribePersisted) {
       SubscribeSuccessfully(PushSubscriptionKeyFormat::kBinary, &token3));
   EXPECT_NE(token1, token3);
   EXPECT_NE(token2, token3);
-  PushMessagingAppIdentifier sw1_identifier =
+  push_messaging::AppIdentifier sw1_identifier =
       GetAppIdentifierForServiceWorkerRegistration(1LL);
   EXPECT_EQ(sw1_identifier.app_id(), gcm_driver_->last_gettoken_app_id());
 
@@ -1191,7 +1195,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, AppHandlerOnlyIfSubscribed) {
 
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventSuccess) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   ASSERT_EQ("false - is not controlled", RunScript("isControlled()"));
@@ -1215,7 +1219,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventSuccess) {
 
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventOnShutdown) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   ASSERT_EQ("false - is not controlled", RunScript("isControlled()"));
@@ -1234,7 +1238,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventOnShutdown) {
 
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventWithoutPayload) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   LoadTestPage();  // Reload to become controlled.
@@ -1250,7 +1254,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventWithoutPayload) {
 
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, LegacyPushEvent) {
   ASSERT_NO_FATAL_FAILURE(LegacySubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   LoadTestPage();  // Reload to become controlled.
@@ -1302,7 +1306,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventNoServiceWorker) {
       1);
 
   // |app_identifier| should no longer be stored in prefs.
-  PushMessagingAppIdentifier stored_app_identifier =
+  push_messaging::AppIdentifier stored_app_identifier =
       PushMessagingAppIdentifier::FindByAppId(GetBrowser()->profile(), app_id);
   EXPECT_TRUE(stored_app_identifier.is_null());
 }
@@ -1310,7 +1314,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventNoServiceWorker) {
 // Tests receiving messages for a subscription that no longer exists.
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, NoSubscription) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   LoadTestPage();  // Reload to become controlled.
@@ -1349,7 +1353,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, NoSubscription) {
 // somehow still has a subscription (as happened in https://crbug.com/633310).
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventWithoutPermission) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   LoadTestPage();  // Reload to become controlled.
@@ -1383,7 +1387,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventWithoutPermission) {
   EXPECT_EQ(app_identifier.app_id(), gcm_driver_->last_deletetoken_app_id());
   EXPECT_EQ("false - not subscribed", RunScript("hasSubscription()"));
   GURL origin = https_server()->GetURL("/").DeprecatedGetOriginAsURL();
-  PushMessagingAppIdentifier app_identifier_afterwards =
+  push_messaging::AppIdentifier app_identifier_afterwards =
       PushMessagingAppIdentifier::FindByServiceWorker(GetBrowser()->profile(),
                                                       origin, 0LL);
   EXPECT_TRUE(app_identifier_afterwards.is_null());
@@ -1397,7 +1401,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, PushEventWithoutPermission) {
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
                        PushEventEnforcesUserVisibleNotification) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   ASSERT_EQ("false - is not controlled", RunScript("isControlled()"));
@@ -1498,7 +1502,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
                        PushEventAllowSilentPushCommandLineFlag) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
   EXPECT_EQ(app_identifier.app_id(), gcm_driver_->last_gettoken_app_id());
   EXPECT_EQ(kEncodedApplicationServerKey,
@@ -1618,7 +1622,7 @@ IN_PROC_BROWSER_TEST_F(
     PushMessagingBrowserTestWithAbusiveOriginPermissionRevocation,
     PushEventPermissionRevoked) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   LoadTestPage();  // Reload to become controlled.
@@ -1651,7 +1655,7 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(app_identifier.app_id(), gcm_driver_->last_deletetoken_app_id());
   EXPECT_EQ("false - not subscribed", RunScript("hasSubscription()"));
   GURL origin = https_server()->GetURL("/").DeprecatedGetOriginAsURL();
-  PushMessagingAppIdentifier app_identifier_afterwards =
+  push_messaging::AppIdentifier app_identifier_afterwards =
       PushMessagingAppIdentifier::FindByServiceWorker(GetBrowser()->profile(),
                                                       origin, 0LL);
   EXPECT_TRUE(app_identifier_afterwards.is_null());
@@ -1681,7 +1685,7 @@ IN_PROC_BROWSER_TEST_F(
       SiteReputation::ABUSIVE_CONTENT);
 
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   ASSERT_EQ("false - is not controlled", RunScript("isControlled()"));
@@ -1706,7 +1710,7 @@ IN_PROC_BROWSER_TEST_F(
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTestBase,
                        PushEventIgnoresScheduledNotificationsForEnforcement) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   LoadTestPage();  // Reload to become controlled.
@@ -1751,7 +1755,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTestBase,
 IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
                        PushEventEnforcesUserVisibleNotificationAfterQueue) {
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   ASSERT_EQ("false - is not controlled", RunScript("isControlled()"));
@@ -1798,7 +1802,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
       GetBrowser()->tab_strip_model()->GetActiveWebContents();
 
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   ASSERT_EQ("false - is not controlled", RunScript("isControlled()"));
@@ -2142,7 +2146,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest, UnsubscribeOffline) {
   // retried, so the app handler shouldn't have been unregistered yet.
   EXPECT_EQ(push_service(), GetAppHandler());
   // But restarting the push service will unregister the app handler, since the
-  // subscription is no longer stored in the PushMessagingAppIdentifier map.
+  // subscription is no longer stored in the push_messaging::AppIdentifier map.
   ASSERT_NO_FATAL_FAILURE(RestartPushService());
   EXPECT_NE(push_service(), GetAppHandler());
 }
@@ -2171,7 +2175,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
 
   // We should not be able to look up the app id.
   GURL origin = https_server()->GetURL("/").DeprecatedGetOriginAsURL();
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(), origin,
           0LL /* service_worker_registration_id */);
@@ -2300,7 +2304,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
 
   GURL origin = https_server()->GetURL("/").DeprecatedGetOriginAsURL();
-  PushMessagingAppIdentifier app_identifier1 =
+  push_messaging::AppIdentifier app_identifier1 =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(), origin,
           0LL /* service_worker_registration_id */);
@@ -2312,7 +2316,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
   // Push messaging should not yet be aware of the InstanceID being deleted.
   histogram_tester_.ExpectTotalCount("PushMessaging.UnregistrationReason", 0);
   // We should still be able to look up the app id.
-  PushMessagingAppIdentifier app_identifier2 =
+  push_messaging::AppIdentifier app_identifier2 =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(), origin,
           0LL /* service_worker_registration_id */);
@@ -2329,7 +2333,7 @@ IN_PROC_BROWSER_TEST_F(PushMessagingBrowserTest,
                            GET_SUBSCRIPTION_STORAGE_CORRUPT),
       1);
   // We should no longer be able to look up the app id.
-  PushMessagingAppIdentifier app_identifier3 =
+  push_messaging::AppIdentifier app_identifier3 =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(), origin,
           0LL /* service_worker_registration_id */);
@@ -2665,7 +2669,7 @@ IN_PROC_BROWSER_TEST_F(
   run_loop.Run();
 
   // |app_identifier| should no longer be stored in prefs.
-  PushMessagingAppIdentifier stored_app_identifier =
+  push_messaging::AppIdentifier stored_app_identifier =
       PushMessagingAppIdentifier::FindByAppId(GetBrowser()->profile(), app_id);
   EXPECT_TRUE(stored_app_identifier.is_null());
 
@@ -2969,7 +2973,7 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnInvalidationTest,
                        PushSubscriptionChangeEventSuccess) {
   // Create the |old_subscription| by subscribing and unsubscribing again
   ASSERT_NO_FATAL_FAILURE(SubscribeSuccessfully());
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   blink::mojom::PushSubscriptionPtr old_subscription =
@@ -3020,7 +3024,7 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnInvalidationTest,
   LoadTestPage();  // Reload to become controlled.
   ASSERT_EQ("true - is controlled", RunScript("isControlled()"));
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
   auto old_subscription = GetSubscriptionForAppIdentifier(app_identifier);
 
@@ -3053,7 +3057,7 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnInvalidationTest,
   LoadTestPage();  // Reload to become controlled.
   ASSERT_EQ("true - is controlled", RunScript("isControlled()"));
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
   ASSERT_FALSE(app_identifier.is_null());
 
@@ -3063,13 +3067,13 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnInvalidationTest,
   run_loop.Run();
 
   // Old subscription should be gone
-  PushMessagingAppIdentifier deleted_identifier =
+  push_messaging::AppIdentifier deleted_identifier =
       PushMessagingAppIdentifier::FindByAppId(GetBrowser()->profile(),
                                               app_identifier.app_id());
   EXPECT_TRUE(deleted_identifier.is_null());
 
   // New subscription with a different app id should exist
-  PushMessagingAppIdentifier new_identifier =
+  push_messaging::AppIdentifier new_identifier =
       PushMessagingAppIdentifier::FindByServiceWorker(
           GetBrowser()->profile(), app_identifier.origin(),
           app_identifier.service_worker_registration_id());
@@ -3098,7 +3102,7 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnResubscribeTest,
   LoadTestPage();  // Reload to become controlled.
   ASSERT_EQ("true - is controlled", RunScript("isControlled()"));
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   {
@@ -3176,7 +3180,7 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnResubscribeTest,
   LoadTestPage();  // Reload to become controlled.
   ASSERT_EQ("true - is controlled", RunScript("isControlled()"));
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   {
@@ -3254,7 +3258,7 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnResubscribeTest,
   LoadTestPage();  // Reload to become controlled.
   ASSERT_EQ("true - is controlled", RunScript("isControlled()"));
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   {
@@ -3348,7 +3352,7 @@ IN_PROC_BROWSER_TEST_F(PushSubscriptionChangeEventOnResubscribeTest,
   LoadTestPage();  // Reload to become controlled.
   ASSERT_EQ("true - is controlled", RunScript("isControlled()"));
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   {
@@ -3430,7 +3434,7 @@ IN_PROC_BROWSER_TEST_F(
   LoadTestPage();  // Reload to become controlled.
   ASSERT_EQ("true - is controlled", RunScript("isControlled()"));
 
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       GetAppIdentifierForServiceWorkerRegistration(0LL);
 
   {

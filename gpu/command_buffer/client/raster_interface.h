@@ -42,7 +42,6 @@ extern "C" typedef const struct _GLcolorSpace* GLcolorSpace;
 
 namespace gpu {
 
-class ClientSharedImage;
 struct Mailbox;
 
 namespace raster {
@@ -55,6 +54,7 @@ class RasterInterface : public InterfaceBase {
   virtual ~RasterInterface() {}
 
   // This function will not perform any color conversion during the copy.
+  // The same width/height is assumed for the destination.
   virtual void CopySharedImage(const gpu::Mailbox& source_mailbox,
                                const gpu::Mailbox& dest_mailbox,
                                GLint xoffset,
@@ -63,6 +63,11 @@ class RasterInterface : public InterfaceBase {
                                GLint y,
                                GLsizei width,
                                GLsizei height) = 0;
+  // This function will not perform any color conversion during the copy.
+  virtual void CopySharedImage(const gpu::Mailbox& source_mailbox,
+                               const gpu::Mailbox& dest_mailbox,
+                               const gfx::Rect& source_rect,
+                               const gfx::Rect& dest_rect) = 0;
 
   // Asynchronously writes pixels from caller-owned memory inside
   // |src_sk_pixmap| into |dest_mailbox|.
@@ -183,22 +188,6 @@ class RasterInterface : public InterfaceBase {
                                    int src_y,
                                    int plane_index,
                                    void* dst_pixels) = 0;
-
-  // Raster via GrContext.
-  virtual GLuint CreateAndConsumeForGpuRaster(const gpu::Mailbox& mailbox) = 0;
-  virtual GLuint CreateAndConsumeForGpuRaster(
-      const scoped_refptr<gpu::ClientSharedImage>& shared_image) = 0;
-
-  virtual void DeleteGpuRasterTexture(GLuint texture) = 0;
-  virtual void BeginGpuRaster() = 0;
-  virtual void EndGpuRaster() = 0;
-  virtual void BeginSharedImageAccessDirectCHROMIUM(GLuint texture,
-                                                    GLenum mode) = 0;
-  virtual void EndSharedImageAccessDirectCHROMIUM(GLuint texture) = 0;
-
-  virtual void InitializeDiscardableTextureCHROMIUM(GLuint texture) = 0;
-  virtual void UnlockDiscardableTextureCHROMIUM(GLuint texture) = 0;
-  virtual bool LockDiscardableTextureCHROMIUM(GLuint texture) = 0;
 
 // Include the auto-generated part of this class. We split this because
 // it means we can easily edit the non-auto generated parts right here in

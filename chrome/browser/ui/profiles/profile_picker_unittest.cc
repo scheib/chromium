@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/profiles/profile_picker.h"
 
+#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/functional/callback.h"
 #include "base/functional/callback_helpers.h"
@@ -66,13 +67,13 @@ TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_TwoActive) {
       testing_profile_manager()->CreateTestingProfile("profile2");
   GetProfileAttributes(profile2)->SetActiveTimeToNow();
 
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kMultipleProfiles);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kProfilePicker);
 
   // Should be within the activity time threshold.
   task_environment()->FastForwardBy(base::Days(27));
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kMultipleProfiles);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kProfilePicker);
 }
 
 TEST_F(ProfilePickerTest,
@@ -81,8 +82,8 @@ TEST_F(ProfilePickerTest,
   testing_profile_manager()->CreateTestingProfile("profile2");
   local_state()->SetBoolean(prefs::kBrowserProfilePickerShown, true);
 
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kMultipleProfiles);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kProfilePicker);
 }
 
 TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_OneGuest) {
@@ -92,8 +93,8 @@ TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_OneGuest) {
   testing_profile_manager()->CreateTestingProfile("profile2");
   testing_profile_manager()->CreateGuestProfile();
 
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kInactiveProfiles);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kBrowserWindow);
 }
 
 TEST_F(ProfilePickerTest,
@@ -106,16 +107,16 @@ TEST_F(ProfilePickerTest,
   GetProfileAttributes(profile2)->SetActiveTimeToNow();
   local_state()->SetBoolean(prefs::kBrowserShowProfilePickerOnStartup, false);
 
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kUserOptedOut);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kBrowserWindow);
 }
 
 TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_Inactive) {
   testing_profile_manager()->CreateTestingProfile("profile1");
   testing_profile_manager()->CreateTestingProfile("profile2");
 
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kInactiveProfiles);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kBrowserWindow);
 }
 
 TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_Expired) {
@@ -128,8 +129,8 @@ TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_Expired) {
   // Should be outside of the activity time threshold.
   task_environment()->FastForwardBy(base::Days(29));
 
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kInactiveProfiles);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kBrowserWindow);
 }
 
 TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_OneActive) {
@@ -137,15 +138,15 @@ TEST_F(ProfilePickerTest, ShouldShowAtLaunch_MultipleProfiles_OneActive) {
       testing_profile_manager()->CreateTestingProfile("profile1");
   GetProfileAttributes(profile1)->SetActiveTimeToNow();
   testing_profile_manager()->CreateTestingProfile("profile2");
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kInactiveProfiles);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kBrowserWindow);
 }
 
 TEST_F(ProfilePickerTest, ShouldShowAtLaunch_SingleProfile) {
   testing_profile_manager()->CreateTestingProfile("profile1");
   local_state()->SetBoolean(prefs::kBrowserProfilePickerShown, true);
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kSingleProfile);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kBrowserWindow);
 }
 
 TEST_F(ProfilePickerTest,
@@ -159,23 +160,23 @@ TEST_F(ProfilePickerTest,
     GetProfileAttributes(profile1)->SetAuthInfo(GaiaId("foo"),
                                                 u"personal@gmail.com", true);
 
-    EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-              StartupProfileModeReason::kSingleProfile);
+    EXPECT_EQ(ProfilePicker::GetStartupMode(),
+              StartupProfileMode::kBrowserWindow);
 
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
         switches::kProfileEmail, "test@corp.com");
-    EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-              StartupProfileModeReason::kSingleProfile);
+    EXPECT_EQ(ProfilePicker::GetStartupMode(),
+              StartupProfileMode::kBrowserWindow);
 
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kCreateProfileEmailIfNotExists);
-    EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-              StartupProfileModeReason::kProfileEmailSwitchCreateProfile);
+    EXPECT_EQ(ProfilePicker::GetStartupMode(),
+              StartupProfileMode::kProfilePicker);
   }
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndDisableFeature(features::kCreateProfileIfNoneExists);
-  EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-            StartupProfileModeReason::kSingleProfile);
+  EXPECT_EQ(ProfilePicker::GetStartupMode(),
+            StartupProfileMode::kBrowserWindow);
 }
 
 TEST_F(ProfilePickerTest,
@@ -194,8 +195,8 @@ TEST_F(ProfilePickerTest,
         switches::kProfileEmail, "test@corp.com");
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kCreateProfileEmailIfNotExists);
-    EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-              StartupProfileModeReason::kProfileEmailSwitch);
+    EXPECT_EQ(ProfilePicker::GetStartupMode(),
+              StartupProfileMode::kBrowserWindow);
   }
 }
 
@@ -221,8 +222,8 @@ TEST_F(
         switches::kProfileEmail, "test@corp.com");
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kCreateProfileEmailIfNotExists);
-    EXPECT_EQ(ProfilePicker::GetStartupModeReason(),
-              StartupProfileModeReason::kProfileEmailSwitch);
+    EXPECT_EQ(ProfilePicker::GetStartupMode(),
+              StartupProfileMode::kBrowserWindow);
   }
 }
 

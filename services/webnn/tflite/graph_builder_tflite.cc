@@ -46,9 +46,7 @@ namespace {
 
 // This feature flag allows us to compare performance between fused vs unfused
 // quantized graphs.
-BASE_FEATURE(kApplyQDQFusion,
-             "ApplyQDQFusion",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kApplyQDQFusion, base::FEATURE_ENABLED_BY_DEFAULT);
 
 // The version number of the Schema. Ideally all changes will be backward
 // compatible. If that ever changes, we must ensure that version is the first
@@ -497,15 +495,19 @@ ContextProperties GraphBuilderTflite::GetContextProperties() {
       InputOperandLayout::kNhwc, Resample2DAxes::kChannelsLast,
       BatchNormalizationAxis::kAny,
       /*tensor_byte_length_limit=*/kTensorByteLengthLimit,
-      {/*input=*/kAllDataTypesExceptUint4,
-       /*constant=*/kAllDataTypesExceptUint4,
+      {/*input=*/{kAllDataTypesExceptUint4, SupportedRanks::UpTo(8)},
+       /*constant=*/{kAllDataTypesExceptUint4, SupportedRanks::UpTo(8)},
        /*arg_min_max_input=*/
        {kFloat16To32AndInt8To32AndUint8, SupportedRanks::NonScalarUpTo(8)},
-       /*arg_min_max_output=*/DataTypeConstraint::kInt32To64,
+       /*arg_min_max_output=*/
+       {DataTypeConstraint::kInt32To64, SupportedRanks::UpTo(8)},
        // BatchNormalization is emulated by sub, mul, add and div ops that only
-       // support max rank up to 5.
+       // support max rank up to 5. Because `SerializeBatchNormalization()`
+       // emulation code accesses input size along axis, input cannot be a
+       // scalar:
+       // https://source.chromium.org/chromium/chromium/src/+/main:services/webnn/tflite/graph_builder_tflite.cc;l=3556;drc=7b1dd7749fbb05ea8469492fe5c03c27fef75e38
        /*batch_normalization_input=*/
-       {DataTypeConstraint::kFloat16To32, SupportedRanks::UpTo(5)},
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::NonScalarUpTo(5)},
        /*batch_normalization_mean=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(1)},
        /*cast_input=*/
@@ -513,7 +515,10 @@ ContextProperties GraphBuilderTflite::GetContextProperties() {
        // Polyfilled using MIN and MAX.
        /*clamp_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::UpTo(5)},
-       /*concat_inputs=*/{kAllDataTypesExceptUint4, SupportedRanks::UpTo(8)},
+       // Scalar is not supported:
+       // https://source.chromium.org/chromium/chromium/src/+/main:third_party/tflite/src/tensorflow/lite/kernels/internal/reference/concatenation.h;l=38;drc=31b46e86a93151ca1192009863818d4eaf5df831
+       /*concat_inputs=*/
+       {kAllDataTypesExceptUint4, SupportedRanks::NonScalarUpTo(8)},
        // https://source.chromium.org/chromium/chromium/src/+/main:third_party/tflite/src/tensorflow/lite/kernels/conv.cc
        /*conv2d_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(4)},
@@ -576,6 +581,12 @@ ContextProperties GraphBuilderTflite::GetContextProperties() {
        {DataTypeConstraint::kUint8, SupportedRanks::UpTo(4)},
        /*logical_not_input=*/
        {DataTypeConstraint::kUint8, SupportedRanks::UpTo(8)},
+       // IsNaN is emulated by not_equal.
+       /*is_nan_input=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::UpTo(4)},
+       // IsInfinite is emulated by abs and equal.
+       /*is_infinite_input=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::UpTo(4)},
        /*logical_output=*/DataTypeConstraint::kUint8,
        /*abs_input=*/{kFloat16To32AndInt32, SupportedRanks::UpTo(8)},
        /*ceil_input=*/
@@ -599,6 +610,8 @@ ContextProperties GraphBuilderTflite::GetContextProperties() {
        // Polyfilled with DIV.
        /*reciprocal_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::UpTo(5)},
+       /*round_even_input=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::UpTo(8)},
        /*sign_input=*/{kFloat16To32AndInt32, SupportedRanks::UpTo(8)},
        /*sin_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::UpTo(8)},
@@ -613,8 +626,10 @@ ContextProperties GraphBuilderTflite::GetContextProperties() {
        /*elu_input=*/{kFloat16To32AndInt8, SupportedRanks::UpTo(5)},
        /*expand_input=*/
        {kFloat16To32AndInts8To32AndInt64, SupportedRanks::UpTo(8)},
+       // Scalar is not supported:
+       // https://source.chromium.org/chromium/chromium/src/+/main:third_party/tflite/src/tensorflow/lite/kernels/internal/reference/gather.h;l=43;drc=49db932a0bdfca060c3e8b0d063a7e8c9f5d2fa5
        /*gather_input=*/
-       {kFloat16To32AndInt8To64AndUint8, SupportedRanks::UpTo(8)},
+       {kFloat16To32AndInt8To64AndUint8, SupportedRanks::NonScalarUpTo(8)},
        /*gather_indices=*/
        {DataTypeConstraint::kGatherScatterIndicesSupportedDataTypes,
         SupportedRanks::UpTo(8)},
@@ -639,6 +654,8 @@ ContextProperties GraphBuilderTflite::GetContextProperties() {
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(3)},
        /*gru_bias=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
+       /*gru_output_sequence=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(4)},
        /*gru_cell_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
        /*gru_cell_bias=*/
@@ -666,6 +683,8 @@ ContextProperties GraphBuilderTflite::GetContextProperties() {
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(3)},
        /*lstm_bias=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
+       /*lstm_output_sequence=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(4)},
        /*lstm_cell_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
        /*lstm_cell_bias=*/
@@ -3454,8 +3473,8 @@ auto GraphBuilderTflite::SerializeArgMinMax(const mojom::ArgMinMax& arg_min_max)
     -> base::expected<OperatorOffset, std::string> {
   CHECK(context_properties_.data_type_limits.arg_min_max_input.Supports(
       GetOperand(arg_min_max.input_operand_id).descriptor));
-  CHECK(context_properties_.data_type_limits.arg_min_max_output.Has(
-      GetOperand(arg_min_max.output_operand_id).descriptor.data_type()));
+  CHECK(context_properties_.data_type_limits.arg_min_max_output.Supports(
+      GetOperand(arg_min_max.output_operand_id).descriptor));
 
   // The WebNN axis option is uint32 data type, but TFLite axis needs int32
   // type, so the axis need to be validated here to not overflow.
@@ -4197,6 +4216,18 @@ auto GraphBuilderTflite::SerializeElementWiseUnary(
       return SerializeUnaryOperation(::tflite::BuiltinOperator_LOG,
                                      input_tensor_index, output_tensor_index);
     }
+    case mojom::ElementWiseUnary::Kind::kIsNaN: {
+      CHECK(data_type_limits.is_nan_input.Supports(input_descriptor));
+      // Emulate the isNaN operation whose calculation follows the expression
+      // `x != x`.
+      return SerializeBinaryOperation(
+          ::tflite::BuiltinOperator_NOT_EQUAL, input_tensor_info.index,
+          input_tensor_info.index, output_tensor_info.index);
+    }
+    case mojom::ElementWiseUnary::Kind::kIsInfinite: {
+      CHECK(data_type_limits.is_infinite_input.Supports(input_descriptor));
+      return SerializeIsInfinite(input_tensor_info, output_tensor_info);
+    }
     case mojom::ElementWiseUnary::Kind::kLogicalNot: {
       CHECK(data_type_limits.logical_not_input.Supports(input_descriptor));
       return SerializeLogicalNot(input_tensor_info, output_tensor_info);
@@ -4209,6 +4240,11 @@ auto GraphBuilderTflite::SerializeElementWiseUnary(
     case mojom::ElementWiseUnary::Kind::kReciprocal: {
       CHECK(data_type_limits.reciprocal_input.Supports(input_descriptor));
       return SerializeReciprocal(input_tensor_info, output_tensor_info);
+    }
+    case mojom::ElementWiseUnary::Kind::kRoundEven: {
+      CHECK(data_type_limits.round_even_input.Supports(input_descriptor));
+      return SerializeUnaryOperation(::tflite::BuiltinOperator_ROUND,
+                                     input_tensor_index, output_tensor_index);
     }
     case mojom::ElementWiseUnary::Kind::kSign: {
       CHECK(data_type_limits.sign_input.Supports(input_descriptor));
@@ -6104,6 +6140,38 @@ auto GraphBuilderTflite::SerializeLinear(const mojom::Linear& linear)
       input_tensor_info.index, output_tensor_index, linear.alpha, linear.beta);
 }
 
+auto GraphBuilderTflite::SerializeIsInfinite(
+    const TensorInfo& input_tensor_info,
+    const TensorInfo& output_tensor_info) -> OperatorOffset {
+  // Emulate isInfinite operation whose calculation follows the expression:
+  // `abs(x) == +inf`.
+  const TensorIndex abs_output_tensor_index = SerializeTemporaryTensor(
+      input_tensor_info.dimensions, input_tensor_info.data_type);
+  operators_.emplace_back(SerializeUnaryOperation(::tflite::BuiltinOperator_ABS,
+                                                  input_tensor_info.index,
+                                                  abs_output_tensor_index));
+
+  TensorIndex inf_tensor_index;
+  switch (input_tensor_info.data_type) {
+    case ::tflite::TensorType_FLOAT32:
+      inf_tensor_index = SerializeTensorWithBuffer<float>(
+          /*buffer=*/std::vector<float>{std::numeric_limits<float>::infinity()},
+          /*dimensions=*/{});
+      break;
+    case ::tflite::TensorType_FLOAT16:
+      inf_tensor_index = SerializeTensorWithBuffer<Float16>(
+          /*buffer=*/std::vector<Float16>{Float16{fp16_ieee_from_fp32_value(
+              std::numeric_limits<float>::infinity())}},
+          /*dimensions=*/{});
+      break;
+    default:
+      NOTREACHED() << "Unsupported data type for isInfinite operation.";
+  }
+  return SerializeBinaryOperation(::tflite::BuiltinOperator_EQUAL,
+                                  abs_output_tensor_index, inf_tensor_index,
+                                  output_tensor_info.index);
+}
+
 auto GraphBuilderTflite::SerializeLogicalNot(
     const TensorInfo& input_tensor_info,
     const TensorInfo& output_tensor_info) -> OperatorOffset {
@@ -7308,7 +7376,7 @@ auto GraphBuilderTflite::SerializeReshape(const mojom::Reshape& reshape)
     output_tensor_shape = std::move(quantized_output->dimensions);
   } else {
     TensorInfo output_tensor_info = SerializeOutputTensorInfo(
-        reshape.output_operand_id, /*quantize_params=*/0,
+        reshape.output_operand_id, input_tensor_info.quantize_params,
         /*operation_supports_float16=*/true, input_tensor_info.data_type);
     output_tensor_index = output_tensor_info.index;
     output_tensor_shape = std::move(output_tensor_info.dimensions);
@@ -7922,7 +7990,9 @@ auto GraphBuilderTflite::SerializeTranspose(const mojom::Transpose& transpose)
   TensorIndex output_tensor_index =
       fuse_dequantize
           ? quantized_output->index
-          : SerializeOutputTensorInfo(transpose.output_operand_id).index;
+          : SerializeOutputTensorInfo(transpose.output_operand_id,
+                                      input_tensor_info.quantize_params)
+                .index;
 
   return SerializeTransposeOperation(
       input_tensor_info.index, output_tensor_index,

@@ -184,6 +184,11 @@ struct PartitionOptions {
   // each `ThreadCache` instance.
   internal::SchedulerLoopQuarantineConfig
       scheduler_loop_quarantine_thread_local_config;
+  // Configuration for the AMSC quarantine branch. Used when
+  // `FreeFlags::kSchedulerLoopQuarantineForAdvancedMemorySafetyChecks` is
+  // specified.
+  internal::SchedulerLoopQuarantineConfig
+      scheduler_loop_quarantine_for_advanced_memory_safety_checks_config;
 
   // As the name implies, this is not a security measure, as there is no
   // guarantee that memorys has been zeroed out when handed back to the
@@ -191,17 +196,6 @@ struct PartitionOptions {
   // compression ratio of freed memory inside partially allocated pages (due to
   // fragmentation).
   EnableToggle eventually_zero_freed_memory = kDisabled;
-  // Linux-based systems have a limited per-process VMA limit, be more
-  // conservative there. This matches the feature setting in
-  // partition_alloc_features.cc, but not all clients use Chromium's feature
-  // system to configure PartitionAlloc.
-  EnableToggle fewer_memory_regions =
-#if PA_BUILDFLAG(IS_LINUX) || PA_BUILDFLAG(IS_ANDROID) || \
-    PA_BUILDFLAG(IS_CHROMEOS)
-      kEnabled;
-#else
-      kDisabled;
-#endif
 
   struct {
     EnableToggle enabled = kDisabled;
@@ -274,7 +268,6 @@ struct alignas(64) PA_COMPONENT_EXPORT(PARTITION_ALLOC) PartitionRoot {
     bool eventually_zero_freed_memory = false;
     internal::SchedulerLoopQuarantineConfig
         scheduler_loop_quarantine_thread_local_config;
-    bool fewer_memory_regions = false;
 #if PA_BUILDFLAG(HAS_MEMORY_TAGGING)
     bool memory_tagging_enabled_ = false;
     bool use_random_memory_tagging_ = false;
@@ -394,6 +387,8 @@ struct alignas(64) PA_COMPONENT_EXPORT(PARTITION_ALLOC) PartitionRoot {
   size_t scheduler_loop_quarantine_branch_capacity_in_bytes = 0;
   internal::SchedulerLoopQuarantineRoot scheduler_loop_quarantine_root;
   internal::GlobalSchedulerLoopQuarantineBranch scheduler_loop_quarantine;
+  internal::GlobalSchedulerLoopQuarantineBranch
+      scheduler_loop_quarantine_for_advanced_memory_safety_checks;
 
   static constexpr internal::base::TimeDelta kMaxPurgeDuration =
       internal::base::Milliseconds(2);
@@ -1544,6 +1539,13 @@ PA_ALWAYS_INLINE void PartitionRoot::FreeNoHooksImmediate(
       scheduler_loop_quarantine.Quarantine(object, slot_span, slot_start);
     }
     return;
+  } else if constexpr (
+      ContainsFlags(
+          flags,
+          FreeFlags::kSchedulerLoopQuarantineForAdvancedMemorySafetyChecks)) {
+    scheduler_loop_quarantine_for_advanced_memory_safety_checks.Quarantine(
+        object, slot_span, slot_start);
+    return;
   }
 
   // TODO(keishi): Create function to convert |object| to |slot_start_ptr|.
@@ -1566,7 +1568,6 @@ PA_ALWAYS_INLINE void PartitionRoot::FreeAfterBRPQuarantine(
 
   // Iterating over the entire slot can be really expensive.
 #if PA_BUILDFLAG(EXPENSIVE_DCHECKS_ARE_ON)
-#if !PA_BUILDFLAG(IS_IOS)
   auto hook = PartitionAllocHooks::GetQuarantineOverrideHook();
   // If we have a hook the object segment is not necessarily filled
   // with |kQuarantinedByte|.
@@ -1577,7 +1578,6 @@ PA_ALWAYS_INLINE void PartitionRoot::FreeAfterBRPQuarantine(
       PA_DCHECK(object[i] == internal::kQuarantinedByte);
     }
   }
-#endif  //  !PA_BUILDFLAG(IS_IOS)
   internal::DebugMemset(internal::SlotStartAddr2Ptr(slot_start),
                         internal::kFreedByte, slot_span->GetUtilizedSlotSize());
 #endif  // PA_BUILDFLAG(EXPENSIVE_DCHECKS_ARE_ON)

@@ -97,6 +97,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SharedDictionaryManager {
       base::Time start_time,
       base::Time end_time,
       base::OnceCallback<void(const std::vector<url::Origin>&)> callback) = 0;
+  virtual void HandleMemoryPressure(
+      base::MemoryPressureLevel memory_pressure_level) = 0;
 
   net::SharedDictionaryGetter MaybeCreateSharedDictionaryGetter(
       int request_load_flags,
@@ -134,8 +136,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SharedDictionaryManager {
 
   size_t GetStorageCountForTesting();
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level);
+  void OnMemoryPressure(base::MemoryPressureLevel level);
 
   void DeletePreloadedDictionaries(
       PreloadedDictionaries* preloaded_dictionaries);
@@ -143,9 +144,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SharedDictionaryManager {
   base::LRUCache<net::SharedDictionaryIsolationKey,
                  scoped_refptr<SharedDictionaryStorage>>
       cached_storages_;
-  std::unique_ptr<base::AsyncMemoryPressureListener> memory_pressure_listener_;
-  base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level_ =
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE;
+  std::unique_ptr<base::AsyncMemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
+  base::MemoryPressureLevel memory_pressure_level_ =
+      base::MEMORY_PRESSURE_LEVEL_NONE;
 
   std::map<net::SharedDictionaryIsolationKey, raw_ptr<SharedDictionaryStorage>>
       storages_;

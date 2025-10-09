@@ -253,7 +253,7 @@ TEST_F(LayerContextImplLayerTreePropertiesTest, UpdateDisplayColorSpaces) {
 
   // Update to new color spaces.
   gfx::DisplayColorSpaces color_spaces1(gfx::ColorSpace::CreateSRGB(),
-                                        gfx::BufferFormat::RGBA_8888);
+                                        SinglePlaneFormat::kRGBA_8888);
   auto update2 = CreateDefaultUpdate();
   update2->display_color_spaces = color_spaces1;
   EXPECT_TRUE(
@@ -269,7 +269,7 @@ TEST_F(LayerContextImplLayerTreePropertiesTest, UpdateDisplayColorSpaces) {
 
   // Update to different color spaces (e.g., P3).
   gfx::DisplayColorSpaces color_spaces2(gfx::ColorSpace::CreateDisplayP3D65(),
-                                        gfx::BufferFormat::BGRA_8888);
+                                        SinglePlaneFormat::kBGRA_8888);
   auto update4 = CreateDefaultUpdate();
   update4->display_color_spaces = color_spaces2;
   EXPECT_TRUE(
@@ -281,7 +281,7 @@ TEST_F(LayerContextImplLayerTreePropertiesTest, UpdateDisplayColorSpaces) {
       gfx::ColorSpace::PrimaryID::BT2020, gfx::ColorSpace::TransferID::PQ,
       gfx::ColorSpace::MatrixID::RGB, gfx::ColorSpace::RangeID::FULL);
   gfx::DisplayColorSpaces color_spaces_hdr(hdr_color_space_object,
-                                           gfx::BufferFormat::RGBA_F16);
+                                           SinglePlaneFormat::kRGBA_F16);
   auto update5 = CreateDefaultUpdate();
   update5->display_color_spaces = color_spaces_hdr;
   EXPECT_TRUE(
@@ -390,60 +390,6 @@ TEST_F(LayerContextImplLayerTreePropertiesTest, UpdateBeginFrameArgs) {
   update4->begin_frame_args.deadline = update4->begin_frame_args.frame_time;
   EXPECT_TRUE(
       layer_context_impl_->DoUpdateDisplayTree(std::move(update4)).has_value());
-}
-
-TEST_F(LayerContextImplLayerTreePropertiesTest, UpdateElasticOverscroll) {
-  cc::LayerTreeImpl* active_tree =
-      layer_context_impl_->host_impl()->active_tree();
-  const gfx::Vector2dF kDefaultOverscroll;  // (0,0)
-
-  // Initial update with default (zero) overscroll.
-  auto update1 = CreateDefaultUpdate();
-  update1->elastic_overscroll = kDefaultOverscroll;
-  EXPECT_TRUE(
-      layer_context_impl_->DoUpdateDisplayTree(std::move(update1)).has_value());
-  EXPECT_EQ(active_tree->current_elastic_overscroll(), kDefaultOverscroll);
-  // The first update will need to update draw properties due to other
-  // unrelated properties being set for the first time.
-  EXPECT_TRUE(active_tree->needs_update_draw_properties());
-  active_tree->clear_needs_update_draw_properties_for_testing();
-
-  // Update with default (zero) overscroll again.
-  auto update2 = CreateDefaultUpdate();
-  update2->elastic_overscroll = kDefaultOverscroll;
-  EXPECT_TRUE(
-      layer_context_impl_->DoUpdateDisplayTree(std::move(update2)).has_value());
-  EXPECT_EQ(active_tree->current_elastic_overscroll(), kDefaultOverscroll);
-  // Using the same elastic overscroll again, should result in no change.
-  EXPECT_FALSE(active_tree->needs_update_draw_properties());
-
-  // Update to a new non-zero overscroll.
-  const gfx::Vector2dF kOverscroll1(10.f, 20.f);
-  auto update3 = CreateDefaultUpdate();
-  update3->elastic_overscroll = kOverscroll1;
-  EXPECT_TRUE(
-      layer_context_impl_->DoUpdateDisplayTree(std::move(update3)).has_value());
-  EXPECT_EQ(active_tree->current_elastic_overscroll(), kOverscroll1);
-  EXPECT_TRUE(active_tree->needs_update_draw_properties());
-  active_tree->clear_needs_update_draw_properties_for_testing();
-
-  // Update to a different non-zero overscroll.
-  const gfx::Vector2dF kOverscroll2(-5.f, 15.f);
-  auto update4 = CreateDefaultUpdate();
-  update4->elastic_overscroll = kOverscroll2;
-  EXPECT_TRUE(
-      layer_context_impl_->DoUpdateDisplayTree(std::move(update4)).has_value());
-  EXPECT_EQ(active_tree->current_elastic_overscroll(), kOverscroll2);
-  EXPECT_TRUE(active_tree->needs_update_draw_properties());
-  active_tree->clear_needs_update_draw_properties_for_testing();
-
-  // Update back to zero overscroll.
-  auto update5 = CreateDefaultUpdate();
-  update5->elastic_overscroll = kDefaultOverscroll;
-  EXPECT_TRUE(
-      layer_context_impl_->DoUpdateDisplayTree(std::move(update5)).has_value());
-  EXPECT_EQ(active_tree->current_elastic_overscroll(), kDefaultOverscroll);
-  EXPECT_TRUE(active_tree->needs_update_draw_properties());
 }
 
 TEST_F(LayerContextImplLayerTreePropertiesTest, UpdateDisplayTransformHint) {

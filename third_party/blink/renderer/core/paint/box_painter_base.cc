@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/core/paint/svg_mask_painter.h"
 #include "third_party/blink/renderer/core/paint/timing/image_element_timing.h"
 #include "third_party/blink/renderer/core/paint/timing/paint_timing_detector.h"
+#include "third_party/blink/renderer/core/paint/timing/paint_timing_utils.h"
 #include "third_party/blink/renderer/core/style/border_edge.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/style/shadow_list.h"
@@ -56,9 +57,8 @@ void BoxPainterBase::PaintFillLayers(
     const PhysicalRect& rect,
     const BoxBackgroundPaintContext& bg_paint_context,
     BackgroundBleedAvoidance bleed) {
-  FillLayerOcclusionOutputList reversed_paint_list;
-  bool should_draw_background_in_separate_buffer =
-      CalculateFillLayerOcclusionCulling(reversed_paint_list, fill_layer);
+  auto [should_draw_background_in_separate_buffer, last_layer] =
+      AnalyzeFillLayersForPainting(fill_layer);
 
   // TODO(trchen): We can optimize out isolation group if we have a
   // non-transparent background color and the bottom layer encloses all other
@@ -67,9 +67,12 @@ void BoxPainterBase::PaintFillLayers(
   if (should_draw_background_in_separate_buffer)
     context.BeginLayer();
 
-  for (auto* const paint : base::Reversed(reversed_paint_list)) {
-    PaintFillLayer(paint_info, c, *paint, rect, bleed, bg_paint_context);
-  }
+  FillLayer::IterateFillLayersInReverseOrder(
+      &fill_layer, last_layer,
+      [this, paint_info, c, rect, bleed,
+       bg_paint_context](const FillLayer& paint) {
+        PaintFillLayer(paint_info, c, paint, rect, bleed, bg_paint_context);
+      });
 
   if (should_draw_background_in_separate_buffer)
     context.EndLayer();
@@ -85,11 +88,6 @@ void ApplySpreadToShadowShape(ContouredRect& shadow_shape, float spread) {
 
   shadow_shape.OutsetForMarginOrShadow(spread);
   shadow_shape.ConstrainRadii();
-}
-
-Node* GeneratingNode(Node* node) {
-  return node && node->IsPseudoElement() ? node->ParentOrShadowHostNode()
-                                         : node;
 }
 
 BackgroundColorPaintImageGenerator* GetBackgroundColorPaintImageGenerator(
@@ -463,13 +461,11 @@ bool BoxPainterBase::ShouldForceWhiteBackgroundForPrintEconomy(
           !document.GetSettings()->GetShouldPrintBackgrounds());
 }
 
-bool BoxPainterBase::CalculateFillLayerOcclusionCulling(
-    FillLayerOcclusionOutputList& reversed_paint_list,
+std::pair<bool, const FillLayer*> BoxPainterBase::AnalyzeFillLayersForPainting(
     const FillLayer& fill_layer) {
   bool is_non_associative = false;
-  for (auto* current_layer = &fill_layer; current_layer;
-       current_layer = current_layer->Next()) {
-    reversed_paint_list.push_back(current_layer);
+  const FillLayer* current_layer = &fill_layer;
+  for (; current_layer; current_layer = current_layer->Next()) {
     // Stop traversal when an opaque layer is encountered.
     // FIXME : It would be possible for the following occlusion culling test to
     // be more aggressive on layers with no repeat by testing whether the image
@@ -492,7 +488,7 @@ bool BoxPainterBase::CalculateFillLayerOcclusionCulling(
       break;
     }
   }
-  return is_non_associative;
+  return {is_non_associative, current_layer};
 }
 
 BoxPainterBase::FillLayerInfo::FillLayerInfo(
@@ -556,7 +552,7 @@ BoxPainterBase::FillLayerInfo::FillLayerInfo(
 
   is_printing = doc.Printing();
 
-  WTF::String failing_url;
+  String failing_url;
   should_paint_image = image && image->CanRender() &&
                        (!(paint_flags & PaintFlag::kPrivacyPreserving) ||
                         image->IsAccessAllowed(failing_url));
@@ -569,7 +565,7 @@ BoxPainterBase::FillLayerInfo::FillLayerInfo(
       RuntimeEnabledFeatures::CompositeBGColorAnimationEnabled() &&
       style.HasCurrentBackgroundColorAnimation() &&
       layer.GetType() == EFillLayerType::kBackground &&
-      !(paint_flags & PaintFlag::kPaintingCanvasDrawElement);
+      !(paint_flags & PaintFlag::kOmitCompositingInfo);
   // When background color animation is running on the compositor thread, we
   // need to trigger repaint even if the background is transparent to collect
   // artifacts in order to run the animation on the compositor.
@@ -834,13 +830,13 @@ bool PaintBGColorWithPaintWorklet(const Document& document,
   return true;
 }
 
-bool WillDrawImage(
+bool NotifyImageTimingOnWillDrawImage(
     Node* node,
     const Image& image,
     const StyleImage& style_image,
     const PropertyTreeStateOrAlias& current_paint_chunk_properties,
     const gfx::RectF& image_rect) {
-  Node* generating_node = GeneratingNode(node);
+  Node* generating_node = paint_timing::ImageGeneratingNode(node);
 
   //  StyleFetchedImage and StyleImageSet are the only two that could be passed
   //  here that could have a non-null CachedImage.
@@ -869,7 +865,7 @@ ImagePaintTimingInfo ComputeImagePaintTimingInfo(Node* node,
                                                  const StyleImage& style_image,
                                                  const GraphicsContext& context,
                                                  const gfx::RectF& rect) {
-  bool image_may_be_lcp_candidate = WillDrawImage(
+  bool image_may_be_lcp_candidate = NotifyImageTimingOnWillDrawImage(
       node, image, style_image,
       context.GetPaintController().CurrentPaintChunkProperties(), rect);
 
@@ -1449,7 +1445,7 @@ void BoxPainterBase::PaintBorder(const ImageResourceObserver& obj,
   }
 
   // border-image is not affected by border-radius.
-  WTF::String failing_url;
+  String failing_url;
   if (!(info.IsPrivacyPreserving() && style.BorderImage().GetImage() &&
         !style.BorderImage().GetImage()->IsAccessAllowed(failing_url))) {
     if (NinePieceImagePainter::Paint(info.context, obj, document, node, rect,
@@ -1474,7 +1470,7 @@ void BoxPainterBase::PaintMaskImages(
 
   PaintFillLayers(paint_info, Color::kTransparent, style_.MaskLayers(),
                   paint_rect, bg_paint_context);
-  WTF::String failing_url;
+  String failing_url;
   if (!(paint_info.IsPrivacyPreserving() && style_.MaskBoxImage().GetImage() &&
         !style_.MaskBoxImage().GetImage()->IsAccessAllowed(failing_url))) {
     NinePieceImagePainter::Paint(paint_info.context, obj, document_, node_,

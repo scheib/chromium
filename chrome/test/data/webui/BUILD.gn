@@ -32,6 +32,13 @@ source_set("browser_tests") {
     "usb_internals/usb_internals_browsertest.cc",
   ]
 
+  deps = [
+    "//chrome/browser/ui/tabs/tab_group_home:constants",
+    "//chrome/test:test_support",
+    "//components/commerce/core:commerce_constants",
+    "//components/webui/chrome_urls/",
+  ]
+
   if (!is_android) {
     sources += [
       "about_sys/about_sys_browsertest.cc",
@@ -61,6 +68,8 @@ source_set("browser_tests") {
       "new_tab_footer/new_tab_footer_browsertest.cc",
       "new_tab_page/new_tab_page_a11y_browsertest.cc",
       "new_tab_page/new_tab_page_browsertest.cc",
+      "new_tab_shared/new_tab_shared_browsertest.cc",
+      "omnibox_popup/omnibox_popup_browsertest.cc",
       "optimization_guide_internals/optimization_guide_internals_browsertest.cc",
       "password_manager/password_manager_browsertest.cc",
       "password_manager_internals/password_manager_internals_browsertest.cc",
@@ -80,6 +89,9 @@ source_set("browser_tests") {
       "tab_search/tab_search_browsertest.cc",
       "webview/webui_webview_browsertest.cc",
     ]
+
+    deps += [ "//chrome/browser/signin:signin_promo" ]
+
     if (is_chrome_branded) {
       sources += [ "media_router/cast_feedback_ui_browsertest.cc" ]
     }
@@ -149,7 +161,10 @@ source_set("browser_tests") {
       "chromeos/vc_background_ui/vc_background_ui_browsertest.cc",
     ]
     if (is_chrome_branded) {
-      sources += [ "chromeos/boca_ui/boca_app_browsertest.cc" ]
+      sources += [
+        "chromeos/boca_receiver_app_ui/boca_receiver_untrusted_ui_browsertest.cc",
+        "chromeos/boca_ui/boca_app_browsertest.cc",
+      ]
     }
   } else if (!is_android) {
     sources += [
@@ -172,13 +187,6 @@ source_set("browser_tests") {
     sources += [ "discards/discards_browsertest.cc" ]
   }
 
-  deps = [
-    "//chrome/browser/ui/tabs/tab_group_home:constants",
-    "//chrome/test:test_support",
-    "//components/commerce/core:commerce_constants",
-    "//components/webui/chrome_urls/",
-  ]
-
   if (is_win || is_mac || is_linux) {
     sources += [
       "app_home/app_home_browsertest.cc",
@@ -199,6 +207,7 @@ source_set("browser_tests") {
       "//chrome/browser/commerce",
       "//chrome/browser/devtools",
       "//chrome/browser/devtools:test_support",
+      "//chrome/browser/history",
       "//chrome/browser/media/router/discovery/access_code:access_code_cast_feature",
       "//chrome/browser/optimization_guide",
       "//chrome/browser/optimization_guide:test_support",
@@ -245,6 +254,7 @@ source_set("browser_tests") {
 
   if (is_chromeos) {
     deps += [
+      "//ash/webui/boca_receiver_app_ui",
       "//ash/webui/boca_ui:constants",
       "//ash/webui/sanitize_ui",
       "//ash/webui/shimless_rma",
@@ -297,6 +307,7 @@ source_set("interactive_ui_tests") {
       "settings/settings_focus_test.cc",
       "side_panel/bookmarks/sp_bookmarks_interactive_test.cc",
       "support_tool/support_tool_focus_test.cc",
+      "tab_search/split_new_tab_page_interactive_uitest.cc",
       "tab_search/tab_search_focus_test.cc",
     ]
   }
@@ -502,6 +513,7 @@ generate_grd("build_grd") {
       "bookmarks:build_grdp",
       "commerce/product_specifications:build_grdp",
       "cr_components:build_grdp",
+      "cr_components/composebox:build_grdp",
       "cr_components/cr_shortcut_input:build_grdp",
       "cr_components/help_bubble:build_grdp",
       "cr_components/history_clusters:build_grdp",
@@ -527,6 +539,8 @@ generate_grd("build_grd") {
       "net_internals:build_grdp",
       "new_tab_footer:build_grdp",
       "new_tab_page:build_grdp",
+      "new_tab_shared:build_grdp",
+      "omnibox_popup:build_grdp",
       "optimization_guide_internals:build_grdp",
       "password_manager:build_grdp",
       "password_manager_internals:build_grdp",
@@ -558,6 +572,7 @@ generate_grd("build_grd") {
       "$target_gen_dir/cr_components/history_clusters/resources.grdp",
       "$target_gen_dir/cr_components/history_embeddings/resources.grdp",
       "$target_gen_dir/cr_components/searchbox/resources.grdp",
+      "$target_gen_dir/cr_components/composebox/resources.grdp",
       "$target_gen_dir/cr_components/theme_color_picker/resources.grdp",
       "$target_gen_dir/css/resources.grdp",
       "$target_gen_dir/data_sharing/resources.grdp",
@@ -577,7 +592,9 @@ generate_grd("build_grd") {
       "$target_gen_dir/lens/resources.grdp",
       "$target_gen_dir/net_internals/resources.grdp",
       "$target_gen_dir/new_tab_footer/resources.grdp",
+      "$target_gen_dir/new_tab_shared/resources.grdp",
       "$target_gen_dir/new_tab_page/resources.grdp",
+      "$target_gen_dir/omnibox_popup/resources.grdp",
       "$target_gen_dir/optimization_guide_internals/resources.grdp",
       "$target_gen_dir/password_manager/resources.grdp",
       "$target_gen_dir/password_manager_internals/resources.grdp",
@@ -671,6 +688,7 @@ generate_grd("build_grd") {
       "chromeos/ash_common/cr_elements:build_grdp",
       "chromeos/ash_common/post_message_api:build_grdp",
       "chromeos/ash_common/sea_pen:build_grdp",
+      "chromeos/boca_receiver_app_ui:build_grdp",
       "chromeos/boca_ui:build_grdp",
       "chromeos/borealis_installer:build_grdp",
       "chromeos/cloud_upload:build_grdp",
@@ -709,6 +727,7 @@ generate_grd("build_grd") {
       "$target_gen_dir/chromeos/ash_common/post_message_api/resources.grdp",
       "$target_gen_dir/chromeos/ash_common/sea_pen/resources.grdp",
       "$target_gen_dir/chromeos/boca_ui/resources.grdp",
+      "$target_gen_dir/chromeos/boca_receiver_app_ui/resources.grdp",
       "$target_gen_dir/chromeos/borealis_installer/resources.grdp",
       "$target_gen_dir/chromeos/cloud_upload/resources.grdp",
       "$target_gen_dir/chromeos/diagnostics/resources.grdp",

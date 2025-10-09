@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.omnibox.suggestions.tabgroup;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.drawable.ShapeDrawable;
 import android.text.style.ImageSpan;
 
@@ -24,7 +23,6 @@ import org.mockito.junit.MockitoRule;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.ContextUtils;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
 import org.chromium.chrome.browser.omnibox.UrlBarEditingTextStateProvider;
@@ -49,7 +47,7 @@ import org.chromium.components.tab_groups.TabGroupColorPickerUtils;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.JUnitTestGURLs;
 
-import java.util.Optional;
+import java.util.function.Supplier;
 
 /** Tests for {@link TabGroupSuggestionProcessor}. */
 @RunWith(BaseRobolectricTestRunner.class)
@@ -63,7 +61,6 @@ public class TabGroupSuggestionProcessorUnitTest {
     public @Rule MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     private @Mock SuggestionHost mSuggestionHost;
-    private @Mock Bitmap mBitmap;
     private @Mock OmniboxImageSupplier mImageSupplier;
     private @Mock UrlBarEditingTextStateProvider mTextProvider;
     private @Mock Supplier<Tab> mTabSupplier;
@@ -86,7 +83,7 @@ public class TabGroupSuggestionProcessorUnitTest {
                         mContext,
                         mSuggestionHost,
                         mTextProvider,
-                        Optional.of(mImageSupplier),
+                        mImageSupplier,
                         mBookmarkState,
                         mTabSupplier,
                         mShareDelegateSupplier,

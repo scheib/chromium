@@ -13,8 +13,8 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 
-import org.chromium.base.BuildInfo;
 import org.chromium.base.Callback;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -165,15 +165,18 @@ public class AccountPickerBottomSheetMediator
         }
 
         final WindowAndroid.IntentCallback onAddAccountCompleted =
-                (int resultCode, Intent data) -> {
+                (int resultCode, @Nullable Intent data) -> {
                     @Nullable String addedAccountEmail =
-                            data.getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
+                            data == null
+                                    ? null
+                                    : data.getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
                     if (resultCode != Activity.RESULT_OK || addedAccountEmail == null) {
                         return;
                     }
                     onAccountAddedInternal(addedAccountEmail);
                 };
         mAccountManagerFacade.createAddAccountIntent(
+                null,
                 intent -> {
                     if (intent == null) {
                         // AccountManagerFacade couldn't create intent, use SigninUtils to open
@@ -427,7 +430,7 @@ public class AccountPickerBottomSheetMediator
     }
 
     private void launchDeviceLockIfNeededAndSignIn() {
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             mDeviceLockActivityLauncher.launchDeviceLockActivity(
                     mActivity,
                     CoreAccountInfo.getEmailFrom(mSelectedAccount),

@@ -507,18 +507,23 @@ class IntegrationTest : public ::testing::Test {
     test_commands_->RunHandoff(app_id);
   }
 
-  void InstallScheduledTask(const std::string& task_name,
+  void InstallScheduledTask(bool run_elevated,
+                            const std::string& task_name,
                             bool use_task_subfolders) {
-    test_commands_->InstallScheduledTask(task_name, use_task_subfolders);
+    test_commands_->InstallScheduledTask(run_elevated, task_name,
+                                         use_task_subfolders);
   }
-  void IsScheduledTaskRegisteredFromMedium(const std::string& task_name,
-                                           bool use_task_subfolders) {
-    test_commands_->IsScheduledTaskRegisteredFromMedium(task_name,
-                                                        use_task_subfolders);
+  void IsScheduledTaskRegistered(bool run_elevated,
+                                 const std::string& task_name,
+                                 bool use_task_subfolders) {
+    test_commands_->IsScheduledTaskRegistered(run_elevated, task_name,
+                                              use_task_subfolders);
   }
-  void DeleteScheduledTask(const std::string& task_name,
+  void DeleteScheduledTask(bool run_elevated,
+                           const std::string& task_name,
                            bool use_task_subfolders) {
-    test_commands_->DeleteScheduledTask(task_name, use_task_subfolders);
+    test_commands_->DeleteScheduledTask(run_elevated, task_name,
+                                        use_task_subfolders);
   }
 
 #endif  // BUILDFLAG(IS_WIN)
@@ -616,6 +621,13 @@ class IntegrationTest : public ::testing::Test {
   void RunServer(int exit_code, bool internal) {
     ASSERT_TRUE(WaitForUpdaterExit());
     test_commands_->RunServer(exit_code, internal);
+  }
+
+  void RunUpdateApps(
+      int exit_code,
+      const base::Version& version = base::Version(kUpdaterVersion)) {
+    ASSERT_TRUE(WaitForUpdaterExit());
+    test_commands_->RunUpdateApps(exit_code, version);
   }
 
   void CheckForUpdate(const std::string& app_id) {
@@ -1355,9 +1367,20 @@ TEST_F(IntegrationTest, SelfUpdateAfterEulaAcceptedViaRegistry) {
 }
 
 TEST_F(IntegrationTest, TaskSchedulerHighToMedium) {
-  ASSERT_NO_FATAL_FAILURE(InstallScheduledTask("Task1", true));
-  ASSERT_NO_FATAL_FAILURE(IsScheduledTaskRegisteredFromMedium("Task1", true));
-  ASSERT_NO_FATAL_FAILURE(DeleteScheduledTask("Task1", true));
+  if (!IsSystemInstall(GetUpdaterScopeForTesting())) {
+    GTEST_SKIP();
+  }
+
+  // Install the scheduled task at high integrity, then test that the task is
+  // visible and can be deleted from medium integrity.
+  ASSERT_NO_FATAL_FAILURE(
+      InstallScheduledTask(/*run_elevated=*/true, "Task1", true));
+  ASSERT_NO_FATAL_FAILURE(
+      IsScheduledTaskRegistered(/*run_elevated=*/false, "Task1", true));
+  ASSERT_NO_FATAL_FAILURE(
+      DeleteScheduledTask(/*run_elevated=*/false, "Task1", true));
+  ASSERT_NO_FATAL_FAILURE(
+      DeleteScheduledTask(/*run_elevated=*/true, "Task1", true));
 }
 
 #endif  // BUILDFLAG(IS_WIN)
@@ -1574,6 +1597,33 @@ TEST_F(IntegrationTest, UpdateAppXZ) {
   ASSERT_NO_FATAL_FAILURE(RunWake(0));
   ASSERT_TRUE(WaitForUpdaterExit());
   ASSERT_NO_FATAL_FAILURE(ExpectAppVersion(kAppId, v1));
+
+  ASSERT_NO_FATAL_FAILURE(ExpectUninstallPing(&test_server));
+  ASSERT_NO_FATAL_FAILURE(Uninstall());
+}
+
+TEST_F(IntegrationTest, UpdateApps) {
+  ASSERT_NO_FATAL_FAILURE(Install());
+
+  const std::string kAppId("test");
+  ASSERT_NO_FATAL_FAILURE(InstallApp(kAppId));
+  base::Version v1("1");
+  ScopedServer test_server(test_commands_);
+  ASSERT_NO_FATAL_FAILURE(ExpectUpdateSequence(
+      &test_server, kAppId, "", UpdateService::Priority::kForeground,
+      base::Version("0.1"), v1));
+  ASSERT_NO_FATAL_FAILURE(ExpectNoUpdateSequence(&test_server, kUpdaterAppId));
+  ASSERT_NO_FATAL_FAILURE(RunUpdateApps(0));
+
+  base::Version v2("2");
+  ASSERT_NO_FATAL_FAILURE(ExpectUpdateSequence(
+      &test_server, kAppId, "", UpdateService::Priority::kForeground, v1, v2,
+      false, true));
+  ASSERT_NO_FATAL_FAILURE(ExpectNoUpdateSequence(&test_server, kUpdaterAppId));
+  ASSERT_NO_FATAL_FAILURE(RunUpdateApps(0));
+
+  ASSERT_TRUE(WaitForUpdaterExit());
+  ASSERT_NO_FATAL_FAILURE(ExpectAppVersion(kAppId, v2));
 
   ASSERT_NO_FATAL_FAILURE(ExpectUninstallPing(&test_server));
   ASSERT_NO_FATAL_FAILURE(Uninstall());
@@ -1877,6 +1927,14 @@ TEST_F(IntegrationTest, InstallUpdaterAndApp) {
   ASSERT_TRUE(WaitForUpdaterExit());
 
   ASSERT_NO_FATAL_FAILURE(ExpectAppVersion(kAppId, v1));
+
+#if BUILDFLAG(IS_WIN)
+  // TODO(crbug.com/445972566): call `ExpectCleanUpdateClientTempDirectories`
+  // from `ExpectClean` for all integration tests once the older updater
+  // versions are revised to a version higher than `142.0.7420.0`.
+  ASSERT_NO_FATAL_FAILURE(
+      ExpectCleanUpdateClientTempDirectories(GetUpdaterScopeForTesting()));
+#endif  // BUILDFLAG(IS_WIN)
 
   ASSERT_NO_FATAL_FAILURE(ExpectUninstallPing(&test_server));
   ASSERT_NO_FATAL_FAILURE(Uninstall());
@@ -2544,7 +2602,7 @@ TEST_F(IntegrationTest, RegisterApp) {
   registration.brand_code = "TSBD";
   registration.brand_path = base::FilePath::FromUTF8Unsafe("/bp");
   registration.ap = "TestAp";
-  registration.version = base::Version("11.22.33.44");
+  registration.version = "11.22.33.44";
   registration.existence_checker_path = base::FilePath::FromUTF8Unsafe("/tmp");
   registration.cohort = "cohort_test";
   test_commands_->RegisterApp(registration);

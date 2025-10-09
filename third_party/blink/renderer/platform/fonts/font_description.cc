@@ -37,6 +37,7 @@
 #include "base/strings/to_string.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/web_font_description.h"
+#include "third_party/blink/renderer/platform/geometry/evaluation_input.h"
 #include "third_party/blink/renderer/platform/language.h"
 #include "third_party/blink/renderer/platform/wtf/hash_functions.h"
 #include "third_party/blink/renderer/platform/wtf/size_assertions.h"
@@ -65,6 +66,7 @@ struct SameSizeAsFontDescription {
   ResolvedFontFeatures resolved_font_features_;
   FontSelectionRequest selection_request_;
   FieldsAsUnsignedType bitfields;
+  AtomicString language_override_;
 };
 
 ASSERT_SIZE(FontDescription, SameSizeAsFontDescription);
@@ -400,6 +402,10 @@ unsigned FontDescription::StyleHashWithoutFamilyList() const {
 
   if (VariationSettings()) {
     AddIntToHash(hash, VariationSettings()->GetHash());
+  }
+
+  if (HasLanguageOverride()) {
+    AddIntToHash(hash, language_override_.Hash());
   }
 
   if (font_palette_) {

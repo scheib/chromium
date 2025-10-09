@@ -20,6 +20,7 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/traced_value.h"
 #include "cc/base/features.h"
+#include "cc/base/math_util.h"
 #include "cc/trees/clip_node.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "cc/trees/effect_node.h"
@@ -875,23 +876,27 @@ bool TransformTree::HasNodesAffectedBySafeAreaBottom() const {
 }
 
 const gfx::Transform& TransformTree::FromScreen(int node_id) const {
-  DCHECK(static_cast<int>(cached_data_.size()) > node_id);
+  DCHECK(static_cast<int>(cached_data_.size()) > node_id &&
+         node_id != kInvalidPropertyNodeId);
   return cached_data_[node_id].from_screen;
 }
 
 void TransformTree::SetFromScreen(int node_id,
                                   const gfx::Transform& transform) {
-  DCHECK(static_cast<int>(cached_data_.size()) > node_id);
+  DCHECK(static_cast<int>(cached_data_.size()) > node_id &&
+         node_id != kInvalidPropertyNodeId);
   cached_data_[node_id].from_screen = transform;
 }
 
 const gfx::Transform& TransformTree::ToScreen(int node_id) const {
-  DCHECK(static_cast<int>(cached_data_.size()) > node_id);
+  DCHECK(static_cast<int>(cached_data_.size()) > node_id &&
+         node_id != kInvalidPropertyNodeId);
   return cached_data_[node_id].to_screen;
 }
 
 void TransformTree::SetToScreen(int node_id, const gfx::Transform& transform) {
-  DCHECK(static_cast<int>(cached_data_.size()) > node_id);
+  DCHECK(static_cast<int>(cached_data_.size()) > node_id &&
+         node_id != kInvalidPropertyNodeId);
   cached_data_[node_id].to_screen = transform;
   cached_data_[node_id].is_showing_backface = transform.IsBackFaceVisible();
 }
@@ -1507,6 +1512,16 @@ ScrollTree& ScrollTree::operator=(const ScrollTree& from) {
   PropertyTree::operator=(from);
   scrolling_contents_cull_rects_ = from.scrolling_contents_cull_rects_;
   currently_scrolling_node_id_ = kInvalidPropertyNodeId;
+
+  // Remove obsolete overscroll amounts.
+  // TODO(crbug.com/430266889): If we have an entry in the map whose node has
+  // been removed, there must either be an active overscroll on this node
+  // or an ongoing animation of overscroll on this node which should also be
+  // cleaned up.
+  base::EraseIf(elastic_overscroll_, [&](const auto& pair) {
+    return FindNodeFromElementId(pair.first) == nullptr;
+  });
+
   // Maps for ScrollOffsets/SyncedScrollOffsets are intentionally omitted here
   // since we can not directly copy them. Pushing of these updates from main
   // currently depends on Layer properties for scroll offset animation changes
@@ -1985,6 +2000,33 @@ bool ScrollTree::SetScrollOffset(ElementId id,
   return false;
 }
 
+bool ScrollTree::SetElasticOverscroll(
+    const ScrollNode& scroll_node,
+    const gfx::Vector2dF& elastic_overscroll) {
+  if (elastic_overscroll.IsZero()) {
+    auto it = elastic_overscroll_.find(scroll_node.element_id);
+    if (it == elastic_overscroll_.end()) {
+      return false;
+    }
+    elastic_overscroll_.erase(it);
+    return true;
+  }
+  gfx::Vector2dF& current_overscroll =
+      elastic_overscroll_[scroll_node.element_id];
+  bool changed = current_overscroll != elastic_overscroll;
+  current_overscroll = elastic_overscroll;
+  return changed;
+}
+
+gfx::Vector2dF ScrollTree::GetElasticOverscroll(
+    const ScrollNode& scroll_node) const {
+  auto it = elastic_overscroll_.find(scroll_node.element_id);
+  if (it == elastic_overscroll_.end()) {
+    return gfx::Vector2dF();
+  }
+  return it->second;
+}
+
 void ScrollTree::SetScrollingContentsCullRect(ElementId id,
                                               const gfx::Rect& cull_rect) {
   scrolling_contents_cull_rects_[id] = cull_rect;
@@ -2095,10 +2137,11 @@ void ScrollTree::SetScrollCallbacks(base::WeakPtr<ScrollCallbacks> callbacks) {
 void ScrollTree::NotifyDidCompositorScroll(
     ElementId scroll_element_id,
     const gfx::PointF& scroll_offset,
+    ScrollSourceType type,
     const std::optional<TargetSnapAreaElementIds>& snap_target_ids) {
   DCHECK(property_trees()->is_main_thread());
   if (callbacks_) {
-    callbacks_->DidCompositorScroll(scroll_element_id, scroll_offset,
+    callbacks_->DidCompositorScroll(scroll_element_id, scroll_offset, type,
                                     snap_target_ids);
   }
 }

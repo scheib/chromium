@@ -14,6 +14,7 @@
 #include "components/sync/protocol/sync.pb.h"
 #include "google_apis/credentials_mode.h"
 #include "net/base/load_flags.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -25,7 +26,7 @@ namespace syncer {
 
 namespace {
 
-const char kEventEndpoint[] = "event";
+constexpr char kEventEndpoint[] = "event";
 
 // The request is tiny, so even on poor connections 10 seconds should be
 // plenty of time. Since sync is off when this request is started, we don't
@@ -145,7 +146,7 @@ void SyncStoppedReporter::OnTimeout() {
 
 // Static.
 GURL SyncStoppedReporter::GetSyncEventURL(const GURL& sync_service_url) {
-  std::string path = sync_service_url.path();
+  std::string path = sync_service_url.GetPath();
   if (path.empty() || *path.rbegin() != '/') {
     path += '/';
   }

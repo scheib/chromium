@@ -25,6 +25,7 @@
 #include "chrome/browser/ui/ash/login/login_display_host.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/test/test_browser_closed_waiter.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
@@ -34,7 +35,6 @@
 #include "extensions/browser/app_window/app_window.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/test/event_generator.h"
-#include "ui/gfx/native_widget_types.h"
 
 namespace ash {
 
@@ -140,7 +140,7 @@ IN_PROC_BROWSER_TEST_P(KioskTest, ExitsIfOnlySettingsWindowRemainsOpen) {
 
 IN_PROC_BROWSER_TEST_P(KioskTest, DoesNotExitWhenSettingsWindowCloses) {
   Browser& settings = CHECK_DEREF(OpenA11ySettings(CurrentProfile()));
-  EXPECT_EQ(BrowserList::GetInstance()->GetLastActive(), &settings);
+  EXPECT_EQ(GetLastActiveBrowserWindowInterfaceWithAnyProfile(), &settings);
 
   settings.window()->Close();
   ASSERT_TRUE(TestBrowserClosedWaiter(&settings).WaitUntilClosed());

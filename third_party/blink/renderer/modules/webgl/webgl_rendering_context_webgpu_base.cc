@@ -28,6 +28,7 @@
 #include "third_party/blink/renderer/platform/graphics/gpu/dawn_control_client_holder.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/webgpu_callback.h"
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
+#include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/web_graphics_context_3d_provider_util.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -424,7 +425,7 @@ ScriptPromise<IDLUndefined> WebGLRenderingContextWebGPUBase::initAsync(
 
   // Request the adapter, making it resolve the result promise when it is done.
   auto* callback =
-      MakeWGPUOnceCallback(resolver->WrapCallbackInScriptScope(WTF::BindOnce(
+      MakeWGPUOnceCallback(resolver->WrapCallbackInScriptScope(blink::BindOnce(
           &WebGLRenderingContextWebGPUBase::InitRequestAdapterCallback,
           WrapPersistent(this), WrapPersistent(script_state))));
 
@@ -445,17 +446,17 @@ void WebGLRenderingContextWebGPUBase::InitRequestAdapterCallback(
   if (status != wgpu::RequestAdapterStatus::Success) {
     resolver->RejectWithDOMException(
         DOMExceptionCode::kOperationError,
-        WTF::String::FromUTF8WithLatin1Fallback(error_message));
+        String::FromUTF8WithLatin1Fallback(error_message));
     return;
   }
 
   adapter_ = std::move(adapter);
 
   // Request the device.
-  auto* callback = MakeWGPUOnceCallback(
-      WTF::BindOnce(&WebGLRenderingContextWebGPUBase::InitRequestDeviceCallback,
-                    WrapPersistent(this), WrapPersistent(script_state),
-                    WrapPersistent(resolver)));
+  auto* callback = MakeWGPUOnceCallback(blink::BindOnce(
+      &WebGLRenderingContextWebGPUBase::InitRequestDeviceCallback,
+      WrapPersistent(this), WrapPersistent(script_state),
+      WrapPersistent(resolver)));
 
   adapter_.RequestDevice(nullptr, wgpu::CallbackMode::AllowSpontaneous,
                          callback->UnboundCallback(), callback->AsUserdata());
@@ -471,7 +472,7 @@ void WebGLRenderingContextWebGPUBase::InitRequestDeviceCallback(
   if (status != wgpu::RequestDeviceStatus::Success) {
     resolver->RejectWithDOMException(
         DOMExceptionCode::kOperationError,
-        WTF::String::FromUTF8WithLatin1Fallback(error_message));
+        String::FromUTF8WithLatin1Fallback(error_message));
     return;
   }
 
@@ -511,25 +512,27 @@ GLenum WebGLRenderingContextWebGPUBase::drawingBufferFormat() const {
   return GL_RGBA8;
 }
 
-V8PredefinedColorSpace
-WebGLRenderingContextWebGPUBase::drawingBufferColorSpace() const {
+V8PredefinedColorSpace WebGLRenderingContextWebGPUBase::drawingBufferColorSpace(
+    ScriptState*) const {
   NOTIMPLEMENTED();
   return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kSRGB);
 }
 
 void WebGLRenderingContextWebGPUBase::setDrawingBufferColorSpace(
+    ScriptState*,
     const V8PredefinedColorSpace& color_space,
     ExceptionState&) {
   NOTIMPLEMENTED();
 }
 
-V8PredefinedColorSpace WebGLRenderingContextWebGPUBase::unpackColorSpace()
-    const {
+V8PredefinedColorSpace WebGLRenderingContextWebGPUBase::unpackColorSpace(
+    ScriptState*) const {
   NOTIMPLEMENTED();
   return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kSRGB);
 }
 
 void WebGLRenderingContextWebGPUBase::setUnpackColorSpace(
+    ScriptState*,
     const V8PredefinedColorSpace& color_space,
     ExceptionState&) {
   NOTIMPLEMENTED();
@@ -2228,6 +2231,17 @@ void WebGLRenderingContextWebGPUBase::texImage2D(
   NOTIMPLEMENTED();
 }
 
+void WebGLRenderingContextWebGPUBase::texElementImage2D(
+    GLenum target,
+    GLint level,
+    GLint internalformat,
+    GLenum format,
+    GLenum type,
+    Element* element,
+    ExceptionState& exception_state) {
+  NOTIMPLEMENTED();
+}
+
 void WebGLRenderingContextWebGPUBase::texElement2D(
     GLenum target,
     GLint level,
@@ -3512,7 +3526,7 @@ gfx::ColorSpace WebGLRenderingContextWebGPUBase::GetColorSpace() const {
   return gfx::ColorSpace::CreateSRGB();
 }
 
-int WebGLRenderingContextWebGPUBase::AllocatedBufferCountPerPixel() {
+int WebGLRenderingContextWebGPUBase::AllocatedBufferCountPerPixel() const {
   // Front and back buffers.
   // TODO(413078308): Add support configuring MSAA and depth-stencil.
   // Note: If/once this class creates a CanvasResourceProvider it should track

@@ -19,14 +19,18 @@
 #include "chrome/browser/preloading/new_tab_page_preload/new_tab_page_preload_pipeline_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
+#include "chrome/browser/ui/tabs/public/tab_features.h"
+#include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/web_applications/preinstalled_web_app_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "components/history/core/browser/features.h"
 #include "components/ntp_tiles/constants.h"
 #include "components/ntp_tiles/most_visited_sites.h"
+#include "components/ntp_tiles/tile_type.h"
 #include "components/page_load_metrics/browser/navigation_handle_user_data.h"
 #include "components/search/ntp_features.h"
 #include "components/search_engines/template_url_service.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/window_open_disposition_utils.h"
 
@@ -77,8 +81,9 @@ MostVisitedHandler::MostVisitedHandler(
 
 MostVisitedHandler::~MostVisitedHandler() = default;
 
-void MostVisitedHandler::EnableCustomLinks(bool enable) {
-  most_visited_sites_->EnableCustomLinks(enable);
+void MostVisitedHandler::EnableTileTypes(
+    const ntp_tiles::MostVisitedSites::EnableTileTypesOptions& options) {
+  most_visited_sites_->EnableTileTypes(options);
 }
 
 void MostVisitedHandler::SetShortcutsVisible(bool visible) {
@@ -99,7 +104,9 @@ void MostVisitedHandler::AddMostVisitedTile(
 }
 
 void MostVisitedHandler::DeleteMostVisitedTile(const GURL& url) {
-  if (most_visited_sites_->IsCustomLinksEnabled()) {
+  if (most_visited_sites_->IsEnterpriseShortcutsEnabled()) {
+    most_visited_sites_->DeleteEnterpriseShortcut(url);
+  } else if (most_visited_sites_->IsCustomLinksEnabled()) {
     most_visited_sites_->DeleteCustomLink(url);
     logger_.LogEvent(NTP_CUSTOMIZE_SHORTCUT_REMOVE,
                      base::TimeDelta() /* unused */);
@@ -110,7 +117,9 @@ void MostVisitedHandler::DeleteMostVisitedTile(const GURL& url) {
 }
 
 void MostVisitedHandler::RestoreMostVisitedDefaults() {
-  if (most_visited_sites_->IsCustomLinksEnabled()) {
+  if (most_visited_sites_->IsEnterpriseShortcutsEnabled()) {
+    most_visited_sites_->RestoreEnterpriseShortcutsDefaults();
+  } else if (most_visited_sites_->IsCustomLinksEnabled()) {
     most_visited_sites_->UninitializeCustomLinks();
     logger_.LogEvent(NTP_CUSTOMIZE_SHORTCUT_RESTORE_ALL,
                      base::TimeDelta() /* unused */);
@@ -121,13 +130,17 @@ void MostVisitedHandler::RestoreMostVisitedDefaults() {
 
 void MostVisitedHandler::ReorderMostVisitedTile(const GURL& url,
                                                 uint8_t new_pos) {
-  if (most_visited_sites_->IsCustomLinksEnabled()) {
+  if (most_visited_sites_->IsEnterpriseShortcutsEnabled()) {
+    most_visited_sites_->ReorderEnterpriseShortcut(url, new_pos);
+  } else if (most_visited_sites_->IsCustomLinksEnabled()) {
     most_visited_sites_->ReorderCustomLink(url, new_pos);
   }
 }
 
 void MostVisitedHandler::UndoMostVisitedTileAction() {
-  if (most_visited_sites_->IsCustomLinksEnabled()) {
+  if (most_visited_sites_->IsEnterpriseShortcutsEnabled()) {
+    most_visited_sites_->UndoEnterpriseShortcutAction();
+  } else if (most_visited_sites_->IsCustomLinksEnabled()) {
     most_visited_sites_->UndoCustomLinkAction();
     logger_.LogEvent(NTP_CUSTOMIZE_SHORTCUT_UNDO,
                      base::TimeDelta() /* unused */);
@@ -146,7 +159,11 @@ void MostVisitedHandler::UpdateMostVisitedTile(
     const GURL& new_url,
     const std::string& new_title,
     UpdateMostVisitedTileCallback callback) {
-  if (most_visited_sites_->IsCustomLinksEnabled()) {
+  if (most_visited_sites_->IsEnterpriseShortcutsEnabled()) {
+    bool success = most_visited_sites_->UpdateEnterpriseShortcut(
+        url, base::UTF8ToUTF16(new_title));
+    std::move(callback).Run(success);
+  } else if (most_visited_sites_->IsCustomLinksEnabled()) {
     bool success = most_visited_sites_->UpdateCustomLink(
         url, new_url != url ? new_url : GURL(), base::UTF8ToUTF16(new_title));
     std::move(callback).Run(success);
@@ -214,12 +231,31 @@ void MostVisitedHandler::PrerenderMostVisitedTile(
     return;
   }
 
-  new_tab_page_preload_manager_ =
-      NewTabPagePreloadPipelineManager::GetOrCreateForWebContents(web_contents_)
-          ->GetWeakPtr();
-  new_tab_page_preload_manager_->StartPrerender(
+  auto* const preload_manager = GetNewTabPagePreloadPipelineManager();
+  if (!preload_manager) {
+    return;
+  }
+
+  preload_manager->StartPrerender(
       tile->url,
       chrome_preloading_predictor::kMouseHoverOrMouseDownOnNewTabPage);
+}
+
+void MostVisitedHandler::PrefetchMostVisitedTile(
+    most_visited::mojom::MostVisitedTilePtr tile) {
+  if (!base::FeatureList::IsEnabled(features::kNewTabPageTriggerForPrefetch)) {
+    page_handler_.ReportBadMessage(
+        "PrefetchMostVisitedTile is only expected to be called "
+        "when kNewTabPageTriggerForPrefetch is true.");
+    return;
+  }
+
+  auto* const preload_manager = GetNewTabPagePreloadPipelineManager();
+  if (!preload_manager) {
+    return;
+  }
+
+  preload_manager->StartPrefetch(tile->url);
 }
 
 void MostVisitedHandler::PreconnectMostVisitedTile(
@@ -251,9 +287,11 @@ void MostVisitedHandler::CancelPrerender() {
     return;
   }
 
-  if (new_tab_page_preload_manager_) {
-    new_tab_page_preload_manager_->ResetPrerender();
+  auto* const preload_manager = GetNewTabPagePreloadPipelineManager();
+  if (!preload_manager) {
+    return;
   }
+  preload_manager->ResetPrerender();
 }
 
 void MostVisitedHandler::OnURLsAvailable(
@@ -282,15 +320,26 @@ void MostVisitedHandler::OnURLsAvailable(
         template_url_service &&
         template_url_service->IsSearchResultsPageFromDefaultSearchProvider(
             tile.url);
+    value->allow_user_edit = tile.allow_user_edit;
+    value->allow_user_delete = tile.allow_user_delete;
     tiles.push_back(std::move(value));
   }
   result->tiles = std::move(tiles);
   result->custom_links_enabled = most_visited_sites_->IsCustomLinksEnabled();
+  result->enterprise_shortcuts_enabled =
+      most_visited_sites_->IsEnterpriseShortcutsEnabled();
   result->visible = most_visited_sites_->IsShortcutsVisible();
   page_->SetMostVisitedInfo(std::move(result));
 }
 
 void MostVisitedHandler::OnIconMadeAvailable(const GURL& site_url) {}
+
+NewTabPagePreloadPipelineManager*
+MostVisitedHandler::GetNewTabPagePreloadPipelineManager() {
+  tabs::TabInterface* tab = webui::GetTabInterface(web_contents_);
+  return tab ? tab->GetTabFeatures()->new_tab_page_preload_pipeline_manager()
+             : nullptr;
+}
 
 void MostVisitedHandler::OnMigrationRun() {
   most_visited_sites_->RefreshTiles();

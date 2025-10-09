@@ -5,7 +5,9 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_NEW_TAB_PAGE_UI_H_
 #define CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_NEW_TAB_PAGE_UI_H_
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,6 +23,7 @@
 #include "chrome/browser/new_tab_page/modules/v2/tab_groups/tab_groups.mojom.h"
 #include "chrome/browser/ui/webui/new_tab_page/ntp_promo/ntp_promo.mojom.h"
 #include "chrome/browser/ui/webui/new_tab_page/ntp_promo/ntp_promo_handler.h"
+#include "components/user_education/common/ntp_promo/ntp_promo_controller.h"
 #include "components/user_education/webui/help_bubble_handler.h"
 #include "ui/webui/resources/cr_components/help_bubble/help_bubble.mojom.h"
 #include "ui/webui/resources/js/browser_command/browser_command.mojom.h"
@@ -129,6 +132,7 @@ class NewTabPageUI
   static bool IsNewTabPageOrigin(const GURL& url);
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
   static void ResetProfilePrefs(PrefService* prefs);
+  static void MigrateDeprecatedUseMostVisitedTilesPref(PrefService* prefs);
   static bool IsManagedProfile(Profile* profile);
 
   // Instantiates the implementor of the mojom::PageHandlerFactory mojo
@@ -298,15 +302,20 @@ class NewTabPageUI
   void OnColorProviderChanged() override;
 
   bool IsCustomLinksEnabled() const;
+  bool IsEnterpriseShortcutsEnabled() const;
   bool IsShortcutsVisible() const;
 
-  // Callback for when the value of the pref for showing custom links vs. most
-  // visited sites in the NTP tiles changes.
-  void OnCustomLinksEnabledPrefChanged();
+  // Callback for when the value of the pref for determining the type of NTP
+  // tiles changes.
+  void OnShortcutsTypePrefChanged();
   // Callback for when the value of the pref for showing the NTP tiles changes.
   void OnTilesVisibilityPrefChanged();
   // Called when the NTP (re)loads. Sets mutable load time data.
   void OnLoad();
+
+  // Based on the current profile and NTP promo controller, determine which
+  // type of NTP promos can be shown, if any.
+  std::string_view GetNtpPromoType();
 
   // The counter for NewTabPage.Count UMA metrics.
   static int instance_count_;

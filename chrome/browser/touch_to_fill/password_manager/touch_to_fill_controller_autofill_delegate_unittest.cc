@@ -45,7 +45,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/android/window_android.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -905,6 +905,36 @@ TEST_F(TouchToFillControllerAutofillTest,
   uma_recorder.ExpectUniqueSample(
       "PasswordManager.FillSuggestionsGroupedMatchAccepted", /*sample=*/false,
       /*expected_bucket_count=*/1);
+}
+
+TEST_F(TouchToFillControllerAutofillTest, LogBackupPasswordSelected) {
+  auto filler_to_pass = CreateMockFiller();
+  UiCredential credentials[] = {
+      MakeUiCredential({.username = "alice",
+                        .password = "p4ssw0rd",
+                        .backup = IsBackupCredential(true)})};
+  ON_CALL(*last_mock_filler(), ShouldTriggerSubmission())
+      .WillByDefault(Return(true));
+
+  EXPECT_CALL(view(), Show);
+  Show(credentials, {},
+       MakeTouchToFillControllerDelegate(
+           autofill::mojom::SubmissionReadinessState::kTwoFields,
+           std::move(filler_to_pass), form_to_fill(),
+           form_to_fill()->password_element_renderer_id,
+           TouchToFillControllerAutofillDelegate::ShowHybridOption(false)),
+       /*cred_man_delegate=*/nullptr);
+
+  EXPECT_CALL(*last_mock_filler(), FillUsernameAndPassword);
+
+  base::HistogramTester histogram_tester;
+  touch_to_fill_controller().OnCredentialSelected(credentials[0]);
+
+  histogram_tester.ExpectUniqueSample(
+      "PasswordManager.PasswordDropdownItemSelected",
+      password_manager::metrics_util::PasswordDropdownSelectedOption::
+          kBackupPassword,
+      1);
 }
 
 class TouchToFillControllerAutofillTestWithSubmissionReadinessVariationTest

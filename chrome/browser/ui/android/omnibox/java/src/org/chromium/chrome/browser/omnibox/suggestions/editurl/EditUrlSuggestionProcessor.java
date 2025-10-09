@@ -9,7 +9,6 @@ import static org.chromium.build.NullUtil.assumeNonNull;
 import android.text.TextUtils;
 
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.history_clusters.HistoryClustersTabHelper;
@@ -37,6 +36,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.GURL;
 
 import java.util.Arrays;
+import java.util.function.Supplier;
 
 /**
  * This class controls the interaction of the "edit url" suggestion item with the rest of the
@@ -62,6 +62,8 @@ public class EditUrlSuggestionProcessor extends BaseSuggestionViewProcessor {
         // The what-you-typed suggestion can potentially appear as the second suggestion in some
         // cases. If the first suggestion isn't the one we want, ignore all subsequent suggestions.
         if (position != 0) return false;
+
+        if (OmniboxFeatures.sRemoveSearchReadyOmnibox.isEnabled()) return false;
 
         // Fall back to the base suggestion processor when retaining omnibox on focus so as not to
         // show mobile-optimized actions in a desktop-like context.

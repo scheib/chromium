@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/test/mock_callback.h"
+#include "ui/ozone/platform/wayland/host/wayland_data_drag_controller.h"
 
 #include <linux/input.h>
 #include <wayland-server.h>
@@ -19,6 +19,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/bind.h"
+#include "base/test/mock_callback.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/clipboard/clipboard_format_type.h"
@@ -31,12 +32,11 @@
 #include "ui/events/base_event_utils.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/vector2d.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_cursor_position.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_device.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_device_manager.h"
-#include "ui/ozone/platform/wayland/host/wayland_data_drag_controller.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_offer.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_source.h"
 #include "ui/ozone/platform/wayland/host/wayland_serial_tracker.h"
@@ -313,6 +313,23 @@ TEST_P(WaylandDataDragControllerTest, StartDragWithWrongMimeType) {
   // The server should get an empty data buffer in ReadData callback when trying
   // to read it with a different mime type.
   ReadAndCheckData(kMimeTypePlainText, {});
+}
+
+TEST_P(WaylandDataDragControllerTest, StartDragWithLink) {
+  FocusAndPressLeftPointerButton(window_.get(), &delegate_);
+
+  // The client starts dragging offering link data
+  OSExchangeData os_exchange_data;
+  os_exchange_data.SetURL(GURL("www.abc.com"), u"ABC");
+  int operations = DragDropTypes::DRAG_LINK;
+  drag_controller()->StartSession(os_exchange_data, operations,
+                                  DragEventSource::kMouse);
+
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* data_source = server->data_device_manager()->data_source();
+    EXPECT_TRUE(data_source->actions() &
+                WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY);
+  });
 }
 
 // Ensures data drag controller properly offers dragged data with custom

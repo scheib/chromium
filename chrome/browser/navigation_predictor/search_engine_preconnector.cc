@@ -50,12 +50,8 @@ constexpr int kPreconnectIntervalForLowPowerSec = 30;
 namespace features {
 // Feature to control preconnect to search.
 
-BASE_FEATURE(kPreconnectFromKeyedService,
-             "PreconnectFromKeyedService",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kPreconnectToSearch,
-             "PreconnectToSearch",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kPreconnectFromKeyedService, base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kPreconnectToSearch, base::FEATURE_ENABLED_BY_DEFAULT);
 }  // namespace features
 
 WebContentVisibilityManager::WebContentVisibilityManager()
@@ -160,8 +156,8 @@ void SearchEnginePreconnector::PreconnectDSE() {
     return;
 
   GURL preconnect_url = GetDefaultSearchEngineOriginURL();
-  if (preconnect_url.scheme() != url::kHttpScheme &&
-      preconnect_url.scheme() != url::kHttpsScheme) {
+  if (preconnect_url.GetScheme() != url::kHttpScheme &&
+      preconnect_url.GetScheme() != url::kHttpsScheme) {
     return;
   }
 

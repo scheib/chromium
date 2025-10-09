@@ -5,14 +5,25 @@
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 
 #include "base/notimplemented.h"
+#include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/themes/custom_theme_supplier.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
+#include "chrome/browser/ui/accelerator_table.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/find_bar/find_bar.h"
+#include "chrome/browser/ui/views/find_bar_host.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_ui_base.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_client_view.h"
+#include "chrome/browser/ui/webui_browser/webui_browser_extensions_container.h"
+#include "chrome/browser/ui/webui_browser/webui_browser_modal_dialog_host.h"
+#include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_web_contents_delegate.h"
 #include "chrome/browser/ui/webui_browser/webui_location_bar.h"
@@ -20,17 +31,28 @@
 #include "chrome/common/webui_url_constants.h"
 #include "components/input/native_web_keyboard_event.h"
 #include "components/sharing_message/sharing_dialog_data.h"
+#include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/mojom/page/draggable_region.mojom.h"
+#include "ui/base/interaction/element_tracker.h"
+#include "ui/content_accelerators/accelerator_util.h"
 #include "ui/views/controls/webview/webview.h"
+#include "ui/views/interaction/element_tracker_views.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 namespace {
 
-// Copied from chrome/browser/ui/views/frame/browser_frame.cc.
+const char* const kWebUIBrowserWindowKey = "__WEBUI_BROWSER_WINDOW__";
+
+// Copied from chrome/browser/ui/views/frame/browser_widget.cc.
 bool IsUsingLinuxSystemTheme(Profile* profile) {
 #if BUILDFLAG(IS_LINUX)
   return ThemeServiceFactory::GetForProfile(profile)->UsingSystemTheme();
@@ -50,34 +72,52 @@ class WebShellWebContentsUserData : public base::SupportsUserData::Data {
   raw_ptr<WebUIBrowserWindow> browser_window_;
 };
 
+ui::ColorProviderKey::SchemeVariant GetSchemeVariant(
+    ui::mojom::BrowserColorVariant color_variant) {
+  using BCV = ui::mojom::BrowserColorVariant;
+  using SV = ui::ColorProviderKey::SchemeVariant;
+  static constexpr auto kSchemeVariantMap = base::MakeFixedFlatMap<BCV, SV>({
+      {BCV::kTonalSpot, SV::kTonalSpot},
+      {BCV::kNeutral, SV::kNeutral},
+      {BCV::kVibrant, SV::kVibrant},
+      {BCV::kExpressive, SV::kExpressive},
+  });
+  return kSchemeVariantMap.at(color_variant);
+}
+
 }  // namespace
 
 class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
  public:
   explicit WidgetDelegate(
+      WebUIBrowserWindow* window,
       WebUIBrowserWebContentsDelegate* web_contents_delegate);
 
   views::ClientView* CreateClientView(views::Widget* widget) override;
+  std::u16string GetWindowTitle() const override;
 
  private:
+  raw_ptr<WebUIBrowserWindow> browser_window_;
   raw_ptr<WebUIBrowserWebContentsDelegate> web_contents_delegate_;
 };
 
-WebUIBrowserWindow::WebUIBrowserWindow(std::unique_ptr<Browser> browser)
-    : browser_(std::move(browser)) {
-  location_bar_ = std::make_unique<WebUILocationBar>(browser_.get());
+WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+  location_bar_ = std::make_unique<WebUILocationBar>(this);
   web_contents_delegate_ =
-      std::make_unique<WebUIBrowserWebContentsDelegate>(browser_.get());
+      std::make_unique<WebUIBrowserWebContentsDelegate>(this);
   widget_delegate_ =
-      std::make_unique<WidgetDelegate>(web_contents_delegate_.get());
+      std::make_unique<WidgetDelegate>(this, web_contents_delegate_.get());
   widget_ = std::make_unique<views::Widget>();
+  widget_->AddObserver(this);
   views::Widget::InitParams params(
       views::Widget::InitParams::CLIENT_OWNS_WIDGET);
   params.name = "WebUIBrowserWindow";
   params.bounds = gfx::Rect(0, 0, 800, 600);
   params.delegate = widget_delegate_.get();
+  params.native_widget = CreateNativeWidget();
   widget_->Init(std::move(params));
-  widget_->MakeCloseSynchronous(base::BindRepeating(
+  widget_->SetNativeWindowProperty(kWebUIBrowserWindowKey, this);
+  widget_->MakeCloseSynchronous(base::BindOnce(
       &WebUIBrowserWindow::OnWindowCloseRequested, base::Unretained(this)));
   auto web_view = std::make_unique<views::WebView>(browser_->profile());
 
@@ -88,13 +128,35 @@ WebUIBrowserWindow::WebUIBrowserWindow(std::unique_ptr<Browser> browser)
       WebShellWebContentsUserData::Key,
       std::make_unique<WebShellWebContentsUserData>(this));
 
+  modal_dialog_host_ = std::make_unique<WebUIBrowserModalDialogHost>(this);
+  extensions_container_ =
+      std::make_unique<WebUIBrowserExtensionsContainer>(*browser_, *this);
+
   web_view->LoadInitialURL(GURL(chrome::kChromeUIWebuiBrowserURL));
   web_view_ = widget_->SetClientContentsView(std::move(web_view));
+  // Set the ColorProviderSource after attaching to the WebView otherwise
+  // attaching overwrites it.
+  // TODO(webium): |widget_| should use |this| as its ColorProviderSource as
+  // secondary UIs need it to get the correct color mode from their parent
+  // widget.
+  ui_web_contents->SetColorProviderSource(this);
 
   widget_->Show();
+  // Give our main web contents the focus so that accelerators work.
+  ui_web_contents->SetInitialFocus();
+
+  LoadAccelerators();
 }
 
-WebUIBrowserWindow::~WebUIBrowserWindow() = default;
+WebUIBrowserWindow::~WebUIBrowserWindow() {
+  browser_->GetFeatures().TearDownPreBrowserWindowDestruction();
+  web_view_ = nullptr;
+  // We want to destroy the extensions container before the `widget_` since
+  // it wants to de-register itself for focus stuff.
+  extensions_container_.reset();
+  widget_->RemoveObserver(this);
+  widget_.reset();
+}
 
 // static
 WebUIBrowserWindow* WebUIBrowserWindow::FromWebShellWebContents(
@@ -108,6 +170,26 @@ WebUIBrowserWindow* WebUIBrowserWindow::FromWebShellWebContents(
   }
 
   return user_data->browser_window_;
+}
+
+// static
+WebUIBrowserWindow* WebUIBrowserWindow::FromBrowser(Browser* browser) {
+  // This function is implemented based on
+  // BrowserView::GetBrowserViewForBrowser(). Please see the comments in that
+  // function for the implementation rationale.
+  if (!browser->window() || !browser->window()->GetNativeWindow()) {
+    return nullptr;
+  }
+  return FromNativeWindow(browser->window()->GetNativeWindow());
+}
+
+// static
+WebUIBrowserWindow* WebUIBrowserWindow::FromNativeWindow(
+    gfx::NativeWindow window) {
+  views::Widget* widget = views::Widget::GetWidgetForNativeWindow(window);
+  return widget ? reinterpret_cast<WebUIBrowserWindow*>(
+                      widget->GetNativeWindowProperty(kWebUIBrowserWindowKey))
+                : nullptr;
 }
 
 void WebUIBrowserWindow::Show() {
@@ -170,8 +252,16 @@ void WebUIBrowserWindow::SetZOrderLevel(ui::ZOrderLevel order) {
 }
 
 gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
-  NOTIMPLEMENTED();
+#if BUILDFLAG(IS_CHROMEOS)
+  // Ash ChromeOS has a UaF on widget's aura::Window during browser shutdown.
+  // The window is stored in apps::InstanceRegistry which becomes dangling after
+  // the BrowserWindow is destroyed.
+  // TODO(webium): Fix ChromeOS. Run WebUIBrowserTest.StartupAndShutdown
+  // to verify.
   return gfx::NativeWindow();
+#else
+  return widget_->GetNativeWindow();
+#endif
 }
 
 bool WebUIBrowserWindow::IsOnCurrentWorkspace() const {
@@ -197,12 +287,11 @@ bool WebUIBrowserWindow::DoBrowserControlsShrinkRendererSize(
 }
 
 ui::NativeTheme* WebUIBrowserWindow::GetNativeTheme() {
-  NOTIMPLEMENTED();
-  return nullptr;
+  return ui::NativeTheme::GetInstanceForNativeUi();
 }
 
 const ui::ThemeProvider* WebUIBrowserWindow::GetThemeProvider() const {
-  // Copied from BrowserFrame::GetThemeProvider().
+  // Copied from BrowserWidget::GetThemeProvider().
   auto* app_controller = browser_->app_controller();
   // Ignore the system theme for web apps with window-controls-overlay as the
   // display_override so the web contents can blend with the overlay by using
@@ -220,9 +309,104 @@ const ui::ColorProvider* WebUIBrowserWindow::GetColorProvider() const {
       GetColorProviderKey());
 }
 
+ui::ColorProviderKey::ThemeInitializerSupplier*
+WebUIBrowserWindow::GetThemeInitializerSupplier() const {
+  // Do not return any custom theme if this is an incognito browser.
+  if (browser_->profile()->IsIncognitoProfile()) {
+    return nullptr;
+  }
+
+  auto* app_controller = browser_->app_controller();
+  // Ignore the system theme for web apps with window-controls-overlay as the
+  // display_override so the web contents can blend with the overlay by using
+  // the developer-provided theme color for a better experience. Context:
+  // https://crbug.com/1219073.
+  if (app_controller && (!IsUsingLinuxSystemTheme(browser_->profile()) ||
+                         app_controller->AppUsesWindowControlsOverlay())) {
+    return app_controller->GetThemeSupplier();
+  }
+  auto* theme_service = ThemeServiceFactory::GetForProfile(browser_->profile());
+  return theme_service->UsingDeviceTheme() ? nullptr
+                                           : theme_service->GetThemeSupplier();
+}
+
 ui::ColorProviderKey WebUIBrowserWindow::GetColorProviderKey() const {
-  return ui::NativeTheme::GetInstanceForNativeUi()->GetColorProviderKey(
-      nullptr);
+  auto key = ui::NativeTheme::GetInstanceForNativeUi()->GetColorProviderKey(
+      GetThemeInitializerSupplier());
+
+  key.app_controller = browser_->app_controller();
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // ChromeOS SystemWebApps use the OS theme all the time.
+  if (ash::IsSystemWebApp(browser_)) {
+    return key;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  const auto* theme_service =
+      ThemeServiceFactory::GetForProfile(browser_->profile());
+  CHECK(theme_service);
+
+  // Determine appropriate key.color_mode.
+  [this, &key, theme_service]() {
+    // Currently the incognito browser is implemented as unthemed dark mode.
+    if (browser_->profile()->IsIncognitoProfile()) {
+      key.color_mode = ui::ColorProviderKey::ColorMode::kDark;
+      return;
+    }
+
+    const auto browser_color_scheme = theme_service->GetBrowserColorScheme();
+    if (browser_color_scheme != ThemeService::BrowserColorScheme::kSystem) {
+      key.color_mode =
+          browser_color_scheme == ThemeService::BrowserColorScheme::kLight
+              ? ui::ColorProviderKey::ColorMode::kLight
+              : ui::ColorProviderKey::ColorMode::kDark;
+    }
+  }();
+
+  // Determine appropriate key.user_color.
+  // Device theme retains the user_color from `Widget`.
+  if (!theme_service->UsingDeviceTheme()) {
+    if (theme_service->UsingAutogeneratedTheme()) {
+      key.user_color = theme_service->GetAutogeneratedThemeColor();
+    } else if (auto user_color = theme_service->GetUserColor()) {
+      key.user_color = user_color;
+    }
+  }
+
+  // Determine appropriate key.user_color_source.
+  if (browser_->profile()->IsIncognitoProfile()) {
+    key.user_color_source = ui::ColorProviderKey::UserColorSource::kGrayscale;
+  } else if (theme_service->UsingDeviceTheme()) {
+    key.user_color_source = ui::ColorProviderKey::UserColorSource::kAccent;
+  } else if (theme_service->GetIsGrayscale()) {
+    key.user_color_source = ui::ColorProviderKey::UserColorSource::kGrayscale;
+  } else if (theme_service->GetIsBaseline()) {
+    key.user_color_source = ui::ColorProviderKey::UserColorSource::kBaseline;
+  } else {
+    CHECK(key.user_color.has_value());
+    key.user_color_source = ui::ColorProviderKey::UserColorSource::kAccent;
+  }
+
+  // Determine appropriate key.scheme_variant.
+  ui::mojom::BrowserColorVariant color_variant =
+      theme_service->GetBrowserColorVariant();
+  if (!theme_service->UsingDeviceTheme() &&
+      color_variant != ui::mojom::BrowserColorVariant::kSystem) {
+    key.scheme_variant = GetSchemeVariant(color_variant);
+  }
+
+  // Determine appropriate key.frame_type.
+  // TODO(webium): special windows might need FrameType::kNative.
+  key.frame_type = ui::ColorProviderKey::FrameType::kChromium;
+
+#if BUILDFLAG(IS_WIN)
+  if (theme_service && theme_service->UsingDeviceTheme()) {
+    key.frame_style = ui::ColorProviderKey::FrameStyle::kSystem;
+  }
+#endif
+
+  return key;
 }
 
 ui::RendererColorMap WebUIBrowserWindow::GetRendererColorMap(
@@ -235,6 +419,113 @@ ui::RendererColorMap WebUIBrowserWindow::GetRendererColorMap(
       ui::ColorProviderManager::Get().GetColorProviderFor(key);
   CHECK(color_provider);
   return ui::CreateRendererColorMap(*color_provider);
+}
+
+bool WebUIBrowserWindow::GetAcceleratorForCommandId(
+    int command_id,
+    ui::Accelerator* accelerator) const {
+  NOTIMPLEMENTED();
+  return false;
+}
+
+void WebUIBrowserWindow::OnWidgetBoundsChanged(views::Widget* widget,
+                                               const gfx::Rect& new_bounds) {
+  DCHECK_EQ(widget, widget_.get());
+  if (modal_dialog_host_) {
+    modal_dialog_host_->NotifyPositionRequiresUpdate();
+  }
+}
+
+gfx::Rect WebUIBrowserWindow::GetContentsBoundsInScreen() const {
+  ui::TrackedElement* content_region =
+      ui::ElementTracker::GetElementTracker()->GetFirstMatchingElement(
+          kContentsContainerViewElementId,
+          views::ElementTrackerViews::GetContextForWidget(widget_.get()));
+  return content_region->GetScreenBounds();
+}
+
+ui::TrackedElement* WebUIBrowserWindow::GetExtensionsMenuButtonAnchor() const {
+  return ui::ElementTracker::GetElementTracker()->GetFirstMatchingElement(
+      kExtensionsMenuButtonElementId,
+      views::ElementTrackerViews::GetContextForWidget(widget_.get()));
+}
+
+void WebUIBrowserWindow::DeleteBrowserWindow() {
+  delete this;
+}
+
+bool WebUIBrowserWindow::FindCommandIdForAccelerator(
+    const ui::Accelerator& accelerator,
+    int* command_id) const {
+  auto iter = accelerator_table_.find(accelerator);
+  if (iter == accelerator_table_.end()) {
+    return false;
+  }
+
+  *command_id = iter->second;
+  if (accelerator.IsRepeat() && !IsCommandRepeatable(*command_id)) {
+    return false;
+  }
+
+  return true;
+}
+
+void WebUIBrowserWindow::LoadAccelerators() {
+  // Let's fill our own accelerator table.
+  const bool is_app_mode = IsRunningInForcedAppMode();
+#if BUILDFLAG(IS_CHROMEOS)
+  const bool is_captive_portal_signin_window =
+      browser_->profile()->IsOffTheRecord() &&
+      browser_->profile()->GetOTRProfileID().IsCaptivePortal();
+#endif
+  const std::vector<AcceleratorMapping> accelerator_list(GetAcceleratorList());
+  for (const auto& entry : accelerator_list) {
+    // In app mode, only allow accelerators of allowlisted commands to pass
+    // through.
+    if (is_app_mode && !IsCommandAllowedInAppMode(entry.command_id,
+                                                  browser_->is_type_popup())) {
+      continue;
+    }
+
+#if BUILDFLAG(IS_CHROMEOS)
+    if (is_captive_portal_signin_window) {
+      int command = entry.command_id;
+      // Captive portal signin uses an OTR profile without history.
+      if (command == IDC_SHOW_HISTORY) {
+        continue;
+      }
+      // The NewTab command expects navigation to occur in the same browser
+      // window. For captive portal signin this is not the case, so hide these
+      // to reduce confusion.
+      if (command == IDC_NEW_TAB || command == IDC_NEW_TAB_TO_RIGHT ||
+          command == IDC_CREATE_NEW_TAB_GROUP) {
+        continue;
+      }
+    }
+#endif
+
+    ui::Accelerator accelerator(entry.keycode, entry.modifiers);
+    accelerator_table_[accelerator] = entry.command_id;
+    accelerator_manager_.Register(
+        {accelerator}, ui::AcceleratorManager::kNormalPriority, this);
+  }
+}
+
+bool WebUIBrowserWindow::AcceleratorPressed(
+    const ui::Accelerator& accelerator) {
+  int command_id;
+  // Though AcceleratorManager should not send unknown |accelerator| to us, it's
+  // still possible the command cannot be executed now.
+  if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
+    return false;
+  }
+
+  return chrome::ExecuteCommand(browser_.get(), command_id,
+                                accelerator.time_stamp());
+}
+
+bool WebUIBrowserWindow::CanHandleAccelerators() const {
+  return true;
 }
 
 int WebUIBrowserWindow::GetTopControlsHeight() const {
@@ -253,7 +544,8 @@ std::vector<StatusBubble*> WebUIBrowserWindow::GetStatusBubbles() {
 }
 
 void WebUIBrowserWindow::UpdateTitleBar() {
-  NOTIMPLEMENTED();
+  widget_->UpdateWindowTitle();
+  // TODO(webium): The icon might also need updating.
 }
 
 void WebUIBrowserWindow::BookmarkBarStateChanged(
@@ -268,6 +560,13 @@ void WebUIBrowserWindow::TemporarilyShowBookmarkBar(base::TimeDelta duration) {
 void WebUIBrowserWindow::UpdateDevTools(
     content::WebContents* inspected_web_contents) {
   NOTIMPLEMENTED();
+}
+
+bool WebUIBrowserWindow::CanDockDevTools() const {
+  // This forces DevTools to open in a new window, which is currently necessary
+  // because the code path for a launching docked DevTools requires BrowserView,
+  // ContentsContainerView, etc.
+  return false;
 }
 
 void WebUIBrowserWindow::UpdateLoadingAnimations(bool is_visible) {
@@ -292,6 +591,15 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
                                             content::WebContents* new_contents,
                                             int index,
                                             int reason) {
+  // New tabs have their ColorProviderSource set to the Widget initially.
+  // Set the ColorProviderSource back to |this| when they're first activated.
+  // This is a no-op if it's already set to |this|.
+  new_contents->SetColorProviderSource(this);
+
+  // State of extensions depends on what's active --- e.g. some may be disabled
+  // on some URLs.
+  extensions_container_->NotifyOfAllActions();
+
   NOTIMPLEMENTED();
 }
 
@@ -351,12 +659,16 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
   return location_bar_.get();
 }
 
-void WebUIBrowserWindow::SetFocusToLocationBar(bool select_all) {
-  NOTIMPLEMENTED();
+void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
+  if (webui_browser::mojom::Page* page = GetWebUIBrowserUI()->page()) {
+    page->SetFocusToLocationBar(is_user_initiated);
+  }
 }
 
 void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-  NOTIMPLEMENTED();
+  if (webui_browser::mojom::Page* page = GetWebUIBrowserUI()->page()) {
+    page->SetReloadStopState(is_loading);
+  }
 }
 
 void WebUIBrowserWindow::UpdateToolbar(content::WebContents* contents) {
@@ -373,10 +685,6 @@ void WebUIBrowserWindow::UpdateCustomTabBarVisibility(bool visible,
   NOTIMPLEMENTED();
 }
 
-void WebUIBrowserWindow::SetContentScrimVisibility(bool visible) {
-  NOTIMPLEMENTED();
-}
-
 void WebUIBrowserWindow::SetDevToolsScrimVisibility(bool visible) {
   NOTIMPLEMENTED();
 }
@@ -390,8 +698,7 @@ void WebUIBrowserWindow::FocusToolbar() {
 }
 
 ExtensionsContainer* WebUIBrowserWindow::GetExtensionsContainer() {
-  NOTIMPLEMENTED();
-  return nullptr;
+  return extensions_container_.get();
 }
 
 void WebUIBrowserWindow::ToolbarSizeChanged(bool is_animating) {
@@ -457,8 +764,7 @@ bool WebUIBrowserWindow::IsToolbarShowing() const {
 }
 
 bool WebUIBrowserWindow::IsLocationBarVisible() const {
-  NOTIMPLEMENTED();
-  return false;
+  return true;
 }
 
 SharingDialog* WebUIBrowserWindow::ShowSharingDialog(
@@ -522,7 +828,7 @@ views::Button* WebUIBrowserWindow::GetSharingHubIconButton() {
   return nullptr;
 }
 
-void WebUIBrowserWindow::ToggleMultitaskMenu() const {
+void WebUIBrowserWindow::ToggleMultitaskMenu() {
   NOTIMPLEMENTED();
 }
 #else
@@ -558,8 +864,12 @@ void WebUIBrowserWindow::ShowOneClickSigninConfirmation(
 }
 
 views::View* WebUIBrowserWindow::GetTopContainer() {
-  NOTIMPLEMENTED();
-  return nullptr;
+  // This view is technically the entire window, not just the top container.
+  // We return it because the BookmarkContextMenu constructor needs to be able
+  // get to a NativeWindow whenever the context menu is triggered from the
+  // bookmarks side panel, and uses
+  // browser_window->TopContainer()->GetWidget()->GetNativeWindow().
+  return web_view_;
 }
 
 views::View* WebUIBrowserWindow::GetLensOverlayView() {
@@ -582,17 +892,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
 
 void WebUIBrowserWindow::UserChangedTheme(
     BrowserThemeChangeType theme_change_type) {
-  NOTIMPLEMENTED();
+  NotifyColorProviderChanged();
+  extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
 }
 
 void WebUIBrowserWindow::ShowAppMenu() {
   NOTIMPLEMENTED();
-}
-
-bool WebUIBrowserWindow::PreHandleMouseEvent(
-    const blink::WebMouseEvent& event) {
-  NOTIMPLEMENTED();
-  return false;
 }
 
 void WebUIBrowserWindow::PreHandleDragUpdate(const content::DropData& drop_data,
@@ -611,25 +916,81 @@ void WebUIBrowserWindow::HandleDragEnded() {
 content::KeyboardEventProcessingResult
 WebUIBrowserWindow::PreHandleKeyboardEvent(
     const input::NativeWebKeyboardEvent& event) {
-  NOTIMPLEMENTED();
-  return content::KeyboardEventProcessingResult::NOT_HANDLED;
+  if ((event.GetType() != blink::WebInputEvent::Type::kRawKeyDown) &&
+      (event.GetType() != blink::WebInputEvent::Type::kKeyUp)) {
+    return content::KeyboardEventProcessingResult::NOT_HANDLED;
+  }
+
+  ui::Accelerator accelerator =
+      ui::GetAcceleratorFromNativeWebKeyboardEvent(event);
+
+  // What we have to do here is as follows:
+  // - If the |browser_| is for an app, do nothing.
+  // - On CrOS if |accelerator| is deprecated, we allow web contents to consume
+  //   it if needed.
+  // - If the |browser_| is not for an app, and the |accelerator| is not
+  //   associated with the browser (e.g. an Ash shortcut), process it.
+  // - If the |browser_| is not for an app, and the |accelerator| is associated
+  //   with the browser, and it is a reserved one (e.g. Ctrl+w), process it.
+  // - If the |browser_| is not for an app, and the |accelerator| is associated
+  //   with the browser, and it is not a reserved one, do nothing.
+
+  if (browser_->is_type_app() || browser_->is_type_app_popup()) {
+    // Let all keys fall through to a v1 app's web content, even accelerators.
+    // We don't use NOT_HANDLED_IS_SHORTCUT here. If we do that, the app
+    // might not be able to see a subsequent Char event. See OnHandleInputEvent
+    // in content/renderer/render_widget.cc for details.
+    return content::KeyboardEventProcessingResult::NOT_HANDLED;
+  }
+
+  int command_id;
+  if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
+    return content::KeyboardEventProcessingResult::NOT_HANDLED;
+  }
+
+  // TODO(webium): Handle shortcuts that are registered in the FocusManager.
+  // We handle only browser window shortcuts here. Secondary UIs can
+  // registered their own shortcuts (e.g. Ctrl+Enter closes the Find Bar) via
+  // FocusManager::RegisterAccelerator().
+  if (accelerator_manager_.Process(accelerator)) {
+    return content::KeyboardEventProcessingResult::HANDLED;
+  }
+
+  // BrowserView does not register RELEASED accelerators. So if we can find the
+  // command id from |accelerator_table_|, it must be a keydown event. This
+  // DCHECK ensures we won't accidentally return NOT_HANDLED for a later added
+  // RELEASED accelerator in BrowserView.
+  DCHECK_EQ(event.GetType(), blink::WebInputEvent::Type::kRawKeyDown);
+  // |accelerator| is a non-reserved browser shortcut (e.g. Ctrl+f).
+  return content::KeyboardEventProcessingResult::NOT_HANDLED_IS_SHORTCUT;
 }
 
+// These functions have Mac implementations in webui_browser_window_mac.mm.
+#if !BUILDFLAG(IS_MAC)
 bool WebUIBrowserWindow::HandleKeyboardEvent(
     const input::NativeWebKeyboardEvent& event) {
-  NOTIMPLEMENTED();
   return false;
 }
 
-std::unique_ptr<FindBar> WebUIBrowserWindow::CreateFindBar() {
-  NOTIMPLEMENTED();
+views::NativeWidget* WebUIBrowserWindow::CreateNativeWidget() {
   return nullptr;
+}
+#endif
+
+std::unique_ptr<FindBar> WebUIBrowserWindow::CreateFindBar() {
+  return std::make_unique<FindBarHost>(
+      browser_->GetFeatures().find_bar_owner());
 }
 
 web_modal::WebContentsModalDialogHost*
 WebUIBrowserWindow::GetWebContentsModalDialogHost() {
-  NOTIMPLEMENTED();
-  return nullptr;
+  return modal_dialog_host_.get();
+}
+
+web_modal::WebContentsModalDialogHost*
+WebUIBrowserWindow::GetWebContentsModalDialogHostFor(
+    content::WebContents* web_contents) {
+  return modal_dialog_host_.get();
 }
 
 void WebUIBrowserWindow::ShowAvatarBubbleFromAvatarButton(
@@ -713,13 +1074,19 @@ void WebUIBrowserWindow::OnWebApiWindowResizableChanged() {
 }
 
 bool WebUIBrowserWindow::GetCanResize() {
-  NOTIMPLEMENTED();
-  return false;
+  return widget_delegate_->CanResize();
 }
 
 ui::mojom::WindowShowState WebUIBrowserWindow::GetWindowShowState() const {
-  NOTIMPLEMENTED();
-  return ui::mojom::WindowShowState::kDefault;
+  if (IsMaximized()) {
+    return ui::mojom::WindowShowState::kMaximized;
+  } else if (IsMinimized()) {
+    return ui::mojom::WindowShowState::kMinimized;
+  } else if (IsFullscreen()) {
+    return ui::mojom::WindowShowState::kFullscreen;
+  } else {
+    return ui::mojom::WindowShowState::kDefault;
+  }
 }
 
 void WebUIBrowserWindow::ShowChromeLabs() {
@@ -737,8 +1104,7 @@ BrowserView* WebUIBrowserWindow::AsBrowserView() {
 }
 
 gfx::Rect WebUIBrowserWindow::GetBounds() const {
-  NOTIMPLEMENTED();
-  return gfx::Rect();
+  return widget_->GetWindowBoundsInScreen();
 }
 
 bool WebUIBrowserWindow::IsMaximized() const {
@@ -779,9 +1145,10 @@ Profile* WebUIBrowserWindow::GetProfile() {
   return browser_->profile();
 }
 
-void WebUIBrowserWindow::EnterFullscreen(const url::Origin& origin,
-                                         ExclusiveAccessBubbleType bubble_type,
-                                         const int64_t display_id) {
+void WebUIBrowserWindow::EnterFullscreen(
+    const url::Origin& origin,
+    ExclusiveAccessBubbleType bubble_type,
+    FullscreenTabParams fullscreen_tab_params) {
   // TODO(webium): Implement this.
   NOTIMPLEMENTED();
 }
@@ -808,8 +1175,7 @@ void WebUIBrowserWindow::OnExclusiveAccessUserInput() {
 }
 
 content::WebContents* WebUIBrowserWindow::GetWebContentsForExclusiveAccess() {
-  // TODO(webium): Implement this.
-  NOTREACHED();
+  return browser_->tab_strip_model()->GetActiveWebContents();
 }
 
 bool WebUIBrowserWindow::CanUserEnterFullscreen() const {
@@ -824,24 +1190,17 @@ bool WebUIBrowserWindow::CanUserExitFullscreen() const {
   return false;
 }
 
-void WebUIBrowserWindow::DestroyBrowser() {
-  web_view_ = nullptr;
-  widget_.reset();
-  // Defer destroy so that Browser and TabStripModel outlive WebContents.
-  // During shutdown WebContents might need access to them.
-  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
-                                                                this);
-}
-
 void WebUIBrowserWindow::OnWindowCloseRequested(
     views::Widget::ClosedReason close_reason) {
   // TODO(webium): don't close a window during tab dragging.
 
   // Give beforeunload handlers, the user, or policy the chance to cancel the
   // close before we hide the window below.
-  if (const auto closing_status = browser_->HandleBeforeClose();
-      closing_status != BrowserClosingStatus::kPermitted) {
-    BrowserList::NotifyBrowserCloseCancelled(browser_.get(), closing_status);
+  if (!browser_->HandleBeforeClose()) {
+    // Need to reset the synchronous close callback after each Close() call as
+    // it's reset once used.  Close() is generally called twice during shutdown.
+    widget_->MakeCloseSynchronous(base::BindOnce(
+        &WebUIBrowserWindow::OnWindowCloseRequested, base::Unretained(this)));
     return;
   }
 
@@ -851,15 +1210,19 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
     // immediately) and close all the tabs, allowing the renderers to shut
     // down. When the tab strip is empty we'll be called back again.
     widget_->Hide();
-    return;
   }
-
-  DestroyBrowser();
 }
 
 WebUIBrowserWindow::WidgetDelegate::WidgetDelegate(
+    WebUIBrowserWindow* window,
     WebUIBrowserWebContentsDelegate* web_contents_delegate)
-    : web_contents_delegate_(web_contents_delegate) {}
+    : browser_window_(window), web_contents_delegate_(web_contents_delegate) {
+  // TODO(webium): May want to override these for Apps or Picture-in-picture.
+  SetCanResize(browser_window_->browser_->create_params().can_resize);
+  SetCanMaximize(browser_window_->browser_->create_params().can_maximize);
+  SetCanFullscreen(browser_window_->browser_->create_params().can_fullscreen);
+  SetCanMinimize(true);
+}
 
 views::ClientView* WebUIBrowserWindow::WidgetDelegate::CreateClientView(
     views::Widget* widget) {
@@ -867,9 +1230,29 @@ views::ClientView* WebUIBrowserWindow::WidgetDelegate::CreateClientView(
                                     TransferOwnershipOfContentsView());
 }
 
+std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+  // TODO(webium):  BrowserView::GetWindowTitle() has some magic for media
+  // on Mac.
+  return browser_window_->browser()->GetWindowTitleForCurrentTab(
+      true /* include_app_name */);
+}
+
 WebUIBrowserUI* WebUIBrowserWindow::GetWebUIBrowserUI() const {
   return web_contents_delegate_->web_contents()
       ->GetWebUI()
       ->GetController()
       ->GetAs<WebUIBrowserUI>();
+}
+
+void WebUIBrowserWindow::ShowSidePanel(SidePanelEntryKey side_panel_entry_key) {
+  GetWebUIBrowserUI()->ShowSidePanel(side_panel_entry_key);
+}
+
+void WebUIBrowserWindow::CloseSidePanel() {
+  GetWebUIBrowserUI()->CloseSidePanel();
+}
+
+WebUIBrowserSidePanelUI* WebUIBrowserWindow::GetWebUIBrowserSidePanelUI() {
+  return static_cast<WebUIBrowserSidePanelUI*>(
+      browser_->browser_window_features()->side_panel_ui());
 }

@@ -50,6 +50,7 @@
 #include "content/public/browser/login_delegate.h"
 #include "content/public/browser/mojo_binder_policy_map.h"
 #include "content/public/browser/privacy_sandbox_invoking_api.h"
+#include "content/public/browser/process_selection_deferring_condition.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/storage_partition_config.h"
 #include "content/public/common/alternative_error_page_override_info.mojom-forward.h"
@@ -79,7 +80,6 @@
 #include "services/network/public/mojom/web_sandbox_flags.mojom-forward.h"
 #include "services/network/public/mojom/web_transport.mojom-forward.h"
 #include "services/network/public/mojom/websocket.mojom-forward.h"
-#include "services/video_effects/public/cpp/buildflags.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "third_party/blink/public/common/mediastream/media_devices.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
@@ -103,11 +103,6 @@
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 #include "content/public/browser/posix_file_descriptor_info.h"
 #endif
-
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-#include "media/capture/mojom/video_effects_manager.mojom.h"
-#include "services/video_effects/public/mojom/video_effects_processor.mojom-forward.h"
-#endif  // BUILDFLAG(ENABLE_VIDEO_EFFECTS)
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "third_party/blink/public/mojom/installedapp/related_application.mojom-forward.h"
@@ -414,9 +409,10 @@ class CONTENT_EXPORT ContentBrowserClient {
   virtual void BrowserChildProcessHostCreated(BrowserChildProcessHost* host) {}
 
   // Gets the effective URL for the given actual URL, to allow an embedder to
-  // group different url schemes in the same SiteInstance.
-  virtual GURL GetEffectiveURL(BrowserContext* browser_context,
-                               const GURL& url);
+  // group different url schemes in the same SiteInstance. If there is no
+  // effective URL for the given URL, return std::nullopt.
+  virtual std::optional<GURL> GetEffectiveURL(BrowserContext* browser_context,
+                                              const GURL& url);
 
   // Invoked during renderer process lock state transitions (e.g., invalid ->
   // allows_any_site and allows_any_site -> locked_to_site) and when renderers
@@ -448,12 +444,16 @@ class CONTENT_EXPORT ContentBrowserClient {
   virtual bool ShouldUseProcessPerSite(BrowserContext* browser_context,
                                        const GURL& site_url);
 
-  // Returns true if the embedder prefers reusing an existing process which is
+  // Returns true if the embedder prefers reusing any same-site renderer process
   // not over-utilized for a main frame site instance for
   // `site_instance_original_url` in `browser_context`, for performance reasons.
+  // The method is currently only used for experiments that use
+  // ProcessPerSiteUpToMainFrameThreshold.
   // Note that other policies have precedence over this and can force or prevent
-  // process reuse irrespective of what this returns.
-  virtual bool ShouldReuseExistingProcessForNewMainFrameSiteInstance(
+  // process reuse irrespective of what this returns. In particular, the feature
+  // ReusePrerenderingProcessForMainFrames may choose to reuse a prerender
+  // process under the same site event if the method returns false.
+  virtual bool ShouldReuseAnyExistingProcessForNewMainFrameSiteInstance(
       BrowserContext* browser_context,
       const GURL& site_instance_original_url);
 
@@ -650,6 +650,10 @@ class CONTENT_EXPORT ContentBrowserClient {
       content::Referrer* referrer,
       std::optional<url::Origin>* initiator_origin) {}
 
+  // Called when the process of a cross-process subframe has gone.
+  virtual void CrossProcessSubframeRenderProcessGone(
+      RenderFrameHost* render_frame_host) {}
+
   // Temporary hack to determine whether to skip OOPIFs on the new tab page.
   // TODO(creis): Remove when https://crbug.com/566091 is fixed.
   virtual bool ShouldStayInParentProcessForNTP(const GURL& url,
@@ -787,11 +791,11 @@ class CONTENT_EXPORT ContentBrowserClient {
   virtual bool IsIsolatedContextAllowedForUrl(BrowserContext* browser_context,
                                               const GURL& lock_url);
 
-  // Check if the application running in the |render_frame_host| is allowed to
-  // automatically capture all screens by using the getAllScreensMedia API.
-  virtual void CheckGetAllScreensMediaAllowed(
-      content::RenderFrameHost* render_frame_host,
-      base::OnceCallback<void(bool)> callback);
+  // Returns whether the application running in the |render_frame_host| is
+  // allowed to automatically capture all screens by using the
+  // getAllScreensMedia API.
+  virtual bool IsMultiCaptureAllowed(
+      content::RenderFrameHost* render_frame_host);
 
   // Allow the embedder to control the maximum renderer process count. Only
   // applies if it is set to a non-zero value.  Once this limit is exceeded,
@@ -1491,6 +1495,18 @@ class CONTENT_EXPORT ContentBrowserClient {
       SiteInstance& main_frame_site,
       blink::web_pref::WebPreferences* prefs);
 
+  // Called by `WebContents` when its `ColorProviderSource` or the web instance
+  // of the `NativeTheme` change. Returns whether the web preferences for
+  // `web_contents` may be out of date as a result, which will trigger
+  // recomputation. This can be used as an alternative to monitoring this state
+  // directly and calling `OnWebPreferencesChanged()` on the `WebContents` when
+  // items of interest change, to avoid duplicate updates. Note that calling
+  // `OnWebPreferencesChanged()` is still necessary if state outside the above
+  // items changes.
+  virtual bool WebPreferencesNeedUpdateForColorRelatedStateChanges(
+      WebContents& web_contents,
+      const SiteInstance& main_frame_site) const;
+
   // Notifies that BrowserURLHandler has been created, so that the embedder can
   // optionally add their own handlers.
   virtual void BrowserURLHandlerCreated(BrowserURLHandler* handler) {}
@@ -1739,6 +1755,13 @@ class CONTENT_EXPORT ContentBrowserClient {
       NavigationHandle* navigation_handle,
       content::CommitDeferringCondition::NavigationType type);
 
+  // Allows the embedder to register one or more
+  // `ProcessSelectionDeferringCondition` for the navigation indicated by
+  // `navigation_handle`.
+  virtual std::vector<std::unique_ptr<ProcessSelectionDeferringCondition>>
+  CreateProcessSelectionDeferringConditionsForNavigation(
+      NavigationHandle& navigation_handle);
+
   // Called at the start of the navigation to get opaque data the embedder
   // wants to see passed to the corresponding URLRequest on the IO thread.
   virtual std::unique_ptr<NavigationUIData> GetNavigationUIData(
@@ -1775,7 +1798,6 @@ class CONTENT_EXPORT ContentBrowserClient {
   // Defines flags that can be passed to PreSpawnChild.
   enum ChildSpawnFlags {
     kChildSpawnFlagNone = 0,
-    kChildSpawnFlagRendererCodeIntegrity = 1 << 0,
   };
 
   // Defines flags that can be passed to GetAppContainerSidForSandboxType.
@@ -1820,10 +1842,6 @@ class CONTENT_EXPORT ContentBrowserClient {
   // should override this with their own unique name to ensure security of the
   // network service data.
   virtual std::wstring GetLPACCapabilityNameForNetworkService();
-
-  // Returns whether renderer code integrity is enabled.
-  // This is called on the UI thread.
-  virtual bool IsRendererCodeIntegrityEnabled();
 
   // Performs a fast and orderly shutdown of the browser. If present,
   // `control_type` is a CTRL_* value from a Windows console control handler;
@@ -2797,6 +2815,7 @@ class CONTENT_EXPORT ContentBrowserClient {
   enum class PrivateNetworkRequestPolicyOverride {
     kForceAllow,
     kBlockInsteadOfWarn,
+    kWarnInsteadOfBlock,
     kDefault,
   };
 
@@ -3083,24 +3102,6 @@ class CONTENT_EXPORT ContentBrowserClient {
   // where the Web application is trusted.
   virtual bool UseOutermostMainFrameOrEmbedderForSubCaptureTargets() const;
 
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-  // Allows the embedder to correlate backend media services with profile-keyed
-  // effect settings.
-  virtual void BindReadonlyVideoEffectsManager(
-      const std::string& device_id,
-      BrowserContext* browser_context,
-      mojo::PendingReceiver<media::mojom::ReadonlyVideoEffectsManager>
-          readonly_video_effects_manager);
-
-  // Allows the embedder to correlate backend media services with profile-keyed
-  // effect settings.
-  virtual void BindVideoEffectsProcessor(
-      const std::string& device_id,
-      BrowserContext* browser_context,
-      mojo::PendingReceiver<video_effects::mojom::VideoEffectsProcessor>
-          video_effects_processor);
-#endif  // BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-
   // Re-order audio device `infos` based on user preference. The ordering will
   // be from most preferred to least preferred.
   virtual void PreferenceRankVideoDeviceInfos(
@@ -3242,18 +3243,6 @@ class CONTENT_EXPORT ContentBrowserClient {
           callback);
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(IS_WIN)
-  // Invoked when an accessibility client requests the UI automation root object
-  // for a window. `uia_provider_enabled` is true when the request was
-  // satisfied, and false when the request was refused.
-  virtual void OnUiaProviderRequested(bool uia_provider_enabled);
-
-  // Invoked when the UI Automation Provider for Windows has been disabled due
-  // to a detected assistive technology that may cause issues with the
-  // provider, such as JAWS.
-  virtual void OnUiaProviderDisabled();
-#endif
-
   // Indicates whether this client allows paint holding in cross-origin
   // navigations even if there was no user activation.
   virtual bool AllowNonActivatedCrossOriginPaintHolding();
@@ -3324,6 +3313,23 @@ class CONTENT_EXPORT ContentBrowserClient {
   // origin has an exception from Canvas noising. Default returns false.
   virtual bool ShouldEnableCanvasNoise(BrowserContext* browser_context,
                                        const GURL& origin);
+
+  // Returns true if PrefetchPrerenderIntegration should be allowed, this
+  // allows a prerender fall back to prefetch if available.
+  virtual bool UsePrefetchPrerenderIntegration();
+
+  // Returns true if `PreloadServingMetrics` should be enabled, which record
+  // serving metrics of preloads.
+  //
+  // Some //content features enable the feature even if it's false. For
+  // details, see `PreloadServingMetricsCapsule::IsFeatureEnabled()`.
+  //
+  // We use `ContentBrowserClient` rather than //content public feature because
+  // we have mulitple preload triggers in //chrome that want to enable the
+  // feature, and we have a limitation: a feature cannot be used in mulitple
+  // experiments. For more details, see
+  // https://docs.google.com/document/d/1bBhfhO7BotUB7Myy_8mtFF_4lI5N8hUyNayV_gI019Y/edit?tab=t.0#heading=h.9osmajzfan4b
+  virtual bool UsePreloadServingMetrics();
 };
 
 }  // namespace content

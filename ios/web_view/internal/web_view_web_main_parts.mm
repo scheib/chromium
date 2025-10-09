@@ -54,7 +54,7 @@ WebViewWebMainParts::~WebViewWebMainParts() {
 #if DCHECK_IS_ON()
   // Make sure that all display observers are removed at the end.
   display::ScreenBase* screen =
-      static_cast<display::ScreenBase*>(display::Screen::GetScreen());
+      static_cast<display::ScreenBase*>(display::Screen::Get());
   DCHECK(!screen->HasDisplayObservers());
 #endif
 }
@@ -77,7 +77,7 @@ void WebViewWebMainParts::PreCreateThreads() {
 
   ApplicationContext::GetInstance()->PreCreateThreads();
 
-  variations::VariationsIdsProvider::Create(
+  variations::VariationsIdsProvider::CreateInstance(
       variations::VariationsIdsProvider::Mode::kUseSignedInState);
 
   std::unique_ptr<base::FeatureList> feature_list(new base::FeatureList);

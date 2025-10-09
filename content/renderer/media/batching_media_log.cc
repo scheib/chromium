@@ -20,9 +20,7 @@ namespace {
 // Keep the JSON conversion in one function to prevent LOG and DVLOG calls
 // from unnecessarily converting it.
 std::string ToJSON(const media::MediaLogRecord& event) {
-  std::string params_json;
-  base::JSONWriter::Write(event.params, &params_json);
-  return params_json;
+  return base::WriteJson(event.params).value_or("");
 }
 
 // Print an event to the chromium log.
@@ -200,9 +198,7 @@ std::string BatchingMediaLog::MediaEventToMessageString(
         return PipelineStatusToString(
             static_cast<media::PipelineStatusCodes>(code));
       }
-      std::stringstream formatted;
-      formatted << *group << ":" << code;
-      return formatted.str();
+      return *group;
     }
     case media::MediaLogRecord::Type::kMessage: {
       const std::string* result = event.params.FindString(

@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 
 #import "base/feature_list.h"
+#import "base/ios/ios_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "components/collaboration/public/features.h"
@@ -14,9 +15,9 @@
 #import "components/signin/public/base/signin_pref_names.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/sync/base/command_line_switches.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_matchers.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_matchers.h"
 #import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_grid/tab_groups/tab_group_app_interface.h"
@@ -39,6 +40,7 @@
 #import "ui/base/l10n/l10n_util.h"
 
 using ::base::test::ios::kWaitForActionTimeout;
+using chrome_test_util::ConsistencySigninPrimaryButtonMatcher;
 using chrome_test_util::CreateTabGroupAtIndex;
 using chrome_test_util::FakeJoinFlowView;
 using chrome_test_util::FakeShareFlowView;
@@ -49,7 +51,6 @@ using chrome_test_util::NavigationBarSaveButton;
 using chrome_test_util::PromoScreenPrimaryButtonMatcher;
 using chrome_test_util::ShareGroupButton;
 using chrome_test_util::TabGridGroupCellAtIndex;
-using chrome_test_util::WebSigninPrimaryButtonMatcher;
 
 namespace {
 
@@ -137,19 +138,19 @@ AppLaunchConfiguration SharedTabGroupAppLaunchConfiguration(
       performAction:grey_tap()];
 
   // Check that a custom sign promo is displayed.
-  [ChromeEarlGrey waitForMatcher:WebSigninPrimaryButtonMatcher()];
+  [ChromeEarlGrey waitForMatcher:ConsistencySigninPrimaryButtonMatcher()];
   [[EarlGrey selectElementWithMatcher:
                  grey_text(l10n_util::GetNSString(
                      IDS_IOS_SIGNIN_GROUP_COLLABORATION_HALF_SHEET_SUBTITLE))]
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Sign-in.
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::
-                                          WebSigninPrimaryButtonMatcher()]
+  [[EarlGrey selectElementWithMatcher:
+                 chrome_test_util::ConsistencySigninPrimaryButtonMatcher()]
       performAction:grey_tap()];
   [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
-  [SigninEarlGreyUI
-      maybeDismissIdentityConfirmationSnackbarOnSignin:fakeIdentity];
+  [SigninEarlGreyUI dismissSigninConfirmationSnackbarForIdentity:fakeIdentity
+                                                   assertVisible:NO];
 
   // Check that a custom history & sync promo is displayed.
   [ChromeEarlGrey waitForMatcher:PromoScreenPrimaryButtonMatcher()];
@@ -344,9 +345,9 @@ AppLaunchConfiguration SharedTabGroupAppLaunchConfiguration(
   [ChromeEarlGrey loadURL:joinGroupURL waitForCompletion:NO];
 
   // Check that a sign in disabled alert is presented.
-  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
-                                          IDS_COLLABORATION_SIGNED_OUT_HEADER))]
-      assertWithMatcher:grey_sufficientlyVisible()];
+  [ChromeEarlGrey waitForSufficientlyVisibleElementWithMatcher:
+                      grey_text(l10n_util::GetNSString(
+                          IDS_COLLABORATION_SIGNED_OUT_HEADER))];
   [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
                                           IDS_COLLABORATION_SIGNED_OUT_BODY))]
       assertWithMatcher:grey_sufficientlyVisible()];

@@ -21,6 +21,8 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation.h"
+#include "components/performance_manager/scenario_api/performance_scenario_observer.h"
 #include "components/services/storage/privileged/mojom/indexed_db_client_state_checker.mojom.h"
 #include "components/services/storage/public/mojom/storage_service.mojom-forward.h"
 #include "content/browser/background_sync/background_sync_context_impl.h"
@@ -122,7 +124,8 @@ class CONTENT_EXPORT StoragePartitionImpl
     : public StoragePartition,
       public blink::mojom::DomStorage,
       public network::mojom::NetworkContextClient,
-      public network::mojom::URLLoaderNetworkServiceObserver {
+      public network::mojom::URLLoaderNetworkServiceObserver,
+      public performance_scenarios::MatchingScenarioObserver {
  public:
   StoragePartitionImpl(const StoragePartitionImpl&) = delete;
   StoragePartitionImpl& operator=(const StoragePartitionImpl&) = delete;
@@ -357,6 +360,7 @@ class CONTENT_EXPORT StoragePartitionImpl
       mojo::PendingReceiver<network::mojom::URLLoaderNetworkServiceObserver>
           listener) override;
   void OnWebSocketConnectedToPrivateNetwork(
+      const GURL& request_url,
       network::mojom::IPAddressSpace ip_address_space) override;
   void OnUrlLoaderConnectedToPrivateNetwork(
       const GURL& request_url,
@@ -395,6 +399,10 @@ class CONTENT_EXPORT StoragePartitionImpl
   void OnAdAuctionEventRecordHeaderReceived(
       network::AdAuctionEventRecord event_record,
       const std::optional<url::Origin>& top_frame_origin) override;
+
+  // performance_scenarios::MatchingScenarioObserver overrides:
+  void OnScenarioMatchChanged(performance_scenarios::ScenarioScope scope,
+                              bool matches_pattern) override;
 
   SharedStorageHeaderObserver* shared_storage_header_observer() {
     return shared_storage_header_observer_.get();
@@ -469,7 +477,7 @@ class CONTENT_EXPORT StoragePartitionImpl
   CreateSharedDictionaryAccessObserverForServiceWorker();
 
   mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>
-  CreateURLLoaderNetworkObserverForServiceWorker(
+  CreateURLLoaderNetworkObserverForServiceOrSharedWorker(
       int process_id,
       const url::Origin& worker_origin);
 
@@ -552,7 +560,7 @@ class CONTENT_EXPORT StoragePartitionImpl
   enum class ContextType {
     kRenderFrameHostContext,
     kNavigationRequestContext,
-    kServiceWorkerContext,
+    kSharedOrServiceWorkerContext,
   };
 
  private:
@@ -626,7 +634,7 @@ class CONTENT_EXPORT StoragePartitionImpl
     explicit URLLoaderNetworkContext(
         GlobalRenderFrameHostId global_render_frame_host_id);
 
-    // Used when `type` is `kServiceWorkerContext`.
+    // Used when `type` is `kSharedOrServiceWorkerContext`.
     URLLoaderNetworkContext(int process_id, const url::Origin& worker_origin);
 
     // Used when `type` is `kNavigationRequestContext`.
@@ -646,8 +654,8 @@ class CONTENT_EXPORT StoragePartitionImpl
       return worker_origin_;
     }
 
-    // If `type_` is kServiceWorkerContext, returns nullptr. Otherwise returns
-    // the WebContents.
+    // If `type_` is kSharedOrServiceWorkerContext, returns nullptr. Otherwise
+    // returns the WebContents.
     WebContents* GetWebContents();
 
     // Returns true if the request is the primary main frame navigation.
@@ -657,10 +665,10 @@ class CONTENT_EXPORT StoragePartitionImpl
     ContextType type_;
     scoped_refptr<NavigationOrDocumentHandle> navigation_or_document_;
 
-    // Only valid when `type_` is kServiceWorkerContext.
+    // Only valid when `type_` is kSharedOrServiceWorkerContext.
     int process_id_ = content::ChildProcessHost::kInvalidUniqueID;
 
-    // Only valid and non-nullopt when `type_` is kServiceWorkerContext.
+    // Only valid and non-nullopt when `type_` is kSharedOrServiceWorkerContext.
     std::optional<url::Origin> worker_origin_;
   };
 
@@ -957,6 +965,12 @@ class CONTENT_EXPORT StoragePartitionImpl
   // Tracks the number of active documents within the same StoragePartition,
   // keyed by NetworkIsolationKeys.
   std::map<net::NetworkIsolationKey, int> active_document_per_nik_count_;
+
+  // Used to observe idle scenario.
+  base::ScopedObservation<
+      performance_scenarios::PerformanceScenarioObserverList,
+      performance_scenarios::MatchingScenarioObserver>
+      performance_scenario_observation_{this};
 
   base::WeakPtrFactory<StoragePartitionImpl> weak_factory_{this};
 };

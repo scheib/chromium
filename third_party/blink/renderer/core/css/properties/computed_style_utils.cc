@@ -60,6 +60,7 @@
 #include "third_party/blink/renderer/core/layout/grid/layout_grid.h"
 #include "third_party/blink/renderer/core/layout/layout_block.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
+#include "third_party/blink/renderer/core/layout/masonry/layout_masonry.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_viewport_container.h"
 #include "third_party/blink/renderer/core/layout/svg/transform_helper.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
@@ -280,22 +281,26 @@ const CSSValueList* ComputedStyleUtils::CreatePositionListForLayer(
     const FillLayer& layer,
     const ComputedStyle& style) {
   CSSValueList* position_list = CSSValueList::CreateSpaceSeparated();
+  bool is_right_edge = false;
   if (layer.IsBackgroundXOriginSet()) {
     DCHECK(property.IDEquals(CSSPropertyID::kBackgroundPosition) ||
            property.IDEquals(CSSPropertyID::kMaskPosition));
-    position_list->Append(
-        *CSSIdentifierValue::Create(layer.BackgroundXOrigin()));
+    is_right_edge = layer.BackgroundXOrigin() == BackgroundEdgeOrigin::kRight;
   }
-  position_list->Append(
-      *ZoomAdjustedPixelValueForLength(layer.PositionX(), style));
+  const Length& x_origin =
+      is_right_edge ? layer.PositionX().SubtractFromOneHundredPercent()
+                    : layer.PositionX();
+  position_list->Append(*ZoomAdjustedPixelValueForLength(x_origin, style));
+  bool is_bottom_edge = false;
   if (layer.IsBackgroundYOriginSet()) {
     DCHECK(property.IDEquals(CSSPropertyID::kBackgroundPosition) ||
            property.IDEquals(CSSPropertyID::kMaskPosition));
-    position_list->Append(
-        *CSSIdentifierValue::Create(layer.BackgroundYOrigin()));
+    is_bottom_edge = layer.BackgroundYOrigin() == BackgroundEdgeOrigin::kBottom;
   }
-  position_list->Append(
-      *ZoomAdjustedPixelValueForLength(layer.PositionY(), style));
+  const Length& y_origin =
+      is_bottom_edge ? layer.PositionY().SubtractFromOneHundredPercent()
+                     : layer.PositionY();
+  position_list->Append(*ZoomAdjustedPixelValueForLength(y_origin, style));
   return position_list;
 }
 
@@ -520,8 +525,6 @@ const CSSValue* ComputedStyleUtils::BackgroundPositionXOrWebkitMaskPositionX(
   for (; curr_layer; curr_layer = curr_layer->Next()) {
     const Length& from_edge = curr_layer->PositionX();
     if (curr_layer->BackgroundXOrigin() == BackgroundEdgeOrigin::kRight) {
-      // TODO(crbug.com/610627): This should use two-value syntax once the
-      // parser accepts it.
       list->Append(*ZoomAdjustedPixelValueForLength(
           from_edge.SubtractFromOneHundredPercent(), style));
     } else {
@@ -538,8 +541,6 @@ const CSSValue* ComputedStyleUtils::BackgroundPositionYOrWebkitMaskPositionY(
   for (; curr_layer; curr_layer = curr_layer->Next()) {
     const Length& from_edge = curr_layer->PositionY();
     if (curr_layer->BackgroundYOrigin() == BackgroundEdgeOrigin::kBottom) {
-      // TODO(crbug.com/610627): This should use two-value syntax once the
-      // parser accepts it.
       list->Append(*ZoomAdjustedPixelValueForLength(
           from_edge.SubtractFromOneHundredPercent(), style));
     } else {
@@ -1247,7 +1248,7 @@ CSSValue* ComputedStyleUtils::ValueForFontVariantAlternates(
 
   if (!variant_alternates->Styleset().empty()) {
     CSSValueList* aliases_list = CSSValueList::CreateCommaSeparated();
-    for (auto alias : variant_alternates->Styleset()) {
+    for (const auto& alias : variant_alternates->Styleset()) {
       aliases_list->Append(*MakeGarbageCollected<CSSCustomIdentValue>(alias));
     }
     value_list->Append(*MakeGarbageCollected<cssvalue::CSSAlternateValue>(
@@ -1256,7 +1257,7 @@ CSSValue* ComputedStyleUtils::ValueForFontVariantAlternates(
   }
   if (!variant_alternates->CharacterVariant().empty()) {
     CSSValueList* aliases_list = CSSValueList::CreateCommaSeparated();
-    for (auto alias : variant_alternates->CharacterVariant()) {
+    for (const auto& alias : variant_alternates->CharacterVariant()) {
       aliases_list->Append(*MakeGarbageCollected<CSSCustomIdentValue>(alias));
     }
     value_list->Append(*MakeGarbageCollected<cssvalue::CSSAlternateValue>(
@@ -1452,6 +1453,15 @@ const CSSValue* ComputedStyleUtils::ValueForFontPalette(
   return ConvertFontPaletteToCSSValue(*palette);
 }
 
+CSSValue* ComputedStyleUtils::ValueForFontLanguageOverride(
+    const ComputedStyle& style) {
+  if (!style.GetFontDescription().FontLanguageOverride()) {
+    return CSSIdentifierValue::Create(CSSValueID::kNormal);
+  }
+  return MakeGarbageCollected<CSSStringValue>(
+      style.GetFontDescription().FontLanguageOverride());
+}
+
 CSSValue* ComputedStyleUtils::ValueForFont(const ComputedStyle& style) {
   auto AppendIfNotNormal = [](CSSValueList* list, const CSSValue& value) {
     auto* identifier_value = DynamicTo<CSSIdentifierValue>(value);
@@ -1496,6 +1506,16 @@ CSSValue* ComputedStyleUtils::ValueForFont(const ComputedStyle& style) {
                               static_cast<CSSValue*>(CSSIdentifierValue::Create(
                                   CSSValueID::kNormal)))) {
     return nullptr;
+  }
+
+  if (RuntimeEnabledFeatures::FontLanguageOverrideEnabled()) {
+    CSSValue* language_override = ValueForFontLanguageOverride(style);
+    if (!base::ValuesEquivalent(
+            language_override,
+            static_cast<CSSValue*>(
+                CSSIdentifierValue::Create(CSSValueID::kNormal)))) {
+      return nullptr;
+    }
   }
 
   FontDescription::Kerning kerning = style.GetFontDescription().GetKerning();
@@ -1703,7 +1723,7 @@ void OrderedNamedLinesCollector::AppendLines(
     return;
   }
 
-  for (auto named_grid_line : iter->value) {
+  for (const auto& named_grid_line : iter->value) {
     // For layout grids, insert all values. For non-layout grids, in order to
     // round-trip repeaters, we need to prevent inserting certain line names.
     // In particular, don't insert lines from repeaters if we're not in a
@@ -2036,34 +2056,35 @@ void PopulateGridTrackListComputedValues(CSSValueList* list,
   }
 }
 
-CSSValue* ComputedStyleUtils::ValueForGridTrackList(
-    GridTrackSizingDirection direction,
-    const LayoutObject* layout_object,
-    const ComputedStyle& style,
-    bool force_computed_value) {
+template <typename T>
+typename std::enable_if<std::is_same<T, LayoutGrid>::value ||
+                            std::is_same<T, LayoutMasonry>::value,
+                        CSSValue*>::type
+ValueForGridTrackList(GridTrackSizingDirection direction,
+                      const LayoutObject* layout_object,
+                      const ComputedStyle& style,
+                      bool force_computed_value) {
   const bool is_for_columns = direction == kForColumns;
   const ComputedGridTrackList& computed_grid_track_list =
       is_for_columns ? style.GridTemplateColumns() : style.GridTemplateRows();
   const bool is_masonry = style.IsDisplayMasonryBox();
-  // TODO(almaher): Update this in some way for Masonry (perhaps make
-  // LayoutMasonry a subclass of LayoutGrid).
-  const auto* grid = DynamicTo<LayoutGrid>(layout_object);
+  auto* container = DynamicTo<T>(layout_object);
 
   // Handle the 'none' case.
   bool is_track_list_empty =
       !computed_grid_track_list.GetTrackList().RepeaterCount();
-  if (grid && is_track_list_empty) {
+  if (container && is_track_list_empty) {
     // For grids we should consider every listed track, whether implicitly or
     // explicitly created. Empty grids have a sole grid line per axis.
     const Vector<LayoutUnit>& positions =
-        is_for_columns ? grid->ColumnPositions() : grid->RowPositions();
+        container->GridTrackPositions(direction);
     is_track_list_empty = positions.size() == 1;
   }
 
   const bool is_subgrid_specified = computed_grid_track_list.IsSubgriddedAxis();
   const bool is_subgrid_valid =
-      grid && grid->HasCachedPlacementData() &&
-      grid->CachedPlacementData().SubgridSpanSize(direction) != kNotFound;
+      container && container->HasCachedPlacementData() &&
+      container->CachedPlacementData().SubgridSpanSize(direction) != kNotFound;
   const bool is_subgrid = is_subgrid_specified && is_subgrid_valid;
 
   // Standalone grids with empty track lists should compute to `none`, but
@@ -2075,7 +2096,7 @@ CSSValue* ComputedStyleUtils::ValueForGridTrackList(
   // Interestingly, specifying `subgrid` on a non-grid *will* compute to
   // `subgrid` syntax.
   CSSValueList* list = CSSValueList::CreateSpaceSeparated();
-  if (is_subgrid || (is_subgrid_specified && !grid)) {
+  if (is_subgrid || (is_subgrid_specified && !container)) {
     list->Append(
         *MakeGarbageCollected<CSSIdentifierValue>(CSSValueID::kSubgrid));
   } else if (!is_subgrid_specified && is_track_list_empty) {
@@ -2087,8 +2108,6 @@ CSSValue* ComputedStyleUtils::ValueForGridTrackList(
   const GridTrackList& track_list = computed_grid_track_list.GetTrackList();
 
   // Treat repeat(auto-fill, <intrinsic-track-size>) as none in Grid.
-  //
-  // TODO(almaher): Change this depending on if we allow this syntax in Grid.
   if (!is_masonry && track_list.HasIntrinsicSizedRepeater()) {
     return CSSIdentifierValue::Create(CSSValueID::kNone);
   }
@@ -2103,10 +2122,7 @@ CSSValue* ComputedStyleUtils::ValueForGridTrackList(
   // Default to the used value if it's a layout grid, unless
   // `force_computed_value` is set (which is used for `grid-template`). Non
   // layout-grids will always report the computed value.
-  //
-  // TODO(almaher): Consider if we should force repeat(auto-fill,
-  // <intrinsic-track-size>) to the computed value instead of used value.
-  if (grid && !force_computed_value) {
+  if (container && !force_computed_value) {
     // The number of auto repeat tracks. For 'repeat(auto-fill, [x][y])' this
     // will be 2, regardless of what auto-fill computes to. For subgrids, use
     // the number of grid line names specified on the track definition. For
@@ -2117,15 +2133,15 @@ CSSValue* ComputedStyleUtils::ValueForGridTrackList(
 
     // Standalone grids will report the track sizes in the computed style
     // string, so base the start and end indices on it.
-    auto track_sizes = grid->TrackSizesForComputedStyle(direction);
+    auto track_sizes = container->TrackSizesForComputedStyle(direction);
     wtf_size_t start_index = 0;
     wtf_size_t end_index = track_sizes.size();
     if (is_subgrid) {
       // For subgrids, track sizes are not supported. Instead, calculate the end
       // index by subtracting the grid end from its start.
-      start_index = grid->ExplicitGridStartForDirection(direction);
-      end_index = grid->ExplicitGridEndForDirection(direction) -
-                  grid->ExplicitGridStartForDirection(direction) + 1;
+      start_index = container->ExplicitGridStartForDirection(direction);
+      end_index = container->ExplicitGridEndForDirection(direction) -
+                  container->ExplicitGridStartForDirection(direction) + 1;
     }
     // If the element is a grid container, the resolved value is the used value,
     // specifying track sizes in pixels (if it's a standalone grid), and
@@ -2134,14 +2150,14 @@ CSSValue* ComputedStyleUtils::ValueForGridTrackList(
         computed_grid_track_list.GetOrderedNamedGridLines(),
         computed_grid_track_list.GetOrderedAutoRepeatNamedGridLines(),
         auto_repeat_insertion_point,
-        grid->AutoRepeatCountForDirection(direction),
+        container->AutoRepeatCountForDirection(direction),
         auto_repeat_track_list_length, is_subgrid);
     // Named grid line indices are relative to the explicit grid, but we are
     // including all tracks. So we need to subtract the number of leading
     // implicit tracks in order to get the proper line index. This is ignored
     // for subgrids because they only have explicit tracks.
     int offset = -base::checked_cast<int>(
-        grid->ExplicitGridStartForDirection(direction));
+        container->ExplicitGridStartForDirection(direction));
 
     // If `subgrid` is specified in `grid-template-rows/columns`, but the
     // element is not a valid subgrid, computed style should behave as if it's a
@@ -2149,7 +2165,7 @@ CSSValue* ComputedStyleUtils::ValueForGridTrackList(
     // invalid subgrid rows/column definitions. See
     // https://github.com/w3c/csswg-drafts/issues/9015.
     const bool discard_line_names =
-        grid && is_subgrid_specified && !is_subgrid_valid;
+        container && is_subgrid_specified && !is_subgrid_valid;
     PopulateGridTrackListUsedValues(list, collector, track_sizes, style,
                                     start_index, end_index, offset,
                                     discard_line_names);
@@ -2159,9 +2175,22 @@ CSSValue* ComputedStyleUtils::ValueForGridTrackList(
   OrderedNamedLinesCollector collector(
       computed_grid_track_list.GetOrderedNamedGridLines(),
       computed_grid_track_list.GetOrderedAutoRepeatNamedGridLines(),
-      is_subgrid_specified, !!grid);
+      is_subgrid_specified, !!container);
   PopulateGridTrackListComputedValues(list, collector, track_list, style);
   return list;
+}
+
+CSSValue* ComputedStyleUtils::ValueForGridTrackList(
+    GridTrackSizingDirection direction,
+    const LayoutObject* layout_object,
+    const ComputedStyle& style,
+    bool force_computed_value) {
+  if (style.IsDisplayMasonryBox()) {
+    return ValueForGridTrackList<LayoutMasonry>(direction, layout_object, style,
+                                                force_computed_value);
+  }
+  return ValueForGridTrackList<LayoutGrid>(direction, layout_object, style,
+                                           force_computed_value);
 }
 
 CSSValue* ComputedStyleUtils::ValueForGridPosition(
@@ -2319,21 +2348,11 @@ CSSValue* ComputedStyleUtils::ValueForTextOverflow(
 CSSValue* ComputedStyleUtils::TouchActionFlagsToCSSValue(
     TouchAction touch_action) {
   CSSValueList* list = CSSValueList::CreateSpaceSeparated();
-  // Until handwriting is a web exposed feature, the combination of
-  // non-handwriting bits should result in values of auto / manipulation in the
-  // exposed CSS value.
-  // TODO(crbug.com/382525574): Launch or clean up kHandwriting.
-  const static auto kHandwritingTouchAction =
-      TouchAction::kInternalHandwriting |
-      TouchAction::kInternalHandwritingPanningRules;
-  touch_action &= ~kHandwritingTouchAction;
-
-  if (touch_action == (TouchAction::kAuto & ~kHandwritingTouchAction)) {
+  if (touch_action == TouchAction::kAuto) {
     list->Append(*CSSIdentifierValue::Create(CSSValueID::kAuto));
   } else if (touch_action == TouchAction::kNone) {
     list->Append(*CSSIdentifierValue::Create(CSSValueID::kNone));
-  } else if (touch_action ==
-             (TouchAction::kManipulation & ~kHandwritingTouchAction)) {
+  } else if (touch_action == TouchAction::kManipulation) {
     list->Append(*CSSIdentifierValue::Create(CSSValueID::kManipulation));
   } else {
     if ((touch_action & TouchAction::kPanX) == TouchAction::kPanX) {
@@ -2820,9 +2839,9 @@ CSSValue* ComputedStyleUtils::ValueForTimelineTriggerTimelineList(
     const ComputedStyle& style) {
   return CreateAnimationValueList(
       animation_data
-          ? animation_data->TimelineTriggerTimelineList()
+          ? animation_data->TimelineTriggerSourceList()
           : Vector<StyleTimeline>{CSSAnimationData::
-                                      InitialTimelineTriggerTimeline()},
+                                      InitialTimelineTriggerSource()},
       &ValueForAnimationTimeline, style);
 }
 
@@ -4704,6 +4723,7 @@ CSSValueID PositionAreaSpanToCSSValueID(PositionAreaRegion span_start,
     case PositionAreaRegion::kNone:
     case PositionAreaRegion::kAll:
     case PositionAreaRegion::kCenter:
+    case PositionAreaRegion::kAny:
       // Should have been handled above
       NOTREACHED();
   }

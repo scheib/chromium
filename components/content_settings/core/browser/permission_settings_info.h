@@ -31,6 +31,8 @@ class PermissionSettingsInfo {
 
     // Return whether the setting is valid.
     virtual bool IsValid(const PermissionSetting& setting) const = 0;
+    virtual bool IsDefaultSettingValid(
+        const PermissionSetting& setting) const = 0;
 
     // Returns a setting to inherit to incognito mode.
     virtual PermissionSetting InheritInIncognito(
@@ -55,6 +57,11 @@ class PermissionSettingsInfo {
     // Returns true if any existing persistent state should be coalesced with
     // ephemeral state from the OneTimePermissionProvider.
     virtual bool ShouldCoalesceEphemeralState() const = 0;
+
+    // Returns a PermissionSetting that represents the permission when under
+    // permission embargo. E.g. turns ASK into BLOCK.
+    virtual PermissionSetting ApplyPermissionEmbargo(
+        const PermissionSetting& setting) const = 0;
 
     // Returns the coalesced PermissionSetting based on the passed in persistent
     // and ephemeral state.

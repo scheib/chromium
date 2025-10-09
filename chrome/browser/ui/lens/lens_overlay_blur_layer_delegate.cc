@@ -8,6 +8,7 @@
 #include "base/timer/timer.h"
 #include "cc/paint/render_surface_filters.h"
 #include "components/lens/lens_features.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/rect_f.h"
@@ -38,9 +39,6 @@ LensOverlayBlurLayerDelegate::LensOverlayBlurLayerDelegate(
   layer()->set_delegate(this);
 
   render_widget_host_observer_.Observe(background_view_host);
-
-  // Fetch the initial screenshot to be used for blurring.
-  FetchBackgroundImage();
 }
 
 LensOverlayBlurLayerDelegate::~LensOverlayBlurLayerDelegate() = default;
@@ -48,7 +46,7 @@ LensOverlayBlurLayerDelegate::~LensOverlayBlurLayerDelegate() = default;
 void LensOverlayBlurLayerDelegate::StartBackgroundImageCapture() {
   // If there is no background_view_host_, there is nothing to take a screenshot
   // of, so we should exit early.
-  if (screenshot_timer_.IsRunning() || !background_view_host_) {
+  if (IsLiveBlurActive() || !background_view_host_) {
     return;
   }
   // Start taking screenshots to render on the layer.
@@ -60,10 +58,14 @@ void LensOverlayBlurLayerDelegate::StartBackgroundImageCapture() {
 }
 
 void LensOverlayBlurLayerDelegate::StopBackgroundImageCapture() {
-  if (!screenshot_timer_.IsRunning()) {
+  if (!IsLiveBlurActive()) {
     return;
   }
   screenshot_timer_.Stop();
+}
+
+bool LensOverlayBlurLayerDelegate::IsLiveBlurActive() {
+  return screenshot_timer_.IsRunning();
 }
 
 bool LensOverlayBlurLayerDelegate::IsCapturingBackgroundImageForTesting() {
@@ -135,7 +137,8 @@ void LensOverlayBlurLayerDelegate::FetchBackgroundImage() {
 }
 
 void LensOverlayBlurLayerDelegate::UpdateBackgroundImage(
-    const SkBitmap& bitmap) {
+    const viz::CopyOutputBitmapWithMetadata& result) {
+  const auto& bitmap = result.bitmap;
   auto layer_size = layer()->size();
   if (bitmap.drawsNothing() || layer_size.width() * layer_size.height() <= 0 ||
       AreBitmapsEqual(background_screenshot_, bitmap)) {

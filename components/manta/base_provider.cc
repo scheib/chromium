@@ -15,7 +15,6 @@ namespace {
 constexpr endpoint_fetcher::HttpMethod kHttpMethod =
     endpoint_fetcher::HttpMethod::kPost;
 constexpr char kHttpContentType[] = "application/x-protobuf";
-constexpr char kOAuthScope[] = "https://www.googleapis.com/auth/mdi.aratea";
 constexpr char kAutopushEndpointUrl[] =
     "https://autopush-aratea-pa.sandbox.googleapis.com/generate";
 constexpr char kProdEndpointUrl[] = "https://aratea-pa.googleapis.com/generate";
@@ -72,7 +71,6 @@ void BaseProvider::OnIdentityManagerShutdown(
 
 void BaseProvider::RequestInternal(
     const GURL& url,
-    const std::string& oauth_consumer_name,
     const net::NetworkTrafficAnnotationTag& annotation_tag,
     manta::proto::Request& request,
     const MantaMetricType metric_type,
@@ -111,13 +109,12 @@ void BaseProvider::RequestInternal(
     std::unique_ptr<EndpointFetcher> fetcher = CreateEndpointFetcherForDemoMode(
         url, annotation_tag, serialized_request, timeout);
     EndpointFetcher* const fetcher_ptr = fetcher.get();
-    fetcher_ptr->PerformRequest(
-        base::BindOnce(&OnEndpointFetcherComplete, std::move(done_callback),
-                       start_time, metric_type, std::move(fetcher)),
-        nullptr);
+    fetcher_ptr->Fetch(base::BindOnce(&OnEndpointFetcherComplete,
+                                      std::move(done_callback), start_time,
+                                      metric_type, std::move(fetcher)));
   } else {
-    std::unique_ptr<EndpointFetcher> fetcher = CreateEndpointFetcher(
-        url, oauth_consumer_name, annotation_tag, serialized_request, timeout);
+    std::unique_ptr<EndpointFetcher> fetcher =
+        CreateEndpointFetcher(url, annotation_tag, serialized_request, timeout);
     EndpointFetcher* const fetcher_ptr = fetcher.get();
     fetcher_ptr->Fetch(base::BindOnce(&OnEndpointFetcherComplete,
                                       std::move(done_callback), start_time,
@@ -127,12 +124,10 @@ void BaseProvider::RequestInternal(
 
 std::unique_ptr<EndpointFetcher> BaseProvider::CreateEndpointFetcher(
     const GURL& url,
-    const std::string& oauth_consumer_name,
     const net::NetworkTrafficAnnotationTag& annotation_tag,
     const std::string& post_data,
     const base::TimeDelta timeout) {
   CHECK(identity_manager_observation_.IsObserving());
-  const std::vector<std::string>& scopes{kOAuthScope};
   return std::make_unique<EndpointFetcher>(
       /*url_loader_factory=*/url_loader_factory_,
       /*identity_manager=*/identity_manager_observation_.GetSource(),
@@ -143,8 +138,7 @@ std::unique_ptr<EndpointFetcher> BaseProvider::CreateEndpointFetcher(
           .SetContentType(kHttpContentType)
           .SetTimeout(timeout)
           .SetUrl(url)
-          .SetOauthScopes(scopes)
-          .SetOauthConsumerName(oauth_consumer_name)
+          .SetOAuthConsumerId(signin::OAuthConsumerId::kManta)
           .SetPostData(post_data)
           .Build());
 }
@@ -156,15 +150,14 @@ std::unique_ptr<EndpointFetcher> BaseProvider::CreateEndpointFetcherForDemoMode(
     const base::TimeDelta timeout) {
   return std::make_unique<EndpointFetcher>(
       /*url_loader_factory=*/url_loader_factory_,
-      /*url=*/url,
-      /*content_type=*/kHttpContentType,
-      /*timeout=*/timeout,
-      /*post_data=*/post_data,
-      /*headers=*/std::vector<std::string>(),
-      /*cors_exempt_headers=*/std::vector<std::string>(),
-      // ChromeOS always uses the stable channel API key
-      version_info::Channel::STABLE,
+      /*identity_manager=*/nullptr,
       EndpointFetcher::RequestParams::Builder(kHttpMethod, annotation_tag)
+          .SetAuthType(endpoint_fetcher::CHROME_API_KEY)
+          .SetUrl(url)
+          .SetContentType(kHttpContentType)
+          .SetTimeout(timeout)
+          .SetPostData(post_data)
+          .SetChannel(version_info::Channel::STABLE)
           .Build());
 }
 

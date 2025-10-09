@@ -18,6 +18,7 @@ import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesPrope
 import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesProperties.HORIZONTAL_INTERVAL_PADDINGS;
 import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesProperties.IS_VISIBLE;
 
+import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.util.DisplayMetrics;
@@ -64,6 +65,7 @@ import java.util.ArrayList;
 @Config(manifest = Config.NONE)
 public class MostVisitedMediatorUnitTest {
     @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Mock private Context mContext;
     @Mock Resources mResources;
     @Mock Configuration mConfiguration;
     @Mock UiConfig mUiConfig;
@@ -130,7 +132,6 @@ public class MostVisitedMediatorUnitTest {
 
         verify(mTileRenderer, atLeastOnce())
                 .renderTileSection(anyList(), eq(mMvTilesLayout), any());
-        verify(mMvTilesLayout).addTile(any());
         verify(mSnapshotTileGridChangedRunnable, atLeastOnce()).run();
     }
 
@@ -145,7 +146,8 @@ public class MostVisitedMediatorUnitTest {
     })
     public void testOnMvtToggleChanged_MvtCustomizationEnabled() {
         createMediator();
-        verify(mNtpCustomizationConfigManager).addListener(mHomepageStateListenerCaptor.capture());
+        verify(mNtpCustomizationConfigManager)
+                .addListener(mHomepageStateListenerCaptor.capture(), eq(mContext));
         NtpCustomizationConfigManager.HomepageStateListener listener =
                 mHomepageStateListenerCaptor.getValue();
 
@@ -181,7 +183,8 @@ public class MostVisitedMediatorUnitTest {
     @Features.DisableFeatures(ChromeFeatureList.MOST_VISITED_TILES_CUSTOMIZATION)
     public void testOnMvtToggleChanged_MvtCustomizationDisabled() {
         createMediator();
-        verify(mNtpCustomizationConfigManager).addListener(mHomepageStateListenerCaptor.capture());
+        verify(mNtpCustomizationConfigManager)
+                .addListener(mHomepageStateListenerCaptor.capture(), eq(mContext));
         NtpCustomizationConfigManager.HomepageStateListener listener =
                 mHomepageStateListenerCaptor.getValue();
 
@@ -227,6 +230,7 @@ public class MostVisitedMediatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void testSetPortraitPaddings_NotSmallDevice() {
         mConfiguration.orientation = Configuration.ORIENTATION_PORTRAIT;
         createMediator();
@@ -246,6 +250,7 @@ public class MostVisitedMediatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void testSetPortraitPaddings_SmallDevice() {
         mConfiguration.orientation = Configuration.ORIENTATION_PORTRAIT;
         when(mUiConfig.getCurrentDisplayStyle())
@@ -270,6 +275,7 @@ public class MostVisitedMediatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void testSetLandscapePaddings() {
         mConfiguration.orientation = Configuration.ORIENTATION_LANDSCAPE;
         createMediator();
@@ -293,6 +299,7 @@ public class MostVisitedMediatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void testUpdateTilesView_Tablet() {
         int expectedTileViewEdgePadding =
                 mResources.getDimensionPixelSize(R.dimen.tile_view_padding_edge_tablet);
@@ -324,6 +331,7 @@ public class MostVisitedMediatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void testUpdateTilesView_Phone() {
         mConfiguration.orientation = Configuration.ORIENTATION_PORTRAIT;
         createMediator(/* isTablet= */ false);
@@ -511,7 +519,7 @@ public class MostVisitedMediatorUnitTest {
     @Features.EnableFeatures(ChromeFeatureList.NEW_TAB_PAGE_CUSTOMIZATION_FOR_MVT)
     public void testAddAndRemoveListener_FeatureEnabled() {
         createMediator();
-        verify(mNtpCustomizationConfigManager).addListener(any());
+        verify(mNtpCustomizationConfigManager).addListener(any(), eq(mContext));
 
         mMediator.destroy();
         verify(mNtpCustomizationConfigManager).removeListener(any());
@@ -521,7 +529,7 @@ public class MostVisitedMediatorUnitTest {
     @Features.DisableFeatures(ChromeFeatureList.NEW_TAB_PAGE_CUSTOMIZATION_FOR_MVT)
     public void testAddAndRemoveListener_FeatureDisabled() {
         createMediator();
-        verify(mNtpCustomizationConfigManager, never()).addListener(any());
+        verify(mNtpCustomizationConfigManager, never()).addListener(any(), eq(mContext));
 
         mMediator.destroy();
         verify(mNtpCustomizationConfigManager, never()).removeListener(any());
@@ -539,11 +547,11 @@ public class MostVisitedMediatorUnitTest {
         when(mMvTilesLayout.getChildAt(0)).thenReturn(mTileView);
         when(mMvTilesLayout.getTileCount()).thenReturn(1);
         when(mMvTilesLayout.getTileAt(0)).thenReturn(mTileView);
-        mMvTilesLayout.addTile(mTileView);
+        when(mContext.getResources()).thenReturn(mResources);
 
         mMediator =
                 new MostVisitedTilesMediator(
-                        mResources,
+                        mContext,
                         mUiConfig,
                         mMvTilesLayout,
                         mTileRenderer,

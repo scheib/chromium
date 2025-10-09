@@ -7,6 +7,7 @@
 #include "services/webnn/public/cpp/webnn_types.h"
 #include "services/webnn/public/mojom/webnn_context_provider.mojom.h"
 #include "services/webnn/public/mojom/webnn_graph.mojom-shared.h"
+#include "services/webnn/scoped_sequence.h"
 #include "services/webnn/tflite/graph_builder_tflite.h"
 #include "services/webnn/tflite/graph_impl_tflite.h"
 #include "services/webnn/tflite/tensor_impl_tflite.h"
@@ -16,25 +17,58 @@
 
 namespace webnn::tflite {
 
-ContextImplTflite::ContextImplTflite(
-    mojo::PendingAssociatedReceiver<mojom::WebNNContext> receiver,
-    WebNNContextProviderImpl* context_provider,
+// static
+scoped_refptr<WebNNContextImpl> ContextImplTflite::Create(
+    mojo::PendingReceiver<mojom::WebNNContext> receiver,
+    base::WeakPtr<WebNNContextProviderImpl> context_provider,
     mojom::CreateContextOptionsPtr options,
+    mojo::ScopedDataPipeConsumerHandle write_tensor_consumer,
+    mojo::ScopedDataPipeProducerHandle read_tensor_producer,
     gpu::CommandBufferId command_buffer_id,
     std::unique_ptr<ScopedSequence> sequence,
-    scoped_refptr<gpu::SchedulerTaskRunner> task_runner)
+    scoped_refptr<gpu::MemoryTracker> memory_tracker,
+    scoped_refptr<base::SingleThreadTaskRunner> owning_task_runner,
+    gpu::SharedImageManager* shared_image_manager,
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
+    ScopedTrace scoped_trace) {
+  DCHECK(owning_task_runner->RunsTasksInCurrentSequence());
+  return base::MakeRefCounted<ContextImplTflite>(
+      std::move(receiver), std::move(context_provider), std::move(options),
+      std::move(write_tensor_consumer), std::move(read_tensor_producer),
+      command_buffer_id, std::move(sequence), std::move(memory_tracker),
+      std::move(owning_task_runner), shared_image_manager,
+      std::move(main_task_runner));
+}
+
+ContextImplTflite::ContextImplTflite(
+    mojo::PendingReceiver<mojom::WebNNContext> receiver,
+    base::WeakPtr<WebNNContextProviderImpl> context_provider,
+    mojom::CreateContextOptionsPtr options,
+    mojo::ScopedDataPipeConsumerHandle write_tensor_consumer,
+    mojo::ScopedDataPipeProducerHandle read_tensor_producer,
+    gpu::CommandBufferId command_buffer_id,
+    std::unique_ptr<ScopedSequence> sequence,
+    scoped_refptr<gpu::MemoryTracker> memory_tracker,
+    scoped_refptr<base::SingleThreadTaskRunner> owning_task_runner,
+    gpu::SharedImageManager* shared_image_manager,
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner)
     : WebNNContextImpl(std::move(receiver),
-                       context_provider,
+                       std::move(context_provider),
                        GraphBuilderTflite::GetContextProperties(),
                        std::move(options),
+                       std::move(write_tensor_consumer),
+                       std::move(read_tensor_producer),
                        command_buffer_id,
                        std::move(sequence),
-                       std::move(task_runner)) {}
+                       std::move(memory_tracker),
+                       std::move(owning_task_runner),
+                       shared_image_manager,
+                       std::move(main_task_runner)) {}
 
 ContextImplTflite::~ContextImplTflite() = default;
 
 base::WeakPtr<WebNNContextImpl> ContextImplTflite::AsWeakPtr() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
   return weak_factory_.GetWeakPtr();
 }
 
@@ -74,10 +108,10 @@ ContextImplTflite::CreateTensorImpl(
 }
 
 base::expected<scoped_refptr<WebNNTensorImpl>, mojom::ErrorPtr>
-ContextImplTflite::CreateTensorFromMailboxImpl(
+ContextImplTflite::CreateTensorFromSharedImageImpl(
     mojo::PendingAssociatedReceiver<mojom::WebNNTensor> receiver,
     mojom::TensorInfoPtr tensor_info,
-    gpu::Mailbox mailbox) {
+    std::unique_ptr<gpu::WebNNTensorRepresentation> representation) {
   return base::unexpected(
       mojom::Error::New(mojom::Error::Code::kNotSupportedError,
                         "WebGPU Interop is not supported."));

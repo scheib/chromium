@@ -32,6 +32,8 @@
 #include "chrome/browser/ui/hats/mock_hats_service.h"
 #include "chrome/browser/ui/hats/survey_config.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
+#include "chrome/browser/ui/omnibox/omnibox_controller.h"
+#include "chrome/browser/ui/omnibox/omnibox_edit_model.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
@@ -45,8 +47,6 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/omnibox/browser/autocomplete_match.h"
-#include "components/omnibox/browser/omnibox_controller.h"
-#include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
 #include "components/omnibox/common/omnibox_feature_configs.h"
@@ -121,7 +121,10 @@ class OmniboxViewViewsTest : public InProcessBrowserTest {
   OmniboxViewViewsTest& operator=(const OmniboxViewViewsTest&) = delete;
 
  protected:
-  OmniboxViewViewsTest() = default;
+  OmniboxViewViewsTest() {
+    scoped_feature_list_.InitAndDisableFeature(
+        omnibox::kAiModeOmniboxEntryPoint);
+  }
   ~OmniboxViewViewsTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -215,6 +218,7 @@ class OmniboxViewViewsTest : public InProcessBrowserTest {
     return native_window;
   }
 
+  base::test::ScopedFeatureList scoped_feature_list_;
   OmniboxTriggeredFeatureService triggered_feature_service_;
 };
 
@@ -563,7 +567,8 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, CloseOmniboxPopupOnTextDrag) {
   results.SortAndCull(
       input, TemplateURLServiceFactory::GetForProfile(browser()->profile()),
       triggered_feature_service(), /*is_lens_active=*/false,
-      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false);
+      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false,
+      /*is_incognito=*/false);
 
   // The omnibox popup should open with suggestions displayed.
   autocomplete_controller->NotifyChanged();
@@ -612,7 +617,8 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, MaintainCursorAfterFocusCycle) {
   results.SortAndCull(
       input, TemplateURLServiceFactory::GetForProfile(browser()->profile()),
       triggered_feature_service(), /*is_lens_active=*/false,
-      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false);
+      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false,
+      /*is_incognito=*/false);
 
   // The omnibox popup should open with suggestions displayed.
   autocomplete_controller->NotifyChanged();
@@ -626,8 +632,7 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, MaintainCursorAfterFocusCycle) {
   EXPECT_FALSE(omnibox_view->IsSelectAll());
 
   // Save cursor position, before blur.
-  size_t prev_start, end;
-  omnibox_view->GetSelectionBounds(&prev_start, &end);
+  size_t prev_start = omnibox_view->GetSelectionBounds().start();
 
   chrome::FocusAppMenu(browser());
   EXPECT_FALSE(omnibox_view->model()->PopupIsOpen());
@@ -636,9 +641,7 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, MaintainCursorAfterFocusCycle) {
   chrome::FocusLocationBar(browser());
 
   // Make sure cursor is restored.
-  size_t start;
-  omnibox_view->GetSelectionBounds(&start, &end);
-  EXPECT_EQ(prev_start, start);
+  EXPECT_EQ(prev_start, omnibox_view->GetSelectionBounds().start());
 }
 
 IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, BackgroundIsOpaque) {
@@ -718,7 +721,8 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, FriendlyAccessibleLabel) {
   results.SortAndCull(
       input, TemplateURLServiceFactory::GetForProfile(browser()->profile()),
       triggered_feature_service(), /*is_lens_active=*/false,
-      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false);
+      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false,
+      /*is_incognito=*/false);
 
   // The omnibox popup should open with suggestions displayed.
   chrome::FocusLocationBar(browser());
@@ -794,7 +798,10 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, AccessiblePopup) {
   match.description = u"Google";
   match.allowed_to_be_default_match = true;
 
-  OmniboxPopupView* popup_view = omnibox_view_views->GetPopupViewForTesting();
+  OmniboxPopupView* popup_view =
+      BrowserView::GetBrowserViewForBrowser(browser())
+          ->GetLocationBarView()
+          ->GetOmniboxPopupView();
   ui::AXNodeData popup_node_data_1;
   popup_view->GetPopupAccessibleNodeData(&popup_node_data_1);
   EXPECT_FALSE(popup_node_data_1.HasState(ax::mojom::State::kExpanded));
@@ -819,7 +826,8 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsTest, AccessiblePopup) {
   results.SortAndCull(
       input, TemplateURLServiceFactory::GetForProfile(browser()->profile()),
       triggered_feature_service(), /*is_lens_active=*/false,
-      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false);
+      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false,
+      /*is_incognito=*/false);
 
   // The omnibox popup should open with suggestions displayed.
   autocomplete_controller->NotifyChanged();
@@ -978,7 +986,8 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsUIATest, AccessibleOmnibox) {
   results.SortAndCull(
       input, TemplateURLServiceFactory::GetForProfile(browser()->profile()),
       triggered_feature_service(), /*is_lens_active=*/false,
-      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false);
+      /*can_show_contextual_suggestions=*/false, /*mia_enabled=*/false,
+      /*is_incognito=*/false);
 
   // The omnibox popup should open with suggestions displayed.
   autocomplete_controller->NotifyChanged();
@@ -1265,7 +1274,7 @@ IN_PROC_BROWSER_TEST_F(
   // rest of the test to operate as if all URLs are using the default ports.
   content::URLLoaderInterceptor interceptor(base::BindLambdaForTesting(
       [&](content::URLLoaderInterceptor::RequestParams* params) {
-        if (params->url_request.url.host() == "site-with-good-https.com") {
+        if (params->url_request.url.GetHost() == "site-with-good-https.com") {
           std::string headers =
               "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n";
           std::string body = "<html><title>Success</title>Hello world</html>";
@@ -1359,7 +1368,7 @@ class OmniboxViewViewsOnFocusZpsTest : public OmniboxViewViewsTest {
 IN_PROC_BROWSER_TEST_F(OmniboxViewViewsOnFocusZpsTest, ShowHatsSurvey) {
   EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _, _, _))
       .Times(1)
-      .WillOnce(testing::Invoke(
+      .WillOnce(
           [](const std::string& trigger, base::OnceClosure success_callback,
              base::OnceClosure failure_callback,
              const SurveyBitsData& product_specific_bits_data,
@@ -1369,7 +1378,7 @@ IN_PROC_BROWSER_TEST_F(OmniboxViewViewsOnFocusZpsTest, ShowHatsSurvey) {
             EXPECT_TRUE(
                 trigger == kHatsSurveyTriggerOnFocusZpsSuggestionsHappiness ||
                 trigger == kHatsSurveyTriggerOnFocusZpsSuggestionsUtility);
-          }));
+          });
 
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GURL("https://test.com/")));

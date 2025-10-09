@@ -182,7 +182,7 @@ void ReportFadeOutAnimationSmoothness(int smoothness) {
 // Returns the id of the display on which |view| is shown.
 int64_t GetDisplayIdForView(const View* view) {
   aura::Window* window = view->GetWidget()->GetNativeWindow();
-  return display::Screen::GetScreen()->GetDisplayNearestWindow(window).id();
+  return display::Screen::Get()->GetDisplayNearestWindow(window).id();
 }
 
 // Whether |item_view| is a ShelfAppButton and its state is STATE_DRAGGING.
@@ -1401,9 +1401,8 @@ void ShelfView::AnimateDragImageLayer(
     }
 
     // |target_layer| bounds are in display coordinates.
-    display::Display display =
-        display::Screen::GetScreen()->GetDisplayNearestWindow(
-            GetWidget()->GetNativeWindow());
+    display::Display display = display::Screen::Get()->GetDisplayNearestWindow(
+        GetWidget()->GetNativeWindow());
     current_bounds.Offset(display.bounds().OffsetFromOrigin());
 
     const gfx::Transform transform = gfx::TransformBetweenRects(
@@ -2014,7 +2013,7 @@ gfx::Rect ShelfView::GetMenuAnchorRect(const views::View& source,
 
   gfx::Rect shelf_bounds_in_screen;
   if (ShelfConfig::Get()->is_in_app() &&
-      display::Screen::GetScreen()->InTabletMode()) {
+      display::Screen::Get()->InTabletMode()) {
     // Use the shelf widget background as the menu anchor point in tablet mode
     // and in app.
     ShelfWidget* shelf_widget = shelf_->shelf_widget();
@@ -2191,10 +2190,6 @@ void ShelfView::OnGestureEvent(ui::GestureEvent* event) {
 void ShelfView::MaybeDuplicatePromiseAppForRemoval(
     ShelfAppButton* promise_app_view,
     const ShelfItem& item) {
-  if (!ash::features::ArePromiseIconsEnabled()) {
-    return;
-  }
-
   if (!promise_app_view || !promise_app_view->is_promise_app()) {
     return;
   }
@@ -2533,7 +2528,7 @@ void ShelfView::OnPinnedStateChanged(aura::Window* pinned_window) {
   // Close context menus in locked fullscreen mode to prevent users from exiting
   // this mode.
   if ((GetWindowPinType(pinned_window) ==
-       chromeos::WindowPinType::kTrustedPinned) &&
+       chromeos::WindowPinType::kLockedFullscreen) &&
       IsShowingMenu()) {
     shelf_menu_model_adapter_->Cancel();
   }
@@ -2643,7 +2638,7 @@ void ShelfView::ShowMenu(std::unique_ptr<ui::SimpleMenuModel> menu_model,
       source_type,
       base::BindOnce(&ShelfView::OnMenuClosed, base::Unretained(this),
                      base::UnsafeDangling(source)),
-      display::Screen::GetScreen()->InTabletMode(),
+      display::Screen::Get()->InTabletMode(),
       /*for_application_menu_items*/ !context_menu);
   shelf_menu_model_adapter_->Run(
       GetMenuAnchorRect(*source, click_point, context_menu),

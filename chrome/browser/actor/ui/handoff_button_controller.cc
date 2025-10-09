@@ -4,49 +4,147 @@
 
 #include "chrome/browser/actor/ui/handoff_button_controller.h"
 
+#include "cc/paint/paint_filter.h"
+#include "cc/paint/paint_flags.h"
+#include "cc/paint/paint_shader.h"
 #include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/actor/ui/actor_ui_metrics.h"
 #include "chrome/browser/actor/ui/actor_ui_tab_controller.h"
+#include "chrome/browser/actor/ui/actor_ui_window_controller.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/public/tab_dialog_manager.h"
 #include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/core/SkRRect.h"
+#include "third_party/skia/include/effects/SkGradientShader.h"
+#include "third_party/skia/include/effects/SkImageFilters.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/events/types/event_type.h"
+#include "ui/gfx/canvas.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/views/bubble/bubble_border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/webview/webview.h"
+#include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget_delegate.h"
 
 namespace {
 
 // A fixed vertical offset from the top of the window, used when the tab
-// strip is not visible (e.g., in immersive fullscreen).
+// strip is not visible.
 constexpr int kHandoffButtonTopOffset = 8;
-constexpr int kHandoffbuttonPreferredHeight = 70;
+constexpr int kHandoffButtonPreferredHeight = 70;
+constexpr float kHandoffButtonShadowMargin = 15.0f;
+constexpr float kHandoffButtonCornerRadius = 48.0f;
 
-std::unique_ptr<views::NonClientFrameView> CreateHandoffButtonFrameView(
+// A custom BubbleFrameView that paints a gradient border.
+class GradientBubbleFrameView : public views::BubbleFrameView {
+  METADATA_HEADER(GradientBubbleFrameView, views::BubbleFrameView)
+
+ public:
+  GradientBubbleFrameView(const gfx::Insets& total_insets,
+                          views::BubbleBorder::Arrow arrow_location,
+                          const gfx::RoundedCornersF& corners)
+      : views::BubbleFrameView(gfx::Insets(), total_insets),
+        corner_radius_(corners) {
+    auto border = std::make_unique<views::BubbleBorder>(
+        arrow_location, views::BubbleBorder::Shadow::NO_SHADOW);
+    border->set_draw_border_stroke(false);
+    border->set_rounded_corners(corners);
+    SetBubbleBorder(std::move(border));
+  }
+  ~GradientBubbleFrameView() override = default;
+
+  // views::View:
+  void OnPaint(gfx::Canvas* canvas) override {
+    constexpr float kShadowBlurSigma = 5.0f;
+    constexpr float kShadowOffsetX = 0.0f;
+    constexpr float kShadowOffsetY = 3.0f;
+    constexpr float kBackgroundInset = 2.0f;
+
+    gfx::RectF button_bounds_f(GetLocalBounds());
+    button_bounds_f.Inset(kHandoffButtonShadowMargin);
+    const float shadow_corner_radius = corner_radius_.upper_left();
+    const float corner_radius = corner_radius_.upper_left();
+    cc::PaintCanvas* paint_canvas = canvas->sk_canvas();
+    SkRRect rrect;
+    rrect.setRectXY(gfx::RectFToSkRect(button_bounds_f), corner_radius,
+                    corner_radius);
+
+    // Draw the shadow
+    {
+      cc::PaintCanvasAutoRestore auto_restore(paint_canvas, true);
+      paint_canvas->translate(kShadowOffsetX, kShadowOffsetY);
+      cc::PaintFlags shadow_flags;
+      shadow_flags.setAntiAlias(true);
+      SkPoint center = SkPoint::Make(button_bounds_f.CenterPoint().x(),
+                                     button_bounds_f.CenterPoint().y());
+      const SkColor colors[] = {
+          SkColorSetARGB(255, 117, 93, 252), SkColorSetARGB(255, 93, 93, 252),
+          SkColorSetARGB(255, 68, 137, 255), SkColorSetARGB(255, 68, 137, 255)};
+      const SkScalar pos[] = {0.0f, 0.4f, 0.6f, 1.0f};
+      std::vector<SkColor4f> color4fs;
+      for (const auto& color : colors) {
+        color4fs.push_back(SkColor4f::FromColor(color));
+      }
+      auto shader = cc::PaintShader::MakeSweepGradient(
+          center.x(), center.y(), color4fs.data(), pos, color4fs.size(),
+          SkTileMode::kClamp, 0, 360);
+      shadow_flags.setShader(std::move(shader));
+      auto blur_filter = sk_make_sp<cc::BlurPaintFilter>(
+          kShadowBlurSigma, kShadowBlurSigma, SkTileMode::kDecal, nullptr);
+      shadow_flags.setImageFilter(std::move(blur_filter));
+      paint_canvas->drawRRect(rrect, shadow_flags);
+    }
+
+    // Create a slightly smaller rectangle for the background.
+    gfx::RectF background_bounds_f = button_bounds_f;
+    background_bounds_f.Inset(kBackgroundInset);
+    const float background_corner_radius =
+        shadow_corner_radius > kBackgroundInset
+            ? shadow_corner_radius - kBackgroundInset
+            : 0.f;
+    SkRRect background_rrect;
+    background_rrect.setRectXY(gfx::RectFToSkRect(background_bounds_f),
+                               background_corner_radius,
+                               background_corner_radius);
+    cc::PaintFlags background_flags;
+    background_flags.setAntiAlias(true);
+    background_flags.setStyle(cc::PaintFlags::kFill_Style);
+    background_flags.setColor(
+        GetColorProvider()->GetColor(ui::kColorTextfieldBackground));
+    paint_canvas->drawRRect(background_rrect, background_flags);
+  }
+
+ private:
+  gfx::RoundedCornersF corner_radius_;
+};
+
+BEGIN_METADATA(GradientBubbleFrameView)
+END_METADATA
+
+std::unique_ptr<views::FrameView> CreateHandoffButtonFrameView(
     views::Widget* widget) {
-  const gfx::Insets margins = gfx::Insets::VH(12, 20);
-  auto frame_view =
-      std::make_unique<views::BubbleFrameView>(gfx::Insets(), margins);
-  auto border = std::make_unique<views::BubbleBorder>(
-      views::BubbleBorder::Arrow::NONE,
-      views::BubbleBorder::Shadow::STANDARD_SHADOW);
-  // TODO(crbug.com/422541242): Use ChromeLayoutProvider instead of hardcoding
-  // this value.
-  border->set_rounded_corners(gfx::RoundedCornersF(48));
-  border->set_draw_border_stroke(false);
-  frame_view->SetBubbleBorder(std::move(border));
-  // TODO(crbug.com/422541242): Update color to match spec.
+  const gfx::Insets content_padding = gfx::Insets::VH(12, 20);
+  const gfx::Insets total_insets =
+      content_padding + gfx::Insets(kHandoffButtonShadowMargin);
+  const gfx::RoundedCornersF corners(kHandoffButtonCornerRadius);
+  auto frame_view = std::make_unique<GradientBubbleFrameView>(
+      total_insets, views::BubbleBorder::Arrow::NONE, corners);
   frame_view->SetBackgroundColor(ui::kColorTextfieldBackground);
   return frame_view;
 }
 
 }  // namespace
+
 namespace actor::ui {
 
 using enum HandoffButtonState::ControlOwnership;
@@ -74,6 +172,9 @@ void HandoffButtonWidget::OnMouseEvent(::ui::MouseEvent* event) {
   views::Widget::OnMouseEvent(event);
 }
 
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(HandoffButtonController,
+                                      kHandoffButtonElementId);
+
 HandoffButtonController::HandoffButtonController(
     tabs::TabInterface& tab_interface)
     : tab_interface_(tab_interface) {}
@@ -82,8 +183,7 @@ HandoffButtonController::~HandoffButtonController() = default;
 
 void HandoffButtonController::UpdateState(const HandoffButtonState& state,
                                           bool is_visible) {
-  is_active_ = state.is_active;
-  if (!is_active_) {
+  if (!state.is_active) {
     CloseButton(views::Widget::ClosedReason::kUnspecified);
     return;
   }
@@ -117,8 +217,6 @@ void HandoffButtonController::UpdateState(const HandoffButtonState& state,
     UpdateBounds();
   }
 
-  // TODO(crbug.com/422541242): Add Z-order logic.
-
   UpdateVisibility();
 }
 
@@ -136,13 +234,15 @@ void HandoffButtonController::CreateAndShowButton(const std::u16string& text,
   button_view_ = button_view.get();
   button_view_->SetEnabledTextColors(::ui::kColorLabelForeground);
   button_view_->SetImageModel(views::Button::STATE_NORMAL, icon);
+  button_view_->SetProperty(views::kElementIdentifierKey,
+                            kHandoffButtonElementId);
 
   auto widget_delegate = std::make_unique<views::WidgetDelegate>();
   widget_delegate->SetContentsView(std::move(button_view));
   widget_delegate->SetModalType(::ui::mojom::ModalType::kNone);
   widget_delegate->SetAccessibleWindowRole(ax::mojom::Role::kAlert);
   widget_delegate->SetShowCloseButton(false);
-  widget_delegate->SetNonClientFrameViewFactory(
+  widget_delegate->SetFrameViewFactory(
       base::BindRepeating(&CreateHandoffButtonFrameView));
   delegate_ = std::move(widget_delegate);
 
@@ -161,9 +261,10 @@ void HandoffButtonController::CreateAndShowButton(const std::u16string& text,
 
   auto tab_dialog_params = std::make_unique<tabs::TabDialogManager::Params>();
   tab_dialog_params->close_on_navigate = false;
-  tab_dialog_params->close_on_detach = false;
+  tab_dialog_params->close_on_detach = true;
   tab_dialog_params->disable_input = false;
   tab_dialog_params->animated = false;
+  tab_dialog_params->should_show_inactive = true;
   tab_dialog_params->should_show_callback = base::BindRepeating(
       &HandoffButtonController::ShouldShowButton, base::Unretained(this));
   tab_dialog_params->get_dialog_bounds =
@@ -181,15 +282,26 @@ void HandoffButtonController::CreateAndShowButton(const std::u16string& text,
 }
 
 void HandoffButtonController::ShouldShowButton(bool& show) {
-  show = is_active_ && is_visible_;
+  show = is_visible_;
 }
 
 gfx::Rect HandoffButtonController::GetHandoffButtonBounds(
     views::Widget* widget) {
   gfx::Size preferred_size = widget->GetContentsView()->GetPreferredSize();
-  preferred_size.set_height(kHandoffbuttonPreferredHeight);
+  preferred_size.set_height(kHandoffButtonPreferredHeight);
 
+  // TODO(crbug.com/447624564): After migrating the Handoff button off the TDM,
+  // explore parenting the bounds of the widget on the contents webview bounds
+  // instead.
   auto* anchor_view = tab_interface_->GetBrowserWindowInterface()->GetWebView();
+  if (auto* window_controller = ActorUiWindowController::From(
+          tab_interface_->GetBrowserWindowInterface())) {
+    if (auto* contents_controller =
+            window_controller->GetControllerForWebContents(
+                tab_interface_->GetContents())) {
+      anchor_view = contents_controller->contents_container_view();
+    }
+  }
   if (!anchor_view) {
     return gfx::Rect(preferred_size);
   }
@@ -222,7 +334,8 @@ void HandoffButtonController::CloseButton(views::Widget::ClosedReason reason) {
 }
 
 void HandoffButtonController::UpdateButtonHoverStatus(bool is_hovered) {
-  GetTabController()->SetHandoffButtonHoverStatus(is_hovered);
+  is_hovering_ = is_hovered;
+  GetTabController()->OnHandoffButtonHoverStatusChanged();
 }
 
 void HandoffButtonController::OnButtonPressed() {
@@ -233,6 +346,7 @@ void HandoffButtonController::OnButtonPressed() {
   } else {
     GetTabController()->SetActorTaskResume();
   }
+  actor::ui::LogHandoffButtonClick(ownership_);
 }
 
 void HandoffButtonController::UpdateBounds() {
@@ -250,7 +364,11 @@ tabs::TabDialogManager* HandoffButtonController::GetTabDialogManager() {
 }
 
 ActorUiTabControllerInterface* HandoffButtonController::GetTabController() {
-  return tab_interface_->GetTabFeatures()->actor_ui_tab_controller();
+  return ActorUiTabControllerInterface::From(&tab_interface_.get());
+}
+
+bool HandoffButtonController::IsHovering() {
+  return is_hovering_;
 }
 
 }  // namespace actor::ui

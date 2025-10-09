@@ -838,6 +838,12 @@ Called by update_protocol_commands_enum.py.-->
   <int value="181" label="AI Assistance - Error"/>
   <int value="182"
       label="Performance Insight agent opened from Insights sidebar"/>
+  <int value="183" label="AI Assistance - Opened from Performance full button"/>
+  <int value="184" label="AI Code Completion - Response served from cache"/>
+  <int value="185" label="AI Code Completion - Request triggered"/>
+  <int value="186" label="AI Code Completion - Suggestion displayed"/>
+  <int value="187" label="AI Code Completion - Suggestion accepted"/>
+  <int value="188" label="AI Code Completion - Error"/>
 </enum>
 
 <enum name="DevToolsAnimationPlaybackRateChanged">
@@ -845,23 +851,6 @@ Called by update_protocol_commands_enum.py.-->
   <int value="1" label="25%"/>
   <int value="2" label="10%"/>
   <int value="3" label="Other"/>
-</enum>
-
-<enum name="DevToolsCSSHintShown">
-  <int value="0" label="Other"/>
-  <int value="1" label="AlignContent"/>
-  <int value="2" label="FlexItem"/>
-  <int value="3" label="FlexContainer"/>
-  <int value="4" label="GridContainer"/>
-  <int value="5" label="GridItem"/>
-  <int value="6" label="FlexGrid"/>
-  <int value="7" label="MulticolFlexGrid"/>
-  <int value="8" label="Padding"/>
-  <int value="9" label="Position"/>
-  <int value="10" label="ZIndex"/>
-  <int value="11" label="Sizing"/>
-  <int value="12" label="FlexOrGridItem"/>
-  <int value="13" label="FontVariationSettings"/>
 </enum>
 
 <enum name="DevToolsDebuggingUserDataDirStatus">

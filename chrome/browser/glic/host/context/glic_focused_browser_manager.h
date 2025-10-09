@@ -13,6 +13,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
+#include "chrome/browser/glic/host/context/glic_focused_browser_manager_interface.h"
 #include "chrome/browser/glic/widget/glic_window_controller.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "ui/views/widget/widget_observer.h"
@@ -27,7 +28,8 @@ class Widget;
 namespace glic {
 
 // Responsible for managing which browser window is considered "focused".
-class GlicFocusedBrowserManager : public BrowserListObserver,
+class GlicFocusedBrowserManager : public GlicFocusedBrowserManagerInterface,
+                                  public BrowserListObserver,
                                   public views::WidgetObserver,
                                   public GlicWindowController::StateObserver {
  public:
@@ -38,10 +40,16 @@ class GlicFocusedBrowserManager : public BrowserListObserver,
   GlicFocusedBrowserManager& operator=(const GlicFocusedBrowserManager&) =
       delete;
 
-  // Returns the currently focused browser window, if there is one.
-  // This window must be the candidate browser (see below), and also be
-  // sufficiently visible to be considered for sharing.
-  BrowserWindowInterface* GetFocusedBrowser() const;
+  // GlicFocusedBrowserInterface implementation.
+  using FocusedBrowserChangedCallback =
+      base::RepeatingCallback<void(BrowserWindowInterface* candidate,
+                                   BrowserWindowInterface* focused)>;
+  base::CallbackListSubscription AddFocusedBrowserChangedCallback(
+      FocusedBrowserChangedCallback callback) override;
+  base::CallbackListSubscription AddActiveBrowserChangedCallback(
+      base::RepeatingCallback<void(BrowserWindowInterface*)> callback) override;
+  BrowserWindowInterface* GetFocusedBrowser() const override;
+  BrowserWindowInterface* GetActiveBrowser() const override;
 
   // Returns the candidate for the focused browser window, if there is one.
   // This browser must not be one that will never be shareable (see
@@ -53,14 +61,6 @@ class GlicFocusedBrowserManager : public BrowserListObserver,
   // particular tab isn't shared because the most recently focused window isn't
   // visible.
   BrowserWindowInterface* GetCandidateBrowser() const;
-
-  // Callback for changes to the focused browser window, or the candidate
-  // to be focused.
-  using FocusedBrowserChangedCallback =
-      base::RepeatingCallback<void(BrowserWindowInterface* candidate,
-                                   BrowserWindowInterface* focused)>;
-  base::CallbackListSubscription AddFocusedBrowserChangedCallback(
-      FocusedBrowserChangedCallback callback);
 
   // BrowserListObserver
   void OnBrowserAdded(Browser* browser) override;
@@ -74,9 +74,16 @@ class GlicFocusedBrowserManager : public BrowserListObserver,
   void OnWidgetDestroyed(views::Widget* widget) override;
 
   // GlicWindowController::StateObserver:
-  void PanelStateChanged(const mojom::PanelState&, Browser*) override;
+  void PanelStateChanged(
+      const mojom::PanelState&,
+      const GlicWindowController::PanelStateContext& context) override;
+
+  // Sets whether the manager is in testing mode. When in testing mode, logic
+  // for determining the active browser is modified to be more deterministic.
+  static void SetTestingModeForTesting(bool testing_mode);
 
  private:
+  // Tracks the state of the focused browser and candidate focused browser.
   struct FocusedBrowserState {
     FocusedBrowserState();
     ~FocusedBrowserState();
@@ -89,6 +96,18 @@ class GlicFocusedBrowserManager : public BrowserListObserver,
     base::WeakPtr<BrowserWindowInterface> focused_browser;
   };
 
+  // Browser state tracked by this manager.
+  struct BrowserState {
+    BrowserState();
+    ~BrowserState();
+    BrowserState(const BrowserState& src);
+    BrowserState& operator=(const BrowserState& src);
+
+    FocusedBrowserState focused_state;
+    // The active, but not necessarily focused, browser.
+    base::WeakPtr<BrowserWindowInterface> active_browser;
+  };
+
   // True if the mutable attributes of `browser` are valid for Glic focus.
   bool IsBrowserStateValid(BrowserWindowInterface* browser_interface);
 
@@ -96,6 +115,8 @@ class GlicFocusedBrowserManager : public BrowserListObserver,
   void PerformMaybeUpdateFocusedBrowser();
   FocusedBrowserState ComputeFocusedBrowserState();
   BrowserWindowInterface* ComputeBrowserCandidate();
+  BrowserWindowInterface* ComputeActiveBrowser();
+  BrowserState ComputeBrowserState();
 
   void OnBrowserBecameActive(BrowserWindowInterface* browser_interface);
   void OnBrowserBecameInactive(BrowserWindowInterface* browser_interface);
@@ -103,7 +124,7 @@ class GlicFocusedBrowserManager : public BrowserListObserver,
 
   raw_ref<GlicWindowController> window_controller_;
 
-  FocusedBrowserState focused_browser_state_;
+  BrowserState browser_state_;
 
   base::CallbackListSubscription window_activation_subscription_;
   std::map<BrowserWindowInterface*, std::vector<base::CallbackListSubscription>>
@@ -115,6 +136,8 @@ class GlicFocusedBrowserManager : public BrowserListObserver,
 
   base::RepeatingCallbackList<FocusedBrowserChangedCallback::RunType>
       focused_browser_callback_list_;
+  base::RepeatingCallbackList<void(BrowserWindowInterface*)>
+      active_browser_callback_list_;
 };
 
 }  // namespace glic

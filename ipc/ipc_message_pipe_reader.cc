@@ -2,11 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifdef UNSAFE_BUFFERS_BUILD
-// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
-#pragma allow_unsafe_buffers
-#endif
-
 #include "ipc/ipc_message_pipe_reader.h"
 
 #include <stdint.h>
@@ -108,22 +103,6 @@ void MessagePipeReader::Close() {
   sender_.reset();
   if (receiver_.is_bound())
     receiver_.reset();
-}
-
-bool MessagePipeReader::Send(std::unique_ptr<Message> message) {
-  CHECK(message->IsValid());
-  TRACE_EVENT_WITH_FLOW0("toplevel.flow", "MessagePipeReader::Send",
-                         message->flags(), TRACE_EVENT_FLAG_FLOW_OUT);
-  std::optional<std::vector<mojo::native::SerializedHandlePtr>> handles;
-  MojoResult result = MOJO_RESULT_OK;
-  result = ChannelMojo::ReadFromMessageAttachmentSet(message.get(), &handles);
-  if (result != MOJO_RESULT_OK)
-    return false;
-
-  if (!sender_)
-    return false;
-
-  NOTREACHED();
 }
 
 void MessagePipeReader::GetRemoteInterface(

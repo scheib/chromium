@@ -105,17 +105,6 @@ AudioBus::AudioBus(int channels, int frames, base::span<float> data)
   BuildChannelData(channels, data);
 }
 
-AudioBus::AudioBus(int frames, const std::vector<float*>& channel_data)
-    : frames_(base::checked_cast<size_t>(frames)) {
-  CHECK(IsValidChannelCount(channel_data.size()));
-  channel_data_.reserve(channel_data.size());
-
-  for (float* data : channel_data) {
-    CHECK(IsAligned(data));
-    channel_data_.emplace_back(data, frames_);
-  }
-}
-
 AudioBus::AudioBus(int channels) : channel_data_(channels), is_wrapper_(true) {
   CHECK(IsValidChannelCount(channels));
 }
@@ -139,19 +128,12 @@ std::unique_ptr<AudioBus> AudioBus::CreateWrapper(int channels) {
   return base::WrapUnique(new AudioBus(channels));
 }
 
-std::unique_ptr<AudioBus> AudioBus::WrapVector(
-    int frames,
-    const std::vector<float*>& channel_data) {
-  return base::WrapUnique(new AudioBus(frames, channel_data));
-}
-
 std::unique_ptr<AudioBus> AudioBus::WrapMemory(int channels,
                                                int frames,
-                                               void* data) {
+                                               base::span<float> data) {
   // |data| must be aligned by AudioBus::kChannelAlignment.
   CHECK(IsAligned(data));
-  return base::WrapUnique(
-      new AudioBus(channels, frames, static_cast<float*>(data)));
+  return base::WrapUnique(new AudioBus(channels, frames, data));
 }
 
 std::unique_ptr<AudioBus> AudioBus::WrapMemory(const AudioParameters& params,
@@ -161,16 +143,6 @@ std::unique_ptr<AudioBus> AudioBus::WrapMemory(const AudioParameters& params,
   return base::WrapUnique(new AudioBus(params.channels(),
                                        params.frames_per_buffer(),
                                        static_cast<float*>(data)));
-}
-
-std::unique_ptr<const AudioBus> AudioBus::WrapReadOnlyMemory(int channels,
-                                                             int frames,
-                                                             const void* data) {
-  // Note: const_cast is generally dangerous but is used in this case since
-  // AudioBus accommodates both read-only and read/write use cases. A const
-  // AudioBus object is returned to ensure no one accidentally writes to the
-  // read-only data.
-  return WrapMemory(channels, frames, const_cast<void*>(data));
 }
 
 std::unique_ptr<const AudioBus> AudioBus::WrapReadOnlyMemory(

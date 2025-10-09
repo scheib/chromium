@@ -12,7 +12,6 @@
 #include "components/viz/common/resources/release_callback.h"
 #include "components/viz/common/resources/transferable_resource.h"
 #include "components/viz/test/test_context_provider.h"
-#include "components/viz/test/test_gles2_interface.h"
 #include "components/viz/test/test_raster_interface.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -41,6 +40,8 @@ namespace blink {
 namespace {
 
 constexpr int kMaxTextureSize = 1024;
+
+}  // namespace
 
 class ImageTrackingDecodeCache : public cc::StubDecodeCache {
  public:
@@ -90,15 +91,15 @@ class ImageTrackingDecodeCache : public cc::StubDecodeCache {
 class CanvasResourceProviderTest : public Test {
  public:
   void SetUp() override {
-    test_context_provider_ = viz::TestContextProvider::Create();
-    auto* test_gl = test_context_provider_->UnboundTestContextGL();
-    test_gl->set_max_texture_size(kMaxTextureSize);
-    test_gl->set_supports_gpu_memory_buffer_format(gfx::BufferFormat::RGBA_8888,
-                                                   true);
-    test_gl->set_supports_gpu_memory_buffer_format(gfx::BufferFormat::BGRA_8888,
-                                                   true);
-    test_gl->set_supports_gpu_memory_buffer_format(gfx::BufferFormat::RGBA_F16,
-                                                   true);
+    test_context_provider_ = viz::TestContextProvider::CreateRaster();
+    auto* test_raster = test_context_provider_->UnboundTestRasterInterface();
+    test_raster->set_max_texture_size(kMaxTextureSize);
+    test_raster->set_supports_gpu_memory_buffer_format(
+        gfx::BufferFormat::RGBA_8888, true);
+    test_raster->set_supports_gpu_memory_buffer_format(
+        gfx::BufferFormat::BGRA_8888, true);
+    test_raster->set_supports_gpu_memory_buffer_format(
+        gfx::BufferFormat::RGBA_F16, true);
 
     gpu::SharedImageCapabilities shared_image_caps;
     shared_image_caps.supports_scanout_shared_images = true;
@@ -106,14 +107,18 @@ class CanvasResourceProviderTest : public Test {
     test_context_provider_->SharedImageInterface()->SetCapabilities(
         shared_image_caps);
 
-    InitializeSharedGpuContextGLES2(test_context_provider_.get(),
-                                    &image_decode_cache_);
+    InitializeSharedGpuContextRaster(test_context_provider_.get(),
+                                     &image_decode_cache_);
     context_provider_wrapper_ = SharedGpuContext::ContextProviderWrapper();
   }
 
   void TearDown() override { SharedGpuContext::Reset(); }
 
  protected:
+  const gpu::SyncToken& GetSyncToken(const CanvasResource* resource) {
+    return resource->sync_token();
+  }
+
   test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   ImageTrackingDecodeCache image_decode_cache_;
@@ -136,23 +141,22 @@ TEST_F(CanvasResourceProviderTest,
       CanvasResourceProvider::ShouldInitialize::kCallClear,
       context_provider_wrapper_, RasterMode::kGPU, shared_image_usage_flags);
 
+  gpu::SyncToken sync_token;
   auto client_si = provider->GetBackingClientSharedImageForExternalWrite(
-      /*internal_access_sync_token=*/nullptr, gpu::SharedImageUsageSet());
+      gpu::SharedImageUsageSet(), sync_token);
 
   // When supplied required usages that the backing SI already supports, that
   // backing SI should be returned.
   auto client_si_with_no_new_usage_required =
       provider->GetBackingClientSharedImageForExternalWrite(
-          /*internal_access_sync_token=*/nullptr,
-          gpu::SHARED_IMAGE_USAGE_SCANOUT);
+          gpu::SHARED_IMAGE_USAGE_SCANOUT, sync_token);
   EXPECT_EQ(client_si_with_no_new_usage_required, client_si);
 
   // When supplied required usages that the backing SI does not support, a new
   // backing SI should be created that supports the required usages.
   auto client_si_with_webgpu_usage_required =
       provider->GetBackingClientSharedImageForExternalWrite(
-          /*internal_access_sync_token=*/nullptr,
-          gpu::SHARED_IMAGE_USAGE_WEBGPU_WRITE);
+          gpu::SHARED_IMAGE_USAGE_WEBGPU_WRITE, sync_token);
   EXPECT_NE(client_si_with_webgpu_usage_required, client_si);
   EXPECT_TRUE(client_si_with_webgpu_usage_required->usage().HasAll(
       shared_image_usage_flags));
@@ -163,8 +167,7 @@ TEST_F(CanvasResourceProviderTest,
   // already-supported usages.
   client_si_with_no_new_usage_required =
       provider->GetBackingClientSharedImageForExternalWrite(
-          /*internal_access_sync_token=*/nullptr,
-          gpu::SHARED_IMAGE_USAGE_SCANOUT);
+          gpu::SHARED_IMAGE_USAGE_SCANOUT, sync_token);
   EXPECT_EQ(client_si_with_no_new_usage_required,
             client_si_with_webgpu_usage_required);
 }
@@ -261,7 +264,7 @@ TEST_F(CanvasResourceProviderTest, CanvasResourceProviderUnacceleratedOverlay) {
   EXPECT_FALSE(provider->IsSingleBuffered());
 }
 
-std::unique_ptr<CanvasResourceProvider> MakeCanvasResourceProvider(
+std::unique_ptr<CanvasResourceProviderSharedImage> MakeCanvasResourceProvider(
     RasterMode raster_mode,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper>
         context_provider_wrapper) {
@@ -301,8 +304,6 @@ TEST_F(CanvasResourceProviderTest,
   // conditions against the test raster interface.
   SharedGpuContext::Reset();
   auto raster_context_provider = viz::TestContextProvider::CreateRaster();
-  raster_context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(
-      true);
   InitializeSharedGpuContextRaster(raster_context_provider.get(),
                                    &image_decode_cache_,
                                    SetIsContextLost::kSetToFalse);
@@ -373,14 +374,14 @@ TEST_F(CanvasResourceProviderTest,
 
   // Same resource and sync token if we query again without updating.
   auto resource = provider->ProduceCanvasResource(FlushReason::kTesting);
-  auto sync_token = resource->GetSyncToken();
+  auto sync_token = GetSyncToken(resource.get());
   ASSERT_TRUE(resource);
   EXPECT_EQ(resource, provider->ProduceCanvasResource(FlushReason::kTesting));
-  EXPECT_EQ(sync_token, resource->GetSyncToken());
+  EXPECT_EQ(sync_token, GetSyncToken(resource.get()));
 
   auto new_resource = UpdateResource(provider.get());
   EXPECT_NE(resource, new_resource);
-  EXPECT_NE(resource->GetSyncToken(), new_resource->GetSyncToken());
+  EXPECT_NE(GetSyncToken(resource.get()), GetSyncToken(new_resource.get()));
   auto* resource_ptr = resource.get();
 
   EnsureResourceRecycled(provider.get(), std::move(resource));
@@ -394,7 +395,7 @@ TEST_F(CanvasResourceProviderTest,
 TEST_F(CanvasResourceProviderTest, CanvasResourceProviderUnusedResources) {
   base::test::ScopedFeatureList feature_list{kCanvas2DReclaimUnusedResources};
 
-  std::unique_ptr<CanvasResourceProvider> provider =
+  auto provider =
       MakeCanvasResourceProvider(RasterMode::kGPU, context_provider_wrapper_);
 
   auto resource = provider->ProduceCanvasResource(FlushReason::kTesting);
@@ -412,7 +413,7 @@ TEST_F(CanvasResourceProviderTest, CanvasResourceProviderUnusedResources) {
   // There is a ready-to-reuse resource
   EXPECT_TRUE(provider->HasUnusedResourcesForTesting());
   task_environment_.FastForwardBy(
-      CanvasResourceProvider::kUnusedResourceExpirationTime);
+      CanvasResourceProviderSharedImage::kUnusedResourceExpirationTime);
   // The resource is freed, don't repost the task.
   EXPECT_FALSE(provider->HasUnusedResourcesForTesting());
   EXPECT_FALSE(
@@ -424,7 +425,7 @@ TEST_F(CanvasResourceProviderTest,
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndDisableFeature(kCanvas2DReclaimUnusedResources);
 
-  std::unique_ptr<CanvasResourceProvider> provider =
+  auto provider =
       MakeCanvasResourceProvider(RasterMode::kGPU, context_provider_wrapper_);
 
   auto resource = provider->ProduceCanvasResource(FlushReason::kTesting);
@@ -445,7 +446,7 @@ TEST_F(CanvasResourceProviderTest,
        CanvasResourceProviderUnusedResourcesAreNotCollectedWhenYoung) {
   base::test::ScopedFeatureList feature_list{kCanvas2DReclaimUnusedResources};
 
-  std::unique_ptr<CanvasResourceProvider> provider =
+  auto provider =
       MakeCanvasResourceProvider(RasterMode::kGPU, context_provider_wrapper_);
 
   auto resource = provider->ProduceCanvasResource(FlushReason::kTesting);
@@ -461,7 +462,8 @@ TEST_F(CanvasResourceProviderTest,
   // There is a ready-to-reuse resource
   EXPECT_TRUE(provider->HasUnusedResourcesForTesting());
   task_environment_.FastForwardBy(
-      CanvasResourceProvider::kUnusedResourceExpirationTime - base::Seconds(1));
+      CanvasResourceProviderSharedImage::kUnusedResourceExpirationTime -
+      base::Seconds(1));
   // The reclaim task hasn't run yet.
   EXPECT_TRUE(
       provider->unused_resources_reclaim_timer_is_running_for_testing());
@@ -483,7 +485,7 @@ TEST_F(CanvasResourceProviderTest,
       provider->unused_resources_reclaim_timer_is_running_for_testing());
 
   task_environment_.FastForwardBy(
-      CanvasResourceProvider::kUnusedResourceExpirationTime);
+      CanvasResourceProviderSharedImage::kUnusedResourceExpirationTime);
   // Now it's collected.
   EXPECT_FALSE(provider->HasUnusedResourcesForTesting());
   // And no new task is posted.
@@ -528,35 +530,6 @@ TEST_F(CanvasResourceProviderTest,
   provider->FlushCanvas(FlushReason::kTesting);
   EXPECT_EQ(original_shared_image,
             provider->Snapshot(FlushReason::kTesting)->GetSharedImage());
-}
-
-TEST_F(CanvasResourceProviderTest,
-       CanvasResourceProviderSharedImageCopyOnWriteDisabled) {
-  auto& fake_context = static_cast<FakeWebGraphicsContext3DProvider&>(
-      context_provider_wrapper_->ContextProvider());
-  auto caps = fake_context.GetCapabilities();
-  caps.disable_2d_canvas_copy_on_write = true;
-  fake_context.SetCapabilities(caps);
-
-  const gpu::SharedImageUsageSet shared_image_usage_flags =
-      gpu::SHARED_IMAGE_USAGE_DISPLAY_READ | gpu::SHARED_IMAGE_USAGE_SCANOUT;
-
-  Canvas2DColorParams color_params(PredefinedColorSpace::kSRGB,
-                                   CanvasPixelFormat::kUint8,
-                                   /*has_alpha=*/true);
-  auto provider = CanvasResourceProvider::CreateSharedImageProvider(
-      gfx::Size(10, 10), color_params,
-      CanvasResourceProvider::ShouldInitialize::kCallClear,
-      context_provider_wrapper_, RasterMode::kGPU, shared_image_usage_flags);
-
-  ASSERT_TRUE(provider->IsValid());
-
-  // Disabling copy-on-write forces a copy each time the resource is queried.
-  auto resource = provider->ProduceCanvasResource(FlushReason::kTesting);
-  EXPECT_NE(resource->GetClientSharedImage()->mailbox(),
-            provider->ProduceCanvasResource(FlushReason::kTesting)
-                ->GetClientSharedImage()
-                ->mailbox());
 }
 
 TEST_F(CanvasResourceProviderTest, CanvasResourceProviderBitmap) {
@@ -816,84 +789,6 @@ TEST_F(CanvasResourceProviderTest, FlushForImage) {
   EXPECT_FALSE(new_dst_canvas.IsCachingImage(src_content_id));
 }
 
-TEST_F(CanvasResourceProviderTest, EnsureCCImageCacheUse) {
-  std::unique_ptr<CanvasResourceProvider> provider =
-      MakeCanvasResourceProvider(RasterMode::kGPU, context_provider_wrapper_);
-
-  cc::TargetColorParams target_color_params;
-  Vector<cc::DrawImage> images = {
-      cc::DrawImage(cc::CreateDiscardablePaintImage(gfx::Size(10, 10)), false,
-                    SkIRect::MakeWH(10, 10),
-                    cc::PaintFlags::FilterQuality::kNone, SkM44(), 0u,
-                    target_color_params),
-      cc::DrawImage(cc::CreateDiscardablePaintImage(gfx::Size(20, 20)), false,
-                    SkIRect::MakeWH(5, 5), cc::PaintFlags::FilterQuality::kNone,
-                    SkM44(), 0u, target_color_params)};
-
-  provider->Canvas().drawImage(images[0].paint_image(), 0u, 0u,
-                               SkSamplingOptions(), nullptr);
-  provider->Canvas().drawImageRect(
-      images[1].paint_image(), SkRect::MakeWH(5u, 5u), SkRect::MakeWH(5u, 5u),
-      SkSamplingOptions(), nullptr, SkCanvas::kFast_SrcRectConstraint);
-  provider->FlushCanvas(FlushReason::kTesting);
-
-  EXPECT_THAT(image_decode_cache_.decoded_images(), cc::ImagesAreSame(images));
-}
-
-TEST_F(CanvasResourceProviderTest, ImagesLockedUntilCacheLimit) {
-  std::unique_ptr<CanvasResourceProvider> provider =
-      MakeCanvasResourceProvider(RasterMode::kGPU, context_provider_wrapper_);
-
-  Vector<cc::DrawImage> images = {
-      cc::DrawImage(cc::CreateDiscardablePaintImage(gfx::Size(10, 10)), false,
-                    SkIRect::MakeWH(10, 10),
-                    cc::PaintFlags::FilterQuality::kNone, SkM44(), 0u,
-                    cc::TargetColorParams()),
-      cc::DrawImage(cc::CreateDiscardablePaintImage(gfx::Size(20, 20)), false,
-                    SkIRect::MakeWH(5, 5), cc::PaintFlags::FilterQuality::kNone,
-                    SkM44(), 0u, cc::TargetColorParams()),
-      cc::DrawImage(cc::CreateDiscardablePaintImage(gfx::Size(20, 20)), false,
-                    SkIRect::MakeWH(5, 5), cc::PaintFlags::FilterQuality::kNone,
-                    SkM44(), 0u, cc::TargetColorParams())};
-
-  // First 2 images are budgeted, they should remain locked after the op.
-  provider->Canvas().drawImage(images[0].paint_image(), 0u, 0u,
-                               SkSamplingOptions(), nullptr);
-  provider->Canvas().drawImage(images[1].paint_image(), 0u, 0u,
-                               SkSamplingOptions(), nullptr);
-  provider->FlushCanvas(FlushReason::kTesting);
-  EXPECT_EQ(image_decode_cache_.max_locked_images(), 2);
-  EXPECT_EQ(image_decode_cache_.num_locked_images(), 0);
-
-  // Next image is not budgeted, we should unlock all images other than the last
-  // image.
-  image_decode_cache_.set_budget_exceeded(true);
-  provider->Canvas().drawImage(images[2].paint_image(), 0u, 0u,
-                               SkSamplingOptions(), nullptr);
-  provider->FlushCanvas(FlushReason::kTesting);
-  EXPECT_EQ(image_decode_cache_.max_locked_images(), 3);
-  EXPECT_EQ(image_decode_cache_.num_locked_images(), 0);
-}
-
-TEST_F(CanvasResourceProviderTest, QueuesCleanupTaskForLockedImages) {
-  std::unique_ptr<CanvasResourceProvider> provider =
-      MakeCanvasResourceProvider(RasterMode::kGPU, context_provider_wrapper_);
-
-  cc::DrawImage image(cc::CreateDiscardablePaintImage(gfx::Size(10, 10)), false,
-                      SkIRect::MakeWH(10, 10),
-                      cc::PaintFlags::FilterQuality::kNone, SkM44(), 0u,
-                      cc::TargetColorParams());
-  provider->Canvas().drawImage(image.paint_image(), 0u, 0u, SkSamplingOptions(),
-                               nullptr);
-
-  provider->FlushCanvas(FlushReason::kTesting);
-  EXPECT_EQ(image_decode_cache_.max_locked_images(), 1);
-  EXPECT_EQ(image_decode_cache_.num_locked_images(), 0);
-
-  base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(image_decode_cache_.num_locked_images(), 0);
-}
-
 TEST_F(CanvasResourceProviderTest, ImageCacheOnContextLost) {
   std::unique_ptr<CanvasResourceProvider> provider =
       MakeCanvasResourceProvider(RasterMode::kGPU, context_provider_wrapper_);
@@ -975,5 +870,4 @@ TEST_F(CanvasResourceProviderTest, FlushCanvasReleasesAllOpsOutsideLayers) {
   EXPECT_FALSE(provider->Recorder().HasSideRecording());
 }
 
-}  // namespace
 }  // namespace blink

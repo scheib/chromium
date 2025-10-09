@@ -72,6 +72,7 @@ background-repeat: repeat
 background-size: auto
 baseline-shift: 0px
 baseline-source: auto
+block-ellipsis: no-ellipsis
 block-size: 100px
 border-block-end-color: rgb(0, 0, 0)
 border-block-end-style: none
@@ -140,7 +141,7 @@ column-rule-break: spanning-item
 column-rule-color: rgb(0, 0, 0)
 column-rule-outset: 50%
 column-rule-style: none
-column-rule-width: 0px
+column-rule-width: 3px
 column-span: none
 column-width: auto
 column-wrap: auto
@@ -184,6 +185,7 @@ float: none
 flood-color: rgb(0, 0, 0)
 flood-opacity: 1
 font-kerning: auto
+font-language-override: normal
 font-optical-sizing: auto
 font-palette: normal
 font-size: 16px
@@ -226,8 +228,8 @@ inset-block-start: auto
 inset-inline-end: auto
 inset-inline-start: auto
 interactivity: auto
-interest-hide-delay: 0.5s
-interest-show-delay: 0.5s
+interest-delay-end: normal
+interest-delay-start: normal
 interpolate-size: numeric-only
 isolation: auto
 item-tolerance: normal
@@ -291,7 +293,7 @@ orphans: 2
 outline-color: rgb(0, 0, 0)
 outline-offset: 0px
 outline-style: none
-outline-width: 0px
+outline-width: 3px
 overflow: visible
 overflow-anchor: auto
 overflow-block: visible
@@ -301,8 +303,10 @@ overflow-wrap: normal
 overflow-x: visible
 overflow-y: visible
 overlay: none
+overscroll-area: none
 overscroll-behavior-block: auto
 overscroll-behavior-inline: auto
+overscroll-position: none
 padding-block-end: 0px
 padding-block-start: 0px
 padding-bottom: 0px
@@ -320,7 +324,7 @@ position-anchor: auto
 position-area: none
 position-try-fallbacks: none
 position-try-order: normal
-position-visibility: always
+position-visibility: anchors-visible
 print-color-adjust: economy
 r: 0px
 reading-flow: normal
@@ -335,6 +339,7 @@ row-rule-outset: 50%
 row-rule-style: none
 row-rule-width: 3px
 ruby-align: space-around
+ruby-overhang: auto
 ruby-position: over
 rx: auto
 ry: auto
@@ -404,13 +409,12 @@ text-underline-position: auto
 text-wrap-mode: wrap
 text-wrap-style: auto
 timeline-scope: none
-timeline-trigger-behavior: once
 timeline-trigger-exit-range-end: auto
 timeline-trigger-exit-range-start: auto
 timeline-trigger-name: none
 timeline-trigger-range-end: normal
 timeline-trigger-range-start: normal
-timeline-trigger-timeline: auto
+timeline-trigger-source: auto
 top: auto
 touch-action: auto
 transform: none

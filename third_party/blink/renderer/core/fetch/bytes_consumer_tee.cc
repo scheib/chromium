@@ -127,11 +127,11 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
       buffer_.AppendSpan(data);
       // Report buffer size to V8 so GC can be triggered appropriately.
       external_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
-                                          static_cast<int64_t>(buffer_.size()));
+                                          buffer_.size());
     }
     ~Chunk() {
       external_memory_accounter_.Decrease(v8::Isolate::GetCurrent(),
-                                          static_cast<int64_t>(buffer_.size()));
+                                          buffer_.size());
     }
     const char* data() const { return buffer_.data(); }
     wtf_size_t size() const { return buffer_.size(); }
@@ -198,8 +198,8 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
       if (chunks_.empty() && tee_->GetPublicState() == PublicState::kClosed) {
         // All data has been consumed.
         execution_context_->GetTaskRunner(TaskType::kNetworking)
-            ->PostTask(FROM_HERE, WTF::BindOnce(&Destination::Close,
-                                                WrapPersistent(this)));
+            ->PostTask(FROM_HERE,
+                       BindOnce(&Destination::Close, WrapPersistent(this)));
       }
       return Result::kOk;
     }

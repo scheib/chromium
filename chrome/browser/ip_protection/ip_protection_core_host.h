@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 
+#include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/threading/sequence_bound.h"
@@ -54,6 +55,11 @@ class IpProtectionCoreHost
       public ip_protection::IpProtectionProxyConfigDirectFetcher::Delegate,
       public ip_protection::IpProtectionTokenDirectFetcher::Delegate {
  public:
+  // A map from proxy layer to a list of tokens.
+  using IpProtectionTokenCache =
+      base::flat_map<ip_protection::ProxyLayer,
+                     std::vector<ip_protection::BlindSignedAuthToken>>;
+
   IpProtectionCoreHost(
       signin::IdentityManager* identity_manager,
       privacy_sandbox::TrackingProtectionSettings* tracking_protection_settings,
@@ -72,6 +78,15 @@ class IpProtectionCoreHost
   void GetProxyConfig(GetProxyConfigCallback callback) override;
   void TryGetProbabilisticRevealTokens(
       TryGetProbabilisticRevealTokensCallback callback) override;
+  // Receives recycled tokens from the network service and caches them.
+  void RecycleTokens(
+      ip_protection::ProxyLayer proxy_layer,
+      std::vector<ip_protection::BlindSignedAuthToken> tokens) override;
+
+  // Called by `ProfileNetworkContextService` to get the tokens recycled from a
+  // previous Incognito session. This method moves the tokens out of the cache,
+  // clearing it.
+  IpProtectionTokenCache TakeRecycledTokens();
 
   static bool CanIpProtectionBeEnabled();
   bool IsIpProtectionEnabled();
@@ -234,6 +249,9 @@ class IpProtectionCoreHost
 
   // True if this class is being tested.
   bool for_testing_ = false;
+
+  // Unspent tokens from a previous session, for pre-warming the token cache.
+  IpProtectionTokenCache recycled_tokens_;
 
   // This must be the last member in this class.
   base::WeakPtrFactory<IpProtectionCoreHost> weak_ptr_factory_{this};

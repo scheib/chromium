@@ -6,6 +6,8 @@ package org.chromium.chrome.browser.tabmodel;
 
 import static org.chromium.build.NullUtil.assumeNonNull;
 
+import android.app.Activity;
+
 import com.google.common.collect.ImmutableList;
 
 import org.chromium.base.MathUtils;
@@ -31,7 +33,9 @@ import org.chromium.chrome.browser.tab.TabUtils;
 import org.chromium.chrome.browser.tab_ui.TabContentManager;
 import org.chromium.chrome.browser.tabmodel.NextTabPolicy.NextTabPolicySupplier;
 import org.chromium.chrome.browser.tabmodel.PendingTabClosureManager.PendingTabClosureDelegate;
+import org.chromium.chrome.browser.tabmodel.TabGroupModelFilter.MergeNotificationType;
 import org.chromium.chrome.browser.tasks.tab_management.MoveTabUtils;
+import org.chromium.components.tabs.TabStripCollection;
 import org.chromium.content_public.browser.WebContents;
 
 import java.util.ArrayList;
@@ -274,6 +278,16 @@ public class TabModelImpl extends TabModelJniBridge {
         return getTabCreator(isIncognitoBranded());
     }
 
+    @Override
+    public void moveTabToWindow(Tab tab, Activity activity, int newIndex) {
+        mModelDelegate.moveTabToWindow(tab, activity, newIndex);
+    }
+
+    @Override
+    public void moveTabGroupToWindow(Token tabGroupId, Activity activity, int newIndex) {
+        mModelDelegate.moveTabGroupToWindow(tabGroupId, activity, newIndex, isIncognito());
+    }
+
     /**
      * Initializes the newly created tab, adds it to controller, and dispatches creation step
      * notifications.
@@ -290,7 +304,8 @@ public class TabModelImpl extends TabModelJniBridge {
                     : "Attempting to add a tab with a duplicate id=" + tab.getId();
 
             for (TabModelObserver obs : mObservers) obs.willAddTab(tab, type);
-
+            // Clear the multi-selection set before adding the tab.
+            clearMultiSelection(/* notifyObservers= */ false);
             boolean selectTab =
                     mOrderController.willOpenInForeground(type, isIncognitoBranded())
                             || (mTabs.size() == 0
@@ -392,17 +407,44 @@ public class TabModelImpl extends TabModelJniBridge {
     }
 
     @Override
-    public void pinTab(int tabId) {
+    public void pinTab(
+            int tabId,
+            boolean showUngroupDialog,
+            @Nullable TabModelActionListener tabModelActionListener) {
+        Tab eligibleTabToPin = getEligibleTabToPin(tabId);
+        if (eligibleTabToPin == null) return;
+
+        TabPinnerActionListener listener =
+                new TabPinnerActionListener(() -> doPin(tabId), tabModelActionListener);
+        getTabUngrouper()
+                .ungroupTabs(
+                        Collections.singletonList(eligibleTabToPin),
+                        /* trailing= */ true,
+                        showUngroupDialog,
+                        listener);
+        listener.pinIfCollaborationDialogShown();
+    }
+
+    private @Nullable Tab getEligibleTabToPin(int tabId) {
+        Tab tab = getTabById(tabId);
+        if (tab == null) return null;
+
+        if (tab.getIsPinned()) return null;
+
+        return tab;
+    }
+
+    private void doPin(int tabId) {
+        Tab tab = getEligibleTabToPin(tabId);
+        if (tab == null) return;
+
         int availableIndex = findFirstNonPinnedTabIndex();
         if (availableIndex == mTabs.size()) return;
 
-        Tab tab = getTabById(tabId);
-        if (tab == null) return;
-
-        moveTab(tab.getId(), availableIndex);
-
         notifyWillChangeInPinState(tab);
         tab.setIsPinned(true);
+        recordPinTimestamp(tab);
+        moveTab(tab.getId(), availableIndex);
         notifyDidChangeInPinState(tab);
     }
 
@@ -413,12 +455,15 @@ public class TabModelImpl extends TabModelJniBridge {
         Tab tab = getTabById(tabId);
         if (tab == null) return;
 
+        if (!tab.getIsPinned()) return;
+
         // The index before the first non-pinned tab is the last pinned tab. Hence move the tab to
         // the last pinned tab.
         moveTab(tab.getId(), nextAvailableIndex - 1);
 
         notifyWillChangeInPinState(tab);
         tab.setIsPinned(false);
+        recordPinnedDuration(tab);
         notifyDidChangeInPinState(tab);
     }
 
@@ -521,7 +566,9 @@ public class TabModelImpl extends TabModelJniBridge {
         }
 
         allowUndo &= supportsPendingClosures();
-
+        if (isTabMultiSelected(tabToClose.getId())) {
+            setTabsMultiSelected(Collections.singleton(tabToClose.getId()), /* isSelected= */ false);
+        }
         startTabClosure(tabToClose, recommendedNextTab, uponExit, allowUndo, tabCloseType);
         List<Tab> tabsToClose = Collections.singletonList(tabToClose);
         if (notifyPending && allowUndo) {
@@ -705,6 +752,7 @@ public class TabModelImpl extends TabModelJniBridge {
                         tabClosureParams.allowUndo,
                         tabClosureParams.tabClosingSource,
                         tabClosureParams.undoRunnable);
+                mTabCountSupplier.set(mTabs.size());
                 return true;
             default:
                 assert false : "Not reached.";
@@ -723,17 +771,6 @@ public class TabModelImpl extends TabModelJniBridge {
     @Override
     public Iterator<Tab> iterator() {
         return ReadOnlyIterator.maybeCreate(mTabs.iterator());
-    }
-
-    // TODO(aurimas): Move this method to TabModelSelector when notifications move there.
-    private int getLastId(@TabSelectionType int type) {
-        if (type == TabSelectionType.FROM_CLOSE || type == TabSelectionType.FROM_EXIT) {
-            return Tab.INVALID_TAB_ID;
-        }
-
-        // Get the current tab in the current tab model.
-        Tab currentTab = TabModelUtils.getCurrentTab(mModelDelegate.getCurrentModel());
-        return currentTab != null ? currentTab.getId() : Tab.INVALID_TAB_ID;
     }
 
     private boolean hasValidTab() {
@@ -759,7 +796,10 @@ public class TabModelImpl extends TabModelJniBridge {
         if (mIsArchivedTabModel) return;
         try {
             TraceEvent.begin("TabModelImpl.setIndex");
-            int lastId = getLastId(type);
+            int lastId =
+                    mCurrentTabSupplier.get() != null
+                            ? mCurrentTabSupplier.get().getId()
+                            : Tab.INVALID_TAB_ID;
 
             // This can cause recursive entries into setIndex, which causes duplicate notifications
             // and UMA records.
@@ -881,7 +921,10 @@ public class TabModelImpl extends TabModelJniBridge {
         mTabs.remove(tab);
         tab.onRemovedFromTabModel(mCurrentTabSupplier);
         mTabIdToTabs.remove(tab.getId());
-        mTabCountSupplier.set(mTabs.size());
+        // Close all tabs should update the mTabCountSupplier after all tabs are closed.
+        if (tabCloseType != TabCloseType.ALL) {
+            mTabCountSupplier.set(mTabs.size());
+        }
 
         boolean nextIsIncognito = nextTab == null ? false : nextTab.isIncognito();
         int nextTabId = nextTab == null ? Tab.INVALID_TAB_ID : nextTab.getId();
@@ -910,9 +953,7 @@ public class TabModelImpl extends TabModelJniBridge {
 
         // Deferred until another tab is selected. Otherwise the compositor may try to re-navigate
         // the tab.
-        if (ChromeFeatureList.sTabFreezeOnUndoableClosureKillSwitch.isEnabled()
-                && pauseMedia
-                && TabUtils.isCapturingForMedia(tab)) {
+        if (pauseMedia && TabUtils.isCapturingForMedia(tab)) {
             // If media is being captured freeze the tab to disconnect it.
             tab.freeze();
         }
@@ -1010,7 +1051,7 @@ public class TabModelImpl extends TabModelJniBridge {
             // TODO(crbug.com/427929717): Ensure any pinned tabs get unpinned.
             ungroup(tabs);
             Tab destinationTab = tabs.get(0);
-            filter.mergeListOfTabsToGroup(tabs, destinationTab, false);
+            filter.mergeListOfTabsToGroup(tabs, destinationTab, MergeNotificationType.DONT_NOTIFY);
             return destinationTab.getTabGroupId();
         }
         List<Tab> tabsInGroup = filter.getTabsInGroup(tabGroupId);
@@ -1025,7 +1066,8 @@ public class TabModelImpl extends TabModelJniBridge {
         }
         // Ungroup the tabs first to ensure they are not in any groups.
         ungroup(tabsToGroup);
-        filter.mergeListOfTabsToGroup(tabsToGroup, tabsInGroup.get(0), false);
+        filter.mergeListOfTabsToGroup(
+                tabsToGroup, tabsInGroup.get(0), MergeNotificationType.DONT_NOTIFY);
         return tabsInGroup.get(0).getTabGroupId();
     }
 
@@ -1111,5 +1153,10 @@ public class TabModelImpl extends TabModelJniBridge {
         }
 
         return firstNonPinnedIndex;
+    }
+
+    @Override
+    public @Nullable TabStripCollection getTabStripCollection() {
+        return null;
     }
 }

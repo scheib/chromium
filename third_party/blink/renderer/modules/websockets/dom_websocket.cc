@@ -112,8 +112,8 @@ void DOMWebSocket::EventQueue::Unpause() {
   state_ = kUnpausePosted;
   target_->GetExecutionContext()
       ->GetTaskRunner(TaskType::kWebSocket)
-      ->PostTask(FROM_HERE, WTF::BindOnce(&EventQueue::UnpauseTask,
-                                          WrapWeakPersistent(this)));
+      ->PostTask(FROM_HERE,
+                 BindOnce(&EventQueue::UnpauseTask, WrapWeakPersistent(this)));
 }
 
 void DOMWebSocket::EventQueue::ContextDestroyed() {
@@ -288,9 +288,8 @@ void DOMWebSocket::PostBufferedAmountUpdateTask() {
   buffered_amount_update_task_pending_ = true;
   GetExecutionContext()
       ->GetTaskRunner(TaskType::kWebSocket)
-      ->PostTask(FROM_HERE,
-                 WTF::BindOnce(&DOMWebSocket::BufferedAmountUpdateTask,
-                               WrapWeakPersistent(this)));
+      ->PostTask(FROM_HERE, BindOnce(&DOMWebSocket::BufferedAmountUpdateTask,
+                                     WrapWeakPersistent(this)));
 }
 
 void DOMWebSocket::BufferedAmountUpdateTask() {
@@ -518,7 +517,7 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
 }
 
 void DOMWebSocket::DidReceiveBinaryMessage(
-    const Vector<base::span<const char>>& data) {
+    const Vector<base::span<const uint8_t>>& data) {
   size_t size = 0;
   for (const auto& span : data) {
     size += span.size();
@@ -536,7 +535,7 @@ void DOMWebSocket::DidReceiveBinaryMessage(
     case V8BinaryType::Enum::kBlob: {
       auto blob_data = std::make_unique<BlobData>();
       for (const auto& span : data) {
-        blob_data->AppendBytes(base::as_bytes(span));
+        blob_data->AppendBytes(span);
       }
       auto* blob = MakeGarbageCollected<Blob>(
           BlobDataHandle::Create(std::move(blob_data), size));

@@ -38,7 +38,9 @@
 #include "chrome/browser/web_applications/preinstalled_web_apps/google_meet.h"
 #include "chrome/browser/web_applications/preinstalled_web_apps/messages_dogfood.h"
 #include "chrome/browser/web_applications/preinstalled_web_apps/notebook_lm.h"
+#include "chrome/browser/web_applications/preinstalled_web_apps/vids.h"
 #include "chrome/common/extensions/extension_constants.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "extensions/common/constants.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
@@ -54,9 +56,7 @@ std::vector<ExternalInstallOptions>* g_preinstalled_app_data_for_testing =
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
 #if !BUILDFLAG(IS_CHROMEOS)
-BASE_FEATURE(kChatPreinstalledWebApp,
-             "ChatPreinstalledWebApp",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kChatPreinstalledWebApp, base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE_PARAM(bool,
                    kOnlyForNewUsers,
@@ -106,6 +106,12 @@ std::vector<ExternalInstallOptions> GetChromeBrandedApps(
       GetConfigForGoogleMeet(),
 #endif  // BUILDFLAG(IS_CHROMEOS)
   };
+
+#if BUILDFLAG(IS_CHROMEOS)
+  if (base::FeatureList::IsEnabled(chromeos::features::kVidsAppPreinstall)) {
+    apps.push_back(GetConfigForVids());
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if !BUILDFLAG(IS_CHROMEOS)
   if (base::FeatureList::IsEnabled(kChatPreinstalledWebApp)) {

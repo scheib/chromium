@@ -49,7 +49,8 @@ public class TabGroupPaneStation extends HubBaseStation {
                     declareView(toolbarElement.descendant(withId(R.id.toolbar_action_button)));
         }
 
-        if (OmniboxFeatures.sAndroidHubSearchTabGroups.isEnabled()) {
+        if (OmniboxFeatures.sAndroidHubSearchTabGroups.isEnabled()
+                && OmniboxFeatures.sAndroidHubSearchEnableOnTabGroupsPane.getValue()) {
             declareElementFactory(
                     mActivityElement,
                     delayedElements -> {
@@ -88,7 +89,7 @@ public class TabGroupPaneStation extends HubBaseStation {
 
     private boolean shouldHubSearchBoxBeVisible() {
         return HubUtils.isScreenWidthTablet(
-                mActivityElement.get().getResources().getConfiguration().screenWidthDp);
+                mActivityElement.value().getResources().getConfiguration().screenWidthDp);
     }
 
     // TODO(crbug.com/413652567): Implement actions.

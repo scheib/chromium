@@ -29,11 +29,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef UNSAFE_BUFFERS_BUILD
-// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
-#pragma allow_unsafe_buffers
-#endif
-
 #include <windows.h>  // For GetACP()
 
 #include <unicode/uscript.h>
@@ -240,7 +235,7 @@ const SimpleFontData* FontCache::GetFallbackFamilyNameFromHardcodedChoices(
   // warrant an additional (real coverage) check with fontCotainsCharacter.
   for (int i = 0; i < num_fonts; ++i) {
     FontFaceCreationParams create_by_family =
-        FontFaceCreationParams(AtomicString(pan_uni_fonts[i]));
+        FontFaceCreationParams(AtomicString(UNSAFE_TODO(pan_uni_fonts[i])));
     const FontPlatformData* data =
         GetFontPlatformData(font_description, create_by_family);
     if (data && data->FontContainsCharacter(codepoint))
@@ -367,6 +362,9 @@ static bool TypefacesHasWeightSuffix(const AtomicString& family,
   };
   // Mapping from suffix to weight from the DirectWrite documentation.
   // http://msdn.microsoft.com/en-us/library/windows/desktop/dd368082.aspx
+  //
+  // The list is intentionally incomplete, because it is for the backward
+  // compatibility with GDI. See issues for crrev.com/c/542603004.
   const static FamilyWeightSuffix kVariantForSuffix[] = {
       {u" thin", 5, FontSelectionValue(100)},
       {u" extralight", 11, FontSelectionValue(200)},
@@ -382,7 +380,7 @@ static bool TypefacesHasWeightSuffix(const AtomicString& family,
       {u" heavy", 6, FontSelectionValue(900)}};
   size_t num_variants = std::size(kVariantForSuffix);
   for (size_t i = 0; i < num_variants; i++) {
-    const FamilyWeightSuffix& entry = kVariantForSuffix[i];
+    const FamilyWeightSuffix& entry = UNSAFE_TODO(kVariantForSuffix[i]);
     if (family.DeprecatedEndsWithIgnoringCase(entry.suffix)) {
       String family_name = family.GetString();
       family_name.Truncate(family.length() - entry.length);
@@ -419,7 +417,7 @@ static bool TypefacesHasStretchSuffix(const AtomicString& family,
       {u" ultraexpanded", 14, kUltraExpandedWidthValue}};
   size_t num_variants = std::size(kVariantForSuffix);
   for (size_t i = 0; i < num_variants; i++) {
-    const FamilyStretchSuffix& entry = kVariantForSuffix[i];
+    const FamilyStretchSuffix& entry = UNSAFE_TODO(kVariantForSuffix[i]);
     if (family.DeprecatedEndsWithIgnoringCase(entry.suffix)) {
       String family_name = family.GetString();
       family_name.Truncate(family.length() - entry.length);

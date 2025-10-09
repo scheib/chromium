@@ -8,14 +8,10 @@
 import type {Bookmark, DocumentDimensions, LayoutOptions, PdfViewerElement, ViewerToolbarElement} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
 import {resetForTesting as resetMetricsForTesting, UserAction, Viewport} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
 // <if expr="enable_pdf_ink2">
-import type {AnnotationBrush, BeforeUnloadProxy, InkBrushSelectorElement, InkColorSelectorElement, InkSizeSelectorElement, SelectableIconButtonElement, ViewerBottomToolbarDropdownElement} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
-import {AnnotationBrushType, BeforeUnloadProxyImpl, DEFAULT_TEXTBOX_WIDTH, MIN_TEXTBOX_SIZE_PX, hexToColor, Ink2Manager, TEXT_COLORS, TextAlignment, TextStyle, PluginController, PluginControllerEventType} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
+import type {AnnotationBrush, InkBrushSelectorElement, InkColorSelectorElement, InkSizeSelectorElement, SelectableIconButtonElement, ViewerBottomToolbarDropdownElement} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
+import {AnnotationBrushType, DEFAULT_TEXTBOX_WIDTH, MIN_TEXTBOX_SIZE_PX, hexToColor, Ink2Manager, TEXT_COLORS, TextAlignment, TextStyle, PluginController, PluginControllerEventType} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
 // </if>
-import {assert} from 'chrome://resources/js/assert.js';
 import {CrLitElement, html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
-// <if expr="enable_pdf_ink2">
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-// </if>
 import {eventToPromise, isVisible, microtasksFinished} from 'chrome://webui-test/test_util.js';
 // clang-format on
 
@@ -195,14 +191,14 @@ export class MockPdfPluginElement extends HTMLEmbedElement {
   }
 
   postMessage(message: any, _transfer: Transferable[]) {
-    assert(message.type);
+    chrome.test.assertTrue(!!message.type);
     // <if expr="enable_pdf_ink2">
     if (message.type === 'save' && this.replyToSave_) {
       this.replyToSaveMessage_(message);
     } else if (this.messageReplies_.has(message.type)) {
       const reply = this.messageReplies_.get(message.type);
-      assert(reply);
-      assert(message.messageId);
+      chrome.test.assertTrue(!!reply);
+      chrome.test.assertTrue(!!message.messageId);
       this.dispatchEvent(new MessageEvent('message', {
         data: {
           messageId: message.messageId,
@@ -236,7 +232,7 @@ export class MockPdfPluginElement extends HTMLEmbedElement {
   }
 
   private replyToSaveMessage_(message: any) {
-    assert(message.token);
+    chrome.test.assertTrue(!!message.token);
     if (message.saveRequestType === SaveRequestType.ORIGINAL) {
       this.dispatchEvent(new MessageEvent('message', {
         data: {
@@ -247,9 +243,7 @@ export class MockPdfPluginElement extends HTMLEmbedElement {
       }));
       return;
     }
-    assert(
-        message.saveRequestType === SaveRequestType.ANNOTATION,
-        'Unexpected save request type');
+    chrome.test.assertEq(SaveRequestType.ANNOTATION, message.saveRequestType);
     const testData = '%PDF1.0 Hello World';
     const buffer = new ArrayBuffer(testData.length);
     // Encode the same way chrome/browser/resources/pdf/controller.ts decodes.
@@ -433,7 +427,7 @@ export function getRequiredElement<E extends HTMLElement = HTMLElement>(
     parent: HTMLElement, query: string): E;
 export function getRequiredElement(parent: HTMLElement, query: string) {
   const element = parent.shadowRoot!.querySelector(query);
-  assert(element);
+  chrome.test.assertTrue(!!element);
   return element;
 }
 
@@ -449,7 +443,7 @@ export async function openToolbarMenu(toolbar: ViewerToolbarElement) {
 
   getRequiredElement(toolbar, '#more').click();
   await microtasksFinished();
-  assert(menu.open);
+  chrome.test.assertTrue(menu.open);
 }
 
 /**
@@ -468,14 +462,14 @@ export function assertCheckboxMenuButton(
 
 export async function ensureFullscreen(): Promise<void> {
   const viewer = document.body.querySelector('pdf-viewer');
-  assert(viewer);
+  chrome.test.assertTrue(!!viewer);
 
   if (document.fullscreenElement !== null) {
     return;
   }
 
   const toolbar = viewer.shadowRoot.querySelector('viewer-toolbar');
-  assert(toolbar);
+  chrome.test.assertTrue(!!toolbar);
   toolbar.dispatchEvent(new CustomEvent('present-click'));
   await eventToPromise('fullscreenchange', viewer.$.scroller);
 }
@@ -496,7 +490,7 @@ export function enterFullscreenWithUserGesture(): Promise<void> {
  */
 export function getCurrentPage(): number {
   const viewer = document.body.querySelector('pdf-viewer');
-  assert(viewer);
+  chrome.test.assertTrue(!!viewer);
   return viewer.viewport.getMostVisiblePage();
 }
 
@@ -535,23 +529,6 @@ export function finishInkStroke(
       PluginControllerEventType.PLUGIN_MESSAGE, {detail: message}));
 }
 
-export class TestBeforeUnloadProxy extends TestBrowserProxy implements
-    BeforeUnloadProxy {
-  constructor() {
-    super(['preventDefault']);
-  }
-
-  preventDefault() {
-    this.methodCalled('preventDefault');
-  }
-}
-
-export function getNewTestBeforeUnloadProxy(): TestBeforeUnloadProxy {
-  const testProxy = new TestBeforeUnloadProxy();
-  BeforeUnloadProxyImpl.setInstance(testProxy);
-  return testProxy;
-}
-
 export function setupTestMockPluginForInk(): MockPdfPluginElement {
   const controller = PluginController.getInstance();
   const mockPlugin = createMockPdfPluginForTest();
@@ -565,6 +542,10 @@ export function setupTestMockPluginForInk(): MockPdfPluginElement {
   });
   mockPlugin.setMessageReply('getAllTextAnnotations', {
     annotations: [],
+  });
+  mockPlugin.setMessageReply('getSuggestedFileName', {
+    fileName: 'test.pdf',
+    bypassSaveFileForTesting: true,
   });
   return mockPlugin;
 }
@@ -687,8 +668,7 @@ export function getSizeButtons(selector: InkSizeSelectorElement):
     NodeListOf<SelectableIconButtonElement> {
   const sizeButtons =
       selector.shadowRoot.querySelectorAll('selectable-icon-button');
-  assert(sizeButtons);
-  assert(sizeButtons.length === 5);
+  chrome.test.assertEq(5, sizeButtons.length);
   return sizeButtons;
 }
 
@@ -714,7 +694,7 @@ export function assertSelectedSize(
 export function getColorButtons(selector: InkColorSelectorElement):
     NodeListOf<HTMLElement> {
   const colorButtons = selector.shadowRoot.querySelectorAll('input');
-  assert(colorButtons);
+  chrome.test.assertTrue(colorButtons.length > 0);
   return colorButtons;
 }
 

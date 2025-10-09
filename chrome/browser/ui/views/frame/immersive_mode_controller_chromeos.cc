@@ -29,7 +29,7 @@
 #include "ui/views/view.h"
 #include "ui/views/widget/native_widget_aura.h"
 #include "ui/views/widget/widget.h"
-#include "ui/views/window/non_client_view.h"
+#include "ui/views/window/frame_view.h"
 
 namespace {
 
@@ -68,7 +68,7 @@ ImmersiveModeControllerChromeos::~ImmersiveModeControllerChromeos() = default;
 
 void ImmersiveModeControllerChromeos::Init(BrowserView* browser_view) {
   browser_view_ = browser_view;
-  controller_.Init(this, browser_view_->frame(),
+  controller_.Init(this, browser_view_->browser_widget(),
                    browser_view_->top_container());
 
   window_observation_.Observe(browser_view_->GetNativeWindow());
@@ -87,7 +87,7 @@ void ImmersiveModeControllerChromeos::SetEnabled(bool enabled) {
   }
 
   chromeos::ImmersiveFullscreenController::EnableForWidget(
-      browser_view_->frame(), enabled);
+      browser_view_->browser_widget(), enabled);
 }
 
 bool ImmersiveModeControllerChromeos::IsEnabled() const {
@@ -127,7 +127,7 @@ void ImmersiveModeControllerChromeos::OnFindBarVisibleBoundsChanged(
 bool ImmersiveModeControllerChromeos::
     ShouldStayImmersiveAfterExitingFullscreen() {
   return !browser_view_->GetSupportsTabStrip() &&
-         display::Screen::GetScreen()->InTabletMode();
+         display::Screen::Get()->InTabletMode();
 }
 
 int ImmersiveModeControllerChromeos::GetMinimumContentOffset() const {
@@ -142,7 +142,7 @@ void ImmersiveModeControllerChromeos::OnContentFullscreenChanged(
     bool is_content_fullscreen) {}
 
 void ImmersiveModeControllerChromeos::LayoutBrowserRootView() {
-  views::Widget* widget = browser_view_->frame();
+  views::Widget* widget = browser_view_->browser_widget();
   // Update the window caption buttons.
   widget->non_client_view()->frame_view()->ResetWindowControls();
   widget->non_client_view()->frame_view()->InvalidateLayout();
@@ -215,6 +215,9 @@ void ImmersiveModeControllerChromeos::SetVisibleFraction(
   visible_fraction_ = visible_fraction;
   browser_view_->top_container()->OnImmersiveRevealUpdated();
   browser_view_->DeprecatedLayoutImmediately();
+  // Invalidate the contents container bounds to ensure the capture contents
+  // border is being drawn below the top container.
+  browser_view_->contents_container()->InvalidateLayout();
 }
 
 std::vector<gfx::Rect>
@@ -259,7 +262,8 @@ void ImmersiveModeControllerChromeos::OnWindowPropertyChanged(
   if (key == chromeos::kWindowStateTypeKey) {
     auto old_type = static_cast<chromeos::WindowStateType>(old);
     // Check if there is a transition into or out of a pinned state.
-    if (IsWindowPinned(window) || chromeos::IsPinnedWindowStateType(old_type)) {
+    if (ash::IsWindowPinned(window) ||
+        chromeos::IsPinnedWindowStateType(old_type)) {
       browser_view_->FullscreenStateChanging();
       return;
     }

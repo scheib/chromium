@@ -65,7 +65,6 @@ const int kBaseTableLen = 64 * 1024;
 const int kTrimDelay = 10;
 
 BASE_FEATURE(kBlockfileCacheBackendDumpWithoutCrashing,
-             "BlockfileCacheBackendDumpWithoutCrashing",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE_PARAM(double,

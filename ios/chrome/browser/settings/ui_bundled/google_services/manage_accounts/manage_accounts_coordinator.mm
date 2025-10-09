@@ -16,12 +16,12 @@
 #import "ios/chrome/browser/authentication/ui_bundled/signout_action_sheet/signout_action_sheet_coordinator.h"
 #import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_feature.h"
 #import "ios/chrome/browser/scoped_ui_blocker/ui_bundled/scoped_ui_blocker.h"
-#import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/legacy_accounts_table_view_controller.h"
 #import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/manage_accounts_coordinator_delegate.h"
 #import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/manage_accounts_mediator.h"
 #import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/manage_accounts_mediator_delegate.h"
 #import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/manage_accounts_table_view_controller.h"
 #import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/manage_accounts_table_view_controller_constants.h"
+#import "ios/chrome/browser/settings/ui_bundled/settings_navigation_controller.h"
 #import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
 #import "ios/chrome/browser/shared/coordinator/alert/alert_coordinator.h"
 #import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
@@ -57,8 +57,7 @@ using signin_metrics::PromoAction;
   ManageAccountsMediator* _mediator;
 
   // The view controller.
-  SettingsRootTableViewController<WithOverridableModelIdentityDataSource>*
-      _viewController;
+  ManageAccountsTableViewController* _viewController;
 
   BOOL _closeSettingsOnAddAccount;
 
@@ -89,7 +88,7 @@ using signin_metrics::PromoAction;
                        closeSettingsOnAddAccount:(BOOL)closeSettingsOnAddAccount
                                   showDoneButton:(BOOL)showDoneButton {
   CHECK(browser, base::NotFatalUntil::M144);
-  DCHECK(!browser->GetProfile()->IsOffTheRecord());
+  DCHECK_EQ(browser->type(), Browser::Type::kRegular);
   CHECK(navigationController, base::NotFatalUntil::M144);
   if ((self = [self initWithBaseViewController:navigationController
                                        browser:browser])) {
@@ -111,30 +110,15 @@ using signin_metrics::PromoAction;
                     identityManager:IdentityManagerFactory::GetForProfile(
                                         profile)];
 
-  if (IsIdentityDiscAccountMenuEnabled()) {
-    ManageAccountsTableViewController* viewController =
-        [[ManageAccountsTableViewController alloc]
-            initWithOfferSignout:self.showSignoutButton];
-    _viewController = viewController;
-    _mediator.consumer = viewController;
-    _mediator.delegate = self;
-    _viewController.modelIdentityDataSource = _mediator;
-    viewController.mutator = _mediator;
-  } else {
-    LegacyAccountsTableViewController* viewController =
-        [[LegacyAccountsTableViewController alloc]
-                                initWithBrowser:self.browser
-                      closeSettingsOnAddAccount:_closeSettingsOnAddAccount
-                     applicationCommandsHandler:
-                         HandlerForProtocol(
-                             self.browser->GetCommandDispatcher(),
-                             ApplicationCommands)
-            signoutDismissalByParentCoordinator:
-                self.signoutDismissalByParentCoordinator];
-    _viewController = viewController;
-    _mediator.consumer = viewController;
-    _viewController.modelIdentityDataSource = _mediator;
-  }
+  ManageAccountsTableViewController* viewController =
+      [[ManageAccountsTableViewController alloc]
+          initWithOfferSignout:self.showSignoutButton];
+  _viewController = viewController;
+  _mediator.consumer = viewController;
+  _mediator.delegate = self;
+  _viewController.modelIdentityDataSource = _mediator;
+  viewController.mutator = _mediator;
+
   if (_showDoneButton) {
     UIBarButtonItem* doneButton = [[UIBarButtonItem alloc]
         initWithBarButtonSystemItem:UIBarButtonSystemItemDone
@@ -151,17 +135,8 @@ using signin_metrics::PromoAction;
 - (void)stop {
   [super stop];
   [self stopAddAccountCoordinator];
-  ManageAccountsTableViewController* accountsTableViewController =
-      base::apple::ObjCCast<ManageAccountsTableViewController>(_viewController);
   _viewController.modelIdentityDataSource = nil;
-  if (accountsTableViewController) {
-    accountsTableViewController.mutator = nil;
-  } else {
-    LegacyAccountsTableViewController* legacyAccountsTableViewController =
-        base::apple::ObjCCastStrict<LegacyAccountsTableViewController>(
-            _viewController);
-    [legacyAccountsTableViewController settingsWillBeDismissed];
-  }
+  _viewController.mutator = nil;
   [_signoutCoordinator stop];
   _signoutCoordinator = nil;
   [self.baseNavigationController popViewControllerAnimated:NO];
@@ -169,6 +144,7 @@ using signin_metrics::PromoAction;
   _mediator.consumer = nil;
   [_mediator disconnect];
   _mediator = nil;
+  [self stopConfirmRemoveIdentityAlertCoordinator];
   _UIBlocker.reset();
 }
 
@@ -247,6 +223,7 @@ using signin_metrics::PromoAction;
                                           browser:self.browser
                                      contextStyle:SigninContextStyle::kDefault
                                       accessPoint:AccessPoint::kSettings
+                                   prefilledEmail:nil
                              continuationProvider:
                                  DoNothingContinuationProvider()];
   _addAccountSigninCoordinator.signinCompletion =
@@ -297,7 +274,7 @@ using signin_metrics::PromoAction;
 // current scene is blocked or the identity is not present on the device
 // anymore.
 - (void)removeAccountDialogConfirmedWithIdentity:(id<SystemIdentity>)identity {
-  [self dismissConfirmRemoveIdentityAlertCoordinator];
+  [self stopConfirmRemoveIdentityAlertCoordinator];
 
   NSArray<id<SystemIdentity>>* identitiesOnDevice =
       signin::GetIdentitiesOnDevice(self.profile);
@@ -356,7 +333,7 @@ using signin_metrics::PromoAction;
   _errorAlertCoordinator = nil;
 }
 
-- (void)dismissConfirmRemoveIdentityAlertCoordinator {
+- (void)stopConfirmRemoveIdentityAlertCoordinator {
   [_confirmRemoveIdentityAlertCoordinator stop];
   _confirmRemoveIdentityAlertCoordinator = nil;
 }

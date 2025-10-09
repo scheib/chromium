@@ -143,12 +143,12 @@ std::optional<SkBitmap> IconManagerReadIconForSize(
   base::RunLoop run_loop;
   icon_manager.ReadTrustedIconsWithFallbackToManifestIcons(
       app_id, {size_px}, IconPurpose::ANY,
-      base::BindLambdaForTesting(
-          [&](std::map<SquareSizePx, SkBitmap> icon_bitmaps) {
-            CHECK(base::Contains(icon_bitmaps, size_px));
-            result = icon_bitmaps.at(size_px);
-            run_loop.Quit();
-          }));
+      base::BindLambdaForTesting([&](IconMetadataFromDisk icon_metadata) {
+        SizeToBitmap icon_bitmaps = std::move(icon_metadata.icons_map);
+        CHECK(base::Contains(icon_bitmaps, size_px));
+        result = icon_bitmaps[size_px];
+        run_loop.Quit();
+      }));
   run_loop.Run();
   return result;
 }
@@ -322,7 +322,7 @@ bool OsIntegrationTestOverrideImpl::SimulateDeleteShortcutsByUser(
   CHECK(base::PathExists(desktop_shortcut_path));
   return base::DeleteFile(desktop_shortcut_path);
 #else
-  NOTREACHED() << "Not implemented on ChromeOS/Fuchsia ";
+  NOTREACHED() << "Not implemented on ChromeOS";
 #endif
 }
 
@@ -390,7 +390,7 @@ bool OsIntegrationTestOverrideImpl::IsRunOnOsLoginEnabled(
       chrome_apps_folder().Append(shortcut_filename);
   return startup_enabled_[app_shortcut_path];
 #else
-  NOTREACHED() << "Not implemented on ChromeOS/Fuchsia ";
+  NOTREACHED() << "Not implemented on ChromeOS";
 #endif
 }
 
@@ -489,7 +489,7 @@ std::optional<SkBitmap> OsIntegrationTestOverrideImpl::GetShortcutIcon(
   return IconManagerReadIconForSize(provider->icon_manager(), app_id,
                                     suggested_size_px);
 #else
-  NOTREACHED() << "Not implemented on Fuchsia";
+  NOTREACHED() << "Not implemented";
 #endif
 }
 
@@ -577,7 +577,7 @@ bool OsIntegrationTestOverrideImpl::IsShortcutCreated(
       GetShortcutPath(profile, desktop(), app_id, app_name);
   return base::PathExists(desktop_shortcut_path);
 #else
-  NOTREACHED() << "Not implemented on ChromeOS/Fuchsia ";
+  NOTREACHED() << "Not implemented on ChromeOS";
 #endif
 }
 

@@ -24,9 +24,7 @@ namespace blink {
 
 namespace {
 
-BASE_FEATURE(kMemoryPurgeInBackground,
-             "MemoryPurgeInBackground",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kMemoryPurgeInBackground, base::FEATURE_ENABLED_BY_DEFAULT);
 
 // The delay for the first purge after a renderer is backgrounded. The value was
 // initially set to 30 minutes, but it was reduced to 1 minute because this
@@ -126,7 +124,19 @@ void MemoryPurgeManager::SetRendererBackgrounded(bool backgrounded) {
 }
 
 void MemoryPurgeManager::OnRendererBackgrounded() {
-  if (!kPurgeOnBackgroundingEnabled || purge_disabled_for_testing_) {
+  if (purge_disabled_for_testing_) {
+    return;
+  }
+
+  if (!kPurgeOnBackgroundingEnabled) {
+#if BUILDFLAG(IS_ANDROID)
+    // If we do not freeze renderers, we want to trigger compaction directly
+    // when we are backgrounded here.
+    if (!base::FeatureList::IsEnabled(features::kStopInBackground)) {
+      base::android::SelfCompactionManager::RequestRunningCompactWithDelay(
+          GetTimeToPurgeAfterBackgrounded());
+    }
+#endif
     return;
   }
 
@@ -178,7 +188,7 @@ void MemoryPurgeManager::PerformMemoryPurge() {
   if (!purge_inhibited_because_purge_on_freeze_disabled &&
       !purge_inhibited_because_already_purged_with_frozen_page) {
     base::MemoryPressureListener::NotifyMemoryPressure(
-        base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
+        base::MEMORY_PRESSURE_LEVEL_CRITICAL);
   }
 
   if (AreAllPagesFrozen()) {

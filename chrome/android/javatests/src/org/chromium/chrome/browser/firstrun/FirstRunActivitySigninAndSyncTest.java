@@ -43,14 +43,13 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.ApplicationTestUtils;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.DoNotBatch;
-import org.chromium.base.test.util.Features;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.Matchers;
 import org.chromium.base.test.util.Restriction;
@@ -67,7 +66,6 @@ import org.chromium.chrome.test.util.browser.signin.SigninTestUtil;
 import org.chromium.chrome.test.util.browser.sync.SyncTestUtil;
 import org.chromium.components.externalauth.ExternalAuthUtils;
 import org.chromium.components.policy.test.annotations.Policies;
-import org.chromium.components.signin.SigninFeatures;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.metrics.SyncButtonClicked;
@@ -138,6 +136,7 @@ public class FirstRunActivitySigninAndSyncTest {
     @Test
     @MediumTest
     @Restriction({DeviceRestriction.RESTRICTION_TYPE_NON_AUTO})
+    @DisabledTest(message = "Flaky, see crbug.com/440276794")
     public void dismissButtonClickSkipsSyncConsentPageWhenOneAccountIsOnDevice() {
         HistogramWatcher signinStartedWatcher =
                 HistogramWatcher.newBuilder()
@@ -172,7 +171,6 @@ public class FirstRunActivitySigninAndSyncTest {
     @Test
     @MediumTest
     @Restriction({DeviceRestriction.RESTRICTION_TYPE_NON_AUTO})
-    @Features.EnableFeatures(SigninFeatures.USE_HOSTED_DOMAIN_FOR_MANAGEMENT_CHECK_ON_SIGNIN)
     public void managedAccountContinueButtonClickShowsManagementNotice() {
         mAccountManagerTestRule.addAccount(TestAccounts.MANAGED_ACCOUNT);
         launchFirstRunActivityAndWaitForNativeInitialization();
@@ -496,6 +494,6 @@ public class FirstRunActivitySigninAndSyncTest {
     }
 
     private boolean isAutomotive() {
-        return BuildInfo.getInstance().isAutomotive;
+        return DeviceInfo.isAutomotive();
     }
 }

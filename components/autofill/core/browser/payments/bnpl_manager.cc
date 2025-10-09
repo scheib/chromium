@@ -23,16 +23,18 @@
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/data_model/payments/credit_card.h"
 #include "components/autofill/core/browser/foundations/autofill_manager.h"
-#include "components/autofill/core/browser/integrators/optimization_guide/autofill_optimization_guide.h"
+#include "components/autofill/core/browser/integrators/optimization_guide/autofill_optimization_guide_decider.h"
 #include "components/autofill/core/browser/metrics/form_events/credit_card_form_event_logger.h"
 #include "components/autofill/core/browser/metrics/payments/bnpl_metrics.h"
 #include "components/autofill/core/browser/payments/bnpl_strategy.h"
+#include "components/autofill/core/browser/payments/bnpl_util.h"
 #include "components/autofill/core/browser/payments/constants.h"
 #include "components/autofill/core/browser/payments/payments_network_interface.h"
 #include "components/autofill/core/browser/payments/payments_request_details.h"
 #include "components/autofill/core/browser/payments/payments_util.h"
 #include "components/autofill/core/browser/suggestions/payments/payments_suggestion_generator.h"
 #include "components/autofill/core/browser/ui/payments/bnpl_tos_controller.h"
+#include "components/autofill/core/browser/ui/payments/bnpl_ui_delegate.h"
 #include "components/autofill/core/browser/ui/payments/select_bnpl_issuer_dialog_controller_impl.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 
@@ -46,13 +48,19 @@ namespace autofill::payments {
 
 namespace {
 
-// Returns true if the `extracted_amount_in_micros` is supported by
-// `bnpl_issuer`.
-bool ShouldShowBnplOptionForIssuer(const BnplIssuer& bnpl_issuer,
-                                   uint64_t extracted_amount_in_micros) {
-  // For MVP, BNPL will only target US users and support USD.
-  return bnpl_issuer.IsEligibleAmount(extracted_amount_in_micros,
-                                      /*currency=*/"USD");
+// Returns true if the `extracted_amount_in_micros` is supported by any of the
+// `bnpl_issuers`.
+bool IsExtractedAmountSupportedByAnyBnplIssuer(
+    const std::vector<BnplIssuer>& bnpl_issuers,
+    uint64_t extracted_amount_in_micros) {
+  return std::any_of(
+      bnpl_issuers.begin(), bnpl_issuers.end(),
+      [extracted_amount_in_micros](const BnplIssuer& bnpl_issuer) {
+        // For MVP, BNPL will only target US users and support
+        // USD.
+        return bnpl_issuer.IsEligibleAmount(extracted_amount_in_micros,
+                                            /*currency=*/"USD");
+      });
 }
 
 bool ShouldShowPermanentErrorDialog(
@@ -87,12 +95,38 @@ bool BnplManager::IsBnplIssuerSupported(std::string_view issuer_id) {
   return supported_issuers.contains(issuer_id);
 }
 
+// static
+bool BnplManager::IsEligibleForBnpl(const AutofillClient& client) {
+  // BNPL is not supported in off-the-record (incognito) mode.
+  if (client.IsOffTheRecord()) {
+    return false;
+  }
+
+  AutofillOptimizationGuideDecider* autofill_optimization_guide_decider =
+      client.GetAutofillOptimizationGuideDecider();
+  if (!autofill_optimization_guide_decider) {
+    return false;
+  }
+
+  const GURL& url = client.GetLastCommittedPrimaryMainFrameURL();
+
+  return std::ranges::any_of(
+      client.GetPaymentsAutofillClient()
+          ->GetPaymentsDataManager()
+          .GetBnplIssuers(),
+      [&autofill_optimization_guide_decider,
+       &url](const BnplIssuer& bnpl_issuer) {
+        return autofill_optimization_guide_decider->IsUrlEligibleForBnplIssuer(
+            bnpl_issuer.issuer_id(), url);
+      });
+}
+
 void BnplManager::OnDidAcceptBnplSuggestion(
-    uint64_t final_checkout_amount,
+    std::optional<uint64_t> final_checkout_amount,
     OnBnplVcnFetchedCallback on_bnpl_vcn_fetched_callback) {
   ongoing_flow_state_ = std::make_unique<OngoingFlowState>();
 
-  ongoing_flow_state_->final_checkout_amount = final_checkout_amount;
+  ongoing_flow_state_->final_checkout_amount = std::move(final_checkout_amount);
   ongoing_flow_state_->app_locale =
       browser_autofill_manager_->client().GetAppLocale();
   ongoing_flow_state_->billing_customer_number =
@@ -110,12 +144,13 @@ void BnplManager::OnDidAcceptBnplSuggestion(
   switch (payments_autofill_client()
               .GetBnplStrategy()
               ->GetNextActionOnBnplSuggestionAcceptance()) {
-    case kShowSelectBnplIssuerDialog:
-      payments_autofill_client().ShowSelectBnplIssuerDialog(
-          GetSortedBnplIssuerContext(), ongoing_flow_state_->app_locale,
-          base::BindOnce(&BnplManager::OnIssuerSelected,
-                         weak_factory_.GetWeakPtr()),
-          base::BindOnce(&BnplManager::Reset, weak_factory_.GetWeakPtr()));
+    case kShowSelectBnplIssuerUi:
+      CHECK_DEREF(payments_autofill_client().GetBnplUiDelegate())
+          .ShowSelectBnplIssuerUi(
+              GetSortedBnplIssuerContext(), ongoing_flow_state_->app_locale,
+              base::BindOnce(&BnplManager::OnIssuerSelected,
+                             weak_factory_.GetWeakPtr()),
+              base::BindOnce(&BnplManager::Reset, weak_factory_.GetWeakPtr()));
       break;
     case kCheckAmountExtractionBeforeContinuingFlow:
       // TODO(crbug.com/430575808): Implement Android flow logic to show
@@ -139,7 +174,7 @@ void BnplManager::NotifyOfSuggestionGeneration(
 
   update_suggestions_barrier_callback_ = base::BarrierCallback<
       std::variant<SuggestionsShownResponse, std::optional<uint64_t>>>(
-      2U, base::BindOnce(&BnplManager::MaybeUpdateSuggestionsWithBnpl,
+      2U, base::BindOnce(&BnplManager::MaybeUpdateDesktopSuggestionsWithBnpl,
                          weak_factory_.GetWeakPtr(), trigger_source));
 }
 
@@ -174,27 +209,44 @@ void BnplManager::OnSuggestionsShown(
 void BnplManager::OnAmountExtractionReturned(
     const std::optional<uint64_t>& extracted_amount,
     bool timeout_reached) {
-  if (!update_suggestions_barrier_callback_.has_value()) {
-    return;
-  }
-
-  if (update_suggestions_barrier_callback_.has_value()) {
-    update_suggestions_barrier_callback_->Run(extracted_amount);
-  }
-
-  if (timeout_reached && !has_logged_bnpl_suggestion_not_shown_reason_) {
-    LogBnplSuggestionNotShownReason(
-        autofill_metrics::BnplSuggestionNotShownReason::
-            kAmountExtractionTimeout);
-    has_logged_bnpl_suggestion_not_shown_reason_ = true;
-    return;
-  }
-
-  if (!extracted_amount && !has_logged_bnpl_suggestion_not_shown_reason_) {
-    LogBnplSuggestionNotShownReason(
-        autofill_metrics::BnplSuggestionNotShownReason::
-            kAmountExtractionFailure);
-    has_logged_bnpl_suggestion_not_shown_reason_ = true;
+  CHECK(payments_autofill_client().GetBnplStrategy());
+  using enum BnplStrategy::BnplAmountExtractionReturnedNextAction;
+  switch (payments_autofill_client()
+              .GetBnplStrategy()
+              ->GetNextActionOnAmountExtractionReturned()) {
+    case kNotifyUpdateCallbackOfAmountExtractionReturnedResponse:
+      if (!update_suggestions_barrier_callback_.has_value()) {
+        return;
+      }
+      update_suggestions_barrier_callback_->Run(extracted_amount);
+      if (!has_logged_bnpl_suggestion_not_shown_reason_) {
+        if (timeout_reached) {
+          LogBnplSuggestionNotShownReason(
+              autofill_metrics::BnplSuggestionNotShownReason::
+                  kAmountExtractionTimeout);
+          has_logged_bnpl_suggestion_not_shown_reason_ = true;
+        } else if (!extracted_amount) {
+          LogBnplSuggestionNotShownReason(
+              autofill_metrics::BnplSuggestionNotShownReason::
+                  kAmountExtractionFailure);
+          has_logged_bnpl_suggestion_not_shown_reason_ = true;
+        }
+      }
+      break;
+    case kNotifyUiOfAmountExtractionReturnedResponse:
+      if (timeout_reached || !extracted_amount.has_value()) {
+        payments_autofill_client().UpdateTouchToFillBnplPaymentMethod(
+            /*extracted_amount=*/std::nullopt,
+            /*is_amount_supported_by_any_issuer=*/false);
+      } else {
+        payments_autofill_client().UpdateTouchToFillBnplPaymentMethod(
+            extracted_amount.value(), IsExtractedAmountSupportedByAnyBnplIssuer(
+                                          payments_autofill_client()
+                                              .GetPaymentsDataManager()
+                                              .GetBnplIssuers(),
+                                          extracted_amount.value()));
+      }
+      break;
   }
 }
 
@@ -209,18 +261,18 @@ void BnplManager::FetchVcnDetails(GURL url) {
   request_details.issuer_id = autofill::ConvertToBnplIssuerIdString(
       ongoing_flow_state_->issuer.issuer_id());
 
-  payments_autofill_client().ShowAutofillProgressDialog(
-      AutofillProgressDialogType::kBnplFetchVcnProgressDialog,
-      /*cancel_callback=*/base::BindOnce(
-          [](base::WeakPtr<BnplManager> manager) {
-            if (manager) {
-              // Note: Does not call
-              // `PaymentsAutofillClient::CloseAutofillProgressDialog()` as this
-              // is expected to be handled by dialog UI code.
-              manager->Reset();
-            }
-          },
-          weak_factory_.GetWeakPtr()));
+  CHECK_DEREF(payments_autofill_client().GetBnplUiDelegate())
+      .ShowProgressUi(AutofillProgressDialogType::kBnplFetchVcnProgressDialog,
+                      /*cancel_callback=*/base::BindOnce(
+                          [](base::WeakPtr<BnplManager> manager) {
+                            if (manager) {
+                              // Note: Does not call
+                              // `BnplUiDelegate::CloseProgressUi()` as this is
+                              // expected to be handled by UI code.
+                              manager->Reset();
+                            }
+                          },
+                          weak_factory_.GetWeakPtr()));
 
   payments_autofill_client()
       .GetPaymentsNetworkInterface()
@@ -242,9 +294,9 @@ void BnplManager::OnVcnDetailsFetched(
   bool successful =
       result == PaymentsAutofillClient::PaymentsRpcResult::kSuccess;
 
-  payments_autofill_client().CloseAutofillProgressDialog(
-      /*show_confirmation_before_closing=*/successful,
-      /*no_interactive_authentication_callback=*/base::OnceClosure());
+  CHECK(payments_autofill_client().GetBnplUiDelegate());
+  payments_autofill_client().GetBnplUiDelegate()->CloseProgressUi(
+      /*show_confirmation_before_closing=*/successful);
 
   if (successful) {
     CHECK(ongoing_flow_state_);
@@ -267,7 +319,7 @@ void BnplManager::OnVcnDetailsFetched(
     std::move(ongoing_flow_state_->on_bnpl_vcn_fetched_callback)
         .Run(credit_card);
   } else {
-    payments_autofill_client().ShowAutofillErrorDialog(
+    payments_autofill_client().GetBnplUiDelegate()->ShowAutofillErrorUi(
         AutofillErrorDialogContext::WithBnplPermanentOrTemporaryError(
             /*is_permanent_error=*/ShouldShowPermanentErrorDialog(result)));
   }
@@ -277,11 +329,18 @@ void BnplManager::OnVcnDetailsFetched(
 void BnplManager::OnIssuerSelected(BnplIssuer selected_issuer) {
   ongoing_flow_state_->issuer = std::move(selected_issuer);
 
-  if (ongoing_flow_state_->issuer.payment_instrument().has_value() &&
-      !AcceptTosActionRequired()) {
+  // TODO(crbug.com/424259928): Refactor BnplManager to always use
+  // `ongoing_flow_state_->instrument_id` instead of
+  // `ongoing_flow_state_->issuer.payment_instrument()->instrument_id()` to
+  // prevent duplicity.
+  bool is_linked_issuer =
+      ongoing_flow_state_->issuer.payment_instrument().has_value();
+  if (is_linked_issuer) {
     ongoing_flow_state_->instrument_id = base::NumberToString(
         ongoing_flow_state_->issuer.payment_instrument()->instrument_id());
+  }
 
+  if (is_linked_issuer && !AcceptTosActionRequired()) {
     LoadRiskDataForFetchingRedirectUrl();
   } else {
     GetLegalMessageFromServer();
@@ -322,7 +381,8 @@ void BnplManager::GetDetailsForUpdateBnplPaymentInstrument() {
   request_details.type =
       GetDetailsForUpdateBnplPaymentInstrumentRequestDetails::
           GetDetailsForUpdateBnplPaymentInstrumentType::kGetDetailsForAcceptTos;
-
+  request_details.issuer_id = autofill::ConvertToBnplIssuerIdString(
+      ongoing_flow_state_->issuer.issuer_id());
   payments_autofill_client()
       .GetPaymentsNetworkInterface()
       ->GetDetailsForUpdateBnplPaymentInstrument(
@@ -335,9 +395,10 @@ void BnplManager::OnDidGetLegalMessageFromServer(
     PaymentsAutofillClient::PaymentsRpcResult result,
     std::string context_token,
     LegalMessageLines legal_message) {
-  // Dismiss the loading throbber in the issuer selection dialog after the
-  // server call completion to show the next dialog.
-  payments_autofill_client().DismissSelectBnplIssuerDialog();
+  // Dismiss the loading throbber in the issuer selection UI after the server
+  // call completion to show the next UI.
+  CHECK(payments_autofill_client().GetBnplUiDelegate());
+  payments_autofill_client().GetBnplUiDelegate()->DismissSelectBnplIssuerUi();
 
   if (result == payments::PaymentsAutofillClient::PaymentsRpcResult::kSuccess) {
     ongoing_flow_state_->context_token = std::move(context_token);
@@ -347,7 +408,7 @@ void BnplManager::OnDidGetLegalMessageFromServer(
     bnpl_tos_model.legal_message_lines = std::move(legal_message);
     bnpl_tos_model.issuer = ongoing_flow_state_->issuer;
 
-    payments_autofill_client().ShowBnplTos(
+    payments_autofill_client().GetBnplUiDelegate()->ShowBnplTosUi(
         std::move(bnpl_tos_model),
         base::BindOnce(&BnplManager::OnTosDialogAccepted,
                        weak_factory_.GetWeakPtr()),
@@ -355,7 +416,7 @@ void BnplManager::OnDidGetLegalMessageFromServer(
     return;
   }
 
-  payments_autofill_client().ShowAutofillErrorDialog(
+  payments_autofill_client().GetBnplUiDelegate()->ShowAutofillErrorUi(
       AutofillErrorDialogContext::WithBnplPermanentOrTemporaryError(
           /*is_permanent_error=*/ShouldShowPermanentErrorDialog(result)));
 
@@ -389,7 +450,9 @@ void BnplManager::FetchRedirectUrl() {
       browser_autofill_manager_->client()
           .GetLastCommittedPrimaryMainFrameOrigin()
           .GetURL();
-  request_details.total_amount = ongoing_flow_state_->final_checkout_amount;
+  CHECK(ongoing_flow_state_->final_checkout_amount);
+  request_details.total_amount =
+      ongoing_flow_state_->final_checkout_amount.value();
   // Only `USD` is supported for MVP.
   request_details.currency = "USD";
 
@@ -404,15 +467,16 @@ void BnplManager::FetchRedirectUrl() {
 void BnplManager::OnRedirectUrlFetched(
     PaymentsAutofillClient::PaymentsRpcResult result,
     const BnplFetchUrlResponseDetails& response) {
+  CHECK(payments_autofill_client().GetBnplUiDelegate());
   if (ongoing_flow_state_->issuer.payment_instrument().has_value() &&
       !AcceptTosActionRequired()) {
     // If the BNPL issuer selected is linked and doesn't require ToS acceptance,
-    // then the issuer selection dialog must be showing, so close it.
-    payments_autofill_client().DismissSelectBnplIssuerDialog();
+    // then the issuer selection UI must be showing, so close it.
+    payments_autofill_client().GetBnplUiDelegate()->DismissSelectBnplIssuerUi();
   } else {
     // If the BNPL issuer selected is not linked, or is linked but requires ToS
-    // acceptance, then the ToS dialog must be showing, so close it.
-    payments_autofill_client().CloseBnplTos();
+    // acceptance, then the ToS UI must be showing, so close it.
+    payments_autofill_client().GetBnplUiDelegate()->CloseBnplTosUi();
   }
 
   if (result == payments::PaymentsAutofillClient::PaymentsRpcResult::kSuccess) {
@@ -434,7 +498,7 @@ void BnplManager::OnRedirectUrlFetched(
     payments_autofill_client().GetPaymentsWindowManager()->InitBnplFlow(
         std::move(payments_window_bnpl_context));
   } else {
-    payments_autofill_client().ShowAutofillErrorDialog(
+    payments_autofill_client().GetBnplUiDelegate()->ShowAutofillErrorUi(
         AutofillErrorDialogContext::WithBnplPermanentOrTemporaryError(
             /*is_permanent_error=*/ShouldShowPermanentErrorDialog(result)));
     Reset();
@@ -452,15 +516,16 @@ void BnplManager::OnPopupWindowCompleted(
       FetchVcnDetails(std::move(url));
       break;
     case PaymentsWindowManager::BnplFlowResult::kFailure:
-      payments_autofill_client().ShowAutofillErrorDialog(
-          AutofillErrorDialogContext::WithBnplPermanentOrTemporaryError(
-              /*is_permanent_error=*/false));
+      CHECK_DEREF(payments_autofill_client().GetBnplUiDelegate())
+          .ShowAutofillErrorUi(
+              AutofillErrorDialogContext::WithBnplPermanentOrTemporaryError(
+                  /*is_permanent_error=*/false));
       Reset();
       break;
   }
 }
 
-void BnplManager::MaybeUpdateSuggestionsWithBnpl(
+void BnplManager::MaybeUpdateDesktopSuggestionsWithBnpl(
     const AutofillSuggestionTriggerSource trigger_source,
     std::vector<std::variant<SuggestionsShownResponse, std::optional<uint64_t>>>
         responses) {
@@ -498,14 +563,11 @@ void BnplManager::MaybeUpdateSuggestionsWithBnpl(
     return;
   }
 
-  const std::vector<BnplIssuer>& bnpl_issuers =
+  std::vector<BnplIssuer> bnpl_issuers =
       payments_autofill_client().GetPaymentsDataManager().GetBnplIssuers();
 
-  if (std::none_of(bnpl_issuers.begin(), bnpl_issuers.end(),
-                   [extracted_amount](const BnplIssuer& bnpl_issuer) {
-                     return ShouldShowBnplOptionForIssuer(
-                         bnpl_issuer, extracted_amount->value());
-                   })) {
+  if (!IsExtractedAmountSupportedByAnyBnplIssuer(bnpl_issuers,
+                                                 extracted_amount->value())) {
     // If the extracted amount is not supported by any issuer, no need to update
     // the suggestion list.
     if (!has_logged_bnpl_suggestion_not_shown_reason_) {
@@ -520,9 +582,9 @@ void BnplManager::MaybeUpdateSuggestionsWithBnpl(
   // Append the BNPL suggestion at the end of the existing suggestion list
   // (before footer items).
   BnplSuggestionUpdateResult update_suggestions_result =
-      ::autofill::MaybeUpdateSuggestionsWithBnpl(
+      ::autofill::MaybeUpdateDesktopSuggestionsWithBnpl(
           /*current_suggestions=*/std::get<0>(*suggestions_shown_response),
-          bnpl_issuers, extracted_amount->value());
+          std::move(bnpl_issuers), extracted_amount->value());
 
   if (!update_suggestions_result.is_bnpl_suggestion_added) {
     // No need to update the pop up, if no BNPL suggestion is added.
@@ -596,8 +658,9 @@ void BnplManager::OnBnplPaymentInstrumentCreated(
     ongoing_flow_state_->instrument_id = std::move(instrument_id);
     FetchRedirectUrl();
   } else {
-    payments_autofill_client().CloseBnplTos();
-    payments_autofill_client().ShowAutofillErrorDialog(
+    CHECK(payments_autofill_client().GetBnplUiDelegate());
+    payments_autofill_client().GetBnplUiDelegate()->CloseBnplTosUi();
+    payments_autofill_client().GetBnplUiDelegate()->ShowAutofillErrorUi(
         AutofillErrorDialogContext::WithBnplPermanentOrTemporaryError(
             /*is_permanent_error=*/ShouldShowPermanentErrorDialog(result)));
     Reset();
@@ -630,8 +693,9 @@ void BnplManager::OnBnplPaymentInstrumentUpdated(
   if (result == payments::PaymentsAutofillClient::PaymentsRpcResult::kSuccess) {
     FetchRedirectUrl();
   } else {
-    payments_autofill_client().CloseBnplTos();
-    payments_autofill_client().ShowAutofillErrorDialog(
+    CHECK(payments_autofill_client().GetBnplUiDelegate());
+    payments_autofill_client().GetBnplUiDelegate()->CloseBnplTosUi();
+    payments_autofill_client().GetBnplUiDelegate()->ShowAutofillErrorUi(
         AutofillErrorDialogContext::WithBnplPermanentOrTemporaryError(
             /*is_permanent_error=*/ShouldShowPermanentErrorDialog(result)));
     Reset();
@@ -639,8 +703,8 @@ void BnplManager::OnBnplPaymentInstrumentUpdated(
 }
 
 std::vector<BnplIssuerContext> BnplManager::GetSortedBnplIssuerContext() {
-  AutofillOptimizationGuide* autofill_optimization_guide =
-      browser_autofill_manager_->client().GetAutofillOptimizationGuide();
+  AutofillOptimizationGuideDecider* autofill_optimization_guide =
+      browser_autofill_manager_->client().GetAutofillOptimizationGuideDecider();
   const GURL& merchant_url = browser_autofill_manager_->client()
                                  .GetLastCommittedPrimaryMainFrameOrigin()
                                  .GetURL();
@@ -657,6 +721,7 @@ std::vector<BnplIssuerContext> BnplManager::GetSortedBnplIssuerContext() {
             price_range =
                 issuer.GetEligiblePriceRangeForCurrency(/*currency=*/"USD");
         CHECK(price_range.has_value());
+        CHECK(ongoing_flow_state_->final_checkout_amount);
 
         BnplIssuerEligibilityForPage eligibility;
 
@@ -705,24 +770,6 @@ std::vector<BnplIssuerContext> BnplManager::GetSortedBnplIssuerContext() {
       });
 
   return result;
-}
-
-bool BnplManager::IsEligibleForBnpl() const {
-  AutofillOptimizationGuide* autofill_optimization_guide =
-      browser_autofill_manager_->client().GetAutofillOptimizationGuide();
-  if (!autofill_optimization_guide) {
-    return false;
-  }
-
-  const GURL& url =
-      browser_autofill_manager_->client().GetLastCommittedPrimaryMainFrameURL();
-
-  return std::ranges::any_of(
-      payments_autofill_client().GetPaymentsDataManager().GetBnplIssuers(),
-      [&autofill_optimization_guide, &url](const BnplIssuer& bnpl_issuer) {
-        return autofill_optimization_guide->IsUrlEligibleForBnplIssuer(
-            bnpl_issuer.issuer_id(), url);
-      });
 }
 
 bool BnplManager::AcceptTosActionRequired() const {

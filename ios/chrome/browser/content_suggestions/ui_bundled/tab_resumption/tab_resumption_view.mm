@@ -151,12 +151,10 @@ bool HasPriceDropOnTab(TabResumptionItem* item) {
         previousPrice:_item.shopCardData.priceDrop->previous_price];
     [labelStackView addArrangedSubview:_priceNotificationsChip];
     self.accessibilityLabel = _item.shopCardData.accessibilityString;
-    if (@available(iOS 17, *)) {
-      NSArray<UITrait>* traits = TraitCollectionSetForTraits(
-          @[ UITraitPreferredContentSizeCategory.self ]);
-      [self registerForTraitChanges:traits
-                         withAction:@selector(hidePriceDropOnTraitChange)];
-    }
+    NSArray<UITrait>* traits = TraitCollectionSetForTraits(
+        @[ UITraitPreferredContentSizeCategory.self ]);
+    [self registerForTraitChanges:traits
+                       withAction:@selector(hidePriceDropOnTraitChange)];
 
   } else {
     self.accessibilityLabel =
@@ -282,12 +280,17 @@ bool HasPriceDropOnTab(TabResumptionItem* item) {
   }
 
   // Resize the salient image.
-  // TODO(crbug.com/411039614): Replace UIGraphicsBeginImageContextWithOptions
-  // with UIGraphicsImageRenderer.
-  UIGraphicsBeginImageContextWithOptions(CGSize(width, height), NO, 0.0);
-  [_item.contentImage drawInRect:CGRectMake(0, 0, width, height)];
-  UIImage* scaledImage = UIGraphicsGetImageFromCurrentImageContext();
-  UIGraphicsEndImageContext();
+  UIGraphicsImageRendererFormat* format =
+      [UIGraphicsImageRendererFormat preferredFormat];
+  format.scale = 0.0;
+  format.opaque = NO;
+  UIGraphicsImageRenderer* renderer =
+      [[UIGraphicsImageRenderer alloc] initWithSize:CGSize(width, height)
+                                             format:format];
+  UIImage* scaledImage =
+      [renderer imageWithActions:^(UIGraphicsImageRendererContext* context) {
+        [_item.contentImage drawInRect:CGRectMake(0, 0, width, height)];
+      }];
   [salientView setImage:scaledImage];
 
   salientView.translatesAutoresizingMaskIntoConstraints = NO;

@@ -48,6 +48,7 @@
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/public/mojom/service_worker_router_info.mojom-shared.h"
 #include "services/network/public/mojom/service_worker_router_info.mojom.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/service_worker/service_worker_loader_helpers.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_fetch_handler_bypass_option.mojom-shared.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-shared.h"
@@ -58,6 +59,8 @@ namespace {
 
 using SyntheticResponseStatus =
     ServiceWorkerSyntheticResponseManager::SyntheticResponseStatus;
+using SyntheticResponseEligibility =
+    ServiceWorkerMetrics::SyntheticResponseEligibility;
 
 const char kHistogramLoadTiming[] =
     "ServiceWorker.LoadTiming.MainFrame.MainResource";
@@ -105,6 +108,12 @@ void MaybeSetHeaderReceivedTiming(net::LoadTimingInfo& timing) {
 
 constexpr char kHistogramSyntheticResponseEligibility[] =
     "ServiceWorker.SyntheticResponse.Eligibility";
+
+void RecordSyntheticResponseEligibility(
+    SyntheticResponseEligibility eligibility) {
+  base::UmaHistogramEnumeration(kHistogramSyntheticResponseEligibility,
+                                eligibility);
+}
 
 }  // namespace
 
@@ -315,6 +324,8 @@ void ServiceWorkerMainResourceLoader::StartRequest(
           head_update_params.load_timing_info = response_head_->load_timing;
           head_update_params.initial_service_worker_status =
               initial_service_worker_status_.value();
+          head_update_params.is_synthetic_response_dry_run_mode =
+              is_synthetic_response_used_;
           Fallback(std::move(head_update_params));
 
           // If the kServiceWorkerStaticRouterStartServiceWorker feature is
@@ -489,7 +500,7 @@ bool ServiceWorkerMainResourceLoader::MaybeStartAutoPreload(
           base::GetFieldTrialParamValueByFeature(
               features::kServiceWorkerAutoPreload, "blocked_hosts"),
           ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY));
-  if (blocked_hosts->contains(resource_request_.url.host())) {
+  if (blocked_hosts->contains(resource_request_.url.GetHost())) {
     return false;
   }
 
@@ -500,7 +511,7 @@ bool ServiceWorkerMainResourceLoader::MaybeStartAutoPreload(
   if (base::GetFieldTrialParamByFeatureAsBool(
           features::kServiceWorkerAutoPreload,
           "enable_only_when_service_worker_not_running",
-          /*default_value=*/false) &&
+          /*default_value=*/true) &&
       version->running_status() == blink::EmbeddedWorkerStatus::kRunning) {
     return false;
   }
@@ -523,7 +534,7 @@ bool ServiceWorkerMainResourceLoader::MaybeStartAutoPreload(
   version->set_fetch_handler_bypass_option(
       base::GetFieldTrialParamByFeatureAsBool(
           features::kServiceWorkerAutoPreload, "enable_subresource_preload",
-          /*default_value=*/true)
+          /*default_value=*/false)
           ? blink::mojom::ServiceWorkerFetchHandlerBypassOption::kAutoPreload
           : blink::mojom::ServiceWorkerFetchHandlerBypassOption::kDefault);
 
@@ -1023,14 +1034,55 @@ bool ServiceWorkerMainResourceLoader::MaybeStartSyntheticNetworkRequest(
   const int kReloadFlags = net::LOAD_VALIDATE_CACHE | net::LOAD_BYPASS_CACHE;
   if (resource_request_.load_flags & kReloadFlags) {
     // Synthetic response is not enabled in reloading the page.
-    base::UmaHistogramEnumeration(
-        kHistogramSyntheticResponseEligibility,
-        ServiceWorkerMetrics::SyntheticResponseEligibility::
-            kNotEligibleByReload);
+    RecordSyntheticResponseEligibility(
+        SyntheticResponseEligibility::kNotEligibleByReload);
+    return false;
+  }
+
+  if (service_worker_loader_helpers::IsSyntheticResponseDryRunModeEnabled()) {
+    if (version->GetResponseHeadForSyntheticResponse()) {
+      // With dry-run mode, update `is_synthetic_response_used_` here. This will
+      // update the actual response head through `ResponseHeadUpdateParams` and
+      // pass the information to the renderer.
+      is_synthetic_response_used_ = true;
+      RecordSyntheticResponseEligibility(
+          SyntheticResponseEligibility::kEligible);
+    } else {
+      // If dry-run mode, do not dispatch a network request for the synthetic
+      // response. Instead, set a fake response headers to
+      // `ServiceWorkerVersion` if it doesn't exist in order to simulate the
+      // next navigation is eligible for the synthetic response.
+      network::mojom::URLResponseHeadPtr fake_response_head =
+          network::mojom::URLResponseHead::New();
+      version->SetResponseHeadForSyntheticResponse(
+          std::move(fake_response_head));
+      RecordSyntheticResponseEligibility(
+          SyntheticResponseEligibility::kNotEligibleByNoHeaderStored);
+    }
     return false;
   }
 
   is_synthetic_response_used_ = true;
+
+  // Always decode on the network service side, since the renderer is not
+  // involved with processing the synthetic response.
+  //
+  // TODO(crbug.com/352578800): When the renderer side decoding is enabled, we
+  // need to plumb `client_side_content_decoding_types` in `URLResponseHead`
+  // from `response_head` in `OnReceiveResponse()` to `response_head_` in
+  // `ServiceWorkerMainResourceLoader`. To achieve that,
+  // `ServiceWorkerSyntheticResponseManager` should be updated not to use
+  // `blink::mojom::FetchAPIResponse` to handle the response, because
+  // `blink::mojom::FetchAPIResponse` doesn't have a corresponding field of
+  // `client_side_content_decoding_types`. The necessary field for decoding will
+  // be lost under the current implementation.
+  //
+  // Note that `ServiceWorkerMainResourceLoader` doesn't dispatch a fetch event
+  // if `ServiceWorkerSyntheticResponseManager::StartRequest()` is called. This
+  // means `resource_request_` is used by
+  // `ServiceWorkerSyntheticResponseManager` only, not used for sending other
+  // network request purpose anymore.
+  resource_request_.client_side_content_decoding_enabled = false;
 
   synthetic_response_manager_.emplace(
       service_worker_client_->CreateNetworkURLLoaderFactory(
@@ -1067,10 +1119,8 @@ bool ServiceWorkerMainResourceLoader::MaybeStartSyntheticNetworkRequest(
       // When it's not ready, the header is not stored yet. That means we don't
       // create a synthetic response locally, and wait for the response from the
       // network.
-      base::UmaHistogramEnumeration(
-          kHistogramSyntheticResponseEligibility,
-          ServiceWorkerMetrics::SyntheticResponseEligibility::
-              kNotEligibleByNoHeaderStored);
+      RecordSyntheticResponseEligibility(
+          SyntheticResponseEligibility::kNotEligibleByNoHeaderStored);
       break;
     case SyntheticResponseStatus::kReady:
       // When it's ready, the header which the service worker locally storead is
@@ -1080,9 +1130,8 @@ bool ServiceWorkerMainResourceLoader::MaybeStartSyntheticNetworkRequest(
       synthetic_response_manager_->StartSyntheticResponse(base::BindOnce(
           &ServiceWorkerMainResourceLoader::DidDispatchFetchEvent,
           weak_factory_.GetWeakPtr()));
-      base::UmaHistogramEnumeration(
-          kHistogramSyntheticResponseEligibility,
-          ServiceWorkerMetrics::SyntheticResponseEligibility::kEligible);
+      RecordSyntheticResponseEligibility(
+          SyntheticResponseEligibility::kEligible);
       break;
   }
 
@@ -1098,6 +1147,12 @@ void ServiceWorkerMainResourceLoader::
   // yet. Return the response from the network to the client here.
   CHECK_EQ(synthetic_response_manager_->Status(),
            SyntheticResponseStatus::kNotReady);
+  // TODO(crbug.com/442270046): Make a centerized method to set required fields
+  // in `load_timing`.
+  response_head->load_timing.request_start =
+      response_head_->load_timing.request_start;
+  response_head->load_timing.request_start_time =
+      response_head_->load_timing.request_start_time;
   MaybeSetHeaderReceivedTiming(response_head->load_timing);
   SetCommitResponsibility(FetchResponseFrom::kWithoutServiceWorker);
   CHECK(url_loader_client_.is_bound());
@@ -1450,6 +1505,15 @@ bool ServiceWorkerMainResourceLoader::IsEligibleForRecordingTimingMetrics() {
   // Don't record metrics when DevTools specify force_update_on_page_load to
   // reduce noise.
   if (find_registration_start_time_.is_null()) {
+    return false;
+  }
+
+  // When the synthetic response is used, do not record metrics since it neither
+  // starts a service worker nor dispatches a fetch event.
+  //
+  // TODO(crbug.com/448235805): Revisit this to ensure if all metrics are really
+  // not needed for the synthetic response.
+  if (is_synthetic_response_used_) {
     return false;
   }
 

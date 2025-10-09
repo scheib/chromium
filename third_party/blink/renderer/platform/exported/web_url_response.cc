@@ -39,6 +39,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "net/base/features.h"
+#include "net/http/http_response_headers.h"
 #include "net/ssl/ssl_info.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/mojom/cors.mojom-shared.h"
@@ -734,7 +735,7 @@ bool WebURLResponse::FromArchive() const {
 void WebURLResponse::SetDnsAliases(const std::vector<WebString>& aliases) {
   Vector<String> dns_aliases(base::checked_cast<wtf_size_t>(aliases.size()));
   std::ranges::transform(aliases, dns_aliases.begin(),
-                         &WebString::operator WTF::String);
+                         &WebString::operator String);
   resource_response_->SetDnsAliases(std::move(dns_aliases));
 }
 
@@ -787,7 +788,7 @@ bool WebURLResponse::IsIpProtectionUsed() const {
 void WebURLResponse::SetUnencodedDigests(
     std::vector<network::IntegrityMetadata> digests) {
   resource_response_->SetUnencodedDigests(
-      WTF::Vector<network::IntegrityMetadata>(std::move(digests)));
+      Vector<network::IntegrityMetadata>(std::move(digests)));
 }
 
 WebURLResponse::WebURLResponse(ResourceResponse& r) : resource_response_(&r) {}

@@ -57,9 +57,7 @@ namespace blink {
 
 class FontSelector;
 class ShapeCache;
-class TextRun;
 struct TextFragmentPaintInfo;
-struct TextRunPaintInfo;
 
 class PLATFORM_EXPORT Font : public GarbageCollected<Font> {
  public:
@@ -75,7 +73,6 @@ class PLATFORM_EXPORT Font : public GarbageCollected<Font> {
   void Trace(Visitor* visitor) const { visitor->Trace(font_fallback_list_); }
 
   bool operator==(const Font& other) const;
-  bool operator!=(const Font& other) const { return !(*this == other); }
 
   const FontDescription& GetFontDescription() const {
     return font_description_;
@@ -94,13 +91,6 @@ class PLATFORM_EXPORT Font : public GarbageCollected<Font> {
                 cc::NodeId node_id,
                 const cc::PaintFlags&,
                 DrawType = DrawType::kGlyphsOnly) const;
-  // Deprecated: Use PlainTextPainter.
-  bool DeprecatedDrawBidiText(cc::PaintCanvas*,
-                              const TextRunPaintInfo&,
-                              const gfx::PointF&,
-                              CustomFontNotReadyAction,
-                              const cc::PaintFlags&,
-                              DrawType = DrawType::kGlyphsOnly) const;
   void DrawEmphasisMarks(cc::PaintCanvas*,
                          const TextFragmentPaintInfo&,
                          const AtomicString& mark,
@@ -123,18 +113,6 @@ class PLATFORM_EXPORT Font : public GarbageCollected<Font> {
                          const cc::PaintFlags&,
                          const std::tuple<float, float>& bounds,
                          Vector<TextIntercept>&) const;
-
-  // Glyph bounds will be the minimum rect containing all glyph strokes, in
-  // coordinates using (<text run x position>, <baseline position>) as the
-  // origin. If the pointer is not null, glyph_bounds is expected to be
-  // default-initialized.
-  // Deprecated: Use PlainTextPainter.
-  float DeprecatedWidth(const TextRun&,
-                        gfx::RectF* glyph_bounds = nullptr) const;
-  float DeprecatedSubRunWidth(const TextRun&,
-                              unsigned from,
-                              unsigned to,
-                              gfx::RectF* glyph_bounds = nullptr) const;
 
   // Metrics that we query the FontFallbackList for.
   float SpaceWidth() const {
@@ -171,6 +149,9 @@ class PLATFORM_EXPORT Font : public GarbageCollected<Font> {
   // Returns the primary font that contains the CJK water glyph.
   const SimpleFontData* PrimaryFontWithCjkWater() const;
 
+  // Returns the primary font that contains the space glyph for tab-size.
+  const SimpleFontData* PrimaryFontForTabSize() const;
+
   // Returns a list of font features for this `FontDescription`. The returned
   // list is common for all `SimpleFontData` for `this`.
   base::span<const FontFeatureRange> GetFontFeatures() const;
@@ -201,6 +182,10 @@ class PLATFORM_EXPORT Font : public GarbageCollected<Font> {
   void NullifyPrimaryFontForTesting() {
     EnsureFontFallbackList()->NullifyPrimarySimpleFontDataForTesting();
   }
+
+  // Reset `font_fallback_list_` to decouple `SimpleFontData`. This is
+  // required not to leak `SimpleFontData` via initial `ComputedStyle`.
+  void NullifyForTesting() { font_fallback_list_ = nullptr; }
 
   void ReportNotDefGlyph() const;
 
@@ -264,6 +249,11 @@ inline const SimpleFontData* Font::PrimaryFontWithDigitZero() const {
 // Uses CJK water as lookup character.
 inline const SimpleFontData* Font::PrimaryFontWithCjkWater() const {
   return EnsureFontFallbackList()->PrimarySimpleFontDataWithCjkWater(
+      font_description_);
+}
+
+inline const SimpleFontData* Font::PrimaryFontForTabSize() const {
+  return EnsureFontFallbackList()->PrimarySimpleFontDataForTabSize(
       font_description_);
 }
 

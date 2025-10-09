@@ -38,6 +38,11 @@ impl Symbol {
         assert!(!symbol.0.is_empty());
         symbol
     }
+
+    #[cfg_attr(proc_macro, expect(dead_code))]
+    pub(crate) fn contains(&self, ch: char) -> bool {
+        self.0.contains(ch)
+    }
 }
 
 pub(crate) trait Segment {

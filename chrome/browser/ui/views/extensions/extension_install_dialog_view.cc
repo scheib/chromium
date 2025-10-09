@@ -60,7 +60,6 @@
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/flex_layout_view.h"
 #include "ui/views/layout/table_layout.h"
-#include "ui/views/metadata/view_factory_internal.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -72,18 +71,6 @@ namespace {
 
 // Time delay before the install button is enabled after initial display.
 int g_install_delay_in_ms = 500;
-
-// These values are logged to UMA. Entries should not be renumbered and numeric
-// values should never be reused. Please keep in sync with "BooleanSent" in
-// src/tools/metrics/histograms/enums.xml.
-enum class CloudExtensionRequestMetricEvent {
-  // A request was not sent because the prompt dialog is aborted.
-  kNotSent = 0,
-  // A request was sent because the send button on the prompt dialog is
-  // selected.
-  kSent = 1,
-  kMaxValue = kSent
-};
 
 // A custom view to contain the ratings information (stars, ratings count, etc).
 // With screen readers, this will handle conveying the information properly
@@ -201,8 +188,8 @@ END_METADATA
 
 void AddResourceIcon(const gfx::ImageSkia* skia_image, void* data) {
   views::View* parent = static_cast<views::View*>(data);
-  parent->AddChildViewRaw(
-      new RatingStar(ui::ImageModel::FromImageSkia(*skia_image)));
+  parent->AddChildView(
+      std::make_unique<RatingStar>(ui::ImageModel::FromImageSkia(*skia_image)));
 }
 
 void ShowExtensionInstallDialogImpl(
@@ -223,9 +210,10 @@ void ShowExtensionInstallDialogImpl(
   }
 
   gfx::NativeWindow parent_window = show_params->GetParentWindow();
-  ExtensionInstallDialogView* dialog = new ExtensionInstallDialogView(
+  auto dialog = std::make_unique<ExtensionInstallDialogView>(
       std::move(show_params), std::move(done_callback), std::move(prompt));
-  constrained_window::CreateBrowserModalDialogViews(dialog, parent_window)
+  constrained_window::CreateBrowserModalDialogViews(std::move(dialog),
+                                                    parent_window)
       ->Show();
 }
 

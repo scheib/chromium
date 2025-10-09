@@ -48,6 +48,7 @@ class StyleRuleNamespace;
 class StyleRulePage;
 class StyleRulePositionTry;
 class StyleRuleProperty;
+class StyleRuleRoute;
 class StyleRuleSupports;
 class StyleSheetContents;
 class Element;
@@ -80,6 +81,7 @@ class CORE_EXPORT CSSParserImpl {
           CSSAtRuleID::kCSSAtRulePage,
           CSSAtRuleID::kCSSAtRulePositionTry,
           CSSAtRuleID::kCSSAtRuleProperty,
+          CSSAtRuleID::kCSSAtRuleRoute,
           CSSAtRuleID::kCSSAtRuleContainer,
           CSSAtRuleID::kCSSAtRuleCounterStyle,
           CSSAtRuleID::kCSSAtRuleScope,
@@ -143,9 +145,12 @@ class CORE_EXPORT CSSParserImpl {
       CSSAtRuleID::kCSSAtRuleMedia,
       CSSAtRuleID::kCSSAtRuleSupports,
       CSSAtRuleID::kCSSAtRuleContainer,
+      CSSAtRuleID::kCSSAtRuleRoute,
   };
 
   // Rules that are valid when nested within a style rule.
+  // Note that this is not a strict subset of kRegularRules
+  // (in particular, @apply is not valid at top level).
   //
   // https://drafts.csswg.org/css-nesting/#nested-group-rules
   static constexpr AllowedRules kNestedGroupRules =
@@ -312,6 +317,9 @@ class CORE_EXPORT CSSParserImpl {
                                            CSSParserTokenStream&);
   StyleRulePage* ConsumePageRule(CSSParserTokenStream&);
   StyleRuleProperty* ConsumePropertyRule(CSSParserTokenStream&);
+  StyleRuleRoute* ConsumeRouteRule(CSSParserTokenStream&,
+                                   CSSNestingType,
+                                   StyleRule* parent_rule_for_nesting);
   StyleRuleCounterStyle* ConsumeCounterStyleRule(CSSParserTokenStream&);
   StyleRuleBase* ConsumeScopeRule(CSSParserTokenStream&,
                                   CSSNestingType,
@@ -328,7 +336,8 @@ class CORE_EXPORT CSSParserImpl {
 
   StyleRuleFunction* ConsumeFunctionRule(CSSParserTokenStream& stream);
   std::optional<HeapVector<StyleRuleFunction::Parameter>>
-  ConsumeFunctionParameters(CSSParserTokenStream& stream);
+  ConsumeFunctionParameters(CSSParserTokenStream& stream,
+                            bool accept_contents_parameter);
   StyleRuleMixin* ConsumeMixinRule(CSSParserTokenStream& stream);
   StyleRuleApplyMixin* ConsumeApplyMixinRule(CSSParserTokenStream& stream);
   StyleRuleContentsStatement* ConsumeContentsRule(CSSParserTokenStream& stream);

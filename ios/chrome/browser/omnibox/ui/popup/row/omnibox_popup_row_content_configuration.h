@@ -29,7 +29,7 @@ extern const CGFloat kOmniboxPopupCellMinimumHeight;
     : NSObject <UIContentConfiguration>
 
 /// Autocomplete suggestion.
-@property(nonatomic, strong) id<AutocompleteSuggestion> suggestion;
+@property(nonatomic, weak) id<AutocompleteSuggestion> suggestion;
 /// Delegate for events in OmniboxPopupRow.
 @property(nonatomic, weak)
     id<OmniboxPopupRowDelegate, OmniboxPopupActionsRowDelegate>
@@ -45,6 +45,8 @@ extern const CGFloat kOmniboxPopupCellMinimumHeight;
 @property(nonatomic, weak) id<FaviconRetriever> faviconRetriever;
 /// Image retriever for `OmniboxIconView`.
 @property(nonatomic, weak) id<ImageRetriever> imageRetriever;
+/// The context in which the omnibox is presented.
+@property(nonatomic, assign) OmniboxPresentationContext presentationContext;
 
 /// Returns the default configuration for a list cell.
 + (instancetype)cellConfiguration;

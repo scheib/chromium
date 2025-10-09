@@ -36,6 +36,7 @@
 #include "media/video/gpu_video_accelerator_factories.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "net/net_buildflags.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/ip_address_space_util.h"
 #include "services/network/public/mojom/ip_address_space.mojom-shared.h"
 #include "third_party/blink/public/common/features.h"
@@ -62,7 +63,6 @@
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/peerconnection/adapters/web_rtc_cross_thread_copier.h"
-#include "third_party/blink/renderer/modules/peerconnection/intercepting_network_controller.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_error_util.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_peer_connection_handler.h"
 #include "third_party/blink/renderer/modules/permissions/permission_utils.h"
@@ -193,6 +193,21 @@ class LocalNetworkAccessPermission final
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   }
 
+  bool ShouldRequestPermission(
+      const webrtc::SocketAddress& candidate_address) override {
+    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+    CHECK(RuntimeEnabledFeatures::LocalNetworkAccessWebRTCEnabled());
+
+    const bool is_less_public = network::IsLessPublicAddressSpace(
+        FromSocketAddress(candidate_address), originator_address_space_);
+
+    if (network::features::kLocalNetworkAccessChecksWebRTCLoopbackOnly.Get()) {
+      return candidate_address.IsLoopbackIP() && is_less_public;
+    }
+
+    return is_less_public;
+  }
+
   void RequestPermission(
       const webrtc::SocketAddress& candidate_address,
       absl::AnyInvocable<void(webrtc::LocalNetworkAccessPermissionStatus)>
@@ -201,19 +216,6 @@ class LocalNetworkAccessPermission final
     CHECK(RuntimeEnabledFeatures::LocalNetworkAccessWebRTCEnabled());
 
     callback_ = std::move(callback);
-
-    if (!network::IsLessPublicAddressSpace(FromSocketAddress(candidate_address),
-                                           originator_address_space_)) {
-      // Can't use Frame-based task runners because this method is called on a
-      // WebRTC thread.
-      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
-          FROM_HERE,
-          base::BindOnce(&LocalNetworkAccessPermission::OnPermissionRequested,
-                         weak_ptr_factory_.GetWeakPtr(),
-                         mojom::blink::PermissionStatus::GRANTED));
-      return;
-    }
-
     permission_service_->RequestPermission(
         CreatePermissionDescriptor(
             mojom::blink::PermissionName::LOCAL_NETWORK_ACCESS),
@@ -291,10 +293,6 @@ class LocalNetworkAccessPermissionFactory final
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
 };
 
-std::string WorkerThreadName() {
-  return "WebRTC_W_and_N";
-}
-
 // Encapsulates process-wide static dependencies used by
 // `PeerConnectionDependencyFactory`, namely the threads used by WebRTC. This
 // avoids allocating multiple threads per factory instance, as they are
@@ -303,7 +301,7 @@ class PeerConnectionStaticDeps {
  public:
   PeerConnectionStaticDeps()
       : chrome_signaling_thread_("WebRTC_Signaling"),
-        chrome_worker_thread_(WorkerThreadName()) {}
+        chrome_worker_thread_("WebRTC_W_and_N") {}
 
   ~PeerConnectionStaticDeps() {
     if (chrome_worker_thread_.IsRunning()) {
@@ -352,10 +350,6 @@ class PeerConnectionStaticDeps {
       chrome_signaling_thread_.StartWithOptions(
           base::Thread::Options(base::ThreadType::kDefault));
     }
-    if (chrome_network_thread_ && !chrome_network_thread_->IsRunning()) {
-      chrome_network_thread_->StartWithOptions(
-          base::Thread::Options(base::ThreadType::kDefault));
-    }
 
     if (!chrome_worker_thread_.IsRunning()) {
       chrome_worker_thread_.StartWithOptions(
@@ -400,26 +394,6 @@ class PeerConnectionStaticDeps {
     return init_worker_event;
   }
 
-  base::WaitableEvent& InitializeNetworkThread() {
-    if (!network_thread_) {
-      if (chrome_network_thread_) {
-        PostCrossThreadTask(
-            *chrome_network_thread_->task_runner(), FROM_HERE,
-            CrossThreadBindOnce(
-                &PeerConnectionStaticDeps::InitializeOnThread,
-                CrossThreadUnretained(&network_thread_),
-                CrossThreadUnretained(&init_network_event),
-                ConvertToBaseRepeatingCallback(CrossThreadBindRepeating(
-                    PeerConnectionStaticDeps::LogTaskLatencyNetwork)),
-                ConvertToBaseRepeatingCallback(CrossThreadBindRepeating(
-                    PeerConnectionStaticDeps::LogTaskDurationNetwork))));
-      } else {
-        init_network_event.Signal();
-      }
-    }
-    return init_network_event;
-  }
-
   base::WaitableEvent& InitializeSignalingThread() {
     if (!signaling_thread_) {
       PostCrossThreadTask(
@@ -438,15 +412,10 @@ class PeerConnectionStaticDeps {
 
   webrtc::Thread* GetSignalingThread() { return signaling_thread_; }
   webrtc::Thread* GetWorkerThread() { return worker_thread_; }
-  webrtc::Thread* GetNetworkThread() {
-    return chrome_network_thread_ ? network_thread_ : worker_thread_;
-  }
+  webrtc::Thread* GetNetworkThread() { return worker_thread_; }
   base::Thread& GetChromeSignalingThread() { return chrome_signaling_thread_; }
   base::Thread& GetChromeWorkerThread() { return chrome_worker_thread_; }
-  base::Thread& GetChromeNetworkThread() {
-    return chrome_network_thread_ ? *chrome_network_thread_
-                                  : chrome_worker_thread_;
-  }
+  base::Thread& GetChromeNetworkThread() { return chrome_worker_thread_; }
 
  private:
   static void LogTaskLatencyWorker(base::TimeDelta sample) {
@@ -499,10 +468,8 @@ class PeerConnectionStaticDeps {
   // (main) chrome thread.
   raw_ptr<webrtc::Thread> signaling_thread_ = nullptr;
   raw_ptr<webrtc::Thread> worker_thread_ = nullptr;
-  raw_ptr<webrtc::Thread> network_thread_ = nullptr;
   base::Thread chrome_signaling_thread_;
   base::Thread chrome_worker_thread_;
-  std::optional<base::Thread> chrome_network_thread_;
 
   // Metronome source used for driving decoding and encoding, created from
   // renderer main thread, always used and destroyed on `chrome_worker_thread_`.
@@ -550,40 +517,6 @@ base::Thread& GetChromeWorkerThread() {
 base::Thread& GetChromeNetworkThread() {
   return StaticDeps().GetChromeNetworkThread();
 }
-
-class InterceptingNetworkControllerFactory
-    : public webrtc::NetworkControllerFactoryInterface {
- public:
-  InterceptingNetworkControllerFactory(
-      scoped_refptr<base::SequencedTaskRunner> context_task_runner,
-      RTCRtpTransport* rtp_transport)
-      : context_task_runner_(context_task_runner),
-        rtp_transport_(rtp_transport) {
-    CHECK(rtp_transport);
-  }
-
-  // Note: Called on a webrtc thread.
-  std::unique_ptr<webrtc::NetworkControllerInterface> Create(
-      webrtc::NetworkControllerConfig config) override {
-    return std::make_unique<InterceptingNetworkController>(
-        goog_cc_factory_->Create(config), rtp_transport_, context_task_runner_);
-  }
-
-  // Note: Called on a webrtc thread.
-  webrtc::TimeDelta GetProcessInterval() const override {
-    return goog_cc_factory_->GetProcessInterval();
-  }
-
- private:
-  const std::unique_ptr<webrtc::GoogCcNetworkControllerFactory>
-      goog_cc_factory_ =
-          std::make_unique<webrtc::GoogCcNetworkControllerFactory>();
-  const scoped_refptr<base::SequencedTaskRunner> context_task_runner_;
-  // Store just a CrossThreadWeakHandle pointing at an RTCRtpTransport, to be
-  // used on a webrtc thread when creating InterceptingNetworkController
-  // instances.
-  const CrossThreadWeakHandle<RTCRtpTransport> rtp_transport_;
-};
 
 // The enum is used for logging. Entries should not be renumbered or reused.
 // Keep in sync with the corresponding enum in
@@ -736,7 +669,6 @@ void PeerConnectionDependencyFactory::CreatePeerConnectionFactory() {
       *ExecutionContextLifecycleObserver::GetExecutionContext());
   base::WaitableEvent& worker_thread_started_event =
       StaticDeps().InitializeWorkerThread();
-  StaticDeps().InitializeNetworkThread();
   StaticDeps().InitializeSignalingThread();
 
 // TODO(crbug.com/355256378): OpenH264 for encoding and FFmpeg for H264 decoding
@@ -985,8 +917,7 @@ PeerConnectionDependencyFactory::CreatePeerConnection(
     const webrtc::PeerConnectionInterface::RTCConfiguration& config,
     blink::WebLocalFrame* web_frame,
     webrtc::PeerConnectionObserver* observer,
-    ExceptionState& exception_state,
-    RTCRtpTransport* rtp_transport) {
+    ExceptionState& exception_state) {
   CHECK(observer);
   if (!GetPcFactory().get())
     return nullptr;
@@ -1001,11 +932,6 @@ PeerConnectionDependencyFactory::CreatePeerConnection(
   if (RuntimeEnabledFeatures::LocalNetworkAccessWebRTCEnabled()) {
     dependencies.lna_permission_factory =
         std::make_unique<LocalNetworkAccessPermissionFactory>(this);
-  }
-  if (rtp_transport) {
-    dependencies.network_controller_factory =
-        std::make_unique<InterceptingNetworkControllerFactory>(
-            context_task_runner_, rtp_transport);
   }
   auto pc_or_error = GetPcFactory()->CreatePeerConnectionOrError(
       config, std::move(dependencies));
@@ -1139,7 +1065,7 @@ scoped_refptr<webrtc::VideoTrackSourceInterface>
 PeerConnectionDependencyFactory::CreateVideoTrackSourceProxy(
     webrtc::VideoTrackSourceInterface* source) {
   // PeerConnectionFactory needs to be instantiated to make sure that
-  // signaling_thread_ and network_thread_ exist.
+  // signaling_thread_ exist.
   if (!PeerConnectionFactoryCreated())
     CreatePeerConnectionFactory();
 
@@ -1178,8 +1104,6 @@ void PeerConnectionDependencyFactory::CreateIpcNetworkManagerOnNetworkThread(
     base::WaitableEvent* event,
     std::unique_ptr<MdnsResponderAdapter> mdns_responder) {
   DCHECK(GetChromeNetworkThread().task_runner()->BelongsToCurrentThread());
-  // The task to initialize `network_thread_` was posted to the same thread, so
-  // there is no need to wait on its event.
   DCHECK(GetNetworkThread());
 
   network_manager_ = std::make_unique<blink::IpcNetworkManager>(
@@ -1336,6 +1260,12 @@ void PeerConnectionDependencyFactory::BindPermissionService(
 
   execution_context->GetBrowserInterfaceBroker().GetInterface(
       std::move(permission_service));
+}
+
+std::unique_ptr<webrtc::LocalNetworkAccessPermissionFactoryInterface>
+PeerConnectionDependencyFactory::
+    CreateLocalNetworkAccessPermissionFactoryForTesting() {
+  return std::make_unique<LocalNetworkAccessPermissionFactory>(this);
 }
 
 }  // namespace blink

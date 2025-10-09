@@ -18,6 +18,7 @@
 #import "components/sync_device_info/device_info_sync_service.h"
 #import "ios/chrome/app/tests_hook.h"
 #import "ios/chrome/browser/data_sharing/model/data_sharing_service_factory.h"
+#import "ios/chrome/browser/data_sharing/model/personal_collaboration_data/personal_collaboration_data_service_factory.h"
 #import "ios/chrome/browser/metrics/model/ios_chrome_metrics_service_accessor.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service_factory.h"
@@ -37,8 +38,7 @@ namespace {
 // Builds the service.
 std::unique_ptr<KeyedService> BuildService(
     SyntheticFieldTrialHelper* synthetic_field_trial_helper,
-    web::BrowserState* context) {
-  ProfileIOS* profile = ProfileIOS::FromBrowserState(context);
+    ProfileIOS* profile) {
   CHECK(!profile->IsOffTheRecord());
 
   // Give the opportunity for the test hook to override the factory from
@@ -53,6 +53,9 @@ std::unique_ptr<KeyedService> BuildService(
           ->GetDeviceInfoTracker();
   auto* opt_guide = OptimizationGuideServiceFactory::GetForProfile(profile);
   auto* identity_manager = IdentityManagerFactory::GetForProfile(profile);
+  auto* personal_collaboration_data_service =
+      data_sharing::personal_collaboration_data::
+          PersonalCollaborationDataServiceFactory::GetForProfile(profile);
   auto* data_sharing_service =
       data_sharing::DataSharingServiceFactory::GetForProfile(profile);
   auto collaboration_finder =
@@ -65,7 +68,7 @@ std::unique_ptr<KeyedService> BuildService(
       CreateTabGroupSyncService(
           ::GetChannel(), DataTypeStoreServiceFactory::GetForProfile(profile),
           profile->GetPrefs(), device_info_tracker, opt_guide, identity_manager,
-          nullptr, std::move(collaboration_finder),
+          personal_collaboration_data_service, std::move(collaboration_finder),
           synthetic_field_trial_helper, data_sharing_service->GetLogger());
 
   BrowserList* browser_list = BrowserListFactory::GetForProfile(profile);
@@ -86,8 +89,8 @@ std::unique_ptr<KeyedService> BuildService(
 // static
 TabGroupSyncService* TabGroupSyncServiceFactory::GetForProfile(
     ProfileIOS* profile) {
-  return static_cast<TabGroupSyncService*>(
-      GetInstance()->GetServiceForBrowserState(profile, true));
+  return GetInstance()->GetServiceForProfileAs<TabGroupSyncService>(
+      profile, /*create=*/true);
 }
 
 // static
@@ -97,7 +100,7 @@ TabGroupSyncServiceFactory* TabGroupSyncServiceFactory::GetInstance() {
 }
 
 // static
-BrowserStateKeyedServiceFactory::TestingFactory
+TabGroupSyncServiceFactory::TestingFactory
 TabGroupSyncServiceFactory::GetDefaultFactory() {
   // KeyedService factories are never destroyed, to base::Unretained(...)
   // is safe. See the implementation of GetInstance() for details.
@@ -123,14 +126,15 @@ TabGroupSyncServiceFactory::TabGroupSyncServiceFactory()
   // signin" metrics.
   DependsOn(IdentityManagerFactory::GetInstance());
   DependsOn(data_sharing::DataSharingServiceFactory::GetInstance());
+  DependsOn(data_sharing::personal_collaboration_data::
+                PersonalCollaborationDataServiceFactory::GetInstance());
 }
 
 TabGroupSyncServiceFactory::~TabGroupSyncServiceFactory() = default;
 
 std::unique_ptr<KeyedService>
-TabGroupSyncServiceFactory::BuildServiceInstanceFor(
-    web::BrowserState* context) const {
-  return BuildService(synthetic_field_trial_helper_.get(), context);
+TabGroupSyncServiceFactory::BuildServiceInstanceFor(ProfileIOS* profile) const {
+  return BuildService(synthetic_field_trial_helper_.get(), profile);
 }
 
 // static

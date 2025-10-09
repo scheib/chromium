@@ -1247,7 +1247,7 @@ impl DFA {
     /// the unknown transition. Otherwise, trying to use the "unknown" state
     /// ID will just result in transitioning back to itself, and thus never
     /// terminating. (This is technically a special exemption to the state ID
-    /// validity rules, but is permissible since this routine is guarateed to
+    /// validity rules, but is permissible since this routine is guaranteed to
     /// never mutate the given `cache`, and thus the identifier is guaranteed
     /// to remain valid.)
     ///
@@ -1371,7 +1371,7 @@ impl DFA {
     /// the unknown transition. Otherwise, trying to use the "unknown" state
     /// ID will just result in transitioning back to itself, and thus never
     /// terminating. (This is technically a special exemption to the state ID
-    /// validity rules, but is permissible since this routine is guarateed to
+    /// validity rules, but is permissible since this routine is guaranteed to
     /// never mutate the given `cache`, and thus the identifier is guaranteed
     /// to remain valid.)
     ///
@@ -1857,7 +1857,7 @@ pub struct Cache {
     bytes_searched: usize,
     /// The progress of the current search.
     ///
-    /// This is only non-`None` when callers utlize the `Cache::search_start`,
+    /// This is only non-`None` when callers utilize the `Cache::search_start`,
     /// `Cache::search_update` and `Cache::search_finish` APIs.
     ///
     /// The purpose of recording search progress is to be able to make a
@@ -2598,8 +2598,8 @@ impl<'i, 'c> Lazy<'i, 'c> {
         unit: alphabet::Unit,
         to: LazyStateID,
     ) {
-        assert!(self.as_ref().is_valid(from), "invalid 'from' id: {:?}", from);
-        assert!(self.as_ref().is_valid(to), "invalid 'to' id: {:?}", to);
+        assert!(self.as_ref().is_valid(from), "invalid 'from' id: {from:?}");
+        assert!(self.as_ref().is_valid(to), "invalid 'to' id: {to:?}");
         let offset =
             from.as_usize_untagged() + self.dfa.classes.get_by_unit(unit);
         self.cache.trans[offset] = to;
@@ -4080,10 +4080,9 @@ impl Builder {
             // and mush on.
             if self.config.get_skip_cache_capacity_check() {
                 debug!(
-                    "given capacity ({}) is too small, \
+                    "given capacity ({cache_capacity}) is too small, \
                      since skip_cache_capacity_check is enabled, \
-                     setting cache capacity to minimum ({})",
-                    cache_capacity, min_cache,
+                     setting cache capacity to minimum ({min_cache})",
                 );
                 cache_capacity = min_cache;
             } else {

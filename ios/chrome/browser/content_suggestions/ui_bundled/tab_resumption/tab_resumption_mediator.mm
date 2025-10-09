@@ -4,8 +4,6 @@
 
 #import "ios/chrome/browser/content_suggestions/ui_bundled/tab_resumption/tab_resumption_mediator.h"
 
-#import <MaterialComponents/MaterialSnackbar.h>
-
 #import <algorithm>
 
 #import "base/apple/foundation_util.h"
@@ -27,10 +25,10 @@
 #import "components/commerce/core/price_tracking_utils.h"
 #import "components/commerce/core/proto/price_tracking.pb.h"
 #import "components/commerce/core/shopping_service.h"
+#import "components/ntp_tiles/pref_names.h"
 #import "components/optimization_guide/core/hints/optimization_guide_decision.h"
 #import "components/optimization_guide/proto/common_types.pb.h"
 #import "components/optimization_guide/proto/hints.pb.h"
-#import "components/page_image_service/features.h"
 #import "components/page_image_service/image_service.h"
 #import "components/page_image_service/mojom/page_image_service.mojom.h"
 #import "components/payments/core/currency_formatter.h"
@@ -80,7 +78,8 @@
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/public/features/system_flags.h"
-#import "ios/chrome/browser/shared/ui/util/snackbar_util.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message_action.h"
 #import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/snapshots/model/snapshot_browser_agent.h"
 #import "ios/chrome/browser/snapshots/model/snapshot_id.h"
@@ -222,7 +221,8 @@ void ConfigureTabResumptionItemForShopCard(
       decisionWithMetadata.metadata
           .ParsedMetadata<commerce::PriceTrackingData>();
 
-  if (commerce::kShopCardVariation.Get() == commerce::kShopCardArm3 &&
+  if (base::Contains(commerce::kShopCardVariation.Get(),
+                     commerce::kShopCardArm3) &&
       HasPriceDropDataForTabResumption(price_tracking_data)) {
     item.shopCardData = [[ShopCardData alloc] init];
     item.shopCardData.shopCardItemType = ShopCardItemType::kPriceDropOnTab;
@@ -280,19 +280,21 @@ void ConfigureTabResumptionItemForShopCard(
 
 bool IsShopCardImpressionLimitsEnabled() {
   return base::FeatureList::IsEnabled(commerce::kShopCardImpressionLimits) &&
-         (commerce::kShopCardVariation.Get() == commerce::kShopCardArm3 ||
+         (base::Contains(commerce::kShopCardVariation.Get(),
+                         commerce::kShopCardArm3) ||
           commerce::kShopCardVariation.Get() == commerce::kShopCardArm4 ||
           commerce::kShopCardVariation.Get() == commerce::kShopCardArm5);
 }
 
 int GetImpressionLimit() {
   return base::GetFieldTrialParamByFeatureAsInt(
-      commerce::kShopCard, commerce::kShopCardMaxImpressions,
+      commerce::kTabResumptionShopCard, commerce::kShopCardMaxImpressions,
       kShopCardMaxImpressions);
 }
 
 const char* GetImpressionLimitPref() {
-  if (commerce::kShopCardVariation.Get() == commerce::kShopCardArm3) {
+  if (base::Contains(commerce::kShopCardVariation.Get(),
+                     commerce::kShopCardArm3)) {
     return tab_resumption_prefs::kTabResumptionWithPriceDropUrlImpressions;
   } else if (commerce::kShopCardVariation.Get() == commerce::kShopCardArm4) {
     return tab_resumption_prefs::kTabResumptionWithPriceTrackableUrlImpressions;
@@ -350,21 +352,23 @@ class TabResumptionMediatorProxy {
   TabResumptionItem* _pendingItem;
 
   // The owning Browser.
-  raw_ptr<Browser> _browser;
-  raw_ptr<PrefService> _profilePrefs;
+  raw_ptr<Browser, DanglingUntriaged> _browser;
+  raw_ptr<PrefService, DanglingUntriaged> _profilePrefs;
   SceneState* _sceneState;
   // Loads favicons.
   raw_ptr<FaviconLoader> _faviconLoader;
   // Browser Agent that manages the most recent WebState.
   raw_ptr<StartSurfaceRecentTabBrowserAgent> _recentTabBrowserAgent;
   // KeyedService responsible session sync.
-  raw_ptr<sync_sessions::SessionSyncService> _sessionSyncService;
+  raw_ptr<sync_sessions::SessionSyncService, DanglingUntriaged>
+      _sessionSyncService;
   // KeyedService responsible for sync state.
-  raw_ptr<syncer::SyncService> _syncService;
-  raw_ptr<UrlLoadingBrowserAgent> _URLLoadingBrowserAgent;
-  raw_ptr<WebStateList> _webStateList;
+  raw_ptr<syncer::SyncService, DanglingUntriaged> _syncService;
+  raw_ptr<UrlLoadingBrowserAgent, DanglingUntriaged> _URLLoadingBrowserAgent;
+  raw_ptr<WebStateList, DanglingUntriaged> _webStateList;
   // KeyedService for Salient images.
-  raw_ptr<page_image_service::ImageService> _pageImageService;
+  raw_ptr<page_image_service::ImageService, DanglingUntriaged>
+      _pageImageService;
   // Observer bridge for mediator to listen to
   // StartSurfaceRecentTabObserverBridge.
   std::unique_ptr<StartSurfaceRecentTabObserverBridge> _startSurfaceObserver;
@@ -411,8 +415,7 @@ class TabResumptionMediatorProxy {
 
     _tabResumptionDisabled = [[PrefBackedBoolean alloc]
         initWithPrefService:_profilePrefs
-                   prefName:
-                       prefs::kHomeCustomizationMagicStackTabResumptionEnabled];
+                   prefName:ntp_tiles::prefs::kTabResumptionHomeModuleEnabled];
     [_tabResumptionDisabled setObserver:self];
 
     ProfileIOS* profile = _browser->GetProfile();
@@ -584,9 +587,9 @@ class TabResumptionMediatorProxy {
   [self.dispatcher showSnackbarMessage:[self snackbarMessage:result item:item]];
 }
 
-- (MDCSnackbarMessage*)snackbarMessage:(ShopCardTrackItemResult)result
-                                  item:(TabResumptionItem*)item {
-  MDCSnackbarMessageAction* action = [[MDCSnackbarMessageAction alloc] init];
+- (SnackbarMessage*)snackbarMessage:(ShopCardTrackItemResult)result
+                               item:(TabResumptionItem*)item {
+  SnackbarMessageAction* action = [[SnackbarMessageAction alloc] init];
 
   if (result != ShopCardTrackItemResult::kTrackError) {
     // Tracking was successful. Give option to go to price tracking menu.
@@ -605,29 +608,32 @@ class TabResumptionMediatorProxy {
         IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_SUCCESS_SNACKBAR_ACTION);
     action.accessibilityLabel = l10n_util::GetNSString(
         IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_SUCCESS_SNACKBAR_ACTION);
-    action.accessibilityIdentifier = kPriceTrackingOnTabSuccessAccessibilityID;
   } else {
     action.title = l10n_util::GetNSString(
         IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_FAILURE_SNACKBAR_ACTION);
     action.accessibilityLabel = l10n_util::GetNSString(
         IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_FAILURE_SNACKBAR_ACTION);
-    action.accessibilityIdentifier = kPriceTrackingOnTabFailureAccessibilityID;
   }
 
-  MDCSnackbarMessage* message;
+  SnackbarMessage* message;
   if (result == ShopCardTrackItemResult::kTrackSuccess) {
-    message = CreateSnackbarMessage(l10n_util::GetNSString(
-        IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_SUCCESS_SNACKBAR));
+    message = [[SnackbarMessage alloc]
+        initWithTitle:
+            l10n_util::GetNSString(
+                IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_SUCCESS_SNACKBAR)];
   } else if (result == ShopCardTrackItemResult::kTrackSuccesNoNotification) {
-    message = CreateSnackbarMessage(l10n_util::GetNSString(
-        IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_NO_PUSH_PERMISSION_SNACKBAR));
+    message = [[SnackbarMessage alloc]
+        initWithTitle:
+            l10n_util::GetNSString(
+                IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_NO_PUSH_PERMISSION_SNACKBAR)];
   } else {
-    message = CreateSnackbarMessage(l10n_util::GetNSString(
-        IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_FAILURE_SNACKBAR));
+    message = [[SnackbarMessage alloc]
+        initWithTitle:
+            l10n_util::GetNSString(
+                IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_TRACK_PRICE_FAILURE_SNACKBAR)];
   }
 
   message.action = action;
-  message.category = kPriceTrackingOnTabSnackbarCategory;
   return message;
 }
 
@@ -824,7 +830,8 @@ class TabResumptionMediatorProxy {
     }
   }
 
-  if (commerce::kShopCardVariation.Get() == commerce::kShopCardArm3 ||
+  if (base::Contains(commerce::kShopCardVariation.Get(),
+                     commerce::kShopCardArm3) ||
       commerce::kShopCardVariation.Get() == commerce::kShopCardArm4) {
     GURL url = resumptionURL;
     __weak __typeof(self) weakSelf = self;
@@ -938,8 +945,7 @@ class TabResumptionMediatorProxy {
 
 // Fetches the salient image for `item`.
 - (void)fetchSalientImageForItem:(TabResumptionItem*)item {
-  if (!IsTabResumptionImagesSalientEnabled() || !_pageImageService ||
-      !base::FeatureList::IsEnabled(page_image_service::kImageService)) {
+  if (!IsTabResumptionImagesSalientEnabled() || !_pageImageService) {
     return;
   }
   __weak TabResumptionMediator* weakSelf = self;
@@ -959,7 +965,7 @@ class TabResumptionMediatorProxy {
                         forItem:(TabResumptionItem*)item {
   __weak TabResumptionMediator* weakSelf = self;
   if (!URL.is_valid() || !URL.SchemeIsCryptographic() ||
-      !base::EndsWith(URL.host(), kGStatic)) {
+      !base::EndsWith(URL.GetHost(), kGStatic)) {
     return;
   }
   _imageFetcher->FetchImageData(

@@ -6,7 +6,9 @@
 #include "chrome/browser/glic/public/glic_keyed_service_factory.h"
 #include "chrome/browser/glic/test_support/glic_test_util.h"
 #include "chrome/browser/glic/test_support/interactive_glic_test.h"
+#include "chrome/browser/glic/widget/glic_window_animator.h"
 #include "chrome/browser/glic/widget/glic_window_controller.h"
+#include "chrome/browser/glic/widget/glic_window_controller_impl.h"
 #include "chrome/browser/glic/widget/glic_window_resize_animation.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -17,6 +19,10 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/widget/widget.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "base/mac/mac_util.h"
+#endif  // BUILDFLAG(IS_MAC)
+
 #if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
@@ -25,6 +31,11 @@ namespace glic {
 namespace {
 
 constexpr base::TimeDelta kTestAnimationDuration = base::Milliseconds(300);
+
+#if BUILDFLAG(IS_MAC)
+bool kTestDisabledForVirtualMachineMac =
+    (base::mac::MacOSMajorVersion() == 15) && base::mac::IsVirtualMachine();
+#endif  // BUILDFLAG(IS_MAC)
 
 void Append(std::string* a, const char* b) {
   *a += b;
@@ -74,8 +85,8 @@ class GlicWindowResizeAnimationTest : public test::InteractiveGlicTest {
                 base::OnceClosure callback) {
     auto animation = std::make_unique<GlicWindowResizeAnimation>(
         window_controller().GetGlicWidget()->GetWeakPtr(),
-        window_controller().window_animator(), target_bounds, duration,
-        std::move(callback));
+        GetWindowControllerImpl().GetWindowAnimatorForTesting(), target_bounds,
+        duration, std::move(callback));
     auto test_api = std::make_unique<gfx::AnimationTestApi>(animation.get());
     test_api->SetStartTime(animation_creation_time_);
     return {std::move(animation), std::move(test_api)};
@@ -104,6 +115,13 @@ class GlicWindowResizeAnimationTest : public test::InteractiveGlicTest {
 }  // namespace
 
 IN_PROC_BROWSER_TEST_F(GlicWindowResizeAnimationTest, ExpandsWidgetSize) {
+  // TODO(crbug.com/445214951): Flaky on mac-vm builder for macOS 15.
+#if BUILDFLAG(IS_MAC)
+  if (kTestDisabledForVirtualMachineMac) {
+    GTEST_SKIP() << "Disabled on macOS Sequoia for virtual machines.";
+  }
+#endif  // BUILDFLAG(IS_MAC)
+
   gfx::Rect test_initial_bounds = GetWidgetBounds();
   gfx::Rect test_new_bounds;
   test_new_bounds.set_origin(test_initial_bounds.origin());
@@ -120,6 +138,13 @@ IN_PROC_BROWSER_TEST_F(GlicWindowResizeAnimationTest, ExpandsWidgetSize) {
 }
 
 IN_PROC_BROWSER_TEST_F(GlicWindowResizeAnimationTest, ShrinksWidgetSize) {
+  // TODO(crbug.com/445214951): Flaky on mac-vm builder for macOS 15.
+#if BUILDFLAG(IS_MAC)
+  if (kTestDisabledForVirtualMachineMac) {
+    GTEST_SKIP() << "Disabled on macOS Sequoia for virtual machines.";
+  }
+#endif  // BUILDFLAG(IS_MAC)
+
   // The widget may be starting at its minimum size, so in order to test
   // shrinking, it must grow first.
   gfx::Rect test_initial_bounds(GetWidgetBounds().origin(), {400, 400});
@@ -162,6 +187,13 @@ IN_PROC_BROWSER_TEST_F(GlicWindowResizeAnimationTest,
 }
 
 IN_PROC_BROWSER_TEST_F(GlicWindowResizeAnimationTest, UpdateTargetPosition) {
+  // TODO(crbug.com/445214951): Flaky on mac-vm builder for macOS 15.
+#if BUILDFLAG(IS_MAC)
+  if (kTestDisabledForVirtualMachineMac) {
+    GTEST_SKIP() << "Disabled on macOS Sequoia for virtual machines.";
+  }
+#endif
+
   if (!PlatformSupportsScreenCoordinates()) {
     GTEST_SKIP() << "Global screen coordinates unavailable";
   }

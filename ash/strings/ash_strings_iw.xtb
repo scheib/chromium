@@ -332,10 +332,12 @@
 <translation id="2083190527011054446">לילה טוב <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">פתיחה של בוחר אמוג'י</translation>
 <translation id="2088116547584365419">משחקים</translation>
+<translation id="2093792000875799555">‏חדשות לגבי Steam ל-Chromebook</translation>
 <translation id="209965399369889474">לא מחובר לרשת</translation>
 <translation id="2107581415810719320">כפתור אחר <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">‏כבל ה-USB-C שחיברת לא תומך ב-Thunderbolt. יכול להיות שביצועי המכשיר יוגבלו.</translation>
 <translation id="2108303511227308752">‏מקשי הקיצור Alt + ‏Backspace הוחלפו. כדי לדמות את הפעולה של המקש Delete, יש להקיש על המקש <ph name="LAUNCHER_KEY_NAME" /> + המקש Backspace.</translation>
+<translation id="2115680839221566783">רמת הטעינה של הסוללה היא %<ph name="PERCENTAGE" />. הטעינה בהשהיה.</translation>
 <translation id="2126242104232412123">שולחן עבודה חדש</translation>
 <translation id="2132302418721800944">הקלטה של מסך מלא</translation>
 <translation id="2135456203358955318">מגדיל במצב מעוגן</translation>
@@ -1588,6 +1590,7 @@
 <translation id="612734058257491180">‏Google Assistant לא זמינה בגלישה כאורח.</translation>
 <translation id="6127395413317891856">אין חיבור לאינטרנט. יש לבדוק את החיבור ולנסות שוב.</translation>
 <translation id="6129953537138746214">רווח</translation>
+<translation id="6136872094979134163">‏לא ניתן לאחזר את החדשות של Steam ל-Chromebook.</translation>
 <translation id="6137566720514957455">פתיחת תיבת דו-דיח להסרה של <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">במה היית רוצה להתרכז?</translation>
 <translation id="6141988275892716286">אישור הורדה</translation>
@@ -1677,6 +1680,7 @@
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> במכשיר <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">‏המעבד (CPU)</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, אירוע (<ph name="NUMBER" />)</translation>
+<translation id="6448529022565414427">הטעינה בהשהיה</translation>
 <translation id="6449483711453944360">‏בשלב הזה, אין תמיכה באפליקציות Linux ובחלונות פרטיים</translation>
 <translation id="6450245544201845082">מקשי הקיצור של לחיצה ימנית מושבתים</translation>
 <translation id="6452181791372256707">דחייה</translation>

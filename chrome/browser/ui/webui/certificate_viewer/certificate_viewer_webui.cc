@@ -49,6 +49,11 @@ using chrome_browser_server_certificate_database::CertificateTrust;
 
 namespace {
 
+CertificateViewerDialog::MockShowCallback& GetMockCallbackInstance() {
+  static base::NoDestructor<CertificateViewerDialog::MockShowCallback> instance;
+  return *instance;
+}
+
 // TODO(crbug.com/40928765): find a good place to put this shared code.
 bool MaskFromIPAndPrefixLength(const net::IPAddress& ip,
                                size_t prefix_length,
@@ -326,9 +331,7 @@ std::string DialogArgsForCertList(
     cert_info.Set("certMetadata", std::move(dict));
   }
 
-  base::JSONWriter::Write(cert_info, &data);
-
-  return data;
+  return base::WriteJson(cert_info).value_or("");
 }
 
 }  // namespace
@@ -337,12 +340,7 @@ std::string DialogArgsForCertList(
 void ShowCertificateViewer(WebContents* web_contents,
                            gfx::NativeWindow parent,
                            net::X509Certificate* cert) {
-  std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> cert_buffers;
-  cert_buffers.push_back(bssl::UpRef(cert->cert_buffer()));
-  for (const auto& intermediate : cert->intermediate_buffers()) {
-    cert_buffers.push_back(bssl::UpRef(intermediate));
-  }
-  CertificateViewerDialog::ShowConstrained(std::move(cert_buffers),
+  CertificateViewerDialog::ShowConstrained(cert->CopyCertBuffers(),
                                            web_contents, parent);
 }
 
@@ -394,6 +392,11 @@ CertificateViewerDialog* CertificateViewerDialog::ShowConstrainedWithMetadata(
 }
 
 // static
+void CertificateViewerDialog::MockForTesting(MockShowCallback callback) {
+  GetMockCallbackInstance() = std::move(callback);
+}
+
+// static
 CertificateViewerDialog* CertificateViewerDialog::ShowConstrained(
     std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> certs,
     std::optional<
@@ -402,6 +405,11 @@ CertificateViewerDialog* CertificateViewerDialog::ShowConstrained(
     CertMetadataModificationsCallback modifications_callback,
     content::WebContents* web_contents,
     gfx::NativeWindow parent) {
+  if (GetMockCallbackInstance()) {
+    GetMockCallbackInstance().Run(std::move(certs), web_contents);
+    return nullptr;
+  }
+
   CertificateViewerDialog* dialog_ptr =
       new CertificateViewerDialog(std::move(certs), std::move(cert_metadata),
                                   std::move(modifications_callback));
@@ -419,7 +427,8 @@ CertificateViewerDialog* CertificateViewerDialog::ShowConstrained(
       dialog_ptr->delegate_->GetWebContents();
   const GURL dialog_url = dialog_ptr->GetDialogContentURL();
   content::HostZoomMap::Get(dialog_web_contents->GetSiteInstance())
-      ->SetZoomLevelForHostAndScheme(dialog_url.scheme(), dialog_url.host(), 0);
+      ->SetZoomLevelForHostAndScheme(dialog_url.GetScheme(),
+                                     dialog_url.GetHost(), 0);
   return dialog_ptr;  // For tests.
 }
 

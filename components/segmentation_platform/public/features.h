@@ -17,10 +17,6 @@ BASE_DECLARE_FEATURE(kSegmentationPlatformFeature);
 // Feature flag for enabling UKM based engine.
 BASE_DECLARE_FEATURE(kSegmentationPlatformUkmEngine);
 
-// Feature flag to increase segmentation platform background processing task
-// runner priority.
-BASE_DECLARE_FEATURE(kSegmentationPlatformUserVisibleTaskRunner);
-
 // Feature flag for enabling adaptive toolbar v2 multi-output model.
 BASE_DECLARE_FEATURE(kSegmentationPlatformAdaptiveToolbarV2Feature);
 
@@ -49,11 +45,17 @@ BASE_DECLARE_FEATURE(kSegmentationPlatformSearchUser);
 // Feature flag for device switcher segment.
 BASE_DECLARE_FEATURE(kSegmentationPlatformDeviceSwitcher);
 
-// Feature flag for enabling reader mode action feature.
-BASE_DECLARE_FEATURE(kContextualPageActionShareModel);
-
 // Feature flag for enabling tab grouping action feature.
 BASE_DECLARE_FEATURE(kContextualPageActionTabGrouping);
+
+// Feature flag for enabling tab group throttling.
+BASE_DECLARE_FEATURE(kContextualPageActionTabGroupThrottling);
+
+extern const base::FeatureParam<bool>
+    kContextualPageActionTabGroupParamThrottleOnNewTab;
+
+extern const base::FeatureParam<bool>
+    kContextualPageActionTabGroupParamShowWhenNotClickedInLastDay;
 
 // Feature flag for enabling shopping user segment feature.
 BASE_DECLARE_FEATURE(kShoppingUserSegmentFeature);
@@ -94,9 +96,6 @@ BASE_DECLARE_FEATURE(kSegmentationPlatformAndroidHomeModuleRankerV2);
 
 // Feature flag for controlling sampling of training data collection.
 BASE_DECLARE_FEATURE(kSegmentationPlatformTimeDelaySampling);
-
-// Feature flag for intoroducing delay while initializing models at startup.
-BASE_DECLARE_FEATURE(kSegmentationPlatformModelInitializationDelay);
 
 // Feature flag for turning of signal database cache.
 BASE_DECLARE_FEATURE(kSegmentationPlatformSignalDbCache);
@@ -195,6 +194,39 @@ BASE_DECLARE_FEATURE(kSegmentationPlatformFedCmUser);
 // Feature flag enabling checking a propensity model before showing a default
 // browser promo.
 BASE_DECLARE_FEATURE(kDefaultBrowserPromoPropensityModel);
+
+// Feature flag for enabling the App Bundle Promo Ephemeral card in the Magic
+// Stack.
+BASE_DECLARE_FEATURE(kAppBundlePromoEphemeralCard);
+// The maximum number of impressions for the `AppBundlePromoEphemeralModule`
+// Magic Stack card before the card should be hidden.
+extern const base::FeatureParam<int> kMaxAppBundlePromoImpressions;
+// The maximum number of app bundle apps that a user can have installed on their
+// device to have the card be shown.
+extern const base::FeatureParam<int> kMaxAppBundleAppsInstalled;
+
+// Whether the App Bundle promo module should be shown in the Magic Stack.
+bool IsAppBundlePromoEphemeralCardEnabled();
+
+// Feature flag to enable the ephemeral Default Browser card in the Magic Stack
+// on iOS.
+BASE_DECLARE_FEATURE(kDefaultBrowserMagicStackIos);
+// The maximum number impressions for `kDefaultBrowserMagicStackIos` before the
+// card should be hidden.
+extern const base::FeatureParam<int> kMaxDefaultBrowserMagicStackIosImpressions;
+
+// Whether the Default Browser promo module should be shown in the Magic Stack.
+bool IsDefaultBrowserMagicStackEnabled();
+
+// Feature flag for enabling the tips notifications ranker.
+BASE_DECLARE_FEATURE(kAndroidTipsNotifications);
+
+// The prioritization of tips notifications based on trust and safety.
+extern const base::FeatureParam<bool> kTrustAndSafety;
+// The prioritization of tips notifications based on essential features.
+extern const base::FeatureParam<bool> kEssential;
+// The prioritization of tips notifications based on new features.
+extern const base::FeatureParam<bool> kNewFeatures;
 
 }  // namespace segmentation_platform::features
 

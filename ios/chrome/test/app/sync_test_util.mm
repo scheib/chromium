@@ -201,7 +201,8 @@ void TriggerSyncCycle(syncer::DataType type) {
   ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
   syncer::SyncService* sync_service =
       SyncServiceFactory::GetForProfile(profile);
-  sync_service->TriggerRefresh({type});
+  sync_service->TriggerRefresh(
+      syncer::SyncService::TriggerRefreshSource::kUnknown, {type});
 }
 
 int GetNumberOfSyncEntities(syncer::DataType type) {
@@ -443,7 +444,8 @@ void AddTypedURLToClient(const GURL& url, base::Time visitTimestamp) {
 
   historyService->AddPage(url, visitTimestamp, 0, 1, GURL(),
                           history::RedirectList(), ui::PAGE_TRANSITION_TYPED,
-                          history::SOURCE_BROWSED, false);
+                          history::SOURCE_BROWSED,
+                          history::VisitResponseCodeCategory::kNot404, false);
 }
 
 void SetPageTitle(const GURL& url, const std::u16string& title) {

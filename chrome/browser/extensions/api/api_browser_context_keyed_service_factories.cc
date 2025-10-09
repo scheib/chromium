@@ -8,6 +8,7 @@
 #include "chrome/browser/extensions/api/developer_private/developer_private_api.h"
 #include "chrome/browser/extensions/api/font_settings/font_settings_api.h"
 #include "chrome/browser/extensions/api/history/history_api.h"
+#include "chrome/browser/extensions/api/identity/identity_api.h"
 #include "chrome/browser/extensions/api/messaging/incognito_connectability.h"
 #include "chrome/browser/extensions/api/notifications/extension_notification_display_helper_factory.h"
 #include "chrome/browser/extensions/api/omnibox/omnibox_api.h"
@@ -18,6 +19,7 @@
 #include "chrome/browser/extensions/api/tabs/tabs_windows_api.h"
 #include "chrome/browser/extensions/api/web_authentication_proxy/web_authentication_proxy_api.h"
 #include "chrome/browser/extensions/api/web_authentication_proxy/web_authentication_proxy_service.h"
+#include "chrome/browser/extensions/api/web_navigation/web_navigation_api.h"
 #include "chrome/browser/extensions/api/webrtc_audio_private/webrtc_audio_private_api.h"
 #include "chrome/browser/extensions/commands/command_service.h"
 #include "chrome/common/buildflags.h"
@@ -34,7 +36,6 @@
 #include "chrome/browser/extensions/api/bookmark_manager_private/bookmark_manager_private_api.h"
 #include "chrome/browser/extensions/api/braille_display_private/braille_display_private_api.h"
 #include "chrome/browser/extensions/api/enterprise_reporting_private/enterprise_reporting_private_event_router.h"
-#include "chrome/browser/extensions/api/identity/identity_api.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation_manager.h"
 #include "chrome/browser/extensions/api/language_settings_private/language_settings_private_delegate_factory.h"
 #include "chrome/browser/extensions/api/networking_private/networking_private_ui_delegate_factory_impl.h"
@@ -46,7 +47,6 @@
 #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
 #include "chrome/browser/extensions/api/tab_capture/tab_capture_registry.h"
 #include "chrome/browser/extensions/api/tab_groups/tab_groups_event_router_factory.h"
-#include "chrome/browser/extensions/api/web_navigation/web_navigation_api.h"
 #include "components/safe_browsing/buildflags.h"
 #include "extensions/browser/api/bluetooth_low_energy/bluetooth_low_energy_api.h"
 #include "extensions/browser/api/networking_private/networking_private_delegate_factory.h"
@@ -86,6 +86,7 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::ExtensionNotificationDisplayHelperFactory::GetInstance();
   extensions::FontSettingsAPI::GetFactoryInstance();
   extensions::HistoryAPI::GetFactoryInstance();
+  extensions::IdentityAPI::GetFactoryInstance();
   extensions::IncognitoConnectability::EnsureFactoryBuilt();
 #if BUILDFLAG(ENABLE_SERVICE_DISCOVERY)
   extensions::MDnsAPI::GetFactoryInstance();
@@ -99,6 +100,7 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::WebAuthenticationProxyAPI::GetFactoryInstance();
   extensions::WebAuthenticationProxyRegistrarFactory::GetInstance();
   extensions::WebAuthenticationProxyServiceFactory::GetInstance();
+  extensions::WebNavigationAPI::GetFactoryInstance();
   extensions::WebrtcAudioPrivateEventService::GetFactoryInstance();
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -111,7 +113,6 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::DocumentScanAPIHandler::GetFactoryInstance();
 #endif
   extensions::EnterpriseReportingPrivateEventRouterFactory::GetInstance();
-  extensions::IdentityAPI::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::InputImeAPI::GetFactoryInstance();
 #endif
@@ -141,7 +142,6 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
   extensions::TerminalPrivateAPI::GetFactoryInstance();
   extensions::VerifyTrustApiService::GetFactoryInstance();
 #endif
-  extensions::WebNavigationAPI::GetFactoryInstance();
 #if BUILDFLAG(IS_CHROMEOS)
   extensions::WMDesksPrivateEventsAPI::GetFactoryInstance();
 #endif

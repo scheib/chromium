@@ -21,6 +21,7 @@
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
 #include "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
+#include "components/autofill/core/browser/data_model/addresses/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/addresses/autofill_structured_address_component.h"
 #include "components/autofill/core/browser/field_type_utils.h"
 #include "components/autofill/core/browser/field_types.h"
@@ -50,7 +51,8 @@ constexpr auto kRecordTypeMapping =
         {{"account", AutofillProfile::RecordType::kAccount},
          {"accountHome", AutofillProfile::RecordType::kAccountHome},
          {"accountWork", AutofillProfile::RecordType::kAccountWork},
-         {"localOrSyncable", AutofillProfile::RecordType::kLocalOrSyncable}});
+         {"localOrSyncable", AutofillProfile::RecordType::kLocalOrSyncable},
+         {"accountNameEmail", AutofillProfile::RecordType::kAccountNameEmail}});
 constexpr std::string_view kKeyInitialCreatorId = "initial_creator_id";
 
 // Checks if the `profile` is changed by `FinalizeAfterImport()`. See
@@ -118,8 +120,12 @@ std::optional<AutofillProfile> MakeProfile(const base::Value::Dict& dict) {
       }
     }
     const FieldType type = TypeNameToFieldType(key);
-    if (type == UNKNOWN_TYPE || !IsAddressType(type)) {
-      LOG(ERROR) << "Unknown or non-address type " << key << ".";
+    // For phone numbers, only the PHONE_HOME_WHOLE_NUMBER is stored internally
+    // and as a result, setting partial phone number is prohibited.
+    if (!IsAddressType(type) ||
+        (GroupTypeOfFieldType(type) == FieldTypeGroup::kPhone &&
+         type != PHONE_HOME_WHOLE_NUMBER)) {
+      LOG(ERROR) << "Invalid address type " << key << ".";
       return std::nullopt;
     }
     profile.SetRawInfoWithVerificationStatus(
@@ -142,9 +148,8 @@ std::optional<CreditCard> MakeCard(const base::Value::Dict& dict) {
       continue;
     }
     const FieldType type = TypeNameToFieldType(key);
-    if (type == UNKNOWN_TYPE ||
-        GroupTypeOfFieldType(type) != FieldTypeGroup::kCreditCard) {
-      LOG(ERROR) << "Unknown or non-credit card type " << key << ".";
+    if (GroupTypeOfFieldType(type) != FieldTypeGroup::kCreditCard) {
+      LOG(ERROR) << "Non-credit card type " << key << ".";
       return std::nullopt;
     }
     card.SetRawInfo(type, base::UTF8ToUTF16(value.GetString()));
@@ -226,8 +231,8 @@ std::optional<std::vector<T>> DataModelsFromJSON(
 // If parsing fails the error is logged and std::nullopt is returned.
 std::optional<AutofillProfilesAndCreditCards> LoadDataFromJSONContent(
     const std::string& file_content) {
-  std::optional<base::Value::Dict> json =
-      base::JSONReader::ReadDict(file_content);
+  std::optional<base::Value::Dict> json = base::JSONReader::ReadDict(
+      file_content, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!json) {
     LOG(ERROR) << "Failed to parse JSON file.";
     return std::nullopt;

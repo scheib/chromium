@@ -419,7 +419,7 @@ void AutofillDriverRouter::FocusOnFormField(
   callback(CHECK_DEREF(target), browser_form, field_id);
 }
 
-void AutofillDriverRouter::DidFillAutofillFormData(
+void AutofillDriverRouter::DidAutofillForm(
     RoutedCallback<const FormData&, base::TimeTicks> callback,
     AutofillDriver& source,
     FormData form,
@@ -648,6 +648,20 @@ void AutofillDriverRouter::RendererShouldTriggerSuggestions(
   if (AutofillDriver* target = DriverOfFrame(field_id.frame_token)) {
     callback(*target, field_id.renderer_id, trigger_source);
   }
+}
+
+void AutofillDriverRouter::DispatchEmailVerifiedEvent(
+    RoutedCallback<FieldRendererId, const std::string&> callback,
+    const FieldGlobalId& field_id,
+    const std::string& presentation_token) {
+  if (auto* target = DriverOfFrame(field_id.frame_token)) {
+    callback(*target, field_id.renderer_id, presentation_token);
+  }
+}
+
+void AutofillDriverRouter::ExposeDomNodeIdsInAllFrames(
+    RoutedCallback<> callback) {
+  ForEachFrame(form_forest_, callback);
 }
 
 void AutofillDriverRouter::RendererShouldSetSuggestionAvailability(

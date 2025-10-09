@@ -44,6 +44,13 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
+namespace {
+
+// A default size used for canvas memory allocation when canvas size is greater
+// than 2^20.
+constexpr int kMaximumCanvasSize = 2 << 20;
+
+}  // namespace
 
 CanvasRenderingContext::CanvasRenderingContext(
     CanvasRenderingContextHost* host,
@@ -65,6 +72,24 @@ CanvasRenderingContext::CanvasRenderingContext(
   CHECK(host_);
 }
 
+intptr_t CanvasRenderingContext::AllocatedBufferSize() const {
+  if (!Host() || isContextLost()) {
+    return 0;
+  }
+  int buffer_count = AllocatedBufferCountPerPixel();
+
+  // NOTE: All formats used by canvas are either 8-bit or 16-bit.
+  const int bytes_per_pixel = GetSharedImageFormat().BitsPerPixel() / 8;
+
+  // Recomputation of externally memory usage computation is carried out
+  // in all cases.
+  base::CheckedNumeric<intptr_t> checked_usage = buffer_count * bytes_per_pixel;
+  gfx::Size canvas_size = DrawingBufferSize();
+  checked_usage *= std::min(kMaximumCanvasSize, canvas_size.width());
+  checked_usage *= std::min(kMaximumCanvasSize, canvas_size.height());
+  return checked_usage.ValueOrDefault(std::numeric_limits<intptr_t>::max());
+}
+
 void CanvasRenderingContext::Dispose() {
   RenderTaskEnded();
 
@@ -80,7 +105,7 @@ void CanvasRenderingContext::Dispose() {
   }
 }
 
-bool CanvasRenderingContext::IsDrawElementEligible(
+bool CanvasRenderingContext::IsDrawElementImageEligible(
     Element* element,
     const String& func_name,
     ExceptionState& exception_state) {
@@ -140,13 +165,6 @@ bool CanvasRenderingContext::IsDrawElementEligible(
     return false;
   }
 
-  // TODO(crbug.com/413728246): Maybe we can support canvas element.
-  if (IsA<HTMLCanvasElement>(element)) {
-    exception_state.ThrowTypeError(
-        build_error("<canvas> children of a <canvas> cannot be passed to %s."));
-    return false;
-  }
-
   return true;
 }
 
@@ -156,7 +174,8 @@ bool CanvasRenderingContext::ConvertHitTestRegionsToHTMLCanvasRegions(
     const String& func_name,
     ExceptionState& exception_state) {
   for (const auto& region : hit_test_regions) {
-    if (!IsDrawElementEligible(region->element(), func_name, exception_state)) {
+    if (!IsDrawElementImageEligible(region->element(), func_name,
+                                    exception_state)) {
       return false;
     }
 

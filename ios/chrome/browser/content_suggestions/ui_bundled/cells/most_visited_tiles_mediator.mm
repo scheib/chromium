@@ -4,8 +4,6 @@
 
 #import "ios/chrome/browser/content_suggestions/ui_bundled/cells/most_visited_tiles_mediator.h"
 
-#import <MaterialComponents/MaterialSnackbar.h>
-
 #import "base/apple/foundation_util.h"
 #import "base/ios/ios_util.h"
 #import "base/memory/raw_ptr.h"
@@ -41,7 +39,8 @@
 #import "ios/chrome/browser/shared/model/utils/observable_boolean.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
-#import "ios/chrome/browser/shared/ui/util/snackbar_util.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message_action.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_params.h"
@@ -74,10 +73,11 @@ const CGFloat kMagicStackMostVisitedFaviconMinimalSize = 18;
   // Whether incognito mode is available.
   BOOL _incognitoAvailable;
   BOOL _recordedPageImpression;
-  raw_ptr<PrefService> _prefService;
+  raw_ptr<PrefService, DanglingUntriaged> _prefService;
   PrefChangeRegistrar _prefChangeRegistrar;
-  raw_ptr<UrlLoadingBrowserAgent> _URLLoadingBrowserAgent;
-  raw_ptr<ChromeAccountManagerService> _accountManagerService;
+  raw_ptr<UrlLoadingBrowserAgent, DanglingUntriaged> _URLLoadingBrowserAgent;
+  raw_ptr<ChromeAccountManagerService, DanglingUntriaged>
+      _accountManagerService;
 }
 
 - (instancetype)
@@ -374,19 +374,18 @@ const CGFloat kMagicStackMostVisitedFaviconMinimalSize = 18;
 // Shows a snackbar with an action to undo the removal of the most visited item
 // with a `URL`.
 - (void)showMostVisitedUndoForURL:(GURL)URL {
-  MDCSnackbarMessageAction* action = [[MDCSnackbarMessageAction alloc] init];
+  SnackbarMessageAction* action = [[SnackbarMessageAction alloc] init];
   __weak MostVisitedTilesMediator* weakSelf = self;
   action.handler = ^{
     [weakSelf allowMostVisitedURL:URL];
   };
   action.title = l10n_util::GetNSString(IDS_NEW_TAB_UNDO_THUMBNAIL_REMOVE);
-  action.accessibilityIdentifier = @"Undo";
 
   TriggerHapticFeedbackForNotification(UINotificationFeedbackTypeSuccess);
-  MDCSnackbarMessage* message = CreateSnackbarMessage(
-      l10n_util::GetNSString(IDS_IOS_NEW_TAB_MOST_VISITED_ITEM_REMOVED));
+  SnackbarMessage* message = [[SnackbarMessage alloc]
+      initWithTitle:l10n_util::GetNSString(
+                        IDS_IOS_NEW_TAB_MOST_VISITED_ITEM_REMOVED)];
   message.action = action;
-  message.category = @"MostVisitedUndo";
   [self.snackbarHandler showSnackbarMessage:message];
 }
 
@@ -412,9 +411,9 @@ const CGFloat kMagicStackMostVisitedFaviconMinimalSize = 18;
 - (void)
     lookForNewMostVisitedSite:(const base::Value::List&)freshMostVisitedSites
           oldMostVisitedSites:(const base::Value::List&)oldMostVisitedSites {
-  for (auto const& freshSiteURLValue : freshMostVisitedSites) {
+  for (const auto& freshSiteURLValue : freshMostVisitedSites) {
     BOOL freshSiteInOldList = NO;
-    for (auto const& oldSiteURLValue : oldMostVisitedSites) {
+    for (const auto& oldSiteURLValue : oldMostVisitedSites) {
       if (freshSiteURLValue.GetString() == oldSiteURLValue.GetString()) {
         freshSiteInOldList = YES;
         break;

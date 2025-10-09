@@ -23,9 +23,13 @@
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/trace_event.h"
 #include "base/types/expected.h"
+#include "components/performance_manager/scenario_api/performance_scenarios.h"
+#include "net/base/features.h"
 #include "net/base/io_buffer.h"
 #include "net/disk_cache/cache_util.h"
+#include "net/disk_cache/sql/indexed_pair_set.h"
 #include "net/disk_cache/sql/sql_backend_constants.h"
+#include "net/disk_cache/sql/sql_persistent_store_in_memory_index.h"
 #include "net/disk_cache/sql/sql_persistent_store_queries.h"
 #include "sql/database.h"
 #include "sql/error_delegate_util.h"
@@ -40,6 +44,20 @@ namespace {
 
 constexpr std::string_view kHistogramPrefix = "Net.SqlDiskCache.Backend.";
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+// LINT.IfChange(IndexMismatchLocation)
+enum class IndexMismatchLocation {
+  kOpenOrCreateEntry = 0,
+  kCreateEntry = 1,
+  kDoomEntry = 2,
+  kStartEviction = 3,
+  kDeleteLiveEntry = 4,
+  kDeleteLiveEntriesBetween = 5,
+  kMaxValue = kDeleteLiveEntriesBetween,
+};
+// LINT.ThenChange(//tools/metrics/histograms/metadata/net/enums.xml:SqlDiskCacheIndexMismatchLocation)
+
 // Holds summary statistics about the cache store.
 struct StoreStatus {
   int32_t entry_count = 0;
@@ -48,10 +66,19 @@ struct StoreStatus {
 
 // The result of a successful initialization.
 struct InitResult {
-  explicit InitResult(int64_t max_bytes) : max_bytes(max_bytes) {}
+  InitResult(int64_t max_bytes,
+             SqlPersistentStoreInMemoryIndex&& index,
+             std::vector<SqlPersistentStore::ResId> doomed_entry_res_ids)
+      : max_bytes(max_bytes),
+        index(std::move(index)),
+        doomed_entry_res_ids(std::move(doomed_entry_res_ids)) {}
   ~InitResult() = default;
+  InitResult(InitResult&& other) = default;
+  InitResult& operator=(InitResult&& other) = default;
 
   int64_t max_bytes = 0;
+  SqlPersistentStoreInMemoryIndex index;
+  std::vector<SqlPersistentStore::ResId> doomed_entry_res_ids;
 };
 
 // A helper struct to associate an IOBuffer with a starting offset.
@@ -65,6 +92,7 @@ using disk_cache_sql_queries::Query;
 
 using EntryInfo = SqlPersistentStore::EntryInfo;
 using Error = SqlPersistentStore::Error;
+using ResId = SqlPersistentStore::ResId;
 using EntryInfoOrError = SqlPersistentStore::EntryInfoOrError;
 using OptionalEntryInfoOrError = SqlPersistentStore::OptionalEntryInfoOrError;
 using EntryInfoWithIdAndKey = SqlPersistentStore::EntryInfoWithIdAndKey;
@@ -72,6 +100,8 @@ using OptionalEntryInfoWithIdAndKey =
     SqlPersistentStore::OptionalEntryInfoWithIdAndKey;
 using IntOrError = SqlPersistentStore::IntOrError;
 using InitResultOrError = base::expected<InitResult, Error>;
+using ResIdList = std::vector<ResId>;
+using ResIdListOrError = base::expected<ResIdList, Error>;
 
 // A helper struct to bundle an operation's result with a flag indicating
 // whether an eviction check is needed. This allows the background sequence,
@@ -97,21 +127,8 @@ using ErrorAndEvictionRequested = ResultAndEvictionRequested<Error>;
 using EntryInfoOrErrorAndEvictionRequested =
     ResultAndEvictionRequested<EntryInfoOrError>;
 using IntOrErrorAndEvictionRequested = ResultAndEvictionRequested<IntOrError>;
-
-std::optional<base::UnguessableToken> ToUnguessableToken(int64_t token_high,
-                                                         int64_t token_low) {
-  // There is no `sql::Statement::ColumnUint64()` method. So we cast to
-  // uint64_t.
-  return base::UnguessableToken::Deserialize(static_cast<uint64_t>(token_high),
-                                             static_cast<uint64_t>(token_low));
-}
-
-int64_t TokenHigh(const base::UnguessableToken& token) {
-  return static_cast<int64_t>(token.GetHighForSerialization());
-}
-int64_t TokenLow(const base::UnguessableToken& token) {
-  return static_cast<int64_t>(token.GetLowForSerialization());
-}
+using ResIdListOrErrorAndEvictionRequested =
+    ResultAndEvictionRequested<ResIdListOrError>;
 
 bool IsBlobSizeValid(int64_t blob_start,
                      int64_t blob_end,
@@ -144,7 +161,7 @@ void PopulateTraceDetails(const StoreStatus& store_status,
 }
 void PopulateTraceDetails(const EntryInfo& entry_info,
                           perfetto::TracedDictionary& dict) {
-  dict.Add("token", entry_info.token.ToString());
+  dict.Add("res_id", entry_info.res_id.value());
   dict.Add("last_used", entry_info.last_used);
   dict.Add("body_end", entry_info.body_end);
   dict.Add("head_size", entry_info.head ? entry_info.head->size() : 0);
@@ -178,6 +195,10 @@ void PopulateTraceDetails(
     dict.Add("entry_info", "not found");
   }
 }
+void PopulateTraceDetails(const ResIdList& result,
+                          perfetto::TracedDictionary& dict) {
+  dict.Add("doomed_entry_count", result.size());
+}
 void PopulateTraceDetails(Error error,
                           const StoreStatus& store_status,
                           perfetto::TracedDictionary& dict) {
@@ -196,13 +217,24 @@ void PopulateTraceDetails(const base::expected<ResultType, Error>& result,
   PopulateTraceDetails(store_status, dict);
 }
 
+// A helper function to record the time delay from posting a task to its
+// execution.
+void RecordPostingDelay(std::string_view method_name,
+                        base::TimeDelta posting_delay) {
+  base::UmaHistogramMicrosecondsTimes(
+      base::StrCat({kHistogramPrefix, method_name, ".PostingDelay"}),
+      posting_delay);
+}
+
 // Records timing and result histograms for a backend method. This logs the
 // method's duration to ".SuccessTime" or ".FailureTime" histograms and the
 // `Error` code to a ".Result" histogram.
 void RecordTimeAndErrorResultHistogram(std::string_view method_name,
+                                       base::TimeDelta posting_delay,
                                        base::TimeDelta time_delta,
                                        Error error,
                                        bool corruption_detected) {
+  RecordPostingDelay(method_name, posting_delay);
   base::UmaHistogramMicrosecondsTimes(
       base::StrCat({kHistogramPrefix, method_name,
                     error == Error::kOk ? ".SuccessTime" : ".FailureTime",
@@ -218,11 +250,9 @@ void RecordTimeAndErrorResultHistogram(std::string_view method_name,
 [[nodiscard]] bool InitSchema(sql::Database& db) {
   if (!db.Execute(GetQuery(Query::kInitSchema_CreateTableResources)) ||
       !db.Execute(GetQuery(Query::kInitSchema_CreateTableBlobs)) ||
-      !db.Execute(GetQuery(Query::kIndex_ResourcesToken)) ||
-      !db.Execute(GetQuery(Query::kIndex_ResourcesCacheKeyDoomed)) ||
-      !db.Execute(GetQuery(Query::kIndex_ResourcesDoomedLastUsed)) ||
-      !db.Execute(GetQuery(Query::kIndex_ResourcesDoomedResId)) ||
-      !db.Execute(GetQuery(Query::kIndex_BlobsTokenStart))) {
+      !db.Execute(GetQuery(Query::kIndex_ResourcesCacheKeyHashDoomed)) ||
+      !db.Execute(GetQuery(Query::kIndex_LiveResourcesLastUsed)) ||
+      !db.Execute(GetQuery(Query::kIndex_BlobsResIdStart))) {
     return false;
   }
   return true;
@@ -239,6 +269,12 @@ void RecordTimeAndErrorResultHistogram(std::string_view method_name,
   }
   value = default_value;
   return meta.SetValue(key, value);
+}
+
+bool IsBrowserIdle() {
+  return performance_scenarios::CurrentScenariosMatch(
+      performance_scenarios::ScenarioScope::kGlobal,
+      performance_scenarios::kDefaultIdleScenarios);
 }
 
 // The `Backend` class encapsulates all direct interaction with the SQLite
@@ -265,7 +301,13 @@ class Backend {
                 .set_exclusive_database_file_lock(true)
 #endif  // IS_WIN
                 .set_preload(true)
-                .set_wal_mode(true),
+                .set_wal_mode(true)
+                .set_wal_commit_callback(base::BindRepeating(
+                    &Backend::OnCommitCallback,
+                    // This callback is only called while the `db_` instance
+                    // is alive, and never during destructor, so it's safe
+                    // to use base::Unretained.
+                    base::Unretained(this))),
             // Tag for metrics collection.
             sql::Database::Tag("HttpCacheDiskCache")) {
   }
@@ -276,7 +318,7 @@ class Backend {
 
   // Initializes the database, including setting up the schema and reading
   // metadata. Returns the cache status and max size on success.
-  InitResultOrError Initialize();
+  InitResultOrError Initialize(base::TimeTicks start_time);
 
   int32_t GetEntryCount() const { return store_status_.entry_count; }
   int64_t GetSizeOfAllEntries() const {
@@ -288,127 +330,149 @@ class Backend {
   }
 
   EntryInfoOrErrorAndEvictionRequested OpenOrCreateEntry(
-      const CacheEntryKey& key);
-  OptionalEntryInfoOrError OpenEntry(const CacheEntryKey& key);
-  EntryInfoOrErrorAndEvictionRequested CreateEntry(const CacheEntryKey& key);
+      const CacheEntryKey& key,
+      base::TimeTicks start_time);
+  OptionalEntryInfoOrError OpenEntry(const CacheEntryKey& key,
+                                     base::TimeTicks start_time);
+  EntryInfoOrErrorAndEvictionRequested CreateEntry(const CacheEntryKey& key,
+                                                   base::Time creation_time,
+                                                   bool run_existance_check,
+                                                   base::TimeTicks start_time);
 
   ErrorAndEvictionRequested DoomEntry(const CacheEntryKey& key,
-                                      const base::UnguessableToken& token);
-  ErrorAndEvictionRequested DeleteDoomedEntry(
+                                      ResId res_id,
+                                      base::TimeTicks start_time);
+  ErrorAndEvictionRequested DeleteDoomedEntry(const CacheEntryKey& key,
+                                              ResId res_id,
+                                              base::TimeTicks start_time);
+  Error DeleteDoomedEntries(ResIdList res_ids_to_delete,
+                            base::TimeTicks start_time);
+  ResIdListOrErrorAndEvictionRequested DeleteLiveEntry(
       const CacheEntryKey& key,
-      const base::UnguessableToken& token);
-  Error DeleteDoomedEntries(
-      base::flat_set<base::UnguessableToken> excluded_tokens);
-  ErrorAndEvictionRequested DeleteLiveEntry(const CacheEntryKey& key);
+      base::TimeTicks start_time);
 
-  ErrorAndEvictionRequested DeleteAllEntries();
-  ErrorAndEvictionRequested DeleteLiveEntriesBetween(
+  ErrorAndEvictionRequested DeleteAllEntries(base::TimeTicks start_time);
+  ResIdListOrErrorAndEvictionRequested DeleteLiveEntriesBetween(
       base::Time initial_time,
       base::Time end_time,
-      base::flat_set<CacheEntryKey> excluded_keys);
-  Error UpdateEntryLastUsed(const CacheEntryKey& key, base::Time last_used);
+      base::flat_set<ResId> excluded_res_ids,
+      base::TimeTicks start_time);
+  Error UpdateEntryLastUsedByKey(const CacheEntryKey& key,
+                                 base::Time last_used,
+                                 base::TimeTicks start_time);
+  Error UpdateEntryLastUsedByResId(ResId res_id,
+                                   base::Time last_used,
+                                   base::TimeTicks start_time);
   ErrorAndEvictionRequested UpdateEntryHeaderAndLastUsed(
       const CacheEntryKey& key,
-      const base::UnguessableToken& token,
+      ResId res_id,
       base::Time last_used,
       scoped_refptr<net::IOBuffer> buffer,
-      int64_t header_size_delta);
+      int64_t header_size_delta,
+      base::TimeTicks start_time);
   ErrorAndEvictionRequested WriteEntryData(const CacheEntryKey& key,
-                                           const base::UnguessableToken& token,
+                                           ResId res_id,
                                            int64_t old_body_end,
                                            int64_t offset,
                                            scoped_refptr<net::IOBuffer> buffer,
                                            int buf_len,
-                                           bool truncate);
-  IntOrError ReadEntryData(const base::UnguessableToken& token,
+                                           bool truncate,
+                                           base::TimeTicks start_time);
+  IntOrError ReadEntryData(ResId res_id,
                            int64_t offset,
                            scoped_refptr<net::IOBuffer> buffer,
                            int buf_len,
                            int64_t body_end,
-                           bool sparse_reading);
-  RangeResult GetEntryAvailableRange(const base::UnguessableToken& token,
+                           bool sparse_reading,
+                           base::TimeTicks start_time);
+  RangeResult GetEntryAvailableRange(ResId res_id,
                                      int64_t offset,
-                                     int len);
+                                     int len,
+                                     base::TimeTicks start_time);
   int64_t CalculateSizeOfEntriesBetween(base::Time initial_time,
-                                        base::Time end_time);
+                                        base::Time end_time,
+                                        base::TimeTicks start_time);
   OptionalEntryInfoWithIdAndKey OpenLatestEntryBeforeResId(
-      int64_t res_id_cursor);
-  ErrorAndEvictionRequested RunEviction(
-      base::flat_set<CacheEntryKey> excluded_keys);
+      ResId res_id_cursor,
+      base::TimeTicks start_time);
+  ResIdListOrErrorAndEvictionRequested RunEviction(
+      base::flat_set<ResId> excluded_res_ids,
+      base::TimeTicks start_time);
+  bool MaybeRunCheckpoint();
 
   void EnableStrictCorruptionCheckForTesting() {
     strict_corruption_check_enabled_ = true;
   }
 
+  void SetSimulateDbFailureForTesting(bool fail) {
+    simulate_db_failure_for_testing_ = fail;
+  }
+
  private:
   void DatabaseErrorCallback(int error, sql::Statement* statement);
 
-  Error InitializeInternal(bool& corruption_detected);
+  Error InitializeInternal(bool& corruption_detected,
+                           SqlPersistentStoreInMemoryIndex& index,
+                           ResIdList& doomed_entry_res_ids);
   EntryInfoOrError OpenOrCreateEntryInternal(const CacheEntryKey& key,
                                              bool& corruption_detected);
-  OptionalEntryInfoOrError OpenEntryInternal(const CacheEntryKey& key,
-                                             bool& corruption_detected);
+  OptionalEntryInfoOrError OpenEntryInternal(const CacheEntryKey& key);
   EntryInfoOrError CreateEntryInternal(const CacheEntryKey& key,
+                                       base::Time creation_time,
                                        bool run_existance_check,
                                        bool& corruption_detected);
-  Error DoomEntryInternal(const CacheEntryKey& key,
-                          const base::UnguessableToken& token,
-                          bool& corruption_detected);
-  Error DeleteDoomedEntryInternal(const CacheEntryKey& key,
-                                  const base::UnguessableToken& token,
-                                  bool& corruption_detected);
-  Error DeleteDoomedEntriesInternal(
-      const base::flat_set<base::UnguessableToken>& excluded_tokens,
-      size_t& deleted_count,
-      bool& corruption_detected);
-  Error DeleteLiveEntryInternal(const CacheEntryKey& key,
-                                bool& corruption_detected);
+  Error DoomEntryInternal(ResId res_id, bool& corruption_detected);
+  Error DeleteDoomedEntryInternal(ResId res_id);
+  Error DeleteDoomedEntriesInternal(const ResIdList& res_ids_to_delete,
+                                    bool& corruption_detected);
+  ResIdListOrError DeleteLiveEntryInternal(const CacheEntryKey& key,
+                                           bool& corruption_detected);
   Error DeleteAllEntriesInternal(bool& corruption_detected);
-  Error DeleteLiveEntriesBetweenInternal(
+  ResIdListOrError DeleteLiveEntriesBetweenInternal(
       base::Time initial_time,
       base::Time end_time,
-      const base::flat_set<CacheEntryKey>& excluded_keys,
+      const base::flat_set<ResId>& excluded_res_ids,
       bool& corruption_detected);
-  Error UpdateEntryLastUsedInternal(const CacheEntryKey& key,
-                                    base::Time last_used);
+  Error UpdateEntryLastUsedByKeyInternal(const CacheEntryKey& key,
+                                         base::Time last_used);
+  Error UpdateEntryLastUsedByResIdInternal(ResId res_id, base::Time last_used);
   Error UpdateEntryHeaderAndLastUsedInternal(
       const CacheEntryKey& key,
-      const base::UnguessableToken& token,
+      ResId res_id,
       base::Time last_used,
       scoped_refptr<net::IOBuffer> buffer,
       int64_t header_size_delta,
       bool& corruption_detected);
-  Error WriteEntryDataInternal(const CacheEntryKey& key,
-                               const base::UnguessableToken& token,
+  Error WriteEntryDataInternal(ResId res_id,
                                int64_t old_body_end,
                                int64_t offset,
                                scoped_refptr<net::IOBuffer> buffer,
                                int buf_len,
                                bool truncate,
                                bool& corruption_detected);
-  IntOrError ReadEntryDataInternal(const base::UnguessableToken& token,
+  IntOrError ReadEntryDataInternal(ResId res_id,
                                    int64_t offset,
                                    scoped_refptr<net::IOBuffer> buffer,
                                    int buf_len,
                                    int64_t body_end,
                                    bool sparse_reading,
                                    bool& corruption_detected);
-  RangeResult GetEntryAvailableRangeInternal(
-      const base::UnguessableToken& token,
-      int64_t offset,
-      int len);
+  RangeResult GetEntryAvailableRangeInternal(ResId res_id,
+                                             int64_t offset,
+                                             int len);
   int64_t CalculateSizeOfEntriesBetweenInternal(base::Time initial_time,
                                                 base::Time end_time);
   OptionalEntryInfoWithIdAndKey OpenLatestEntryBeforeResIdInternal(
-      int64_t res_id_cursor,
+      ResId res_id_cursor,
       bool& corruption_detected);
-  Error RunEvictionInternal(const base::flat_set<CacheEntryKey>& excluded_keys,
-                            bool& corruption_detected);
+  ResIdListOrError RunEvictionInternal(
+      const base::flat_set<ResId>& excluded_res_ids,
+      bool& corruption_detected);
 
   // Trims blobs that overlap with the new write range [offset, end), and
   // updates the total size delta.
   Error TrimOverlappingBlobs(
-      const base::UnguessableToken& token,
+      ResId res_id,
       int64_t offset,
       int64_t end,
       bool truncate,
@@ -417,17 +481,17 @@ class Backend {
   // Truncates data by deleting all blobs that start at or after the given
   // offset.
   Error TruncateBlobsAfter(
-      const base::UnguessableToken& token,
+      ResId res_id,
       int64_t truncate_offset,
       base::CheckedNumeric<int64_t>& checked_total_size_delta);
   // Inserts a vector of new blobs into the database, and updates the total size
   // delta.
-  Error InsertNewBlobs(const base::UnguessableToken& token,
+  Error InsertNewBlobs(ResId res_id,
                        const std::vector<BufferWithStart>& new_blobs,
                        base::CheckedNumeric<int64_t>& checked_total_size_delta);
   // Inserts a single new blob into the database, and updates the total size
   // delta.
-  Error InsertNewBlob(const base::UnguessableToken& token,
+  Error InsertNewBlob(ResId res_id,
                       int64_t start,
                       const scoped_refptr<net::IOBuffer>& buffer,
                       int buf_len,
@@ -440,13 +504,13 @@ class Backend {
   Error DeleteBlobById(int64_t blob_id,
                        base::CheckedNumeric<int64_t>& checked_total_size_delta,
                        bool& corruption_detected);
-  // Deletes all blobs associated with a given token.
-  Error DeleteBlobsByToken(const base::UnguessableToken& token);
-  // Deletes all blobs associated with a list of entry tokens.
-  Error DeleteBlobsByTokens(const std::vector<base::UnguessableToken>& tokens);
+  // Deletes all blobs associated with a given res_id.
+  Error DeleteBlobsByResId(ResId res_id);
+  // Deletes all blobs associated with a list of entry res_ids.
+  Error DeleteBlobsByResIds(const std::vector<ResId>& res_ids);
   // Deletes multiple resource entries from the `resources` table by their
   // `res_id`s.
-  Error DeleteResourcesByResIds(const std::vector<int64_t>& res_ids);
+  Error DeleteResourcesByResIds(const std::vector<ResId>& res_ids);
 
   // Updates the in-memory `store_status_` by `entry_count_delta` and
   // `total_size_delta`. If the update results in an overflow or a negative
@@ -484,6 +548,7 @@ class Backend {
   void MaybeCrashIfCorrupted(bool corruption_detected) {
     CHECK(!(corruption_detected && strict_corruption_check_enabled_));
   }
+  void OnCommitCallback(int pages);
 
   const base::FilePath path_;
   const int64_t max_bytes_;
@@ -494,16 +559,25 @@ class Backend {
   std::optional<Error> db_init_status_;
   StoreStatus store_status_;
   bool strict_corruption_check_enabled_ = false;
+  bool simulate_db_failure_for_testing_ = false;
+  // The number of pages in the write-ahead log file. This is updated by
+  // `OnCommitCallback` and reset to 0 after a checkpoint.
+  int wal_pages_ = 0;
 };
 
-InitResultOrError Backend::Initialize() {
+InitResultOrError Backend::Initialize(base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN0("disk_cache", "SqlBackend.Initialize");
   base::ElapsedTimer timer;
   CHECK(!db_init_status_.has_value());
   bool corruption_detected = false;
-  db_init_status_ = InitializeInternal(corruption_detected);
-  RecordTimeAndErrorResultHistogram("Initialize", timer.Elapsed(),
-                                    *db_init_status_, corruption_detected);
+  SqlPersistentStoreInMemoryIndex index;
+  ResIdList doomed_entry_res_ids;
+  db_init_status_ =
+      InitializeInternal(corruption_detected, index, doomed_entry_res_ids);
+  RecordTimeAndErrorResultHistogram("Initialize", posting_delay,
+                                    timer.Elapsed(), *db_init_status_,
+                                    corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.Initialize", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
@@ -511,12 +585,34 @@ InitResultOrError Backend::Initialize() {
                                           dict);
                    });
   MaybeCrashIfCorrupted(corruption_detected);
+
+  if (*db_init_status_ == Error::kOk) {
+    base::UmaHistogramMemoryLargeMB(
+        base::StrCat({kHistogramPrefix, "DatabaseSize"}),
+        base::GetFileSize(path_.Append(kSqlBackendDatabaseFileName))
+                .value_or(0) /
+            1024 / 1024);
+    base::UmaHistogramCounts1M(base::StrCat({kHistogramPrefix, "EntryCount"}),
+                               store_status_.entry_count);
+    base::UmaHistogramMemoryLargeMB(
+        base::StrCat({kHistogramPrefix, "TotalSize"}),
+        store_status_.total_size / 1024 / 1024);
+    base::UmaHistogramMemoryLargeMB(base::StrCat({kHistogramPrefix, "MaxSize"}),
+                                    max_bytes_ / 1024 / 1024);
+  }
+
   return *db_init_status_ == Error::kOk
-             ? InitResultOrError(InitResult(max_bytes_))
+             ? InitResultOrError(InitResult(max_bytes_, std::move(index),
+                                            std::move(doomed_entry_res_ids)))
              : base::unexpected(*db_init_status_);
 }
 
-Error Backend::InitializeInternal(bool& corruption_detected) {
+Error Backend::InitializeInternal(bool& corruption_detected,
+                                  SqlPersistentStoreInMemoryIndex& index,
+                                  ResIdList& doomed_entry_res_ids) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CHECK(!db_init_status_.has_value());
 
   db_.set_error_callback(base::BindRepeating(&Backend::DatabaseErrorCallback,
@@ -549,17 +645,44 @@ Error Backend::InitializeInternal(bool& corruption_detected) {
     return Error::kFailedToStartTransaction;
   }
 
+  if (!sql::MetaTable::DoesTableExist(&db_)) {
+    // Initialize the database schema.
+    if (!InitSchema(db_)) {
+      return Error::kFailedToInitializeSchema;
+    }
+  }
+
   // Initialize the meta table, which stores version info and other metadata.
   if (!meta_table_.Init(&db_, kSqlBackendCurrentDatabaseVersion,
                         kSqlBackendCompatibleDatabaseVersion)) {
     return Error::kFailedToInitializeMetaTable;
   }
 
-  // Initialize the database schema.
-  if (!InitSchema(db_)) {
-    return Error::kFailedToInitializeSchema;
+  {
+    base::ElapsedTimer timer;
+    sql::Statement statement(db_.GetCachedStatement(
+        SQL_FROM_HERE,
+        GetQuery(
+            Query::kGetCacheKeyHashes_SelectCacheKeyHashFromLiveResources)));
+    while (statement.Step()) {
+      const auto res_id = ResId(statement.ColumnInt64(0));
+      const auto key_hash = CacheEntryKey::Hash(statement.ColumnInt(1));
+      const bool doomed = statement.ColumnBool(2);
+      if (doomed) {
+        doomed_entry_res_ids.emplace_back(res_id);
+      } else {
+        index.Insert(key_hash, res_id);
+      }
+    }
+    // TODO(crbug.com/443171275): If this process takes a very long time,
+    // load the in-memory index when the browser is idle.
+    base::UmaHistogramMicrosecondsTimes(
+        base::StrCat({kHistogramPrefix, "LoadInMemoryIndexTime"}),
+        timer.Elapsed());
   }
 
+  // TODO(crbug.com/443171275): Use `index.size()` and remove
+  // `kSqlBackendMetaTableKeyEntryCount` metadata.
   int64_t tmp_entry_count = 0;
   if (!GetOrInitializeMetaValue(meta_table_, kSqlBackendMetaTableKeyEntryCount,
                                 tmp_entry_count,
@@ -598,7 +721,9 @@ void Backend::DatabaseErrorCallback(int error, sql::Statement* statement) {
 }
 
 EntryInfoOrErrorAndEvictionRequested Backend::OpenOrCreateEntry(
-    const CacheEntryKey& key) {
+    const CacheEntryKey& key,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.OpenOrCreateEntry", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
@@ -608,9 +733,9 @@ EntryInfoOrErrorAndEvictionRequested Backend::OpenOrCreateEntry(
   base::ElapsedTimer timer;
   bool corruption_detected = false;
   auto result = OpenOrCreateEntryInternal(key, corruption_detected);
-  RecordTimeAndErrorResultHistogram("OpenOrCreateEntry", timer.Elapsed(),
-                                    result.error_or(Error::kOk),
-                                    corruption_detected);
+  RecordTimeAndErrorResultHistogram(
+      "OpenOrCreateEntry", posting_delay, timer.Elapsed(),
+      result.error_or(Error::kOk), corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.OpenOrCreateEntry", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
@@ -623,8 +748,11 @@ EntryInfoOrErrorAndEvictionRequested Backend::OpenOrCreateEntry(
 
 EntryInfoOrError Backend::OpenOrCreateEntryInternal(const CacheEntryKey& key,
                                                     bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return base::unexpected(Error::kFailedForTesting);
+  }
   // Try to open first.
-  auto open_result = OpenEntryInternal(key, corruption_detected);
+  auto open_result = OpenEntryInternal(key);
   if (open_result.has_value() && open_result->has_value()) {
     return std::move(*open_result.value());
   }
@@ -633,11 +761,14 @@ EntryInfoOrError Backend::OpenOrCreateEntryInternal(const CacheEntryKey& key,
     return base::unexpected(open_result.error());
   }
   // If the entry was not found, try to create a new one.
-  return CreateEntryInternal(key, /*run_existance_check=*/false,
+  return CreateEntryInternal(key, base::Time::Now(),
+                             /*run_existance_check=*/false,
                              corruption_detected);
 }
 
-OptionalEntryInfoOrError Backend::OpenEntry(const CacheEntryKey& key) {
+OptionalEntryInfoOrError Backend::OpenEntry(const CacheEntryKey& key,
+                                            base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.OpenEntry", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
@@ -645,27 +776,28 @@ OptionalEntryInfoOrError Backend::OpenEntry(const CacheEntryKey& key) {
                        PopulateTraceDetails(store_status_, dict);
                      });
   base::ElapsedTimer timer;
-  bool corruption_detected = false;
-  auto result = OpenEntryInternal(key, corruption_detected);
-  RecordTimeAndErrorResultHistogram("OpenEntry", timer.Elapsed(),
+  auto result = OpenEntryInternal(key);
+  RecordTimeAndErrorResultHistogram("OpenEntry", posting_delay, timer.Elapsed(),
                                     result.error_or(Error::kOk),
-                                    corruption_detected);
+                                    /*corruption_detected=*/false);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.OpenEntry", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
                      PopulateTraceDetails(result, store_status_, dict);
                    });
-  MaybeCrashIfCorrupted(corruption_detected);
   return result;
 }
 
-OptionalEntryInfoOrError Backend::OpenEntryInternal(const CacheEntryKey& key,
-                                                    bool& corruption_detected) {
+OptionalEntryInfoOrError Backend::OpenEntryInternal(const CacheEntryKey& key) {
+  if (simulate_db_failure_for_testing_) {
+    return base::unexpected(Error::kFailedForTesting);
+  }
   CheckDatabaseInitStatus();
 
   sql::Statement statement(db_.GetCachedStatement(
       SQL_FROM_HERE, GetQuery(Query::kOpenEntry_SelectLiveResources)));
-  statement.BindString(0, key.string());
+  statement.BindInt(0, key.hash().value());
+  statement.BindString(1, key.string());
   if (!statement.Step()) {
     // `Step()` returned false, which means either the query completed with no
     // results, or an error occurred.
@@ -677,20 +809,10 @@ OptionalEntryInfoOrError Backend::OpenEntryInternal(const CacheEntryKey& key,
     return base::unexpected(Error::kFailedToExecute);
   }
   EntryInfo entry_info;
-  // Reconstruct the UnguessableToken from its two 64-bit parts.
-  auto maybe_token =
-      ToUnguessableToken(statement.ColumnInt64(0), statement.ColumnInt64(1));
-  if (!maybe_token) {
-    // This indicates data corruption in the database.
-    // TODO(crbug.com/422065015): If this error is observed in UMA, implement
-    // recovery logic.
-    corruption_detected = true;
-    return base::unexpected(Error::kInvalidData);
-  }
-  entry_info.token = *maybe_token;
-  entry_info.last_used = statement.ColumnTime(2);
-  entry_info.body_end = statement.ColumnInt64(3);
-  base::span<const uint8_t> blob_span = statement.ColumnBlob(4);
+  entry_info.res_id = ResId(statement.ColumnInt64(0));
+  entry_info.last_used = statement.ColumnTime(1);
+  entry_info.body_end = statement.ColumnInt64(2);
+  base::span<const uint8_t> blob_span = statement.ColumnBlob(3);
   entry_info.head = base::MakeRefCounted<net::GrowableIOBuffer>();
   CHECK(base::IsValueInRangeForNumericType<int>(blob_span.size()));
   entry_info.head->SetCapacity(blob_span.size());
@@ -700,7 +822,11 @@ OptionalEntryInfoOrError Backend::OpenEntryInternal(const CacheEntryKey& key,
 }
 
 EntryInfoOrErrorAndEvictionRequested Backend::CreateEntry(
-    const CacheEntryKey& key) {
+    const CacheEntryKey& key,
+    base::Time creation_time,
+    bool run_existance_check,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.CreateEntry", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
@@ -709,11 +835,11 @@ EntryInfoOrErrorAndEvictionRequested Backend::CreateEntry(
                      });
   base::ElapsedTimer timer;
   bool corruption_detected = false;
-  auto result = CreateEntryInternal(key, /*run_existance_check=*/true,
+  auto result = CreateEntryInternal(key, creation_time, run_existance_check,
                                     corruption_detected);
-  RecordTimeAndErrorResultHistogram("CreateEntry", timer.Elapsed(),
-                                    result.error_or(Error::kOk),
-                                    corruption_detected);
+  RecordTimeAndErrorResultHistogram(
+      "CreateEntry", posting_delay, timer.Elapsed(),
+      result.error_or(Error::kOk), corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.CreateEntry", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
@@ -725,15 +851,19 @@ EntryInfoOrErrorAndEvictionRequested Backend::CreateEntry(
 }
 
 EntryInfoOrError Backend::CreateEntryInternal(const CacheEntryKey& key,
+                                              base::Time creation_time,
                                               bool run_existance_check,
                                               bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return base::unexpected(Error::kFailedForTesting);
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
     return base::unexpected(Error::kFailedToStartTransaction);
   }
   if (run_existance_check) {
-    auto open_result = OpenEntryInternal(key, corruption_detected);
+    auto open_result = OpenEntryInternal(key);
     if (open_result.has_value() && open_result->has_value()) {
       return base::unexpected(Error::kAlreadyExists);
     }
@@ -743,8 +873,7 @@ EntryInfoOrError Backend::CreateEntryInternal(const CacheEntryKey& key,
     }
   }
   EntryInfo entry_info;
-  entry_info.token = base::UnguessableToken::Create();
-  entry_info.last_used = base::Time::Now();
+  entry_info.last_used = creation_time;
   entry_info.body_end = 0;
   entry_info.head = nullptr;
   entry_info.opened = false;
@@ -758,15 +887,15 @@ EntryInfoOrError Backend::CreateEntryInternal(const CacheEntryKey& key,
         SQL_FROM_HERE,
         GetQuery(
             disk_cache_sql_queries::Query::kCreateEntry_InsertIntoResources)));
-    statement.BindInt64(0, TokenHigh(entry_info.token));
-    statement.BindInt64(1, TokenLow(entry_info.token));
-    statement.BindTime(2, entry_info.last_used);
-    statement.BindInt64(3, entry_info.body_end);
-    statement.BindInt64(4, bytes_usage);
-    statement.BindString(5, key.string());
-    if (!statement.Run()) {
+    statement.BindTime(0, entry_info.last_used);
+    statement.BindInt64(1, entry_info.body_end);
+    statement.BindInt64(2, bytes_usage);
+    statement.BindInt(3, key.hash().value());
+    statement.BindString(4, key.string());
+    if (!statement.Step()) {
       return base::unexpected(Error::kFailedToExecute);
     }
+    entry_info.res_id = ResId(statement.ColumnInt64(0));
   }
 
   // Update the store's status and commit the transaction.
@@ -783,21 +912,22 @@ EntryInfoOrError Backend::CreateEntryInternal(const CacheEntryKey& key,
   return entry_info;
 }
 
-ErrorAndEvictionRequested Backend::DoomEntry(
-    const CacheEntryKey& key,
-    const base::UnguessableToken& token) {
+ErrorAndEvictionRequested Backend::DoomEntry(const CacheEntryKey& key,
+                                             ResId res_id,
+                                             base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.DoomEntry", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
                        dict.Add("key", key.string());
-                       dict.Add("token", token.ToString());
+                       dict.Add("res_id", res_id.value());
                        PopulateTraceDetails(store_status_, dict);
                      });
   base::ElapsedTimer timer;
   bool corruption_detected = false;
-  auto result = DoomEntryInternal(key, token, corruption_detected);
-  RecordTimeAndErrorResultHistogram("DoomEntry", timer.Elapsed(), result,
-                                    corruption_detected);
+  auto result = DoomEntryInternal(res_id, corruption_detected);
+  RecordTimeAndErrorResultHistogram("DoomEntry", posting_delay, timer.Elapsed(),
+                                    result, corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.DoomEntry", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
@@ -808,9 +938,10 @@ ErrorAndEvictionRequested Backend::DoomEntry(
   return ErrorAndEvictionRequested(result, ShouldStartEviction());
 }
 
-Error Backend::DoomEntryInternal(const CacheEntryKey& key,
-                                 const base::UnguessableToken& token,
-                                 bool& corruption_detected) {
+Error Backend::DoomEntryInternal(ResId res_id, bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
@@ -824,9 +955,7 @@ Error Backend::DoomEntryInternal(const CacheEntryKey& key,
   {
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE, GetQuery(Query::kDoomEntry_MarkDoomedResources)));
-    statement.BindString(0, key.string());
-    statement.BindInt64(1, TokenHigh(token));
-    statement.BindInt64(2, TokenLow(token));
+    statement.BindInt64(0, res_id.value());
     // Iterate through the rows returned by the RETURNING clause.
     while (statement.Step()) {
       // Since we're dooming an entry, its size is subtracted from the total.
@@ -835,17 +964,11 @@ Error Backend::DoomEntryInternal(const CacheEntryKey& key,
       ++doomed_count;
     }
   }
+  // The res_id should uniquely identify a single non-doomed entry.
+  CHECK_LE(doomed_count, 1);
 
-  if (doomed_count > 1) {
-    // The cache_key and token combination should uniquely identify a single
-    // non-doomed entry.
-    // TODO(crbug.com/422065015): If this error is observed in UMA, implement
-    // recovery logic.
-    corruption_detected = true;
-  }
-
-  // If no rows were updated, it means the entry was not found (or the token
-  // was wrong), so we report kNotFound.
+  // If no rows were updated, it means the entry was not found, so we report
+  // kNotFound.
   if (doomed_count == 0) {
     return transaction.Commit() ? Error::kNotFound
                                 : Error::kFailedToCommitTransaction;
@@ -868,31 +991,33 @@ Error Backend::DoomEntryInternal(const CacheEntryKey& key,
 
 ErrorAndEvictionRequested Backend::DeleteDoomedEntry(
     const CacheEntryKey& key,
-    const base::UnguessableToken& token) {
+    ResId res_id,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.DeleteDoomedEntry", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
                        dict.Add("key", key.string());
-                       dict.Add("token", token.ToString());
+                       dict.Add("res_id", res_id.value());
                        PopulateTraceDetails(store_status_, dict);
                      });
   base::ElapsedTimer timer;
-  bool corruption_detected = false;
-  auto result = DeleteDoomedEntryInternal(key, token, corruption_detected);
-  RecordTimeAndErrorResultHistogram("DeleteDoomedEntry", timer.Elapsed(),
-                                    result, corruption_detected);
+  auto result = DeleteDoomedEntryInternal(res_id);
+  RecordTimeAndErrorResultHistogram("DeleteDoomedEntry", posting_delay,
+                                    timer.Elapsed(), result,
+                                    /*corruption_detected=*/false);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.DeleteDoomedEntry", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
                      PopulateTraceDetails(result, store_status_, dict);
                    });
-  MaybeCrashIfCorrupted(corruption_detected);
   return ErrorAndEvictionRequested(result, ShouldStartEviction());
 }
 
-Error Backend::DeleteDoomedEntryInternal(const CacheEntryKey& key,
-                                         const base::UnguessableToken& token,
-                                         bool& corruption_detected) {
+Error Backend::DeleteDoomedEntryInternal(ResId res_id) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
@@ -904,116 +1029,85 @@ Error Backend::DeleteDoomedEntryInternal(const CacheEntryKey& key,
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE,
         GetQuery(Query::kDeleteDoomedEntry_DeleteFromResources)));
-    statement.BindString(0, key.string());
-    statement.BindInt64(1, TokenHigh(token));
-    statement.BindInt64(2, TokenLow(token));
+    statement.BindInt64(0, res_id.value());
     if (!statement.Run()) {
       return Error::kFailedToExecute;
     }
     deleted_count = db_.GetLastChangeCount();
   }
+  // The res_id should uniquely identify a single doomed entry.
+  CHECK_LE(deleted_count, 1);
 
-  if (deleted_count > 1) {
-    // The cache_key and token combination should uniquely identify a single
-    // non-doomed entry.
-    // TODO(crbug.com/422065015): If this error is observed in UMA, implement
-    // recovery logic.
-    corruption_detected = true;
-  }
-
-  // If we didn't find any doomed entry matching the key and token, report it.
+  // If we didn't find any doomed entry matching the res_id, report it.
   if (deleted_count == 0) {
     return transaction.Commit() ? Error::kNotFound
                                 : Error::kFailedToCommitTransaction;
   }
 
   // Delete the associated blobs from the `blobs` table.
-  if (Error error = DeleteBlobsByToken(token); error != Error::kOk) {
+  if (Error error = DeleteBlobsByResId(res_id); error != Error::kOk) {
     return error;
   }
 
   return transaction.Commit() ? Error::kOk : Error::kFailedToCommitTransaction;
 }
 
-Error Backend::DeleteDoomedEntries(
-    base::flat_set<base::UnguessableToken> excluded_tokens) {
+Error Backend::DeleteDoomedEntries(ResIdList res_ids_to_delete,
+                                   base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN0("disk_cache", "SqlBackend.DeleteDoomedEntries");
   base::ElapsedTimer timer;
   bool corruption_detected = false;
-  size_t deleted_count = 0;
-  auto result = DeleteDoomedEntriesInternal(excluded_tokens, deleted_count,
-                                            corruption_detected);
-  RecordTimeAndErrorResultHistogram("DeleteDoomedEntries", timer.Elapsed(),
-                                    result, corruption_detected);
+  auto result =
+      DeleteDoomedEntriesInternal(res_ids_to_delete, corruption_detected);
+  RecordTimeAndErrorResultHistogram("DeleteDoomedEntries", posting_delay,
+                                    timer.Elapsed(), result,
+                                    corruption_detected);
   base::UmaHistogramCounts100("Net.SqlDiskCache.DeleteDoomedEntriesCount",
-                              deleted_count);
+                              res_ids_to_delete.size());
   TRACE_EVENT_END1("disk_cache", "SqlBackend.DeleteDoomedEntries", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
                      PopulateTraceDetails(result, store_status_, dict);
-                     dict.Add("deleted_count", deleted_count);
+                     dict.Add("deleted_count", res_ids_to_delete.size());
                    });
   MaybeCrashIfCorrupted(corruption_detected);
   return result;
 }
 
-Error Backend::DeleteDoomedEntriesInternal(
-    const base::flat_set<base::UnguessableToken>& excluded_tokens,
-    size_t& deleted_count,
-    bool& corruption_detected) {
+Error Backend::DeleteDoomedEntriesInternal(const ResIdList& res_ids_to_delete,
+                                           bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
     return Error::kFailedToStartTransaction;
   }
 
-  std::vector<int64_t> res_ids_to_delete;
-  std::vector<base::UnguessableToken> tokens_for_blob_deletion;
-
-  // 1. Select all doomed entries.
-  {
-    sql::Statement statement(db_.GetCachedStatement(
-        SQL_FROM_HERE,
-        GetQuery(Query::kDeleteDoomedEntries_SelectDoomedResources)));
-    // 2. Collect entries to be deleted, skipping excluded ones.
-    while (statement.Step()) {
-      auto maybe_token = ToUnguessableToken(statement.ColumnInt64(1),
-                                            statement.ColumnInt64(2));
-      if (!maybe_token) {
-        corruption_detected = true;
-        continue;
-      }
-      if (excluded_tokens.contains(*maybe_token)) {
-        continue;
-      }
-      res_ids_to_delete.push_back(statement.ColumnInt64(0));
-      tokens_for_blob_deletion.push_back(*maybe_token);
-    }
-  }
-
-  deleted_count = res_ids_to_delete.size();
-  if (deleted_count == 0) {
-    // Nothing to delete, abort the transaction and return kOk;
-    return Error::kOk;
-  }
-
-  // 3. Delete from `resources` table by `res_id`.
+  // 1. Delete from `resources` table by `res_id`.
   if (auto error = DeleteResourcesByResIds(res_ids_to_delete);
       error != Error::kOk) {
     return error;
   }
 
-  // 4. Delete corresponding blobs by token.
-  if (auto error = DeleteBlobsByTokens(tokens_for_blob_deletion);
+  // 2. Delete corresponding blobs by res_id.
+  if (auto error = DeleteBlobsByResIds(res_ids_to_delete);
       error != Error::kOk) {
     return error;
   }
 
-  // 5. Commit the transaction.
+  // 3. Commit the transaction.
+  // Note: The entries for the res IDs passed to this method are assumed to be
+  // doomed, so store_status_'s entry_count and total_size are not updated.
   return transaction.Commit() ? Error::kOk : Error::kFailedToCommitTransaction;
 }
 
-ErrorAndEvictionRequested Backend::DeleteLiveEntry(const CacheEntryKey& key) {
+ResIdListOrErrorAndEvictionRequested Backend::DeleteLiveEntry(
+    const CacheEntryKey& key,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.DeleteLiveEntry", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
@@ -1023,8 +1117,9 @@ ErrorAndEvictionRequested Backend::DeleteLiveEntry(const CacheEntryKey& key) {
   base::ElapsedTimer timer;
   bool corruption_detected = false;
   auto result = DeleteLiveEntryInternal(key, corruption_detected);
-  RecordTimeAndErrorResultHistogram("DeleteLiveEntry", timer.Elapsed(), result,
-                                    corruption_detected);
+  RecordTimeAndErrorResultHistogram(
+      "DeleteLiveEntry", posting_delay, timer.Elapsed(),
+      result.error_or(Error::kOk), corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.DeleteLiveEntry", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
@@ -1032,52 +1127,52 @@ ErrorAndEvictionRequested Backend::DeleteLiveEntry(const CacheEntryKey& key) {
                      dict.Add("corruption_detected", corruption_detected);
                    });
   MaybeCrashIfCorrupted(corruption_detected);
-  return ErrorAndEvictionRequested(result, ShouldStartEviction());
+  return ResIdListOrErrorAndEvictionRequested(std::move(result),
+                                              ShouldStartEviction());
 }
 
-Error Backend::DeleteLiveEntryInternal(const CacheEntryKey& key,
-                                       bool& corruption_detected) {
+ResIdListOrError Backend::DeleteLiveEntryInternal(const CacheEntryKey& key,
+                                                  bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return base::unexpected(Error::kFailedForTesting);
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
-    return Error::kFailedToStartTransaction;
+    return base::unexpected(Error::kFailedToStartTransaction);
   }
 
-  // We need to collect the tokens of deleted entries to later remove their
+  // We need to collect the res_ids of deleted entries to later remove their
   // corresponding data from the `blobs` table.
-  std::vector<base::UnguessableToken> tokens_to_be_deleted;
+  ResIdList res_ids_to_be_deleted;
   // Use checked numerics to safely update the total cache size.
   base::CheckedNumeric<int64_t> total_size_delta = 0;
-  int64_t deleted_count = 0;
   {
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE, GetQuery(Query::kDeleteLiveEntry_DeleteFromResources)));
-    statement.BindString(0, key.string());
+    statement.BindInt(0, key.hash().value());
+    statement.BindString(1, key.string());
     while (statement.Step()) {
-      ++deleted_count;
-      auto maybe_token = ToUnguessableToken(statement.ColumnInt64(0),
-                                            statement.ColumnInt64(1));
-      // If deserializing the token fails, it's a sign of data corruption.
-      if (!maybe_token) {
-        corruption_detected = true;
-        continue;
-      }
+      const auto res_id = ResId(statement.ColumnInt64(0));
+      res_ids_to_be_deleted.emplace_back(res_id);
       // The size of the deleted entry is subtracted from the total.
-      total_size_delta -= statement.ColumnInt64(2);
-      tokens_to_be_deleted.emplace_back(*maybe_token);
+      total_size_delta -= statement.ColumnInt64(1);
     }
   }
 
   // If no entries were deleted, the key wasn't found.
-  if (deleted_count == 0) {
-    return transaction.Commit() ? Error::kNotFound
-                                : Error::kFailedToCommitTransaction;
+  if (res_ids_to_be_deleted.empty()) {
+    return transaction.Commit()
+               ? base::unexpected(Error::kNotFound)
+               : base::unexpected(Error::kFailedToCommitTransaction);
   }
 
   // Delete the blobs associated with the deleted entries.
-  if (Error delete_result = DeleteBlobsByTokens(tokens_to_be_deleted);
+  if (Error delete_result = DeleteBlobsByResIds(res_ids_to_be_deleted);
       delete_result != Error::kOk) {
-    return delete_result;
+    // If blob deletion fails, returns the error. The transaction will be
+    // rolled back. So no need to return `deleted_enties`.
+    return base::unexpected(delete_result);
   }
 
   // If we detected corruption, or if the size update calculation overflowed,
@@ -1085,17 +1180,25 @@ Error Backend::DeleteLiveEntryInternal(const CacheEntryKey& key,
   // scratch.
   if (corruption_detected || !total_size_delta.IsValid()) {
     corruption_detected = true;
-    return RecalculateStoreStatusAndCommitTransaction(transaction);
+    auto error = RecalculateStoreStatusAndCommitTransaction(transaction);
+    return error == Error::kOk
+               ? ResIdListOrError(std::move(res_ids_to_be_deleted))
+               : base::unexpected(error);
   }
 
-  return UpdateStoreStatusAndCommitTransaction(
+  auto error = UpdateStoreStatusAndCommitTransaction(
       transaction,
       /*entry_count_delta=*/
-      -static_cast<int64_t>(tokens_to_be_deleted.size()),
+      -static_cast<int64_t>(res_ids_to_be_deleted.size()),
       /*total_size_delta=*/total_size_delta.ValueOrDie(), corruption_detected);
+  return error == Error::kOk
+             ? ResIdListOrError(std::move(res_ids_to_be_deleted))
+             : base::unexpected(error);
 }
 
-ErrorAndEvictionRequested Backend::DeleteAllEntries() {
+ErrorAndEvictionRequested Backend::DeleteAllEntries(
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.DeleteAllEntries", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
@@ -1104,7 +1207,8 @@ ErrorAndEvictionRequested Backend::DeleteAllEntries() {
   base::ElapsedTimer timer;
   bool corruption_detected = false;
   Error result = DeleteAllEntriesInternal(corruption_detected);
-  RecordTimeAndErrorResultHistogram("DeleteAllEntries", timer.Elapsed(), result,
+  RecordTimeAndErrorResultHistogram("DeleteAllEntries", posting_delay,
+                                    timer.Elapsed(), result,
                                     corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.DeleteAllEntries", "result",
                    [&](perfetto::TracedValue trace_context) {
@@ -1116,6 +1220,9 @@ ErrorAndEvictionRequested Backend::DeleteAllEntries() {
 }
 
 Error Backend::DeleteAllEntriesInternal(bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
@@ -1149,49 +1256,55 @@ Error Backend::DeleteAllEntriesInternal(bool& corruption_detected) {
       /*total_size_delta=*/-store_status_.total_size, corruption_detected);
 }
 
-ErrorAndEvictionRequested Backend::DeleteLiveEntriesBetween(
+ResIdListOrErrorAndEvictionRequested Backend::DeleteLiveEntriesBetween(
     base::Time initial_time,
     base::Time end_time,
-    base::flat_set<CacheEntryKey> excluded_keys) {
+    base::flat_set<ResId> excluded_res_ids,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.DeleteLiveEntriesBetween",
                      "data", [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
                        dict.Add("initial_time", initial_time);
                        dict.Add("end_time", end_time);
-                       dict.Add("excluded_keys_size", excluded_keys.size());
+                       dict.Add("excluded_res_ids_size",
+                                excluded_res_ids.size());
                        PopulateTraceDetails(store_status_, dict);
                      });
   base::ElapsedTimer timer;
   // Flag to indicate if we encounter signs of database corruption. In
   // DeleteLiveEntriesBetween, database corruption is ignored.
   bool corruption_detected = false;
-  Error result = DeleteLiveEntriesBetweenInternal(
-      initial_time, end_time, excluded_keys, corruption_detected);
-  RecordTimeAndErrorResultHistogram("DeleteLiveEntriesBetween", timer.Elapsed(),
-                                    result, corruption_detected);
+  auto result = DeleteLiveEntriesBetweenInternal(
+      initial_time, end_time, excluded_res_ids, corruption_detected);
+  RecordTimeAndErrorResultHistogram(
+      "DeleteLiveEntriesBetween", posting_delay, timer.Elapsed(),
+      result.error_or(Error::kOk), corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.DeleteLiveEntriesBetween",
                    "result", [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
                      PopulateTraceDetails(result, store_status_, dict);
                    });
   MaybeCrashIfCorrupted(corruption_detected);
-  return ErrorAndEvictionRequested(result, ShouldStartEviction());
+  return ResIdListOrErrorAndEvictionRequested(std::move(result),
+                                              ShouldStartEviction());
 }
 
-Error Backend::DeleteLiveEntriesBetweenInternal(
+ResIdListOrError Backend::DeleteLiveEntriesBetweenInternal(
     base::Time initial_time,
     base::Time end_time,
-    const base::flat_set<CacheEntryKey>& excluded_keys,
+    const base::flat_set<ResId>& excluded_res_ids,
     bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return base::unexpected(Error::kFailedForTesting);
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
-    return Error::kFailedToStartTransaction;
+    return base::unexpected(Error::kFailedToStartTransaction);
   }
 
-  std::vector<int64_t> res_ids_to_be_deleted;
-  std::vector<base::UnguessableToken> tokens_to_be_deleted;
-  int64_t entry_count_delta = 0;
+  ResIdList res_ids_to_be_deleted;
   base::CheckedNumeric<int64_t> total_size_delta = 0;
   {
     sql::Statement statement(db_.GetCachedStatement(
@@ -1200,32 +1313,25 @@ Error Backend::DeleteLiveEntriesBetweenInternal(
     statement.BindTime(0, initial_time);
     statement.BindTime(1, end_time);
     while (statement.Step()) {
-      if (excluded_keys.contains(CacheEntryKey(statement.ColumnString(4)))) {
+      const auto res_id = ResId(statement.ColumnInt64(0));
+      if (excluded_res_ids.contains(res_id)) {
         continue;
       }
-      --entry_count_delta;
-      res_ids_to_be_deleted.push_back(statement.ColumnInt64(0));
-      auto maybe_token = ToUnguessableToken(statement.ColumnInt64(1),
-                                            statement.ColumnInt64(2));
-      if (maybe_token) {
-        tokens_to_be_deleted.push_back(*maybe_token);
-        total_size_delta -= statement.ColumnInt64(3);
-      } else {
-        corruption_detected = true;
-      }
+      res_ids_to_be_deleted.emplace_back(res_id);
+      total_size_delta -= statement.ColumnInt64(1);
     }
   }
 
   // Delete the blobs associated with the entries to be deleted.
-  if (auto error = DeleteBlobsByTokens(tokens_to_be_deleted);
+  if (auto error = DeleteBlobsByResIds(res_ids_to_be_deleted);
       error != Error::kOk) {
-    return error;
+    return base::unexpected(error);
   }
 
   // Delete the selected entries from the `resources` table.
   if (auto error = DeleteResourcesByResIds(res_ids_to_be_deleted);
       error != Error::kOk) {
-    return error;
+    return base::unexpected(error);
   }
 
   // If we detected corruption, or if the size update calculation overflowed,
@@ -1233,38 +1339,50 @@ Error Backend::DeleteLiveEntriesBetweenInternal(
   // scratch.
   if (corruption_detected || !total_size_delta.IsValid()) {
     corruption_detected = true;
-    return RecalculateStoreStatusAndCommitTransaction(transaction);
+    auto error = RecalculateStoreStatusAndCommitTransaction(transaction);
+    return error == Error::kOk
+               ? ResIdListOrError(std::move(res_ids_to_be_deleted))
+               : base::unexpected(error);
   }
 
   // Update the in-memory and on-disk store status (entry count and total size)
   // and commit the transaction.
-  return UpdateStoreStatusAndCommitTransaction(transaction, entry_count_delta,
-                                               total_size_delta.ValueOrDie(),
-                                               corruption_detected);
+  auto error = UpdateStoreStatusAndCommitTransaction(
+      transaction, -static_cast<int64_t>(res_ids_to_be_deleted.size()),
+      total_size_delta.ValueOrDie(), corruption_detected);
+  return error == Error::kOk
+             ? ResIdListOrError(std::move(res_ids_to_be_deleted))
+             : base::unexpected(error);
 }
 
-Error Backend::UpdateEntryLastUsed(const CacheEntryKey& key,
-                                   base::Time last_used) {
-  TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.UpdateEntryLastUsed", "data",
-                     [&](perfetto::TracedValue trace_context) {
+Error Backend::UpdateEntryLastUsedByKey(const CacheEntryKey& key,
+                                        base::Time last_used,
+                                        base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
+  TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.UpdateEntryLastUsedByKey",
+                     "data", [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
                        dict.Add("key", key.string());
                        dict.Add("last_used", last_used);
                      });
   base::ElapsedTimer timer;
-  auto result = UpdateEntryLastUsedInternal(key, last_used);
-  RecordTimeAndErrorResultHistogram("UpdateEntryLastUsed", timer.Elapsed(),
-                                    result, /*corruption_detected=*/false);
-  TRACE_EVENT_END1("disk_cache", "SqlBackend.UpdateEntryLastUsed", "result",
-                   [&](perfetto::TracedValue trace_context) {
+  auto result = UpdateEntryLastUsedByKeyInternal(key, last_used);
+  RecordTimeAndErrorResultHistogram("UpdateEntryLastUsedByKey", posting_delay,
+                                    timer.Elapsed(), result,
+                                    /*corruption_detected=*/false);
+  TRACE_EVENT_END1("disk_cache", "SqlBackend.UpdateEntryLastUsedByKey",
+                   "result", [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
                      PopulateTraceDetails(result, dict);
                    });
   return result;
 }
 
-Error Backend::UpdateEntryLastUsedInternal(const CacheEntryKey& key,
-                                           base::Time last_used) {
+Error Backend::UpdateEntryLastUsedByKeyInternal(const CacheEntryKey& key,
+                                                base::Time last_used) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
@@ -1274,9 +1392,61 @@ Error Backend::UpdateEntryLastUsedInternal(const CacheEntryKey& key,
   {
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE,
-        GetQuery(Query::kUpdateEntryLastUsed_UpdateResourceLastUsed)));
+        GetQuery(Query::kUpdateEntryLastUsedByKey_UpdateResourceLastUsed)));
     statement.BindTime(0, last_used);
-    statement.BindString(1, key.string());
+    statement.BindInt(1, key.hash().value());
+    statement.BindString(2, key.string());
+    if (!statement.Run()) {
+      return Error::kFailedToExecute;
+    }
+    change_count = db_.GetLastChangeCount();
+  }
+  if (!transaction.Commit()) {
+    return Error::kFailedToCommitTransaction;
+  }
+  return change_count == 0 ? Error::kNotFound : Error::kOk;
+}
+
+Error Backend::UpdateEntryLastUsedByResId(ResId res_id,
+                                          base::Time last_used,
+                                          base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
+  TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.UpdateEntryLastUsedByResId",
+                     "data", [&](perfetto::TracedValue trace_context) {
+                       auto dict = std::move(trace_context).WriteDictionary();
+                       dict.Add("res_id", res_id.value());
+                       dict.Add("last_used", last_used);
+                     });
+  base::ElapsedTimer timer;
+  auto result = UpdateEntryLastUsedByResIdInternal(res_id, last_used);
+  RecordTimeAndErrorResultHistogram("UpdateEntryLastUsedByResId", posting_delay,
+                                    timer.Elapsed(), result,
+                                    /*corruption_detected=*/false);
+  TRACE_EVENT_END1("disk_cache", "SqlBackend.UpdateEntryLastUsedByResId",
+                   "result", [&](perfetto::TracedValue trace_context) {
+                     auto dict = std::move(trace_context).WriteDictionary();
+                     PopulateTraceDetails(result, dict);
+                   });
+  return result;
+}
+
+Error Backend::UpdateEntryLastUsedByResIdInternal(ResId res_id,
+                                                  base::Time last_used) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
+  CheckDatabaseInitStatus();
+  sql::Transaction transaction(&db_);
+  if (!transaction.Begin()) {
+    return Error::kFailedToStartTransaction;
+  }
+  int64_t change_count = 0;
+  {
+    sql::Statement statement(db_.GetCachedStatement(
+        SQL_FROM_HERE,
+        GetQuery(Query::kUpdateEntryLastUsedByResId_UpdateResourceLastUsed)));
+    statement.BindTime(0, last_used);
+    statement.BindInt64(1, res_id.value());
     if (!statement.Run()) {
       return Error::kFailedToExecute;
     }
@@ -1290,15 +1460,17 @@ Error Backend::UpdateEntryLastUsedInternal(const CacheEntryKey& key,
 
 ErrorAndEvictionRequested Backend::UpdateEntryHeaderAndLastUsed(
     const CacheEntryKey& key,
-    const base::UnguessableToken& token,
+    ResId res_id,
     base::Time last_used,
     scoped_refptr<net::IOBuffer> buffer,
-    int64_t header_size_delta) {
+    int64_t header_size_delta,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.UpdateEntryHeaderAndLastUsed",
                      "data", [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
                        dict.Add("key", key.string());
-                       dict.Add("token", token.ToString());
+                       dict.Add("res_id", res_id.value());
                        dict.Add("last_used", last_used);
                        dict.Add("header_size_delta", header_size_delta);
                        PopulateTraceDetails(store_status_, dict);
@@ -1306,10 +1478,10 @@ ErrorAndEvictionRequested Backend::UpdateEntryHeaderAndLastUsed(
   base::ElapsedTimer timer;
   bool corruption_detected = false;
   auto result = UpdateEntryHeaderAndLastUsedInternal(
-      key, token, last_used, std::move(buffer), header_size_delta,
+      key, res_id, last_used, std::move(buffer), header_size_delta,
       corruption_detected);
   RecordTimeAndErrorResultHistogram("UpdateEntryHeaderAndLastUsed",
-                                    timer.Elapsed(), result,
+                                    posting_delay, timer.Elapsed(), result,
                                     corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.UpdateEntryHeaderAndLastUsed",
                    "result", [&](perfetto::TracedValue trace_context) {
@@ -1322,11 +1494,14 @@ ErrorAndEvictionRequested Backend::UpdateEntryHeaderAndLastUsed(
 
 Error Backend::UpdateEntryHeaderAndLastUsedInternal(
     const CacheEntryKey& key,
-    const base::UnguessableToken& token,
+    ResId res_id,
     base::Time last_used,
     scoped_refptr<net::IOBuffer> buffer,
     int64_t header_size_delta,
     bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CHECK(buffer);
   CheckDatabaseInitStatus();
 
@@ -1341,9 +1516,7 @@ Error Backend::UpdateEntryHeaderAndLastUsedInternal(
     statement.BindTime(0, last_used);
     statement.BindInt64(1, header_size_delta);
     statement.BindBlob(2, buffer->span());
-    statement.BindString(3, key.string());
-    statement.BindInt64(4, TokenHigh(token));
-    statement.BindInt64(5, TokenLow(token));
+    statement.BindInt64(3, res_id.value());
     if (statement.Step()) {
       const int64_t bytes_usage = statement.ColumnInt64(0);
       if (bytes_usage < static_cast<int64_t>(buffer->size()) +
@@ -1366,17 +1539,19 @@ Error Backend::UpdateEntryHeaderAndLastUsedInternal(
 
 ErrorAndEvictionRequested Backend::WriteEntryData(
     const CacheEntryKey& key,
-    const base::UnguessableToken& token,
+    ResId res_id,
     int64_t old_body_end,
     int64_t offset,
     scoped_refptr<net::IOBuffer> buffer,
     int buf_len,
-    bool truncate) {
+    bool truncate,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.WriteEntryData", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
                        dict.Add("key", key.string());
-                       dict.Add("token", token.ToString());
+                       dict.Add("res_id", res_id.value());
                        dict.Add("old_body_end", old_body_end);
                        dict.Add("offset", offset);
                        dict.Add("buf_len", buf_len);
@@ -1385,10 +1560,11 @@ ErrorAndEvictionRequested Backend::WriteEntryData(
                      });
   base::ElapsedTimer timer;
   bool corruption_detected = false;
-  auto result = WriteEntryDataInternal(key, token, old_body_end, offset,
-                                       std::move(buffer), buf_len, truncate,
-                                       corruption_detected);
-  RecordTimeAndErrorResultHistogram("WriteEntryData", timer.Elapsed(), result,
+  auto result =
+      WriteEntryDataInternal(res_id, old_body_end, offset, std::move(buffer),
+                             buf_len, truncate, corruption_detected);
+  RecordTimeAndErrorResultHistogram("WriteEntryData", posting_delay,
+                                    timer.Elapsed(), result,
                                     corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.WriteEntryData", "result",
                    [&](perfetto::TracedValue trace_context) {
@@ -1399,14 +1575,16 @@ ErrorAndEvictionRequested Backend::WriteEntryData(
   return ErrorAndEvictionRequested(result, ShouldStartEviction());
 }
 
-Error Backend::WriteEntryDataInternal(const CacheEntryKey& key,
-                                      const base::UnguessableToken& token,
+Error Backend::WriteEntryDataInternal(ResId res_id,
                                       int64_t old_body_end,
                                       int64_t offset,
                                       scoped_refptr<net::IOBuffer> buffer,
                                       int buf_len,
                                       bool truncate,
                                       bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return Error::kFailedForTesting;
+  }
   CheckDatabaseInitStatus();
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
@@ -1432,7 +1610,7 @@ Error Backend::WriteEntryDataInternal(const CacheEntryKey& key,
   // with existing data.
   if (offset < old_body_end) {
     if (Error result =
-            TrimOverlappingBlobs(token, offset, write_end, truncate,
+            TrimOverlappingBlobs(res_id, offset, write_end, truncate,
                                  checked_total_size_delta, corruption_detected);
         result != Error::kOk) {
       return result;
@@ -1444,7 +1622,7 @@ Error Backend::WriteEntryDataInternal(const CacheEntryKey& key,
   if (body_end_delta < 0) {
     CHECK(truncate);
     if (Error result =
-            TruncateBlobsAfter(token, new_body_end, checked_total_size_delta);
+            TruncateBlobsAfter(res_id, new_body_end, checked_total_size_delta);
         result != Error::kOk) {
       return result;
     }
@@ -1452,7 +1630,7 @@ Error Backend::WriteEntryDataInternal(const CacheEntryKey& key,
 
   // Insert the new data blob if there is data to write.
   if (buf_len) {
-    if (Error result = InsertNewBlob(token, offset, buffer, buf_len,
+    if (Error result = InsertNewBlob(res_id, offset, buffer, buf_len,
                                      checked_total_size_delta);
         result != Error::kOk) {
       return result;
@@ -1474,9 +1652,7 @@ Error Backend::WriteEntryDataInternal(const CacheEntryKey& key,
         SQL_FROM_HERE, GetQuery(Query::kWriteEntryData_UpdateResource)));
     statement.BindInt64(0, body_end_delta);
     statement.BindInt64(1, total_size_delta);
-    statement.BindString(2, key.string());
-    statement.BindInt64(3, TokenHigh(token));
-    statement.BindInt64(4, TokenLow(token));
+    statement.BindInt64(2, res_id.value());
     if (statement.Step()) {
       // Consistency check: The `RETURNING` clause gives us the `body_end` value
       // after the update. If this doesn't match our calculated `new_body_end`,
@@ -1494,8 +1670,7 @@ Error Backend::WriteEntryDataInternal(const CacheEntryKey& key,
         total_size_delta = 0;
       }
     } else {
-      // If no rows were updated, it means the entry was not found (or the
-      // token was wrong).
+      // If no rows were updated, it means the entry was not found.
       return Error::kNotFound;
     }
   }
@@ -1513,7 +1688,7 @@ Error Backend::WriteEntryDataInternal(const CacheEntryKey& key,
 // them, and recreates any non-overlapping portions as new, smaller blobs. This
 // effectively "cuts out" the space for the new data.
 Error Backend::TrimOverlappingBlobs(
-    const base::UnguessableToken& token,
+    ResId res_id,
     int64_t offset,
     int64_t end,
     bool truncate,
@@ -1522,7 +1697,7 @@ Error Backend::TrimOverlappingBlobs(
   TRACE_EVENT1("disk_cache", "SqlBackend.TrimOverlappingBlobs", "data",
                [&](perfetto::TracedValue trace_context) {
                  auto dict = std::move(trace_context).WriteDictionary();
-                 dict.Add("token", token.ToString());
+                 dict.Add("res_id", res_id.value());
                  dict.Add("offset", offset);
                  dict.Add("end", end);
                });
@@ -1534,10 +1709,9 @@ Error Backend::TrimOverlappingBlobs(
   if (offset != end) {
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE, GetQuery(Query::kTrimOverlappingBlobs_DeleteContained)));
-    statement.BindInt64(0, TokenHigh(token));
-    statement.BindInt64(1, TokenLow(token));
-    statement.BindInt64(2, offset);
-    statement.BindInt64(3, end);
+    statement.BindInt64(0, res_id.value());
+    statement.BindInt64(1, offset);
+    statement.BindInt64(2, end);
     while (statement.Step()) {
       const int64_t blob_start = statement.ColumnInt64(0);
       const int64_t blob_end = statement.ColumnInt64(1);
@@ -1561,10 +1735,9 @@ Error Backend::TrimOverlappingBlobs(
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE,
         GetQuery(Query::kTrimOverlappingBlobs_SelectOverlapping)));
-    statement.BindInt64(0, TokenHigh(token));
-    statement.BindInt64(1, TokenLow(token));
-    statement.BindInt64(2, end);
-    statement.BindInt64(3, offset);
+    statement.BindInt64(0, res_id.value());
+    statement.BindInt64(1, end);
+    statement.BindInt64(2, offset);
     while (statement.Step()) {
       const int64_t blob_id = statement.ColumnInt64(0);
       const int64_t blob_start = statement.ColumnInt64(1);
@@ -1608,7 +1781,7 @@ Error Backend::TrimOverlappingBlobs(
 
   // Insert the new, smaller blobs that were preserved from the non-overlapping
   // parts.
-  if (Error error = InsertNewBlobs(token, new_blobs, checked_total_size_delta);
+  if (Error error = InsertNewBlobs(res_id, new_blobs, checked_total_size_delta);
       error != Error::kOk) {
     return error;
   }
@@ -1616,22 +1789,21 @@ Error Backend::TrimOverlappingBlobs(
 }
 
 Error Backend::TruncateBlobsAfter(
-    const base::UnguessableToken& token,
+    ResId res_id,
     int64_t truncate_offset,
     base::CheckedNumeric<int64_t>& checked_total_size_delta) {
   TRACE_EVENT1("disk_cache", "SqlBackend.TruncateBlobsAfter", "data",
                [&](perfetto::TracedValue trace_context) {
                  auto dict = std::move(trace_context).WriteDictionary();
-                 dict.Add("token", token.ToString());
+                 dict.Add("res_id", res_id.value());
                  dict.Add("truncate_offset", truncate_offset);
                });
   // Delete all blobs that start at or after the truncation offset.
   {
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE, GetQuery(Query::kTruncateBlobsAfter_DeleteAfter)));
-    statement.BindInt64(0, TokenHigh(token));
-    statement.BindInt64(1, TokenLow(token));
-    statement.BindInt64(2, truncate_offset);
+    statement.BindInt64(0, res_id.value());
+    statement.BindInt64(1, truncate_offset);
     while (statement.Step()) {
       const int64_t blob_start = statement.ColumnInt64(0);
       const int64_t blob_end = statement.ColumnInt64(1);
@@ -1646,13 +1818,13 @@ Error Backend::TruncateBlobsAfter(
 
 // Inserts a vector of new blobs into the database.
 Error Backend::InsertNewBlobs(
-    const base::UnguessableToken& token,
+    ResId res_id,
     const std::vector<BufferWithStart>& new_blobs,
     base::CheckedNumeric<int64_t>& checked_total_size_delta) {
   // Iterate through the provided blobs and insert each one.
   for (const auto& new_blob : new_blobs) {
     if (Error error =
-            InsertNewBlob(token, new_blob.start, new_blob.buffer,
+            InsertNewBlob(res_id, new_blob.start, new_blob.buffer,
                           new_blob.buffer->size(), checked_total_size_delta);
         error != Error::kOk) {
       return error;
@@ -1663,7 +1835,7 @@ Error Backend::InsertNewBlobs(
 
 // Inserts a single new blob into the database.
 Error Backend::InsertNewBlob(
-    const base::UnguessableToken& token,
+    ResId res_id,
     int64_t start,
     const scoped_refptr<net::IOBuffer>& buffer,
     int buf_len,
@@ -1671,7 +1843,7 @@ Error Backend::InsertNewBlob(
   TRACE_EVENT1("disk_cache", "SqlBackend.InsertNewBlob", "data",
                [&](perfetto::TracedValue trace_context) {
                  auto dict = std::move(trace_context).WriteDictionary();
-                 dict.Add("token", token.ToString());
+                 dict.Add("res_id", res_id.value());
                  dict.Add("start", start);
                  dict.Add("buf_len", buf_len);
                });
@@ -1679,11 +1851,10 @@ Error Backend::InsertNewBlob(
       (base::CheckedNumeric<int64_t>(start) + buf_len).ValueOrDie();
   sql::Statement statement(db_.GetCachedStatement(
       SQL_FROM_HERE, GetQuery(Query::kInsertNewBlob_InsertIntoBlobs)));
-  statement.BindInt64(0, TokenHigh(token));
-  statement.BindInt64(1, TokenLow(token));
-  statement.BindInt64(2, start);
-  statement.BindInt64(3, end);
-  statement.BindBlob(4,
+  statement.BindInt64(0, res_id.value());
+  statement.BindInt64(1, start);
+  statement.BindInt64(2, end);
+  statement.BindBlob(3,
                      buffer->span().first(base::checked_cast<size_t>(buf_len)));
   if (!statement.Run()) {
     return Error::kFailedToExecute;
@@ -1742,41 +1913,39 @@ Error Backend::DeleteBlobById(
   return Error::kOk;
 }
 
-// Deletes all blobs associated with a specific entry token.
-Error Backend::DeleteBlobsByToken(const base::UnguessableToken& token) {
-  TRACE_EVENT1("disk_cache", "SqlBackend.DeleteBlobsByToken", "token",
+// Deletes all blobs associated with a specific entry res_id.
+Error Backend::DeleteBlobsByResId(ResId res_id) {
+  TRACE_EVENT1("disk_cache", "SqlBackend.DeleteBlobsByResId", "res_id",
                [&](perfetto::TracedValue trace_context) {
                  auto dict = std::move(trace_context).WriteDictionary();
-                 dict.Add("token", token.ToString());
+                 dict.Add("res_id", res_id.value());
                });
   sql::Statement statement(db_.GetCachedStatement(
-      SQL_FROM_HERE, GetQuery(Query::kDeleteBlobsByToken_DeleteFromBlobs)));
-  statement.BindInt64(0, TokenHigh(token));
-  statement.BindInt64(1, TokenLow(token));
+      SQL_FROM_HERE, GetQuery(Query::kDeleteBlobsByResId_DeleteFromBlobs)));
+  statement.BindInt64(0, res_id.value());
   if (!statement.Run()) {
     return Error::kFailedToExecute;
   }
   return Error::kOk;
 }
 
-Error Backend::DeleteBlobsByTokens(
-    const std::vector<base::UnguessableToken>& tokens) {
-  TRACE_EVENT0("disk_cache", "SqlBackend.DeleteBlobsByTokens");
-  for (const auto& token : tokens) {
-    if (auto error = DeleteBlobsByToken(token); error != Error::kOk) {
+Error Backend::DeleteBlobsByResIds(const std::vector<ResId>& res_ids) {
+  TRACE_EVENT0("disk_cache", "SqlBackend.DeleteBlobsByResIds");
+  for (const auto& res_id : res_ids) {
+    if (auto error = DeleteBlobsByResId(res_id); error != Error::kOk) {
       return error;
     }
   }
   return Error::kOk;
 }
 
-Error Backend::DeleteResourcesByResIds(const std::vector<int64_t>& res_ids) {
+Error Backend::DeleteResourcesByResIds(const std::vector<ResId>& res_ids) {
   TRACE_EVENT0("disk_cache", "SqlBackend.DeleteResourcesByResIds");
-  for (int64_t res_id : res_ids) {
+  for (const auto& res_id : res_ids) {
     sql::Statement delete_resource_stmt(db_.GetCachedStatement(
         SQL_FROM_HERE,
         GetQuery(Query::kDeleteResourcesByResIds_DeleteFromResources)));
-    delete_resource_stmt.BindInt64(0, res_id);
+    delete_resource_stmt.BindInt64(0, res_id.value());
     if (!delete_resource_stmt.Run()) {
       return Error::kFailedToExecute;
     }
@@ -1784,16 +1953,18 @@ Error Backend::DeleteResourcesByResIds(const std::vector<int64_t>& res_ids) {
   return Error::kOk;
 }
 
-IntOrError Backend::ReadEntryData(const base::UnguessableToken& token,
+IntOrError Backend::ReadEntryData(ResId res_id,
                                   int64_t offset,
                                   scoped_refptr<net::IOBuffer> buffer,
                                   int buf_len,
                                   int64_t body_end,
-                                  bool sparse_reading) {
+                                  bool sparse_reading,
+                                  base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.ReadEntryData", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
-                       dict.Add("token", token.ToString());
+                       dict.Add("res_id", res_id.value());
                        dict.Add("offset", offset);
                        dict.Add("buf_len", buf_len);
                        dict.Add("body_end", body_end);
@@ -1803,11 +1974,11 @@ IntOrError Backend::ReadEntryData(const base::UnguessableToken& token,
   base::ElapsedTimer timer;
   bool corruption_detected = false;
   auto result =
-      ReadEntryDataInternal(token, offset, std::move(buffer), buf_len, body_end,
-                            sparse_reading, corruption_detected);
-  RecordTimeAndErrorResultHistogram("ReadEntryData", timer.Elapsed(),
-                                    result.error_or(Error::kOk),
-                                    corruption_detected);
+      ReadEntryDataInternal(res_id, offset, std::move(buffer), buf_len,
+                            body_end, sparse_reading, corruption_detected);
+  RecordTimeAndErrorResultHistogram(
+      "ReadEntryData", posting_delay, timer.Elapsed(),
+      result.error_or(Error::kOk), corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.ReadEntryData", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
@@ -1817,13 +1988,16 @@ IntOrError Backend::ReadEntryData(const base::UnguessableToken& token,
   return result;
 }
 
-IntOrError Backend::ReadEntryDataInternal(const base::UnguessableToken& token,
+IntOrError Backend::ReadEntryDataInternal(ResId res_id,
                                           int64_t offset,
                                           scoped_refptr<net::IOBuffer> buffer,
                                           int buf_len,
                                           int64_t body_end,
                                           bool sparse_reading,
                                           bool& corruption_detected) {
+  if (simulate_db_failure_for_testing_) {
+    return base::unexpected(Error::kFailedForTesting);
+  }
   CheckDatabaseInitStatus();
 
   if (offset < 0 || buf_len < 0 || !buffer || buf_len > buffer->size()) {
@@ -1840,10 +2014,9 @@ IntOrError Backend::ReadEntryDataInternal(const base::UnguessableToken& token,
   // ordered by their start offset.
   sql::Statement statement(db_.GetCachedStatement(
       SQL_FROM_HERE, GetQuery(Query::kReadEntryData_SelectOverlapping)));
-  statement.BindInt64(0, TokenHigh(token));
-  statement.BindInt64(1, TokenLow(token));
-  statement.BindInt64(2, read_end);
-  statement.BindInt64(3, offset);
+  statement.BindInt64(0, res_id.value());
+  statement.BindInt64(1, read_end);
+  statement.BindInt64(2, offset);
 
   size_t written_bytes = 0;
   while (statement.Step()) {
@@ -1899,20 +2072,23 @@ IntOrError Backend::ReadEntryDataInternal(const base::UnguessableToken& token,
   return written_bytes;
 }
 
-RangeResult Backend::GetEntryAvailableRange(const base::UnguessableToken& token,
+RangeResult Backend::GetEntryAvailableRange(ResId res_id,
                                             int64_t offset,
-                                            int len) {
+                                            int len,
+                                            base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.GetEntryAvailableRange", "data",
                      [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
-                       dict.Add("token", token.ToString());
+                       dict.Add("res_id", res_id.value());
                        dict.Add("offset", offset);
                        dict.Add("len", len);
                      });
   base::ElapsedTimer timer;
-  auto result = GetEntryAvailableRangeInternal(token, offset, len);
-  RecordTimeAndErrorResultHistogram("GetEntryAvailableRange", timer.Elapsed(),
-                                    Error::kOk, /*corruption_detected=*/false);
+  auto result = GetEntryAvailableRangeInternal(res_id, offset, len);
+  RecordTimeAndErrorResultHistogram("GetEntryAvailableRange", posting_delay,
+                                    timer.Elapsed(), Error::kOk,
+                                    /*corruption_detected=*/false);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.GetEntryAvailableRange", "result",
                    [&](perfetto::TracedValue trace_context) {
                      auto dict = std::move(trace_context).WriteDictionary();
@@ -1921,10 +2097,9 @@ RangeResult Backend::GetEntryAvailableRange(const base::UnguessableToken& token,
   return result;
 }
 
-RangeResult Backend::GetEntryAvailableRangeInternal(
-    const base::UnguessableToken& token,
-    int64_t offset,
-    int len) {
+RangeResult Backend::GetEntryAvailableRangeInternal(ResId res_id,
+                                                    int64_t offset,
+                                                    int len) {
   CheckDatabaseInitStatus();
   // Truncate `len` to make sure that `offset + len` does not overflow.
   len = std::min(static_cast<int64_t>(len),
@@ -1940,10 +2115,9 @@ RangeResult Backend::GetEntryAvailableRangeInternal(
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE,
         GetQuery(Query::kGetEntryAvailableRange_SelectOverlapping)));
-    statement.BindInt64(0, TokenHigh(token));
-    statement.BindInt64(1, TokenLow(token));
-    statement.BindInt64(2, end);
-    statement.BindInt64(3, offset);
+    statement.BindInt64(0, res_id.value());
+    statement.BindInt64(1, end);
+    statement.BindInt64(2, offset);
     while (statement.Step()) {
       int64_t blob_start = statement.ColumnInt64(0);
       int64_t blob_end = statement.ColumnInt64(1);
@@ -1975,10 +2149,12 @@ RangeResult Backend::GetEntryAvailableRangeInternal(
 }
 
 int64_t Backend::CalculateSizeOfEntriesBetween(base::Time initial_time,
-                                               base::Time end_time) {
+                                               base::Time end_time,
+                                               base::TimeTicks start_time) {
   if (initial_time == base::Time::Min() && end_time == base::Time::Max()) {
     return GetSizeOfAllEntries();
   }
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.CalculateSizeOfEntriesBetween",
                      "data", [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
@@ -1988,7 +2164,7 @@ int64_t Backend::CalculateSizeOfEntriesBetween(base::Time initial_time,
   base::ElapsedTimer timer;
   auto result = CalculateSizeOfEntriesBetweenInternal(initial_time, end_time);
   RecordTimeAndErrorResultHistogram("CalculateSizeOfEntriesBetween",
-                                    timer.Elapsed(), Error::kOk,
+                                    posting_delay, timer.Elapsed(), Error::kOk,
                                     /*corruption_detected=*/false);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.CalculateSizeOfEntriesBetween",
                    "result", result);
@@ -2016,7 +2192,9 @@ int64_t Backend::CalculateSizeOfEntriesBetweenInternal(base::Time initial_time,
 }
 
 OptionalEntryInfoWithIdAndKey Backend::OpenLatestEntryBeforeResId(
-    int64_t res_id_cursor) {
+    ResId res_id_cursor,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT_BEGIN1("disk_cache", "SqlBackend.OpenLatestEntryBeforeResId",
                      "data", [&](perfetto::TracedValue trace_context) {
                        auto dict = std::move(trace_context).WriteDictionary();
@@ -2026,7 +2204,7 @@ OptionalEntryInfoWithIdAndKey Backend::OpenLatestEntryBeforeResId(
   bool corruption_detected = false;
   auto result =
       OpenLatestEntryBeforeResIdInternal(res_id_cursor, corruption_detected);
-  RecordTimeAndErrorResultHistogram("OpenLatestEntryBeforeResId",
+  RecordTimeAndErrorResultHistogram("OpenLatestEntryBeforeResId", posting_delay,
                                     timer.Elapsed(), Error::kOk,
                                     corruption_detected);
   TRACE_EVENT_END1("disk_cache", "SqlBackend.OpenLatestEntryBeforeResId",
@@ -2039,32 +2217,24 @@ OptionalEntryInfoWithIdAndKey Backend::OpenLatestEntryBeforeResId(
 }
 
 OptionalEntryInfoWithIdAndKey Backend::OpenLatestEntryBeforeResIdInternal(
-    int64_t res_id_cursor,
+    ResId res_id_cursor,
     bool& corruption_detected) {
   CheckDatabaseInitStatus();
 
   sql::Statement statement(db_.GetCachedStatement(
       SQL_FROM_HERE,
       GetQuery(Query::kOpenLatestEntryBeforeResId_SelectLiveResources)));
-  statement.BindInt64(0, res_id_cursor);
+  statement.BindInt64(0, res_id_cursor.value());
   while (statement.Step()) {
-    auto maybe_token =
-        ToUnguessableToken(statement.ColumnInt64(1), statement.ColumnInt64(2));
-    if (!maybe_token) {
-      // If OpenNextEntry encounters invalid data, it records it in a histogram
-      // and ignores the data.
-      corruption_detected = true;
-      continue;
-    }
-
+    const ResId res_id = ResId(statement.ColumnInt64(0));
     EntryInfoWithIdAndKey result;
-    result.res_id = statement.ColumnInt64(0);
-    result.key = CacheEntryKey(statement.ColumnString(5));
+    result.res_id = res_id;
     auto& entry_info = result.info;
-    entry_info.token = *maybe_token;
-    entry_info.last_used = statement.ColumnTime(3);
-    entry_info.body_end = statement.ColumnInt64(4);
-    base::span<const uint8_t> blob_span = statement.ColumnBlob(6);
+    entry_info.res_id = res_id;
+    entry_info.last_used = statement.ColumnTime(1);
+    entry_info.body_end = statement.ColumnInt64(2);
+    result.key = CacheEntryKey(statement.ColumnString(3));
+    base::span<const uint8_t> blob_span = statement.ColumnBlob(4);
     if (blob_span.size() > std::numeric_limits<int>::max()) {
       // If OpenNextEntry encounters invalid data, it records it in a histogram
       // and ignores the data.
@@ -2080,77 +2250,78 @@ OptionalEntryInfoWithIdAndKey Backend::OpenLatestEntryBeforeResIdInternal(
   return std::nullopt;
 }
 
-ErrorAndEvictionRequested Backend::RunEviction(
-    base::flat_set<CacheEntryKey> excluded_keys) {
+ResIdListOrErrorAndEvictionRequested Backend::RunEviction(
+    base::flat_set<ResId> excluded_res_ids,
+    base::TimeTicks start_time) {
+  const base::TimeDelta posting_delay = base::TimeTicks::Now() - start_time;
   TRACE_EVENT0("disk_cache", "SqlBackend.RunEviction");
   base::ElapsedTimer timer;
   bool corruption_detected = false;
-  auto result =
-      RunEvictionInternal(std::move(excluded_keys), corruption_detected);
-  RecordTimeAndErrorResultHistogram("RunEviction", timer.Elapsed(), result,
-                                    corruption_detected);
+  auto result = RunEvictionInternal(excluded_res_ids, corruption_detected);
+  RecordTimeAndErrorResultHistogram(
+      "RunEviction", posting_delay, timer.Elapsed(),
+      result.error_or(Error::kOk), corruption_detected);
   MaybeCrashIfCorrupted(corruption_detected);
-  return ErrorAndEvictionRequested(result, ShouldStartEviction());
+  return ResIdListOrErrorAndEvictionRequested(std::move(result),
+                                              ShouldStartEviction());
 }
 
-Error Backend::RunEvictionInternal(
-    const base::flat_set<CacheEntryKey>& excluded_keys,
+ResIdListOrError Backend::RunEvictionInternal(
+    const base::flat_set<ResId>& excluded_res_ids,
     bool& corruption_detected) {
   int64_t size_to_be_removed = GetSizeOfAllEntries() - low_watermark_;
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
-    return Error::kFailedToExecute;
+    return base::unexpected(Error::kFailedToExecute);
   }
 
-  std::vector<base::UnguessableToken> tokens_to_be_deleted;
+  ResIdList res_ids_to_be_deleted;
   int64_t entry_count_delta = 0;
   // Use checked numerics to safely update the total cache size.
   base::CheckedNumeric<int64_t> checked_total_size_delta = 0;
   base::CheckedNumeric<int64_t> checked_removed_total_size = 0;
+  ResIdList deleted_enties;
   {
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE, GetQuery(Query::kRunEviction_SelectLiveResources)));
     while (size_to_be_removed > checked_removed_total_size.ValueOrDie() &&
            statement.Step()) {
-      if (excluded_keys.contains(CacheEntryKey(statement.ColumnString(2)))) {
+      const ResId res_id = ResId(statement.ColumnInt64(0));
+      if (excluded_res_ids.contains(res_id)) {
         continue;
       }
-      auto maybe_token = ToUnguessableToken(statement.ColumnInt64(0),
-                                            statement.ColumnInt64(1));
-      if (!maybe_token) {
-        corruption_detected = true;
-        continue;
-      }
-      tokens_to_be_deleted.push_back(*maybe_token);
+      res_ids_to_be_deleted.emplace_back(res_id);
       --entry_count_delta;
-      const int64_t bytes_usage = statement.ColumnInt64(3);
+      const int64_t bytes_usage = statement.ColumnInt64(1);
       checked_total_size_delta -= bytes_usage;
       checked_removed_total_size += bytes_usage;
       checked_removed_total_size += kSqlBackendStaticResourceSize;
       if (!checked_total_size_delta.IsValid() ||
           !checked_removed_total_size.IsValid()) {
         corruption_detected = true;
-        return Error::kInvalidData;
+        return base::unexpected(Error::kInvalidData);
       }
     }
   }
 
-  for (const auto& token_to_be_deleted : tokens_to_be_deleted) {
-    if (Error delete_result = DeleteBlobsByToken(token_to_be_deleted);
+  for (const auto& res_id_to_be_deleted : res_ids_to_be_deleted) {
+    if (Error delete_result = DeleteBlobsByResId(res_id_to_be_deleted);
         delete_result != Error::kOk) {
-      return delete_result;
+      return base::unexpected(delete_result);
     }
     sql::Statement statement(db_.GetCachedStatement(
         SQL_FROM_HERE, GetQuery(Query::kRunEviction_DeleteFromResources)));
-    statement.BindInt64(0, TokenHigh(token_to_be_deleted));
-    statement.BindInt64(1, TokenLow(token_to_be_deleted));
+    statement.BindInt64(0, res_id_to_be_deleted.value());
     if (!statement.Run()) {
-      return Error::kFailedToExecute;
+      return base::unexpected(Error::kFailedToExecute);
     }
   }
-  return UpdateStoreStatusAndCommitTransaction(
+  auto error = UpdateStoreStatusAndCommitTransaction(
       transaction, entry_count_delta, checked_total_size_delta.ValueOrDie(),
       corruption_detected);
+  return error == Error::kOk
+             ? ResIdListOrError(std::move(res_ids_to_be_deleted))
+             : base::unexpected(error);
 }
 
 Error Backend::UpdateStoreStatusAndCommitTransaction(
@@ -2240,6 +2411,62 @@ int64_t Backend::CalculateTotalSize() {
   return result;
 }
 
+bool Backend::MaybeRunCheckpoint() {
+  TRACE_EVENT("disk_cache", "SqlBackend.MaybeRunCheckpoint");
+  if (!db_.is_open()) {
+    // The database might have been closed if a catastrophic error occurred and
+    // RazeAndPoison() was called.
+    return false;
+  }
+  if (!IsBrowserIdle()) {
+    // Between the time when idle was detected in the browser process and the
+    // time when this backend was notified, the browser became non-idle.
+    return false;
+  }
+  if (wal_pages_ < net::features::kSqlDiskCacheIdleCheckpointThreshold.Get()) {
+    return false;
+  }
+  TRACE_EVENT("disk_cache", "SqlBackend.CheckpointDatabase", "pages",
+              wal_pages_);
+  base::ElapsedTimer timer;
+  bool checkpoint_result = db_.CheckpointDatabase();
+  base::UmaHistogramMicrosecondsTimes(
+      base::StrCat({kHistogramPrefix, "IdleEventCheckpoint.",
+                    checkpoint_result ? "Success" : "Failure", "Time"}),
+      timer.Elapsed());
+  base::UmaHistogramCounts100000(
+      base::StrCat({kHistogramPrefix, "IdleEventCheckpoint.",
+                    checkpoint_result ? "Success" : "Failure", "Pages"}),
+      wal_pages_);
+  wal_pages_ = 0;
+  return checkpoint_result;
+}
+
+void Backend::OnCommitCallback(int pages) {
+  TRACE_EVENT("disk_cache", "SqlBackend.OnCommitCallback");
+  const bool is_idle = IsBrowserIdle();
+  if (pages >= net::features::kSqlDiskCacheForceCheckpointThreshold.Get() ||
+      (pages >= net::features::kSqlDiskCacheIdleCheckpointThreshold.Get() &&
+       is_idle)) {
+    TRACE_EVENT("disk_cache", "SqlBackend.CheckpointDatabase", "pages", pages);
+    base::ElapsedTimer timer;
+    bool checkpoint_result = db_.CheckpointDatabase();
+    base::UmaHistogramMicrosecondsTimes(
+        base::StrCat({kHistogramPrefix, is_idle ? "Idle" : "Force",
+                      "Checkpoint.", checkpoint_result ? "Success" : "Failure",
+                      "Time"}),
+        timer.Elapsed());
+    base::UmaHistogramCounts100000(
+        base::StrCat({kHistogramPrefix, is_idle ? "Idle" : "Force",
+                      "Checkpoint.", checkpoint_result ? "Success" : "Failure",
+                      "Pages"}),
+        pages);
+    wal_pages_ = 0;
+    return;
+  }
+  wal_pages_ = pages;
+}
+
 // `SqlPersistentStoreImpl` is the concrete implementation of the
 // `SqlPersistentStore` interface. It serves as the bridge between the caller
 // (on the main sequence = network IO thread) and the `Backend` (on the
@@ -2258,12 +2485,16 @@ class SqlPersistentStoreImpl : public SqlPersistentStore {
   // Kicks off the asynchronous initialization of the backend.
   void Initialize(ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::Initialize)
+        .WithArgs(base::TimeTicks::Now())
         .Then(base::BindOnce(
             [](base::WeakPtr<SqlPersistentStoreImpl> weak_ptr,
                ErrorCallback callback, InitResultOrError result) {
               if (weak_ptr) {
                 if (result.has_value()) {
                   weak_ptr->SetMaxSize(result->max_bytes);
+                  weak_ptr->index_ = std::move(result->index);
+                  weak_ptr->to_be_deleted_res_ids_ =
+                      std::move(result->doomed_entry_res_ids);
                 }
                 std::move(callback).Run(result.has_value() ? Error::kOk
                                                            : result.error());
@@ -2274,80 +2505,122 @@ class SqlPersistentStoreImpl : public SqlPersistentStore {
   void OpenOrCreateEntry(const CacheEntryKey& key,
                          EntryInfoOrErrorCallback callback) override {
     backend_.AsyncCall(&Backend::OpenOrCreateEntry)
-        .WithArgs(key)
-        .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
+        .WithArgs(key, base::TimeTicks::Now())
+        .Then(WrapEntryInfoOrErrorCallback(
+            std::move(callback), key,
+            IndexMismatchLocation::kOpenOrCreateEntry));
   }
   void OpenEntry(const CacheEntryKey& key,
                  OptionalEntryInfoOrErrorCallback callback) override {
     backend_.AsyncCall(&Backend::OpenEntry)
-        .WithArgs(key)
+        .WithArgs(key, base::TimeTicks::Now())
         .Then(WrapCallback(std::move(callback)));
   }
   void CreateEntry(const CacheEntryKey& key,
+                   base::Time creation_time,
                    EntryInfoOrErrorCallback callback) override {
+    bool run_existance_check = !index_ || index_->Contains(key.hash());
     backend_.AsyncCall(&Backend::CreateEntry)
-        .WithArgs(key)
-        .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
+        .WithArgs(key, creation_time, run_existance_check,
+                  base::TimeTicks::Now())
+        .Then(WrapEntryInfoOrErrorCallback(
+            std::move(callback), key, IndexMismatchLocation::kCreateEntry));
   }
   void DoomEntry(const CacheEntryKey& key,
-                 const base::UnguessableToken& token,
+                 ResId res_id,
                  ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::DoomEntry)
-        .WithArgs(key, token)
-        .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
+        .WithArgs(key, res_id, base::TimeTicks::Now())
+        .Then(base::BindOnce(
+            [](base::WeakPtr<SqlPersistentStoreImpl> weak_ptr,
+               CacheEntryKey::Hash key_hash, ResId res_id,
+               ErrorCallback callback, ErrorAndEvictionRequested result) {
+              if (weak_ptr) {
+                if (result.result == Error::kOk) {
+                  CHECK(weak_ptr->index_.has_value());
+                  if (!weak_ptr->index_->Remove(key_hash, res_id)) {
+                    weak_ptr->RecordIndexMismatch(
+                        IndexMismatchLocation::kDoomEntry);
+                  }
+                }
+                weak_ptr->eviction_requested_ = result.eviction_requested;
+                // We should not run the callback when `this` was deleted.
+                std::move(callback).Run(std::move(result.result));
+              }
+            },
+            weak_factory_.GetWeakPtr(), key.hash(), res_id,
+            std::move(callback)));
   }
   void DeleteDoomedEntry(const CacheEntryKey& key,
-                         const base::UnguessableToken& token,
+                         ResId res_id,
                          ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::DeleteDoomedEntry)
-        .WithArgs(key, token)
+        .WithArgs(key, res_id, base::TimeTicks::Now())
         .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
-  }
-  void DeleteDoomedEntries(
-      base::flat_set<base::UnguessableToken> excluded_tokens,
-      ErrorCallback callback) override {
-    backend_.AsyncCall(&Backend::DeleteDoomedEntries)
-        .WithArgs(std::move(excluded_tokens))
-        .Then(WrapCallback(std::move(callback)));
   }
   void DeleteLiveEntry(const CacheEntryKey& key,
                        ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::DeleteLiveEntry)
-        .WithArgs(key)
-        .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
+        .WithArgs(key, base::TimeTicks::Now())
+        .Then(WrapErrorCallbackToRemoveFromIndex(
+            std::move(callback), IndexMismatchLocation::kDeleteLiveEntry));
   }
   void DeleteAllEntries(ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::DeleteAllEntries)
-        .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
+        .WithArgs(base::TimeTicks::Now())
+        .Then(base::BindOnce(
+            [](base::WeakPtr<SqlPersistentStoreImpl> weak_ptr,
+               ErrorCallback callback, ErrorAndEvictionRequested result) {
+              if (weak_ptr) {
+                if (result.result == Error::kOk) {
+                  CHECK(weak_ptr->index_.has_value());
+                  weak_ptr->index_->Clear();
+                }
+                // We should not run the callback when `this` was deleted.
+                std::move(callback).Run(std::move(result.result));
+              }
+            },
+            weak_factory_.GetWeakPtr(), std::move(callback)));
   }
   void DeleteLiveEntriesBetween(base::Time initial_time,
                                 base::Time end_time,
-                                base::flat_set<CacheEntryKey> excluded_keys,
+                                base::flat_set<ResId> excluded_res_ids,
                                 ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::DeleteLiveEntriesBetween)
-        .WithArgs(initial_time, end_time, std::move(excluded_keys))
-        .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
+        .WithArgs(initial_time, end_time, std::move(excluded_res_ids),
+                  base::TimeTicks::Now())
+        .Then(WrapErrorCallbackToRemoveFromIndex(
+            std::move(callback),
+            IndexMismatchLocation::kDeleteLiveEntriesBetween));
   }
-  void UpdateEntryLastUsed(const CacheEntryKey& key,
-                           base::Time last_used,
-                           ErrorCallback callback) override {
-    backend_.AsyncCall(&Backend::UpdateEntryLastUsed)
-        .WithArgs(key, last_used)
+  void UpdateEntryLastUsedByKey(const CacheEntryKey& key,
+                                base::Time last_used,
+                                ErrorCallback callback) override {
+    backend_.AsyncCall(&Backend::UpdateEntryLastUsedByKey)
+        .WithArgs(key, last_used, base::TimeTicks::Now())
+        .Then(WrapCallback(std::move(callback)));
+  }
+  void UpdateEntryLastUsedByResId(ResId res_id,
+                                  base::Time last_used,
+                                  ErrorCallback callback) override {
+    backend_.AsyncCall(&Backend::UpdateEntryLastUsedByResId)
+        .WithArgs(res_id, last_used, base::TimeTicks::Now())
         .Then(WrapCallback(std::move(callback)));
   }
   void UpdateEntryHeaderAndLastUsed(const CacheEntryKey& key,
-                                    const base::UnguessableToken& token,
+                                    ResId res_id,
                                     base::Time last_used,
                                     scoped_refptr<net::IOBuffer> buffer,
                                     int64_t header_size_delta,
                                     ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::UpdateEntryHeaderAndLastUsed)
-        .WithArgs(key, token, last_used, std::move(buffer), header_size_delta)
+        .WithArgs(key, res_id, last_used, std::move(buffer), header_size_delta,
+                  base::TimeTicks::Now())
         .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
   }
 
   void WriteEntryData(const CacheEntryKey& key,
-                      const base::UnguessableToken& token,
+                      ResId res_id,
                       int64_t old_body_end,
                       int64_t offset,
                       scoped_refptr<net::IOBuffer> buffer,
@@ -2355,11 +2628,11 @@ class SqlPersistentStoreImpl : public SqlPersistentStore {
                       bool truncate,
                       ErrorCallback callback) override {
     backend_.AsyncCall(&Backend::WriteEntryData)
-        .WithArgs(key, token, old_body_end, offset, std::move(buffer), buf_len,
-                  truncate)
+        .WithArgs(key, res_id, old_body_end, offset, std::move(buffer), buf_len,
+                  truncate, base::TimeTicks::Now())
         .Then(WrapCallbackWithEvictionRequested(std::move(callback)));
   }
-  void ReadEntryData(const base::UnguessableToken& token,
+  void ReadEntryData(ResId res_id,
                      int64_t offset,
                      scoped_refptr<net::IOBuffer> buffer,
                      int buf_len,
@@ -2367,48 +2640,58 @@ class SqlPersistentStoreImpl : public SqlPersistentStore {
                      bool sparse_reading,
                      IntOrErrorCallback callback) override {
     backend_.AsyncCall(&Backend::ReadEntryData)
-        .WithArgs(token, offset, std::move(buffer), buf_len, body_end,
-                  sparse_reading)
+        .WithArgs(res_id, offset, std::move(buffer), buf_len, body_end,
+                  sparse_reading, base::TimeTicks::Now())
         .Then(WrapCallback(std::move(callback)));
   }
-  void GetEntryAvailableRange(const base::UnguessableToken& token,
+  void GetEntryAvailableRange(ResId res_id,
                               int64_t offset,
                               int len,
                               RangeResultCallback callback) override {
     backend_.AsyncCall(&Backend::GetEntryAvailableRange)
-        .WithArgs(token, offset, len)
+        .WithArgs(res_id, offset, len, base::TimeTicks::Now())
         .Then(WrapCallback(std::move(callback)));
   }
   void CalculateSizeOfEntriesBetween(base::Time initial_time,
                                      base::Time end_time,
                                      Int64OrErrorCallback callback) override {
     backend_.AsyncCall(&Backend::CalculateSizeOfEntriesBetween)
-        .WithArgs(initial_time, end_time)
+        .WithArgs(initial_time, end_time, base::TimeTicks::Now())
         .Then(WrapCallback(std::move(callback)));
   }
   void OpenLatestEntryBeforeResId(
-      int64_t res_id_cursor,
+      ResId res_id_cursor,
       OptionalEntryInfoWithIdAndKeyCallback callback) override {
     backend_.AsyncCall(&Backend::OpenLatestEntryBeforeResId)
-        .WithArgs(res_id_cursor)
+        .WithArgs(res_id_cursor, base::TimeTicks::Now())
         .Then(WrapCallback(std::move(callback)));
   }
   bool ShouldStartEviction() override {
     return !eviction_in_progress_ && eviction_requested_;
   }
-  void StartEviction(base::flat_set<CacheEntryKey> excluded_keys,
+  void StartEviction(base::flat_set<ResId> excluded_res_ids,
                      ErrorCallback callback) override {
     CHECK(!eviction_in_progress_);
     eviction_in_progress_ = true;
     backend_.AsyncCall(&Backend::RunEviction)
-        .WithArgs(std::move(excluded_keys))
+        .WithArgs(std::move(excluded_res_ids), base::TimeTicks::Now())
         .Then(base::BindOnce(
             [](base::WeakPtr<SqlPersistentStoreImpl> weak_ptr,
-               ErrorCallback callback, ErrorAndEvictionRequested result) {
+               ErrorCallback callback,
+               ResIdListOrErrorAndEvictionRequested result) {
               if (weak_ptr) {
                 weak_ptr->eviction_in_progress_ = false;
+                if (result.result.has_value()) {
+                  CHECK(weak_ptr->index_.has_value());
+                  for (ResId res_id : *result.result) {
+                    if (!weak_ptr->index_->Remove(res_id)) {
+                      weak_ptr->RecordIndexMismatch(
+                          IndexMismatchLocation::kStartEviction);
+                    }
+                  }
+                }
                 weak_ptr->eviction_requested_ = result.eviction_requested;
-                std::move(callback).Run(result.result);
+                std::move(callback).Run(result.result.error_or(Error::kOk));
               }
             },
             weak_factory_.GetWeakPtr(), std::move(callback)));
@@ -2422,9 +2705,37 @@ class SqlPersistentStoreImpl : public SqlPersistentStore {
   void GetSizeOfAllEntries(Int64Callback callback) const override {
     backend_.AsyncCall(&Backend::GetSizeOfAllEntries).Then(std::move(callback));
   }
+  bool MaybeRunCleanupDoomedEntries(ErrorCallback callback) override {
+    if (to_be_deleted_res_ids_.empty()) {
+      return false;
+    }
+    backend_.AsyncCall(&Backend::DeleteDoomedEntries)
+        .WithArgs(std::move(to_be_deleted_res_ids_), base::TimeTicks::Now())
+        .Then(WrapCallback(std::move(callback)));
+    return true;
+  }
+  void MaybeRunCheckpoint(base::OnceCallback<void(bool)> callback) override {
+    backend_.AsyncCall(&Backend::MaybeRunCheckpoint).Then(std::move(callback));
+  }
 
   void EnableStrictCorruptionCheckForTesting() override {
+    strict_corruption_check_enabled_ = true;
     backend_.AsyncCall(&Backend::EnableStrictCorruptionCheckForTesting);
+  }
+
+  void SetSimulateDbFailureForTesting(bool fail) override {
+    backend_.AsyncCall(&Backend::SetSimulateDbFailureForTesting).WithArgs(fail);
+  }
+
+  IndexState GetIndexStateForHash(CacheEntryKey::Hash key_hash) const override {
+    if (!index_.has_value()) {
+      return IndexState::kNotReady;
+    }
+
+    if (index_->Contains(key_hash)) {
+      return IndexState::kHashFound;
+    }
+    return IndexState::kHashNotFound;
   }
 
  private:
@@ -2467,12 +2778,77 @@ class SqlPersistentStoreImpl : public SqlPersistentStore {
         weak_factory_.GetWeakPtr(), std::move(callback));
   }
 
+  base::OnceCallback<void(EntryInfoOrErrorAndEvictionRequested)>
+  WrapEntryInfoOrErrorCallback(EntryInfoOrErrorCallback callback,
+                               const CacheEntryKey& key,
+                               IndexMismatchLocation location) {
+    return base::BindOnce(
+        [](base::WeakPtr<SqlPersistentStoreImpl> weak_ptr,
+           EntryInfoOrErrorCallback callback, CacheEntryKey::Hash key_hash,
+           IndexMismatchLocation location,
+           EntryInfoOrErrorAndEvictionRequested result) {
+          if (weak_ptr) {
+            if (result.result.has_value()) {
+              CHECK(weak_ptr->index_.has_value());
+              if (!result.result->opened) {
+                if (!weak_ptr->index_->Insert(key_hash,
+                                              result.result->res_id)) {
+                  weak_ptr->RecordIndexMismatch(location);
+                };
+              }
+            }
+            weak_ptr->eviction_requested_ = result.eviction_requested;
+            // We should not run the callback when `this` was deleted.
+            std::move(callback).Run(std::move(result.result));
+          }
+        },
+        weak_factory_.GetWeakPtr(), std::move(callback), key.hash(), location);
+  }
+
+  base::OnceCallback<void(ResIdListOrErrorAndEvictionRequested)>
+  WrapErrorCallbackToRemoveFromIndex(ErrorCallback callback,
+                                     IndexMismatchLocation location) {
+    return base::BindOnce(
+        [](base::WeakPtr<SqlPersistentStoreImpl> weak_ptr,
+           ErrorCallback callback, IndexMismatchLocation location,
+           ResIdListOrErrorAndEvictionRequested result) {
+          if (weak_ptr) {
+            if (result.result.has_value()) {
+              CHECK(weak_ptr->index_.has_value());
+              for (ResId res_id : result.result.value()) {
+                if (!weak_ptr->index_->Remove(res_id)) {
+                  weak_ptr->RecordIndexMismatch(location);
+                }
+              }
+            }
+            weak_ptr->eviction_requested_ = result.eviction_requested;
+            // We should not run the callback when `this` was deleted.
+            std::move(callback).Run(
+                std::move(result.result.error_or(Error::kOk)));
+          }
+        },
+        weak_factory_.GetWeakPtr(), std::move(callback), location);
+  }
+
+  void RecordIndexMismatch(IndexMismatchLocation location) {
+    base::UmaHistogramEnumeration(
+        base::StrCat({kHistogramPrefix, "IndexMismatch"}), location);
+    CHECK(!strict_corruption_check_enabled_);
+  }
+
   base::SequenceBound<Backend> backend_;
 
   int64_t max_size_ = 0;
   int64_t max_file_size_ = 0;
   bool eviction_in_progress_ = false;
   bool eviction_requested_ = false;
+  bool strict_corruption_check_enabled_ = false;
+
+  std::optional<SqlPersistentStoreInMemoryIndex> index_;
+
+  // A list of resource IDs for entries that were doomed in a previous session
+  // and are scheduled for deletion.
+  ResIdList to_be_deleted_res_ids_;
 
   base::WeakPtrFactory<SqlPersistentStoreImpl> weak_factory_{this};
 };

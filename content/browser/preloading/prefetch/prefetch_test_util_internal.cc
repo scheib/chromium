@@ -10,7 +10,8 @@
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "content/browser/preloading/prefetch/prefetch_container.h"
-#include "content/browser/preloading/prefetch/prefetch_params.h"
+#include "content/browser/preloading/prefetch/prefetch_features.h"
+#include "content/browser/preloading/prefetch/prefetch_key.h"
 #include "content/browser/preloading/prefetch/prefetch_response_reader.h"
 #include "content/browser/preloading/prefetch/prefetch_streaming_url_loader.h"
 #include "content/browser/preloading/preloading.h"
@@ -20,6 +21,7 @@
 #include "content/public/test/mock_navigation_handle.h"
 #include "net/cookies/site_for_cookies.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "url/gurl.h"
@@ -496,7 +498,6 @@ TestPrefetchService::~TestPrefetchService() = default;
 
 void TestPrefetchService::PrefetchUrl(
     base::WeakPtr<PrefetchContainer> prefetch_container) {
-  prefetch_container->DisablePrecogLoggingForTest();
   prefetches_.push_back(prefetch_container);
 }
 
@@ -597,9 +598,6 @@ void PrefetchingMetricsTestBase::ExpectPrefetchFailedNetError(
     blink::mojom::SpeculationEagerness eagerness,
     bool is_accurate_triggering,
     bool browser_initiated_prefetch) {
-  histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.ExistingPrefetchWithMatchingURL", false, 1);
-
   histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
                                     0);
   histogram_tester.ExpectUniqueSample(
@@ -637,9 +635,6 @@ void PrefetchingMetricsTestBase::ExpectPrefetchFailedAfterResponseReceived(
     int expected_body_length,
     PrefetchStatus expected_prefetch_status) {
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.ExistingPrefetchWithMatchingURL", false, 1);
-
-  histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", expected_response_code, 1);
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.NetError", net::OK, 1);
@@ -668,9 +663,6 @@ void PrefetchingMetricsTestBase::ExpectPrefetchSuccess(
     int expected_body_length,
     blink::mojom::SpeculationEagerness eagerness,
     bool is_accurate) {
-  histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.ExistingPrefetchWithMatchingURL", false, 1);
-
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
   histogram_tester.ExpectUniqueSample(
@@ -736,6 +728,60 @@ void PrefetchingMetricsTestBase::ExpectCorrectUkmLogs(
                                                   expected_attempts);
   // We do not test the `PreloadingPrediction` as it is added in
   // `PreloadingDecider`.
+}
+
+WithPrefetchRearchParam::WithPrefetchRearchParam(PrefetchRearchParam param)
+    : param_(param) {}
+WithPrefetchRearchParam::~WithPrefetchRearchParam() = default;
+
+// static
+std::vector<PrefetchRearchParam> PrefetchRearchParam::Params() {
+  return {PrefetchRearchParam{
+              .prefetch_scheduler = false,
+              .prefetch_scheduler_progress_sync_best_effort = false,
+          },
+          PrefetchRearchParam{
+              .prefetch_scheduler = true,
+              .prefetch_scheduler_progress_sync_best_effort = false,
+          },
+          PrefetchRearchParam{
+              .prefetch_scheduler = true,
+              .prefetch_scheduler_progress_sync_best_effort = true,
+          }};
+}
+
+void WithPrefetchRearchParam::InitRearchFeatures() {
+  if (param_.prefetch_scheduler) {
+    feature_list_prefetch_scheduler_.InitWithFeaturesAndParameters(
+        {{
+            features::kPrefetchScheduler,
+            {
+                {"kPrefetchSchedulerProgressSyncBestEffort",
+                 param_.prefetch_scheduler_progress_sync_best_effort ? "true"
+                                                                     : "false"},
+            },
+        }},
+        {});
+  }
+}
+
+PrefetchServiceInjectedEligibilityCheckFuture::
+    PrefetchServiceInjectedEligibilityCheckFuture(
+        PrefetchService& prefetch_service)
+    : prefetch_service_(prefetch_service) {
+  prefetch_service_->SetInjectedEligibilityCheckForTesting(base::BindRepeating(
+      [](TestFutureType* result_callback_future,
+         PrefetchService::InjectedEligibilityCheckResultCallbackForTesting
+             callback) {
+        result_callback_future->SetValue(std::move(callback));
+      },
+      base::Unretained(&result_callback_future_)));
+}
+
+PrefetchServiceInjectedEligibilityCheckFuture::
+    ~PrefetchServiceInjectedEligibilityCheckFuture() {
+  prefetch_service_->SetInjectedEligibilityCheckForTesting(
+      base::NullCallback());
 }
 
 }  // namespace content

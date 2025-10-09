@@ -68,7 +68,10 @@ import java.util.concurrent.TimeoutException;
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 // TODO(crbug.com/419289558): Re-enable color surface feature flags.
-@DisableFeatures({ChromeFeatureList.ANDROID_THEME_MODULE})
+@DisableFeatures({
+    ChromeFeatureList.ANDROID_THEME_MODULE,
+    OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS
+})
 @Batch(Batch.PER_CLASS)
 public class TabSwitcherSearchTest {
     private static final int SERVER_PORT = 13245;
@@ -105,7 +108,7 @@ public class TabSwitcherSearchTest {
     @Restriction(PHONE)
     public void testHubSearchBox_Phone() {
         RegularTabSwitcherStation tabSwitcher = mPage.openRegularTabSwitcher();
-        assertEquals(R.id.search_box, tabSwitcher.searchElement.get().getId());
+        assertEquals(R.id.search_box, tabSwitcher.searchElement.value().getId());
     }
 
     @Test
@@ -113,7 +116,7 @@ public class TabSwitcherSearchTest {
     @Restriction(DeviceFormFactor.TABLET_OR_DESKTOP)
     public void testHubSearchLoupe_Tablet() {
         RegularTabSwitcherStation tabSwitcher = mPage.openRegularTabSwitcher();
-        assertEquals(R.id.search_loupe, tabSwitcher.searchElement.get().getId());
+        assertEquals(R.id.search_loupe, tabSwitcher.searchElement.value().getId());
     }
 
     @Test
@@ -154,7 +157,7 @@ public class TabSwitcherSearchTest {
         mPage = suggestion.openPage();
         assertEquals(
                 mTestServer.getURL(urlsToOpen.get(0)),
-                mPage.loadedTabElement.get().getUrl().getSpec());
+                mPage.loadedTabElement.value().getUrl().getSpec());
     }
 
     @Test
@@ -162,7 +165,7 @@ public class TabSwitcherSearchTest {
     public void testZeroPrefixSuggestions_OpenSameTab() {
         List<String> urlsToOpen = List.of("/chrome/test/data/android/navigate/one.html");
         mPage = Journeys.prepareRegularTabsWithWebPages(mPage, mTestServer.getURLs(urlsToOpen));
-        Tab initialTab = mPage.loadedTabElement.get();
+        Tab initialTab = mPage.loadedTabElement.value();
         TabSwitcherSearchStation tabSwitcherSearchStation =
                 mPage.openRegularTabSwitcher().openTabSwitcherSearch();
         tabSwitcherSearchStation.checkSuggestionsShown();
@@ -173,7 +176,7 @@ public class TabSwitcherSearchTest {
                         /* title= */ null,
                         /* text= */ URL_PREFIX + urlsToOpen.get(0));
         mPage = suggestion.openPage();
-        assertSame(initialTab, mPage.loadedTabElement.get());
+        assertSame(initialTab, mPage.loadedTabElement.value());
     }
 
     @Test
@@ -269,7 +272,7 @@ public class TabSwitcherSearchTest {
     public void testTypedSuggestions_OpenSameTab() {
         List<String> urlsToOpen = List.of("/chrome/test/data/android/navigate/one.html");
         mPage = Journeys.prepareRegularTabsWithWebPages(mPage, mTestServer.getURLs(urlsToOpen));
-        Tab initialTab = mPage.loadedTabElement.get();
+        Tab initialTab = mPage.loadedTabElement.value();
         TabSwitcherSearchStation tabSwitcherSearchStation =
                 mPage.openRegularTabSwitcher().openTabSwitcherSearch();
         tabSwitcherSearchStation.typeInOmnibox("one.html");
@@ -279,8 +282,8 @@ public class TabSwitcherSearchTest {
                         /* title= */ "One",
                         /* text= */ URL_PREFIX + urlsToOpen.get(0));
         mPage = suggestion.openPage();
-        assertEquals("One", mPage.loadedTabElement.get().getTitle());
-        assertSame(initialTab, mPage.loadedTabElement.get());
+        assertEquals("One", mPage.loadedTabElement.value().getTitle());
+        assertSame(initialTab, mPage.loadedTabElement.value());
     }
 
     @Test
@@ -298,7 +301,7 @@ public class TabSwitcherSearchTest {
                 tabSwitcherSearchStation.findSuggestion(
                         /* index= */ 0, /* title= */ "One", /* text= */ null);
         mPage = suggestion.openPagePressingEnter();
-        assertEquals("One", mPage.loadedTabElement.get().getTitle());
+        assertEquals("One", mPage.loadedTabElement.value().getTitle());
     }
 
     @Test
@@ -349,14 +352,14 @@ public class TabSwitcherSearchTest {
     @EnableFeatures({OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS})
     public void testTypedSuggestions_OpenTabGroupSearchSuggestion() {
         String tabGroupTitle = "Test";
-        Tab firstTab = mPage.loadedTabElement.get();
+        Tab firstTab = mPage.loadedTabElement.value();
         int firstTabId = firstTab.getId();
         mCtaTestRule.loadUrlInTab(
                 mCtaTestRule.getTestServer().getURL(NavigatePageStations.PATH_ONE),
                 PageTransition.TYPED | PageTransition.FROM_ADDRESS_BAR,
                 firstTab);
         RegularNewTabPageStation secondPage = mPage.openNewTabFast();
-        Tab secondTab = secondPage.loadedTabElement.get();
+        Tab secondTab = secondPage.loadedTabElement.value();
         int secondTabId = secondTab.getId();
         mCtaTestRule.loadUrlInTab(
                 mCtaTestRule.getTestServer().getURL(NavigatePageStations.PATH_ONE),
@@ -374,9 +377,10 @@ public class TabSwitcherSearchTest {
 
         TabSwitcherSearchStation tabSwitcherSearchStation = tabSwitcher.openTabSwitcherSearch();
         tabSwitcherSearchStation.typeInOmnibox("test");
+        tabSwitcherSearchStation.findSectionHeaderByIndexAndText(0, "Tabs and tab groups");
         SuggestionFacility suggestion =
                 tabSwitcherSearchStation.findSuggestion(
-                        /* index= */ 1,
+                        /* index= */ 2,
                         /* title= */ "   Test",
                         /* text= */ "127.0.0.1:13245/chrome/test/data/android/navigate/one.html,"
                                 + " 127.0.0.1:13245/chrome/test/data/android/navigate/one.html");
@@ -396,14 +400,14 @@ public class TabSwitcherSearchTest {
     @EnableFeatures({OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS})
     public void testTypedSuggestions_OpenTabGroupSearchSuggestionByURLMatch() {
         String tabGroupTitle = "Test";
-        Tab firstTab = mPage.loadedTabElement.get();
+        Tab firstTab = mPage.loadedTabElement.value();
         int firstTabId = firstTab.getId();
         mCtaTestRule.loadUrlInTab(
                 mCtaTestRule.getTestServer().getURL(NavigatePageStations.PATH_ONE),
                 PageTransition.TYPED | PageTransition.FROM_ADDRESS_BAR,
                 firstTab);
         RegularNewTabPageStation secondPage = mPage.openNewTabFast();
-        Tab secondTab = secondPage.loadedTabElement.get();
+        Tab secondTab = secondPage.loadedTabElement.value();
         int secondTabId = secondTab.getId();
         mCtaTestRule.loadUrlInTab(
                 mCtaTestRule.getTestServer().getURL(NavigatePageStations.PATH_ONE),
@@ -421,9 +425,10 @@ public class TabSwitcherSearchTest {
 
         TabSwitcherSearchStation tabSwitcherSearchStation = tabSwitcher.openTabSwitcherSearch();
         tabSwitcherSearchStation.typeInOmnibox("navigate");
+        tabSwitcherSearchStation.findSectionHeaderByIndexAndText(0, "Tabs and tab groups");
         SuggestionFacility suggestion =
                 tabSwitcherSearchStation.findSuggestion(
-                        /* index= */ 1,
+                        /* index= */ 2,
                         /* title= */ "   Test",
                         /* text= */ "127.0.0.1:13245/chrome/test/data/android/navigate/one.html,"
                                 + " 127.0.0.1:13245/chrome/test/data/android/navigate/one.html");
@@ -440,17 +445,19 @@ public class TabSwitcherSearchTest {
 
     @Test
     @MediumTest
-    @EnableFeatures({OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS})
+    @EnableFeatures({
+        OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS + ":enable_hub_search_tab_groups_pane/true"
+    })
     public void testTypedSuggestionsFromTabGroupsPane_OpenTabGroupSearchSuggestion() {
         String tabGroupTitle = "Test";
-        Tab firstTab = mPage.loadedTabElement.get();
+        Tab firstTab = mPage.loadedTabElement.value();
         int firstTabId = firstTab.getId();
         mCtaTestRule.loadUrlInTab(
                 mCtaTestRule.getTestServer().getURL(NavigatePageStations.PATH_ONE),
                 PageTransition.TYPED | PageTransition.FROM_ADDRESS_BAR,
                 firstTab);
         RegularNewTabPageStation secondPage = mPage.openNewTabFast();
-        Tab secondTab = secondPage.loadedTabElement.get();
+        Tab secondTab = secondPage.loadedTabElement.value();
         int secondTabId = secondTab.getId();
         mCtaTestRule.loadUrlInTab(
                 mCtaTestRule.getTestServer().getURL(NavigatePageStations.PATH_ONE),
@@ -469,9 +476,10 @@ public class TabSwitcherSearchTest {
         TabSwitcherSearchStation tabSwitcherSearchStation =
                 tabSwitcher.selectTabGroupsPane().openTabGroupsPaneSearch();
         tabSwitcherSearchStation.typeInOmnibox("test");
+        tabSwitcherSearchStation.findSectionHeaderByIndexAndText(0, "Tabs and tab groups");
         SuggestionFacility suggestion =
                 tabSwitcherSearchStation.findSuggestion(
-                        /* index= */ 1,
+                        /* index= */ 2,
                         /* title= */ "   Test",
                         /* text= */ "127.0.0.1:13245/chrome/test/data/android/navigate/one.html,"
                                 + " 127.0.0.1:13245/chrome/test/data/android/navigate/one.html");

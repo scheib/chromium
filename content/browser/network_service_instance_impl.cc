@@ -35,6 +35,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/threading/platform_thread_metrics.h"
 #include "base/threading/sequence_local_storage_slot.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_restrictions.h"
@@ -79,7 +80,9 @@
 #include "services/network/public/mojom/network_service_test.mojom.h"
 #include "services/network/public/mojom/socket_broker.mojom.h"
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/background_thread_pool_field_trial.h"
+#else
 #include "content/browser/network_sandbox.h"
 #endif
 
@@ -309,12 +312,29 @@ void CreateInProcessNetworkService(
             network::features::kNetworkServiceTaskScheduler)) {
       network::ConfigureSequenceManager(options);
     }
+#if BUILDFLAG(IS_ANDROID)
+    // Local testing shows that when priority inheritance (PI) locks are enabled
+    // on Android, the network service thread is frequently queued behind thread
+    // pool worker threads when contending for a PI lock, regressing startup
+    // time. This is because of the Linux kernel enforcing FIFO ordering on
+    // threads of same priority contending on a PI lock. Increase the network
+    // thread's priority when PI locks are enabled to compensate for the shift
+    // from an unfair to a fair lock.
+    if (base::android::BackgroundThreadPoolFieldTrial::
+            ShouldUsePriorityInheritanceLocks()) {
+      options.thread_type = base::ThreadType::kDisplayCritical;
+    }
+#endif  // BUILDFLAG(IS_ANDROID)
     GetNetworkServiceDedicatedThread().StartWithOptions(std::move(options));
     task_runner = GetNetworkServiceDedicatedThread().task_runner();
     task_runner->PostTask(
         FROM_HERE, base::BindOnce([]() {
           mojo::InterfaceEndpointClient::SetThreadNameSuffixForMetrics(
               "NetworkService");
+#if BUILDFLAG(IS_ANDROID)
+          base::PlatformThreadPriorityMonitor::Get().RegisterCurrentThread(
+              "NetworkService");
+#endif  // BUILDFLAG(IS_ANDROID)
         }));
   } else {
     task_runner = GetIOThreadTaskRunner({});
@@ -539,9 +559,7 @@ base::StrictNumeric<uint64_t> GetNetLogMaximumFileSizeFromCommandLine(
 
 // If this feature is enabled, the Network Service will run on its own thread
 // when running in-process; otherwise it will run on the IO thread.
-BASE_FEATURE(kNetworkServiceDedicatedThread,
-             "NetworkServiceDedicatedThread",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kNetworkServiceDedicatedThread, base::FEATURE_ENABLED_BY_DEFAULT);
 
 uint64_t GetNetLogMaximumFileSizeFromCommandLineForTesting(  // IN-TEST
     const base::CommandLine& command_line) {

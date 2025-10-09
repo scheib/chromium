@@ -125,7 +125,7 @@ bool IsEnhancedProtectionEnabled(const PrefService& prefs) {
 }
 
 ExtendedReportingLevel GetExtendedReportingLevel(const PrefService& prefs) {
-  if (base::FeatureList::IsEnabled(kExtendedReportingRemovePrefDependency)) {
+  if (IsExtendedReportingDeprecated()) {
     // If it is enabled and the currently the deprecation flag is on,
     // it means this is an ESB user.
     return IsEnhancedProtectionEnabled(prefs) ? SBER_LEVEL_ENHANCED_PROTECTION
@@ -135,14 +135,14 @@ ExtendedReportingLevel GetExtendedReportingLevel(const PrefService& prefs) {
 }
 
 bool IsExtendedReportingOptInAllowed(const PrefService& prefs) {
-  if (base::FeatureList::IsEnabled(kExtendedReportingRemovePrefDependency)) {
+  if (IsExtendedReportingDeprecated()) {
     return false;
   }
   return prefs.GetBoolean(prefs::kSafeBrowsingExtendedReportingOptInAllowed);
 }
 
 bool IsExtendedReportingEnabled(const PrefService& prefs) {
-  if (base::FeatureList::IsEnabled(kExtendedReportingRemovePrefDependency)) {
+  if (IsExtendedReportingDeprecated()) {
     return IsEnhancedProtectionEnabled(prefs);
   }
   return (IsSafeBrowsingEnabled(prefs) &&
@@ -157,7 +157,7 @@ bool IsExtendedReportingEnabledBypassDeprecationFlag(const PrefService& prefs) {
 }
 
 bool IsExtendedReportingPolicyManaged(const PrefService& prefs) {
-  if (base::FeatureList::IsEnabled(kExtendedReportingRemovePrefDependency)) {
+  if (IsExtendedReportingDeprecated()) {
     return false;
   }
   return prefs.IsManagedPreference(prefs::kSafeBrowsingScoutReportingEnabled);
@@ -197,7 +197,7 @@ void RecordExtendedReportingMetrics(const PrefService& prefs) {
   // This metric tracks the extended browsing opt-in based on whichever setting
   // the user is currently seeing. It tells us whether extended reporting is
   // happening for this user.
-  if (base::FeatureList::IsEnabled(kExtendedReportingRemovePrefDependency)) {
+  if (IsExtendedReportingDeprecated()) {
     return;
   }
   UMA_HISTOGRAM_BOOLEAN("SafeBrowsing.Pref.Extended",
@@ -205,6 +205,8 @@ void RecordExtendedReportingMetrics(const PrefService& prefs) {
 }
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry) {
+  registry->RegisterBooleanPref(
+      prefs::kJavascriptOptimizerBlockedForUnfamiliarSites, false);
   // TODO(crbug.com/422747384): Implement correct logic to set bundle level
   // based on user's safe browsing status.
   registry->RegisterIntegerPref(prefs::kSecuritySettingsBundle,
@@ -241,9 +243,8 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterDictionaryPref(prefs::kSafeBrowsingIncidentsSent);
   registry->RegisterDictionaryPref(
       prefs::kSafeBrowsingUnhandledGaiaPasswordReuses);
-  registry->RegisterStringPref(
-      prefs::kSafeBrowsingNextPasswordCaptureEventLogTime,
-      "0");  // int64 as string
+  registry->RegisterInt64Pref(
+      prefs::kSafeBrowsingNextPasswordCaptureEventLogTime, 0);
   registry->RegisterListPref(prefs::kSafeBrowsingAllowlistDomains);
   registry->RegisterStringPref(prefs::kPasswordProtectionChangePasswordURL, "");
   registry->RegisterListPref(prefs::kPasswordProtectionLoginURLs);
@@ -283,9 +284,17 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
       base::Time());
 
   registry->RegisterTimePref(prefs::kExtensionTelemetryLastUploadTime,
-                             base::Time::Now());
+                             base::Time());
   registry->RegisterDictionaryPref(prefs::kExtensionTelemetryConfig);
   registry->RegisterDictionaryPref(prefs::kExtensionTelemetryFileData);
+  registry->RegisterTimePref(
+      prefs::kExtensionTelemetrySearchHijackingLastCheckTime, base::Time());
+  registry->RegisterDictionaryPref(
+      prefs::kExtensionTelemetrySearchHijackingSignalData);
+  registry->RegisterIntegerPref(
+      prefs::kExtensionTelemetrySearchHijackingOmniboxSearchCount, 0);
+  registry->RegisterIntegerPref(
+      prefs::kExtensionTelemetrySearchHijackingSerpLandingCount, 0);
   registry->RegisterBooleanPref(prefs::kHashPrefixRealTimeChecksAllowedByPolicy,
                                 true);
   registry->RegisterBooleanPref(prefs::kSafeBrowsingSurveysEnabled, true);
@@ -545,6 +554,12 @@ bool MatchesPasswordProtectionChangePasswordURL(const GURL& url,
   }
 
   return GetSimplifiedURL(change_password_url) == GetSimplifiedURL(url);
+}
+
+bool IsExtendedReportingDeprecated() {
+  return base::FeatureList::IsEnabled(kExtendedReportingRemovePrefDependency) ||
+         base::FeatureList::IsEnabled(
+             kExtendedReportingRemovePrefDependencyIos);
 }
 
 }  // namespace safe_browsing

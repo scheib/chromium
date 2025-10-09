@@ -28,11 +28,14 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory_coordinator/memory_consumer_registry.h"
+#include "base/memory_coordinator/traits.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/instrumentation/histogram.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -46,6 +49,28 @@
 namespace blink {
 
 namespace {
+
+// The set of traits that describes the behavior of MemoryCache.
+constexpr base::MemoryConsumerTraits kMemoryCacheTraits = {
+    .supports_memory_limit =
+        base::MemoryConsumerTraits::SupportsMemoryLimit::kYes,
+    .in_process = base::MemoryConsumerTraits::InProcess::kYes,
+    .estimated_memory_usage =
+        base::MemoryConsumerTraits::EstimatedMemoryUsage::kMedium,
+    .release_memory_cost =
+        base::MemoryConsumerTraits::ReleaseMemoryCost::kRequiresTraversal,
+    .recreate_memory_cost = base::MemoryConsumerTraits::RecreateMemoryCost::kNA,
+    .information_retention =
+        base::MemoryConsumerTraits::InformationRetention::kLossless,
+    .memory_release_behavior =
+        base::MemoryConsumerTraits::MemoryReleaseBehavior::kIdempotent,
+    .execution_type = base::MemoryConsumerTraits::ExecutionType::kAsynchronous,
+    .release_gc_references =
+        base::MemoryConsumerTraits::ReleaseGCReferences::kYes,
+    .garbage_collects_v8_heap =
+        base::MemoryConsumerTraits::GarbageCollectsV8Heap::kNo,
+};
+
 // Use function-local statics to cache the feature parameters. This avoids
 // global constructors and ensures the .Get() call happens only once.
 double GetFrequencyWeight() {
@@ -122,7 +147,6 @@ static constexpr base::TimeDelta kDefaultStrongReferencePruneDelay =
 // Feature to control the duration for which a strong reference may remain
 // in the MemoryCache after its last access.
 BASE_FEATURE(kMemoryCacheChangeStrongReferencePruneDelay,
-             "MemoryCacheChangeStrongReferencePruneDelay",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Parameter defining the delay after which a strong reference is removed
@@ -133,12 +157,27 @@ BASE_FEATURE_PARAM(base::TimeDelta,
                    "strong_reference_prune_delay",
                    kDefaultStrongReferencePruneDelay);
 
-MemoryCache* ReplaceMemoryCacheForTesting(MemoryCache* cache) {
-  MemoryCache::Get();
-  MemoryCache* old_cache = g_memory_cache->Release();
-  *g_memory_cache = cache;
-  MemoryCacheDumpProvider::Instance()->SetMemoryCache(cache);
-  return old_cache;
+static constexpr char kPageSavedResourceStrongReferenceSize[] =
+    "Blink.MemoryCache.PageSavedResourceStrongReferenceSize2";
+
+ScopedMemoryCacheForTesting::ScopedMemoryCacheForTesting(
+    Persistent<MemoryCache> cache) {
+  if (!g_memory_cache) {
+    g_memory_cache = new Persistent<MemoryCache>(std::move(cache));
+    return;
+  }
+
+  stored_cache_ = std::exchange(*g_memory_cache, std::move(cache));
+}
+
+ScopedMemoryCacheForTesting::~ScopedMemoryCacheForTesting() {
+  if (stored_cache_) {
+    *g_memory_cache = std::move(stored_cache_);
+  } else {
+    delete g_memory_cache;
+    g_memory_cache = nullptr;
+  }
+  blink::ThreadState::Current()->CollectAllGarbageForTesting();
 }
 
 void MemoryCacheEntry::Trace(Visitor* visitor) const {
@@ -166,7 +205,18 @@ MemoryCache* MemoryCache::Get() {
 
 MemoryCache::MemoryCache(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner)
-    : strong_references_prune_duration_(
+    : scoped_memory_consumer_registration_(
+          (base::SingleThreadTaskRunner::GetMainThreadDefault()
+               ->RunsTasksInCurrentSequence() &&
+           base::MemoryConsumerRegistry::Exists())
+              ? std::make_unique<base::ScopedMemoryConsumerRegistration>(
+                    "MemoryCache",
+                    kMemoryCacheTraits,
+                    this)
+              : nullptr),
+      strong_references_max_size_(
+          features::kMemoryCacheStrongReferenceTotalSizeThresholdParam.Get()),
+      strong_references_prune_duration_(
           kMemoryCacheStrongReferencePruneDelay.Get()),
       task_runner_(std::move(task_runner)) {
   MemoryCacheDumpProvider::Instance()->SetMemoryCache(this);
@@ -278,7 +328,18 @@ void MemoryCache::RemoveInternal(ResourceMap* resource_map,
 
   Update(resource, resource->size(), 0);
   resource_map->erase(it);
-  strong_references_.erase(resource);
+  if (base::FeatureList::IsEnabled(features::kMemoryCacheIntelligentPruning)) {
+    // If intelligent pruning is on, the resource can only be in the new
+    // tiered vector. We perform a "lazy" remove for performance.
+    size_t index = tiered_strong_references_.Find(resource);
+    if (index != kNotFound) {
+      tiered_strong_references_[index] = nullptr;
+    }
+  } else {
+    // Otherwise, the resource can only be in the original strong references
+    // set.
+    strong_references_.erase(resource);
+  }
 }
 
 bool MemoryCache::Contains(const Resource* resource) const {
@@ -409,21 +470,36 @@ MemoryCache::Statistics MemoryCache::GetStatistics() const {
 void MemoryCache::EvictResources() {
   for (auto resource_map_iter = resource_maps_.begin();
        resource_map_iter != resource_maps_.end();) {
-    ResourceMap* resources = resource_map_iter->value.Get();
-    for (auto resource_iter = resources->begin();
-         resource_iter != resources->end();
-         resource_iter = resources->begin()) {
-      DCHECK(resource_iter.Get());
-      DCHECK(resource_iter->value.Get());
-      DCHECK(resource_iter->value->GetResource());
-      Resource* resource = resource_iter->value->GetResource();
-      DCHECK(resource);
-      RemoveInternal(resources, resource_iter);
-    }
+    RemoveAllResourcesFromMap(resource_map_iter->value.Get());
     resource_maps_.erase(resource_map_iter);
     resource_map_iter = resource_maps_.begin();
   }
   ClearStrongReferences();
+}
+
+void MemoryCache::EvictResourcesForCacheIdentifier(
+    const String& cache_identifier) {
+  const auto& resource_map_iter = resource_maps_.find(cache_identifier);
+  // Not all cache identifiers will end up in the resource map (e.g. a failed
+  // fetch or a dataURL)
+  if (resource_map_iter == resource_maps_.end()) {
+    return;
+  }
+
+  RemoveAllResourcesFromMap(resource_map_iter->value.Get());
+  resource_maps_.erase(resource_map_iter);
+}
+
+void MemoryCache::RemoveAllResourcesFromMap(ResourceMap* resources) {
+  for (auto resource_iter = resources->begin();
+       resource_iter != resources->end(); resource_iter = resources->begin()) {
+    DCHECK(resource_iter.Get());
+    DCHECK(resource_iter->value.Get());
+    DCHECK(resource_iter->value->GetResource());
+    Resource* resource = resource_iter->value->GetResource();
+    DCHECK(resource);
+    RemoveInternal(resources, resource_iter);
+  }
 }
 
 bool MemoryCache::OnMemoryDump(WebMemoryDumpLevelOfDetail level_of_detail,
@@ -476,12 +552,24 @@ bool MemoryCache::OnMemoryDump(WebMemoryDumpLevelOfDetail level_of_detail,
   return true;
 }
 
-void MemoryCache::OnMemoryPressure(
-    base::MemoryPressureListener::MemoryPressureLevel level) {
+void MemoryCache::OnMemoryPressure(base::MemoryPressureLevel level) {
   if (base::FeatureList::IsEnabled(
           features::kReleaseResourceStrongReferencesOnMemoryPressure)) {
     ClearStrongReferences();
   }
+}
+
+void MemoryCache::OnReleaseMemory() {
+  PruneStrongReferences();
+}
+
+void MemoryCache::OnUpdateMemoryLimit() {
+  // It is important to not do any memory management in this function. The max
+  // size is updated to the requested limit without calling
+  // PruneStrongReferences().
+  strong_references_max_size_ =
+      features::kMemoryCacheStrongReferenceTotalSizeThresholdParam.Get() *
+      memory_limit_ratio();
 }
 
 void MemoryCache::SaveTieredStrongReference(Resource* resource) {
@@ -496,6 +584,8 @@ void MemoryCache::SaveTieredStrongReference(Resource* resource) {
 void MemoryCache::SavePageResourceStrongReferences(
     HeapVector<Member<Resource>> resources) {
   DCHECK(base::FeatureList::IsEnabled(features::kMemoryCacheStrongReference));
+  base::UmaHistogramCustomCounts(kPageSavedResourceStrongReferenceSize,
+                                 resources.size(), 0, 200, 50);
   for (Resource* resource : resources) {
     resource->UpdateMemoryCacheLastAccessedTime();
     strong_references_.AppendOrMoveToLast(resource);
@@ -519,27 +609,24 @@ void MemoryCache::PruneTieredStrongReferences() {
   // the O(N log N) sorting step is not a bottleneck in production.
   SCOPED_UMA_HISTOGRAM_TIMER("MemoryCache.PruneTieredStrongReferences.Time");
 
-  const size_t max_threshold = static_cast<size_t>(
-      features::kMemoryCacheStrongReferenceTotalSizeThresholdParam.Get());
-
-  size_t current_total_size = 0;
-  for (Resource* resource : tiered_strong_references_) {
-    current_total_size += resource->size();
-  }
+  const size_t max_threshold = strong_references_max_size_;
 
   // Enforce a maximum lifetime for all strong references.
   const base::TimeTicks now = base::TimeTicks::Now();
   const base::TimeDelta max_lifetime = strong_references_prune_duration_;
 
   EraseIf(tiered_strong_references_, [&](const Member<Resource>& resource) {
-    if (now - resource->MemoryCacheLastAccessed() > max_lifetime) {
-      // This resource IS expired. Update the size and return true
-      // to erase it.
-      current_total_size -= resource->size();
-      return true;
-    }
-    return false;
+    // Erase the resource if it's null (due to lazy removal by
+    // `RemoveInternal`) or if it has expired
+    return !resource ||
+           (now - resource->MemoryCacheLastAccessed() > max_lifetime);
   });
+
+  size_t current_total_size = 0;
+  for (Resource* resource : tiered_strong_references_) {
+    CHECK(resource, base::NotFatalUntil::M145);
+    current_total_size += resource->size();
+  }
 
   //  Early exit if already under budget
   if (current_total_size <= max_threshold) {
@@ -552,6 +639,8 @@ void MemoryCache::PruneTieredStrongReferences() {
   // The sorting is "Just-In-Time" for the eviction decisions.
   std::sort(tiered_strong_references_.begin(), tiered_strong_references_.end(),
             [this](const Member<Resource>& a, const Member<Resource>& b) {
+              CHECK(a, base::NotFatalUntil::M145);
+              CHECK(b, base::NotFatalUntil::M145);
               // Note: `>` sorts in descending order (highest value first).
               return CalculateResourceValue(a.Get()) >
                      CalculateResourceValue(b.Get());
@@ -579,8 +668,7 @@ void MemoryCache::PruneStrongReferences() {
   SCOPED_UMA_HISTOGRAM_TIMER("MemoryCache.PruneStrongReferences.Time");
 
   DCHECK(base::FeatureList::IsEnabled(features::kMemoryCacheStrongReference));
-  static const size_t max_threshold = static_cast<size_t>(
-      features::kMemoryCacheStrongReferenceTotalSizeThresholdParam.Get());
+  const size_t max_threshold = strong_references_max_size_;
 
   base::TimeTicks last_ticks;
   size_t strong_reference_total_size = 0;

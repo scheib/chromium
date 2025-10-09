@@ -8,10 +8,8 @@ import android.content.Context;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
-import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tasks.tab_management.MessageCardView.ServiceDismissActionProvider;
 import org.chromium.chrome.browser.tasks.tab_management.MessageService.Message;
 import org.chromium.chrome.browser.tasks.tab_management.MessageService.MessageModelFactory;
@@ -27,21 +25,18 @@ import java.util.Map;
  * This is a {@link MessageObserver} that creates and owns different {@link PropertyModel} based on
  * the message type.
  *
- * @param <T> The message type.
+ * @param <MessageT> The message type.
+ * @param <UiT> The UI type.
  */
 @NullMarked
-public class MessageCardProviderMediator<T> implements MessageObserver<T> {
+public class MessageCardProviderMediator<MessageT, UiT> implements MessageObserver<MessageT> {
     private final Context mContext;
-    private final Supplier<Profile> mProfileSupplier;
-    private final ServiceDismissActionProvider<T> mServiceDismissActionProvider;
-    private final Map<T, MessageService<T>> mMessageServices = new HashMap<>();
+    private final ServiceDismissActionProvider<MessageT> mServiceDismissActionProvider;
+    private final Map<MessageT, MessageService<MessageT, UiT>> mMessageServices = new HashMap<>();
 
     public MessageCardProviderMediator(
-            Context context,
-            Supplier<Profile> profileSupplier,
-            ServiceDismissActionProvider<T> serviceDismissActionProvider) {
+            Context context, ServiceDismissActionProvider<MessageT> serviceDismissActionProvider) {
         mContext = context;
-        mProfileSupplier = profileSupplier;
         mServiceDismissActionProvider = serviceDismissActionProvider;
     }
 
@@ -51,16 +46,10 @@ public class MessageCardProviderMediator<T> implements MessageObserver<T> {
      * @param messageType The type of the message.
      * @return The next message item for the given type.
      */
-    public @Nullable Message<T> getNextMessageItemForType(T messageType) {
-        MessageService<T> service = mMessageServices.get(messageType);
+    public @Nullable Message<MessageT> getNextMessageItemForType(MessageT messageType) {
+        MessageService<MessageT, UiT> service = mMessageServices.get(messageType);
         if (service == null) return null;
-
-        Message<T> message = service.getNextMessageItem();
-        if (message == null) return null;
-
-        PropertyModel model = message.model;
-        maybeSetCardIncognitoStatus(model);
-        return message;
+        return service.getNextMessageItem();
     }
 
     /**
@@ -68,26 +57,25 @@ public class MessageCardProviderMediator<T> implements MessageObserver<T> {
      * @param identifier The identifier associated with the message.
      * @return Whether the given message is shown.
      */
-    boolean isMessageShown(T messageType, int identifier) {
-        MessageService<T> service = mMessageServices.get(messageType);
+    boolean isMessageShown(MessageT messageType, int identifier) {
+        MessageService<MessageT, UiT> service = mMessageServices.get(messageType);
         if (service == null) return false;
         return service.isMessageShown(identifier);
     }
 
     // MessageObserver implementations.
     @Override
-    public void messageReady(T type, MessageModelFactory<T> factory) {
-        MessageService<T> service = mMessageServices.get(type);
+    public void messageReady(MessageT type, MessageModelFactory<MessageT> factory) {
+        MessageService<MessageT, UiT> service = mMessageServices.get(type);
         if (service == null) return;
 
         PropertyModel model = factory.build(mContext, this::invalidateShownMessage);
-        maybeSetCardIncognitoStatus(model);
         service.addMessage(new Message<>(type, model));
     }
 
     @Override
-    public void messageInvalidate(T type) {
-        MessageService<T> service = mMessageServices.get(type);
+    public void messageInvalidate(MessageT type) {
+        MessageService<MessageT, UiT> service = mMessageServices.get(type);
         if (service == null) return;
 
         service.invalidateMessages();
@@ -95,8 +83,8 @@ public class MessageCardProviderMediator<T> implements MessageObserver<T> {
     }
 
     @VisibleForTesting
-    void invalidateShownMessage(T type) {
-        MessageService<T> service = mMessageServices.get(type);
+    void invalidateShownMessage(MessageT type) {
+        MessageService<MessageT, UiT> service = mMessageServices.get(type);
         if (service == null) return;
 
         service.invalidateShownMessage();
@@ -108,7 +96,7 @@ public class MessageCardProviderMediator<T> implements MessageObserver<T> {
      *
      * @param service The message service to add.
      */
-    public void addMessageService(MessageService<T> service) {
+    public void addMessageService(MessageService<MessageT, UiT> service) {
         mMessageServices.put(service.getMessageType(), service);
     }
 
@@ -117,25 +105,17 @@ public class MessageCardProviderMediator<T> implements MessageObserver<T> {
      *
      * @param service The message service to remove.
      */
-    public void removeMessageService(MessageService<T> service) {
+    public void removeMessageService(MessageService<MessageT, UiT> service) {
         mMessageServices.remove(service.getMessageType());
     }
 
     /** Returns a list of the registered message services. */
-    public List<MessageService<T>> getMessageServices() {
+    public List<MessageService<MessageT, UiT>> getMessageServices() {
         return new ArrayList<>(mMessageServices.values());
     }
 
     @VisibleForTesting
-    Map<T, MessageService<T>> getMessageServicesMap() {
+    Map<MessageT, MessageService<MessageT, UiT>> getMessageServicesMap() {
         return mMessageServices;
-    }
-
-    private void maybeSetCardIncognitoStatus(PropertyModel model) {
-        if (model.containsKey(MessageCardViewProperties.IS_INCOGNITO)) {
-            model.set(
-                    MessageCardViewProperties.IS_INCOGNITO,
-                    mProfileSupplier.get().isOffTheRecord());
-        }
     }
 }

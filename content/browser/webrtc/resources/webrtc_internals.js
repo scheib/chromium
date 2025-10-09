@@ -10,7 +10,7 @@ import {MAX_STATS_DATA_POINT_BUFFER_SIZE} from './data_series.js';
 import {DumpCreator, peerConnectionDataStore, userMediaRequests} from './dump_creator.js';
 import {PeerConnectionUpdateTable} from './peer_connection_update_table.js';
 import {drawSingleReport, removeStatsReportGraphs} from './stats_graph_helper.js';
-import {StatsRatesCalculator, StatsReport} from './stats_rates_calculator.js';
+import {StatsRatesCalculator} from './stats_rates_calculator.js';
 import {StatsTable} from './stats_table.js';
 import {TabView} from './tab_view.js';
 import {UserMediaTable} from './user_media_table.js';
@@ -368,16 +368,16 @@ function addStandardStats(data) {
     statsRatesCalculator = new StatsRatesCalculator();
     statsRatesCalculatorById.set(pcId, statsRatesCalculator);
   }
-  const r = StatsReport.fromInternalsReportList(data.reports);
-  statsRatesCalculator.addStatsReport(r);
-  data.reports = statsRatesCalculator.currentReport.toInternalsReportList();
-  for (let i = 0; i < data.reports.length; ++i) {
-    const report = data.reports[i];
+  // Create a map from the stats entries so it behaves like a getStats maplike
+  // and then sort it.
+  const stats = sortStatsReport(new Map(data.reports));
+
+  // This augments stats with [delta] values.
+  statsRatesCalculator.addStatsReport(stats);
+  stats.forEach(report => {
     statsTable.addStatsReport(peerConnectionElement, report);
     drawSingleReport(peerConnectionElement, report);
-  }
-  // Determine currently connected candidate pair.
-  const stats = r.statsById;
+  });
 
   let ids = [];
   stats.forEach(report => {
@@ -419,7 +419,6 @@ function addStandardStats(data) {
       peerConnectionElement.id + '-table-' + remoteCandidate.id,
     ]);
   });
-  console.log('IDS', ids);
   // Mark active local-candidate, remote candidate and candidate pair
   // bold in the table.
   // Disable getElementById restriction here, since |peerConnectionElement|
@@ -455,7 +454,29 @@ function addStandardStats(data) {
     }
   }
 
-  updateIceCandidateGrid(peerConnectionElement, r.statsById);
+  updateIceCandidateGrid(peerConnectionElement, stats);
+
+  // Mark inactive outbound-rtp in grey.
+  const inactiveStatsIds = [];
+  const inactiveRtpStatsClass = 'stats-table-rtp-inactive';
+  stats.forEach(report => {
+    if (!(report.type === 'outbound-rtp')) {
+      return;
+    }
+    if (report.active === false) {
+      inactiveStatsIds.push(peerConnectionElement.id + '-details-' + report.id);
+    }
+  });
+  statsContainer.childNodes.forEach(node => {
+    if (node.nodeName !== 'DETAILS') {
+      return;
+    }
+    if (inactiveStatsIds.includes(node.id)) {
+      node.classList.add(inactiveRtpStatsClass);
+    } else {
+      node.classList.remove(inactiveRtpStatsClass);
+    }
+  });
 }
 
 /**
@@ -478,4 +499,64 @@ function eventLogRecordingsFileSelectionCancelled() {
 
 function dataChannelRecordingsFileSelectionCancelled() {
   dumpCreator.clearDataChannelRecordingsCheckbox();
+}
+
+// Returns a sorted version of the stats report as a Map.
+// 1. outbound-rtps, sorted by encodingIndex
+// 2. inbound-rtps
+// 3. everything else
+function sortStatsReport(report) {
+  const getOutboundRtpsForMid = (report, mid) => {
+    const outboundRtpsByEncodingIndex = new Map();
+    for (const stats of report.values()) {
+      if (stats.type !== 'outbound-rtp' || stats.mid !== mid) {
+        continue;
+      }
+      let encodingIndex = stats.encodingIndex ? Number(stats.encodingIndex) : 0;
+      outboundRtpsByEncodingIndex.set(encodingIndex, stats);
+    }
+    const orderedOutboundRtps = [];
+    for (let i = 0; i < outboundRtpsByEncodingIndex.size; ++i) {
+      orderedOutboundRtps.push(outboundRtpsByEncodingIndex.get(i));
+    }
+    return orderedOutboundRtps;
+  }
+  // Categorize into outbound-rtp, inbound-rtp and other categories.
+  let outboundRtps = [];
+  let inboundRtps = [];
+  let otherStats = [];
+  const midsIncluded = new Set();
+  for (const stats of report.values()) {
+    if (stats.type === 'outbound-rtp') {
+      if (stats.mid !== undefined) {
+        if (midsIncluded.has(stats.mid)) {
+          continue;  // This outbound-rtp has already been included.
+        }
+        midsIncluded.add(stats.mid);
+        // Add all outbound-rtps for this mid in encodingIndex order.
+        outboundRtps = outboundRtps.concat(
+            getOutboundRtpsForMid(report, stats.mid));
+      } else {
+        // It's unexpected that an outbound-rtp does not have a mid due to
+        // outbound-rtps being created after O/A, but just in case...
+        outboundRtps.push(stats);
+      }
+    } else if (stats.type === 'inbound-rtp') {
+      inboundRtps.push(stats);
+    } else {
+      otherStats.push(stats);
+    }
+  }
+  // Re-build the internal reports in our new preferred order.
+  const sortedReport = new Map();
+  for (const outboundRtp of outboundRtps) {
+    sortedReport.set(outboundRtp.id, outboundRtp);
+  }
+  for (const inboundRtp of inboundRtps) {
+    sortedReport.set(inboundRtp.id, inboundRtp);
+  }
+  for (const other of otherStats) {
+    sortedReport.set(other.id, other);
+  }
+  return sortedReport;
 }

@@ -231,7 +231,7 @@ DocumentSpeculationRules::DocumentSpeculationRules(Document& document)
   if (!lcpp) {
     return;
   }
-  lcpp->AddLCPPredictedCallback(WTF::BindOnce(
+  lcpp->AddLCPPredictedCallback(BindOnce(
       &DocumentSpeculationRules::OnLCPPredicted, WrapPersistent(this)));
 }
 
@@ -598,7 +598,7 @@ void DocumentSpeculationRules::QueueUpdateSpeculationCandidates(
 
   auto* execution_context = GetSupplementable()->GetExecutionContext();
   if (needs_microtask && !microtask_already_queued && execution_context) {
-    execution_context->GetAgent()->event_loop()->EnqueueMicrotask(WTF::BindOnce(
+    execution_context->GetAgent()->event_loop()->EnqueueMicrotask(BindOnce(
         &DocumentSpeculationRules::UpdateSpeculationCandidatesMicrotask,
         WrapWeakPersistent(this)));
   }
@@ -681,7 +681,7 @@ void DocumentSpeculationRules::UpdateSpeculationCandidates() {
         CHECK(!rule->requires_anonymous_client_ip_when_cross_origin() ||
               action == mojom::blink::SpeculationAction::kPrefetch);
 
-        Vector<WTF::String> tags;
+        Vector<String> tags;
         if (rule->rule_tag()) {
           tags.push_back(rule->rule_tag());
         }
@@ -771,7 +771,10 @@ void DocumentSpeculationRules::UpdateSpeculationCandidates() {
     mojom_candidates.push_back(std::move(mojom_candidate));
   }
 
-  host->UpdateSpeculationCandidates(std::move(mojom_candidates));
+  host->UpdateSpeculationCandidates(
+      std::move(mojom_candidates),
+      RuntimeEnabledFeatures::Prerender2CrossOriginIframesEnabled(
+          execution_context));
 
   if (eagerness_set.Has(SpeculationEagerness::kConservative)) {
     UseCounter::Count(document,
@@ -810,7 +813,7 @@ void DocumentSpeculationRules::AddLinkBasedSpeculationCandidates(
     CHECK(execution_context);
 
     const auto push_link_candidates =
-        [&link, &link_candidates, &document, &execution_context, this](
+        [&link, &link_candidates, &document, this](
             mojom::blink::SpeculationAction action,
             SpeculationRuleSet* rule_set,
             const HeapVector<Member<SpeculationRule>>& speculation_rules) {
@@ -848,11 +851,9 @@ void DocumentSpeculationRules::AddLinkBasedSpeculationCandidates(
 
             mojom::blink::SpeculationTargetHint target_hint =
                 mojom::blink::SpeculationTargetHint::kNoHint;
-            if (RuntimeEnabledFeatures::SpeculationRulesTargetHintEnabled(
-                    execution_context) &&
-                (action == mojom::blink::SpeculationAction::kPrerender ||
-                 action ==
-                     mojom::blink::SpeculationAction::kPrerenderUntilScript)) {
+            if (action == mojom::blink::SpeculationAction::kPrerender ||
+                action ==
+                    mojom::blink::SpeculationAction::kPrerenderUntilScript) {
               if (rule->target_browsing_context_name_hint()) {
                 target_hint = rule->target_browsing_context_name_hint().value();
               } else {
@@ -863,7 +864,7 @@ void DocumentSpeculationRules::AddLinkBasedSpeculationCandidates(
               }
             }
 
-            Vector<WTF::String> tags;
+            Vector<String> tags;
             if (rule->rule_tag()) {
               tags.push_back(rule->rule_tag());
             }

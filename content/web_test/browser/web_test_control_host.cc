@@ -27,7 +27,6 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/functional/callback_helpers.h"
-#include "base/hash/md5.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -46,6 +45,7 @@
 #include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "components/subresource_filter/core/common/test_ruleset_creator.h"
 #include "components/subresource_filter/core/common/test_ruleset_utils.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/browser/aggregation_service/aggregation_service.h"
 #include "content/browser/attribution_reporting/attribution_manager.h"
 #include "content/browser/in_memory_federated_permission_context.h"
@@ -94,6 +94,7 @@
 #include "content/web_test/common/web_test_constants.h"
 #include "content/web_test/common/web_test_string_util.h"
 #include "content/web_test/common/web_test_switches.h"
+#include "crypto/obsolete/md5.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "net/cookies/cookie_util.h"
 #include "services/device/public/cpp/compute_pressure/buildflags.h"
@@ -122,6 +123,11 @@
 #endif
 
 namespace content {
+
+std::string Md5OfPixelsAsHexForWebTests(base::span<const uint8_t> pixels) {
+  return base::ToLowerASCII(
+      base::HexEncode(crypto::obsolete::Md5::Hash(pixels)));
+}
 
 namespace {
 
@@ -740,7 +746,6 @@ void WebTestControlHost::ResetBrowserAfterWebTest() {
   layout_dump_.reset();
   waiting_for_layout_dumps_ = 0;
   pixel_dump_.reset();
-  actual_pixel_hash_ = "";
   waiting_for_pixel_results_ = false;
   composite_all_frames_node_queue_ =
       std::queue<raw_ptr<Node, CtnExperimental>>();
@@ -1319,7 +1324,7 @@ void WebTestControlHost::OnTestFinished() {
       ShellContentBrowserClient::Get()->browser_context();
 
   base::RepeatingClosure barrier_closure = base::BarrierClosure(
-      2, base::BindOnce(&WebTestControlHost::PrepareRendererForNextWebTest,
+      3, base::BindOnce(&WebTestControlHost::PrepareRendererForNextWebTest,
                         weak_factory_.GetWeakPtr()));
 
   StoragePartition* storage_partition =
@@ -1327,6 +1332,41 @@ void WebTestControlHost::OnTestFinished() {
   storage_partition->GetServiceWorkerContext()->ClearAllServiceWorkersForTest(
       barrier_closure);
   storage_partition->ClearBluetoothAllowedDevicesMapForTesting();
+
+  // Clear all site-related storage APIs to ensure tests are hermetic.
+  // Use an "opt-out" (or "blacklist") approach for future-proofing. This
+  // ensures that new storage APIs added to `REMOVE_DATA_MASK_ALL` in the
+  // future are automatically cleared without needing to modify this code.
+  const uint32_t exclusion_mask =
+      // Cookies are excluded to preserve the state of the test runner itself
+      // and any test-specific setup.
+      content::StoragePartition::REMOVE_DATA_MASK_COOKIES |
+      // Media licenses can be costly to re-acquire and are not considered
+      // typical, per-test site data.
+      content::StoragePartition::REMOVE_DATA_MASK_MEDIA_LICENSES |
+      // Internal flags manage browser-internal state, not website data, and
+      // should not be cleared.
+      content::StoragePartition::
+          REMOVE_DATA_MASK_ATTRIBUTION_REPORTING_INTERNAL |
+      content::StoragePartition::REMOVE_DATA_MASK_PRIVATE_AGGREGATION_INTERNAL |
+      content::StoragePartition::REMOVE_DATA_MASK_INTEREST_GROUPS_INTERNAL |
+      // These flags are designed for explicit user actions in settings.
+      content::StoragePartition::REMOVE_DATA_MASK_INTEREST_GROUPS_USER_CLEAR |
+      // This is a transient network state, not persistent storage.
+      content::StoragePartition::REMOVE_KEEPALIVE_LOADS_ATTEMPTING_RETRY |
+      // Device-bound sessions are security/session-related and should persist.
+      content::StoragePartition::REMOVE_DATA_MASK_DEVICE_BOUND_SESSIONS;
+
+  const uint32_t removal_mask =
+      content::StoragePartition::REMOVE_DATA_MASK_ALL & ~exclusion_mask;
+
+  storage_partition->ClearData(
+      removal_mask, content::StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL,
+      /*filter_builder=*/nullptr,
+      content::StoragePartition::StorageKeyPolicyMatcherFunction(),
+      /*cookie_deletion_filter=*/nullptr,
+      /*perform_storage_cleanup=*/false, base::Time::Min(), base::Time::Max(),
+      barrier_closure);
 
   // TODO(nhiroki): Add a comment about the reason why we terminate all shared
   // workers here.
@@ -1363,7 +1403,9 @@ void WebTestControlHost::OnDumpFrameLayoutResponse(
   ReportResults();
 }
 
-void WebTestControlHost::OnPixelDumpCaptured(const SkBitmap& snapshot) {
+void WebTestControlHost::OnPixelDumpCaptured(
+    const viz::CopyOutputBitmapWithMetadata& result) {
+  const SkBitmap& snapshot = result.bitmap;
   // In the test: test_runner/notify_done_and_defered_close_dump_surface.html,
   // the |main_window_| is closed while waiting for the pixel dump. When this
   // happens, every window is closed and while pumping the message queue,
@@ -1407,14 +1449,11 @@ void WebTestControlHost::ReportResults() {
     // can't track initializedness across processes, we must assure it that the
     // pixels are in fact initialized.
     MSAN_UNPOISON(pixel_dump_->getPixels(), pixel_dump_->computeByteSize());
-    base::MD5Digest digest;
     auto bytes = UNSAFE_TODO(
         base::span(static_cast<const uint8_t*>(pixel_dump_->getPixels()),
                    pixel_dump_->computeByteSize()));
-    base::MD5Sum(bytes, &digest);
-    actual_pixel_hash_ = base::MD5DigestToBase16(digest);
 
-    OnImageDump(actual_pixel_hash_, *pixel_dump_);
+    OnImageDump(Md5OfPixelsAsHexForWebTests(bytes), *pixel_dump_);
   } else if (!renderer_dump_result_->actual_pixel_hash.empty()) {
     OnImageDump(renderer_dump_result_->actual_pixel_hash,
                 renderer_dump_result_->pixels);
@@ -1886,10 +1925,17 @@ void WebTestControlHost::SetMainWindowHidden(bool hidden) {
 void WebTestControlHost::SetFrameWindowHidden(
     const blink::LocalFrameToken& frame_token,
     bool hidden) {
+  WebContents* web_contents = GetWebContentsFromCurrentContext(frame_token);
+  // It's possible that the `frame_token` sent is stale and the RenderFrameHost
+  // is already deleted at this point, e.g. when the message is fired during
+  // unloading. In this case, there's nothing we can do.
+  if (!web_contents) {
+    return;
+  }
   if (hidden) {
-    GetWebContentsFromCurrentContext(frame_token)->WasHidden();
+    web_contents->WasHidden();
   } else {
-    GetWebContentsFromCurrentContext(frame_token)->WasShown();
+    web_contents->WasShown();
   }
 }
 
@@ -1898,7 +1944,9 @@ WebContents* WebTestControlHost::GetWebContentsFromCurrentContext(
   const int render_process_id = receiver_bindings_.current_context();
   auto* rfh =
       RenderFrameHostImpl::FromFrameToken(render_process_id, frame_token);
-  CHECK(rfh);
+  if (!rfh) {
+    return nullptr;
+  }
   return WebContents::FromRenderFrameHost(rfh);
 }
 

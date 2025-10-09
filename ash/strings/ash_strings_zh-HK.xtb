@@ -332,10 +332,12 @@
 <translation id="2083190527011054446"><ph name="GIVEN_NAME" />，晚安：</translation>
 <translation id="2086334242442703436">開啟 Emoji 點選器</translation>
 <translation id="2088116547584365419">遊戲</translation>
+<translation id="2093792000875799555">Chromebook 版 Steam 最新消息</translation>
 <translation id="209965399369889474">未連接網絡</translation>
 <translation id="2107581415810719320">其他按鈕：<ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">USB-C 連接線不支援 Thunderbolt。裝置效能可能受到限制。</translation>
 <translation id="2108303511227308752">「Alt + Backspace 鍵」的鍵盤快速鍵已變更。如要使用 Delete 鍵，請按下<ph name="LAUNCHER_KEY_NAME" />鍵 + Backspace 鍵。</translation>
+<translation id="2115680839221566783">電池有 <ph name="PERCENTAGE" />%。目前暫停充電。</translation>
 <translation id="2126242104232412123">新增虛擬桌面</translation>
 <translation id="2132302418721800944">錄影全螢幕</translation>
 <translation id="2135456203358955318">固定的放大鏡</translation>
@@ -1367,7 +1369,7 @@
 <translation id="5426063383988017631">閂咗設定選單</translation>
 <translation id="5428899915242071344">開始選取</translation>
 <translation id="5429993543155113935">目前不支援無痕式視窗</translation>
-<translation id="5431318178759467895">顏色</translation>
+<translation id="5431318178759467895">彩色</translation>
 <translation id="5433020815079095860">音訊輸入</translation>
 <translation id="543584294741034249">最多可連接 <ph name="DISPLAY_LIMIT" /> 個外部顯示屏。</translation>
 <translation id="544691375626129091">現有使用者已全部加入這個工作階段。</translation>
@@ -1587,6 +1589,7 @@
 <translation id="612734058257491180">「Google 助理」不適用於訪客工作階段。</translation>
 <translation id="6127395413317891856">您已離線。請檢查連線，然後再試。</translation>
 <translation id="6129953537138746214">空格</translation>
+<translation id="6136872094979134163">無法擷取 Chromebook 版 Steam 最新消息。</translation>
 <translation id="6137566720514957455">打開移除 <ph name="USER_EMAIL_ADDRESS" /> 嘅對話框</translation>
 <translation id="6141205840878048728">你想專心處理什麼？</translation>
 <translation id="6141988275892716286">確認下載</translation>
@@ -1676,6 +1679,7 @@
 <translation id="6445835306623867477">在<ph name="RECEIVER_NAME" />投放 <ph name="ROUTE_TITLE" /></translation>
 <translation id="6445915701151710649">CPU</translation>
 <translation id="6447111710783417522"><ph name="DATE" />，<ph name="NUMBER" /> 個活動</translation>
+<translation id="6448529022565414427">目前暫停充電</translation>
 <translation id="6449483711453944360">目前不支援 Linux 應用程式和無痕式視窗</translation>
 <translation id="6450245544201845082">右鍵快速鍵目前已關閉</translation>
 <translation id="6452181791372256707">拒絕</translation>

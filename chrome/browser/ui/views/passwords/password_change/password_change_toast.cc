@@ -50,26 +50,26 @@ DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PasswordChangeToast,
 
 PasswordChangeToast::ToastOptions::ToastOptions(
     const std::u16string& text,
+    base::OnceClosure close_callback,
     const std::optional<std::u16string>& action_button_text,
-    base::OnceClosure action_button_closure,
-    bool has_close_button)
+    base::OnceClosure action_button_closure)
     : text(text),
       icon(std::nullopt),
       action_button_text(action_button_text),
       action_button_closure(std::move(action_button_closure)),
-      has_close_button(has_close_button) {}
+      close_callback(std::move(close_callback)) {}
 
 PasswordChangeToast::ToastOptions::ToastOptions(
     const std::u16string& text,
     const gfx::VectorIcon& icon,
+    base::OnceClosure close_callback,
     const std::optional<std::u16string>& action_button_text,
-    base::OnceClosure action_button_closure,
-    bool has_close_button)
+    base::OnceClosure action_button_closure)
     : text(text),
       icon(icon),
       action_button_text(action_button_text),
       action_button_closure(std::move(action_button_closure)),
-      has_close_button(has_close_button) {}
+      close_callback(std::move(close_callback)) {}
 
 PasswordChangeToast::ToastOptions::~ToastOptions() = default;
 PasswordChangeToast::ToastOptions::ToastOptions(
@@ -156,6 +156,7 @@ PasswordChangeToast::PasswordChangeToast(ToastOptions toast_configuration) {
                                  DISTANCE_TOAST_BUBBLE_BETWEEN_CHILD_SPACING)));
   close_button_->SetTooltipText(
       l10n_util::GetStringUTF16(IDS_TOAST_CLOSE_TOOLTIP));
+  close_button_->SetVisible(true);
 
   UpdateLayout(std::move(toast_configuration));
 }
@@ -163,7 +164,6 @@ PasswordChangeToast::PasswordChangeToast(ToastOptions toast_configuration) {
 PasswordChangeToast::~PasswordChangeToast() = default;
 
 void PasswordChangeToast::UpdateLayout(ToastOptions configuration) {
-  action_button_closure_ = std::move(configuration.action_button_closure);
   ChromeLayoutProvider* layout_provider = ChromeLayoutProvider::Get();
   icon_ = configuration.icon;
   icon_view_->SetVisible(icon_.has_value());
@@ -187,10 +187,12 @@ void PasswordChangeToast::UpdateLayout(ToastOptions configuration) {
     action_button_->GetViewAccessibility().SetRole(ax::mojom::Role::kButton);
     action_button_->SetVisible(false);
   }
-  close_button_->SetVisible(configuration.has_close_button);
 
   layout_manager_->SetInteriorMargin(CalculateInteriorMargin());
   GetViewAccessibility().AnnounceText(configuration.text);
+
+  action_button_closure_ = std::move(configuration.action_button_closure);
+  close_callback_ = std::move(configuration.close_callback);
 }
 
 gfx::Insets PasswordChangeToast::CalculateInteriorMargin() {
@@ -233,7 +235,7 @@ void PasswordChangeToast::OnActionButtonClicked() {
 }
 
 void PasswordChangeToast::OnCloseButtonClicked() {
-  GetWidget()->CloseWithReason(views::Widget::ClosedReason::kUnspecified);
+  std::move(close_callback_).Run();
 }
 
 BEGIN_METADATA(PasswordChangeToast)

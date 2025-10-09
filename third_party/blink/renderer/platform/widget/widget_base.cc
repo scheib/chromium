@@ -10,7 +10,6 @@
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
-#include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
@@ -751,6 +750,8 @@ void WidgetBase::RequestNewLayerTreeFrameSink(
 
   // The renderer runs animations and layout for animate_only BeginFrames.
   params->wants_animate_only_begin_frames = true;
+  params->no_compositor_frame_acks =
+      base::FeatureList::IsEnabled(::features::kNoCompositorFrameAcks);
 
   // In disable frame rate limit mode, also let the renderer tick as fast as it
   // can. The top level begin frame source will also be running as a back to
@@ -784,6 +785,12 @@ void WidgetBase::RequestNewLayerTreeFrameSink(
     params->num_did_not_produce_frame_before_internal_begin_frame_source =
         num_did_not_produce_frame;
     params->auto_needs_begin_frame = true;
+  }
+
+  if (base::FeatureList::IsEnabled(::features::kManualBeginFrame) &&
+      !command_line.HasSwitch(switches::kAllowPreCommitInput)) {
+    params->auto_needs_begin_frame = true;
+    params->manual_begin_frame = true;
   }
 
   mojo::PendingReceiver<viz::mojom::blink::CompositorFrameSink>
@@ -880,25 +887,16 @@ void WidgetBase::FinishRequestNewLayerTreeFrameSink(
   // uploads happen on the worker context instead.
   gpu::SharedMemoryLimits limits = gpu::SharedMemoryLimits::ForMailboxContext();
 
-  // This is for an offscreen context for the compositor. So the default
-  // framebuffer doesn't need alpha, depth, stencil, antialiasing.
-  gpu::ContextCreationAttribs attributes;
-  attributes.lose_context_when_out_of_memory = true;
-  // VideoResourceUpdater was the only usage of gles2 interface from this
-  // RasterContextProvider and now we use RasterInterface in
-  // VideoResourceUpdater.
-  attributes.enable_gles2_interface = false;
-  attributes.enable_raster_interface = true;
-  attributes.enable_gpu_rasterization = false;
-
   constexpr bool automatic_flushes = false;
   constexpr bool support_locking = false;
+  constexpr bool enable_gpu_rasterization = false;
+  constexpr bool lose_context_when_out_of_memory = true;
 
-  auto context_provider =
-      base::MakeRefCounted<viz::ContextProviderCommandBuffer>(
-          gpu_channel_host, kGpuStreamIdDefault, kGpuStreamPriorityDefault,
-          GURL(url), automatic_flushes, support_locking, limits, attributes,
-          viz::command_buffer_metrics::ContextType::RENDER_COMPOSITOR);
+  auto context_provider = viz::ContextProviderCommandBuffer::CreateForRaster(
+      gpu_channel_host, kGpuStreamIdDefault, kGpuStreamPriorityDefault,
+      GURL(url), automatic_flushes, support_locking, limits,
+      viz::command_buffer_metrics::ContextType::RENDERER_COMPOSITOR,
+      enable_gpu_rasterization, lose_context_when_out_of_memory);
 
 #if BUILDFLAG(IS_ANDROID)
   if (Platform::Current()->IsSynchronousCompositingEnabledForAndroidWebView() &&
@@ -1688,14 +1686,6 @@ void WidgetBase::RequestAnimationAfterDelayTimerFired(TimerBase*) {
 
 float WidgetBase::GetOriginalDeviceScaleFactor() const {
   return client_->GetOriginalScreenInfos().current().device_scale_factor;
-}
-
-bool WidgetBase::InsertVisualStateRequest(base::OnceClosure callback) {
-  if (!widget_compositor_) {
-    return false;
-  }
-  widget_compositor_->MainThreadVisualStateRequest(std::move(callback));
-  return true;
 }
 
 void WidgetBase::UpdateSurfaceAndScreenInfo(

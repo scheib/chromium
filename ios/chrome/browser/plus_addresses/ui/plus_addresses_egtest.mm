@@ -7,14 +7,13 @@
 #import "base/strings/sys_string_conversions.h"
 #import "components/autofill/core/common/autofill_features.h"
 #import "components/feature_engagement/public/feature_constants.h"
+#import "components/plus_addresses/core/browser/grit/plus_addresses_strings.h"
 #import "components/plus_addresses/core/browser/metrics/plus_address_metrics.h"
+#import "components/plus_addresses/core/browser/plus_address_test_utils.h"
 #import "components/plus_addresses/core/common/features.h"
-#import "components/plus_addresses/grit/plus_addresses_strings.h"
-#import "components/plus_addresses/plus_address_test_utils.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
-#import "ios/chrome/browser/autofill/ui_bundled/autofill_app_interface.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/plus_addresses/ui/plus_address_app_interface.h"
 #import "ios/chrome/browser/plus_addresses/ui/plus_address_bottom_sheet_constants.h"
@@ -150,12 +149,8 @@ void ExpectModalTimeSample(
       l10n_util::GetNSString(IDS_PLUS_ADDRESS_CREATE_SUGGESTION_MAIN_TEXT);
   NSString* suggestionSubLabel =
       l10n_util::GetNSString(IDS_PLUS_ADDRESS_CREATE_SUGGESTION_SECONDARY_TEXT);
-  id<GREYMatcher> userChip =
-      [AutofillAppInterface isKeyboardAccessoryUpgradeEnabled]
-          ? grey_accessibilityLabel(
-                [NSString stringWithFormat:@"%@, %@", suggestionLabel,
-                                           suggestionSubLabel])
-          : grey_text(suggestionLabel);
+  id<GREYMatcher> userChip = grey_accessibilityLabel([NSString
+      stringWithFormat:@"%@, %@", suggestionLabel, suggestionSubLabel]);
 
   // Ensure the plus_address suggestion appears.
   [ChromeEarlGrey waitForUIElementToAppearWithMatcher:userChip];
@@ -294,12 +289,10 @@ id<GREYMatcher> GetMatcherForPlusAddressLabel(NSString* labelText) {
 - (void)testCreatePlusAddressIPH {
   [PlusAddressAppInterface setShouldOfferPlusAddressCreation:YES];
 
-#if TARGET_OS_SIMULATOR
   // Synchronization off because the tap on element 'kEmailFieldId' completes
   // only after the IPH has already disappeared. This leads to a subsequent
   // error when trying to verify that the IPH appeared.
   ScopedSynchronizationDisabler disabler;
-#endif
 
   // Tap an element that is eligible for plus_address autofilling.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]

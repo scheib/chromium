@@ -42,8 +42,9 @@ import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
+import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.DisabledTest;
-import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
@@ -61,9 +62,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Integration tests for keyboard accessory and accessory sheet with other Chrome components. */
+// TODO(crbug.com/447076444): Enable Keyboard Accessory revamp flag
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-@Features.DisableFeatures({ChromeFeatureList.EDGE_TO_EDGE_BOTTOM_CHIN})
+@DisableFeatures({ChromeFeatureList.AUTOFILL_ANDROID_DESKTOP_KEYBOARD_ACCESSORY_REVAMP})
 public class ManualFillingIntegrationTest {
     @Rule
     public final FreshCtaTransitTestRule mActivityTestRule =
@@ -118,6 +120,8 @@ public class ManualFillingIntegrationTest {
 
     @Test
     @SmallTest
+    @DisableIf.Build(supported_abis_includes = "x86", message = "https://crbug.com/420290639")
+    @DisableIf.Build(supported_abis_includes = "x86_64", message = "https://crbug.com/420290639")
     public void testAccessorySheetHiddenUntilManuallyTriggered() throws TimeoutException {
         mHelper.startAtTestPage(/* isRtl= */ false);
 
@@ -160,6 +164,8 @@ public class ManualFillingIntegrationTest {
 
     @Test
     @SmallTest
+    @DisableIf.Build(supported_abis_includes = "x86", message = "https://crbug.com/420290639")
+    @DisableIf.Build(supported_abis_includes = "x86_64", message = "https://crbug.com/420290639")
     public void testAccessorySheetHiddenWhenRefocusingField() throws TimeoutException {
         AtomicReference<ViewGroup.MarginLayoutParams> accessoryMargins = new AtomicReference<>();
         AtomicReference<View> accessorySheetView = new AtomicReference<>();
@@ -296,6 +302,8 @@ public class ManualFillingIntegrationTest {
 
     @Test
     @SmallTest
+    @DisableIf.Build(supported_abis_includes = "x86", message = "https://crbug.com/420290639")
+    @DisableIf.Build(supported_abis_includes = "x86_64", message = "https://crbug.com/420290639")
     public void testResumingTheAppDismissesAllInputMethods() throws TimeoutException {
         mHelper.startAtTestPage(/* isRtl= */ false);
 
@@ -349,6 +357,8 @@ public class ManualFillingIntegrationTest {
 
     @Test
     @SmallTest
+    @DisableIf.Build(supported_abis_includes = "x86", message = "https://crbug.com/420290639")
+    @DisableIf.Build(supported_abis_includes = "x86_64", message = "https://crbug.com/420290639")
     public void testPressingBackButtonHidesAccessorySheet() throws TimeoutException {
         mHelper.startAtTestPage(/* isRtl= */ false);
 

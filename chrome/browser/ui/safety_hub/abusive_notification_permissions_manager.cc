@@ -8,6 +8,7 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/time/default_clock.h"
+#include "chrome/browser/permissions/permission_revocation_request.h"
 #include "chrome/browser/ui/safety_hub/safety_hub_constants.h"
 #include "chrome/browser/ui/safety_hub/safety_hub_prefs.h"
 #include "chrome/browser/ui/safety_hub/safety_hub_util.h"
@@ -15,7 +16,10 @@
 #include "components/content_settings/core/common/features.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "content/public/browser/browser_thread.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -43,6 +47,112 @@ AbusiveNotificationPermissionsManager::AbusiveNotificationPermissionsManager(
 
 AbusiveNotificationPermissionsManager::
     ~AbusiveNotificationPermissionsManager() = default;
+
+// static
+void AbusiveNotificationPermissionsManager::
+    ExecuteAbusiveNotificationAutoRevocation(
+        HostContentSettingsMap* hcsm,
+        GURL url,
+        safe_browsing::NotificationRevocationSource revocation_source,
+        const raw_ptr<const base::Clock> clock) {
+  UpdateNotificationPermission(hcsm, url,
+                               ContentSetting::CONTENT_SETTING_DEFAULT);
+  // Set the default constraint to the current time and lifetime defined by
+  // the clean up threshold. Use this to set the expiration time of the
+  // revocation permission.
+  content_settings::ContentSettingConstraints default_constraint(clock->Now());
+  default_constraint.set_lifetime(safety_hub_util::GetCleanUpThreshold());
+  SetRevokedAbusiveNotificationPermission(
+      hcsm, url, /*is_ignored=*/false, revocation_source, default_constraint);
+  content_settings_uma_util::RecordContentSettingsHistogram(
+      "Settings.SafetyHub.UnusedSitePermissionsModule.AutoRevoked2",
+      ContentSettingsType::NOTIFICATIONS);
+}
+
+// static
+void AbusiveNotificationPermissionsManager::
+    SetRevokedAbusiveNotificationPermission(
+        HostContentSettingsMap* hcsm,
+        GURL url,
+        bool is_ignored,
+        safe_browsing::NotificationRevocationSource revocation_source,
+        const content_settings::ContentSettingConstraints& constraints) {
+  DCHECK(url.is_valid());
+  // If the `url` should be ignore during future auto revocation, then the
+  // constraint should not expire. If the lifetime is zero, then the setting
+  // does not expire.
+  if (is_ignored) {
+    DCHECK(constraints.lifetime().is_zero());
+    DCHECK(constraints.expiration() == base::Time());
+    PermissionRevocationRequest::ExemptOriginFromFutureRevocations(hcsm, url);
+  } else {
+    PermissionRevocationRequest::UndoExemptOriginFromFutureRevocations(hcsm,
+                                                                       url);
+  }
+  base::Value::Dict revoked_value;
+  revoked_value.Set(
+      safety_hub::kRevokedStatusDictKeyStr,
+      is_ignored ? safety_hub::kIgnoreStr : safety_hub::kRevokeStr);
+  std::optional<std::string> source_str =
+      GetRevocationSourceString(revocation_source);
+  if (source_str) {
+    revoked_value.Set(kAbusiveRevocationSourceKeyStr, source_str.value());
+  }
+  hcsm->SetWebsiteSettingCustomScope(
+      ContentSettingsPattern::FromURLNoWildcard(url),
+      ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::REVOKED_ABUSIVE_NOTIFICATION_PERMISSIONS,
+      base::Value(std::move(revoked_value)), constraints);
+}
+
+// static
+// `SetRevokedAbusiveNotificationPermission`, preserving `revocation_source` if
+// it exists. This method should be used for re-grant, undo of the re-grant, or
+// other scenarios where there may be an existing revocation entry for the url.
+void AbusiveNotificationPermissionsManager::
+    SetRevokedAbusiveNotificationPermission(
+        HostContentSettingsMap* hcsm,
+        GURL url,
+        bool is_ignored,
+        const content_settings::ContentSettingConstraints& constraints) {
+  safe_browsing::NotificationRevocationSource revocation_source =
+      GetRevokedAbusiveNotificationRevocationSource(hcsm, url);
+
+  SetRevokedAbusiveNotificationPermission(hcsm, url, is_ignored,
+                                          revocation_source, constraints);
+}
+
+// static
+safe_browsing::NotificationRevocationSource
+AbusiveNotificationPermissionsManager::
+    GetRevokedAbusiveNotificationRevocationSource(HostContentSettingsMap* hcsm,
+                                                  GURL setting_url) {
+  DCHECK(setting_url.is_valid());
+  base::Value stored_value =
+      safety_hub_util::GetRevokedAbusiveNotificationPermissionsSettingValue(
+          hcsm, setting_url);
+  if (stored_value.is_none()) {
+    return safe_browsing::NotificationRevocationSource::kUnknown;
+  }
+  const std::string* revocation_type =
+      stored_value.GetDict().FindString(kAbusiveRevocationSourceKeyStr);
+  if (!revocation_type) {
+    return safe_browsing::NotificationRevocationSource::kUnknown;
+  }
+  if (*revocation_type == kSocialEngineeringBlocklistStr) {
+    return safe_browsing::NotificationRevocationSource::
+        kSocialEngineeringBlocklist;
+  }
+  if (*revocation_type == kManualSafeBrowsingRevocationStr) {
+    return safe_browsing::NotificationRevocationSource::
+        kManualSafeBrowsingRevocation;
+  }
+  // Only `kSocialEngineeringBlocklist` and `kManualSafeBrowsingRevocation` are
+  // stored in `REVOKED_ABUSIVE_NOTIFICATION_PERMISSIONS`, other type of
+  // `NotificationRevocationSource` should never be the reason for abusive
+  // notification revocation.
+  return safe_browsing::NotificationRevocationSource::kUnknown;
+}
 
 void AbusiveNotificationPermissionsManager::
     CheckNotificationPermissionOrigins() {
@@ -84,11 +194,14 @@ void AbusiveNotificationPermissionsManager::
   is_abusive_site_revocation_running_ = true;
   UpdateNotificationPermission(hcsm_.get(), url,
                                ContentSetting::CONTENT_SETTING_ALLOW);
-  safety_hub_util::SetRevokedAbusiveNotificationPermission(hcsm_.get(), url,
-                                                           /*is_ignored=*/true);
+  SetRevokedAbusiveNotificationPermission(hcsm_.get(), url,
+                                          /*is_ignored=*/true);
   // Set this back to false, so that revoked settings can be cleaned up if
   // necessary.
   is_abusive_site_revocation_running_ = false;
+
+  LogAbusiveNotificationPermissionRevocationUKM(
+      url, AbusiveNotificationPermissionsInteractions::kAllowAgain);
 }
 
 void AbusiveNotificationPermissionsManager::
@@ -108,15 +221,19 @@ void AbusiveNotificationPermissionsManager::
   if (stored_value.is_none()) {
     return;
   }
+
   // Set this to true to prevent removal of revoked setting values.
   is_abusive_site_revocation_running_ = true;
   UpdateNotificationPermission(hcsm_.get(), url,
                                ContentSetting::CONTENT_SETTING_DEFAULT);
-  safety_hub_util::SetRevokedAbusiveNotificationPermission(
-      hcsm_.get(), url, /*is_ignored=*/false, constraints);
+  SetRevokedAbusiveNotificationPermission(hcsm_.get(), url,
+                                          /*is_ignored=*/false, constraints);
   // Set this back to false, so that revoked settings can be cleaned up if
   // necessary.
   is_abusive_site_revocation_running_ = false;
+
+  LogAbusiveNotificationPermissionRevocationUKM(
+      url, AbusiveNotificationPermissionsInteractions::kUndoAllowAgain);
 }
 
 void AbusiveNotificationPermissionsManager::ClearRevokedPermissionsList() {
@@ -141,9 +258,9 @@ void AbusiveNotificationPermissionsManager::
 void AbusiveNotificationPermissionsManager::RestoreDeletedRevokedPermission(
     const ContentSettingsPattern& primary_pattern,
     content_settings::ContentSettingConstraints constraints) {
-  safety_hub_util::SetRevokedAbusiveNotificationPermission(
-      hcsm_.get(), primary_pattern.ToRepresentativeUrl(), /*is_ignored=*/false,
-      constraints);
+  SetRevokedAbusiveNotificationPermission(hcsm_.get(),
+                                          primary_pattern.ToRepresentativeUrl(),
+                                          /*is_ignored=*/false, constraints);
 }
 
 const base::Clock* AbusiveNotificationPermissionsManager::GetClock() {
@@ -156,6 +273,18 @@ const base::Clock* AbusiveNotificationPermissionsManager::GetClock() {
 bool AbusiveNotificationPermissionsManager::IsRevocationRunning() {
   return is_abusive_site_revocation_running_ ||
          !safe_browsing_request_clients_.empty();
+}
+
+void AbusiveNotificationPermissionsManager::
+    LogAbusiveNotificationPermissionRevocationUKM(
+        const GURL& origin,
+        AbusiveNotificationPermissionsInteractions interaction) {
+  ukm::SourceId source_id = ukm::UkmRecorder::GetSourceIdForNotificationEvent(
+      base::PassKey<AbusiveNotificationPermissionsManager>(), origin);
+  ukm::builders::SafetyHub_AbusiveNotificationPermissionRevocation_Interactions(
+      source_id)
+      .SetInteractionType(static_cast<int>(interaction))
+      .Record(ukm::UkmRecorder::Get());
 }
 
 AbusiveNotificationPermissionsManager::SafeBrowsingCheckClient::
@@ -231,16 +360,15 @@ void AbusiveNotificationPermissionsManager::SafeBrowsingCheckClient::
   // we got a blocklist check result in time.
   timer_.Stop();
   if (threat_type == safe_browsing::SBThreatType::SB_THREAT_TYPE_URL_PHISHING) {
-    UpdateNotificationPermission(hcsm_.get(), url,
-                                 ContentSetting::CONTENT_SETTING_DEFAULT);
-    content_settings::ContentSettingConstraints default_constraint(
-        clock_->Now());
-    default_constraint.set_lifetime(safety_hub_util::GetCleanUpThreshold());
-    safety_hub_util::SetRevokedAbusiveNotificationPermission(
-        hcsm_.get(), url, /*is_ignored=*/false, default_constraint);
-    content_settings_uma_util::RecordContentSettingsHistogram(
-        "Settings.SafetyHub.UnusedSitePermissionsModule.AutoRevoked2",
-        ContentSettingsType::NOTIFICATIONS);
+    ExecuteAbusiveNotificationAutoRevocation(
+        hcsm_.get(), url,
+        safe_browsing::NotificationRevocationSource::
+            kSocialEngineeringBlocklist,
+        clock_);
+    safe_browsing::SafeBrowsingMetricsCollector::
+        LogSafeBrowsingNotificationRevocationSourceHistogram(
+            safe_browsing::NotificationRevocationSource::
+                kSocialEngineeringBlocklist);
   }
   // Update user pref that stores the time of the last successful blocklist
   // check.
@@ -336,5 +464,23 @@ bool AbusiveNotificationPermissionsManager::ShouldCheckOrigin(
 void AbusiveNotificationPermissionsManager::ResetSafeBrowsingCheckHelpers() {
   if (!safe_browsing_request_clients_.empty()) {
     safe_browsing_request_clients_.clear();
+  }
+}
+
+// static
+std::optional<std::string>
+AbusiveNotificationPermissionsManager::GetRevocationSourceString(
+    safe_browsing::NotificationRevocationSource source) {
+  switch (source) {
+    case safe_browsing::NotificationRevocationSource::
+        kSocialEngineeringBlocklist:
+      return kSocialEngineeringBlocklistStr;
+    case safe_browsing::NotificationRevocationSource::
+        kManualSafeBrowsingRevocation:
+      return kManualSafeBrowsingRevocationStr;
+    // Other revocation sources are not stored in
+    // REVOKED_ABUSIVE_NOTIFICATION_PERMISSIONS setting.
+    default:
+      return std::nullopt;
   }
 }

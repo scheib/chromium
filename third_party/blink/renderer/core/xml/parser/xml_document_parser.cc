@@ -780,16 +780,6 @@ scoped_refptr<XMLParserContext> XMLParserContext::CreateMemoryParser(
   xmlCtxtUseOptions(parser,
                     XML_PARSE_NODICT | XML_PARSE_NOENT | XML_PARSE_HUGE);
 
-#if LIBXML_VERSION < 21300
-  // Internal initialization required before libxml2 2.13.
-  // Fixed with https://gitlab.gnome.org/GNOME/libxml2/-/commit/8c5848bd
-  parser->sax2 = 1;
-  parser->instate = XML_PARSER_CONTENT;  // We are parsing a CONTENT
-  parser->depth = 0;
-  parser->str_xml = xmlDictLookup(parser->dict, BAD_CAST "xml", 3);
-  parser->str_xmlns = xmlDictLookup(parser->dict, BAD_CAST "xmlns", 5);
-  parser->str_xml_ns = xmlDictLookup(parser->dict, XML_XML_NAMESPACE, 36);
-#endif
   parser->_private = user_data;
 
   return base::AdoptRef(new XMLParserContext(parser));
@@ -942,8 +932,8 @@ static inline bool HandleNamespaceAttributes(
     AtomicString namespace_q_name = g_xmlns_atom;
     AtomicString namespace_uri = ToAtomicString(ns.uri);
     if (ns.prefix) {
-      namespace_q_name = AtomicString(
-          StrCat({WTF::g_xmlns_with_colon, ToAtomicString(ns.prefix)}));
+      namespace_q_name =
+          AtomicString(StrCat({g_xmlns_with_colon, ToAtomicString(ns.prefix)}));
     }
     std::optional<QualifiedName> parsed_name = Element::ParseAttributeName(
         xmlns_names::kNamespaceURI, namespace_q_name, exception_state);
@@ -1083,8 +1073,8 @@ void XMLDocumentParser::StartElementNs(
   std::optional<ThrowOnDynamicMarkupInsertionCountIncrementer>
       throw_on_dynamic_markup_insertions;
   if (!parsing_fragment_) {
-    if (HTMLConstructionSite::LookUpCustomElementDefinition(*document_, q_name,
-                                                            is)) {
+    if (HTMLConstructionSite::LookUpCustomElementDefinition(
+            *document_, q_name, is, document_->customElementRegistry())) {
       throw_on_dynamic_markup_insertions.emplace(document_);
       document_->GetAgent().event_loop()->PerformMicrotaskCheckpoint();
       reactions.emplace(isolate);
@@ -1617,8 +1607,7 @@ static void IgnorableWhitespaceHandler(void*, const xmlChar*, int) {
 }
 
 void XMLDocumentParser::InitializeParserContext(const std::string& chunk) {
-  xmlSAXHandler sax;
-  UNSAFE_TODO(memset(&sax, 0, sizeof(sax)));
+  xmlSAXHandler sax = {};
 
   // According to http://xmlsoft.org/html/libxml-tree.html#xmlSAXHandler and
   // http://xmlsoft.org/html/libxml-parser.html#fatalErrorSAXFunc the SAX
@@ -1772,24 +1761,6 @@ bool XMLDocumentParser::AppendFragmentSource(const String& chunk) {
   xmlParseContent(Context());
   EndDocument();  // Close any open text nodes.
 
-#if LIBXML_VERSION < 21400
-  // FIXME: If this code is actually needed, it should probably move to
-  // finish()
-  // XMLDocumentParserQt has a similar check (m_stream.error() ==
-  // QXmlStreamReader::PrematureEndOfDocumentError) in doEnd(). Check if all
-  // the chunk has been processed.
-  int64_t bytes_processed = xmlByteConsumed(Context());
-  if (bytes_processed == -1 ||
-      bytes_processed != static_cast<int64_t>(chunk_as_utf8.length())) {
-    // FIXME: I don't believe we can hit this case without also having seen
-    // an error or a null byte. If we hit this DCHECK, we've found a test
-    // case which demonstrates the need for this code.
-    DCHECK(saw_error_ ||
-           (bytes_processed >= 0 && !chunk_as_utf8.data()[bytes_processed]));
-    return false;
-  }
-#endif
-
   // No error if the chunk is well formed or it is not but we have no error.
   return Context()->wellFormed || !xmlCtxtGetLastError(Context());
 }
@@ -1868,8 +1839,7 @@ HashMap<String, String> ParseAttributes(const String& string, bool& attrs_ok) {
   AttributeParseState state;
   state.got_attributes = false;
 
-  xmlSAXHandler sax;
-  UNSAFE_TODO(memset(&sax, 0, sizeof(sax)));
+  xmlSAXHandler sax = {};
   sax.startElementNs = AttributesStartElementNsHandler;
   sax.initialized = XML_SAX2_MAGIC;
   scoped_refptr<XMLParserContext> parser =

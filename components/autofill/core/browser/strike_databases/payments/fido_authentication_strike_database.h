@@ -11,8 +11,8 @@
 #include <string_view>
 
 #include "base/time/time.h"
-#include "components/autofill/core/browser/strike_databases/simple_autofill_strike_database.h"
-#include "components/autofill/core/browser/strike_databases/strike_database.h"
+#include "components/strike_database/simple_autofill_strike_database.h"
+#include "components/strike_database/strike_database.h"
 
 namespace autofill {
 
@@ -27,10 +27,10 @@ struct FidoAuthenticationStrikeDatabaseTraits {
 
 // Strike database for offering FIDO authentication for card unmasking.
 class FidoAuthenticationStrikeDatabase
-    : public SimpleAutofillStrikeDatabase<
+    : public strike_database::SimpleAutofillStrikeDatabase<
           FidoAuthenticationStrikeDatabaseTraits> {
  public:
-  using SimpleAutofillStrikeDatabase<
+  using strike_database::SimpleAutofillStrikeDatabase<
       FidoAuthenticationStrikeDatabaseTraits>::SimpleAutofillStrikeDatabase;
 
   // Strikes to add when user declines opt-in offer.

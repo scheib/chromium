@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 #import "base/ios/ios_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/drive_file_picker/test/drive_file_picker_app_interface.h"
 #import "ios/chrome/browser/drive_file_picker/ui/drive_file_picker_constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
@@ -123,12 +123,6 @@ id<GREYMatcher> IdentityButtonMatcher(NSString* email) {
       selectElementWithMatcher:IdentityButtonMatcher(primaryIdentity.userEmail)]
       performAction:grey_tap()];
 
-  // TODO(crbug.com/428928323): Investigate why the keyboard appears and remove
-  // this workaround when it's not needed anymore.
-  // On iOS 26, the keyboard appears when the identity button is tapped and it
-  // hides the elements behind. Close the keyboard by typing a return key.
-  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
-
   [[EarlGrey selectElementWithMatcher:
                  chrome_test_util::ContextMenuItemWithAccessibilityLabel(
                      secondaryIdentity.userEmail)] performAction:grey_tap()];
@@ -160,12 +154,6 @@ id<GREYMatcher> IdentityButtonMatcher(NSString* email) {
   [[EarlGrey
       selectElementWithMatcher:IdentityButtonMatcher(primaryIdentity.userEmail)]
       performAction:grey_tap()];
-
-  // TODO(crbug.com/428928323): Investigate why the keyboard appears and remove
-  // this workaround when it's not needed anymore.
-  // On iOS 26, the keyboard appears when the identity button is tapped and it
-  // hides the elements behind. Close the keyboard by typing a return key.
-  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
 
   [[EarlGrey selectElementWithMatcher:
                  chrome_test_util::ContextMenuItemWithAccessibilityLabel(

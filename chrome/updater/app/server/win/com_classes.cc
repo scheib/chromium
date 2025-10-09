@@ -56,7 +56,7 @@ class UpdaterAppStateImpl : public IDispatchImpl<IUpdaterAppState> {
 
   HRESULT RuntimeClassInitialize(const UpdateService::AppState& app_state) {
     app_id_ = base::UTF8ToWide(app_state.app_id);
-    version_ = base::UTF8ToWide(app_state.version.GetString());
+    version_ = base::UTF8ToWide(app_state.version);
     ap_ = base::UTF8ToWide(app_state.ap);
     brand_code_ = base::UTF8ToWide(app_state.brand_code);
     brand_path_ = app_state.brand_path.value();
@@ -120,6 +120,10 @@ class UpdaterAppStateImpl : public IDispatchImpl<IUpdaterAppState> {
 
 }  // namespace
 
+UpdateStateImpl::UpdateStateImpl(const UpdateService::UpdateState& update_state)
+    : DYNAMICIIDSIMPL(IUpdateState)(GetUpdaterScope()),
+      update_state_(update_state) {}
+
 STDMETHODIMP UpdateStateImpl::get_state(LONG* state) {
   CHECK(state);
   *state = static_cast<LONG>(update_state_.state);
@@ -136,10 +140,9 @@ STDMETHODIMP UpdateStateImpl::get_appId(BSTR* app_id) {
 STDMETHODIMP UpdateStateImpl::get_nextVersion(BSTR* next_version) {
   CHECK(next_version);
   *next_version =
-      base::win::ScopedBstr(
-          update_state_.next_version.IsValid()
-              ? base::UTF8ToWide(update_state_.next_version.GetString())
-              : L"")
+      base::win::ScopedBstr(base::Version(update_state_.next_version).IsValid()
+                                ? base::UTF8ToWide(update_state_.next_version)
+                                : L"")
           .Release();
   return S_OK;
 }
@@ -197,6 +200,13 @@ STDMETHODIMP UpdateStateImpl::get_installerCommandLine(
   return S_OK;
 }
 
+UpdateStateImpl::~UpdateStateImpl() = default;
+
+CompleteStatusImpl::CompleteStatusImpl(int code, const std::wstring& message)
+    : DYNAMICIIDSIMPL(ICompleteStatus)(GetUpdaterScope()),
+      code_(code),
+      message_(message) {}
+
 STDMETHODIMP CompleteStatusImpl::get_statusCode(LONG* code) {
   CHECK(code);
   *code = code_;
@@ -208,6 +218,8 @@ STDMETHODIMP CompleteStatusImpl::get_statusMessage(BSTR* message) {
   *message = base::win::ScopedBstr(message_).Release();
   return S_OK;
 }
+
+CompleteStatusImpl::~CompleteStatusImpl() = default;
 
 UpdaterImpl::UpdaterImpl()
     : DynamicIIDsMultImpl<IUpdater, IUpdater2>(

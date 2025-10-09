@@ -11,6 +11,7 @@
 #include "base/json/json_writer.h"
 #include "base/values.h"
 #include "net/base/load_flags.h"
+#include "net/http/http_response_headers.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -84,7 +85,7 @@ TrialGroupChecker::Status TrialGroupChecker::LookUpMembership(
   {
     base::Value::Dict request;
     request.Set("group", static_cast<int>(group_id_));
-    base::JSONWriter::Write(request, &upload_data);
+    upload_data = base::WriteJson(request).value_or("");
   }
 
   net::NetworkTrafficAnnotationTag traffic_annotation =

@@ -36,6 +36,7 @@ class OpenXRSceneUnderstandingManagerMSFT
 
  protected:
   // OpenXRSceneUnderstandingManager
+  OpenXrSceneUnderstandingManagerType GetType() const override;
   OpenXrPlaneManager* GetPlaneManager() override;
   OpenXrAnchorManager* GetAnchorManager() override;
   OpenXrHitTestManager* GetHitTestManager() override;
@@ -66,7 +67,7 @@ class OpenXrSceneUnderstandingManagerMsftFactory
 
   std::unique_ptr<OpenXRSceneUnderstandingManager>
   CreateSceneUnderstandingManager(const OpenXrExtensionHelper& extension_helper,
-                                  XrSession session,
+                                  OpenXrApiWrapper* openxr,
                                   XrSpace mojo_space) const override;
 
  private:

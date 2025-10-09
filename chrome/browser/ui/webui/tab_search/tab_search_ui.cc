@@ -17,6 +17,7 @@
 #include "chrome/browser/ui/webui/favicon_source.h"
 #include "chrome/browser/ui/webui/metrics_reporter/metrics_reporter_service.h"
 #include "chrome/browser/ui/webui/plural_string_handler.h"
+#include "chrome/browser/ui/webui/tab_search/tab_search_page_handler.h"
 #include "chrome/browser/ui/webui/tab_search/tab_search_prefs.h"
 #include "chrome/browser/ui/webui/tab_search/tab_search_sync_handler.h"
 #include "chrome/common/webui_url_constants.h"
@@ -79,10 +80,12 @@ TabSearchUI::TabSearchUI(content::WebUI* web_ui)
        IDS_TAB_SEARCH_A11Y_RECENTLY_CLOSED_TAB_GROUP},
       {"audioMuting", IDS_TAB_AX_LABEL_AUDIO_MUTING_FORMAT},
       {"audioPlaying", IDS_TAB_AX_LABEL_AUDIO_PLAYING_FORMAT},
+      {"blobUrlSource", IDS_HOVER_CARD_BLOB_URL_SOURCE},
       {"clearSearch", IDS_CLEAR_SEARCH},
       {"closeTab", IDS_TAB_SEARCH_CLOSE_TAB},
       {"collapseRecentlyClosed", IDS_TAB_SEARCH_COLLAPSE_RECENTLY_CLOSED},
       {"expandRecentlyClosed", IDS_TAB_SEARCH_EXPAND_RECENTLY_CLOSED},
+      {"fileUrlSource", IDS_HOVER_CARD_FILE_URL_SOURCE},
       {"mediaRecording", IDS_TAB_AX_LABEL_MEDIA_RECORDING_FORMAT},
       {"audioRecording", IDS_TAB_AX_LABEL_AUDIO_RECORDING_FORMAT},
       {"videoRecording", IDS_TAB_AX_LABEL_VIDEO_RECORDING_FORMAT},
@@ -183,6 +186,8 @@ TabSearchUI::TabSearchUI(content::WebUI* web_ui)
       {"splitViewEmptyTitle", IDS_SPLIT_VIEW_NTP_EMPTY_TITLE},
       {"splitViewTabTitle", IDS_SPLIT_VIEW_NTP_TAB_TITLE},
       {"splitViewTitle", IDS_SPLIT_VIEW_NTP_TITLE},
+      {"splitViewCloseButtonAriaLabel",
+       IDS_SPLIT_VIEW_NTP_CLOSE_BUTTON_ARIA_LABEL},
   };
   source->AddLocalizedStrings(kStrings);
   source->AddBoolean("useRipples", views::PlatformStyle::kUseRipples);

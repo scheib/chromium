@@ -9,6 +9,7 @@
   --google-button-bg-color: #4285f4;
   --google-button-text-color: white;
   --google-button-hover-bg-color: #357ae8;
+  --google-button-arrow-hover-bg-color: #0000001a;
   --dropdown-border-color: #ccc;
   --dropdown-header-bg-color: #f9f9f9;
   --dropdown-header-text-color: #5f6368;
@@ -40,6 +41,7 @@
   --google-button-bg-color: #5f6368;
   --google-button-text-color: #e8eaed;
   --google-button-hover-bg-color: #72767c;
+  --google-button-arrow-hover-bg-color: #ffffff26;
   --dropdown-border-color: #5f6368;
   --dropdown-header-bg-color: #33363b;
   --dropdown-header-text-color: #e8eaed;
@@ -99,14 +101,18 @@ body {
   /* Ensure the controls stay on top of other content */
   z-index: 100;
   width: 100%;
-  padding: 25px;
+  padding: 8px 20px;
   display: flex;
   /* Adjust spacing between dropdowns and checkboxes */
   gap: 20px;
   /* Align items to the top */
   align-items: flex-start;
-  /* Allow controls to wrap on smaller screens */
-  flex-wrap: wrap;
+  /* Do not allow controls to wrap on smaller screens */
+  flex-wrap: nowrap;
+  /* Show a horizontal scrollbar on smaller screens */
+  overflow-x: auto;
+  /* Add a visual distinction between the controls and the text display area */
+  border-bottom: 1px solid var(--dropdown-border-color);
 }
 
 .google-button {
@@ -123,6 +129,10 @@ body {
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
   transition: background-color 0.3s ease;
+  /* Do not allow text wrapping */
+  white-space: nowrap;
+  /* Do not allow the user to highlight the text inside the button */
+  user-select: none;
 }
 
 .google-button:hover {
@@ -134,16 +144,37 @@ body {
   margin-right: 8px;
 }
 
+.google-button.arrow-controls {
+  padding-right: 8px;
+  /* Disable mouse interactions for the entire button */
+  pointer-events: none;
+}
+
+.google-button .arrow-feedback {
+  margin-right: 8px;
+}
+
+.google-button .arrow {
+  cursor: pointer;
+  font-size: 18px;
+  border-radius: 3px;
+  /* Re-enable mouse interaction only for the arrows */
+  pointer-events: auto;
+}
+
+.google-button .arrow:hover {
+  background-color: var(--google-button-arrow-hover-bg-color);
+}
+
 .dropdown {
   position: relative;
   border: 1px solid var(--dropdown-border-color);
   border-radius: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  width: 300px;
 }
 
 .dropdown-header {
-  padding: 12px 16px;
+  padding: 9px 16px;
   background-color: var(--dropdown-header-bg-color);
   color: var(--dropdown-header-text-color);
   border-bottom: 1px solid var(--dropdown-header-border-color);
@@ -152,6 +183,10 @@ body {
   align-items: center;
   font-size: 15px;
   font-weight: 500;
+  /* Do not allow text wrapping */
+  white-space: nowrap;
+  /* Do not allow the user to highlight the text inside the dropdown header */
+  user-select: none;
 }
 
 .dropdown-header i {
@@ -160,10 +195,12 @@ body {
 }
 
 .dropdown-list {
+  position: fixed;
+  z-index: 200;
   list-style: none;
   padding: 0;
   margin: 0;
-  border-top: 1px solid var(--dropdown-list-border-color);
+  border: 1px solid var(--dropdown-border-color);
   border-radius: 0 0 4px 4px;
   /* To contain the rounded corners */
   overflow: hidden;
@@ -213,37 +250,7 @@ body {
   flex-grow: 1;
   /* Make the label clickable */
   cursor: pointer;
-  /* Wrap text whenever necessary */
-  word-break: break-all;
-}
-
-#checkbox-controls {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-}
-
-#checkbox-controls .checkbox-column {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-#checkbox-controls label {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  color: var(--checkbox-label-text-color);
-  cursor: pointer;
-  margin-bottom: 6px;
-  margin-right: 12px;
-}
-
-#checkbox-controls input[type="checkbox"] {
-  margin-right: 8px;
-  accent-color: var(--checkbox-accent-color);
-  border: 1.5px solid var(--checkbox-border-color);
-  border-radius: 2px;
+  white-space: nowrap;
 }
 
 #text-display-area {
@@ -254,6 +261,7 @@ body {
   background-color: var(--text-display-bg-color);
   color: var(--text-display-text-color);
   margin-left: 20px;
+  margin-top: 6em; /* Use em to adjust with page zoom. */
 }
 
 

@@ -22,6 +22,7 @@
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/snapshots/model/snapshot_browser_agent.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_source_tab_helper.h"
 #import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/test/fakes/fake_navigation_context.h"
@@ -40,8 +41,7 @@ namespace utils {
 namespace {
 
 // Creates a MockTabGroupSyncService.
-std::unique_ptr<KeyedService> CreateMockSyncService(
-    web::BrowserState* context) {
+std::unique_ptr<KeyedService> CreateMockSyncService(ProfileIOS* profile) {
   return std::make_unique<::testing::NiceMock<MockTabGroupSyncService>>();
 }
 
@@ -92,6 +92,7 @@ class TabGroupSyncUtilTest : public PlatformTest {
     auto fake_web_state = std::make_unique<web::FakeWebState>();
     web::FakeWebState* inserted_web_state = fake_web_state.get();
     SnapshotTabHelper::CreateForWebState(inserted_web_state);
+    SnapshotSourceTabHelper::CreateForWebState(inserted_web_state);
     browser->GetWebStateList()->InsertWebState(
         std::move(fake_web_state),
         WebStateList::InsertionParams::Automatic().Activate());
@@ -484,7 +485,7 @@ TEST_F(TabGroupSyncUtilTest, IsTabGroupSharedWithShared) {
 
   SavedTabGroup saved_group(u"title", tab_groups::TabGroupColorId::kGrey,
                             /*urls=*/{}, /*position=*/std::nullopt);
-  saved_group.SetCollaborationId(CollaborationId("collaboration"));
+  saved_group.SetCollaborationId(syncer::CollaborationId("collaboration"));
 
   EXPECT_CALL(*mock_service_, GetGroup(tab_group_id))
       .WillOnce(testing::Return(saved_group));
@@ -519,7 +520,7 @@ TEST_F(TabGroupSyncUtilTest, GetTabGroupCollabIDWithShared) {
 
   SavedTabGroup saved_group(u"title", tab_groups::TabGroupColorId::kGrey,
                             /*urls=*/{}, /*position=*/std::nullopt);
-  saved_group.SetCollaborationId(CollaborationId("collaboration"));
+  saved_group.SetCollaborationId(syncer::CollaborationId("collaboration"));
 
   tab_groups::EitherGroupID either_id = tab_group_id;
   EXPECT_CALL(*mock_service_, GetGroup(either_id))
@@ -562,7 +563,7 @@ TEST_F(TabGroupSyncUtilTest, GetUserRoleForGroupShared) {
 
   SavedTabGroup saved_group(u"title", tab_groups::TabGroupColorId::kGrey,
                             /*urls=*/{}, /*position=*/std::nullopt);
-  saved_group.SetCollaborationId(CollaborationId("collaboration"));
+  saved_group.SetCollaborationId(syncer::CollaborationId("collaboration"));
 
   tab_groups::EitherGroupID either_id = tab_group_id;
   EXPECT_CALL(*mock_service_, GetGroup(either_id))

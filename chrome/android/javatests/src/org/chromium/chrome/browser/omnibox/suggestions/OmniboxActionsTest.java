@@ -4,10 +4,6 @@
 
 package org.chromium.chrome.browser.omnibox.suggestions;
 
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-
 import androidx.annotation.Nullable;
 import androidx.test.filters.MediumTest;
 
@@ -40,7 +36,6 @@ import org.chromium.components.omnibox.AutocompleteResult;
 import org.chromium.components.omnibox.OmniboxSuggestionType;
 import org.chromium.components.omnibox.SuggestTemplateInfoProto.SuggestTemplateInfo.TemplateAction;
 import org.chromium.components.omnibox.action.OmniboxAction;
-import org.chromium.components.omnibox.action.OmniboxActionJni;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,7 +57,6 @@ public class OmniboxActionsTest {
 
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
     private @Mock AutocompleteController.Natives mAutocompleteControllerJniMock;
-    private @Mock OmniboxActionJni mOmniboxActionJni;
 
     private WebPageStation mStartingPage;
     private OmniboxTestUtils mOmniboxUtils;
@@ -72,7 +66,6 @@ public class OmniboxActionsTest {
         mStartingPage = mActivityTestRule.start();
         mOmniboxUtils = new OmniboxTestUtils(mActivityTestRule.getActivity());
         AutocompleteControllerJni.setInstanceForTesting(mAutocompleteControllerJniMock);
-        OmniboxActionJni.setInstanceForTesting(mOmniboxActionJni);
     }
 
     @After
@@ -85,7 +78,6 @@ public class OmniboxActionsTest {
                     IncognitoTabHostUtils.closeAllIncognitoTabs();
                 });
         AutocompleteControllerJni.setInstanceForTesting(null);
-        OmniboxActionJni.setInstanceForTesting(null);
     }
 
     /**
@@ -124,6 +116,7 @@ public class OmniboxActionsTest {
                             "accessibility",
                             type.getNumber(),
                             "https://www.google.com",
+                            /* tabId= */ 0,
                             /* showAsActionButton= */ false));
         }
 
@@ -139,16 +132,6 @@ public class OmniboxActionsTest {
                 createFakeActionInSuggest(TemplateAction.ActionType.DIRECTIONS));
 
         mOmniboxUtils.clearFocus();
-
-        verify(mOmniboxActionJni, times(1))
-                .recordActionShown(
-                        TemplateAction.ActionType.CALL_VALUE, /* position= */ 1, /* executed= */ false);
-        verify(mOmniboxActionJni, times(1))
-                .recordActionShown(
-                        TemplateAction.ActionType.DIRECTIONS_VALUE,
-                        /* position= */ 2,
-                        /* executed= */ false);
-        verifyNoMoreInteractions(mOmniboxActionJni);
     }
 
     @Test
@@ -161,16 +144,6 @@ public class OmniboxActionsTest {
                 createFakeActionInSuggest(TemplateAction.ActionType.DIRECTIONS));
 
         mOmniboxUtils.clickOnAction(1, 0);
-
-        verify(mOmniboxActionJni, times(1))
-                .recordActionShown(
-                        TemplateAction.ActionType.CALL_VALUE, /* position= */ 1, /* executed= */ true);
-        verify(mOmniboxActionJni, times(1))
-                .recordActionShown(
-                        TemplateAction.ActionType.DIRECTIONS_VALUE,
-                        /* position= */ 2,
-                        /* executed= */ false);
-        verifyNoMoreInteractions(mOmniboxActionJni);
     }
 
     @Test
@@ -185,20 +158,5 @@ public class OmniboxActionsTest {
                         TemplateAction.ActionType.REVIEWS));
 
         mOmniboxUtils.clickOnAction(1, 2);
-
-        verify(mOmniboxActionJni, times(1))
-                .recordActionShown(
-                        TemplateAction.ActionType.CALL_VALUE, /* position= */ 1, /* executed= */ false);
-        verify(mOmniboxActionJni, times(1))
-                .recordActionShown(
-                        TemplateAction.ActionType.DIRECTIONS_VALUE,
-                        /* position= */ 1,
-                        /* executed= */ false);
-        verify(mOmniboxActionJni, times(1))
-                .recordActionShown(
-                        TemplateAction.ActionType.REVIEWS_VALUE,
-                        /* position= */ 1,
-                        /* executed= */ true);
-        verifyNoMoreInteractions(mOmniboxActionJni);
     }
 }

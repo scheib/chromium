@@ -5,8 +5,9 @@
 #include "chrome/browser/ui/browser_navigator_browsertest.h"
 
 #include "ash/constants/ash_switches.h"
-#include "ash/public/cpp/multi_user_window_manager.h"
+#include "ash/multi_user/multi_user_window_manager.h"
 #include "ash/public/cpp/new_window_delegate.h"
+#include "ash/shell.h"
 #include "ash/wm/window_pin_util.h"
 #include "base/command_line.h"
 #include "chrome/browser/ash/login/chrome_restart_request.h"
@@ -15,7 +16,6 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
-#include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/ash/session/session_controller_client_impl.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -61,7 +61,7 @@ IN_PROC_BROWSER_TEST_F(BrowserNavigatorTestChromeOS,
                        NavigationBlockedInLockedFullscreen) {
   // Set locked fullscreen state.
   aura::Window* window = browser()->window()->GetNativeWindow();
-  PinWindow(window, /*trusted=*/true);
+  ash::PinWindow(window, /*trusted=*/true);
 
   // Navigate to a page.
   auto url = GURL(chrome::kChromeUIVersionURL);
@@ -81,7 +81,7 @@ IN_PROC_BROWSER_TEST_F(BrowserNavigatorTestChromeOS,
   // As a sanity check unset the locked fullscreen state and make sure that the
   // navigation happens (the following EXPECTs fail if the next line isn't
   // executed).
-  UnpinWindow(window);
+  ash::UnpinWindow(window);
 
   Navigate(&params);
 
@@ -103,7 +103,7 @@ IN_PROC_BROWSER_TEST_F(BrowserNavigatorTestChromeOS,
                        NavigationAllowedInLockedFullscreenWhenLockedForOnTask) {
   // Set locked fullscreen state.
   aura::Window* const window = browser()->window()->GetNativeWindow();
-  PinWindow(window, /*trusted=*/true);
+  ash::PinWindow(window, /*trusted=*/true);
   browser()->SetLockedForOnTask(true);
 
   // Navigate to a page.
@@ -243,7 +243,7 @@ IN_PROC_BROWSER_TEST_F(BrowserNavigatorMultiUserTestChromeOS,
   // Start multi-user sign-in.
   LogIn(kSecondaryAccountId);
 
-  auto* window_manager = MultiUserWindowManagerHelper::GetWindowManager();
+  auto* window_manager = ash::Shell::Get()->multi_user_window_manager();
 
   // Test 1: Test that a browser created from a visiting browser will be on the
   // same visiting desktop.
@@ -275,9 +275,8 @@ IN_PROC_BROWSER_TEST_F(BrowserNavigatorMultiUserTestChromeOS,
     aura::Window* created_window =
         navigated->GetWebContents()->GetTopLevelNativeWindow();
     ASSERT_TRUE(created_window);
-    EXPECT_TRUE(
-        MultiUserWindowManagerHelper::GetInstance()->IsWindowOnDesktopOfUser(
-            created_window, kSecondaryAccountId));
+    EXPECT_TRUE(window_manager->IsWindowOnDesktopOfUser(created_window,
+                                                        kSecondaryAccountId));
   }
 
   // Test 2: Test that a window which is not visiting does not cause an owner
@@ -307,9 +306,8 @@ IN_PROC_BROWSER_TEST_F(BrowserNavigatorMultiUserTestChromeOS,
     aura::Window* created_window =
         navigated->GetWebContents()->GetTopLevelNativeWindow();
     ASSERT_TRUE(created_window);
-    EXPECT_TRUE(
-        MultiUserWindowManagerHelper::GetInstance()->IsWindowOnDesktopOfUser(
-            created_window, kPrimaryAccountId));
+    EXPECT_TRUE(window_manager->IsWindowOnDesktopOfUser(created_window,
+                                                        kPrimaryAccountId));
   }
 }
 

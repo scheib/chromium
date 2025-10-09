@@ -54,7 +54,7 @@ inline constexpr base::TimeDelta kDefaultLowPriorityTimeout = base::Seconds(30);
 
 inline constexpr char kIdleTimeBeforeHeavyweight[] = "idle_before_heavyweight";
 inline constexpr base::TimeDelta kDefaultIdleTimeBeforeHeavyweight =
-    base::Seconds(5);
+    base::Seconds(2);
 
 inline constexpr char kPollingInterval[] = "polling_interval";
 inline constexpr base::TimeDelta kDefaultPollingInterval =
@@ -88,8 +88,12 @@ inline constexpr base::TimeDelta kDefaultNtpBrowserPromosSnoozedHideDuration =
     base::Days(7);
 
 inline constexpr char kNtpBrowserPromoSetupListPromoLimitName[] =
-    "setup-list-limit";
+    "setup-list-promo-limit";
 inline constexpr int kDefaultNtpBrowserPromoSetupListPromoLimit = 10;
+
+inline constexpr char kNtpBrowserPromoSetupListCompletedPromoLimitName[] =
+    "setup-list-promo-completed-limit";
+inline constexpr int kDefaultNtpBrowserPromoSetupListCompletedPromoLimit = 2;
 
 inline constexpr char kNtpBrowserPromoIndividualPromoLimitName[] =
     "individual-promo-limit";
@@ -98,12 +102,9 @@ inline constexpr int kDefaultNtpBrowserPromoIndividualPromoLimit = 1;
 }  // namespace
 
 BASE_FEATURE(kUserEducationExperienceVersion2Point5,
-             "UserEducationExperienceVersion2Point5",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kNewBadgeTestFeature,
-             "NewBadgeTestFeature",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kNewBadgeTestFeature, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsUserEducationV25() {
   return base::FeatureList::IsEnabled(kUserEducationExperienceVersion2Point5);
@@ -205,9 +206,7 @@ base::TimeDelta GetNtpSetupListSnoozeTime() {
   return GetNtpBrowserPromosSnoozedHideDuration();
 }
 
-BASE_FEATURE(kEnableNtpBrowserPromos,
-             "EnableNtpBrowserPromos",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableNtpBrowserPromos, base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE_ENUM_PARAM(NtpBrowserPromoType,
                         kNtpBrowserPromoType,
@@ -260,6 +259,12 @@ BASE_FEATURE_PARAM(int,
                    kDefaultNtpBrowserPromoSetupListPromoLimit);
 
 BASE_FEATURE_PARAM(int,
+                   kNtpBrowserPromoSetupListCompletedPromoLimit,
+                   &kEnableNtpBrowserPromos,
+                   kNtpBrowserPromoSetupListCompletedPromoLimitName,
+                   kDefaultNtpBrowserPromoSetupListCompletedPromoLimit);
+
+BASE_FEATURE_PARAM(int,
                    kNtpBrowserPromoIndividualPromoLimit,
                    &kEnableNtpBrowserPromos,
                    kNtpBrowserPromoIndividualPromoLimitName,
@@ -289,6 +294,10 @@ base::TimeDelta GetNtpBrowserPromosSnoozedHideDuration() {
 
 int GetNtpBrowserPromoSetupListPromoLimit() {
   return kNtpBrowserPromoSetupListPromoLimit.Get();
+}
+
+int GetNtpBrowserPromoSetupListCompletedPromoLimit() {
+  return kNtpBrowserPromoSetupListCompletedPromoLimit.Get();
 }
 
 int GetNtpBrowserPromoIndividualPromoLimit() {

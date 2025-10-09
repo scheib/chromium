@@ -17,11 +17,12 @@
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
-#include "chrome/browser/web_applications/tabbed_mode_scope_matcher.h"
+#include "chrome/browser/web_applications/ui_manager/update_dialog_types.h"
 #include "chrome/browser/web_applications/web_app_icon_manager.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_install_manager_observer.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "chrome/browser/web_applications/web_app_registrar_observer.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
 #include "components/webapps/common/web_app_id.h"
 #include "third_party/re2/src/re2/set.h"
@@ -45,6 +46,10 @@ namespace content_relationship_verification {
 class DigitalAssetLinksHandler;
 }
 
+namespace base {
+class TimeTicks;
+}  // namespace base
+
 namespace web_app {
 
 class WebAppRegistrar;
@@ -57,7 +62,8 @@ class WebAppProvider;
 // Note: Much of the functionality in HostedAppBrowserController
 // will move to this class.
 class WebAppBrowserController : public AppBrowserController,
-                                public WebAppInstallManagerObserver {
+                                public WebAppInstallManagerObserver,
+                                public WebAppRegistrarObserver {
  public:
   WebAppBrowserController(WebAppProvider& provider,
                           Browser* browser,
@@ -107,6 +113,8 @@ class WebAppBrowserController : public AppBrowserController,
   gfx::Rect GetDefaultBounds() const override;
   bool HasReloadButton() const override;
   bool HasPendingUpdate() const override;
+  void CreateMetadataAndTriggerAppUpdateDialog(
+      base::TimeTicks start_time) const override;
 #if BUILDFLAG(IS_CHROMEOS)
   const ash::SystemWebAppDelegate* system_app() const override;
   bool ShouldShowCustomTabBar() const override;
@@ -126,6 +134,11 @@ class WebAppBrowserController : public AppBrowserController,
       webapps::WebappUninstallSource uninstall_source) override;
   void OnWebAppManifestUpdated(const webapps::AppId& app_id) override;
   void OnWebAppInstallManagerDestroyed() override;
+
+  // WebAppRegistrarObserver:
+  void OnWebAppEffectiveScopeChanged(const webapps::AppId& app_id,
+                                     const WebAppScope& new_scope) override;
+  void OnAppRegistrarDestroyed() override;
 
   base::CallbackListSubscription AddHomeTabIconLoadCallbackForTesting(
       const base::OnceClosure callback);
@@ -152,6 +165,9 @@ class WebAppBrowserController : public AppBrowserController,
   void OnReadHomeTabIcon(SkBitmap home_tab_icon_bitmap) const;
   void OnReadIcon(IconPurpose purpose, SkBitmap bitmap);
   void PerformDigitalAssetLinkVerification(Browser* browser);
+  void OnMetadataObtainedTriggerUpdateDialog(
+      base::TimeTicks start_time,
+      std::optional<WebAppIdentityUpdate> identity_update) const;
 
 #if BUILDFLAG(IS_CHROMEOS)
   void CheckDigitalAssetLinkRelationshipForAndroidApp(
@@ -193,6 +209,8 @@ class WebAppBrowserController : public AppBrowserController,
 
   base::ScopedObservation<WebAppInstallManager, WebAppInstallManagerObserver>
       install_manager_observation_{this};
+  base::ScopedObservation<WebAppRegistrar, WebAppRegistrarObserver>
+      registrar_observation_{this};
 
   mutable base::WeakPtrFactory<WebAppBrowserController> weak_ptr_factory_{this};
 };

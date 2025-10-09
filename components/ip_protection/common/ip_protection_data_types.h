@@ -57,25 +57,19 @@ enum class TryGetAuthTokensResult {
 
 // The result of a fetch of tokens from the IP Protection auth token server on
 // Android.
-//
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused. Keep this in sync with
-// AwIpProtectionTokenBatchRequestResult in enums.xml.
 enum class TryGetAuthTokensAndroidResult {
   // The request was successful and resulted in new tokens.
-  kSuccess = 0,
+  kSuccess,
   // A transient error, implies that retrying the action (with backoff) is
   // appropriate.
-  kFailedBSATransient = 1,
+  kFailedBSATransient,
   // A persistent error, implies that the action should not be retried.
-  kFailedBSAPersistent = 2,
+  kFailedBSAPersistent,
   // Any other issue calling BSA.
-  kFailedBSAOther = 3,
+  kFailedBSAOther,
   // The attempt to request tokens failed because IP Protection is disabled by
   // WebView.
-  kFailedDisabled = 4,
-
-  kMaxValue = kFailedDisabled,
+  kFailedDisabled,
 };
 
 // A GeoHint represents a course location of a user. Values are based on
@@ -189,7 +183,7 @@ enum class TryGetProbabilisticRevealTokensStatus {
   kInvalidEpochIdSize = 15,
   kMaxValue = kInvalidEpochIdSize,
 };
-// LINT.ThenChange(//tools/metrics/histograms/metadata/network/enums.xml:ProbabilisticRevealTokensResult)
+// LINT.ThenChange(//tools/metrics/histograms/metadata/ip_protection/enums.xml:ProbabilisticRevealTokensResult)
 
 // Stores return status of TryGetProbabilisticRevealTokens() together with
 // NetError() returned by url loader.
@@ -232,6 +226,15 @@ struct TryGetProbabilisticRevealTokensOutcome {
   std::string epoch_id;
 };
 
+enum class IpProxyStatus {
+  kOk,
+  kFeatureNotEnabled,
+  kMaskedDomainListNotEnabled,
+  kMaskedDomainListNotPopulated,
+  kAuthTokensUnavailable,
+  kUnavailable,
+  kBypassedByDevTools
+};
 }  // namespace ip_protection
 
 #endif  // COMPONENTS_IP_PROTECTION_COMMON_IP_PROTECTION_DATA_TYPES_H_

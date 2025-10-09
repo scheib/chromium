@@ -8,9 +8,11 @@
 #include <ranges>
 #include <variant>
 
+#include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/types/pass_key.h"
+#include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/data_model/addresses/autofill_i18n_api.h"
 #include "components/autofill/core/browser/data_model/addresses/autofill_normalization_utils.h"
 #include "components/autofill/core/browser/data_model/addresses/autofill_structured_address_component.h"
 #include "components/autofill/core/browser/data_model/addresses/contact_info.h"
@@ -21,24 +23,26 @@
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
 #include "components/autofill/core/browser/geo/country_names.h"
+#include "components/autofill/core/browser/proto/server.pb.h"
 #include "third_party/abseil-cpp/absl/functional/overload.h"
 
 namespace autofill {
 
 namespace {
 
-std::u16string Format(std::u16string s,
-                      base::optional_ref<const std::u16string> format_string) {
-  if (!format_string) {
-    return s;
-  }
+std::u16string NormalizeEntityValue(const AttributeInstance& attribute) {
+  return normalization::NormalizeForComparison(
+      attribute.GetRawInfo(attribute.type().field_type()));
+}
 
+// Returns `s` in the demanded `format`. See `data_util::IsValidDateFormat` for
+// the valid `format` values.
+std::u16string FormatAffix(std::u16string s, std::u16string_view format) {
   // We parse the leading minus here rather than using `base::StringToInt()` to
   // avoid mixing signed and unsigned integers as this easily leads to
   // undefined behavior.
-  std::u16string_view format = *format_string;
   bool suffix = false;
-  if (format_string->starts_with(u"-")) {
+  if (format.starts_with(u"-")) {
     format = format.substr(1);
     suffix = true;
   }
@@ -56,13 +60,51 @@ std::u16string Format(std::u16string s,
   return s;
 }
 
+// Returns `s` in the demanded `format`. See
+// `data_util::IsValidFlightNumberFormat` for the valid `format` values.
+std::u16string FormatFlightNumber(std::u16string s,
+                                  std::u16string_view format) {
+  // Invalid flight number - do not attempt to format.
+  if (s.size() < 3) {
+    return s;
+  }
+
+  // The airline designator corresponds to the first two characters.
+  if (format == u"A") {
+    return s.substr(0, 2);
+  }
+  // The number is the remainder of the string.
+  if (format == u"N") {
+    return s.substr(2);
+  }
+  return s;
+}
+
+std::u16string Format(
+    std::u16string s,
+    base::optional_ref<const AutofillFormatString> format_string) {
+  if (!format_string) {
+    return s;
+  }
+
+  switch (format_string->type) {
+    case FormatString_Type_AFFIX:
+      return FormatAffix(std::move(s), format_string->value);
+    case FormatString_Type_FLIGHT_NUMBER:
+      return FormatFlightNumber(std::move(s), format_string->value);
+    case FormatString_Type_DATE:
+      break;
+  }
+  return s;
+}
+
 }  // namespace
 
 AttributeInstance::AttributeInstance(AttributeType type)
     : type_(type), info_([&]() -> InfoStructure {
         switch (type.data_type()) {
           case AttributeType::DataType::kName:
-            return NameInfo();
+            return NameInfo(/*alternative_names_supported=*/false);
           case AttributeType::DataType::kCountry:
             return CountryInfo();
           case AttributeType::DataType::kDate:
@@ -83,15 +125,9 @@ AttributeInstance::~AttributeInstance() = default;
 
 std::u16string AttributeInstance::GetInfo(
     FieldType field_type,
-    const std::string& app_locale,
-    base::optional_ref<const std::u16string> format_string) const {
+    std::string_view app_locale,
+    base::optional_ref<const AutofillFormatString> format_string) const {
   field_type = GetNormalizedFieldType(field_type);
-  if (!base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    if (field_type == UNKNOWN_TYPE) {
-      return u"";
-    }
-    CHECK(type_.field_subtypes().contains(field_type));
-  }
   return std::visit(
       absl::Overload{[&](const CountryInfo& country) {
                        return country.GetCountryName(app_locale);
@@ -100,31 +136,19 @@ std::u16string AttributeInstance::GetInfo(
                        // TODO(crbug.com/396325496): Consider falling back
                        // to a locale-specific format by relying on
                        // `app_locale`.
-                       return date.GetDate(format_string ? *format_string
+                       return date.GetDate(format_string ? format_string->value
                                                          : u"YYYY-MM-DD");
                      },
-                     [&](const NameInfo&) {
-                       return GetRawInfo(/*pass_key=*/{}, field_type);
-                     },
-                     [&](const StateInfo&) {
-                       return GetRawInfo(/*pass_key=*/{}, field_type);
-                     },
+                     [&](const NameInfo&) { return GetRawInfo(field_type); },
+                     [&](const StateInfo&) { return GetRawInfo(field_type); },
                      [&](const std::u16string&) {
-                       return Format(GetRawInfo(/*pass_key=*/{}, field_type),
-                                     format_string);
+                       return Format(GetRawInfo(field_type), format_string);
                      }},
       info_);
 }
 
-std::u16string AttributeInstance::GetRawInfo(GetRawInfoPassKey,
-                                             FieldType field_type) const {
+std::u16string AttributeInstance::GetRawInfo(FieldType field_type) const {
   field_type = GetNormalizedFieldType(field_type);
-  if (!base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    if (field_type == UNKNOWN_TYPE) {
-      return u"";
-    }
-    CHECK(type_.field_subtypes().contains(field_type));
-  }
   return std::visit(
       absl::Overload{
           [&](const CountryInfo& country) {
@@ -145,12 +169,6 @@ std::u16string AttributeInstance::GetRawInfo(GetRawInfoPassKey,
 VerificationStatus AttributeInstance::GetVerificationStatus(
     FieldType field_type) const {
   field_type = GetNormalizedFieldType(field_type);
-  if (!base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    if (field_type == UNKNOWN_TYPE) {
-      return VerificationStatus::kNoStatus;
-    }
-    CHECK(type_.field_subtypes().contains(field_type));
-  }
   return std::visit(
       absl::Overload{
           [&](const CountryInfo&) { return VerificationStatus::kNoStatus; },
@@ -166,18 +184,13 @@ VerificationStatus AttributeInstance::GetVerificationStatus(
       info_);
 }
 
-void AttributeInstance::SetInfo(FieldType field_type,
-                                const std::u16string& value,
-                                const std::string& app_locale,
-                                std::u16string_view format_string,
-                                VerificationStatus status) {
+void AttributeInstance::SetInfo(
+    FieldType field_type,
+    const std::u16string& value,
+    std::string_view app_locale,
+    base::optional_ref<const AutofillFormatString> format_string,
+    VerificationStatus status) {
   field_type = GetNormalizedFieldType(field_type);
-  if (!base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    if (field_type == UNKNOWN_TYPE) {
-      return;
-    }
-    CHECK(type_.field_subtypes().contains(field_type));
-  }
   std::visit(
       absl::Overload{
           [&](CountryInfo& country) {
@@ -191,7 +204,12 @@ void AttributeInstance::SetInfo(FieldType field_type,
               country = CountryInfo();
             }
           },
-          [&](DateInfo& date) { date.SetDate(value, format_string); },
+          [&](DateInfo& date) {
+            date.SetDate(value, format_string && format_string->type ==
+                                                     FormatString_Type_DATE
+                                    ? format_string->value
+                                    : u"");
+          },
           [&](NameInfo& name) {
             if (!name.GetSupportedTypes().contains(field_type)) {
               return;
@@ -208,12 +226,6 @@ void AttributeInstance::SetRawInfo(FieldType field_type,
                                    const std::u16string& value,
                                    VerificationStatus status) {
   field_type = GetNormalizedFieldType(field_type);
-  if (!base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    if (field_type == UNKNOWN_TYPE) {
-      return;
-    }
-    CHECK(type_.field_subtypes().contains(field_type));
-  }
   std::visit(absl::Overload{
                  [&](CountryInfo& country) {
                    if (!country.SetCountryFromCountryCode(value)) {
@@ -237,35 +249,6 @@ void AttributeInstance::SetRawInfo(FieldType field_type,
 
 FieldType AttributeInstance::GetNormalizedFieldType(
     FieldType field_type) const {
-  if (!base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    if (type_.field_subtypes().contains(field_type)) {
-      return field_type;
-    }
-    if (field_type == type_.field_type()) {
-      // In some cases, a field might have `AutofillField::Type()` being the one
-      // corresponding to a structured attribute (e.g., PASSPORT_NAME_TAG). This
-      // should not usually happen but for now can, only in case a field
-      // couldn't be classified by Autofill's logic but was classified by the ML
-      // model. In that case, we assume the type is the top-level type of the
-      // attribute.
-      return std::visit(
-          absl::Overload{
-              [&](const CountryInfo&) { return type_.field_type(); },
-              [&](const DateInfo&) { return type_.field_type(); },
-              [&](const NameInfo&) { return NAME_FULL; },
-              [&](const StateInfo&) { return type_.field_type(); },
-              [&](const std::u16string&) { return type_.field_type(); }},
-          info_);
-    }
-    // In case the field classification is totally unrelated to the
-    // attribute type classification, we return UKNOWN_TYPE if the attribute is
-    // structured because we don't have information on how to break down the
-    // attribute with the given type. If the type is not structured we just
-    // return the corresponding field type of the attribute, just like we would
-    // do regardless of the type passed.
-    return IsTagType(type_.field_type()) ? UNKNOWN_TYPE : type_.field_type();
-  }
-
   return type_.field_subtypes().contains(field_type) ? field_type
                                                      : type_.field_type();
 }
@@ -282,11 +265,12 @@ EntityInstance::EntityInstance(
     EntityType type,
     base::flat_set<AttributeInstance, AttributeInstance::CompareByType>
         attributes,
-    base::Uuid guid,
+    EntityId guid,
     std::string nickname,
     base::Time date_modified,
     size_t use_count,
     base::Time use_date,
+    RecordType record_type,
     AreAttributesReadOnly are_attributes_read_only)
     : type_(type),
       attributes_(std::move(attributes)),
@@ -295,6 +279,7 @@ EntityInstance::EntityInstance(
       date_modified_(date_modified),
       use_count_(use_count),
       use_date_(use_date),
+      record_type_(record_type),
       are_attributes_read_only_(are_attributes_read_only) {
   DCHECK(!attributes_.empty());
   DCHECK(std::ranges::all_of(attributes_, [this](const AttributeInstance& a) {
@@ -313,6 +298,11 @@ bool EntityInstance::ImportOrder(const EntityInstance& lhs,
   return EntityType::ImportOrder(lhs.type(), rhs.type());
 }
 
+bool EntityInstance::MigrationOrder(const EntityInstance& lhs,
+                                    const EntityInstance& rhs) {
+  return lhs.use_date() > rhs.use_date();
+}
+
 std::ostream& operator<<(std::ostream& os, const AttributeInstance& a) {
   os << a.type() << ": " << '"'
      << a.GetInfo(a.type().field_type(), /*app_locale=*/"en-US",
@@ -324,7 +314,8 @@ std::ostream& operator<<(std::ostream& os, const AttributeInstance& a) {
 std::ostream& operator<<(std::ostream& os, const EntityInstance& e) {
   os << "- name: " << '"' << e.type() << '"' << std::endl;
   os << "- nickname: " << '"' << e.nickname() << '"' << std::endl;
-  os << "- guid: " << '"' << e.guid().AsLowercaseString() << '"' << std::endl;
+  os << "- guid: " << '"' << e.guid() << '"' << std::endl;
+  os << "- use date: " << '"' << e.use_date() << '"' << std::endl;
   os << "- date modified: " << '"' << e.date_modified() << '"' << std::endl;
   for (const AttributeInstance& a : e.attributes()) {
     os << "- attribute " << a << std::endl;
@@ -365,11 +356,6 @@ EntityInstance::EntityMergeability EntityInstance::GetEntityMergeability(
     const EntityInstance& newer) const {
   CHECK_EQ(type_, newer.type());
 
-  auto normalized_value = [](const AttributeInstance& attribute) {
-    return normalization::NormalizeForComparison(
-        attribute.GetRawInfo(/*pass_key=*/{}, attribute.type().field_type()));
-  };
-
   // If a certain set of mergeable constraints for both entities have the same
   // values, we consider them to be the same entity. This affects how we handle
   // attributes with different values. For entities that are not the same, this
@@ -386,8 +372,8 @@ EntityInstance::EntityMergeability EntityInstance::GetEntityMergeability(
             base::optional_ref<const AttributeInstance> attribute_2 =
                 newer.attribute(type);
             return attribute_1 && attribute_2 &&
-                   normalized_value(*attribute_1) ==
-                       normalized_value(*attribute_2);
+                   NormalizeEntityValue(*attribute_1) ==
+                       NormalizeEntityValue(*attribute_2);
           });
         });
   }();
@@ -398,8 +384,8 @@ EntityInstance::EntityMergeability EntityInstance::GetEntityMergeability(
       base::optional_ref<const AttributeInstance> attribute_2 =
           newer.attribute(type);
       return !attribute_2 ||
-             (attribute_1 &&
-              normalized_value(*attribute_1) == normalized_value(*attribute_2));
+             (attribute_1 && NormalizeEntityValue(*attribute_1) ==
+                                 NormalizeEntityValue(*attribute_2));
     });
   }();
 
@@ -430,7 +416,7 @@ EntityInstance::EntityMergeability EntityInstance::GetEntityMergeability(
     auto is_attribute_empty =
         [&](base::optional_ref<const AttributeInstance> attribute_instance) {
           return !attribute_instance ||
-                 normalized_value(*attribute_instance).empty();
+                 NormalizeEntityValue(*attribute_instance).empty();
         };
     const bool is_attribute_1_empty = is_attribute_empty(attribute_1);
     const bool is_attribute_2_empty = is_attribute_empty(attribute_2);
@@ -450,8 +436,8 @@ EntityInstance::EntityMergeability EntityInstance::GetEntityMergeability(
       return AttributeMergeabilityResult::kNewEntityHasNewAttribute;
     }
 
-    const std::u16string attribute_value_1 = normalized_value(*attribute_1);
-    const std::u16string attribute_value_2 = normalized_value(*attribute_2);
+    const std::u16string attribute_value_1 = NormalizeEntityValue(*attribute_1);
+    const std::u16string attribute_value_2 = NormalizeEntityValue(*attribute_2);
     return attribute_value_1 == attribute_value_2
                ? AttributeMergeabilityResult::
                      kNewAndOldEntitiesHaveSameAttribute
@@ -486,6 +472,49 @@ EntityInstance::EntityMergeability EntityInstance::GetEntityMergeability(
   return {std::move(mergeable_attributes), is_subset};
 }
 
+bool EntityInstance::IsSubsetOf(const EntityInstance& other) const {
+  if (type_ != other.type_) {
+    return false;
+  }
+  for (AttributeType type : type_.attributes()) {
+    base::optional_ref<const AttributeInstance> this_attribute =
+        attribute(type);
+    base::optional_ref<const AttributeInstance> other_attribute =
+        other.attribute(type);
+
+    const std::u16string this_attribute_value =
+        this_attribute ? NormalizeEntityValue(*this_attribute) : u"";
+    const std::u16string other_attribute_value =
+        other_attribute ? NormalizeEntityValue(*other_attribute) : u"";
+
+    // Both entities do not have a value for a certain attribute, move forward
+    // to check other attributes.
+    if (this_attribute_value.empty() && other_attribute_value.empty()) {
+      continue;
+    }
+
+    // `other` has a value for a certain attribute, while `this` does not, this
+    // means `this` could be a subset of `other`, move forward to check other
+    // attributes.
+    if (this_attribute_value.empty() && !other_attribute_value.empty()) {
+      continue;
+    }
+
+    // If the other entity does not have a certain attribute set, but `this`
+    // does. `This` is not a subset of `other`.
+    if (other_attribute_value.empty() && !this_attribute_value.empty()) {
+      return false;
+    }
+
+    // Both `this` and `other` have different values stored for a certain
+    // attribute, `this` is not a subset of `other`.
+    if (this_attribute_value != other_attribute_value) {
+      return false;
+    }
+  }
+  return true;
+}
+
 EntityInstance::FrecencyOrder::FrecencyOrder(base::Time now) : now_(now) {}
 
 bool EntityInstance::FrecencyOrder::operator()(
@@ -494,21 +523,30 @@ bool EntityInstance::FrecencyOrder::operator()(
   // At days_since_last_use = 0, use_count = 0, the score is -1.
   // As days_since_last_use increases, the score becomes more negative.
   // As use_count increases, the score approaches 0.
-  auto get_ranking_score = [&](const EntityInstance& entity) {
+  auto get_ranking_score = [&](const EntityInstance& entity) -> double {
     int days_since_last_use = std::max(0, (now_ - entity.use_date()).InDays());
     // The numerator punishes old usages, since as days_since_last_use
     // grows, the score becomes smaller (note the negative sign). The
     // denominator softens this penalty by making it smaller the more often a
     // user has used an entity.
     return -log(static_cast<double>(days_since_last_use) + 2) /
-           log(entity.use_count() + 2);
+           log(static_cast<double>(entity.use_count()) + 2);
   };
 
-  const double lhs_score = get_ranking_score(lhs);
-  const double rhs_score = get_ranking_score(rhs);
+  // We use rounded values to express near equivalence.
+  //
+  // We cannot use `std::fabs(x - y) < kEpsilon` because that'd break
+  // transitivity of equivalence, which is required by std::sort().
+  //
+  // We don't need to worry about overflows because the maximum absolute value
+  // of get_ranking_score() is
+  //   std::log(std::numeric_limits<double>::max()) / std::log(2)
+  // which is ~1023.
+  static constexpr double kEpsilon = 0.00001;
+  const int32_t lhs_score = std::lround(get_ranking_score(lhs) / kEpsilon);
+  const int32_t rhs_score = std::lround(get_ranking_score(rhs) / kEpsilon);
 
-  const double kEpsilon = 0.00001;
-  if (std::fabs(lhs_score - rhs_score) > kEpsilon) {
+  if (lhs_score != rhs_score) {
     return lhs_score > rhs_score;
   }
   return lhs.use_date() > rhs.use_date();

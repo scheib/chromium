@@ -24,6 +24,7 @@
 #include "ui/gfx/native_pixmap_handle.h"
 #include "ui/ozone/platform/wayland/gpu/gbm_surfaceless_wayland.h"
 #include "ui/ozone/platform/wayland/gpu/wayland_buffer_manager_gpu.h"
+#include "ui/ozone/public/native_pixmap_usage_utils.h"
 #include "ui/ozone/public/ozone_platform.h"
 
 namespace ui {
@@ -41,7 +42,7 @@ bool GbmPixmapWayland::InitializeBuffer(
     gfx::AcceleratedWidget widget,
     gfx::Size size,
     gfx::BufferFormat format,
-    gfx::BufferUsage usage,
+    NativePixmapUsageSet usage,
     std::optional<gfx::Size> visible_area_size) {
   DCHECK(!visible_area_size ||
          ((visible_area_size.value().width() <= size.width()) &&
@@ -55,7 +56,7 @@ bool GbmPixmapWayland::InitializeBuffer(
     return false;
 
   const uint32_t fourcc_format = GetFourCCFormatFromBufferFormat(format);
-  const uint32_t gbm_flags = ui::BufferUsageToGbmFlags(usage);
+  const uint32_t gbm_flags = ui::NativePixmapUsageToGbmFlags(usage);
   auto modifiers = buffer_manager_->GetModifiersForBufferFormat(format);
 
   // Create buffer object without format modifiers unless they are explicitly
@@ -76,17 +77,29 @@ bool GbmPixmapWayland::InitializeBuffer(
     }
     gbm_bo_ = gbm_device->CreateBufferWithModifiers(fourcc_format, size,
                                                     gbm_flags, modifiers);
+
+    // Wayland server can announce implicit modifier support by including
+    // `DRM_FORMAT_MOD_INVALID`. For some GPU drivers, certain format+modifier
+    // combination can be sampled but not rendered to. (E.g. Some AMD gpu can
+    // sample `DRM_FORMAT_MOD_LINEAR` buffers but always create tiled buffer for
+    // rendering, while wlroots would announce MOD_LINEAR and MOD_INVALID).
+    // In such cases gbm_bo allocation may fail, where we should fallback to
+    // creation without modifiers, and leave the choices to driver.
+    if (!gbm_bo_ &&
+        buffer_manager_->AllowsImplicitModifierForBufferFormat(format)) {
+      gbm_bo_ = gbm_device->CreateBuffer(fourcc_format, size, gbm_flags);
+    }
   }
 
   if (!gbm_bo_) {
-    LOG(ERROR) << "Cannot create bo with format= "
+    LOG(ERROR) << "Cannot create bo with format="
                << gfx::BufferFormatToString(format)
-               << " and usage=" << gfx::BufferUsageToString(usage);
+               << " and usage=" << ui::NativePixmapUsageToString(usage);
     return false;
   }
 
-  DVLOG(3) << "Created gbm bo. format= " << gfx::BufferFormatToString(format)
-           << " usage=" << gfx::BufferUsageToString(usage);
+  DVLOG(3) << "Created gbm bo. format=" << gfx::BufferFormatToString(format)
+           << " usage=" << ui::NativePixmapUsageToString(usage);
 
   visible_area_size_ = visible_area_size ? visible_area_size.value() : size;
   return true;
@@ -108,12 +121,12 @@ bool GbmPixmapWayland::InitializeBufferFromHandle(
   gbm_bo_ = gbm_device->CreateBufferFromHandle(
       GetFourCCFormatFromBufferFormat(format), size, std::move(handle));
   if (!gbm_bo_) {
-    LOG(ERROR) << "Cannot create bo with format= "
+    LOG(ERROR) << "Cannot create bo with format="
                << gfx::BufferFormatToString(format);
     return false;
   }
 
-  DVLOG(3) << "Created gbm bo. format= " << gfx::BufferFormatToString(format);
+  DVLOG(3) << "Created gbm bo. format=" << gfx::BufferFormatToString(format);
 
   visible_area_size_ = size;
   return true;
@@ -172,8 +185,9 @@ bool GbmPixmapWayland::ScheduleOverlayPlane(
     std::vector<gfx::GpuFence> release_fences) {
   DCHECK_NE(widget, gfx::kNullAcceleratedWidget);
 
-  if (!created_wl_buffer_)
-    CreateDmabufBasedWlBuffer();
+  if (!created_wl_buffer_) {
+    CreateDmabufBasedWlBuffer(overlay_plane_data);
+  }
 
   widget_ = widget;
 
@@ -216,7 +230,8 @@ gfx::NativePixmapHandle GbmPixmapWayland::ExportHandle() const {
   return handle;
 }
 
-void GbmPixmapWayland::CreateDmabufBasedWlBuffer() {
+void GbmPixmapWayland::CreateDmabufBasedWlBuffer(
+    const gfx::OverlayPlaneData& overlay_plane_data) {
   uint64_t modifier = gbm_bo_->GetFormatModifier();
 
   std::vector<uint32_t> strides;
@@ -241,7 +256,8 @@ void GbmPixmapWayland::CreateDmabufBasedWlBuffer() {
   // Asks Wayland to create a wl_buffer based on the |file| fd.
   buffer_manager_->CreateDmabufBasedBuffer(
       std::move(fd), visible_area_size_, strides, offsets, modifiers,
-      gbm_bo_->GetFormat(), plane_count, buffer_id_);
+      gbm_bo_->GetFormat(), plane_count, overlay_plane_data.color_space,
+      overlay_plane_data.hdr_metadata.value_or(gfx::HDRMetadata()), buffer_id_);
 }
 
 }  // namespace ui

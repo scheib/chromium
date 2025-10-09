@@ -512,6 +512,15 @@ void TextfieldTest::OnAfterCutOrCopy(ui::ClipboardBuffer clipboard_type) {
   copied_to_clipboard_ = clipboard_type;
 }
 
+bool TextfieldTest::HandleWriteTextToClipboard(ui::ClipboardBuffer,
+                                               const std::u16string_view&) {
+  return handle_write_to_clipboard_;
+}
+
+bool TextfieldTest::AllowStartDragEvent(const std::u16string_view&) {
+  return allow_drag_event_;
+}
+
 void TextfieldTest::InitTextfield(int count) {
   ASSERT_FALSE(textfield_);
   textfield_ = PrepareTextfields(count, std::make_unique<TestTextfield>(),
@@ -1754,6 +1763,40 @@ TEST_F(TextfieldTest, TextInputType) {
   EXPECT_EQ(ui::TEXT_INPUT_TYPE_PASSWORD, textfield_->GetTextInputType());
 }
 
+TEST_F(TextfieldTest, NumberInputType_FiltersNonDigitCharacters) {
+  InitTextfield();
+
+  // Set the textfield to accept number input.
+  textfield_->SetTextInputType(ui::TEXT_INPUT_TYPE_NUMBER);
+  EXPECT_EQ(ui::TEXT_INPUT_TYPE_NUMBER, textfield_->GetTextInputType());
+
+  // Test inserting digits. They should be accepted.
+  SendKeyEvent(ui::VKEY_1);
+  EXPECT_EQ(u"1", textfield_->GetText());
+
+  // Test inserting a non-digit character. It should be ignored.
+  SendKeyEvent(ui::VKEY_A);
+  EXPECT_EQ(u"1", textfield_->GetText());
+
+  // Test inserting a string with only digits. It should be accepted.
+  textfield_->InsertText(
+      u"234",
+      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
+  EXPECT_EQ(u"1234", textfield_->GetText());
+
+  // Test inserting a string with mixed characters. Only digits should be kept.
+  textfield_->InsertText(
+      u"5a6b7",
+      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
+  EXPECT_EQ(u"1234567", textfield_->GetText());
+
+  // Test inserting a string with only non-digits. It should be ignored.
+  textfield_->InsertText(
+      u"abc",
+      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
+  EXPECT_EQ(u"1234567", textfield_->GetText());
+}
+
 TEST_F(TextfieldTest, OnKeyPress) {
   InitTextfield();
 
@@ -2265,6 +2308,10 @@ TEST_F(TextfieldTest, DragAndDrop_InitiateDrag) {
             textfield_->GetDragOperationsForView(nullptr, kStringPoint));
   EXPECT_TRUE(
       textfield_->CanStartDragForView(nullptr, kStringPoint, gfx::Point()));
+  allow_drag_event_ = false;
+  EXPECT_FALSE(
+      textfield_->CanStartDragForView(nullptr, kStringPoint, kStringPoint));
+  allow_drag_event_ = true;
   // Ensure that textfields support local moves.
   EXPECT_EQ(ui::DragDropTypes::DRAG_MOVE | ui::DragDropTypes::DRAG_COPY,
             textfield_->GetDragOperationsForView(textfield_, kStringPoint));
@@ -2888,6 +2935,17 @@ TEST_F(TextfieldTest, CutCopyPaste) {
   EXPECT_EQ(u"abc", GetClipboardText(ui::ClipboardBuffer::kCopyPaste));
   EXPECT_EQ(u"abcabcabc", textfield_->GetText());
   EXPECT_EQ(ui::ClipboardBuffer::kMaxValue, GetAndResetCopiedToClipboard());
+
+  // Ensure clipboard buffer is unchanged if override is enabled
+  textfield_->SetText(u"345");
+  textfield_->SelectAll(false);
+  SendAlternateCopy();
+  EXPECT_EQ(u"345", GetClipboardText(ui::ClipboardBuffer::kCopyPaste));
+  handle_write_to_clipboard_ = true;
+  textfield_->SetText(u"4242");
+  textfield_->SelectAll(false);
+  SendAlternateCopy();
+  EXPECT_EQ(u"345", GetClipboardText(ui::ClipboardBuffer::kCopyPaste));
 }
 
 TEST_F(TextfieldTest, CutCopyPasteWithEditCommand) {
@@ -5683,5 +5741,38 @@ TEST_F(TextfieldTest, AccessibleGraphemeOffsetsIndependentOfDisplayOffset) {
             expected_offsets);
 }
 #endif  // BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
+
+TEST_F(TextfieldTest, DragOutsideSelectionModifiesSelection) {
+  allow_drag_event_ = false;
+
+  InitTextfield();
+  textfield_->SetText(u"Hello World");
+  textfield_->SetSelectedRange(gfx::Range(0, 5));  // Selects "Hello"
+  EXPECT_EQ(u"Hello", textfield_->GetSelectedText());
+
+  // Simulate a mouse click and drag starting outside the current selection.
+  gfx::Point start_drag =
+      GetTextfieldTestApi()
+          .GetRenderText()
+          ->GetCursorBounds(gfx::SelectionModel(6, gfx::CURSOR_FORWARD), true)
+          .origin();
+  gfx::Point end_drag =
+      GetTextfieldTestApi()
+          .GetRenderText()
+          ->GetCursorBounds(gfx::SelectionModel(11, gfx::CURSOR_FORWARD), true)
+          .origin();
+
+  ui::MouseEvent press_event(ui::EventType::kMousePressed, start_drag,
+                             start_drag, ui::EventTimeForNow(),
+                             ui::EF_LEFT_MOUSE_BUTTON,
+                             ui::EF_LEFT_MOUSE_BUTTON);
+  textfield_->OnMousePressed(press_event);
+
+  ui::MouseEvent drag_event(ui::EventType::kMouseDragged, end_drag, end_drag,
+                            ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON, 0);
+  textfield_->OnMouseDragged(drag_event);
+
+  EXPECT_EQ(u"World", textfield_->GetSelectedText());
+}
 
 }  // namespace views::test

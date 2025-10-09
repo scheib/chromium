@@ -17,6 +17,7 @@ import org.jni_zero.JniType;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.services.tracing.TracingServiceFeatures;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -43,6 +44,8 @@ public class WebViewCachedFlags {
     private static final String CACHED_ENABLED_FLAGS_PREF = "CachedFlagsEnabled";
     private static final String CACHED_DISABLED_FLAGS_PREF = "CachedFlagsDisabled";
     private static final String MIGRATION_HISTOGRAM_NAME = "Android.WebView.CachedFlagMigration";
+    private static final String CACHED_FLAGS_EXIST_HISTOGRAM_NAME =
+            "Android.WebView.CachedFlagsExist";
 
     @IntDef({DefaultState.DISABLED, DefaultState.ENABLED})
     @Retention(RetentionPolicy.SOURCE)
@@ -75,22 +78,42 @@ public class WebViewCachedFlags {
             sInstance =
                     new WebViewCachedFlags(
                             prefs,
-                            Map.of(
-                                    // Add new CachedFlags here along with their default state.
-                                    AwFeatures.WEBVIEW_DISABLE_CHIPS,
-                                    DefaultState.DISABLED,
-                                    AwFeatures.WEBVIEW_USE_STARTUP_TASKS_LOGIC,
-                                    DefaultState.DISABLED,
-                                    AwFeatures.WEBVIEW_USE_STARTUP_TASKS_LOGIC_P2,
-                                    DefaultState.DISABLED,
-                                    AwFeatures.WEBVIEW_STARTUP_TASKS_YIELD_TO_NATIVE,
-                                    DefaultState.DISABLED,
-                                    AwFeatures.WEBVIEW_USE_BACKGROUND_THREAD_FOR_GMS,
-                                    DefaultState.DISABLED,
-                                    AwFeatures.WEBVIEW_REDUCED_SEED_EXPIRATION,
-                                    DefaultState.DISABLED,
-                                    AwFeatures.WEBVIEW_REDUCED_SEED_REQUEST_PERIOD,
-                                    DefaultState.DISABLED));
+                            // Add new CachedFlags here along with their default state.
+                            Map.ofEntries(
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_DISABLE_CHIPS,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_MOVE_WORK_TO_PROVIDER_INIT,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_EARLY_PERFETTO_INIT,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_EARLY_STARTUP_TRACING,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_USE_STARTUP_TASKS_LOGIC,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_USE_STARTUP_TASKS_LOGIC_P2,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_STARTUP_TASKS_YIELD_TO_NATIVE,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_REDUCED_SEED_EXPIRATION,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures.WEBVIEW_REDUCED_SEED_REQUEST_PERIOD,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            TracingServiceFeatures.ENABLE_PERFETTO_SYSTEM_TRACING,
+                                            DefaultState.DISABLED),
+                                    Map.entry(
+                                            AwFeatures
+                                                    .WEBVIEW_OPT_IN_TO_GMS_BIND_SERVICE_OPTIMIZATION,
+                                            DefaultState.DISABLED)));
         }
     }
 
@@ -149,6 +172,10 @@ public class WebViewCachedFlags {
     @VisibleForTesting
     public WebViewCachedFlags(
             SharedPreferences prefs, Map<String, @DefaultState Integer> defaults) {
+        boolean flagsExist =
+                prefs.contains(CACHED_ENABLED_FLAGS_PREF)
+                        && prefs.contains(CACHED_DISABLED_FLAGS_PREF);
+        RecordHistogram.recordBooleanHistogram(CACHED_FLAGS_EXIST_HISTOGRAM_NAME, flagsExist);
         // TODO(crbug.com/414342590): Remove the call to HashSet constructor once the migration code
         // is removed.
         mOverrideEnabled =

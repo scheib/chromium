@@ -165,7 +165,7 @@ class OutsideSettingsCSPDelegate final
   }
 
   void DidAddContentSecurityPolicies(
-      WTF::Vector<network::mojom::blink::ContentSecurityPolicyPtr>) override {
+      Vector<network::mojom::blink::ContentSecurityPolicyPtr>) override {
     DCHECK_CALLED_ON_VALID_THREAD(worker_thread_checker_);
     // We do nothing here, because if the added policies should be reported to
     // LocalFrameClient, then they are already reported on the parent
@@ -178,6 +178,8 @@ class OutsideSettingsCSPDelegate final
     DCHECK_CALLED_ON_VALID_THREAD(worker_thread_checker_);
     global_scope_for_logging_->AddInspectorIssue(std::move(issue));
   }
+
+  bool ScriptSrcExtendedHashesEnabled() override { return false; }
 
  private:
   const Member<const FetchClientSettingsObject> outside_settings_object_;
@@ -222,7 +224,8 @@ WorkerOrWorkletGlobalScope::WorkerOrWorkletGlobalScope(
     scoped_refptr<WebWorkerFetchContext> web_worker_fetch_context,
     WorkerReportingProxy& reporting_proxy,
     bool is_worker_loaded_from_data_url,
-    bool is_default_world_of_isolate)
+    bool is_default_world_of_isolate,
+    std::optional<NoiseToken> canvas_noise_token)
     : ExecutionContext(isolate, agent),
       is_creator_secure_context_(is_creator_secure_context),
       name_(name),
@@ -241,6 +244,7 @@ WorkerOrWorkletGlobalScope::WorkerOrWorkletGlobalScope(
   GetSecurityContext().SetSecurityOrigin(std::move(origin));
 
   SetPolicyContainer(PolicyContainer::CreateEmpty());
+  SetCanvasNoiseToken(std::move(canvas_noise_token));
   if (worker_clients_)
     worker_clients_->ReattachThread();
 }

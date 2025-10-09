@@ -34,6 +34,11 @@ CONTENT_EXPORT extern const base::FeatureParam<
     Prerender2FallbackPrefetchSchedulerPolicy>
     kPrerender2FallbackPrefetchSchedulerPolicy;
 
+// If enabled, `PreloadServingMetrics` is collected and metrics are rerpoted.
+// For more details, see `PreloadServingMetrics`.
+CONTENT_EXPORT extern const base::FeatureParam<bool>
+    kPrerender2FallbackUsePreloadServingMetrics;
+
 // This feature was used to launch Prerender2 support for No-Vary-Search header.
 // This work has finished and the old implementation was deleted. Now this flag
 // is just for injecting parameters through field trials as an umberella
@@ -69,6 +74,10 @@ CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrerender2WarmUpCompositorForNonImmediate);
 
 CONTENT_EXPORT bool UsePrefetchPrerenderIntegration();
 
+// If enabled, browsers will now prerender all cross-origin frames if the
+// top-level frame's HTTP response includes the Supports-Loading-Mode:
+// prerender-cross-origin-frames. (crbug.com/440387014)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrerender2CrossOriginIframes);
 }  // namespace features
 
 #endif  // CONTENT_BROWSER_PRELOADING_PRERENDER_PRERENDER_FEATURES_H_

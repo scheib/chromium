@@ -74,7 +74,7 @@ public abstract class XrTestFramework {
     public static final String[] NATIVE_URLS_OF_INTEREST = {
         UrlConstants.BOOKMARKS_FOLDER_URL + "3",
         UrlConstants.BOOKMARKS_UNCATEGORIZED_URL,
-        UrlConstants.BOOKMARKS_URL,
+        UrlConstants.BOOKMARKS_NATIVE_URL,
         UrlConstants.DOWNLOADS_URL,
         UrlConstants.NATIVE_HISTORY_URL,
         UrlConstants.NTP_URL,
@@ -408,7 +408,7 @@ public abstract class XrTestFramework {
                         runJavaScriptOrFail("testPassed", POLL_TIMEOUT_SHORT_MS, webContents));
         if (testPassed) {
             return TestStatus.PASSED;
-        } else if (!testPassed && resultString.equals("\"\"")) {
+        } else if (resultString.equals("\"\"")) {
             return TestStatus.RUNNING;
         } else {
             // !testPassed && !resultString.equals("\"\"")

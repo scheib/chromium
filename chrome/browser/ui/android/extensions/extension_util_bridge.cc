@@ -16,7 +16,21 @@
 
 namespace extensions {
 
-std::optional<std::vector<base::FilePath>> CreateEmptyFilesUnderDownloads(
+std::optional<base::FilePath> GetFileUnderDownloads(
+    const std::string& file_name) {
+  if (file_name.empty()) {
+    return std::nullopt;
+  }
+  JNIEnv* env = base::android::AttachCurrentThread();
+  std::string uri =
+      Java_ExtensionUtilBridge_getFileUnderDownloads(env, file_name);
+  if (uri.empty()) {
+    return std::nullopt;
+  }
+  return base::FilePath(uri);
+}
+
+std::optional<std::vector<base::FilePath>> GetOrCreateEmptyFilesUnderDownloads(
     const base::FilePath& file_for_basename,
     const std::vector<std::string>& dot_extensions) {
   auto content_uri = base::ResolveToContentUri(file_for_basename);
@@ -26,7 +40,7 @@ std::optional<std::vector<base::FilePath>> CreateEmptyFilesUnderDownloads(
 
   JNIEnv* env = base::android::AttachCurrentThread();
   std::vector<std::string> uris =
-      Java_ExtensionUtilBridge_createEmptyFilesUnderDownloads(
+      Java_ExtensionUtilBridge_getOrCreateEmptyFilesUnderDownloads(
           env, content_uri->value(), dot_extensions);
   if (uris.empty()) {
     return std::nullopt;

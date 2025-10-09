@@ -43,10 +43,15 @@ std::string WaitTool::JournalEvent() const {
   return "Wait";
 }
 
-std::unique_ptr<ObservationDelayController> WaitTool::GetObservationDelayer()
-    const {
+std::unique_ptr<ObservationDelayController> WaitTool::GetObservationDelayer(
+    std::optional<ObservationDelayController::PageStabilityConfig>
+        page_stability_config) {
   // Wait tool shouldn't delay observation aside from its own built-in delay.
   return nullptr;
+}
+
+tabs::TabHandle WaitTool::GetTargetTab() const {
+  return tabs::TabHandle::Null();
 }
 
 void WaitTool::OnDelayFinished(InvokeCallback callback) {

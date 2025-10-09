@@ -182,8 +182,10 @@ Element* CustomElement::CreateUncustomizedOrUndefinedElement(
       document, tag_name, flags, is_value, registry);
 }
 
-HTMLElement* CustomElement::CreateFailedElement(Document& document,
-                                                const QualifiedName& tag_name) {
+HTMLElement* CustomElement::CreateFailedElement(
+    Document& document,
+    const QualifiedName& tag_name,
+    CustomElementRegistry* registry) {
   CHECK(ShouldCreateCustomElement(tag_name))
       << "HTMLUnknownElement with built-in tag name: " << tag_name;
 
@@ -197,6 +199,10 @@ HTMLElement* CustomElement::CreateFailedElement(Document& document,
 
   auto* element = MakeGarbageCollected<HTMLUnknownElement>(tag_name, document);
   element->SetCustomElementState(CustomElementState::kFailed);
+  if (RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled() &&
+      registry) {
+    element->SetCustomElementRegistry(registry);
+  }
   return element;
 }
 
@@ -302,7 +308,10 @@ void CustomElement::TryToUpgrade(Element& element) {
   DCHECK_EQ(element.GetCustomElementState(), CustomElementState::kUndefined);
 
   CustomElementRegistry* registry =
-      element.GetTreeScope().customElementRegistry();
+      RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled()
+          ? element.customElementRegistry()
+          : element.GetTreeScope().customElementRegistry();
+
   if (!registry)
     return;
   const AtomicString& is_value = element.IsValue();

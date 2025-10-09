@@ -144,21 +144,6 @@ void HistogramCookieAge(const net::CanonicalCookie& cookie) {
       }
     }
   } else {
-    // We are studying the age of session cookies in active use. The record is
-    // split into two histograms to improve resolution.
-    if (!cookie.CreationDate().is_null()) {
-      const int session_cookie_age_in_hours =
-          (Time::Now() - cookie.CreationDate()).InHours();
-      if (session_cookie_age_in_hours > kHoursInOneWeek) {
-        UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.SessionAgeInHoursGTOneWeek2",
-                                    session_cookie_age_in_hours,
-                                    kHoursInOneWeek + 1, kHoursInOneYear, 100);
-      } else {
-        UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.SessionAgeInHoursLTEOneWeek2",
-                                    session_cookie_age_in_hours, 1,
-                                    kHoursInOneWeek + 1, 100);
-      }
-    }
     // Similar to the above, except this metric tracks time since the cookie was
     // last updated and not just initial creation.
     if (!cookie.LastUpdateDate().is_null()) {
@@ -197,14 +182,14 @@ namespace {
 // Version 21 - 2023/11/22 - https://crrev.com/c/5049032
 // Version 20 - 2023/11/14 - https://crrev.com/c/5030577
 // Version 19 - 2023/09/22 - https://crrev.com/c/4704672
-// Version 18 - 2022/04/19 - https://crrev.com/c/3594203
 //
 // Versions older than two years should be removed and marked as unsupported.
-// This was last done in February 2024. https://crrev.com/c/5300252
+// This was last done in September 2025. https://crrev.com/c/6819011
 // Be sure to update SQLitePersistentCookieStoreTest.TestInvalidVersionRecovery
 // to test the latest unsupported version number.
 //
 // Unsupported versions:
+// Version 18 - 2022/04/19 - https://crrev.com/c/3594203
 // Version 17 - 2022/01/25 - https://crrev.com/c/3416230
 // Version 16 - 2021/09/10 - https://crrev.com/c/3152897
 // Version 15 - 2021/07/01 - https://crrev.com/c/3001822
@@ -960,8 +945,19 @@ bool SQLitePersistentCookieStore::Backend::LoadCookiesForDomains(
   }
   delete_statement.Assign(db()->GetCachedStatement(
       SQL_FROM_HERE, "DELETE FROM cookies WHERE host_key = ?"));
-  if (!smt.is_valid() || !delete_statement.is_valid()) {
+
+  sql::Statement delete_insecure_prefixed_statement;
+  delete_insecure_prefixed_statement.Assign(db()->GetCachedStatement(
+      SQL_FROM_HERE,
+      "DELETE FROM cookies WHERE "
+      "(LOWER(name) LIKE '__host-http-%' OR LOWER(name) LIKE '__http-%') "
+      "AND host_key = ? "
+      "AND (is_httponly = 0 OR is_secure = 0)"));
+
+  if (!smt.is_valid() || !delete_statement.is_valid() ||
+      !delete_insecure_prefixed_statement.is_valid()) {
     delete_statement.Clear();
+    delete_insecure_prefixed_statement.Clear();
     smt.Clear();  // Disconnect smt_ref from db_.
     Reset();
     return false;
@@ -971,6 +967,22 @@ bool SQLitePersistentCookieStore::Backend::LoadCookiesForDomains(
   std::unordered_set<std::string> top_frame_site_keys_to_delete;
   auto it = domains.begin();
   bool ok = true;
+  // Delete cookies with __host-http- or __http- prefixes that are not httponly
+  // These cookies could have been set by the DOM, so should be removed.
+  sql::Transaction transaction(db());
+  if (transaction.Begin()) {
+    for (const std::string& domain : domains) {
+      delete_insecure_prefixed_statement.BindString(0, domain);
+      if (!delete_insecure_prefixed_statement.Run()) {
+        // Log the failure but don't treat it as fatal since this is a cleanup
+        // operation
+        RecordCookieLoadProblem(CookieLoadProblem::KRecoveryFailed);
+      }
+      delete_insecure_prefixed_statement.Reset(true);
+    }
+    transaction.Commit();
+  }
+
   for (; it != domains.end() && ok; ++it) {
     smt.BindString(0, *it);
     ok = MakeCookiesFromSQLStatement(cookies, smt,
@@ -1098,7 +1110,8 @@ bool SQLitePersistentCookieStore::Backend::MakeCookiesFromSQLStatement(
         /*source_port=*/statement.ColumnInt(16),                            //
         /*source_type=*/
         DBCookieSourceTypeToCookieSourceType(
-            static_cast<DBCookieSourceType>(statement.ColumnInt(18))));  //
+            static_cast<DBCookieSourceType>(statement.ColumnInt(18))),      //
+        CanonicalCookieFromStorageCallSite::kSqlitePersistentCookieStore);  //
     if (cc) {
       DLOG_IF(WARNING, cc->CreationDate() > Time::Now())
           << "CreationDate too recent";
@@ -1128,38 +1141,6 @@ bool SQLitePersistentCookieStore::Backend::MakeCookiesFromSQLStatement(
 std::optional<int>
 SQLitePersistentCookieStore::Backend::DoMigrateDatabaseSchema() {
   int cur_version = meta_table()->GetVersionNumber();
-
-  if (cur_version == 18) {
-    SCOPED_UMA_HISTOGRAM_TIMER("Cookie.TimeDatabaseMigrationToV19");
-
-    sql::Statement update_statement(
-        db()->GetCachedStatement(SQL_FROM_HERE,
-                                 "UPDATE cookies SET expires_utc = ? WHERE "
-                                 "has_expires = 1 AND expires_utc > ?"));
-    if (!update_statement.is_valid()) {
-      return std::nullopt;
-    }
-
-    sql::Transaction transaction(db());
-    if (!transaction.Begin()) {
-      return std::nullopt;
-    }
-
-    base::Time expires_cap = base::Time::Now() + base::Days(400);
-    update_statement.BindTime(0, expires_cap);
-    update_statement.BindTime(1, expires_cap);
-    if (!update_statement.Run()) {
-      return std::nullopt;
-    }
-
-    ++cur_version;
-    if (!meta_table()->SetVersionNumber(cur_version) ||
-        !meta_table()->SetCompatibleVersionNumber(
-            std::min(cur_version, kCompatibleVersionNumber)) ||
-        !transaction.Commit()) {
-      return std::nullopt;
-    }
-  }
 
   if (cur_version == 19) {
     SCOPED_UMA_HISTOGRAM_TIMER("Cookie.TimeDatabaseMigrationToV20");

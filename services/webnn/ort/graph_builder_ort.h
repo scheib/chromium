@@ -62,8 +62,7 @@ class GraphBuilderOrt {
       const mojom::GraphInfo& graph_info,
       ContextProperties context_properties,
       base::flat_map<OperandId, std::unique_ptr<WebNNConstantOperand>>
-          constant_operands,
-      bool is_external_data_supported);
+          constant_operands);
 
   GraphBuilderOrt(const GraphBuilderOrt&) = delete;
   GraphBuilderOrt& operator=(const GraphBuilderOrt&) = delete;
@@ -75,8 +74,7 @@ class GraphBuilderOrt {
       const mojom::GraphInfo& graph_info,
       ContextProperties context_properties,
       base::flat_map<OperandId, std::unique_ptr<WebNNConstantOperand>>
-          constant_operands,
-      bool is_external_data_supported);
+          constant_operands);
 
   const mojom::Operand& GetOperand(OperandId operand_id) const;
 
@@ -247,7 +245,8 @@ class GraphBuilderOrt {
   void AddEluOperation(const mojom::Elu& elu);
   void AddLogicalBinaryOperation(const mojom::ElementWiseBinary& logical_binary,
                                  base::cstring_view op_type);
-  void AddLogicalNotOperation(const mojom::ElementWiseUnary& logical_not);
+  void AddLogicalUnaryOperation(const mojom::ElementWiseUnary& logical_unary,
+                                base::cstring_view op_type);
   void AddLogicalNotEqualOperation(const mojom::ElementWiseBinary& not_equal);
   void AddElementWiseBinaryOperation(
       const mojom::ElementWiseBinary& element_wise_binary);

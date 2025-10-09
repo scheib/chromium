@@ -468,7 +468,7 @@ class DragDropControllerTest : public AshTestBase {
     AshTestBase::SetUp();
 
     drag_drop_controller_ = std::make_unique<TestDragDropController>();
-    drag_drop_controller_->set_should_block_during_drag_drop(false);
+    drag_drop_controller_->SetDisableNestedLoopForTesting(true);
     drag_drop_controller_->set_enabled(true);
     aura::client::SetDragDropClient(Shell::GetPrimaryRootWindow(),
                                     drag_drop_controller_.get());
@@ -1262,14 +1262,14 @@ TEST_F(DragDropControllerTest, DragObserverEvents) {
     {
       testing::InSequence sequence;
       EXPECT_CALL(observer, OnDragUpdated)
-          .WillOnce(testing::Invoke([&](const ui::DropTargetEvent& event) {
+          .WillOnce([&](const ui::DropTargetEvent& event) {
             gfx::Point root_location_in_screen = event.root_location();
             ::wm::ConvertPointToScreen(
                 static_cast<aura::Window*>(event.target())->GetRootWindow(),
                 &root_location_in_screen);
             EXPECT_EQ(gfx::Point(200, 0), root_location_in_screen);
             EXPECT_EQ(&event.data(), data_ptr);
-          }));
+          });
       EXPECT_CALL(observer, OnDragCompleted);
       EXPECT_CALL(observer, OnDropCompleted);
     }
@@ -1323,7 +1323,7 @@ TEST_F(DragDropControllerTest, EventTarget) {
       FROM_HERE,
       base::BindLambdaForTesting([&]() { generator.ReleaseLeftButton(); }));
 
-  drag_drop_controller_->set_should_block_during_drag_drop(true);
+  drag_drop_controller_->SetDisableNestedLoopForTesting(false);
   auto data = CreateDragData(/*with_image=*/false);
   drag_drop_controller_->StartDragAndDrop(
       std::move(data), window->GetRootWindow(), window.get(), gfx::Point(5, 5),
@@ -1359,7 +1359,7 @@ TEST_F(DragDropControllerTest, DragTabChangesDragOperationToMove) {
       FROM_HERE,
       base::BindLambdaForTesting([&]() { generator.ReleaseLeftButton(); }));
 
-  drag_drop_controller_->set_should_block_during_drag_drop(true);
+  drag_drop_controller_->SetDisableNestedLoopForTesting(false);
   DragOperation operation = drag_drop_controller_->StartDragAndDrop(
       std::make_unique<ui::OSExchangeData>(), window->GetRootWindow(), window,
       gfx::Point(5, 5), ui::DragDropTypes::DRAG_NONE,

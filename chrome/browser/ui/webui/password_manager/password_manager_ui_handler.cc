@@ -4,8 +4,15 @@
 
 #include "chrome/browser/ui/webui/password_manager/password_manager_ui_handler.h"
 
+#include <utility>
+
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate.h"
+#include "chrome/browser/ui/webui/password_manager/password_manager.mojom-forward.h"
 #include "chrome/browser/ui/webui/password_manager/password_manager.mojom.h"
+#include "components/password_manager/core/browser/password_ui_utils.h"
+#include "components/password_manager/core/browser/ui/actor_login_permission.h"
+#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -21,6 +28,10 @@ PasswordManagerUIHandler::PasswordManagerUIHandler(
       page_(std::move(page)) {}
 
 PasswordManagerUIHandler::~PasswordManagerUIHandler() = default;
+
+void PasswordManagerUIHandler::ExtendAuthValidity() {
+  passwords_private_delegate_->RestartAuthTimer();
+}
 
 void PasswordManagerUIHandler::DeleteAllPasswordManagerData(
     DeleteAllPasswordManagerDataCallback callback) {
@@ -39,4 +50,32 @@ void PasswordManagerUIHandler::CopyPlaintextBackupPassword(
 
 void PasswordManagerUIHandler::RemoveBackupPassword(int id) {
   passwords_private_delegate_->RemoveBackupPassword(id);
+}
+
+void PasswordManagerUIHandler::GetActorLoginPermissions(
+    GetActorLoginPermissionsCallback callback) {
+  std::vector<password_manager::mojom::ActorLoginPermissionPtr> result;
+  for (const auto& site :
+       GetSavedPasswordsPresenter()->GetActorLoginPermissions()) {
+    auto url = password_manager::mojom::FormattedUrl::New(
+        /*human_readable_url=*/password_manager::GetShownOrigin(
+            url::Origin::Create(site.url)),
+        /*link=*/site.url.spec());
+    result.push_back(password_manager::mojom::ActorLoginPermission::New(
+        std::move(url), base::UTF16ToUTF8(site.username)));
+  }
+  std::move(callback).Run(std::move(result));
+}
+
+void PasswordManagerUIHandler::RevokeActorLoginPermission(
+    password_manager::mojom::ActorLoginPermissionPtr site) {
+  GetSavedPasswordsPresenter()->RevokeActorLoginPermission(
+      password_manager::ActorLoginPermission{
+          .url = GURL(site->url->link),
+          .username = base::UTF8ToUTF16(site->username)});
+}
+
+password_manager::SavedPasswordsPresenter*
+PasswordManagerUIHandler::GetSavedPasswordsPresenter() {
+  return passwords_private_delegate_->GetSavedPasswordsPresenter();
 }

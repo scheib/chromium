@@ -41,6 +41,14 @@
 
 namespace {
 
+// Pref value identifying the compliance regime specified by the Commercial
+// National Security Algorithm Suite 2.0 (CNSA 2.0).
+const char kPrefStringValueCnsa2[] = "cnsa2";
+
+// Pref value identifying the compliance regime specified by the Commercial
+// National Security Algorithm Suite versions 1.0 and 2.0 (CNSA 1.0 and 2.0).
+const char kPrefStringValueCnsa[] = "cnsa";
+
 // Converts a `base::Value::List` of StringValues into a vector of strings. Any
 // values which cannot be converted will be skipped.
 std::vector<std::string> ValueListToStringVector(
@@ -140,6 +148,10 @@ SSLConfigServiceManager::SSLConfigServiceManager(PrefService* local_state) {
 #endif
   ech_enabled_.Init(prefs::kEncryptedClientHelloEnabled, local_state,
                     local_state_callback);
+  key_exchange_compliance_.Init(prefs::kPreferSlowKexAlgorithms, local_state,
+                                local_state_callback);
+  tls13_cipher_compliance_.Init(prefs::kPreferSlowCiphers, local_state,
+                                local_state_callback);
 
   local_state_change_registrar_.Init(local_state);
   local_state_change_registrar_.Add(prefs::kCipherSuiteBlacklist,
@@ -166,6 +178,8 @@ void SSLConfigServiceManager::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterListPref(prefs::kH2ClientCertCoalescingHosts);
   registry->RegisterBooleanPref(prefs::kEncryptedClientHelloEnabled,
                                 default_context_config.ech_enabled);
+  registry->RegisterStringPref(prefs::kPreferSlowKexAlgorithms, std::string());
+  registry->RegisterStringPref(prefs::kPreferSlowCiphers, std::string());
 
   // Default value for these prefs don't matter since they are only used when
   // managed.
@@ -266,6 +280,21 @@ network::mojom::SSLConfigPtr SSLConfigServiceManager::GetNewSSLConfig() const {
           ? trust_anchor_ids_.value()
           : net::TrustStoreChrome::GetTrustAnchorIDsFromCompiledInRootStore();
 #endif
+
+  bool cnsa_feature_enabled =
+      base::FeatureList::IsEnabled(features::kCryptographyComplianceCnsa);
+
+  if (cnsa_feature_enabled ||
+      (key_exchange_compliance_.IsManaged() &&
+       key_exchange_compliance_.GetValue() == kPrefStringValueCnsa2)) {
+    config->named_groups_preset = network::mojom::SSLNamedGroupsPreset::kCnsa2;
+  }
+
+  if (cnsa_feature_enabled ||
+      (tls13_cipher_compliance_.IsManaged() &&
+       tls13_cipher_compliance_.GetValue() == kPrefStringValueCnsa)) {
+    config->tls13_cipher_prefer_aes_256 = true;
+  }
 
   return config;
 }

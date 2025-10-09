@@ -36,16 +36,6 @@ std::string GetStorageStateSuffixForMetrics(StorageStateForUma storage_state) {
   NOTREACHED();
 }
 
-std::string GetStorageFileSuffixForMetrics(StorageFileForUma storage_file) {
-  switch (storage_file) {
-    case StorageFileForUma::kLocalOrSyncable:
-      return std::string(".LocalOrSyncable");
-    case StorageFileForUma::kAccount:
-      return std::string(".Account");
-  }
-  NOTREACHED();
-}
-
 }  // namespace
 
 void RecordUrlBookmarkAdded(BookmarkFolderTypeForUMA parent,
@@ -184,6 +174,10 @@ void RecordUserFolderLoadStatsOnProfileLoad(const UserFolderLoadStats& stats) {
   base::UmaHistogramCustomCounts("Bookmarks.UserFolder.OnProfileLoad.Count",
                                  stats.total_folders, /*min=*/1,
                                  /*exclusive_max=*/300, /*buckets=*/100);
+
+  base::UmaHistogramCounts100(
+      "Bookmarks.UserFolder.OnProfileLoad.BookmarkBarTopLevelItems",
+      stats.bookmark_bar_top_level_items);
 }
 
 void RecordCloneBookmarkNode(int num_cloned) {
@@ -192,14 +186,6 @@ void RecordCloneBookmarkNode(int num_cloned) {
 
 void RecordAverageNodeSizeAtStartup(size_t size_in_bytes) {
   base::UmaHistogramCounts10000("Bookmarks.AverageNodeSize", size_in_bytes);
-}
-
-void RecordIdsReassignedOnProfileLoad(StorageFileForUma storage_file,
-                                      bool ids_reassigned) {
-  base::UmaHistogramBoolean(
-      base::StrCat({"Bookmarks.IdsReassigned.OnProfileLoad",
-                    GetStorageFileSuffixForMetrics(storage_file)}),
-      ids_reassigned);
 }
 
 void RecordBookmarksExistInStorageType(

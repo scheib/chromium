@@ -34,7 +34,6 @@ import org.robolectric.shadows.ShadowLooper;
 
 import org.chromium.base.AconfigFlaggedApiDelegate;
 import org.chromium.base.ContextUtils;
-import org.chromium.base.ServiceLoaderUtil;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
@@ -46,7 +45,7 @@ import java.util.HashSet;
 /** Tests logic in the {@link DisplayAndroidManager} class. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(sdk = Build.VERSION_CODES.S)
-@EnableFeatures({UiAndroidFeatures.ANDROID_WINDOW_MANAGEMENT_WEB_API})
+@EnableFeatures({UiAndroidFeatures.ANDROID_USE_DISPLAY_TOPOLOGY})
 public class DisplayAndroidManagerTest {
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
@@ -67,9 +66,8 @@ public class DisplayAndroidManagerTest {
 
         mBounds.put(Display.DEFAULT_DISPLAY, new RectF(0, 0, 1920, 1080));
 
-        ServiceLoaderUtil.setInstanceForTesting(
-                AconfigFlaggedApiDelegate.class, mAconfigFlaggedApiDelegate);
-        doReturn(true).when(mAconfigFlaggedApiDelegate).isDisplayTopologyAvailable();
+        AconfigFlaggedApiDelegate.setInstanceForTesting(mAconfigFlaggedApiDelegate);
+        doReturn(true).when(mAconfigFlaggedApiDelegate).isDisplayTopologyAvailable(mDisplayManager);
 
         doReturn(mBounds.clone())
                 .when(mAconfigFlaggedApiDelegate)
@@ -84,7 +82,7 @@ public class DisplayAndroidManagerTest {
     }
 
     @Test
-    @DisableFeatures({UiAndroidFeatures.ANDROID_WINDOW_MANAGEMENT_WEB_API})
+    @DisableFeatures({UiAndroidFeatures.ANDROID_USE_DISPLAY_TOPOLOGY})
     public void testDisplayAndroidManager() {
         // Display won't be registered.
         final int firstExternalDisplay = ShadowDisplayManager.addDisplay("");
@@ -186,12 +184,12 @@ public class DisplayAndroidManagerTest {
                 displayAndroidManager.mIdMap.get(Display.DEFAULT_DISPLAY).getBounds());
         assertEquals(
                 "External Display bounds incorrect after initialization.",
-                new Rect(0, -2160, 3840, 0),
+                new Rect(0, -1440, 2560, 0),
                 displayAndroidManager.mIdMap.get(externalDisplayId).getBounds());
 
         mBounds.put(externalDisplayId, new RectF(0, -1080, 1920, 0));
 
-        // Update only bounds.
+        // Update bounds.
         updateDisplayTopology(displayAndroidManager);
 
         assertEquals(
@@ -200,12 +198,10 @@ public class DisplayAndroidManagerTest {
                 displayAndroidManager.mIdMap.get(Display.DEFAULT_DISPLAY).getBounds());
         assertEquals(
                 "External Display absolute bounds incorrect after bounds update.",
-                new Rect(0, -1620, 2880, 0),
+                new Rect(0, -1080, 1920, 0),
                 displayAndroidManager.mIdMap.get(externalDisplayId).getBounds());
 
-        // Update only density.
-        updateDensity(externalDisplayId, DisplayMetrics.DENSITY_300);
-        // DisplayListenerBackend.onDisplayChanged should process this update
+        // DisplayListenerBackend.onDisplayChanged should process this update.
         ShadowDisplayManager.changeDisplay(externalDisplayId, "+");
 
         assertEquals(
@@ -214,22 +210,36 @@ public class DisplayAndroidManagerTest {
                 displayAndroidManager.mIdMap.get(Display.DEFAULT_DISPLAY).getBounds());
         assertEquals(
                 "External Display absolute bounds incorrect after density update.",
-                new Rect(0, -2025, 3600, 0),
+                new Rect(0, -1080, 1920, 0),
                 displayAndroidManager.mIdMap.get(externalDisplayId).getBounds());
+    }
 
-        // Update bounds and density.
-        updateDensity(externalDisplayId, DisplayMetrics.DENSITY_200);
-        mBounds.put(externalDisplayId, new RectF(0, -1728, 3072, 0));
-        updateDisplayTopology(displayAndroidManager);
+    @Test
+    public void testIsDisplayTopologyAvailableHistogram() {
+        final HistogramWatcher histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectBooleanRecord(
+                                DisplayAndroidManager.IS_DISPLAY_TOPOLOGY_AVAILABLE_HISTOGRAM_NAME,
+                                false)
+                        .expectBooleanRecord(
+                                DisplayAndroidManager.IS_DISPLAY_TOPOLOGY_AVAILABLE_HISTOGRAM_NAME,
+                                true)
+                        .build();
 
-        assertEquals(
-                "BuiltIn Display bounds incorrect after bounds and density update.",
-                new Rect(0, 0, 1920, 1080),
-                displayAndroidManager.mIdMap.get(Display.DEFAULT_DISPLAY).getBounds());
-        assertEquals(
-                "External Display bounds incorrect after bounds and density update.",
-                new Rect(0, -2160, 3840, 0),
-                displayAndroidManager.mIdMap.get(externalDisplayId).getBounds());
+        // ANDROID_USE_DISPLAY_TOPOLOGY is enabled and
+        // mAconfigFlaggedApiDelegate.isDisplayTopologyAvailable() is true
+        DisplayAndroidManager displayAndroidManager = DisplayAndroidManager.getInstance();
+
+        DisplayAndroidManager.resetInstanceForTesting();
+        doReturn(false)
+                .when(mAconfigFlaggedApiDelegate)
+                .isDisplayTopologyAvailable(mDisplayManager);
+
+        // ANDROID_USE_DISPLAY_TOPOLOGY is enabled, but
+        // mAconfigFlaggedApiDelegate.isDisplayTopologyAvailable() is false
+        displayAndroidManager = DisplayAndroidManager.getInstance();
+
+        histogramWatcher.assertExpected("Incorrect histogram values.");
     }
 
     @Test

@@ -95,6 +95,22 @@ class MODULES_EXPORT BaseRenderingContext2D : public CanvasRenderingContext,
 
   void ResetInternal() override;
 
+  int AllocatedBufferCountPerPixel() const override {
+    int buffer_count = 0;
+    auto* provider = GetResourceProvider();
+    if (provider) {
+      buffer_count = 1;
+      if (provider->IsAccelerated()) {
+        // The number of internal GPU buffers vary between one (stable
+        // non-displayed state) and three (triple-buffered animations).
+        // Adding 2 is a pessimistic but relevant estimate.
+        // Note: These buffers might be allocated in GPU memory.
+        buffer_count += 2;
+      }
+    }
+    return buffer_count;
+  }
+
   CanvasRenderingContext2DSettings* getContextAttributes() const;
 
   ImageData* createImageData(ImageData*, ExceptionState&) const;
@@ -149,7 +165,8 @@ class MODULES_EXPORT BaseRenderingContext2D : public CanvasRenderingContext,
   // before `transferToGPUTexture` is first called.
   V8GPUTextureFormat getTextureFormat() const;
 
-  virtual bool CanCreateCanvas2dResourceProvider() = 0;
+  virtual bool CanCreateResourceProvider() = 0;
+  virtual CanvasResourceProvider* GetOrCreateResourceProvider() = 0;
 
   String lang() const;
   void setLang(const String&);
@@ -229,12 +246,11 @@ class MODULES_EXPORT BaseRenderingContext2D : public CanvasRenderingContext,
       SourceDrawingBuffer source_buffer,
       FlushReason reason) final;
 
-  void SetTryRestoreContextIntervalForTesting(base::TimeDelta delay) {
-    try_restore_context_interval_ = delay;
-  }
   void SetRestoreFailedCallbackForTesting(base::RepeatingClosure callback) {
     on_restore_failed_callback_for_testing_ = std::move(callback);
   }
+
+  bool IsResourceProviderValid();
 
   HeapTaskRunnerTimer<BaseRenderingContext2D>
       dispatch_context_lost_event_timer_;
@@ -290,6 +306,8 @@ class MODULES_EXPORT BaseRenderingContext2D : public CanvasRenderingContext,
   bool context_restorable_{true};
 
  private:
+  virtual bool IsHibernating() const { return false; }
+  virtual CanvasResourceProvider* GetResourceProvider() const { NOTREACHED(); }
   virtual void EnableAccelerationIfPossible() {}
   void DrawTextInternal(const String& text,
                         double x,
@@ -311,10 +329,10 @@ class MODULES_EXPORT BaseRenderingContext2D : public CanvasRenderingContext,
   int num_readbacks_performed_ = 0;
   unsigned read_count_ = 0;
   Member<GPUTexture> webgpu_access_texture_ = nullptr;
-  std::unique_ptr<CanvasResourceProvider> resource_provider_from_webgpu_access_;
+  std::unique_ptr<CanvasResourceProviderSharedImage>
+      resource_provider_from_webgpu_access_;
   Canvas2DColorParams color_params_;
   bool need_dispatch_context_restored_ = false;
-  base::TimeDelta try_restore_context_interval_ = kTryRestoreContextInterval;
   base::RepeatingClosure on_restore_failed_callback_for_testing_;
 };
 

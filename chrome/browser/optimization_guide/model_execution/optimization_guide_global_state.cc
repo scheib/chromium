@@ -18,14 +18,19 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/component_updater/optimization_guide_on_device_model_installer.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
+#include "chrome/browser/optimization_guide/prediction/chrome_profile_download_service_tracker.h"
+#include "chrome/common/chrome_paths.h"
 #include "components/component_updater/component_updater_paths.h"
 #include "components/component_updater/pref_names.h"
 #include "components/optimization_guide/core/delivery/optimization_guide_model_provider.h"
+#include "components/optimization_guide/core/delivery/prediction_manager.h"
 #include "components/optimization_guide/core/model_execution/on_device_asset_manager.h"
 #include "components/optimization_guide/core/model_execution/on_device_model_access_controller.h"
 #include "components/optimization_guide/core/model_execution/performance_class.h"
+#include "components/optimization_guide/core/optimization_guide_constants.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/optimization_guide/proto/on_device_base_model_metadata.pb.h"
+#include "components/services/unzip/content/unzip_service.h"
 #include "content/public/browser/service_process_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 
@@ -33,6 +38,7 @@ namespace optimization_guide {
 
 namespace {
 
+#if BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
 class OnDeviceModelComponentStateManagerDelegate
     : public OnDeviceModelComponentStateManager::Delegate {
  public:
@@ -92,11 +98,6 @@ class OnDeviceModelComponentStateManagerDelegate
   }
 };
 
-base::WeakPtr<OptimizationGuideGlobalState>& GetInstance() {
-  static base::NoDestructor<base::WeakPtr<OptimizationGuideGlobalState>> instance;
-  return *instance.get();
-}
-
 void LaunchService(
     mojo::PendingReceiver<on_device_model::mojom::OnDeviceModelService>
         pending_receiver) {
@@ -107,6 +108,21 @@ void LaunchService(
       content::ServiceProcessHost::Options()
           .WithDisplayName("On-Device Model Service")
           .Pass());
+}
+#endif  // BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
+
+base::WeakPtr<OptimizationGuideGlobalState>& GetInstance() {
+  static base::NoDestructor<base::WeakPtr<OptimizationGuideGlobalState>>
+      instance;
+  return *instance.get();
+}
+
+base::FilePath GetBaseStoreDir() {
+  base::FilePath model_downloads_dir;
+  base::PathService::Get(chrome::DIR_USER_DATA, &model_downloads_dir);
+  model_downloads_dir = model_downloads_dir.Append(
+      optimization_guide::kOptimizationGuideModelStoreDirPrefix);
+  return model_downloads_dir;
 }
 
 }  // namespace
@@ -133,6 +149,7 @@ class ChromeOnDeviceModelServiceController final {
   }
 };
 
+#if BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
 // Registers a field trial once the model is ready.
 class ChromeModelComponentStateManagerObserver final
     : public OnDeviceModelComponentStateManager::Observer {
@@ -159,17 +176,38 @@ class ChromeModelComponentStateManagerObserver final
                           OnDeviceModelComponentStateManager::Observer>
       observation_{this};
 };
+#endif  // BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
 
 OptimizationGuideGlobalState::OptimizationGuideGlobalState()
-    : model_broker_state_(
+    : prediction_model_store_(*g_browser_process->local_state()),
+      prediction_manager_(&prediction_model_store_,
+                          g_browser_process->shared_url_loader_factory(),
+                          g_browser_process->local_state(),
+                          g_browser_process->GetApplicationLocale(),
+                          OptimizationGuideLogger::GetInstance(),
+                          base::BindRepeating(&unzip::LaunchUnzipper))
+#if BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
+      ,
+      model_broker_state_(
           g_browser_process->local_state(),
           std::make_unique<OnDeviceModelComponentStateManagerDelegate>(),
-          base::BindRepeating(&LaunchService)) {
+          base::BindRepeating(&LaunchService))
+#elif BUILDFLAG(IS_ANDROID)
+      ,
+      model_broker_android_(*g_browser_process->local_state(),
+                            prediction_manager_)
+#endif  // BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
+{
+  prediction_model_store_.Initialize(GetBaseStoreDir());
+  prediction_manager_.MaybeInitializeModelDownloads(
+      profile_download_service_tracker_, g_browser_process->local_state());
+
+#if BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
   // Register an observer on the component state manager after it is created but
   // before it has start up.
   component_state_manager_observer_ =
       std::make_unique<ChromeModelComponentStateManagerObserver>(
-          component_state_manager().GetWeakPtr());
+          model_broker_state_.component_state_manager().GetWeakPtr());
 
   model_broker_state_.Init();
   model_broker_state_.performance_classifier()
@@ -177,17 +215,36 @@ OptimizationGuideGlobalState::OptimizationGuideGlobalState()
           base::BindOnce(&ChromeOnDeviceModelServiceController::
                              RegisterPerformanceClassSyntheticTrial));
   model_broker_state_.performance_classifier().ScheduleEvaluation();
+#endif  // BUILDFLAG(USE_ON_DEVICE_MODEL_SERVICE)
 }
 OptimizationGuideGlobalState::~OptimizationGuideGlobalState() = default;
 
-scoped_refptr<OptimizationGuideGlobalState> OptimizationGuideGlobalState::CreateOrGet() {
+scoped_refptr<OptimizationGuideGlobalState>
+OptimizationGuideGlobalState::CreateOrGet() {
   base::WeakPtr<OptimizationGuideGlobalState>& instance = GetInstance();
   if (!instance) {
-    auto new_instance = base::WrapRefCounted(new OptimizationGuideGlobalState());
+    auto new_instance =
+        base::WrapRefCounted(new OptimizationGuideGlobalState());
     instance = new_instance->weak_ptr_factory_.GetWeakPtr();
     return new_instance;
   }
   return scoped_refptr<OptimizationGuideGlobalState>(instance.get());
+}
+
+OptimizationGuideGlobalFeature::OptimizationGuideGlobalFeature() = default;
+
+OptimizationGuideGlobalFeature::~OptimizationGuideGlobalFeature() = default;
+
+OptimizationGuideGlobalState& OptimizationGuideGlobalFeature::Get() {
+  if (!global_state_) {
+    global_state_ = OptimizationGuideGlobalState::CreateOrGet();
+  }
+  return *global_state_;
+}
+
+OptimizationGuideModelProvider&
+OptimizationGuideGlobalFeature::GetModelProvider() {
+  return Get().prediction_manager();
 }
 
 }  // namespace optimization_guide

@@ -31,8 +31,7 @@
 namespace blink {
 
 BASE_FEATURE(kPreloadingNoSamePageFragmentAnchorTracking,
-             "PreloadingNoSamePageFragmentAnchorTracking",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace {
 
@@ -41,22 +40,7 @@ const base::TimeDelta kMousePosQueueTimeDelta{base::Milliseconds(500)};
 const base::TimeDelta kMouseAccelerationAndVelocityInterval{
     base::Milliseconds(50)};
 
-// Config for viewport heuristic derived from field trial params.
-struct ViewportHeuristicConfig {
-  // Min/max values of distance_from_pointer_down_ratio for an anchor to be
-  // selected by the heuristic.
-  std::pair<float, float> distance_from_ptr_down_ratio_bounds;
-  // The largest anchor should be larger than the next largest anchor by this
-  // threshold to be selected by the heuristic. More specifically, for the
-  // largest anchor a1, and the next largest anchor a2:
-  // (size(a1) - size(a2)) / size(a2) >= `largest_anchor_threshold`.
-  double largest_anchor_threshold;
-  // Time to wait before informing the browser of the largest anchor element
-  // selected by the heuristic.
-  base::TimeDelta delay;
-};
-
-ViewportHeuristicConfig GetViewportHeuristicConfig() {
+ViewportHeuristicConfig GetViewportHeuristicConfigFromFeatureParams() {
   // -0.3 is the lower bound of the middle 75% of distance_from_ptr_down_ratio
   // values of clicked anchors (i.e. the P12.5 value).
   const base::FeatureParam<double> kDistanceFromPointerDownLowerBound{
@@ -70,11 +54,13 @@ ViewportHeuristicConfig GetViewportHeuristicConfig() {
   // Note: The default value was selected arbitrarily and hasn't been tuned.
   const base::FeatureParam<double> kLargestAnchorThreshold{
       &features::kPreloadingViewportHeuristics, "largest_anchor_threshold",
-      0.5};
+      0.25
+  };
   // Note: The default value was selected arbitrarily and hasn't been tuned.
   const base::FeatureParam<base::TimeDelta> kDelay{
       &features::kPreloadingViewportHeuristics, "delay",
-      base::Milliseconds(1000)};
+      base::Milliseconds(500)
+  };
 
   double low = std::clamp(kDistanceFromPointerDownLowerBound.Get(), -1.0, 1.0);
   double high = std::clamp(kDistanceFromPointerDownUpperBound.Get(), low, 1.0);
@@ -84,7 +70,27 @@ ViewportHeuristicConfig GetViewportHeuristicConfig() {
       .delay = kDelay.Get()};
 }
 
+ViewportHeuristicConfig* g_config_for_testing = nullptr;
+
+const ViewportHeuristicConfig& GetViewportHeuristicConfig() {
+  static const ViewportHeuristicConfig config_from_feature_params =
+      GetViewportHeuristicConfigFromFeatureParams();
+  return (g_config_for_testing == nullptr) ? config_from_feature_params
+                                           : *g_config_for_testing;
+}
+
 }  // namespace
+
+ViewportHeuristicConfigTestingScope::ViewportHeuristicConfigTestingScope()
+    : config_(GetViewportHeuristicConfigFromFeatureParams()) {  // IN-TEST
+  DCHECK(!g_config_for_testing);
+  g_config_for_testing = &config_;
+}
+
+ViewportHeuristicConfigTestingScope::
+    ~ViewportHeuristicConfigTestingScope() {  // IN-TEST
+  g_config_for_testing = nullptr;
+}
 
 AnchorElementInteractionTracker::MouseMotionEstimator::MouseMotionEstimator(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner)
@@ -539,7 +545,7 @@ void AnchorElementInteractionTracker::AnchorPositionsUpdated(
     HeapVector<Member<AnchorPositionUpdate>>& position_updates) {
   CHECK(base::FeatureList::IsEnabled(
       blink::features::kPreloadingViewportHeuristics));
-  static const ViewportHeuristicConfig config = GetViewportHeuristicConfig();
+  const ViewportHeuristicConfig& config = GetViewportHeuristicConfig();
 
   // Reset the delay timer (if active); this could happen if a programmatic
   // scroll happened after the timer started.

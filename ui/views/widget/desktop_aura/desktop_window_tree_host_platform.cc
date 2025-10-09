@@ -329,9 +329,8 @@ void DesktopWindowTreeHostPlatform::OnWidgetInitDone() {
       GetWindowMaskForClipping().isEmpty());
 }
 
-void DesktopWindowTreeHostPlatform::OnWidgetThemeChanged(
-    ui::ColorProviderKey::ColorMode color_mode,
-    std::optional<SkColor> background_color) {}
+void DesktopWindowTreeHostPlatform::SetBackgroundColor(
+    SkColor background_color) {}
 
 void DesktopWindowTreeHostPlatform::OnActiveWindowChanged(bool active) {
 #if BUILDFLAG(IS_OZONE)
@@ -560,7 +559,7 @@ gfx::Rect DesktopWindowTreeHostPlatform::GetWindowBoundsInScreen() const {
 }
 
 gfx::Rect DesktopWindowTreeHostPlatform::GetClientAreaBoundsInScreen() const {
-  // Attempts to calculate the rect by asking the NonClientFrameView what it
+  // Attempts to calculate the rect by asking the FrameView what it
   // thought its GetBoundsForClientView() were broke combobox drop down
   // placement.
   return GetWindowBoundsInScreen();
@@ -737,8 +736,7 @@ void DesktopWindowTreeHostPlatform::SetVisibilityChangedAnimationsEnabled(
   }
 }
 
-std::unique_ptr<NonClientFrameView>
-DesktopWindowTreeHostPlatform::CreateNonClientFrameView() {
+std::unique_ptr<FrameView> DesktopWindowTreeHostPlatform::CreateFrameView() {
   return ShouldUseNativeFrame() ? std::make_unique<NativeFrameView>(GetWidget())
                                 : nullptr;
 }
@@ -893,7 +891,7 @@ gfx::Transform DesktopWindowTreeHostPlatform::GetRootTransform() const {
     root_window = window_parent_->window();
   }
 
-  auto* const screen = display::Screen::GetScreen();
+  auto* const screen = display::Screen::Get();
   const float scale = root_window
                           ? screen
                                 ->GetPreferredScaleFactorForWindow(
@@ -1165,7 +1163,7 @@ display::Display DesktopWindowTreeHostPlatform::GetDisplayNearestRootWindow()
   DCHECK(window());
   DCHECK(window()->IsRootWindow());
   // TODO(sky): GetDisplayNearestWindow() should take a const aura::Window*.
-  return display::Screen::GetScreen()->GetDisplayNearestWindow(
+  return display::Screen::Get()->GetDisplayNearestWindow(
       const_cast<aura::Window*>(window()));
 }
 

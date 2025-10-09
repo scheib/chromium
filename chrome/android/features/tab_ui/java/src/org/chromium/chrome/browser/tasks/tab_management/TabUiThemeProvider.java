@@ -19,7 +19,6 @@ import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.tab_ui.TabCardThemeUtil;
 import org.chromium.chrome.browser.tasks.tab_management.TabListEditorCoordinator.CreationMode;
-import org.chromium.chrome.browser.theme.SurfaceColorUpdateUtils;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.tab_groups.TabGroupColorId;
 
@@ -35,6 +34,13 @@ public class TabUiThemeProvider {
      */
     public static @ColorInt int getDefaultNtbContainerColor(Context context) {
         return MaterialColors.getColor(context, R.attr.colorPrimaryContainer, TAG);
+    }
+
+    public static @ColorInt int getGridTabSwitcherBackgroundColor(
+            Context context, boolean isIncognito) {
+        return isIncognito
+                ? ContextCompat.getColor(context, R.color.default_bg_color_dark)
+                : SemanticColorUtils.getDefaultBgColor(context);
     }
 
     /**
@@ -136,7 +142,7 @@ public class TabUiThemeProvider {
         if (creationMode == CreationMode.DIALOG) {
             return getTabGridDialogBackgroundColor(context, isIncognito);
         } else {
-            return SurfaceColorUpdateUtils.getGridTabSwitcherBackgroundColor(context, isIncognito);
+            return getGridTabSwitcherBackgroundColor(context, isIncognito);
         }
     }
 
@@ -149,7 +155,11 @@ public class TabUiThemeProvider {
      */
     public static @ColorInt int getTabGridDialogBackgroundColor(
             Context context, boolean isIncognito) {
-        return SurfaceColorUpdateUtils.getTabGridDialogBackgroundColor(context, isIncognito);
+        if (isIncognito) {
+            return context.getColor(R.color.gm3_baseline_surface_container_dark);
+        } else {
+            return ContextCompat.getColor(context, R.color.tab_grid_dialog_bg_color);
+        }
     }
 
     private static @ColorInt int getTabGridDialogUngroupBarBackgroundColor(
@@ -301,7 +311,7 @@ public class TabUiThemeProvider {
         if (creationMode == CreationMode.DIALOG) {
             return getTabGridDialogBackgroundColor(context, isIncognito);
         }
-        return SurfaceColorUpdateUtils.getGridTabSwitcherBackgroundColor(context, isIncognito);
+        return getGridTabSwitcherBackgroundColor(context, isIncognito);
     }
 
     /**

@@ -161,6 +161,8 @@ PASS oldChildWindow.onended is newChildWindow.onended
 PASS oldChildWindow.onerror is newChildWindow.onerror
 PASS oldChildWindow.onfocus is newChildWindow.onfocus
 PASS oldChildWindow.onformdata is newChildWindow.onformdata
+PASS oldChildWindow.ongamepadconnected is newChildWindow.ongamepadconnected
+PASS oldChildWindow.ongamepaddisconnected is newChildWindow.ongamepaddisconnected
 PASS oldChildWindow.ongotpointercapture is newChildWindow.ongotpointercapture
 PASS oldChildWindow.onhashchange is newChildWindow.onhashchange
 PASS oldChildWindow.oninput is newChildWindow.oninput
@@ -308,7 +310,6 @@ PASS oldChildWindow.statusbar.visible is newChildWindow.statusbar.visible
 PASS oldChildWindow.styleMedia.type is newChildWindow.styleMedia.type
 PASS oldChildWindow.toolbar.visible is newChildWindow.toolbar.visible
 PASS oldChildWindow.trustedTypes.defaultPolicy is newChildWindow.trustedTypes.defaultPolicy
-PASS oldChildWindow.trustedTypes.onbeforecreatepolicy is newChildWindow.trustedTypes.onbeforecreatepolicy
 PASS oldChildWindow.viewport.segments is newChildWindow.viewport.segments
 PASS oldChildWindow.visualViewport.height is newChildWindow.visualViewport.height
 PASS oldChildWindow.visualViewport.offsetLeft is newChildWindow.visualViewport.offsetLeft

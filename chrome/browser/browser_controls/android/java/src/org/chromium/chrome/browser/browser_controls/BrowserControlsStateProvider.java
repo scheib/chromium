@@ -78,10 +78,11 @@ public interface BrowserControlsStateProvider {
         default void onAndroidControlsVisibilityChanged(int visibility) {}
 
         /**
-         * Called when the visibility constraints of the controls are changed. Visibility here
-         * refers to if the browser is forcing the controls to be fully shown/hidden, which is not
-         * the same as the visibility of the controls container, which is observed by
-         * onAndroidControlsVisibilityChanged.
+         * Called when information relevant to OffsetTags change. This is usually from a change in
+         * visibility constraints of the controls, which would result in removing or creating new
+         * OffsetTags. Visibility here refers to if the browser is forcing the controls to be fully
+         * shown/hidden, which is not the same as the visibility of the controls container, which is
+         * observed by onAndroidControlsVisibilityChanged.
          *
          * @param oldOffsetTagsInfo the old OffsetTags for moving browser controls in viz.
          * @param offsetTagsInfo the new OffsetTags moving browser controls in viz. A null tag means
@@ -90,7 +91,7 @@ public interface BrowserControlsStateProvider {
          * @param constraints the visibility constraints of the browser controls.
          * @param shouldUpdateOffsets should the offset be updated with the renderer's offset.
          */
-        default void onControlsConstraintsChanged(
+        default void onOffsetTagsInfoChanged(
                 BrowserControlsOffsetTagsInfo oldOffsetTagsInfo,
                 BrowserControlsOffsetTagsInfo offsetTagsInfo,
                 @BrowserControlsState int constraints,

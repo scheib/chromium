@@ -152,7 +152,7 @@ class AutofillWebDataBackendImpl
       base::OnceCallback<void(EntityInstanceChange)> on_success,
       WebDatabase* db);
   WebDatabase::State RemoveEntityInstance(
-      base::Uuid guid,
+      EntityInstance::EntityId guid,
       base::OnceCallback<void(EntityInstanceChange)> on_success,
       WebDatabase* db);
   WebDatabase::State RemoveEntityInstancesModifiedBetween(
@@ -232,6 +232,11 @@ class AutofillWebDataBackendImpl
 
   // Method to clean up for crbug.com/411681430.
   WebDatabase::State CleanupForCrbug411681430(WebDatabase* db);
+
+#if BUILDFLAG(IS_IOS)
+  // Method to clean up for crbug.com/445879524.
+  WebDatabase::State CleanupForCrbug445879524(WebDatabase* db);
+#endif  // BUILDFLAG(IS_IOS)
 
   // Returns the PaymentsCustomerData from the database.
   std::unique_ptr<WDTypedResult> GetPaymentsCustomerData(WebDatabase* db);

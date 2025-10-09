@@ -136,10 +136,8 @@ NSString* const kContextualPanelEntrypointLabelIdentifier =
 
   [self activateInitialConstraints];
 
-  if (@available(iOS 17, *)) {
-    [self registerForTraitChanges:@[ UITraitPreferredContentSizeCategory.class ]
-                       withAction:@selector(updateLabelFont)];
-  }
+  [self registerForTraitChanges:@[ UITraitPreferredContentSizeCategory.class ]
+                     withAction:@selector(updateLabelFont)];
 
   // TODO(crbug.com/361110974): Have bubbles gracefully handle orientation
   // changes without needing to dismiss here.
@@ -152,9 +150,6 @@ NSString* const kContextualPanelEntrypointLabelIdentifier =
 
 - (void)viewDidLayoutSubviews {
   [super viewDidLayoutSubviews];
-
-  _entrypointContainer.layer.cornerRadius =
-      _entrypointContainer.bounds.size.height / 2.0;
 
   _entrypointItemsWrapper.layer.cornerRadius =
       _entrypointItemsWrapper.bounds.size.height / 2.0;
@@ -197,11 +192,24 @@ NSString* const kContextualPanelEntrypointLabelIdentifier =
 
 #pragma mark - private
 
+// Returns the entrypoint button configuration with the given background color.
+- (UIButtonConfiguration*)entrypointContainerConfigurationWithBackgroundColor:
+    (UIColor*)backgroundColor {
+  UIButtonConfiguration* configuration =
+      [UIButtonConfiguration filledButtonConfiguration];
+  configuration.baseBackgroundColor = backgroundColor;
+  configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+  return configuration;
+}
+
 // Creates and configures the entrypoint's button container view.
 - (UIButton*)configuredEntrypointContainer {
   UIButton* button = [[UIButton alloc] init];
   button.translatesAutoresizingMaskIntoConstraints = NO;
-  button.backgroundColor = [UIColor colorNamed:kBackgroundColor];
+  UIColor* defaultBackgroundColor = [UIColor colorNamed:kBackgroundColor];
+  button.configuration =
+      [self entrypointContainerConfigurationWithBackgroundColor:
+                defaultBackgroundColor];
   button.clipsToBounds = NO;
   button.pointerInteractionEnabled = YES;
   button.pointerStyleProvider = CreateLiftEffectCirclePointerStyleProvider();
@@ -414,9 +422,12 @@ NSString* const kContextualPanelEntrypointLabelIdentifier =
           ? nil
           : [UIColor colorNamed:kBackgroundColor];
 
-  _entrypointContainer.backgroundColor =
+  UIColor* entrypointContainerBackgroundColor =
       _entrypointTapped ? [UIColor colorNamed:kGrey100Color]
                         : untappedEntrypointColor;
+  _entrypointContainer.configuration =
+      [self entrypointContainerConfigurationWithBackgroundColor:
+                entrypointContainerBackgroundColor];
 
   // Separator visibility.
   _separator.hidden = !_infobarBadgesCurrentlyShown;
@@ -428,9 +439,13 @@ NSString* const kContextualPanelEntrypointLabelIdentifier =
   _imageView.tintColor = colored ? [UIColor colorNamed:kBackgroundColor]
                                  : [UIColor colorNamed:kBlue600Color];
 
-  _entrypointContainer.backgroundColor =
+  // Update entrypoint container background.
+  UIColor* entrypointContainerBackgroundColor =
       colored ? [UIColor colorNamed:kBlue600Color]
               : [UIColor colorNamed:kBackgroundColor];
+  _entrypointContainer.configuration =
+      [self entrypointContainerConfigurationWithBackgroundColor:
+                entrypointContainerBackgroundColor];
 }
 
 // User swiped the large entrypoint chip towards the leading edge, intending to
@@ -666,22 +681,5 @@ NSString* const kContextualPanelEntrypointLabelIdentifier =
 
   _entrypointContainer.isAccessibilityElement = !self.view.hidden;
 }
-
-#pragma mark - UIView
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  if (previousTraitCollection.preferredContentSizeCategory !=
-      self.traitCollection.preferredContentSizeCategory) {
-    [self updateLabelFont];
-  }
-}
-#endif
 
 @end

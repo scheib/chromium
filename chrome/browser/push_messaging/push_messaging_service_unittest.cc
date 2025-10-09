@@ -26,10 +26,8 @@
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/permissions/permission_manager_factory.h"
 #include "chrome/browser/push_messaging/push_messaging_app_identifier.h"
-#include "chrome/browser/push_messaging/push_messaging_features.h"
 #include "chrome/browser/push_messaging/push_messaging_service_factory.h"
 #include "chrome/browser/push_messaging/push_messaging_service_impl.h"
-#include "chrome/browser/push_messaging/push_messaging_utils.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
@@ -41,6 +39,8 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/test_history_database.h"
 #include "components/permissions/permission_manager.h"
+#include "components/push_messaging/push_messaging_features.h"
+#include "components/push_messaging/push_messaging_utils.h"
 #include "content/public/browser/permission_result.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
@@ -368,7 +368,7 @@ TEST_F(PushMessagingServiceTest, MAYBE_PayloadEncryptionTest) {
   ASSERT_FALSE(message.decrypted);
 
   // (4) Find the app_id that has been associated with the subscription.
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       PushMessagingAppIdentifier::FindByServiceWorker(profile(), origin,
                                                       kTestServiceWorkerId);
 
@@ -452,14 +452,14 @@ TEST_F(PushMessagingServiceTest, MAYBE_RemoveExpiredSubscriptions) {
   // (3) Subscribe origin to push service and find corresponding
   // |app_identifier|
   Subscribe(push_service, origin);
-  PushMessagingAppIdentifier app_identifier =
+  push_messaging::AppIdentifier app_identifier =
       PushMessagingAppIdentifier::FindByServiceWorker(profile(), origin,
                                                       kTestServiceWorkerId);
   ASSERT_FALSE(app_identifier.is_null());
 
   // (4) Manually set the time as expired, save the time in preferences
   app_identifier.set_expiration_time(base::Time::UnixEpoch());
-  app_identifier.PersistToPrefs(profile());
+  PushMessagingAppIdentifier::PersistToPrefs(app_identifier, profile());
   ASSERT_EQ(1u, PushMessagingAppIdentifier::GetCount(profile()));
 
   // (3) Remove all expired subscriptions
@@ -471,7 +471,7 @@ TEST_F(PushMessagingServiceTest, MAYBE_RemoveExpiredSubscriptions) {
 
   // (5) We expect the subscription to be deleted
   ASSERT_EQ(0u, PushMessagingAppIdentifier::GetCount(profile()));
-  PushMessagingAppIdentifier deleted_identifier =
+  push_messaging::AppIdentifier deleted_identifier =
       PushMessagingAppIdentifier::FindByAppId(profile(),
                                               app_identifier.app_id());
   EXPECT_TRUE(deleted_identifier.is_null());

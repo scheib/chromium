@@ -11,6 +11,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <memory>
 
 #include "base/files/file_path.h"
@@ -19,8 +20,8 @@
 #include "base/test/test_shared_memory_util.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
-#include "ipc/ipc_channel_handle.h"
 #include "ipc/ipc_message.h"
+#include "mojo/public/cpp/system/message_pipe.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -110,25 +111,20 @@ TEST(IPCMessageUtilsTest, InlinedVector) {
 
 TEST(IPCMessageUtilsTest, MojoChannelHandle) {
   mojo::MessagePipe message_pipe;
-  IPC::ChannelHandle channel_handle(message_pipe.handle0.release());
 
   IPC::Message message;
-  IPC::WriteParam(&message, channel_handle);
+  IPC::WriteParam(&message, message_pipe.handle0.get());
 
   base::PickleIterator iter(message);
-  IPC::ChannelHandle result_handle;
+  mojo::MessagePipeHandle result_handle;
   EXPECT_TRUE(IPC::ReadParam(&message, &iter, &result_handle));
-  EXPECT_EQ(channel_handle.mojo_handle, result_handle.mojo_handle);
+  EXPECT_EQ(message_pipe.handle0.get(), result_handle);
 }
 
 TEST(IPCMessageUtilsTest, OptionalUnset) {
   std::optional<int> opt;
   base::Pickle pickle;
   IPC::WriteParam(&pickle, opt);
-
-  std::string log;
-  IPC::LogParam(opt, &log);
-  EXPECT_EQ("(unset)", log);
 
   std::optional<int> unserialized_opt;
   base::PickleIterator iter(pickle);
@@ -140,10 +136,6 @@ TEST(IPCMessageUtilsTest, OptionalSet) {
   std::optional<int> opt(10);
   base::Pickle pickle;
   IPC::WriteParam(&pickle, opt);
-
-  std::string log;
-  IPC::LogParam(opt, &log);
-  EXPECT_EQ("10", log);
 
   std::optional<int> unserialized_opt;
   base::PickleIterator iter(pickle);
@@ -200,10 +192,6 @@ TEST(IPCMessageUtilsTest, UnguessableTokenTest) {
   base::UnguessableToken token = base::UnguessableToken::Create();
   base::Pickle pickle;
   IPC::WriteParam(&pickle, token);
-
-  std::string log;
-  IPC::LogParam(token, &log);
-  EXPECT_EQ(token.ToString(), log);
 
   base::UnguessableToken deserialized_token;
   base::PickleIterator iter(pickle);

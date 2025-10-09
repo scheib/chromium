@@ -39,7 +39,6 @@
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_test_util.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/passwords/ui_utils.h"
@@ -1517,6 +1516,41 @@ TEST_F(RenderViewContextMenuPrefsTest, GetIsNewFeatureAtValue) {
   const char* const kUnregisteredFeatureName = "UnregisteredFeature";
   // An unknown feature name should not be considered new.
   ASSERT_FALSE(menu.GetIsNewFeatureAtValue(kUnregisteredFeatureName));
+}
+
+TEST_F(RenderViewContextMenuPrefsTest, GetIsNewFeatureAtValue_GuestProfile) {
+  profile_metrics::SetBrowserProfileType(
+      profile(), profile_metrics::BrowserProfileType::kGuest);
+
+  // The profile should be a guest profile.
+  ASSERT_TRUE(profile()->IsGuestSession());
+
+  content::ContextMenuParams params;
+  TestRenderViewContextMenu menu(*web_contents()->GetPrimaryMainFrame(),
+                                 params);
+
+  // If it is not a regular profile, we don't have user education tracking and
+  // the feature should not be considered new.
+  ASSERT_FALSE(menu.GetIsNewFeatureAtValue(
+      user_education::features::kNewBadgeTestFeature.name));
+}
+
+TEST_F(RenderViewContextMenuPrefsTest,
+       GetIsNewFeatureAtValue_IncognitoProfile) {
+  profile_metrics::SetBrowserProfileType(
+      profile(), profile_metrics::BrowserProfileType::kIncognito);
+
+  // The profile should be an incognito profile.
+  ASSERT_TRUE(profile()->IsIncognitoProfile());
+
+  content::ContextMenuParams params;
+  TestRenderViewContextMenu menu(*web_contents()->GetPrimaryMainFrame(),
+                                 params);
+
+  // If it is not a regular profile, we don't have user education tracking and
+  // the feature should not be considered new.
+  ASSERT_FALSE(menu.GetIsNewFeatureAtValue(
+      user_education::features::kNewBadgeTestFeature.name));
 }
 
 // Verify that the Lens Region Search menu item is enabled for Progressive Web

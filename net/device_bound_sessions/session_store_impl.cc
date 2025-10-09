@@ -15,6 +15,7 @@
 #include "components/unexportable_keys/service_error.h"
 #include "components/unexportable_keys/unexportable_key_id.h"
 #include "components/unexportable_keys/unexportable_key_service.h"
+#include "net/base/features.h"
 #include "net/base/schemeful_site.h"
 #include "net/device_bound_sessions/proto/storage.pb.h"
 
@@ -35,7 +36,6 @@ constexpr base::TaskTraits kDBTaskTraits = {
     base::MayBlock(), base::TaskPriority::USER_VISIBLE,
     base::TaskShutdownBehavior::BLOCK_SHUTDOWN};
 
-const int kCurrentSchemaVersion = 1;
 const char kSessionTableName[] = "dbsc_session_tbl";
 const base::TimeDelta kFlushDelay = base::Seconds(2);
 
@@ -48,8 +48,11 @@ SessionStoreImpl::DBStatus InitializeOnDbSequence(
     return SessionStoreImpl::DBStatus::kFailure;
   }
 
+  // Control the schema version with a feature param so that the database can be
+  // wiped between Origin Trials and going into the final release.
   table_manager->InitializeOnDbSequence(
-      db, std::vector<std::string>{kSessionTableName}, kCurrentSchemaVersion);
+      db, std::vector<std::string>{kSessionTableName},
+      features::kDeviceBoundSessionsSchemaVersion.Get());
   session_data->InitializeOnDBSequence();
 
   return SessionStoreImpl::DBStatus::kSuccess;

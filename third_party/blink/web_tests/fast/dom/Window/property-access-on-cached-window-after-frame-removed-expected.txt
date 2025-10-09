@@ -101,6 +101,8 @@ PASS childWindow.onended is null
 PASS childWindow.onerror is null
 PASS childWindow.onfocus is null
 PASS childWindow.onformdata is null
+PASS childWindow.ongamepadconnected is null
+PASS childWindow.ongamepaddisconnected is null
 PASS childWindow.ongotpointercapture is null
 PASS childWindow.onhashchange is null
 PASS childWindow.oninput is null
@@ -219,7 +221,6 @@ PASS childWindow.statusbar.visible is false
 PASS childWindow.styleMedia.type is ''
 PASS childWindow.toolbar.visible is false
 PASS childWindow.trustedTypes.defaultPolicy is null
-PASS childWindow.trustedTypes.onbeforecreatepolicy is null
 PASS childWindow.viewport.segments is null
 PASS childWindow.visualViewport.height is 0
 PASS childWindow.visualViewport.offsetLeft is 0

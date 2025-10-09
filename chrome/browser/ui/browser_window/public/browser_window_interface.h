@@ -80,6 +80,14 @@ class ScopedWindowCallToAction {
 
 class BrowserWindowInterface : public content::PageNavigator {
  public:
+  // TODO(crbug.com/421758609): Hoist other enums above method declarations.
+  enum class ClosingStatus {
+    kPermitted,
+    kDeniedByUser,
+    kDeniedByPolicy,
+    kDeniedUnloadHandlersNeedTime
+  };
+
   // Returns the UnownedUserDataHost associated with this browser window. This
   // is used to retrieve arbitrary features from the browser window without
   // requiring BrowserWindowInterface to have knowledge of them.
@@ -90,6 +98,7 @@ class BrowserWindowInterface : public content::PageNavigator {
   // generic window actions, such as activation, querying minimize/maximized
   // state, etc.
   virtual ui::BaseWindow* GetWindow() = 0;
+  virtual const ui::BaseWindow* GetWindow() const = 0;
 
   // Returns the profile that semantically owns this browser window.
   // On most desktop platforms, there is only one profile per browser window.
@@ -104,6 +113,7 @@ class BrowserWindowInterface : public content::PageNavigator {
   // when implemented, this will return a single Profile for the given browser
   // window.
   virtual Profile* GetProfile() = 0;
+  virtual const Profile* GetProfile() const = 0;
 
   // Returns a session-unique ID.
   virtual const SessionID& GetSessionID() const = 0;
@@ -111,10 +121,16 @@ class BrowserWindowInterface : public content::PageNavigator {
   // SessionService::WindowType mirrors these values.  If you add to this
   // enum, look at SessionService::WindowType to see if it needs to be
   // updated.
+  //
   // TODO(https://crbug.com/331031753): Several of these existing Window Types
   // likely should not have been using Browser as a base to begin with and
   // should be migrated. Other types are not available on all platforms.
   // Please refrain from adding new types.
+  //
+  // GENERATED_JAVA_ENUM_PACKAGE: (
+  //   org.chromium.chrome.browser.ui.browser_window)
+  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: BrowserWindowType
+  // GENERATED_JAVA_PREFIX_TO_STRIP: TYPE_
   enum Type {
     // Normal tabbed non-app browser (previously TYPE_TABBED).
     TYPE_NORMAL,
@@ -193,6 +209,13 @@ class BrowserWindowInterface : public content::PageNavigator {
   virtual base::CallbackListSubscription RegisterBrowserDidClose(
       BrowserDidCloseCallback callback) = 0;
 
+  // Register callbacks invoked when browser attempted to close but the close
+  // operation was cancelled.
+  using BrowserCloseCancelledCallback =
+      base::RepeatingCallback<void(BrowserWindowInterface*, ClosingStatus)>;
+  virtual base::CallbackListSubscription RegisterBrowserCloseCancelled(
+      BrowserCloseCancelledCallback callback) = 0;
+
   // Returns the top container view.
   virtual views::View* TopContainer() = 0;
 
@@ -247,6 +270,10 @@ class BrowserWindowInterface : public content::PageNavigator {
   // BrowserWindow.
   virtual web_modal::WebContentsModalDialogHost*
   GetWebContentsModalDialogHostForWindow() = 0;
+
+  // Returns the web contents modal dialog host for the `tab_interface`.
+  virtual web_modal::WebContentsModalDialogHost*
+  GetWebContentsModalDialogHostForTab(tabs::TabInterface* tab_interface) = 0;
 
   // Whether the window is active.
   // The definition of "active" aligns with the window being painted as active

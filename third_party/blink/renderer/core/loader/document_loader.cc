@@ -80,6 +80,7 @@
 #include "third_party/blink/public/web/blink.h"
 #include "third_party/blink/public/web/web_navigation_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
+#include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/document_parser.h"
@@ -301,7 +302,7 @@ bool ShouldEmitNewNavigationHistogram(WebNavigationType navigation_type) {
   }
 }
 
-// Helpers to convert between base::flat_map and WTF::HashMap
+// Helpers to convert between base::flat_map and blink::HashMap
 std::optional<
     HashMap<mojom::blink::PermissionName, mojom::blink::PermissionStatus>>
 ConvertPermissionStatusFlatMapToHashMap(
@@ -452,6 +453,7 @@ struct SameSizeAsDocumentLoader
       HashMap<mojom::blink::PermissionName, mojom::blink::PermissionStatus>>
       initial_permission_statuses;
   bool force_new_document_sequence_number;
+  base::TimeDelta total_taken_time_to_update_subresource_load_metrics;
 };
 
 // Asserts size of DocumentLoader, so that whenever a new attribute is added to
@@ -1732,15 +1734,15 @@ mojom::CommitResult DocumentLoader::CommitSameDocumentNavigation(
     frame_->GetTaskRunner(TaskType::kInternalLoading)
         ->PostTask(
             FROM_HERE,
-            WTF::BindOnce(&DocumentLoader::CommitSameDocumentNavigationInternal,
-                          WrapWeakPersistent(this), url, frame_load_type,
-                          WrapPersistent(history_item),
-                          same_document_navigation_type, client_redirect_policy,
-                          has_transient_user_activation,
-                          WTF::RetainedRef(initiator_origin),
-                          is_browser_initiated, is_synchronously_committed,
-                          triggering_event_info, task_state_id,
-                          has_ua_visual_transition, should_skip_screenshot));
+            blink::BindOnce(
+                &DocumentLoader::CommitSameDocumentNavigationInternal,
+                WrapWeakPersistent(this), url, frame_load_type,
+                WrapPersistent(history_item), same_document_navigation_type,
+                client_redirect_policy, has_transient_user_activation,
+                blink::RetainedRef(initiator_origin), is_browser_initiated,
+                is_synchronously_committed, triggering_event_info,
+                task_state_id, has_ua_visual_transition,
+                should_skip_screenshot));
   } else {
     CommitSameDocumentNavigationInternal(
         url, frame_load_type, history_item, same_document_navigation_type,
@@ -2966,21 +2968,16 @@ void DocumentLoader::CommitNavigation() {
       (commit_reason_ == CommitReason::kRegular)
           ? ScopedOldDocumentInfoForCommitCapturer::CurrentInfo()
           : nullptr;
-  bool had_sticky_activation_before_navigation =
-      old_document_info_for_commit &&
-      old_document_info_for_commit->had_sticky_activation_before_navigation;
-  if (had_sticky_activation_before_navigation != had_sticky_activation_) {
+  if (frame_->HadStickyUserActivationBeforeNavigation() !=
+      had_sticky_activation_) {
     frame_->SetHadStickyUserActivationBeforeNavigation(had_sticky_activation_);
     frame_->GetLocalFrameHostRemote()
         .HadStickyUserActivationBeforeNavigationChanged(had_sticky_activation_);
   }
 
   if (old_document_info_for_commit) {
-    bool was_focused_frame = old_document_info_for_commit->was_focused_frame;
-    if (was_focused_frame) {
-      frame_->GetPage()->GetFocusController().SetFocusedFrame(frame_);
-    }
-
+    frame_->GetPage()->GetFocusController().UpdateFocusOnNavigationCommit(
+        frame_, old_document_info_for_commit->was_focused_frame);
     if (old_document_info_for_commit->overlay_color.has_value()) {
       frame_->SetFrameColorOverlay(
           old_document_info_for_commit->overlay_color.value());
@@ -3196,24 +3193,20 @@ void DocumentLoader::CreateParserPostCommit() {
 
   // DidObserveLoadingBehavior() must be called after DispatchDidCommitLoad() is
   // called for the metrics tracking logic to handle it properly.
+  LoadingBehaviorFlag loading_behavior = kLoadingBehaviorNone;
   if (service_worker_network_provider_ &&
       service_worker_network_provider_->GetControllerServiceWorkerMode() ==
           mojom::blink::ControllerServiceWorkerMode::kControlled) {
-    LoadingBehaviorFlag loading_behavior =
-        kLoadingBehaviorServiceWorkerControlled;
+    loading_behavior |= kLoadingBehaviorServiceWorkerControlled;
     if (service_worker_network_provider_->GetFetchHandlerType() !=
         mojom::blink::ServiceWorkerFetchHandlerType::kNotSkippable) {
       DCHECK_NE(service_worker_network_provider_->GetFetchHandlerType(),
                 mojom::blink::ServiceWorkerFetchHandlerType::kNoHandler);
-      // LoadingBehaviorFlag is a bit stream, and `|` should work.
-      loading_behavior = static_cast<LoadingBehaviorFlag>(
-          loading_behavior |
-          kLoadingBehaviorServiceWorkerFetchHandlerSkippable);
+      loading_behavior |= kLoadingBehaviorServiceWorkerFetchHandlerSkippable;
     }
     if (!response_.WasFetchedViaServiceWorker()) {
-      loading_behavior = static_cast<LoadingBehaviorFlag>(
-          loading_behavior |
-          kLoadingBehaviorServiceWorkerMainResourceFetchFallback);
+      loading_behavior |=
+          kLoadingBehaviorServiceWorkerMainResourceFetchFallback;
     }
     if (service_worker_network_provider_->GetFetchHandlerBypassOption() ==
             mojom::blink::ServiceWorkerFetchHandlerBypassOption::
@@ -3221,9 +3214,13 @@ void DocumentLoader::CreateParserPostCommit() {
         service_worker_network_provider_->GetFetchHandlerBypassOption() ==
             mojom::blink::ServiceWorkerFetchHandlerBypassOption::
                 kRaceNetworkRequestHoldback) {
-      loading_behavior = static_cast<LoadingBehaviorFlag>(
-          loading_behavior | kLoadingBehaviorServiceWorkerRaceNetworkRequest);
+      loading_behavior |= kLoadingBehaviorServiceWorkerRaceNetworkRequest;
     }
+  }
+  if (response_.FromSyntheticResponse()) {
+    loading_behavior |= kLoadingBehaviorServiceWorkerSyntheticResponse;
+  }
+  if (loading_behavior != kLoadingBehaviorNone) {
     GetLocalFrameClient().DidObserveLoadingBehavior(loading_behavior);
   }
 
@@ -3429,8 +3426,9 @@ void DocumentLoader::RecordUseCountersForCommit() {
                          TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
   // Pre-commit state, count usage the use counter associated with "this"
   // (provisional document loader) instead of frame_'s document loader.
-  if (response_.DidServiceWorkerNavigationPreload())
+  if (response_.DidServiceWorkerNavigationPreload()) {
     CountUse(WebFeature::kServiceWorkerNavigationPreload);
+  }
   if (frame_->DomWindow()->IsFeatureEnabled(
           mojom::blink::DocumentPolicyFeature::kForceLoadAtTop)) {
     CountUse(WebFeature::kForceLoadAtTop);
@@ -3469,30 +3467,43 @@ void DocumentLoader::RecordUseCountersForCommit() {
                  : WebFeature::kSignedExchangeInnerResponseInSubFrame);
   }
 
-  if (!response_.HttpHeaderField(http_names::kRequireDocumentPolicy).IsNull())
-    CountUse(WebFeature::kRequireDocumentPolicyHeader);
+  if (!response_.HttpHeaderField(http_names::kReportTo).IsNull()) {
+    CountUse(WebFeature::kReportToHeader);
+  }
 
-  if (!response_.HttpHeaderField(http_names::kNoVarySearch).IsNull())
+  if (!response_.HttpHeaderField(http_names::kReportingEndpoints).IsNull()) {
+    CountUse(WebFeature::kReportingEndpointsHeader);
+  }
+
+  if (!response_.HttpHeaderField(http_names::kRequireDocumentPolicy).IsNull()) {
+    CountUse(WebFeature::kRequireDocumentPolicyHeader);
+  }
+
+  if (!response_.HttpHeaderField(http_names::kNoVarySearch).IsNull()) {
     CountUse(WebFeature::kNoVarySearch);
+  }
 
   if (frame_->IsOutermostMainFrame() &&
       !response_.HttpHeaderField(http_names::kRequestOTR).IsNull()) {
     CountUse(WebFeature::kRequestOTRMainFrame);
   }
 
-  if (was_blocked_by_document_policy_)
+  if (was_blocked_by_document_policy_) {
     CountUse(WebFeature::kDocumentPolicyCausedPageUnload);
+  }
 
   // Required document policy can either come from iframe attribute or HTTP
   // header 'Require-Document-Policy'.
-  if (!frame_policy_.required_document_policy.empty())
+  if (!frame_policy_.required_document_policy.empty()) {
     CountUse(WebFeature::kRequiredDocumentPolicy);
+  }
 
   FrameClientHintsPreferencesContext hints_context(frame_);
   for (const auto& elem : network::GetClientHintToNameMap()) {
     const auto& type = elem.first;
-    if (client_hints_preferences_.ShouldSend(type))
+    if (client_hints_preferences_.ShouldSend(type)) {
       hints_context.CountClientHints(type);
+    }
   }
 
   if (!early_hints_preloaded_resources_.empty()) {
@@ -3515,7 +3526,8 @@ void DocumentLoader::RecordUseCountersForCommit() {
   }
 #endif
 
-  if (response_.HttpHeaderField(http_names::kSecSessionRegistration)) {
+  if (response_.HttpHeaderField(http_names::kSecSessionRegistration) ||
+      response_.HttpHeaderField(http_names::kSecureSessionRegistration)) {
     CountUse(WebFeature::kDeviceBoundSessionRegistered);
   }
 
@@ -3657,7 +3669,7 @@ void DocumentLoader::NotifyPrerenderingDocumentActivated(
     // process already knows it.
   }
 
-  GetTiming().SetActivationStart(params.activation_start);
+  GetTiming().SetActivationStart(*params.activation_start);
 
   if (params.view_transition_state) {
     CHECK(!view_transition_state_);
@@ -3876,11 +3888,25 @@ void DocumentLoader::DisableCodeCacheForTesting() {
 
 void DocumentLoader::UpdateSubresourceLoadMetrics(
     const SubresourceLoadMetrics& subresource_load_metrics) {
+  base::ElapsedTimer timer;
   GetLocalFrameClient().DidObserveSubresourceLoad(subresource_load_metrics);
+  if (base::TimeTicks::IsHighResolution()) {
+    total_taken_time_to_update_subresource_load_metrics_ += timer.Elapsed();
+  }
 }
 
 const mojom::RendererContentSettingsPtr& DocumentLoader::GetContentSettings() {
   return content_settings_;
+}
+
+void DocumentLoader::ReportTotalTakenTimeToUpdateSubresourceLoadMetrics() {
+  if (Url().ProtocolIsInHTTPFamily() && frame_->IsOutermostMainFrame() &&
+      ShouldEmitNewNavigationHistogram(navigation_type_)) {
+    base::UmaHistogramMicrosecondsTimes(
+        "Blink.DocumentLoader.TotalTakenTimeToUpdateSubresourceLoadMetrics2."
+        "OutermostMainFrame.NewNavigation.IsHTTPOrHTTPS",
+        total_taken_time_to_update_subresource_load_metrics_);
+  }
 }
 
 DEFINE_WEAK_IDENTIFIER_MAP(DocumentLoader)

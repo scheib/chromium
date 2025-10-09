@@ -55,8 +55,8 @@ GURL GetUnsafeRequestOrigin(const content::WebContents::Getter& wc_getter) {
 
 bool IsOriginAllowedServerFallback(const GURL& url) {
   // Allow chrome-untrusted://data-sharing to use Google server fallback.
-  if (url.scheme() == content::kChromeUIUntrustedScheme &&
-      url.host() == chrome::kChromeUIUntrustedDataSharingHost) {
+  if (url.GetScheme() == content::kChromeUIUntrustedScheme &&
+      url.GetHost() == chrome::kChromeUIUntrustedDataSharingHost) {
     return true;
   }
   GURL history_url(chrome::kChromeUIHistoryURL);
@@ -257,11 +257,11 @@ void FaviconSource::SendDefaultResponse(
     const chrome::ParsedFaviconPath& parsed,
     const content::WebContents::Getter& wc_getter) {
   if (!parsed.show_fallback_monogram) {
-    SendDefaultResponse(std::move(callback), parsed.size_in_dip,
-                        parsed.device_scale_factor,
-                        parsed.force_light_mode
-                            ? false
-                            : GetNativeTheme(wc_getter)->ShouldUseDarkColors());
+    SendDefaultResponse(
+        std::move(callback), parsed.size_in_dip, parsed.device_scale_factor,
+        !parsed.force_light_mode &&
+            GetNativeTheme(wc_getter)->preferred_color_scheme() ==
+                ui::NativeTheme::PreferredColorScheme::kDark);
     return;
   }
   int icon_size = std::ceil(parsed.size_in_dip * parsed.device_scale_factor);
@@ -279,9 +279,9 @@ void FaviconSource::SendDefaultResponse(
     const content::WebContents::Getter& wc_getter,
     bool force_light_mode) {
   SendDefaultResponse(std::move(callback), 16, 1.0f,
-                      force_light_mode
-                          ? false
-                          : GetNativeTheme(wc_getter)->ShouldUseDarkColors());
+                      !force_light_mode &&
+                          GetNativeTheme(wc_getter)->preferred_color_scheme() ==
+                              ui::NativeTheme::PreferredColorScheme::kDark);
 }
 
 void FaviconSource::SendDefaultResponse(

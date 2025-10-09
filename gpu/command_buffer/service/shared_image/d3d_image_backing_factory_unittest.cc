@@ -39,9 +39,11 @@
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "gpu/command_buffer/service/shared_image/compound_image_backing.h"
 #include "gpu/command_buffer/service/shared_image/d3d_image_backing.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_copy_manager.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
+#include "gpu/command_buffer/service/shared_image/shared_memory_copy_strategy.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkAlphaType.h"
@@ -56,6 +58,7 @@
 #include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "third_party/skia/include/gpu/graphite/Surface.h"
 #include "third_party/skia/include/private/chromium/GrPromiseImageTexture.h"
+#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/gpu_memory_buffer_handle.h"
@@ -487,9 +490,8 @@ class D3DImageBackingFactoryTest
     auto gr_context_type = GetParam();
     if (gr_context_type == GrContextType::kGraphiteDawn)
     {
-      dawn_context_provider_ = DawnContextProvider::Create(
-          GpuPreferences(), GpuFeatureInfo(),
-          DawnContextProvider::DefaultValidateAdapterFn);
+      dawn_context_provider_ =
+          DawnContextProvider::Create(GpuPreferences(), GpuFeatureInfo());
     }
     context_state_ = base::MakeRefCounted<SharedContextState>(
         std::move(share_group), surface_, context_,
@@ -499,6 +501,8 @@ class D3DImageBackingFactoryTest
     auto feature_info =
         base::MakeRefCounted<gles2::FeatureInfo>(workarounds, GpuFeatureInfo());
     context_state_->InitializeGL(GpuPreferences(), std::move(feature_info));
+    copy_manager_ = base::MakeRefCounted<SharedImageCopyManager>();
+    copy_manager_->AddStrategy(std::make_unique<SharedMemoryCopyStrategy>());
   }
 
   void TearDown() override {
@@ -616,6 +620,7 @@ class D3DImageBackingFactoryTest
 
   std::unique_ptr<DawnContextProvider> dawn_context_provider_;
   scoped_refptr<SharedContextState> context_state_;
+  scoped_refptr<SharedImageCopyManager> copy_manager_;
 };
 
 // Test to check interaction between Gl and skia GL representations.
@@ -1985,10 +1990,11 @@ void D3DImageBackingFactoryTest::RunCreateFromSharedMemoryMultiplanarTest(
 
   // CompoundImageBacking wrapping D3DImageBacking is required for shared
   // memory support.
-  auto backing = CompoundImageBacking::CreateSharedMemory(
-      shared_image_factory_.get(), mailbox, std::move(shm_gmb_handle),
-      viz::MultiPlaneFormat::kNV12, size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, usage, "TestLabel");
+  auto backing = CompoundImageBacking::CreateSharedMemoryForTesting(
+      shared_image_factory_.get(), copy_manager_, mailbox,
+      std::move(shm_gmb_handle), viz::MultiPlaneFormat::kNV12, size,
+      gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, usage,
+      "TestLabel");
   EXPECT_NE(backing, nullptr);
 
   EXPECT_EQ(backing->mailbox(), mailbox);
@@ -2513,7 +2519,7 @@ TEST_F(D3DImageBackingFactoryBufferTest, CreateSharedImageImportToDawn) {
 
   auto dawn_representation =
       shared_image_representation_factory_->ProduceDawnBuffer(
-          mailbox, device, wgpu::BackendType::D3D12);
+          mailbox, device, wgpu::BackendType::D3D12, /*context_state=*/nullptr);
   ASSERT_NE(dawn_representation, nullptr);
 
   auto scoped_access = dawn_representation->BeginScopedAccess(
@@ -2546,6 +2552,39 @@ TEST_F(D3DImageBackingFactoryBufferTest, CreateSharedImageImportToDawn) {
   CheckDawnBuffer(buffer, instance.Get(), device, kBufferSize, kBufferData);
 
   factory_ref.reset();
+}
+
+// Disabled by default as it requires DX11.
+TEST_F(D3DImageBackingFactoryTest, DISABLED_CreateGpuMemoryBuffer) {
+  for (auto format : gfx::GetBufferFormatsForTesting()) {
+    gfx::BufferUsage usages[] = {
+        gfx::BufferUsage::GPU_READ,
+        gfx::BufferUsage::SCANOUT,
+        gfx::BufferUsage::SCANOUT_CAMERA_READ_WRITE,
+        gfx::BufferUsage::CAMERA_AND_CPU_READ_WRITE,
+        gfx::BufferUsage::SCANOUT_CPU_READ_WRITE,
+        gfx::BufferUsage::SCANOUT_VDA_WRITE,
+        gfx::BufferUsage::PROTECTED_SCANOUT,
+        gfx::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE,
+        gfx::BufferUsage::GPU_READ_CPU_READ_WRITE,
+        gfx::BufferUsage::SCANOUT_VEA_CPU_READ,
+        gfx::BufferUsage::VEA_READ_CAMERA_AND_CPU_READ_WRITE,
+        gfx::BufferUsage::SCANOUT_FRONT_RENDERING,
+    };
+    for (auto usage : usages) {
+      if (!gpu::GpuMemoryBufferSupport::
+              IsNativeGpuMemoryBufferConfigurationSupportedForTesting(format,
+                                                                      usage)) {
+        continue;
+      }
+
+      gfx::GpuMemoryBufferHandle handle =
+          D3DImageBackingFactory::CreateGpuMemoryBufferHandle(
+              /*io_runner=*/nullptr, gfx::Size(2, 2),
+              viz::GetSharedImageFormat(format), usage);
+      EXPECT_EQ(handle.type, gfx::DXGI_SHARED_HANDLE);
+    }
+  }
 }
 
 }  // namespace gpu

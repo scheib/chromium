@@ -4,6 +4,8 @@
 
 #include "components/fingerprinting_protection_filter/browser/fingerprinting_protection_page_activation_throttle.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
@@ -12,6 +14,7 @@
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/fingerprinting_protection_filter/browser/fingerprinting_protection_web_contents_helper.h"
+#include "components/fingerprinting_protection_filter/browser/throttle_manager.h"
 #include "components/fingerprinting_protection_filter/common/fingerprinting_protection_breakage_exception.h"
 #include "components/fingerprinting_protection_filter/common/fingerprinting_protection_filter_constants.h"
 #include "components/fingerprinting_protection_filter/common/fingerprinting_protection_filter_features.h"
@@ -36,7 +39,7 @@ using ::subresource_filter::ScopedTimers;
 using ::subresource_filter::mojom::ActivationLevel;
 using ::subresource_filter::mojom::ActivationState;
 
-// TODO(https://crbug.com/40280666): This doesn't actually throttle any
+// TODO(https://crbug.com/346777548): This doesn't actually throttle any
 // navigations - use a different object to kick off the
 // `ProfileInteractionManager`.
 FingerprintingProtectionPageActivationThrottle::
@@ -72,8 +75,9 @@ FingerprintingProtectionPageActivationThrottle::GetNameForLogging() {
   return kPageActivationThrottleNameForLogging;
 }
 
-bool FingerprintingProtectionPageActivationThrottle::
-    IsFpActivationDeterminedByFeatureFlags(GetActivationResult* result) const {
+std::optional<GetActivationResult>
+FingerprintingProtectionPageActivationThrottle::
+    MaybeGetFpActivationDeterminedByFeatureFlags() const {
   // There are two, disjoint ways to gate FPP using flags:
   //
   // 1) `FingerprintingProtectionUx` -- This flag enables the FPP setting in the
@@ -91,49 +95,45 @@ bool FingerprintingProtectionPageActivationThrottle::
   //
 
   if (base::FeatureList::IsEnabled(
-          privacy_sandbox::kFingerprintingProtectionUx)) {
+          privacy_sandbox::kFingerprintingProtectionUx) &&
+      is_incognito_) {
     // Gate path (1).
     if (tracking_protection_settings_ == nullptr) {
       // If the Tracking Protection UX is enabled, we should never see a null
       // TrackingProtectionSettings. If we do, treat it like a disabled flag.
-      *result = {.level = ActivationLevel::kDisabled,
-                 .decision = ActivationDecision::UNKNOWN};
-      return true;
+      return GetActivationResult(ActivationLevel::kDisabled,
+                                 ActivationDecision::UNKNOWN);
     }
     if (!tracking_protection_settings_->IsFpProtectionEnabled()) {
       // Disabled by TP setting.
-      *result = {.level = ActivationLevel::kDisabled,
-                 .decision = ActivationDecision::ACTIVATION_DISABLED};
-      return true;
+      return GetActivationResult(ActivationLevel::kDisabled,
+                                 ActivationDecision::ACTIVATION_DISABLED);
     }
 
     // TP setting enabled, so FPP should be enabled unless the URL has an
     // exception, checked later in `GetActivation()`.
-    return false;
+    return std::nullopt;
   }
 
   // Gate path (2).
   if (!features::IsFingerprintingProtectionEnabledForIncognitoState(
           is_incognito_)) {
     // Feature flag disabled.
-    *result = {.level = ActivationLevel::kDisabled,
-               .decision = ActivationDecision::UNKNOWN};
-    return true;
+    return GetActivationResult(ActivationLevel::kDisabled,
+                               ActivationDecision::UNKNOWN);
   }
 
   if (features::kActivationLevel.Get() == ActivationLevel::kDisabled) {
     // The `activation_level` feature param can be used to force disable, e.g.
     // for an experiment.
-    *result = {.level = ActivationLevel::kDisabled,
-               .decision = ActivationDecision::ACTIVATION_DISABLED};
-    return true;
+    return GetActivationResult(ActivationLevel::kDisabled,
+                               ActivationDecision::ACTIVATION_DISABLED);
   }
 
   if (features::kActivationLevel.Get() == ActivationLevel::kDryRun) {
     // Dry run => enable FPP, ignoring exceptions.
-    *result = {.level = ActivationLevel::kDryRun,
-               .decision = ActivationDecision::ACTIVATED};
-    return true;
+    return GetActivationResult(ActivationLevel::kDryRun,
+                               ActivationDecision::ACTIVATED);
   }
 
   if (prefs_ != nullptr) {
@@ -149,15 +149,15 @@ bool FingerprintingProtectionPageActivationThrottle::
         content_settings::CookieControlsMode::kBlockThirdParty;
 
     if (features::kEnableOnlyIf3pcBlocked.Get() && !is_3pc_blocked) {
-      *result = {.level = ActivationLevel::kDisabled,
-                 .decision = ActivationDecision::ACTIVATION_CONDITIONS_NOT_MET};
-      return true;
+      return GetActivationResult(
+          ActivationLevel::kDisabled,
+          ActivationDecision::ACTIVATION_CONDITIONS_NOT_MET);
     }
   }
 
   // FPP enabled by flags, so FPP should be enabled unless the URL has an
   // exception, checked later in `GetActivation()`.
-  return false;
+  return std::nullopt;
 }
 
 bool FingerprintingProtectionPageActivationThrottle::
@@ -212,41 +212,42 @@ bool FingerprintingProtectionPageActivationThrottle::
 
 GetActivationResult
 FingerprintingProtectionPageActivationThrottle::GetActivation() const {
-  GetActivationResult activation_based_on_flags;
-  if (IsFpActivationDeterminedByFeatureFlags(&activation_based_on_flags)) {
-    return activation_based_on_flags;
+  if (auto activation_based_on_flags =
+          MaybeGetFpActivationDeterminedByFeatureFlags()) {
+    return *activation_based_on_flags;
   }
 
   // Ensures activation is disabled on top-level URLs that are localhost.
   if (net::IsLocalhost(navigation_handle()->GetURL())) {
-    return {.level = ActivationLevel::kDisabled,
-            .decision = ActivationDecision::ACTIVATION_CONDITIONS_NOT_MET};
+    return GetActivationResult(
+        ActivationLevel::kDisabled,
+        ActivationDecision::ACTIVATION_CONDITIONS_NOT_MET);
   }
 
   if (DoesUrlHaveRefreshHeuristicException()) {
-    return {.level = ActivationLevel::kDisabled,
-            .decision = ActivationDecision::URL_ALLOWLISTED};
+    return GetActivationResult(ActivationLevel::kDisabled,
+                               ActivationDecision::URL_ALLOWLISTED);
   }
 
   if (DoesUrlHaveTrackingProtectionException()) {
-    return {.level = ActivationLevel::kDisabled,
-            .decision = ActivationDecision::URL_ALLOWLISTED};
+    return GetActivationResult(ActivationLevel::kDisabled,
+                               ActivationDecision::URL_ALLOWLISTED);
   }
 
-  return {.level = ActivationLevel::kEnabled,
-          .decision = ActivationDecision::ACTIVATED};
+  return GetActivationResult(ActivationLevel::kEnabled,
+                             ActivationDecision::ACTIVATED);
 }
 
 void FingerprintingProtectionPageActivationThrottle::
     NotifyPageActivationComputed(ActivationState activation_state,
                                  ActivationDecision activation_decision) {
-  auto* web_contents_helper =
-      FingerprintingProtectionWebContentsHelper::FromWebContents(
-          navigation_handle()->GetWebContents());
-  // Making sure the WebContentsHelper exists is outside the scope of this
+  ThrottleManager* throttle_manager =
+      FingerprintingProtectionWebContentsHelper::GetThrottleManager(
+          *navigation_handle());
+  // Making sure the ThrottleManager exists is outside the scope of this
   // class.
-  if (web_contents_helper) {
-    web_contents_helper->NotifyPageActivationComputed(
+  if (throttle_manager) {
+    throttle_manager->OnPageActivationComputed(
         navigation_handle(), activation_state, activation_decision);
   }
 }
@@ -277,27 +278,6 @@ void FingerprintingProtectionPageActivationThrottle::LogMetricsOnChecksComplete(
   UMA_HISTOGRAM_ENUMERATION(ActivationLevelHistogramName, level);
   UMA_HISTOGRAM_ENUMERATION(ActivationDecisionHistogramName, decision,
                             ActivationDecision::ACTIVATION_DECISION_MAX);
-}
-
-namespace {
-
-bool ShouldMeasurePerformance(double performance_measurement_rate) {
-  return base::ThreadTicks::IsSupported() &&
-         (performance_measurement_rate == 1 ||
-          base::RandDouble() < performance_measurement_rate);
-}
-
-}  // namespace
-
-bool FingerprintingProtectionPageActivationThrottle::
-    GetEnablePerformanceMeasurements(bool is_incognito) const {
-  // Performance measurement rate may differ between incognito and
-  // non-incognito modes.
-  double performance_measurement_rate = GetFieldTrialParamByFeatureAsDouble(
-      is_incognito ? features::kEnableFingerprintingProtectionFilterInIncognito
-                   : features::kEnableFingerprintingProtectionFilter,
-      features::kPerformanceMeasurementRateParam, 0.0);
-  return ShouldMeasurePerformance(performance_measurement_rate);
 }
 
 bool FingerprintingProtectionPageActivationThrottle::

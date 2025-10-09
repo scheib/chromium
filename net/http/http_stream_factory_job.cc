@@ -653,7 +653,7 @@ int HttpStreamFactory::Job::StartInternal() {
 int HttpStreamFactory::Job::DoStart() {
   // Don't connect to restricted ports.
   if (!IsPortAllowedForScheme(destination_.port(),
-                              request_info_.url.scheme_piece())) {
+                              request_info_.url.scheme())) {
     return ERR_UNSAFE_PORT;
   }
 
@@ -1065,6 +1065,8 @@ int HttpStreamFactory::Job::SetSpdyHttpStreamOrBidirectionalStreamImpl(
   auto dns_aliases = session_->spdy_session_pool()->GetDnsAliasesForSessionKey(
       spdy_session_key_);
 
+  used_existing_spdy_session_ = existing_spdy_session_ != nullptr;
+
   if (is_websocket_) {
     DCHECK_NE(job_type_, PRECONNECT);
     DCHECK_NE(job_type_, PRECONNECT_DNS_ALPN_H3);
@@ -1196,6 +1198,10 @@ void HttpStreamFactory::Job::OnSpdySessionAvailable(
     base::WeakPtr<SpdySession> spdy_session) {
   DCHECK(spdy_session);
 
+  net_log_.AddEventReferencingSource(
+      NetLogEventType::HTTP_STREAM_JOB_HTTP2_SESSION_AVAILABLE,
+      spdy_session->net_log().source());
+
   // No need for the connection any more, since |spdy_session| can be used
   // instead, and there's no benefit from keeping the old ConnectJob in the
   // socket pool.
@@ -1222,8 +1228,10 @@ void HttpStreamFactory::Job::OnSpdySessionAvailable(
   existing_spdy_session_ = spdy_session;
   next_state_ = STATE_CREATE_STREAM;
 
-  // This will synchronously close |connection_|, so no need to worry about it
-  // calling back into |this|.
+  // This will synchronously close `connection_`, so no need to worry about it
+  // calling back into `this`. It will also immediately use
+  // `existing_spdy_session_`, so there are no concerns about it being destroyed
+  // before use.
   RunLoop(OK);
 }
 

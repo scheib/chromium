@@ -69,7 +69,7 @@ typedef NS_ENUM(NSUInteger, LensOverlayFilterState) {
 
 @implementation LensOverlayMediator {
   /// The profile pref service.
-  raw_ptr<const PrefService> _profilePrefs;
+  raw_ptr<const PrefService, DanglingUntriaged> _profilePrefs;
   /// Search engine observer.
   std::unique_ptr<SearchEngineObserverBridge> _searchEngineObserver;
   /// Orchestrates the navigation in the bottom sheet of the lens result page.
@@ -160,11 +160,11 @@ typedef NS_ENUM(NSUInteger, LensOverlayFilterState) {
                                      totalAnimationDuration * NSEC_PER_SEC),
                        dispatch_get_main_queue(), ^{
                          [weakSelf.delegate
-                             lensOverlayMediatorOpenURLInNewTabRequsted:URL];
+                             lensOverlayMediatorOpenURLInNewTabRequested:URL];
                        });
       } else {
         [self.delegate
-            lensOverlayMediatorOpenURLInNewTabRequsted:destinationURL];
+            lensOverlayMediatorOpenURLInNewTabRequested:destinationURL];
       }
 
       [self.metricsRecorder recordNewTabGeneratedWithSource:
@@ -197,7 +197,7 @@ typedef NS_ENUM(NSUInteger, LensOverlayFilterState) {
   [self.omniboxCoordinator focusOmnibox];
   [self.toolbarConsumer setOmniboxFocused:YES];
   [self.omniboxCoordinator.animatee setClearButtonFaded:NO];
-  [self.presentationDelegate requestMaximizeBottomSheet];
+  [self.bottomSheetCommands requestMaximizeBottomSheet];
 }
 
 - (void)defocusOmnibox {
@@ -257,13 +257,13 @@ typedef NS_ENUM(NSUInteger, LensOverlayFilterState) {
       // bottom sheet hidden, as no auto selection happens at this stage.
       [self.lensHandler resetSelectionAreaToInitialPosition:^{
       }];
-      [self.presentationDelegate
+      [self.bottomSheetCommands
           showInfoMessage:LensOverlayBottomSheetInfoMessageType::
                               kImageTranslatedIndication];
     } else if (noSelectionInTranslate) {
       // A missing selection without a switch in modes indicates the user
       // intended to dismiss the current selection.
-      [self.presentationDelegate
+      [self.bottomSheetCommands
           showInfoMessage:LensOverlayBottomSheetInfoMessageType::
                               kImageTranslatedIndication];
     }
@@ -282,8 +282,8 @@ typedef NS_ENUM(NSUInteger, LensOverlayFilterState) {
   };
   [self.toolbarConsumer setOmniboxEnabled:YES];
   // Make sure the bottom sheet is dismissed before triggering any alert.
-  if (self.presentationDelegate) {
-    [self.presentationDelegate hideBottomSheetWithCompletion:completion];
+  if (self.bottomSheetCommands) {
+    [self.bottomSheetCommands hideBottomSheetWithCompletion:completion];
   } else {
     completion();
   }
@@ -443,8 +443,8 @@ typedef NS_ENUM(NSUInteger, LensOverlayFilterState) {
   [self.metricsRecorder recordNewTabGeneratedWithSource:newTabSource];
 }
 
-- (void)lensResultPageOpenURLInNewTabRequsted:(GURL)URL {
-  [self.delegate lensOverlayMediatorOpenURLInNewTabRequsted:URL];
+- (void)lensResultPageOpenURLInNewTabRequested:(GURL)URL {
+  [self.delegate lensOverlayMediatorOpenURLInNewTabRequested:URL];
 }
 
 #pragma mark - Private
@@ -482,9 +482,9 @@ typedef NS_ENUM(NSUInteger, LensOverlayFilterState) {
   [self updateOmniboxText:result.queryText];
 
   if (result.isGeneratedInTranslate) {
-    [self.presentationDelegate didLoadTranslateResult];
+    [self.bottomSheetCommands adjustForTranslateResult];
   } else {
-    [self.presentationDelegate didLoadSelectionResult];
+    [self.bottomSheetCommands adjustForSelectionResult];
   }
 }
 

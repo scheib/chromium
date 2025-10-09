@@ -4,6 +4,8 @@
 
 #import "base/test/ios/wait_util.h"
 #import "base/time/time.h"
+#import "components/safe_browsing/core/common/safe_browsing_prefs.h"
+#import "components/safety_check/safety_check_pref_names.h"
 #import "components/segmentation_platform/public/features.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/content_suggestions_constants.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/new_tab_page_app_interface.h"
@@ -50,6 +52,22 @@ void WaitUntilSafetyCheckModuleVisibleOrTimeout(bool should_show) {
   }
 }
 
+// Scrolls to the Safety Check module.
+void ScrollToSafetyCheckModule() {
+  id<GREYMatcher> magicStackScrollView =
+      grey_accessibilityID(kMagicStackScrollViewAccessibilityIdentifier);
+  CGFloat moduleSwipeAmount = kMagicStackWideWidth * 0.6;
+  id<GREYMatcher> safetyCheckMatcher =
+      grey_allOf(grey_accessibilityID(safety_check::kSafetyCheckViewID),
+                 grey_sufficientlyVisible(), nil);
+
+  [[[EarlGrey selectElementWithMatcher:safetyCheckMatcher]
+         usingSearchAction:GREYScrollInDirectionWithStartPoint(
+                               kGREYDirectionRight, moduleSwipeAmount, 0.9, 0.5)
+      onElementWithMatcher:magicStackScrollView]
+      assertWithMatcher:grey_sufficientlyVisible()];
+}
+
 }  // namespace
 
 // Test case for the Safety Check view, i.e. Safety Check (Magic Stack) module.
@@ -61,7 +79,7 @@ void WaitUntilSafetyCheckModuleVisibleOrTimeout(bool should_show) {
 - (void)setUp {
   [super setUp];
 
-  [NewTabPageAppInterface disableSetUpList];
+  [NewTabPageAppInterface disableTipsCards];
 }
 
 - (void)tearDownHelper {
@@ -84,7 +102,7 @@ void WaitUntilSafetyCheckModuleVisibleOrTimeout(bool should_show) {
   // Enable relevant preferences for the test.
   [ChromeEarlGrey
       setBoolValue:YES
-       forUserPref:prefs::kHomeCustomizationMagicStackSafetyCheckEnabled];
+       forUserPref:safety_check::prefs::kSafetyCheckHomeModuleEnabled];
 
   // Intentionally forces a Safety Check error to ensure module visibility in
   // the Magic Stack.
@@ -97,6 +115,9 @@ void WaitUntilSafetyCheckModuleVisibleOrTimeout(bool should_show) {
       ensureAppLaunchedWithConfiguration:[self appConfigurationForTestCase]];
 
   [ChromeEarlGrey openNewTab];
+
+  // Scroll to the Safety Check module in case it is not the first module.
+  ScrollToSafetyCheckModule();
 
   WaitUntilSafetyCheckModuleVisibleOrTimeout(true);
 

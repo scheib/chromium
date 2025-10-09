@@ -36,6 +36,7 @@
 <translation id="1249250836236328755">Είδος</translation>
 <translation id="1254593899333212300">Άμεση σύνδεση στο διαδίκτυο</translation>
 <translation id="1272293450992660632">Οι τιμές PIN δεν ταιριάζουν.</translation>
+<translation id="1279040297980392566">Αναμονή για την ολοκλήρωση της σάρωσης, δοκιμάστε ξανά αργότερα</translation>
 <translation id="1280820357415527819">Αναζήτηση για δίκτυα κινητής τηλεφωνίας</translation>
 <translation id="1293556467332435079">Αρχεία</translation>
 <translation id="1297922636971898492">Το Google Drive δεν είναι διαθέσιμο αυτήν τη στιγμή. Η μεταφόρτωση θα ξεκινήσει ξανά, όταν το Google Drive είναι και πάλι διαθέσιμο.</translation>
@@ -108,7 +109,7 @@
 <translation id="1810764548349082891">Δεν υπάρχει διαθέσιμη προεπισκόπηση</translation>
 <translation id="1812302367230252929">Μεταγραφή σε Αμχαρικά</translation>
 <translation id="1813278315230285598">Υπηρεσίες</translation>
-<translation id="181434555916624618">Προς το παρόν, τα αποτελέσματα που περιέχουν άτομα δεν θα εμφανίζονται. Δοκιμάστε άλλη οδηγία.</translation>
+<translation id="181434555916624618">Προς το παρόν, τα αποτελέσματα που περιέχουν άτομα δεν θα εμφανίζονται. Δοκιμάστε άλλη προτροπή.</translation>
 <translation id="1829129547161959350">Πιγκουίνος</translation>
 <translation id="183183971458492120">Γίνεται φόρτωση των πληροφοριών…</translation>
 <translation id="1832073788765803750">Κατακάνα μισού πλάτους</translation>
@@ -801,7 +802,7 @@
 <translation id="7075931588889865715">Ταϊλανδικά με πληκτρολόγιο TIS 820-2531</translation>
 <translation id="708278670402572152">Αποσυνδεθείτε για να είναι δυνατή η σάρωση</translation>
 <translation id="7086590977277044826">Ταμίλ με πληκτρολόγιο InScript</translation>
-<translation id="7088615885725309056">Παλαιότερο</translation>
+<translation id="7088615885725309056">Παλαιότερη</translation>
 <translation id="7103992300314999525">Σλαβομακεδονικά</translation>
 <translation id="7104338189998813914">Υπάρχει κάποιο πρόβλημα με την πρόσβαση στον λογαριασμό σας στο OneDrive</translation>
 <translation id="7106346894903675391">Αγοράστε περισσότερο αποθηκευτικό χώρο...</translation>
@@ -1101,6 +1102,7 @@
 <translation id="9213073329713032541">Η εγκατάσταση ξεκίνησε με επιτυχία.</translation>
 <translation id="9219103736887031265">Εικόνες</translation>
 <translation id="9219908252191632183">Σεληνιακό τοπίο</translation>
+<translation id="931652069802536959">Το δίκτυο έχει αποκλειστεί από την πολιτική</translation>
 <translation id="938470336146445890">Εγκαταστήστε ένα πιστοποιητικό χρήστη.</translation>
 <translation id="939736085109172342">Νέος φάκελος</translation>
 <translation id="943972244133411984">Τροποποιήθηκε από</translation>

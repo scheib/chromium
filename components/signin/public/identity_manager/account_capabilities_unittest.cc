@@ -4,6 +4,7 @@
 
 #include "components/signin/public/identity_manager/account_capabilities.h"
 
+#include "build/build_config.h"
 #include "components/signin/public/identity_manager/account_capabilities_test_mutator.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -42,6 +43,23 @@ TEST_F(AccountCapabilitiesTest, CanHaveEmailAddressDisplayed) {
   EXPECT_EQ(capabilities.can_have_email_address_displayed(),
             signin::Tribool::kFalse);
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+TEST_F(AccountCapabilitiesTest, CanMakeChromeSearchEngineChoiceScreenChoice) {
+  AccountCapabilities capabilities;
+  EXPECT_EQ(capabilities.can_make_chrome_search_engine_choice_screen_choice(),
+            signin::Tribool::kUnknown);
+
+  AccountCapabilitiesTestMutator mutator(&capabilities);
+  mutator.set_can_make_chrome_search_engine_choice_screen_choice(true);
+  EXPECT_EQ(capabilities.can_make_chrome_search_engine_choice_screen_choice(),
+            signin::Tribool::kTrue);
+
+  mutator.set_can_make_chrome_search_engine_choice_screen_choice(false);
+  EXPECT_EQ(capabilities.can_make_chrome_search_engine_choice_screen_choice(),
+            signin::Tribool::kFalse);
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 TEST_F(AccountCapabilitiesTest,
        CanShowHistorySyncOptInsWithoutMinorModeRestrictions) {
@@ -211,9 +229,6 @@ TEST_F(AccountCapabilitiesTest, IsSubjectToAccountLevelEnterprisePolicies) {
   EXPECT_EQ(capabilities.is_subject_to_account_level_enterprise_policies(),
             signin::Tribool::kUnknown);
 
-#if !BUILDFLAG(IS_IOS)
-  // TODO(crbug.com/435151047): Remove this once the capability is fully rolled
-  // out.
   AccountCapabilitiesTestMutator mutator(&capabilities);
   mutator.set_is_subject_to_account_level_enterprise_policies(true);
   EXPECT_EQ(capabilities.is_subject_to_account_level_enterprise_policies(),
@@ -222,7 +237,6 @@ TEST_F(AccountCapabilitiesTest, IsSubjectToAccountLevelEnterprisePolicies) {
   mutator.set_is_subject_to_account_level_enterprise_policies(false);
   EXPECT_EQ(capabilities.is_subject_to_account_level_enterprise_policies(),
             signin::Tribool::kFalse);
-#endif  // !BUILDFLAG(IS_IOS)
 }
 
 TEST_F(AccountCapabilitiesTest, IsSubjectToEnterpriseFeatures) {

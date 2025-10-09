@@ -7,8 +7,8 @@
 //   --gn_target chrome/test/data/webui/glic:build_ts
 
 import {WebClientMode} from '/glic/glic_api/glic_api.js';
-import type {GlicBrowserHost, GlicHostRegistry, GlicWebClient, Observable, OpenPanelInfo, PanelOpeningData, Subscriber} from '/glic/glic_api/glic_api.js';
-import {ObservableValue} from '/glic/observable.js';
+import type {GlicBrowserHost, GlicHostRegistry, GlicWebClient, Observable, OpenPanelInfo, PanelOpeningData, PanelStateKind} from '/glic/glic_api/glic_api.js';
+import {ObservableValue, type Subscriber} from '/glic/observable.js';
 
 import {createGlicHostRegistryOnLoad} from '../api_boot.js';
 
@@ -36,8 +36,16 @@ export class SequencedSubscriber<T> {
   // The last value read from `next()`, or undefined if none was read.
   current: T|undefined;
 
+  // A promise that resolves when the observable is completed.
+  readonly completed: Promise<void>;
+
   constructor(observable: Observable<T>) {
-    this.subscriber = observable.subscribe(this.change.bind(this));
+    const completedResolvers = Promise.withResolvers<void>();
+    this.completed = completedResolvers.promise;
+    this.subscriber = observable.subscribeObserver!({
+      next: this.change.bind(this),
+      complete: completedResolvers.resolve,
+    });
   }
   async next(): Promise<T> {
     // Wrapping the returned value with `waitFor` improves failure logs
@@ -88,15 +96,18 @@ export class WebClient implements GlicWebClient {
   initializedPromise = Promise.withResolvers<void>();
   onNotifyPanelWasClosed: () => void = () => {};
   panelOpenState = ObservableValue.withValue<boolean>(false);
+  panelOpenStateKind = ObservableValue.withNoValue<PanelStateKind>();
 
   async initialize(glicBrowserHost: GlicBrowserHost): Promise<void> {
     this.host = glicBrowserHost;
     this.initializedPromise.resolve();
   }
 
-  async notifyPanelWillOpen(_panelOpeningData: PanelOpeningData):
+  async notifyPanelWillOpen(panelOpeningData: PanelOpeningData):
       Promise<OpenPanelInfo> {
     this.panelOpenState.assignAndSignal(true);
+    this.panelOpenStateKind.assignAndSignal(
+        checkDefined(panelOpeningData.panelState?.kind));
     this.firstOpened.resolve();
 
     const openPanelInfo: OpenPanelInfo = {
@@ -186,6 +197,15 @@ export class ApiTestFixtureBase {
   getStepCount(): number {
     return this.testStepCount;
   }
+
+  async testAllTestsAreRegistered() {
+    const allNames = [];
+    for (const fixture of testRunner.testFixtures) {
+      allNames.push(...Object.getOwnPropertyNames(fixture.prototype)
+                        .filter(name => name.startsWith('test')));
+    }
+    await this.advanceToNextStep(allNames);
+  }
 }
 
 function findTestFixture(testFixtures: any[], testName: string): any {
@@ -193,6 +213,10 @@ function findTestFixture(testFixtures: any[], testName: string): any {
     if (Object.getOwnPropertyNames(fixture.prototype).includes(testName)) {
       return fixture;
     }
+  }
+  // testAllTestsAreRegistered is provided by the fixture base class.
+  if (testName === 'testAllTestsAreRegistered') {
+    return testFixtures[0];
   }
   return undefined;
 }
@@ -215,7 +239,7 @@ class TestRunner implements TestStepper {
   testDone: Promise<void>|undefined;
   testFound = false;
   stepFailures: ApiTestError[] = [];
-  constructor(private testName: string, private testFixtures: any[]) {
+  constructor(private testName: string, public testFixtures: any[]) {
     console.info(`TestRunner(${testName})`);
   }
 
@@ -253,7 +277,7 @@ class TestRunner implements TestStepper {
   // If `run()` or `stepComplete()` returns 'next-step', this function is called
   // to continue running the test.
   stepComplete(payload: any): Promise<TestResult> {
-    console.info(`Continue test${this.testName}`);
+    console.info(`Continue ${this.testName}`);
     if (payload !== null) {
       this.fixture!.testParams = payload;
     }
@@ -387,16 +411,22 @@ export function assertTrue(x: boolean, message?: string): asserts x {
   }
 }
 
+export function assertFalse(x: boolean, message?: string): asserts x is false {
+  if (x) {
+    throw new ApiTestError(
+        `assertFalse failed: '${x}' is not false. ${message ?? ''}`);
+  }
+}
+
 export function assertDefined<T>(x: T|undefined, message?: string): asserts x {
   if (x === undefined) {
     throw new Error(`assertDefined failed. ${message ?? ''}`);
   }
 }
 
-export function assertFalse(x: boolean, message?: string): asserts x is false {
-  if (x) {
-    throw new ApiTestError(
-        `assertFalse failed: '${x}' is not false. ${message ?? ''}`);
+export function assertUndefined<T>(x: T|undefined, message?: string) {
+  if (x !== undefined) {
+    throw new Error(`assertUndefined failed. ${message ?? ''}`);
   }
 }
 

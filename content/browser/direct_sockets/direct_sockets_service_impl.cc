@@ -156,6 +156,35 @@ bool ShouldOpenFirewallHole(const net::IPAddress& address) {
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
+bool IsMulticastAllowed(const Context& context) {
+  if (!base::FeatureList::IsEnabled(
+          blink::features::kMulticastInDirectSockets)) {
+    return false;
+  }
+
+  return std::visit(
+      absl::Overload{[](content::RenderFrameHost* rfh) {
+                       return rfh->IsFeatureEnabled(
+                           network::mojom::PermissionsPolicyFeature::
+                               kMulticastInDirectSockets);
+                     },
+                     [](base::WeakPtr<SharedWorkerHost> shared_worker) {
+                       // No need to check flag DirectSocketsInSharedWorker,
+                       // since it was checked already
+                       // TODO(crbug.com/393539884): Add permissions policy
+                       // check.
+                       return true;
+                     },
+                     [](base::WeakPtr<ServiceWorkerVersion> service_worker) {
+                       // No need to check flag DirectSocketsInServiceWorker,
+                       // since it was checked already.
+                       // TODO(crbug.com/393539884): Add permissions policy
+                       // check.
+                       return true;
+                     }},
+      context);
+}
+
 bool RequiresPrivateNetworkAccess(const net::AddressList& addresses) {
   return std::ranges::any_of(
       addresses.endpoints(), [](const net::IPEndPoint& ip_endpoint) {
@@ -216,13 +245,13 @@ void CreateSocketIfAllowed(
     return;
   }
   FulfillWithError(std::move(finish_callback),
-                   net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS);
+                   net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS);
 }
 
 // Queries the embedder whether private network access is allowed, and on
 // success invokes `create_socket_callback` with `finish_callback`. Upon failure
 // discards `create_socket_callback` and errors `finish_callback` with
-// net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS.
+// net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS.
 template <typename FinishCallback>
 void RequestPrivateNetworkAccessAndCreateSocket(
     const Context& context,
@@ -566,6 +595,18 @@ void DirectSocketsServiceImpl::OpenBoundUDPSocket(
   if (options->receive_buffer_size.has_value()) {
     socket_options->receive_buffer_size = *options->receive_buffer_size;
   }
+  if (IsMulticastAllowed(context_)) {
+    if (options->multicast_allow_address_sharing.has_value()) {
+      socket_options->allow_address_sharing_for_multicast =
+          *options->multicast_allow_address_sharing;
+    }
+    if (options->multicast_time_to_live.has_value()) {
+      socket_options->multicast_time_to_live = *options->multicast_time_to_live;
+    }
+    if (options->multicast_loopback.has_value()) {
+      socket_options->multicast_loopback_mode = *options->multicast_loopback;
+    }
+  }
 
   auto params = network::mojom::RestrictedUDPSocketParams::New();
   params->socket_options = std::move(socket_options);
@@ -774,6 +815,15 @@ void DirectSocketsServiceImpl::OnResolveCompleteForUDPSocket(
     socket_options->receive_buffer_size = *options->receive_buffer_size;
   }
 
+  if (IsMulticastAllowed(context_)) {
+    if (options->multicast_time_to_live.has_value()) {
+      socket_options->multicast_time_to_live = *options->multicast_time_to_live;
+    }
+    if (options->multicast_loopback.has_value()) {
+      socket_options->multicast_loopback_mode = *options->multicast_loopback;
+    }
+  }
+
   auto params = network::mojom::RestrictedUDPSocketParams::New();
   params->socket_options = std::move(socket_options);
 
@@ -823,7 +873,7 @@ void DirectSocketsServiceImpl::CreateRestrictedUDPSocketImpl(
       /*traffic_annotation=*/
       net::MutableNetworkTrafficAnnotationTag(kDirectSocketsTrafficAnnotation),
       std::move(options), std::move(socket), std::move(listener),
-      std::move(callback));
+      IsMulticastAllowed(context_), std::move(callback));
 }
 
 }  // namespace content

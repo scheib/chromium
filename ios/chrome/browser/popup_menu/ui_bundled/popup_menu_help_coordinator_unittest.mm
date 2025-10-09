@@ -27,7 +27,7 @@
 namespace {
 // Create the Feature Engagement Mock Tracker.
 std::unique_ptr<KeyedService> BuildFeatureEngagementMockTracker(
-    web::BrowserState* browser_state) {
+    ProfileIOS* profile) {
   return std::make_unique<feature_engagement::test::MockTracker>();
 }
 
@@ -81,7 +81,7 @@ class PopupMenuHelpCoordinatorTest : public PlatformTest {
   std::unique_ptr<TestBrowser> browser_;
   PopupMenuHelpCoordinator* popup_menu_help_coordinator_;
   id<PopupMenuUIUpdating> popupMenuUIUpdating_;
-  raw_ptr<feature_engagement::test::MockTracker> tracker_;
+  raw_ptr<feature_engagement::test::MockTracker, DanglingUntriaged> tracker_;
 };
 
 // Test that blue dot is set on foreground.

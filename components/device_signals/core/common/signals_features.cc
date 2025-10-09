@@ -7,13 +7,11 @@
 namespace enterprise_signals::features {
 
 BASE_FEATURE(kAllowClientCertificateReportingForUsers,
-             "AllowClientCertificateReportingForUsers",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Enables the addition of device signals fields to Profile-level Chrome
 // Reports.
 BASE_FEATURE(kProfileSignalsReportingEnabled,
-             "ProfileSignalsReportingEnabled",
 #if BUILDFLAG(IS_ANDROID)
              base::FEATURE_DISABLED_BY_DEFAULT);
 #else
@@ -22,14 +20,17 @@ BASE_FEATURE(kProfileSignalsReportingEnabled,
 
 // Enables the collection of detected agent signals in Chrome report.
 BASE_FEATURE(kDetectedAgentSignalCollectionEnabled,
-             "DetectedAgentSignalCollectionEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Enables the addition of device signals fields to Browser-level Chrome
 // Reports.
 BASE_FEATURE(kBrowserSignalsReportingEnabled,
-             "BrowserSignalsReportingEnabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables the improvements made during system signals collection in Chrome.
+BASE_FEATURE(kSystemSignalCollectionImprovementEnabled,
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 // Controls whether a signals-only profile report will be triggered when a valid
 // cookie change is observed.
 constexpr base::FeatureParam<bool> kTriggerOnCookieChange{
@@ -54,14 +55,17 @@ bool IsDetectedAgentSignalCollectionEnabled() {
   return base::FeatureList::IsEnabled(kDetectedAgentSignalCollectionEnabled);
 }
 
+bool IsSystemSignalCollectionImprovementEnabled() {
+  return base::FeatureList::IsEnabled(
+      kSystemSignalCollectionImprovementEnabled);
+}
+
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || \
     BUILDFLAG(IS_CHROMEOS)
 // Enables the triggering of device signals consent dialog when conditions met
 // This feature also requires UnmanagedDeviceSignalsConsentFlowEnabled policy to
 // be enabled
-BASE_FEATURE(kDeviceSignalsConsentDialog,
-             "DeviceSignalsConsentDialog",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kDeviceSignalsConsentDialog, base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool IsConsentDialogEnabled() {
   return base::FeatureList::IsEnabled(kDeviceSignalsConsentDialog);
@@ -70,7 +74,6 @@ bool IsConsentDialogEnabled() {
         // BUILDFLAG(IS_CHROMEOS)
 
 BASE_FEATURE(kNewEvSignalsUnaffiliatedEnabled,
-             "NewEvSignalsUnaffiliatedEnabled",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 }  // namespace enterprise_signals::features

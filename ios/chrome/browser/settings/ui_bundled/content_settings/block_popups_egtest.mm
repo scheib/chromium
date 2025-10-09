@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
+#import "base/ios/ios_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "ios/chrome/browser/settings/ui_bundled/content_settings/block_popups_app_interface.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -13,6 +14,7 @@
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
+#import "ios/chrome/test/earl_grey/scoped_disable_timer_tracking.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
@@ -81,15 +83,7 @@ class ScopedBlockPopupsException {
 
 // Opens the block popups settings page and verifies that accessibility is set
 // up properly.
-// TODO(crbug.com/438657821): Flaky on device.
-#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-#define MAYBE_testAccessibilityOfBlockPopupSettings \
-  FLAKY_testAccessibilityOfBlockPopupSettings
-#else
-#define MAYBE_testAccessibilityOfBlockPopupSettings \
-  testAccessibilityOfBlockPopupSettings
-#endif
-- (void)MAYBE_testAccessibilityOfBlockPopupSettings {
+- (void)testAccessibilityOfBlockPopupSettings {
   [ChromeEarlGreyUI openSettingsMenu];
   [ChromeEarlGreyUI tapSettingsMenuButton:ContentSettingsButton()];
   [[EarlGrey selectElementWithMatcher:BlockPopupsSettingsButton()]
@@ -100,14 +94,14 @@ class ScopedBlockPopupsException {
       assertWithMatcher:grey_notNil()];
   [ChromeEarlGrey verifyAccessibilityForCurrentScreen];
 
-  // Disable EarlGrey synchronization to avoid infinite spinner loop.
-  ScopedSynchronizationDisabler disabler;
+  {
+    // Disable EarlGrey synchronization to avoid infinite spinner loop.
+    ScopedSynchronizationDisabler disabler;
 
-  // Close the settings menu.
-  [[EarlGrey selectElementWithMatcher:NavigationBarBackButton()]
-      performAction:grey_tap()];
-  [[EarlGrey selectElementWithMatcher:NavigationBarBackButton()]
-      performAction:grey_tap()];
+    // Close the settings menu.
+    [[EarlGrey selectElementWithMatcher:NavigationBarBackButton()]
+        performAction:grey_tap()];
+  }
   [[EarlGrey selectElementWithMatcher:SettingsDoneButton()]
       performAction:grey_tap()];
 }
@@ -181,12 +175,19 @@ class ScopedBlockPopupsException {
 // Tests that the "exceptions" section on the settings page is hidden and
 // revealed properly when the preference switch is toggled.
 - (void)testSettingsPageWithExceptions {
+  // TODO(crbug.com/441738071): Still flaky on iOS 18.
+  if (!base::ios::IsRunningOnIOS26OrLater()) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 18.");
+  }
   std::string allowedPattern = "[*.]example.com";
   ScopedBlockPopupsPref prefSetter(CONTENT_SETTING_BLOCK);
   ScopedBlockPopupsException exceptionSetter(allowedPattern);
 
   [ChromeEarlGreyUI openSettingsMenu];
-  [ChromeEarlGreyUI tapSettingsMenuButton:ContentSettingsButton()];
+  {
+    ScopedDisableTimerTracking disabler;
+    [ChromeEarlGreyUI tapSettingsMenuButton:ContentSettingsButton()];
+  }
   [[EarlGrey selectElementWithMatcher:BlockPopupsSettingsButton()]
       performAction:grey_tap()];
 

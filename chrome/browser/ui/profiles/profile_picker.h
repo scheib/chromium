@@ -26,7 +26,7 @@ class View;
 class WebView;
 }  // namespace views
 
-enum class StartupProfileModeReason;
+enum class StartupProfileMode;
 class ForceSigninUIError;
 
 class ProfilePicker {
@@ -284,10 +284,6 @@ class ProfilePicker {
   // Returns the path of the default profile used for rendering the picker.
   static base::FilePath GetPickerProfilePath();
 
-  // Getter of the path of profile which is displayed on the profile switch
-  // screen.
-  static base::FilePath GetSwitchProfilePath();
-
   // Hides the profile picker.
   static void Hide();
 
@@ -321,7 +317,11 @@ class ProfilePicker {
   // Returns whether to show profile picker at launch. This can be called on
   // startup or when Chrome is re-opened, e.g. when clicking on the dock icon on
   // MacOS when there are no windows, or from Windows tray icon.
-  static StartupProfileModeReason GetStartupModeReason();
+  static StartupProfileMode GetStartupMode();
+
+  // Opens the command line urls in the next profile that is opened.
+  static void SetOpenCommandLineUrlsInNextProfileOpened(bool value);
+  static bool GetOpenCommandLineUrlsInNextProfileOpened();
 };
 
 #endif  // CHROME_BROWSER_UI_PROFILES_PROFILE_PICKER_H_

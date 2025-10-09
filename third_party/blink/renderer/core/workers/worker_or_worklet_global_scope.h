@@ -11,6 +11,7 @@
 #include "base/unguessable_token.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink-forward.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-blink-forward.h"
+#include "third_party/blink/public/common/fingerprinting_protection/noise_token.h"
 #include "third_party/blink/public/mojom/loader/code_cache.mojom-forward.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
 #include "third_party/blink/public/platform/cross_variant_mojo_util.h"
@@ -67,7 +68,8 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
       scoped_refptr<WebWorkerFetchContext>,
       WorkerReportingProxy&,
       bool is_worker_loaded_from_data_url,
-      bool is_default_world_of_isolate);
+      bool is_default_world_of_isolate,
+      std::optional<NoiseToken> canvas_noise_token);
   ~WorkerOrWorkletGlobalScope() override;
 
   // EventTarget

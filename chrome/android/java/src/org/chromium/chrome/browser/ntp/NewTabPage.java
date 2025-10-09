@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.ntp;
 
+import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.animation.Animator;
@@ -34,14 +35,11 @@ import org.chromium.base.Log;
 import org.chromium.base.ObserverList;
 import org.chromium.base.TimeUtils;
 import org.chromium.base.TraceEvent;
-import org.chromium.base.jank_tracker.JankScenario;
-import org.chromium.base.jank_tracker.JankTracker;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.EnsuresNonNull;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -74,6 +72,7 @@ import org.chromium.chrome.browser.metrics.StartupMetricsTracker;
 import org.chromium.chrome.browser.ntp_customization.NtpCustomizationConfigManager;
 import org.chromium.chrome.browser.ntp_customization.NtpCustomizationCoordinator;
 import org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils;
+import org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils.NtpBackgroundImageType;
 import org.chromium.chrome.browser.ntp_customization.edge_to_edge.TopInsetCoordinator;
 import org.chromium.chrome.browser.omnibox.OmniboxFocusReason;
 import org.chromium.chrome.browser.omnibox.OmniboxStub;
@@ -81,6 +80,7 @@ import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler;
 import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.readaloud.ReadAloudController;
+import org.chromium.chrome.browser.readaloud.ReadAloudController.Entrypoint;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.search_resumption.SearchResumptionModuleCoordinator;
 import org.chromium.chrome.browser.search_resumption.SearchResumptionModuleUtils;
@@ -110,6 +110,8 @@ import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.chrome.browser.ui.native_page.NativePage;
 import org.chromium.chrome.browser.ui.native_page.NativePageHost;
+import org.chromium.chrome.browser.url_constants.UrlConstantResolver;
+import org.chromium.chrome.browser.url_constants.UrlConstantResolverFactory;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.browser_ui.widget.displaystyle.UiConfig;
@@ -127,6 +129,7 @@ import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 /** Provides functionality when the user interacts with the NTP. */
 @NullMarked
@@ -148,12 +151,11 @@ public class NewTabPage
     private static int sTotalCount;
 
     protected final Tab mTab;
-    private final Supplier<Tab> mActivityTabProvider;
+    private final Supplier<@Nullable Tab> mActivityTabProvider;
     private final ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
 
     private final String mTitle;
     private final Point mLastTouchPosition = new Point(-1, -1);
-    private final JankTracker mJankTracker;
     private final Context mContext;
     private final int mBackgroundColor;
     protected final NewTabPageManagerImpl mNewTabPageManager;
@@ -492,7 +494,6 @@ public class NewTabPage
      * @param bottomSheetController The controller for bottom sheets, used by the feed.
      * @param shareDelegateSupplier Supplies the Delegate used to open SharingHub.
      * @param windowAndroid The containing window of this page.
-     * @param jankTracker {@link JankTracker} object to measure jankiness while NTP is visible.
      * @param toolbarSupplier Supplies the {@link Toolbar}.
      * @param homeSurfaceTracker Used to decide whether we are the home surface.
      * @param tabContentManagerSupplier Used to create tab thumbnails.
@@ -504,7 +505,7 @@ public class NewTabPage
     public NewTabPage(
             Activity activity,
             BrowserControlsStateProvider browserControlsStateProvider,
-            Supplier<Tab> activityTabProvider,
+            Supplier<@Nullable Tab> activityTabProvider,
             SnackbarManager snackbarManager,
             ActivityLifecycleDispatcher lifecycleDispatcher,
             TabModelSelector tabModelSelector,
@@ -517,9 +518,8 @@ public class NewTabPage
             BottomSheetController bottomSheetController,
             Supplier<ShareDelegate> shareDelegateSupplier,
             WindowAndroid windowAndroid,
-            JankTracker jankTracker,
             Supplier<Toolbar> toolbarSupplier,
-            HomeSurfaceTracker homeSurfaceTracker,
+            @Nullable HomeSurfaceTracker homeSurfaceTracker,
             ObservableSupplier<TabContentManager> tabContentManagerSupplier,
             ObservableSupplier<Integer> tabStripHeightSupplier,
             OneshotSupplier<ModuleRegistry> moduleRegistrySupplier,
@@ -533,7 +533,6 @@ public class NewTabPage
         mActivityTabProvider = activityTabProvider;
         mActivityLifecycleDispatcher = lifecycleDispatcher;
         mTab = tab;
-        mJankTracker = jankTracker;
         mToolbarSupplier = toolbarSupplier;
         mMostVisitedTileClickObservers = new ObserverList<>();
         mBrowserControlsStateProvider = browserControlsStateProvider;
@@ -583,19 +582,6 @@ public class NewTabPage
                                 && (mHomeSurfaceTracker == null
                                         || !mHomeSurfaceTracker.canShowHomeSurface(mTab))) {
                             mSingleTabSwitcherCoordinator.hide();
-                        }
-                    }
-
-                    @Override
-                    public void onInteractabilityChanged(Tab tab, boolean isInteractable) {
-                        // We start/stop tracking based on InteractabilityChanged in addition to
-                        // Shown/Hidden because those events don't trigger for switching to tab
-                        // switcher, we don't rely solely on this event because it doesn't
-                        // trigger when the user navigates to a website.
-                        if (isInteractable) {
-                            mJankTracker.startTrackingScenario(JankScenario.NEW_TAB_PAGE);
-                        } else {
-                            mJankTracker.finishTrackingScenario(JankScenario.NEW_TAB_PAGE);
                         }
                     }
                 };
@@ -736,7 +722,6 @@ public class NewTabPage
                         activity,
                         snackbarManager,
                         windowAndroid,
-                        mJankTracker,
                         new SnapScrollHelperImpl(mNewTabPageManager, mNewTabPageLayout),
                         mNewTabPageLayout,
                         mBrowserControlsStateProvider.getTopControlsHeight(),
@@ -793,14 +778,15 @@ public class NewTabPage
 
     private void initTopInsetCoordinatorObserver() {
         mTopInsetChangeObserver = this::onToEdgeChange;
-        if (mTopInsetCoordinatorSupplier.hasValue()) {
-            mTopInsetCoordinatorSupplier.get().addObserver(mTopInsetChangeObserver);
+        var topInsetCoordinator = mTopInsetCoordinatorSupplier.get();
+        if (topInsetCoordinator != null) {
+            topInsetCoordinator.addObserver(mTopInsetChangeObserver);
             return;
         }
 
         mTopInsetCoordinatorCallback =
-                topInsetCoordinator -> {
-                    topInsetCoordinator.addObserver(assumeNonNull(mTopInsetChangeObserver));
+                coordinator -> {
+                    coordinator.addObserver(assumeNonNull(mTopInsetChangeObserver));
                     if (mTopInsetCoordinatorCallback != null) {
                         mTopInsetCoordinatorSupplier.removeObserver(mTopInsetCoordinatorCallback);
                         mTopInsetCoordinatorCallback = null;
@@ -994,9 +980,10 @@ public class NewTabPage
 
     /**
      * Sets the listener for search box scroll changes.
+     *
      * @param listener The listener to be notified on changes.
      */
-    public void setSearchBoxScrollListener(OnSearchBoxScrollListener listener) {
+    public void setSearchBoxScrollListener(@Nullable OnSearchBoxScrollListener listener) {
         mNewTabPageLayout.setSearchBoxScrollListener(listener);
     }
 
@@ -1062,13 +1049,11 @@ public class NewTabPage
     private void recordNtpShown() {
         mLastShownTimeNs = System.nanoTime();
         RecordUserAction.record("MobileNTPShown");
-        mJankTracker.startTrackingScenario(JankScenario.NEW_TAB_PAGE);
         SuggestionsMetrics.recordSurfaceVisible();
     }
 
     /** Records UMA for the NTP being hidden and the time spent on it. */
     private void recordNtpHidden() {
-        mJankTracker.finishTrackingScenario(JankScenario.NEW_TAB_PAGE);
         RecordHistogram.deprecatedRecordMediumTimesHistogram(
                 "NewTabPage.TimeSpent",
                 (System.nanoTime() - mLastShownTimeNs) / TimeUtils.NANOSECONDS_PER_MILLISECOND);
@@ -1145,8 +1130,9 @@ public class NewTabPage
             mHomeModulesCoordinator.destroy();
         }
 
-        if (mTopInsetCoordinatorSupplier.hasValue() && mTopInsetChangeObserver != null) {
-            mTopInsetCoordinatorSupplier.get().removeObserver(mTopInsetChangeObserver);
+        var topInsetCoordinator = mTopInsetCoordinatorSupplier.get();
+        if (topInsetCoordinator != null && mTopInsetChangeObserver != null) {
+            topInsetCoordinator.removeObserver(mTopInsetChangeObserver);
             mTopInsetChangeObserver = null;
         }
 
@@ -1161,7 +1147,10 @@ public class NewTabPage
 
     @Override
     public String getUrl() {
-        return UrlConstants.NTP_URL;
+        Profile currentProfile = mTab.getProfile();
+        UrlConstantResolver urlConstantResolver =
+                UrlConstantResolverFactory.getForProfile(currentProfile);
+        return urlConstantResolver.getNtpUrl();
     }
 
     @Override
@@ -1185,7 +1174,7 @@ public class NewTabPage
                 && !mIsTablet
                 && isInSingleUrlBarMode()
                 && NtpCustomizationConfigManager.getInstance().getBackgroundImageType()
-                        != NtpCustomizationUtils.NtpBackgroundImageType.DEFAULT;
+                        != NtpBackgroundImageType.DEFAULT;
     }
 
     @Override
@@ -1238,6 +1227,11 @@ public class NewTabPage
         mNewTabPageLayout.reload();
     }
 
+    @Override
+    public int getTopInset() {
+        return mNewTabPageLayout.getTopInset();
+    }
+
     // InvalidationAwareThumbnailProvider
 
     @Override
@@ -1276,7 +1270,15 @@ public class NewTabPage
                 && (mOmniboxStub != null && mOmniboxStub.isUrlBarFocused());
     }
 
-    public void listenToFeed(Supplier<ReadAloudController> readAloudControllerSupplier) {}
+    public void listenToFeed(Supplier<ReadAloudController> readAloudControllerSupplier) {
+        ReadAloudController readAloudController = readAloudControllerSupplier.get();
+        if (readAloudController == null) return;
+
+        List<String> feedUrls = mFeedSurfaceProvider.getFeedUrls();
+        if (feedUrls == null || feedUrls.isEmpty()) return;
+
+        readAloudController.playOverviewForUrls(feedUrls, Entrypoint.FEED_PLAYBACK);
+    }
 
     public FeedSurfaceCoordinator getCoordinatorForTesting() {
         return (FeedSurfaceCoordinator) mFeedSurfaceProvider;
@@ -1394,7 +1396,7 @@ public class NewTabPage
                         mNewTabPageLayout,
                         HomeModulesConfigManager.getInstance(),
                         profileSupplier,
-                        assumeNonNull(mModuleRegistrySupplier).get());
+                        assertNonNull(assumeNonNull(mModuleRegistrySupplier).get()));
     }
 
     private void onMagicStackShown(boolean isVisible) {
@@ -1507,7 +1509,8 @@ public class NewTabPage
     @Nullable
     @Override
     public Tab getTrackingTab() {
-        if (!mMostRecentTabSupplier.hasValue()) {
+        var mostRecentTab = mMostRecentTabSupplier.get();
+        if (mostRecentTab == null) {
             return null;
         }
 
@@ -1518,7 +1521,7 @@ public class NewTabPage
     public boolean isHomeSurface() {
         // Can only show a local tab to resume if we we have a tracked tab. The presence of the
         // local tab to resume module is effectively what being a home surface is.
-        return mMostRecentTabSupplier.hasValue();
+        return mMostRecentTabSupplier.get() != null;
     }
 
     @Override

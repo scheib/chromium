@@ -86,7 +86,6 @@ ASSERT_SIZE(ShapeResultCharacterData, SameSizeAsShapeResultCharacterData);
 struct SameSizeAsShapeResult {
   Vector<int> character_position_;
   Vector<UntracedMember<void*>, 1> runs_;
-  UntracedMember<void*> deprecated_ink_bounds_;
   float width;
   unsigned start_index_;
   unsigned bitfields;
@@ -429,7 +428,6 @@ ShapeResult::ShapeResult(const ShapeResult& other)
 ShapeResult::~ShapeResult() = default;
 
 void ShapeResult::Trace(Visitor* visitor) const {
-  visitor->Trace(deprecated_ink_bounds_);
   visitor->Trace(runs_);
   visitor->Trace(character_position_);
 }
@@ -846,14 +844,15 @@ float ShapeResult::ForEachGlyph(float initial_advance,
   return total_advance;
 }
 
-unsigned ShapeResult::CountGraphemesInCluster(base::span<const UChar> str,
-                                              uint16_t start_index,
-                                              uint16_t end_index) {
+unsigned ShapeResult::CountGraphemesInClusterDeprecated(
+    base::span<const UChar> str,
+    uint16_t start_index,
+    uint16_t end_index) {
   if (start_index > end_index)
     std::swap(start_index, end_index);
   uint16_t length = end_index - start_index;
   TextBreakIterator* cursor_pos_iterator =
-      CursorMovementIterator(str.subspan(start_index, length));
+      CursorMovementIteratorDeprecated(str.subspan(start_index, length));
   if (!cursor_pos_iterator)
     return 0;
 
@@ -925,8 +924,15 @@ float ShapeResult::ForEachGraphemeClusters(const StringView& text,
               is_run_end ? run->start_index_ + run->num_characters_ + run_offset
                          : run->GlyphToCharacterIndex(i + 1) + run_offset);
         }
-        graphemes_in_cluster =
-            CountGraphemesInCluster(text.Span16(), cluster_start, cluster_end);
+        if (RuntimeEnabledFeatures::DeprecateCursorMovementIteratorEnabled()) {
+          graphemes_in_cluster = NumGraphemeClusters(
+              cluster_end >= cluster_start
+                  ? StringView(text, cluster_start, cluster_end - cluster_start)
+                  : StringView(text, cluster_end, cluster_start - cluster_end));
+        } else {
+          graphemes_in_cluster = ShapeResult::CountGraphemesInClusterDeprecated(
+              text.Span16(), cluster_start, cluster_end);
+        }
         if (!graphemes_in_cluster || !cluster_advance)
           continue;
 
@@ -940,6 +946,20 @@ float ShapeResult::ForEachGraphemeClusters(const StringView& text,
     }
   }
   return advance_so_far;
+}
+
+GlyphData ShapeResult::EmphasisMarkGlyphData(
+    const FontDescription& font_description) const {
+  for (const auto& run : runs_) {
+    DCHECK(run->font_data_);
+    if (run->glyph_data_.IsEmpty()) {
+      continue;
+    }
+    return GlyphData(run->glyph_data_[0].glyph,
+                     run->font_data_->EmphasisMarkFontData(font_description),
+                     run->CanvasRotation());
+  }
+  return GlyphData();
 }
 
 namespace {
@@ -1845,7 +1865,7 @@ const ShapeResult* ShapeResult::CreateForTabulationCharacters(
     unsigned start_index,
     unsigned length) {
   DCHECK_GT(length, 0u);
-  const SimpleFontData* font_data = font->PrimaryFont();
+  const SimpleFontData* font_data = font->PrimaryFontForTabSize();
   DCHECK(font_data);
   ShapeResult* result =
       MakeGarbageCollected<ShapeResult>(start_index, length, direction);

@@ -28,6 +28,7 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
+#include "third_party/perfetto/include/perfetto/tracing/track.h"
 
 namespace {
 bool CanUseRgbReadback(media::VideoFrame& frame) {
@@ -191,9 +192,9 @@ void BackgroundReadback::ReadbackRGBTextureBackedFrameToMemory(
     return;
   }
 
-  TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
-      "media", "ReadbackRGBTextureBackedFrameToMemory", txt_frame.get(),
-      "timestamp", txt_frame->timestamp());
+  TRACE_EVENT_BEGIN("media", "ReadbackRGBTextureBackedFrameToMemory",
+                    perfetto::Track::FromPointer(txt_frame.get()), "timestamp",
+                    txt_frame->timestamp());
 
   base::span<uint8_t> dst_pixels =
       result->GetWritableVisiblePlaneData(media::VideoFrame::Plane::kARGB);
@@ -212,9 +213,9 @@ void BackgroundReadback::ReadbackRGBTextureBackedFrameToMemory(
       shared_image->mailbox(), shared_image->GetTextureTarget(), origin,
       texture_size, src_point, info, base::saturated_cast<GLuint>(rgba_stide),
       dst_pixels,
-      WTF::BindOnce(&BackgroundReadback::OnARGBPixelsFrameReadCompleted,
-                    WrapWeakPersistent(this), std::move(result_cb), txt_frame,
-                    std::move(result)));
+      blink::BindOnce(&BackgroundReadback::OnARGBPixelsFrameReadCompleted,
+                      WrapWeakPersistent(this), std::move(result_cb), txt_frame,
+                      std::move(result)));
   media::WaitAndReplaceSyncTokenClient client(ri, std::move(ri_access));
   txt_frame->UpdateReleaseSyncToken(&client);
 }
@@ -224,9 +225,8 @@ void BackgroundReadback::OnARGBPixelsFrameReadCompleted(
     scoped_refptr<media::VideoFrame> txt_frame,
     scoped_refptr<media::VideoFrame> result_frame,
     bool success) {
-  TRACE_EVENT_NESTABLE_ASYNC_END1("media",
-                                  "ReadbackRGBTextureBackedFrameToMemory",
-                                  txt_frame.get(), "success", success);
+  TRACE_EVENT_END("media", perfetto::Track::FromPointer(txt_frame.get()),
+                  "success", success);
   if (!success) {
     ReadbackOnThread(std::move(txt_frame), std::move(result_cb));
     return;
@@ -270,9 +270,9 @@ void BackgroundReadback::ReadbackRGBTextureBackedFrameToBuffer(
     return;
   }
 
-  TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
-      "media", "ReadbackRGBTextureBackedFrameToBuffer", txt_frame.get(),
-      "timestamp", txt_frame->timestamp());
+  TRACE_EVENT_BEGIN("media", "ReadbackRGBTextureBackedFrameToBuffer",
+                    perfetto::Track::FromPointer(txt_frame.get()), "timestamp",
+                    txt_frame->timestamp());
 
   SkImageInfo info = GetImageInfoForFrame(*txt_frame, src_rect.size());
   gfx::Point src_point = src_rect.origin();
@@ -286,9 +286,9 @@ void BackgroundReadback::ReadbackRGBTextureBackedFrameToBuffer(
       shared_image->mailbox(), shared_image->GetTextureTarget(), origin,
       texture_size, src_point, info, base::saturated_cast<GLuint>(stride),
       dst_pixels,
-      WTF::BindOnce(&BackgroundReadback::OnARGBPixelsBufferReadCompleted,
-                    WrapWeakPersistent(this), std::move(txt_frame), src_rect,
-                    dest_layout, dest_buffer, std::move(done_cb)));
+      blink::BindOnce(&BackgroundReadback::OnARGBPixelsBufferReadCompleted,
+                      WrapWeakPersistent(this), std::move(txt_frame), src_rect,
+                      dest_layout, dest_buffer, std::move(done_cb)));
   gpu::RasterScopedAccess::EndAccess(std::move(ri_access));
 }
 
@@ -299,9 +299,8 @@ void BackgroundReadback::OnARGBPixelsBufferReadCompleted(
     base::span<uint8_t> dest_buffer,
     ReadbackDoneCallback done_cb,
     bool success) {
-  TRACE_EVENT_NESTABLE_ASYNC_END1("media",
-                                  "ReadbackRGBTextureBackedFrameToBuffer",
-                                  txt_frame.get(), "success", success);
+  TRACE_EVENT_END("media", perfetto::Track::FromPointer(txt_frame.get()),
+                  "success", success);
   if (!success) {
     ReadbackOnThread(std::move(txt_frame), src_rect, dest_layout, dest_buffer,
                      std::move(done_cb));
@@ -327,13 +326,9 @@ bool SyncReadbackThread::LazyInitialize() {
 
   if (context_provider_)
     return true;
-  Platform::ContextAttributes attributes;
-  attributes.enable_raster_interface = true;
-  attributes.prefer_low_power_gpu = true;
-
-  Platform::GraphicsInfo info;
-  context_provider_ = CreateOffscreenGraphicsContext3DProvider(
-      attributes, &info, KURL("chrome://BackgroundReadback"));
+  context_provider_ = CreateRasterGraphicsContextProvider(
+      KURL("chrome://BackgroundReadback"),
+      Platform::RasterContextType::kWebCodecsReadback);
 
   if (!context_provider_) {
     DLOG(ERROR) << "Can't create context provider.";

@@ -137,6 +137,13 @@ void MediaQueryEvaluator::Trace(Visitor* visitor) const {
   visitor->Trace(media_values_);
 }
 
+const Document* MediaQueryEvaluator::GetDocument() const {
+  if (!media_values_) {
+    return nullptr;
+  }
+  return media_values_->GetDocument();
+}
+
 const String MediaQueryEvaluator::MediaType() const {
   // If a static mediaType was given by the constructor, we use it here.
   if (!media_type_.empty()) {
@@ -1573,52 +1580,40 @@ static bool ScrollableMediaFeatureEval(const MediaQueryExpValue& value,
   }
 }
 
-static bool DirectionMediaFeatureEval(const MediaQueryExpValue& value,
-                                      MediaQueryOperator op,
-                                      const MediaValues& media_values) {
+static bool ScrolledMediaFeatureEval(const MediaQueryExpValue& value,
+                                     MediaQueryOperator op,
+                                     const MediaValues& media_values) {
   if (!value.IsValid()) {
-    return media_values.ScrollDirection();
+    return media_values.Scrolled();
   }
 
   switch (value.Id()) {
     case CSSValueID::kNone:
-      return !media_values.ScrollDirection();
+      return !media_values.Scrolled();
     case CSSValueID::kTop:
-      return media_values.ScrollDirectionVertical() ==
-             ContainerScrollDirection::kStart;
+      return media_values.ScrolledVertical() == ContainerScrolled::kStart;
     case CSSValueID::kLeft:
-      return media_values.ScrollDirectionHorizontal() ==
-             ContainerScrollDirection::kStart;
+      return media_values.ScrolledHorizontal() == ContainerScrolled::kStart;
     case CSSValueID::kBottom:
-      return media_values.ScrollDirectionVertical() ==
-             ContainerScrollDirection::kEnd;
+      return media_values.ScrolledVertical() == ContainerScrolled::kEnd;
     case CSSValueID::kRight:
-      return media_values.ScrollDirectionHorizontal() ==
-             ContainerScrollDirection::kEnd;
+      return media_values.ScrolledHorizontal() == ContainerScrolled::kEnd;
     case CSSValueID::kBlockStart:
-      return media_values.ScrollDirectionBlock() ==
-             ContainerScrollDirection::kStart;
+      return media_values.ScrolledBlock() == ContainerScrolled::kStart;
     case CSSValueID::kBlockEnd:
-      return media_values.ScrollDirectionBlock() ==
-             ContainerScrollDirection::kEnd;
+      return media_values.ScrolledBlock() == ContainerScrolled::kEnd;
     case CSSValueID::kInlineStart:
-      return media_values.ScrollDirectionInline() ==
-             ContainerScrollDirection::kStart;
+      return media_values.ScrolledInline() == ContainerScrolled::kStart;
     case CSSValueID::kInlineEnd:
-      return media_values.ScrollDirectionInline() ==
-             ContainerScrollDirection::kEnd;
+      return media_values.ScrolledInline() == ContainerScrolled::kEnd;
     case CSSValueID::kX:
-      return media_values.ScrollDirectionHorizontal() !=
-             ContainerScrollDirection::kNone;
+      return media_values.ScrolledHorizontal() != ContainerScrolled::kNone;
     case CSSValueID::kY:
-      return media_values.ScrollDirectionVertical() !=
-             ContainerScrollDirection::kNone;
+      return media_values.ScrolledVertical() != ContainerScrolled::kNone;
     case CSSValueID::kBlock:
-      return media_values.ScrollDirectionBlock() !=
-             ContainerScrollDirection::kNone;
+      return media_values.ScrolledBlock() != ContainerScrolled::kNone;
     case CSSValueID::kInline:
-      return media_values.ScrollDirectionInline() !=
-             ContainerScrollDirection::kNone;
+      return media_values.ScrolledInline() != ContainerScrolled::kNone;
     default:
       NOTREACHED();
   }
@@ -1706,7 +1701,8 @@ static bool FallbackMediaFeatureEval(const MediaQueryExpValue& value,
   StyleResolverState state(container->GetDocument(), *container);
   PositionTryFallback query_fallback =
       StyleBuilderConverter::ConvertSinglePositionTryFallback(
-          state, value.GetCSSValue());
+          state, value.GetCSSValue(),
+          /*allow_any_keyword_in_position_area=*/true);
   query_fallback = ToPhysicalFallback(query_fallback, media_values);
   fallback = ToPhysicalFallback(fallback, media_values);
   return fallback.Matches(query_fallback);
@@ -1762,6 +1758,13 @@ KleeneValue MediaQueryEvaluator::EvalFeature(
   }
   if (!media_values_->BlockSize().has_value() &&
       feature.IsBlockSizeDependent()) {
+    return KleeneValue::kUnknown;
+  }
+
+  if (RuntimeEnabledFeatures::CSSCustomMediaEnabled() &&
+      feature.IsCustomMedia() &&
+      CSSVariableParser::IsValidVariableName(feature.Name())) {
+    // TODO(crbug.com/40781325): Support evaluation of custom-media queries.
     return KleeneValue::kUnknown;
   }
 
@@ -1862,7 +1865,7 @@ KleeneValue MediaQueryEvaluator::EvalStyleFeature(
     Document* document = media_values_->GetDocument();
 
     StyleResolverState state(*document, *container);
-    state.SetStyle(container->ComputedStyleRef());
+    state.CreateNewClonedStyle(container->ComputedStyleRef());
     const auto* context = MakeGarbageCollected<CSSParserContext>(*document);
 
     const CSSValue* reference = StyleCascade::CoerceIntoNumericValue(
@@ -1962,6 +1965,18 @@ KleeneValue MediaQueryEvaluator::EvalStyleRange(const CSSValue& reference_value,
       DynamicTo<CSSNumericLiteralValue>(reference_value);
   const CSSNumericLiteralValue* query_numeric =
       DynamicTo<CSSNumericLiteralValue>(query_value);
+
+  if (reference_numeric->IsNumber() && !reference_numeric->DoubleValue() &&
+      query_numeric->IsLength()) {
+    reference_numeric =
+        CSSNumericLiteralValue::Create(0, query_numeric->GetType());
+  }
+
+  if (query_numeric->IsNumber() && !query_numeric->DoubleValue() &&
+      reference_numeric->IsLength()) {
+    query_numeric =
+        CSSNumericLiteralValue::Create(0, reference_numeric->GetType());
+  }
 
   if (!reference_numeric || !query_numeric ||
       !TypesMatch(*reference_numeric, *query_numeric)) {

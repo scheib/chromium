@@ -5,6 +5,8 @@
 #include "components/autofill/core/browser/suggestions/autocomplete_suggestion_generator.h"
 
 #include "base/containers/to_vector.h"
+#include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/data_quality/autofill_data_util.h"
 #include "components/autofill/core/browser/single_field_fillers/autocomplete/autocomplete_history_manager.h"
 #include "components/autofill/core/browser/studies/autofill_experiments.h"
 #include "components/autofill/core/browser/webdata/autocomplete/autocomplete_entry.h"
@@ -31,7 +33,7 @@ struct AutocompleteSuggestionGenerator::QueryHandler {
   QueryHandler(FieldGlobalId field_id,
                std::u16string prefix,
                base::OnceCallback<void(
-                   std::pair<FillingProduct,
+                   std::pair<SuggestionDataSource,
                              std::vector<SuggestionGenerator::SuggestionData>>)>
                    on_suggestions_returned)
       : field_id(field_id),
@@ -49,61 +51,80 @@ struct AutocompleteSuggestionGenerator::QueryHandler {
 
   // Callback to-be-executed once a response from the DB is available.
   base::OnceCallback<void(
-      std::pair<FillingProduct,
+      std::pair<SuggestionDataSource,
                 std::vector<SuggestionGenerator::SuggestionData>>)>
       on_suggestions_returned;
 };
 
 void AutocompleteSuggestionGenerator::FetchSuggestionData(
-    const FormData& form_data,
-    const FormFieldData& field_data,
-    const FormStructure* form,
-    const AutofillField* field,
+    const FormData& form,
+    const FormFieldData& trigger_field,
+    const FormStructure* form_structure,
+    const AutofillField* trigger_autofill_field,
     const AutofillClient& client,
     base::OnceCallback<
-        void(std::pair<FillingProduct,
+        void(std::pair<SuggestionDataSource,
                        std::vector<SuggestionGenerator::SuggestionData>>)>
         callback) {
-  if (!field_data.should_autocomplete()) {
-    std::move(callback).Run({FillingProduct::kAutocomplete, {}});
+  if (!trigger_field.should_autocomplete()) {
+    std::move(callback).Run({SuggestionDataSource::kAutocomplete, {}});
+    return;
+  }
+
+  // Do not offer autocomplete suggestions for credit card number, cvc, and
+  // expiration date related fields. Standalone cvc fields (used to
+  // re-authenticate the use of a credit card the website has on file) will be
+  // handled separately because those have the field type
+  // CREDIT_CARD_STANDALONE_VERIFICATION_CODE.
+  if (FieldType type = trigger_autofill_field
+                           ? trigger_autofill_field->Type().GetCreditCardType()
+                           : UNKNOWN_TYPE;
+      data_util::IsCreditCardExpirationType(type) ||
+      type == CREDIT_CARD_VERIFICATION_CODE || type == CREDIT_CARD_NUMBER) {
+    std::move(callback).Run({SuggestionDataSource::kAutocomplete, {}});
     return;
   }
 
   CancelPendingQuery();
   if (!AutocompleteHistoryManager::IsFieldNameMeaningfulForAutocomplete(
-          field_data.name()) ||
+          trigger_field.name()) ||
       !client.IsAutocompleteEnabled() ||
-      field_data.form_control_type() == FormControlType::kTextArea ||
-      field_data.form_control_type() == FormControlType::kContentEditable ||
+      trigger_field.form_control_type() == FormControlType::kTextArea ||
+      trigger_field.form_control_type() == FormControlType::kContentEditable ||
       IsInAutofillSuggestionsDisabledExperiment()) {
-    std::move(callback).Run({FillingProduct::kAutocomplete, {}});
+    std::move(callback).Run({SuggestionDataSource::kAutocomplete, {}});
     return;
   }
 
   if (!profile_database_) {
-    std::move(callback).Run({FillingProduct::kAutocomplete, {}});
+    std::move(callback).Run({SuggestionDataSource::kAutocomplete, {}});
     return;
   }
 
   pending_query_ = profile_database_->GetFormValuesForElementName(
-      field_data.name(), field_data.value(), kMaxAutocompleteMenuItems,
+      trigger_field.name(), trigger_field.value(), kMaxAutocompleteMenuItems,
       base::BindOnce(&AutocompleteSuggestionGenerator::OnAutofillValuesReturned,
                      weak_ptr_factory_.GetWeakPtr(),
-                     QueryHandler(field_data.global_id(), field_data.value(),
-                                  std::move(callback))));
+                     QueryHandler(trigger_field.global_id(),
+                                  trigger_field.value(), std::move(callback))));
 }
 
 void AutocompleteSuggestionGenerator::GenerateSuggestions(
-    const FormData& form_data,
-    const FormFieldData& field_data,
-    const FormStructure* form,
-    const AutofillField* field,
-    const std::vector<std::pair<FillingProduct, std::vector<SuggestionData>>>&
+    const FormData& form,
+    const FormFieldData& trigger_field,
+    const FormStructure* form_structure,
+    const AutofillField* trigger_autofill_field,
+    const base::flat_map<SuggestionDataSource, std::vector<SuggestionData>>&
         all_suggestion_data,
     base::OnceCallback<void(ReturnedSuggestions)> callback) {
+  auto it = all_suggestion_data.find(SuggestionDataSource::kAutocomplete);
   std::vector<SuggestionData> autocomplete_suggestion_data =
-      ExtractSuggestionDataForFillingProduct(all_suggestion_data,
-                                             FillingProduct::kAutocomplete);
+      it != all_suggestion_data.end() ? it->second
+                                      : std::vector<SuggestionData>();
+  if (autocomplete_suggestion_data.empty()) {
+    std::move(callback).Run({FillingProduct::kAutocomplete, {}});
+    return;
+  }
 
   std::vector<AutocompleteEntry> autocomplete_entries =
       base::ToVector(std::move(autocomplete_suggestion_data),
@@ -111,14 +132,6 @@ void AutocompleteSuggestionGenerator::GenerateSuggestions(
                        return std::get<autofill::AutocompleteEntry>(
                            std::move(suggestion_data));
                      });
-
-  // If there is only one suggestion that is the exact same string as
-  // what is in the input box, then don't show the suggestion.
-  if (autocomplete_entries.size() == 1 &&
-      field_data.value() == autocomplete_entries[0].key().value()) {
-    std::move(callback).Run({FillingProduct::kAutocomplete, {}});
-    return;
-  }
 
   std::vector<Suggestion> suggestions;
   suggestions.reserve(autocomplete_entries.size());
@@ -140,7 +153,7 @@ void AutocompleteSuggestionGenerator::OnAutofillValuesReturned(
     // Linux due to NFS dismounting and causing sql failures.
     // See http://crbug.com/68783.
     std::move(query_handler.on_suggestions_returned)
-        .Run({FillingProduct::kAutocomplete, {}});
+        .Run({SuggestionDataSource::kAutocomplete, {}});
     return;
   }
   DCHECK_EQ(AUTOFILL_VALUE_RESULT, result->GetType());
@@ -148,7 +161,7 @@ void AutocompleteSuggestionGenerator::OnAutofillValuesReturned(
   if (!pending_query_ || *pending_query_ != current_handle) {
     // There's no handler for this query, hence nothing to do.
     std::move(query_handler.on_suggestions_returned)
-        .Run({FillingProduct::kAutocomplete, {}});
+        .Run({SuggestionDataSource::kAutocomplete, {}});
     return;
   }
   // Removing the query, as it is no longer pending.
@@ -158,12 +171,22 @@ void AutocompleteSuggestionGenerator::OnAutofillValuesReturned(
       static_cast<const WDResult<std::vector<AutocompleteEntry>>*>(
           result.get());
   std::vector<AutocompleteEntry> entries = autocomplete_result->GetValue();
+
+  // If there is only one entry that is the exact same string as what is in the
+  // input box, then don't offer it as a suggestion.
+  if (entries.size() == 1 &&
+      query_handler.prefix == entries.front().key().value()) {
+    std::move(query_handler.on_suggestions_returned)
+        .Run({SuggestionDataSource::kAutocomplete, {}});
+    return;
+  }
+
   std::vector<SuggestionGenerator::SuggestionData> suggestion_data =
       base::ToVector(std::move(entries), [](AutocompleteEntry& entry) {
         return SuggestionGenerator::SuggestionData(std::move(entry));
       });
   std::move(query_handler.on_suggestions_returned)
-      .Run({FillingProduct::kAutocomplete, std::move(suggestion_data)});
+      .Run({SuggestionDataSource::kAutocomplete, std::move(suggestion_data)});
 }
 
 void AutocompleteSuggestionGenerator::CancelPendingQuery() {

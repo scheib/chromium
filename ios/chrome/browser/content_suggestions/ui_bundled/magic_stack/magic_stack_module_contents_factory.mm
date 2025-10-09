@@ -5,6 +5,8 @@
 #import "ios/chrome/browser/content_suggestions/ui_bundled/magic_stack/magic_stack_module_contents_factory.h"
 
 #import "base/notreached.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/app_bundle_promo/ui/app_bundle_promo_config.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/app_bundle_promo/ui/app_bundle_promo_view.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/cells/content_suggestions_shortcut_tile_view.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/cells/content_suggestions_tile_layout_util.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/cells/most_visited_tiles_stack_view.h"
@@ -13,6 +15,8 @@
 #import "ios/chrome/browser/content_suggestions/ui_bundled/cells/shortcuts_config.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/cells/shortcuts_consumer_source.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/content_suggestions_constants.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/default_browser/ui/default_browser_config.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/default_browser/ui/default_browser_view.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/magic_stack/magic_stack_module_content_view_delegate.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/price_tracking_promo/price_tracking_promo_favicon_consumer_source.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/price_tracking_promo/price_tracking_promo_item.h"
@@ -35,10 +39,10 @@
 #import "ios/chrome/browser/content_suggestions/ui_bundled/standalone_module_view.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/tab_resumption/tab_resumption_item.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/tab_resumption/tab_resumption_view.h"
-#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/tips_module_audience.h"
-#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/tips_module_consumer_source.h"
-#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/tips_module_state.h"
-#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/tips_module_view.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/ui/tips_module_audience.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/ui/tips_module_consumer_source.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/ui/tips_module_state.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/tips/ui/tips_module_view.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 
 @implementation MagicStackModuleContentsFactory
@@ -68,9 +72,6 @@
           static_cast<TabResumptionItem*>(config);
       return [self tabResumptionViewForConfig:tabResumptionItem];
     }
-    case ContentSuggestionsModuleType::kParcelTracking:
-      // TODO(crbug.com/391002352): Remove kParcelTracking entirely.
-      NOTREACHED();
     case ContentSuggestionsModuleType::kSafetyCheck: {
       SafetyCheckState* safetyCheckConfig =
           static_cast<SafetyCheckState*>(config);
@@ -103,6 +104,16 @@
       TipsModuleState* tipsConfig = static_cast<TipsModuleState*>(config);
       return [self tipsViewForConfig:tipsConfig
                  contentViewDelegate:contentViewDelegate];
+    }
+    case ContentSuggestionsModuleType::kAppBundlePromo: {
+      AppBundlePromoConfig* appBundlePromoConfig =
+          static_cast<AppBundlePromoConfig*>(config);
+      return [self appBundlePromoViewForConfig:appBundlePromoConfig];
+    }
+    case ContentSuggestionsModuleType::kDefaultBrowser: {
+      DefaultBrowserConfig* defaultBrowserConfig =
+          static_cast<DefaultBrowserConfig*>(config);
+      return [self defaultBrowserViewForConfig:defaultBrowserConfig];
     }
     default:
       NOTREACHED();
@@ -231,6 +242,22 @@
   view.audience = state.audience;
   view.contentViewDelegate = contentViewDelegate;
   [state.consumerSource addConsumer:view];
+
+  return view;
+}
+
+// Returns an `AppBundlePromoView` for a given `AppBundlePromoConfig`.
+- (UIView*)appBundlePromoViewForConfig:(AppBundlePromoConfig*)config {
+  AppBundlePromoView* view = [[AppBundlePromoView alloc] initWithConfig:config];
+  view.audience = config.audience;
+
+  return view;
+}
+
+// Returns a `DefaultBrowserView` for a given `DefaultBrowserConfig`.
+- (UIView*)defaultBrowserViewForConfig:(DefaultBrowserConfig*)config {
+  DefaultBrowserView* view = [[DefaultBrowserView alloc] initWithConfig:config];
+  view.commandHandler = config.commandHandler;
 
   return view;
 }

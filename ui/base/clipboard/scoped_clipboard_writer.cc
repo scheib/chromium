@@ -42,10 +42,8 @@ ScopedClipboardWriter::~ScopedClipboardWriter() {
     base::Value::Dict registered_formats_value;
     for (const auto& item : registered_formats_)
       registered_formats_value.Set(item.first, item.second);
-    std::string custom_format_json;
-    base::JSONWriter::Write(registered_formats_value, &custom_format_json);
     Clipboard::Data data = Clipboard::WebCustomFormatMapData{
-        .data = std::move(custom_format_json),
+        .data = base::WriteJson(registered_formats_value).value_or(""),
     };
     const size_t index = data.index();
     objects_[index] = Clipboard::ObjectMapParams(std::move(data));
@@ -205,6 +203,16 @@ void ScopedClipboardWriter::WritePickledData(
       reinterpret_cast<const uint8_t*>(pickle.data()),
       UNSAFE_TODO(reinterpret_cast<const uint8_t*>(pickle.data()) +
                   pickle.size()));
+  raw_objects_.insert({format, std::move(raw_data)});
+}
+
+void ScopedClipboardWriter::WriteRawDataForTest(
+    const ClipboardFormatType& format,
+    std::vector<uint8_t> data) {
+  RecordWrite(ClipboardFormatMetric::kCustomData);
+  Clipboard::RawData raw_data;
+  raw_data.format = format;
+  raw_data.data = std::move(data);
   raw_objects_.insert({format, std::move(raw_data)});
 }
 

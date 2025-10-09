@@ -149,7 +149,8 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
       std::move(params->content_settings_proxy), std::move(cache_storage),
       std::move(browser_interface_broker),
       std::move(params->coep_reporting_observer),
-      std::move(params->dip_reporting_observer));
+      std::move(params->dip_reporting_observer),
+      std::move(params->canvas_noise_token_observer));
 }
 
 void EmbeddedWorkerInstanceClientImpl::StopWorker() {
@@ -209,6 +210,7 @@ EmbeddedWorkerInstanceClientImpl::BuildStartData(
   start_data->devtools_worker_token = params.devtools_worker_token;
   start_data->service_worker_token = params.service_worker_token;
   start_data->ukm_source_id = params.ukm_source_id;
+  start_data->canvas_noise_token = params.canvas_noise_token;
   return start_data;
 }
 

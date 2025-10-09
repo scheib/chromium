@@ -62,6 +62,7 @@ const char* valid_attr_values[] = {
     "attr(p type(<color>#), red)",
     "attr(p px)",
     "attr(p raw-string)",
+    "attr(p number)",
     "attr(p type(<color>))",
     "attr(p type(<color> ))",
     "attr(p type( <color>))",
@@ -486,7 +487,7 @@ TEST_P(CollectDashedFunctionsTest, CollectionTest) {
 
   Vector<AtomicString> actual_result_vector(actual_result);
   std::sort(actual_result_vector.begin(), actual_result_vector.end(),
-            WTF::CodeUnitCompareLessThan);
+            CodeUnitCompareLessThan);
 
   StringBuilder actual_joined;
   for (const AtomicString& a : actual_result_vector) {

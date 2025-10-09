@@ -138,6 +138,7 @@ export enum ReadAnythingSpeechError {
 // chrome.readingMode.
 export interface MetricsBrowserProxy {
   incrementMetricCount(action: string): void;
+  recordEmptyState(): void;
   recordHighlightOff(): void;
   recordHighlightOn(): void;
   recordHighlightGranularity(highlight: number): void;
@@ -152,11 +153,16 @@ export interface MetricsBrowserProxy {
   recordTime(umaName: string, time: number): void;
   recordVoiceSpeed(index: number): void;
   recordVoiceType(voiceType: ReadAnythingVoiceType): void;
+  recordExtensionState(): void;
 }
 
 export class MetricsBrowserProxyImpl implements MetricsBrowserProxy {
   incrementMetricCount(umaName: string) {
     chrome.readingMode.incrementMetricCount(umaName);
+  }
+
+  recordEmptyState() {
+    chrome.readingMode.logEmptyState();
   }
 
   recordSpeechStopSource(source: number) {
@@ -230,6 +236,10 @@ export class MetricsBrowserProxyImpl implements MetricsBrowserProxy {
 
   recordSpeechPlaybackLength(time: number) {
     chrome.metricsPrivate.recordLongTime(UmaName.SPEECH_PLAYBACK, time);
+  }
+
+  recordExtensionState(): void {
+    chrome.readingMode.logExtensionState();
   }
 
   static getInstance(): MetricsBrowserProxy {

@@ -3418,13 +3418,12 @@ class MockHidDelegate : public ChromeHidDelegate {
     chooser_controller_->set_view(mock_chooser_view_.get());
 
     EXPECT_CALL(*mock_chooser_view_.get(), OnOptionsInitialized)
-        .WillOnce(
-            testing::Invoke([this] { chooser_controller_->Select({0}); }));
+        .WillOnce([this] { chooser_controller_->Select({0}); });
   }
 
  private:
-  std::unique_ptr<HidChooserController> chooser_controller_;
   std::unique_ptr<permissions::MockChooserControllerView> mock_chooser_view_;
+  std::unique_ptr<HidChooserController> chooser_controller_;
 };
 
 class WebHidWebViewTest : public WebViewTest {
@@ -3823,7 +3822,7 @@ std::unique_ptr<net::test_server::HttpResponse> HandleDownloadRequestWithCookie(
     return nullptr;
   }
 
-  std::string cookie_to_expect = request.GetURL().query();
+  std::string cookie_to_expect = request.GetURL().GetQuery();
   const auto cookie_header_it = request.headers.find("cookie");
   std::unique_ptr<net::test_server::BasicHttpResponse> response;
 
@@ -3959,7 +3958,7 @@ IN_PROC_BROWSER_TEST_P(WebViewTest, DownloadCookieIsolation) {
     ASSERT_TRUE(
         base::ReadFileToString(download->GetTargetFilePath(), &content));
     // Note that the contents of the file is the value of the cookie.
-    EXPECT_EQ(content, download->GetURL().query());
+    EXPECT_EQ(content, download->GetURL().GetQuery());
     cookies.insert(content);
   }
 
@@ -5065,7 +5064,7 @@ IN_PROC_BROWSER_TEST_P(WebViewTest, NavigateGuestToWebviewAccessibleResource) {
   extensions::ExtensionRegistry* registry =
       extensions::ExtensionRegistry::Get(browser()->profile());
   const extensions::Extension* extension =
-      registry->enabled_extensions().GetByID(guest_url.host());
+      registry->enabled_extensions().GetByID(guest_url.GetHost());
   EXPECT_EQ(extensions::mojom::ContextType::kUnprivilegedExtension,
             process_map->GetMostLikelyContextType(
                 extension, guest_process->GetDeprecatedID(), &guest_url));

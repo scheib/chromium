@@ -4,9 +4,14 @@
 
 package org.chromium.chrome.browser.ui.browser_window;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import org.jni_zero.CalledByNative;
 
 import org.chromium.build.annotations.NullMarked;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.tabmodel.TabModel;
 
 /** Supports {@code browser_window_interface_iterator_android_unittest.cc}. */
 @NullMarked
@@ -15,12 +20,31 @@ final class BrowserWindowInterfaceIteratorAndroidNativeUnitTestSupport {
     private BrowserWindowInterfaceIteratorAndroidNativeUnitTestSupport() {}
 
     @CalledByNative
-    private static long createBrowserWindow(int taskId) {
-        var mockActivityWindowAndroid =
+    private static long createBrowserWindow(int taskId, Profile profile) {
+        var activityWindowAndroid =
                 ChromeAndroidTaskUnitTestSupport.createMockActivityWindowAndroid(taskId);
+        var tabModel = mock(TabModel.class);
+        when(tabModel.getProfile()).thenReturn(profile);
         var chromeAndroidTask =
-                ChromeAndroidTaskTrackerImpl.getInstance().obtainTask(mockActivityWindowAndroid);
+                ChromeAndroidTaskTrackerImpl.getInstance()
+                        .obtainTask(
+                                BrowserWindowType.NORMAL, activityWindowAndroid, tabModel, null);
         return chromeAndroidTask.getOrCreateNativeBrowserWindowPtr();
+    }
+
+    /**
+     * This function simulates Android OS behavior to activate a browser window. It calls into a
+     * task's onTopResumedActivityChangedWithNative() function to make sure its
+     * mLastActivatedTimeMillis is positive, which is a requirement for being able to call into
+     * ChromeAndroidTaskTrackerImpl.getNativeBrowserWindowPtrsOrderedByActivation(). Without this,
+     * |mLastActivatedTimeMillis| will always be -1 (invalid value) as the window isn't activated.
+     */
+    @CalledByNative
+    private static void activateBrowserWindow(int taskId) {
+        ChromeAndroidTaskImpl task =
+                (ChromeAndroidTaskImpl) ChromeAndroidTaskTrackerImpl.getInstance().get(taskId);
+        assert task != null;
+        task.onTopResumedActivityChangedWithNative(/* isTopResumedActivity= */ true);
     }
 
     @CalledByNative

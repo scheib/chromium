@@ -4,15 +4,16 @@
 
 package org.chromium.chrome.browser.safety_hub;
 
+import static org.chromium.build.NullUtil.assumeNonNull;
+
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
-import org.chromium.base.BuildInfo;
 import org.chromium.base.Callback;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.browser.magic_stack.HomeModulesConfigManager;
 import org.chromium.chrome.browser.magic_stack.ModuleConfigChecker;
@@ -25,6 +26,8 @@ import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
+
+import java.util.function.Supplier;
 
 /** {@link ModuleProviderBuilder} that builds the Safety Hub Magic Stack module. */
 @NullMarked
@@ -89,17 +92,17 @@ public class SafetyHubMagicStackBuilder implements ModuleProviderBuilder, Module
     @Override
     public boolean isEligible() {
         // The Safety Hub is not fully supported on Automotive.
-        if (BuildInfo.getInstance().isAutomotive) return false;
+        if (DeviceInfo.isAutomotive()) return false;
 
-        if (!mProfileSupplier.hasValue()) return false;
+        Profile profile = mProfileSupplier.get();
+        if (profile == null) return false;
 
         return true;
     }
 
     private Profile getRegularProfile() {
-        assert mProfileSupplier.hasValue();
-
         Profile profile = mProfileSupplier.get();
+        assumeNonNull(profile);
         // It is possible that an incognito profile is provided by the supplier. See b/326619334.
         return profile.isOffTheRecord() ? profile.getOriginalProfile() : profile;
     }

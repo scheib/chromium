@@ -21,25 +21,6 @@ const std::string& GetEmptyStringRef() {
 }
 }  // namespace
 
-// DoNothingProto
-
-const google::protobuf::internal::ClassData* DoNothingProto::GetClassData()
-    const {
-  NOTREACHED();
-}
-
-void DoNothingProto::Clear() {}
-
-size_t DoNothingProto::ByteSizeLong() const {
-  return 0;
-}
-
-uint8_t* DoNothingProto::_InternalSerialize(
-    uint8_t* ptr,
-    google::protobuf::io::EpsCopyOutputStream* stream) const {
-  return ptr;
-}
-
 // ===========================
 // RemoteAccessService helpers
 // ===========================
@@ -211,6 +192,46 @@ std::unique_ptr<RemoteSupportHost> GetRemoteSupportHost(
 
 std::string_view GetSupportId(const RemoteSupportHost&) {
   return {};
+}
+
+// ============================
+// MessagingService helpers
+// ============================
+
+std::string_view GetSendHostMessagePath() {
+  return "/fake/for_testing/send_host_message";
+}
+std::string_view GetReceiveClientMessagesPath() {
+  return "/fake/for_testing/receive_client_messages";
+}
+
+std::unique_ptr<ReceiveClientMessagesRequest> GetReceiveClientMessagesRequest(
+    const ReceiveClientMessagesRequestStruct&) {
+  return std::make_unique<ReceiveClientMessagesRequest>();
+}
+
+std::unique_ptr<ReceiveClientMessagesResponseStruct>
+GetReceiveClientMessagesResponseStruct(const ReceiveClientMessagesResponse&) {
+  return std::make_unique<ReceiveClientMessagesResponseStruct>();
+}
+
+std::unique_ptr<SendHostMessageRequest> GetSendHostMessageRequest(
+    const SendHostMessageRequestStruct&) {
+  return std::make_unique<SendHostMessageRequest>();
+}
+
+std::unique_ptr<SendHostMessageResponseStruct> GetSendHostMessageResponseStruct(
+    const SendHostMessageResponse&) {
+  return std::make_unique<SendHostMessageResponseStruct>();
+}
+
+std::unique_ptr<SimpleMessage> GetSimpleMessage(const SimpleMessageStruct&) {
+  return std::make_unique<SimpleMessage>();
+}
+
+std::unique_ptr<SimpleMessageStruct> GetSimpleMessageStruct(
+    const SimpleMessage&) {
+  return std::make_unique<SimpleMessageStruct>();
 }
 
 }  // namespace remoting::internal

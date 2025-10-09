@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "components/autofill/core/browser/autofill_field.h"
 #include "components/autofill/core/browser/data_model/addresses/autofill_profile.h"
@@ -105,6 +106,11 @@ std::unique_ptr<PrefService> PrefServiceForTesting(
 // Returns a `FormData` corresponding to a simple address form. Use `unique_id`
 // to ensure that the form has its own signature.
 [[nodiscard]] FormData CreateTestAddressFormData(
+    const char* unique_id = nullptr);
+
+// Returns a `FormData` corresponding to a simple sign-up form that also
+// accepts a passkey.
+[[nodiscard]] FormData CreateTestHybridSignUpFormData(
     const char* unique_id = nullptr);
 
 // Returns a full profile with valid info according to rules for Canada.
@@ -240,7 +246,7 @@ void SetUpCreditCardAndBenefitData(
     const CreditCardBenefit& benefit,
     const std::string& benefit_source,
     TestPersonalDataManager& personal_data,
-    AutofillOptimizationGuide* optimization_guide);
+    AutofillOptimizationGuideDecider* optimization_guide);
 
 // A unit testing utility that is common to a number of the Autofill unit
 // tests.  |SetProfileInfo| provides a quick way to populate a profile with
@@ -339,9 +345,12 @@ struct PassportEntityOptionsT {
   std::string_view guid = "00000000-0000-4000-8000-000000000000";
   std::string_view nickname = "Passie";
   base::Time date_modified = kJune2017;
+  base::Time use_date = kJune2017;
   std::string_view app_locale = "en-US";
+  EntityInstance::RecordType record_type = EntityInstance::RecordType::kLocal;
   EntityInstance::AreAttributesReadOnly are_attributes_read_only =
       EntityInstance::AreAttributesReadOnly(false);
+  int use_count = 0;
 };
 using PassportEntityOptions = PassportEntityOptionsT<>;
 
@@ -351,6 +360,9 @@ using PassportEntityOptions = PassportEntityOptionsT<>;
 // entity from the database obtains the original entity (the resolution of
 // base::Time in the database is seconds).
 EntityInstance GetPassportEntityInstance(PassportEntityOptions options = {});
+
+EntityInstance GetPassportEntityInstanceWithRandomGuid(
+    PassportEntityOptions options = {});
 
 template <typename = void>
 struct DriversLicenseOptionsT {
@@ -362,11 +374,19 @@ struct DriversLicenseOptionsT {
   std::string_view guid = "00000000-0000-4000-8000-100000000000";
   std::string_view nickname = "License";
   base::Time date_modified = kJune2017;
+  base::Time use_date = kJune2017;
   std::string_view app_locale = "en-US";
+  EntityInstance::RecordType record_type = EntityInstance::RecordType::kLocal;
+  EntityInstance::AreAttributesReadOnly are_attributes_read_only =
+      EntityInstance::AreAttributesReadOnly(false);
+  int use_count = 0;
 };
 using DriversLicenseOptions = DriversLicenseOptionsT<>;
 
 EntityInstance GetDriversLicenseEntityInstance(
+    DriversLicenseOptions options = {});
+
+EntityInstance GetDriversLicenseEntityInstanceWithRandomGuid(
     DriversLicenseOptions options = {});
 
 template <typename = void>
@@ -380,11 +400,20 @@ struct VehicleOptionsT {
   const char16_t* state = u"California";
   std::string_view guid = "00000000-0000-4000-8000-200000000000";
   std::string_view nickname = "Vehicle";
+  base::Time date_modified = kJune2017;
+  base::Time use_date = kJune2017;
   std::string_view app_locale = "en-US";
+  EntityInstance::RecordType record_type = EntityInstance::RecordType::kLocal;
+  EntityInstance::AreAttributesReadOnly are_attributes_read_only =
+      EntityInstance::AreAttributesReadOnly(false);
+  int use_count = 0;
 };
 using VehicleOptions = VehicleOptionsT<>;
 
 EntityInstance GetVehicleEntityInstance(VehicleOptions options = {});
+
+EntityInstance GetVehicleEntityInstanceWithRandomGuid(
+    VehicleOptions options = {});
 
 template <typename = void>
 struct NationalIdCardOptionsT {
@@ -395,6 +424,11 @@ struct NationalIdCardOptionsT {
   std::string_view guid = "00000000-0000-4000-8000-300000000000";
   std::string_view nickname = "IdCard";
   std::string_view app_locale = "en-US";
+  base::Time use_date = kJune2017;
+  EntityInstance::RecordType record_type = EntityInstance::RecordType::kLocal;
+  EntityInstance::AreAttributesReadOnly are_attributes_read_only =
+      EntityInstance::AreAttributesReadOnly(false);
+  int use_count = 0;
 };
 using NationalIdCardOptions = NationalIdCardOptionsT<>;
 
@@ -408,6 +442,11 @@ struct KnownTravelerNumberOptionsT {
   std::string_view guid = "00000000-0000-4000-8000-400000000000";
   std::string_view nickname = "Known Traveler Number";
   std::string_view app_locale = "en-US";
+  base::Time use_date = kJune2017;
+  EntityInstance::RecordType record_type = EntityInstance::RecordType::kLocal;
+  EntityInstance::AreAttributesReadOnly are_attributes_read_only =
+      EntityInstance::AreAttributesReadOnly(false);
+  int use_count = 0;
 };
 using KnownTravelerNumberOptions = KnownTravelerNumberOptionsT<>;
 
@@ -420,11 +459,42 @@ struct RedressNumberOptionsT {
   std::string_view guid = "00000000-0000-4000-8000-500000000000";
   std::string_view nickname = "RedressNumber";
   std::string_view app_locale = "en-US";
+  base::Time use_date = kJune2017;
+  EntityInstance::RecordType record_type = EntityInstance::RecordType::kLocal;
+  EntityInstance::AreAttributesReadOnly are_attributes_read_only =
+      EntityInstance::AreAttributesReadOnly(false);
+  int use_count = 0;
 };
 using RedressNumberOptions = RedressNumberOptionsT<>;
 
 EntityInstance GetRedressNumberEntityInstance(
     RedressNumberOptions options = {});
+
+template <typename = void>
+struct FlightReservationOptionsT {
+  const char16_t* flight_number = u"AA123";
+  const char16_t* ticket_number = u"123123456";
+  const char16_t* confirmation_code = u"AB4KW5";
+  const char16_t* name = u"John Doe";
+  const char16_t* departure_airport = u"MUC";
+  const char16_t* arrival_airport = u"BEY";
+  std::string_view guid = "00000000-0000-4000-8000-500000000000";
+  std::string_view nickname = "FlightReservation";
+  std::string_view app_locale = "en-US";
+  base::Time date_modified = kJune2017;
+  base::Time use_date = kJune2017;
+  EntityInstance::RecordType record_type = EntityInstance::RecordType::kLocal;
+  EntityInstance::AreAttributesReadOnly are_attributes_read_only =
+      EntityInstance::AreAttributesReadOnly(false);
+  int use_count = 0;
+};
+using FlightReservationOptions = FlightReservationOptionsT<>;
+
+EntityInstance GetFlightReservationEntityInstance(
+    FlightReservationOptions options = {});
+
+EntityInstance GetFlightReservationEntityInstanceWithRandomGuid(
+    FlightReservationOptions options = {});
 
 // Adds `possible_types` at the end of `possible_field_types`.
 void InitializePossibleTypes(std::vector<FieldTypeSet>& possible_field_types,
@@ -548,6 +618,21 @@ BnplIssuer GetTestUnlinkedBnplIssuer();
 // fake data using `id` as the `PaymentInstrumentCreationOption.id`.
 sync_pb::PaymentInstrumentCreationOption
 CreatePaymentInstrumentCreationOptionWithBnplIssuer(const std::string& id);
+
+// For the key metrics as used for different data types, this struct allows to
+// define expectations. The values are marked optional. `std::nullopt` means
+// that no value was recorded to the histogram.
+struct SingleSubmissionKeyMetricExpectations {
+  std::optional<bool> readiness;
+  std::optional<bool> acceptance;
+  std::optional<bool> assistance;
+  std::optional<bool> correctness;
+};
+
+void VerifySingleSubmissionKeyMetricExpectations(
+    const base::HistogramTester& histogram_tester,
+    absl::string_view form_type_name,
+    const SingleSubmissionKeyMetricExpectations& expectations);
 
 }  // namespace test
 }  // namespace autofill

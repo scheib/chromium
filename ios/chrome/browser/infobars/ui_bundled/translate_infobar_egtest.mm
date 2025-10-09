@@ -123,6 +123,10 @@ const char kTranslateScript[] =
     "          return true;"
     "        },"
     "        translatePage: function(source, target, callback) {"
+    "          myButton = document.getElementById('restored-button');"
+    "          if (myButton) {"
+    "            myButton.remove();"
+    "          }"
     "          myButton = document.createElement('button');"
     "          myButton.setAttribute('id', 'translated-button');"
     "          myButton.appendChild(document.createTextNode('Translated'));"
@@ -131,7 +135,13 @@ const char kTranslateScript[] =
     "        },"
     "        restore: function() {"
     "          myButton = document.getElementById('translated-button');"
-    "          myButton.remove();"
+    "          if (myButton) {"
+    "            myButton.remove();"
+    "          }"
+    "          myButton = document.createElement('button');"
+    "          myButton.setAttribute('id', 'restored-button');"
+    "          myButton.appendChild(document.createTextNode('Restored'));"
+    "          document.body.prepend(myButton);"
     "        }"
     "      }"
     "    }"
@@ -191,14 +201,15 @@ class TestResponseProvider : public web::DataResponseProvider {
 
 bool TestResponseProvider::CanHandleRequest(const Request& request) {
   const GURL& url = request.url;
-  return (url.host() == kHttpServerDomain &&
-          (url.path() == kLanguagePath || url.path() == kLinkPath ||
-           url.path() == kSubresourcePath || url.path() == kFrenchPagePath ||
-           url.path() == kFrenchPageDistillablePath ||
-           url.path() == kFrenchPageWithLinkPath ||
-           url.path() == kFrenchPageNoTranslateContent ||
-           url.path() == kFrenchPageNoTranslateValue ||
-           url.path() == kTranslateScriptPath)) ||
+  return (url.GetHost() == kHttpServerDomain &&
+          (url.GetPath() == kLanguagePath || url.GetPath() == kLinkPath ||
+           url.GetPath() == kSubresourcePath ||
+           url.GetPath() == kFrenchPagePath ||
+           url.GetPath() == kFrenchPageDistillablePath ||
+           url.GetPath() == kFrenchPageWithLinkPath ||
+           url.GetPath() == kFrenchPageNoTranslateContent ||
+           url.GetPath() == kFrenchPageNoTranslateValue ||
+           url.GetPath() == kTranslateScriptPath)) ||
          url.SchemeIs(kChromeUIScheme);
 }
 
@@ -211,48 +222,48 @@ void TestResponseProvider::GetResponseHeadersAndBody(
   if (url.SchemeIs(kChromeUIScheme)) {
     *response_body = url.spec();
     return;
-  } else if (url.path() == kLanguagePath) {
+  } else if (url.GetPath() == kLanguagePath) {
     // HTTP header and meta tag read from parameters.
     return GetLanguageResponse(request, headers, response_body);
-  } else if (url.path() == kSubresourcePath) {
+  } else if (url.GetPath() == kSubresourcePath) {
     // Different "Content-Language" headers in the main page and subresource.
     (*headers)->AddHeader("Content-Language", "fr");
     *response_body = base::StringPrintf(
         "<html><body><img src=%s></body></html>", kSomeLanguageUrl);
     return;
-  } else if (url.path() == kLinkPath) {
+  } else if (url.GetPath() == kLinkPath) {
     // Link to a page with "Content Language" headers.
     GURL some_language_url = web::test::HttpServer::MakeUrl(kSomeLanguageUrl);
     *response_body = base::StringPrintf(
         "<html><body><a href='%s' id='click'>Click</a></body></html>",
         some_language_url.spec().c_str());
     return;
-  } else if (url.path() == kFrenchPagePath) {
+  } else if (url.GetPath() == kFrenchPagePath) {
     *response_body = GetFrenchPageHtml(kHtmlAttribute, "");
     return;
-  } else if (url.path() == kFrenchPageDistillablePath) {
+  } else if (url.GetPath() == kFrenchPageDistillablePath) {
     *response_body = GetFrenchPageDistillableHtml();
     return;
-  } else if (url.path() == kFrenchPageWithLinkPath) {
+  } else if (url.GetPath() == kFrenchPageWithLinkPath) {
     GURL page_path_url = web::test::HttpServer::MakeUrl(
         base::StringPrintf("http://%s", kFrenchPagePath));
     *response_body = base::StringPrintf(
         "<html><body>%s<br/><a href='%s' id='link'>link</a></body></html>",
         kFrenchText, page_path_url.spec().c_str());
     return;
-  } else if (url.path() == kFrenchPageNoTranslateContent) {
+  } else if (url.GetPath() == kFrenchPageNoTranslateContent) {
     GURL page_path_url = web::test::HttpServer::MakeUrl(
         base::StringPrintf("http://%s", kFrenchPagePath));
     // A page with French text and a 'content' attribute with "notranslate".
     *response_body = GetFrenchPageHtml(kHtmlAttribute, kMetaNotranslateContent);
     return;
-  } else if (url.path() == kFrenchPageNoTranslateValue) {
+  } else if (url.GetPath() == kFrenchPageNoTranslateValue) {
     GURL page_path_url = web::test::HttpServer::MakeUrl(
         base::StringPrintf("http://%s", kFrenchPagePath));
     // A page with French text and a 'value' attribute with "notranslate".
     *response_body = GetFrenchPageHtml(kHtmlAttribute, kMetaNotranslateValue);
     return;
-  } else if (url.path() == kTranslateScriptPath) {
+  } else if (url.GetPath() == kTranslateScriptPath) {
     *response_body = kTranslateScript;
     return;
   }
@@ -298,8 +309,11 @@ void TestResponseProvider::GetLanguageResponse(
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config;
   config.features_enabled.push_back(kEnableReaderModeTranslation);
+  config.features_enabled.push_back(kEnableReaderModeTranslationWithInfobar);
 
-  if ([self isRunningTest:@selector(testTranslateInReaderMode)]) {
+  if ([self isRunningTest:@selector(testTranslateInReaderMode)] ||
+      [self isRunningTest:@selector(testNoAutotranslateInReaderMode)] ||
+      [self isRunningTest:@selector(testTranslateInClosedReaderMode)]) {
     config.features_enabled.push_back(kEnableReaderMode);
   }
 
@@ -1328,8 +1342,8 @@ void TestResponseProvider::GetLanguageResponse(
   [ChromeEarlGrey waitForWebStateContainingText:"Translated"];
 }
 
-// Tests that translation can be applied while in reader mode and that translate
-// infobars are suppressed when reader mode is activated.
+// Tests that translation applied prior to Reader Mode is displayed and that
+// translate infobars are suppressed when reader mode is activated.
 - (void)testTranslateInReaderMode {
 #if !TARGET_OS_SIMULATOR
   if ([ChromeEarlGrey isIPadIdiom]) {
@@ -1349,6 +1363,9 @@ void TestResponseProvider::GetLanguageResponse(
   // Check Translate banner is presented.
   GREYAssertTrue([self isBeforeTranslateBannerVisible],
                  @"Before Translate banner was not found");
+  // Tap banner button to translate.
+  GREYAssertTrue([self selectTranslateButton],
+                 @"Could not tap on Translate banner action button");
 
   // Open Reader Mode.
   GREYAssertTrue(
@@ -1364,23 +1381,144 @@ void TestResponseProvider::GetLanguageResponse(
   GREYAssertFalse([self isBeforeTranslateBannerVisible],
                   @"Before Translate banner was found");
 
-  // Manually trigger translation from the tools menu.
+  // Verify translation is available in the tools menu.
   [ChromeEarlGreyUI openToolsMenu];
 
   id<GREYMatcher> tableViewMatcher =
       [ChromeEarlGrey isNewOverflowMenuEnabled]
           ? grey_accessibilityID(kPopupMenuToolsMenuActionListId)
           : grey_accessibilityID(kPopupMenuToolsMenuTableViewId);
-  [[[[EarlGrey
+  [[[EarlGrey
       selectElementWithMatcher:grey_allOf(
                                    grey_accessibilityID(kToolsMenuTranslateId),
                                    grey_sufficientlyVisible(), nil)]
          usingSearchAction:grey_scrollInDirection(kGREYDirectionDown, 150)
-      onElementWithMatcher:tableViewMatcher] assertWithMatcher:grey_notNil()]
-      performAction:grey_tap()];
+      onElementWithMatcher:tableViewMatcher] assertWithMatcher:grey_enabled()];
 
   // Verify page is translated.
   [ChromeEarlGrey waitForWebStateContainingText:"Translated"];
+
+  // Close Reader Mode.
+  [ChromeEarlGrey hideReaderMode];
+  [ChromeEarlGrey
+      waitForUIElementToDisappearWithMatcher:
+          grey_accessibilityID(kReaderModeViewAccessibilityIdentifier)];
+
+  // Verify badge is shown and page is translated.
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     kBadgeButtonTranslateAcceptedAccessibilityIdentifier)]
+      assertWithMatcher:grey_notNil()];
+  [ChromeEarlGrey waitForWebStateContainingText:"Translated"];
+}
+
+// Tests that if the original page is not translated, the Reading Mode page is
+// not either, regardless of the autotranslate settings.
+- (void)testNoAutotranslateInReaderMode {
+  // Start the HTTP server.
+  std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
+  web::test::SetUpHttpServer(std::move(provider));
+
+  // Load a page with French text.
+  GURL URL = web::test::HttpServer::MakeUrl(
+      base::StringPrintf("http://%s", kFrenchPageDistillablePath));
+  [ChromeEarlGrey loadURL:URL];
+
+  // Make sure that French to English translation is not automatic.
+  GREYAssert(![TranslateAppInterface shouldAutoTranslateFromLanguage:@"fr"
+                                                          toLanguage:@"en"],
+             @"French to English translation is automatic");
+
+  // Check Translate banner is presented.
+  GREYAssertTrue([self isBeforeTranslateBannerVisible],
+                 @"Before Translate banner was not found");
+  // Show modal.
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(
+                                   grey_accessibilityID(
+                                       kInfobarBannerOpenModalButtonIdentifier),
+                                   grey_accessibilityTrait(
+                                       UIAccessibilityTraitButton),
+                                   nil)] performAction:grey_tap()];
+  // Select the Always Translate button.
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(grey_accessibilityID(
+                         kTranslateInfobarModalAlwaysTranslateButtonAXId),
+                     grey_accessibilityTrait(UIAccessibilityTraitButton), nil)]
+      performAction:grey_tap()];
+
+  // Make sure the page is translated.
+  [ChromeEarlGrey waitForWebStateContainingText:"Translated"];
+  // Wait for "Show Original?" banner to appear.
+  GREYAssertTrue([self isAfterTranslateBannerVisible],
+                 @"Show Original Banner was not found.");
+
+  // Tap on banner button to revert.
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(grey_accessibilityLabel(l10n_util::GetNSString(
+                         IDS_IOS_TRANSLATE_INFOBAR_TRANSLATE_UNDO_ACTION)),
+                     grey_accessibilityTrait(UIAccessibilityTraitButton), nil)]
+      performAction:grey_tap()];
+  [ChromeEarlGrey waitForWebStateContainingText:"Restored"];
+
+  // Open Reader Mode.
+  GREYAssertTrue(
+      [ChromeEarlGrey showReaderModeAndWaitUntilReaderModeWebStateIsReady],
+      @"Reader mode content could not be loaded.");
+
+  // Verify Reader Mode is active.
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:
+          grey_accessibilityID(kReaderModeViewAccessibilityIdentifier)];
+
+  // Verify page is not translated.
+  [ChromeEarlGrey waitForWebStateNotContainingText:"Translated"];
+}
+
+// Tests that for a tab where translation was applied in Reading Mode, deletion
+// of the original web state correctly closes Reading Mode state.
+- (void)testTranslateInClosedReaderMode {
+#if !TARGET_OS_SIMULATOR
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    EARL_GREY_TEST_DISABLED(@"Disabled on iPad devices");
+  }
+#endif
+  // Set up server with a French page.
+  std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
+  web::test::SetUpHttpServer(std::move(provider));
+
+  GURL URL = web::test::HttpServer::MakeUrl(
+      base::StringPrintf("http://%s", kFrenchPageDistillablePath));
+
+  // Load URL.
+  [ChromeEarlGrey loadURL:URL];
+
+  // Check Translate banner is presented.
+  GREYAssertTrue([self isBeforeTranslateBannerVisible],
+                 @"Before Translate banner was not found");
+  // Tap banner button to translate.
+  GREYAssertTrue([self selectTranslateButton],
+                 @"Could not tap on Translate banner action button");
+
+  // Open Reader Mode.
+  GREYAssertTrue(
+      [ChromeEarlGrey showReaderModeAndWaitUntilReaderModeWebStateIsReady],
+      @"Reader mode content could not be loaded.");
+
+  // Verify Reader Mode is active.
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:
+          grey_accessibilityID(kReaderModeViewAccessibilityIdentifier)];
+
+  // Verify page is translated.
+  [ChromeEarlGrey waitForWebStateContainingText:"Translated"];
+
+  // Close Reader Mode.
+  [ChromeEarlGrey closeTabAtIndex:0];
+
+  [ChromeEarlGrey waitForMainTabCount:0];
 }
 
 @end

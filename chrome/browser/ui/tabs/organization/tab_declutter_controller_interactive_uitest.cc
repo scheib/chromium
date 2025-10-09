@@ -17,6 +17,7 @@
 #include "chrome/browser/resource_coordinator/time.h"
 #include "chrome/browser/resource_coordinator/utils.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/organization/tab_declutter_controller.h"
@@ -24,6 +25,7 @@
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/tab_strip_region_view.h"
+#include "chrome/browser/ui/views/interaction/browser_elements_views.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_action_container.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_nudge_button.h"
 #include "chrome/common/chrome_features.h"
@@ -38,6 +40,7 @@
 #include "ui/events/base_event_utils.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/view.h"
+#include "ui/views/view_utils.h"
 
 class FakeTabDeclutterObserver : public TabDeclutterObserver {
  public:
@@ -120,13 +123,13 @@ class TabDeclutterControllerBrowserTest : public InProcessBrowserTest {
   }
 
   views::View* nudge_container() {
-    auto* tab_strip_region_view =
-        BrowserView::GetBrowserViewForBrowser(browser())
-            ->tab_strip_region_view();
     if (features::HasTabSearchToolbarButton()) {
-      return tab_strip_region_view->GetTabStripActionContainer();
+      return BrowserElementsViews::From(browser())->GetView(
+          kTabStripActionContainerElementId);
     }
-    return tab_strip_region_view->tab_search_container_for_testing();
+
+    return BrowserElementsViews::From(browser())->GetViewAs<TabSearchContainer>(
+        kTabSearchContainerElementId);
   }
 
  protected:
@@ -301,18 +304,17 @@ IN_PROC_BROWSER_TEST_F(TabDeclutterControllerBrowserTest,
   views::LabelButton* close_button;
   if (features::HasTabSearchToolbarButton()) {
     TabStripActionContainer* tab_strip_action_container =
-        BrowserView::GetBrowserViewForBrowser(browser())
-            ->tab_strip_region_view()
-            ->GetTabStripActionContainer();
+        BrowserElementsViews::From(browser())
+            ->GetViewAs<TabStripActionContainer>(
+                kTabStripActionContainerElementId);
     EXPECT_TRUE(
         tab_strip_action_container->tab_declutter_button()->GetVisible());
     close_button = tab_strip_action_container->tab_declutter_button()
                        ->close_button_for_testing();
   } else {
     TabSearchContainer* tab_search_container =
-        BrowserView::GetBrowserViewForBrowser(browser())
-            ->tab_strip_region_view()
-            ->tab_search_container_for_testing();
+        BrowserElementsViews::From(browser())->GetViewAs<TabSearchContainer>(
+            kTabSearchContainerElementId);
     EXPECT_TRUE(tab_search_container->tab_declutter_button()->GetVisible());
     close_button = tab_search_container->tab_declutter_button()
                        ->close_button_for_testing();
@@ -442,6 +444,11 @@ IN_PROC_BROWSER_TEST_F(TabDeclutterControllerBrowserTest,
 
   EXPECT_GE(fake_observer.unused_tabs_processed_count(), 1);
   EXPECT_EQ(fake_observer.trigger_declutter_ui_visibility_count(), 0);
+
+  // Reset focused_tab_strip_model_for_testing_ to eliminate reliance on browser
+  // list ordering during destruction.
+  resource_coordinator::GetTabLifecycleUnitSource()
+      ->SetFocusedTabStripModelForTesting(nullptr);
 }
 
 class TabDeclutterControllerDuplicateTabsTest

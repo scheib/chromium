@@ -7,12 +7,12 @@
 #import <Foundation/Foundation.h>
 
 #import "base/check.h"
-#import "ios/chrome/browser/home_customization/model/background_collection_configuration.h"
-#import "ios/chrome/browser/home_customization/model/background_customization_configuration.h"
-#import "ios/chrome/browser/home_customization/model/background_customization_configuration_item.h"
+#import "base/metrics/histogram_functions.h"
+#import "ios/chrome/browser/home_customization/ui/background_collection_configuration.h"
+#import "ios/chrome/browser/home_customization/ui/background_customization_configuration.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_background_cell.h"
-#import "ios/chrome/browser/home_customization/ui/home_customization_background_picker_action_sheet_presentation_delegate.h"
-#import "ios/chrome/browser/home_customization/ui/home_customization_background_preset_gallery_picker_mutator.h"
+#import "ios/chrome/browser/home_customization/ui/home_customization_background_configuration_mutator.h"
+#import "ios/chrome/browser/home_customization/ui/home_customization_background_picker_action_sheet_consumer.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_background_preset_header_view.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_background_skeleton_cell.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_collection_configurator.h"
@@ -20,6 +20,8 @@
 #import "ios/chrome/browser/home_customization/ui/home_customization_search_engine_logo_mediator_provider.h"
 #import "ios/chrome/browser/home_customization/ui/home_customization_view_controller_protocol.h"
 #import "ios/chrome/browser/home_customization/utils/home_customization_constants.h"
+#import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_image_background_trait.h"
+#import "ios/chrome/browser/shared/ui/util/custom_ui_trait_accessor.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -73,6 +75,13 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
 
   // The current index of the cell being dimmed in the loading animation.
   NSInteger _skeletonAnimationIndex;
+
+  // Tracking for maximum visible indices
+  NSInteger _maxVisibleSectionIndex;
+  NSInteger _maxVisibleItemIndex;
+
+  // The number of times an item from the gallery is selected.
+  int _galleryClickCount;
 }
 @end
 
@@ -82,6 +91,8 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
 @synthesize collectionView = _collectionView;
 @synthesize diffableDataSource = _diffableDataSource;
 @synthesize page = _page;
+
+@dynamic navigationItem;
 
 - (void)viewDidLoad {
   [super viewDidLoad];
@@ -142,7 +153,11 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
   AddSameConstraints(_collectionView, self.view);
 }
 
-#pragma mark - HomeCustomizationBackgroundPresetGalleryPickerConsumer
+- (NSInteger)selectedIndex {
+  return _collectionView.indexPathsForSelectedItems.firstObject.section;
+}
+
+#pragma mark - HomeCustomizationBackgroundConfigurationConsumer
 
 - (void)setBackgroundCollectionConfigurations:
             (NSArray<BackgroundCollectionConfiguration*>*)
@@ -155,13 +170,15 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
 
   // Flattens all background configurations from the collections into a single
   // map.
-  for (BackgroundCollectionConfiguration* BackgroundCollectionConfiguration in
+  for (BackgroundCollectionConfiguration* backgroundCollectionConfiguration in
            backgroundCollectionConfigurations) {
-    for (id<BackgroundCustomizationConfiguration> backgroundConfiguration in
-             BackgroundCollectionConfiguration.configurations) {
-      [backgroundCustomizationConfigurationMap
-          setObject:backgroundConfiguration
-             forKey:backgroundConfiguration.configurationID];
+    for (NSString* configurationID in backgroundCollectionConfiguration
+             .configurations) {
+      id<BackgroundCustomizationConfiguration> backgroundConfiguration =
+          [backgroundCollectionConfiguration.configurations
+              objectForKey:configurationID];
+      [backgroundCustomizationConfigurationMap setObject:backgroundConfiguration
+                                                  forKey:configurationID];
     }
   }
 
@@ -174,6 +191,17 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
+  // Log final maximums before disappearing, for example.
+  base::UmaHistogramSparse(
+      "IOS.HomeCustomization.Background.Gallery.MaxVisibleSectionIndex",
+      _maxVisibleSectionIndex);
+  base::UmaHistogramSparse(
+      "IOS.HomeCustomization.Background.Gallery.MaxVisibleItemIndex",
+      _maxVisibleItemIndex);
+  // Log the total number of selection changes while the gallery was open.
+  base::UmaHistogramCounts10000(
+      "IOS.HomeCustomization.Background.Gallery.ClickCount",
+      _galleryClickCount);
   [self stopLoadingAnimation];
 }
 
@@ -213,18 +241,34 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
     didSelectItemAtIndexPath:(NSIndexPath*)indexPath {
   NSString* itemIdentifier =
       [_diffableDataSource itemIdentifierForIndexPath:indexPath];
-  [self.presentationDelegate
-      applyBackgroundForConfiguration:_backgroundCustomizationConfigurationMap
-                                          [itemIdentifier]];
+
+  // Prevent background updates when a user clicks on an already selected cell.
+  if (_selectedBackgroundId == itemIdentifier) {
+    return;
+  }
+
+  _selectedBackgroundId = itemIdentifier;
+
+  [self.mutator applyBackgroundForConfiguration:
+                    _backgroundCustomizationConfigurationMap[itemIdentifier]];
+  _galleryClickCount += 1;
 }
 
 - (void)collectionView:(UICollectionView*)collectionView
        willDisplayCell:(HomeCustomizationBackgroundCell*)cell
     forItemAtIndexPath:(NSIndexPath*)indexPath {
+  // Update the maximum visible section index.
+  _maxVisibleSectionIndex =
+      std::max(_maxVisibleSectionIndex, indexPath.section);
+
+  // Update the maximum visible item index.
+  _maxVisibleItemIndex = std::max(_maxVisibleItemIndex, indexPath.item);
+
   NSString* itemIdentifier =
       [_diffableDataSource itemIdentifierForIndexPath:indexPath];
   id<BackgroundCustomizationConfiguration> backgroundConfiguration =
       _backgroundCustomizationConfigurationMap[itemIdentifier];
+  __weak __typeof(self) weakSelf = self;
 
   if (backgroundConfiguration &&
       !backgroundConfiguration.thumbnailURL.is_empty()) {
@@ -234,12 +278,18 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
                                            completion:^(UIImage* image,
                                                         NSError* error) {
                                              if (error) {
-                                               // Hide the cell if the thumbnail
-                                               // image failed to load.
-                                               cell.hidden = YES;
+                                               // Delete the cell if the
+                                               // thumbnail image failed to
+                                               // load.
+                                               [weakSelf
+                                                   deleteBackgroundCell:
+                                                       backgroundConfiguration
+                                                           .configurationID
+                                                     forItemAtIndexPath:
+                                                         indexPath];
                                              } else {
-                                               [cell
-                                                   updateBackgroundImage:image];
+                                               [cell updateBackgroundImage:image
+                                                        framingCoordinates:nil];
                                              }
                                            }];
   }
@@ -255,6 +305,35 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
 }
 
 #pragma mark - Private
+
+// Removes a background cell for the given configurationID.
+- (void)deleteBackgroundCell:(NSString*)configurationID
+          forItemAtIndexPath:(NSIndexPath*)indexPath {
+  [_backgroundCustomizationConfigurationMap removeObjectForKey:configurationID];
+
+  BackgroundCollectionConfiguration* backgroundCollectionConfiguration =
+      _backgroundCollectionConfigurations[indexPath.section];
+  if (backgroundCollectionConfiguration) {
+    [backgroundCollectionConfiguration.configurations
+        removeObjectForKey:configurationID];
+
+    NSUInteger indexOfConfigurationOrder =
+        [backgroundCollectionConfiguration.configurationOrder
+            indexOfObjectPassingTest:^BOOL(NSString* id, NSUInteger index,
+                                           BOOL* stop) {
+              return configurationID == id;
+            }];
+    if (indexOfConfigurationOrder != NSNotFound) {
+      [backgroundCollectionConfiguration.configurationOrder
+          removeObjectAtIndex:indexOfConfigurationOrder];
+    }
+  }
+
+  NSDiffableDataSourceSnapshot<CustomizationSection*, NSString*>* snapshot =
+      [_diffableDataSource snapshot];
+  [snapshot deleteItemsWithIdentifiers:@[ configurationID ]];
+  [_diffableDataSource applySnapshot:snapshot animatingDifferences:NO];
+}
 
 // Creates a skeleton snapshot representing the loading content of the
 // collection view.
@@ -295,9 +374,9 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
       backgroundCollectionConfiguration.collectionName
     ]];
     NSMutableArray* backgroundIds = [NSMutableArray array];
-    for (id<BackgroundCustomizationConfiguration> backgroundConfiguration in
-             backgroundCollectionConfiguration.configurations) {
-      [backgroundIds addObject:backgroundConfiguration.configurationID];
+    for (NSString* configurationID in backgroundCollectionConfiguration
+             .configurationOrder) {
+      [backgroundIds addObject:configurationID];
     }
 
     [snapshot appendItemsWithIdentifiers:backgroundIds
@@ -397,9 +476,12 @@ const NSTimeInterval kAnimationIntervalSeconds = 0.5;
       [self.searchEngineLogoMediatorProvider
           provideSearchEngineLogoMediatorForKey:itemIdentifier];
 
+  CustomUITraitAccessor* traitAccessor =
+      [[CustomUITraitAccessor alloc] initWithMutableTraits:cell.traitOverrides];
+  [traitAccessor setBoolForNewTabPageImageBackgroundTrait:YES];
+
   [cell configureWithBackgroundOption:backgroundConfiguration
-             searchEngineLogoMediator:searchEngineLogoMediator
-                         colorPalette:nil];
+             searchEngineLogoMediator:searchEngineLogoMediator];
 
   if ([itemIdentifier isEqualToString:_selectedBackgroundId]) {
     [_collectionView selectItemAtIndexPath:indexPath

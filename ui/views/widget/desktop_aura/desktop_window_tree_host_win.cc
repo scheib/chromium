@@ -50,7 +50,7 @@
 #include "ui/events/platform/platform_event_source.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/vector2d.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/gfx/path_win.h"
 #include "ui/views/corewm/tooltip_aura.h"
 #include "ui/views/views_features.h"
@@ -92,7 +92,7 @@ void UpdateMouseLockRegion(aura::Window* window, bool locked) {
   }
 
   RECT window_rect =
-      display::Screen::GetScreen()
+      display::Screen::Get()
           ->DIPToScreenRectInWindow(window, window->GetBoundsInScreen())
           .ToRECT();
   window_rect.left += kMouseCaptureRegionBorder;
@@ -247,15 +247,11 @@ void DesktopWindowTreeHostWin::OnActiveWindowChanged(bool active) {}
 
 void DesktopWindowTreeHostWin::OnWidgetInitDone() {}
 
-void DesktopWindowTreeHostWin::OnWidgetThemeChanged(
-    ui::ColorProviderKey::ColorMode color_mode,
-    std::optional<SkColor> background_color) {
+void DesktopWindowTreeHostWin::SetBackgroundColor(SkColor background_color) {
   UpdateBackdropColorMode();
-  if (background_color) {
-    ClearBackgroundPaintBrush();
-    background_paint_brush_ =
-        CreateSolidBrush(skia::SkColorToCOLORREF(*background_color));
-  }
+  ClearBackgroundPaintBrush();
+  background_paint_brush_ =
+      CreateSolidBrush(skia::SkColorToCOLORREF(background_color));
 }
 
 std::unique_ptr<corewm::Tooltip> DesktopWindowTreeHostWin::CreateTooltip() {
@@ -565,8 +561,7 @@ void DesktopWindowTreeHostWin::SetVisibilityChangedAnimationsEnabled(
   }
 }
 
-std::unique_ptr<NonClientFrameView>
-DesktopWindowTreeHostWin::CreateNonClientFrameView() {
+std::unique_ptr<FrameView> DesktopWindowTreeHostWin::CreateFrameView() {
   return (ShouldUseNativeFrame() && native_widget_delegate_)
              ? std::make_unique<NativeFrameView>(
                    native_widget_delegate_->AsWidget())
@@ -1001,6 +996,22 @@ gfx::NativeViewAccessible DesktopWindowTreeHostWin::GetNativeViewAccessible() {
   return nullptr;
 }
 
+gfx::NativeViewAccessible
+DesktopWindowTreeHostWin::GetParentNativeViewAccessible() {
+  views::Widget* widget = GetWidget();
+  if (!widget) {
+    return nullptr;
+  }
+
+  views::Widget* parent_widget = widget->parent();
+  if (!parent_widget) {
+    return nullptr;
+  }
+
+  views::View* parent_root = parent_widget->GetRootView();
+  return parent_root ? parent_root->GetNativeViewAccessible() : nullptr;
+}
+
 void DesktopWindowTreeHostWin::HandleActivationChanged(bool active) {
   // This can be invoked from HWNDMessageHandler::Init(), at which point we're
   // not in a good state and need to ignore it.
@@ -1224,7 +1235,7 @@ void DesktopWindowTreeHostWin::HandleTouchEvent(ui::TouchEvent* event) {
     return;
   }
   if (event->type() == ui::EventType::kTouchPressed) {
-    display::Screen* screen = display::Screen::GetScreen();
+    display::Screen* screen = display::Screen::Get();
     CHECK(screen);
     aura::Window* window =
         screen->GetWindowAtScreenPoint(screen->GetCursorScreenPoint());
@@ -1379,7 +1390,7 @@ void DesktopWindowTreeHostWin::SetBoundsInDIP(const gfx::Rect& bounds) {
   // details.
   aura::Window* root = nullptr;
   const gfx::Rect bounds_in_pixels =
-      display::Screen::GetScreen()->DIPToScreenRectInWindow(
+      display::Screen::Get()->DIPToScreenRectInWindow(
           root, AdjustedContentBounds(bounds));
   AsWindowTreeHost()->SetBoundsInPixels(bounds_in_pixels);
 }
@@ -1456,7 +1467,7 @@ bool DesktopWindowTreeHostWin::IsModalWindowActive() const {
 
 void DesktopWindowTreeHostWin::CheckForMonitorChange() {
   display::Display nearest_display =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(window());
+      display::Screen::Get()->GetDisplayNearestWindow(window());
   if (nearest_display == last_nearest_display_) {
     return;
   }

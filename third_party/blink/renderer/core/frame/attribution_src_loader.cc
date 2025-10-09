@@ -179,9 +179,7 @@ Vector<KURL> ParseAttributionSrcUrls(AttributionSrcLoader& loader,
 
 bool KeepaliveResponsesHandledInBrowser() {
   return base::FeatureList::IsEnabled(
-             blink::features::kKeepAliveInBrowserMigration) &&
-         base::FeatureList::IsEnabled(
-             blink::features::kAttributionReportingInBrowserMigration);
+      blink::features::kKeepAliveInBrowserMigration);
 }
 
 // Keepalive requests will be serviced by `KeepAliveAttributionRequestHelper`
@@ -581,7 +579,8 @@ void AttributionSrcLoader::RegisterFromContextMenuNavigation(
   }
 
   DataHostSharedRemote data_host = std::move(entry->second);
-  DCHECK(data_host.is_bound());
+  // This is required for `DoRegistration()` to work properly.
+  CHECK(data_host.is_bound());
   context_menu_data_hosts_.erase(entry);
 
   const AtomicString& attribution_src =
@@ -617,7 +616,7 @@ bool AttributionSrcLoader::CreateAndSendRequests(
 
   if (Document* document = local_frame_->DomWindow()->document();
       document->IsPrerendering()) {
-    document->AddPostPrerenderingActivationStep(WTF::BindOnce(
+    document->AddPostPrerenderingActivationStep(blink::BindOnce(
         base::IgnoreResult(&AttributionSrcLoader::DoRegistration),
         WrapPersistentIfNeeded(this), std::move(urls), attribution_src_token,
         referrer_policy, std::move(data_host)));
@@ -674,7 +673,7 @@ bool AttributionSrcLoader::DoRegistration(
       local_frame_->GetRemoteNavigationAssociatedInterfaces()->GetInterface(
           &conversion_host);
 
-      WTF::Vector<scoped_refptr<const blink::SecurityOrigin>> reporting_origins;
+      Vector<scoped_refptr<const blink::SecurityOrigin>> reporting_origins;
       std::ranges::transform(
           urls, std::back_inserter(reporting_origins),
           [](const KURL& url) { return SecurityOrigin::Create(url); });
@@ -871,11 +870,11 @@ bool AttributionSrcLoader::MaybeRegisterAttributionHeaders(
 
   if (Document* document = local_frame_->DomWindow()->document();
       document->IsPrerendering()) {
-    document->AddPostPrerenderingActivationStep(WTF::BindOnce(
-        &AttributionSrcLoader::RegisterAttributionHeaders,
-        WrapPersistentIfNeeded(this), *registration_eligibility, support,
-        *std::move(reporting_origin), std::move(headers), *registration_info,
-        response.WasFetchedViaServiceWorker()));
+    document->AddPostPrerenderingActivationStep(
+        BindOnce(&AttributionSrcLoader::RegisterAttributionHeaders,
+                 WrapPersistentIfNeeded(this), *registration_eligibility,
+                 support, *std::move(reporting_origin), std::move(headers),
+                 *registration_info, response.WasFetchedViaServiceWorker()));
   } else {
     RegisterAttributionHeaders(
         *registration_eligibility, support, *std::move(reporting_origin),

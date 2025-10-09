@@ -220,16 +220,21 @@ unsigned HTMLSelectElement::ListBoxSize() const {
 }
 
 void HTMLSelectElement::UpdateUsesMenuList() {
-  // If the author explicitly sets the size attribute, then we allow that to
-  // control whether we actually delegate menulist rendering.
-  if (RuntimeEnabledFeatures::CustomizableSelectMultiplePopupEnabled()) {
+  if (RuntimeEnabledFeatures::SelectMobileDesktopParityEnabled()) {
+    // Choose MenuList or ListBox the same regardless of the platform:
+    // <select>                  MenuList (popup)
+    // <select size=1>           MenuList (popup)
+    // <select multiple size=1>  MenuList (popup)
+    // <select multiple>         ListBox  (in-page)
+    // <select size=4>           ListBox  (in-page)
+    // <select multiple size=4>  ListBox  (in-page)
     if (is_multiple_) {
       // <select multiple> does not use MenuList by default. The author must
       // specify <select multiple size=1> to get MenuList.
       uses_menu_list_ =
           FastHasAttribute(html_names::kSizeAttr) ? size_ == 1 : false;
     } else {
-      uses_menu_list_ = size_ == 1;
+      uses_menu_list_ = size_ <= 1;
     }
     return;
   }
@@ -812,6 +817,12 @@ int HTMLSelectElement::SelectedListIndex() const {
 }
 
 void HTMLSelectElement::SetSuggestedOption(HTMLOptionElement* option) {
+  if (RuntimeEnabledFeatures::CanvasDrawElementEnabled() &&
+      IsInCanvasSubtree()) {
+    // Hide suggested values when under canvas, to prevent leaking this
+    // information to javascript.
+    option = nullptr;
+  }
   if (suggested_option_ == option)
     return;
   SetAutofillState(option ? WebAutofillState::kPreviewed
@@ -819,6 +830,15 @@ void HTMLSelectElement::SetSuggestedOption(HTMLOptionElement* option) {
   suggested_option_ = option;
 
   select_type_->DidSetSuggestedOption(option);
+}
+
+void HTMLSelectElement::DidChangeIsCanvasOrInCanvasSubtree() {
+  if (RuntimeEnabledFeatures::CanvasDrawElementEnabled() &&
+      IsInCanvasSubtree()) {
+    // Hide suggested values when under canvas, to prevent leaking this
+    // information to javascript.
+    SetSuggestedOption(nullptr);
+  }
 }
 
 void HTMLSelectElement::OptionSelectionStateChanged(HTMLOptionElement* option,
@@ -969,7 +989,7 @@ void HTMLSelectElement::SelectOption(HTMLOptionElement* element,
 void HTMLSelectElement::SelectOptionFromPopoverPickerOrBaseListbox(
     HTMLOptionElement* option) {
   if (!UsesMenuList() || IsMultiple()) {
-    CHECK(RuntimeEnabledFeatures::CustomizableSelectInPageEnabled());
+    CHECK(RuntimeEnabledFeatures::SelectMobileDesktopParityEnabled());
     option->SetSelectedState(!option->Selected());
     option->SetDirty(true);
     if (!IsMultiple()) {
@@ -1333,6 +1353,12 @@ void HTMLSelectElement::SelectOptionByAccessKey(HTMLOptionElement* option) {
     SelectOption(option, flags);
   }
   option->SetDirty(true);
+
+  // Whether the option was selected or de-selected, we need to set it as the
+  // active descendant by calling SetListBoxActiveSelection here. Otherwise,
+  // screen readers will unexpectedly move their cursor to another option.
+  select_type_->SetListBoxActiveSelection(option);
+
   select_type_->ListBoxOnChange();
   select_type_->ScrollToSelection();
 }
@@ -1371,7 +1397,6 @@ void HTMLSelectElement::Trace(Visitor* visitor) const {
   visitor->Trace(last_on_change_option_);
   visitor->Trace(suggested_option_);
   visitor->Trace(descendant_selectedcontents_);
-  visitor->Trace(descendant_text_inputs_);
   visitor->Trace(select_type_);
   visitor->Trace(descendants_observer_);
   HTMLFormControlElementWithState::Trace(visitor);
@@ -1579,6 +1604,7 @@ void HTMLSelectElement::ChangeRendering() {
   if (UsesMenuList() != old_uses_menu_list) {
     select_type_->WillBeDestroyed();
     select_type_ = SelectType::Create(*this);
+    PseudoStateChanged(CSSSelector::kPseudoListBox);
   }
   if (!InActiveDocument())
     return;
@@ -1731,6 +1757,17 @@ bool HTMLSelectElement::IsPopoverPickerElement(const Element* element) {
   return false;
 }
 
+// static
+HTMLSelectElement* HTMLSelectElement::GetSelectForPopoverPickerElement(
+    const Element* element) {
+  if (auto* root = DynamicTo<ShadowRoot>(element->parentNode())) {
+    if (element->ShadowPseudoId() == shadow_element_names::kPickerSelect) {
+      return DynamicTo<HTMLSelectElement>(root->host());
+    }
+  }
+  return nullptr;
+}
+
 bool HTMLSelectElement::IsAppearanceBase() const {
   return select_type_->IsAppearanceBase();
 }
@@ -1767,33 +1804,6 @@ void HTMLSelectElement::SelectedContentElementRemoved(
     (*descendant_selectedcontents_.begin())
         ->CloneContentsFromOptionElement(SelectedOption());
   }
-}
-
-void HTMLSelectElement::AddDescendantTextInput(HTMLInputElement* input) {
-  CHECK(RuntimeEnabledFeatures::SelectAccessibilityReparentInputEnabled() ||
-        RuntimeEnabledFeatures::SelectAccessibilityNestedInputEnabled());
-  CHECK(input->IsTextField());
-  descendant_text_inputs_.Add(input);
-  input->SetFirstAncestorSelectElement(this);
-}
-
-void HTMLSelectElement::RemoveDescendantTextInput(HTMLInputElement* input) {
-  CHECK(RuntimeEnabledFeatures::SelectAccessibilityReparentInputEnabled() ||
-        RuntimeEnabledFeatures::SelectAccessibilityNestedInputEnabled());
-  descendant_text_inputs_.Remove(input);
-  input->SetFirstAncestorSelectElement(nullptr);
-}
-
-HTMLInputElement* HTMLSelectElement::FirstDescendantTextInput() const {
-  if (descendant_text_inputs_.IsEmpty()) {
-    return nullptr;
-  }
-  HTMLInputElement* first_input = *descendant_text_inputs_.begin();
-  if (!first_input->isConnected() || !first_input->IsTextField() ||
-      Traversal<HTMLSelectElement>::FirstAncestor(*first_input) != this) {
-    return nullptr;
-  }
-  return first_input;
 }
 
 HTMLSelectElement::SelectAutofillPreviewElement*
@@ -1847,19 +1857,6 @@ HTMLSelectElement::SelectAutofillPreviewElement::CustomStyleForLayoutObject(
   }
 
   return style_builder.TakeStyle();
-}
-
-Node::InsertionNotificationRequest
-HTMLSelectElement::SelectAutofillPreviewElement::InsertedInto(
-    ContainerNode& container) {
-  select_->IncrementImplicitlyAnchoredElementCount();
-  return HTMLDivElement::InsertedInto(container);
-}
-
-void HTMLSelectElement::SelectAutofillPreviewElement::RemovedFrom(
-    ContainerNode& container) {
-  HTMLDivElement::RemovedFrom(container);
-  select_->DecrementImplicitlyAnchoredElementCount();
 }
 
 void HTMLSelectElement::SelectAutofillPreviewElement::Trace(
@@ -1969,6 +1966,21 @@ String HTMLSelectElement::MultipleOptionsSelectedText(
       locale.ConvertToLocalizedNumber(String::Number(selected_count));
   return locale.QueryString(IDS_FORM_SELECT_MENU_LIST_TEXT,
                             localized_number_string);
+}
+
+bool HTMLSelectElement::SupportsBaseAppearance() const {
+  if (!IsMultiple() ||
+      RuntimeEnabledFeatures::CustomizableSelectMultiplePopupEnabled()) {
+    // Single-selects are always supported. When
+    // CustomizableSelectMultiplePopup is enabled, then all modes are
+    // supported.
+    return true;
+  } else if (RuntimeEnabledFeatures::CustomizableSelectInPageEnabled()) {
+    // CustomizableSelectInPage allows multi-selects to be base appearance
+    // but only if they are in-page ListBox selects.
+    return !UsesMenuList();
+  }
+  return false;
 }
 
 }  // namespace blink

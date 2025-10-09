@@ -5,6 +5,9 @@
 #ifndef COMPONENTS_OMNIBOX_COMPOSEBOX_IOS_COMPOSEBOX_QUERY_CONTROLLER_IOS_H_
 #define COMPONENTS_OMNIBOX_COMPOSEBOX_IOS_COMPOSEBOX_QUERY_CONTROLLER_IOS_H_
 
+#include <vector>
+
+#include "components/lens/lens_bitmap_processing.h"
 #include "components/omnibox/composebox/composebox_query_controller.h"
 
 // iOS-specific subclass of ComposeboxQueryController.
@@ -16,8 +19,8 @@ class ComposeboxQueryControllerIOS : public ComposeboxQueryController {
   // ComposeboxQueryController overrides:
   void CreateImageUploadRequest(
       const base::UnguessableToken& file_token,
-      scoped_refptr<base::RefCountedBytes> file_data,
-      std::optional<composebox::ImageEncodingOptions> options,
+      const std::vector<uint8_t>& image_data,
+      std::optional<lens::ImageEncodingOptions> options,
       RequestBodyProtoCreatedCallback callback) override;
 };
 

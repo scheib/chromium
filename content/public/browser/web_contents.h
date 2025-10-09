@@ -29,42 +29,40 @@
 #include "content/common/content_export.h"
 #include "content/public/browser/frame_tree_node_id.h"
 #include "content/public/browser/invalidate_type.h"
-#include "content/public/browser/navigation_controller.h"
-#include "content/public/browser/page.h"
 #include "content/public/browser/page_navigator.h"
-#include "content/public/browser/prefetch_handle.h"
 #include "content/public/browser/prefetch_priority.h"
-#include "content/public/browser/preload_pipeline_info.h"
 #include "content/public/browser/preloading.h"
 #include "content/public/browser/preloading_trigger_type.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/save_page_type.h"
+#include "content/public/browser/session_storage_namespace.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents_capability_type.h"
 #include "content/public/common/stop_find_action.h"
 #include "ipc/constants.mojom.h"
 #include "net/base/network_handle.h"
-#include "net/http/http_request_headers.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-shared.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom-forward.h"
 #include "third_party/blink/public/mojom/frame/find_in_page.mojom-forward.h"
 #include "third_party/blink/public/mojom/frame/remote_frame.mojom-forward.h"
-#include "third_party/blink/public/mojom/input/pointer_lock_result.mojom.h"
+#include "third_party/blink/public/mojom/input/pointer_lock_result.mojom-forward.h"
 #include "third_party/blink/public/mojom/media/capture_handle_config.mojom-forward.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-forward.h"
 #include "third_party/blink/public/mojom/picture_in_picture_window_options/picture_in_picture_window_options.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
-#include "ui/accessibility/ax_mode.h"
+#include "ui/accessibility/ax_node_id_forward.h"
 #include "ui/accessibility/platform/inspect/ax_api_type.h"
 #include "ui/color/color_provider_key.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "content/public/browser/android/child_process_importance.h"
+#include "content/public/browser/android/selection_popup_delegate.h"
 #include "third_party/jni_zero/jni_zero.h"
 #endif
 
@@ -96,6 +94,7 @@ class WakeLockContext;
 
 namespace net {
 class HttpNoVarySearchData;
+class HttpRequestHeaders;
 struct LoadStateWithParam;
 }  // namespace net
 
@@ -106,6 +105,7 @@ class InterfaceProvider;
 namespace ui {
 struct AXPropertyFilter;
 struct AXTreeUpdate;
+class AXMode;
 class AXNode;
 class ColorProvider;
 class ColorProviderSource;
@@ -121,6 +121,11 @@ class BackForwardTransitionAnimationManager;
 class BrowserContext;
 class BrowserPluginGuestDelegate;
 class GuestPageHolder;
+class NavigationController;
+class NavigationEntry;
+class Page;
+class PrefetchHandle;
+class PreloadPipelineInfo;
 class PrerenderHandle;
 class RenderFrameHost;
 class RenderViewHost;
@@ -132,8 +137,12 @@ class UnownedInnerWebContentsClient;
 class WebContentsDelegate;
 class WebUI;
 struct DropData;
+struct GlobalRenderFrameHostId;
 struct MHTMLGenerationParams;
 class PreloadingAttempt;
+#if BUILDFLAG(IS_ANDROID)
+class SelectionPopupDelegate;
+#endif
 
 // WebContents is the core class in content/. A WebContents renders web content
 // (usually HTML) in a rectangular area.
@@ -765,8 +774,8 @@ class WebContents : public PageNavigator, public base::SupportsUserData {
   // processed in the renderer and acknowledged by the Browser, or if the
   // discarded WebContents' renderer was proactively terminated.
   // Discard can fail if attempted on a WebContents with a speculative RFH that
-  // has a navigation waiting to commit.
-  // TODO(crbug.com/433627400): Consider updating `on_discarded_cb` to return a
+  // has a navigation waiting to commit or it is already discarded.
+  // TODO(crbug.com/441841249): Consider updating `on_discarded_cb` to return a
   // bool to indicate whether the operation completed successfully.
   virtual void Discard(base::OnceClosure on_discarded_cb) = 0;
 
@@ -1514,6 +1523,11 @@ class WebContents : public PageNavigator, public base::SupportsUserData {
   virtual void SetPrimaryPageImportance(
       ChildProcessImportance main_frame_importance,
       ChildProcessImportance subframe_importance) = 0;
+
+  // Set a SelectionPopupDelegate (see documentation of SelectionPopupDelegate
+  // methods).
+  virtual void SetSelectionPopupDelegate(
+      std::unique_ptr<SelectionPopupDelegate> delegate) = 0;
 #endif  // BUILDFLAG(IS_ANDROID)
 
   // Returns true if the WebContents has completed its first meaningful paint
@@ -1526,6 +1540,9 @@ class WebContents : public PageNavigator, public base::SupportsUserData {
   // renderer. This should be eventually merged into and accounted for in the
   // user activation work: crbug.com/848778
   virtual bool HasRecentInteraction() = 0;
+
+  // Returns the time ticks of the last user interaction.
+  virtual base::TimeTicks GetLastInteractionTimeTicks() = 0;
 
   // Causes the WebContents to ignore input events for at least as long as the
   // token exists. In the event of multiple calls, input events will be ignored
@@ -1643,7 +1660,7 @@ class WebContents : public PageNavigator, public base::SupportsUserData {
   // - `attempt` is used to record some metrics associated with this prefetch
   //   request.
   // - `holdback_status_override` is used to override holdback status, if
-  //   specified.
+  //   not `PreloadingHoldbackStatus::kUnspecified`.
   // - `ttl`: TTL; `PrefetchService` holds prefetch in `ttl`. Uses default value
   // if `std::nullopt`.
   // - Returns `PrefetchHandle` to control prefetch resources. This can be
@@ -1659,7 +1676,7 @@ class WebContents : public PageNavigator, public base::SupportsUserData {
       std::optional<PrefetchPriority> priority,
       scoped_refptr<PreloadPipelineInfo> preload_pipeline_info,
       base::WeakPtr<PreloadingAttempt> attempt,
-      std::optional<PreloadingHoldbackStatus> holdback_status_override,
+      PreloadingHoldbackStatus holdback_status_override,
       std::optional<base::TimeDelta> ttl) = 0;
 
   // Starts an embedder triggered (browser-initiated) prerendering page and

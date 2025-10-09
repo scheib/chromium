@@ -31,6 +31,7 @@
 #include "components/enterprise/connectors/core/common.h"
 #include "components/enterprise/connectors/core/connectors_prefs.h"
 #include "components/enterprise/data_controls/core/browser/test_utils.h"
+#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/browser/realtime/fake_url_lookup_service.h"
@@ -207,7 +208,7 @@ class FakeRealTimeUrlLookupService
         new_threat_info->mutable_matched_url_navigation_rule();
 
     // Only add a watermark for watermark.com URLs.
-    if (url.host() == "watermark.com") {
+    if (url.GetHost() == "watermark.com") {
       safe_browsing::MatchedUrlNavigationRule::WatermarkMessage wm;
       wm.set_watermark_message("custom_messge");
       wm.mutable_timestamp()->set_seconds(base::Time::Now().ToTimeT());

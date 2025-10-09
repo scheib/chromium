@@ -429,7 +429,8 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
       public base::CurrentThread::DestructionObserver {
  public:
   NetworkServiceTestImpl() : test_host_resolver_(new TestHostResolver()) {
-    memory_pressure_listener_.emplace(
+    memory_pressure_listener_registration_.emplace(
+        base::MemoryPressureListenerTag::kTest,
         base::BindRepeating(
             &NetworkServiceTestHelper::NetworkServiceTestImpl::OnMemoryPressure,
             weak_factory_.GetWeakPtr()));
@@ -558,13 +559,12 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
     std::move(callback).Run();
   }
 
-  void SetTransportSecurityStateSource(
-      uint16_t reporting_port,
-      SetTransportSecurityStateSourceCallback callback) override {
-    if (reporting_port) {
+  void SetTransportSecurityStateTestSource(
+      bool enable_unittest_source,
+      SetTransportSecurityStateTestSourceCallback callback) override {
+    if (enable_unittest_source) {
       transport_security_state_source_ =
-          std::make_unique<net::ScopedTransportSecurityStateSource>(
-              reporting_port);
+          std::make_unique<net::ScopedTransportSecurityStateSource>();
     } else {
       transport_security_state_source_.reset();
     }
@@ -806,8 +806,7 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
   }
 
  private:
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level) {
     latest_memory_pressure_level_ = memory_pressure_level;
   }
 
@@ -836,10 +835,10 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
   std::unique_ptr<net::MockCertVerifier> mock_cert_verifier_;
   std::unique_ptr<net::ScopedTransportSecurityStateSource>
       transport_security_state_source_;
-  std::optional<base::SyncMemoryPressureListener> memory_pressure_listener_;
-  base::MemoryPressureListener::MemoryPressureLevel
-      latest_memory_pressure_level_ =
-          base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE;
+  std::optional<base::SyncMemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
+  base::MemoryPressureLevel latest_memory_pressure_level_ =
+      base::MEMORY_PRESSURE_LEVEL_NONE;
   int write_result_;
   std::unique_ptr<disk_cache::Backend> disk_cache_backend_;
 

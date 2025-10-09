@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.tabbed_mode;
 import android.view.Window;
 
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
@@ -22,10 +21,10 @@ import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeSystemBarColorHelper;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeSystemBarColorHelper;
 import org.chromium.ui.insets.InsetObserver;
 
-import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * A UI coordinator that manages the system status bar and bottom navigation bar for
@@ -75,7 +74,7 @@ public class TabbedSystemUiCoordinator {
             Supplier<SnackbarManager> snackbarManagerSupplier,
             ObservableSupplier<ContextualSearchManager> contextualSearchManagerSupplier,
             BottomSheetController bottomSheetController,
-            Optional<OmniboxSuggestionsVisualState> omniboxSuggestionsVisualState,
+            @Nullable OmniboxSuggestionsVisualState omniboxSuggestionsVisualState,
             ManualFillingComponentSupplier manualFillingComponentSupplier,
             ObservableSupplier<Integer> overviewColorSupplier,
             InsetObserver insetObserver,

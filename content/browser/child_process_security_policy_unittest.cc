@@ -71,7 +71,7 @@ class ChildProcessSecurityPolicyTestBrowserClient
   ChildProcessSecurityPolicyTestBrowserClient() {}
 
   bool IsHandledURL(const GURL& url) override {
-    return base::Contains(schemes_, url.scheme());
+    return base::Contains(schemes_, url.GetScheme());
   }
 
   void ClearSchemes() {
@@ -327,13 +327,14 @@ class ChildProcessSecurityPolicyTest
   }
 
   BrowserContext* browser_context() { return &browser_context_; }
+  base::test::ScopedFeatureList& feature_list() { return feature_list_; }
 
  private:
+  base::test::ScopedFeatureList feature_list_;
   BrowserTaskEnvironment task_environment_;
   TestBrowserContext browser_context_;
   ChildProcessSecurityPolicyTestBrowserClient test_browser_client_;
   raw_ptr<ContentBrowserClient> old_browser_client_;
-  base::test::ScopedFeatureList feature_list_;
 };
 
 // A test class that forces kOriginKeyedProcessesByDefault off in
@@ -343,12 +344,10 @@ class ChildProcessSecurityPolicyTest_NoOriginKeyedProcessesByDefault
     : public ChildProcessSecurityPolicyTest {
  public:
   ChildProcessSecurityPolicyTest_NoOriginKeyedProcessesByDefault() {
-    feature_list_.InitAndDisableFeature(
+    feature_list().Reset();
+    feature_list().InitAndDisableFeature(
         features::kOriginKeyedProcessesByDefault);
   }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
 TEST_P(ChildProcessSecurityPolicyTest, ChildID) {
@@ -2799,73 +2798,6 @@ TEST_P(ChildProcessSecurityPolicyTest, WildcardDefaultPort) {
   EXPECT_THAT(p->GetIsolatedOrigins(), testing::IsEmpty());
 }
 
-TEST_P(ChildProcessSecurityPolicyTest, ProcessLockMatching) {
-  GURL nonapp_url("https://bar.com/");
-  GURL app_url("https://some.app.foo.com/");
-  GURL app_effective_url("https://app.com/");
-  EffectiveURLContentBrowserClient modified_client(
-      app_url, app_effective_url, /* requires_dedicated_process */ true);
-  ContentBrowserClient* original_client =
-      SetBrowserClientForTesting(&modified_client);
-
-  IsolationContext isolation_context(browser_context());
-
-  auto nonapp_urlinfo = UrlInfo::CreateForTesting(
-      nonapp_url, CreateStoragePartitionConfigForTesting());
-  auto ui_nonapp_url_siteinfo =
-      SiteInfo::Create(isolation_context, nonapp_urlinfo);
-  auto ui_nonapp_url_lock =
-      ProcessLock::Create(isolation_context, nonapp_urlinfo);
-
-  auto app_urlinfo = UrlInfo::CreateForTesting(
-      app_url, CreateStoragePartitionConfigForTesting());
-  auto ui_app_url_lock = ProcessLock::Create(isolation_context, app_urlinfo);
-  auto ui_app_url_siteinfo = SiteInfo::Create(isolation_context, app_urlinfo);
-
-  SiteInfo io_nonapp_url_siteinfo(browser_context());
-  ProcessLock io_nonapp_url_lock;
-  SiteInfo io_app_url_siteinfo(browser_context());
-  ProcessLock io_app_url_lock;
-
-  base::WaitableEvent io_locks_set_event;
-
-  // Post a task that will compute ProcessLocks for the same URLs in the
-  // IO thread.
-  GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindLambdaForTesting([&]() {
-        io_nonapp_url_siteinfo =
-            SiteInfo::CreateOnIOThread(isolation_context, nonapp_urlinfo);
-        io_nonapp_url_lock =
-            ProcessLock::Create(isolation_context, nonapp_urlinfo);
-
-        io_app_url_siteinfo =
-            SiteInfo::CreateOnIOThread(isolation_context, app_urlinfo);
-        io_app_url_lock = ProcessLock::Create(isolation_context, app_urlinfo);
-
-        // Tell the UI thread have computed the locks.
-        io_locks_set_event.Signal();
-      }));
-
-  io_locks_set_event.Wait();
-
-  // Expect URLs with effective URLs that match the original URL to have
-  // matching SiteInfos and matching ProcessLocks.
-  EXPECT_EQ(ui_nonapp_url_siteinfo, io_nonapp_url_siteinfo);
-  EXPECT_EQ(ui_nonapp_url_lock, io_nonapp_url_lock);
-
-  // Expect hosted app URLs where the effective URL does not match the original
-  // URL to have different SiteInfos but matching process locks. The SiteInfos,
-  // are expected to be different because the effective URL cannot be computed
-  // from the IO thread. This means the site_url fields will differ.
-  EXPECT_NE(ui_app_url_siteinfo, io_app_url_siteinfo);
-  EXPECT_NE(ui_app_url_siteinfo.site_url(), io_app_url_siteinfo.site_url());
-  EXPECT_EQ(ui_app_url_siteinfo.process_lock_url(),
-            io_app_url_siteinfo.process_lock_url());
-  EXPECT_EQ(ui_app_url_lock, io_app_url_lock);
-
-  SetBrowserClientForTesting(original_client);
-}
-
 // Verify the mechanism that allows non-origin-keyed isolated origins to be
 // associated with a single BrowsingInstance.
 TEST_P(ChildProcessSecurityPolicyTest,
@@ -3154,10 +3086,10 @@ TEST_P(ChildProcessSecurityPolicyTest, NoBrowsingInstanceIDs_OriginKeyed) {
                    ProcessLock::FromSiteInfo(foo_instance->GetSiteInfo()));
     p->AddCommittedOrigin(kRendererID, foo);
 
-    EXPECT_TRUE(p->GetProcessLock(kRendererID).is_locked_to_site());
+    EXPECT_TRUE(p->GetProcessLock(kRendererID).IsLockedToSite());
     EXPECT_TRUE(
         p->GetProcessLock(kRendererID).agent_cluster_key().IsOriginKeyed());
-    EXPECT_EQ(foo.GetURL(), p->GetProcessLock(kRendererID).lock_url());
+    EXPECT_EQ(foo.GetURL(), p->GetProcessLock(kRendererID).GetProcessLockURL());
 
     EXPECT_TRUE(ProcessLock::FromSiteInfo(foo_instance->GetSiteInfo())
                     .agent_cluster_key()
@@ -3218,13 +3150,13 @@ TEST_P(ChildProcessSecurityPolicyTest_NoOriginKeyedProcessesByDefault,
                    ProcessLock::FromSiteInfo(foo_instance->GetSiteInfo()));
     p->AddCommittedOrigin(kRendererID, sub_foo_origin);
 
-    EXPECT_TRUE(p->GetProcessLock(kRendererID).is_locked_to_site());
+    EXPECT_TRUE(p->GetProcessLock(kRendererID).IsLockedToSite());
     // Note: This might become true in the future if we convert legacy isolated
     // origins to create origin-keyed AgentClusterKeys instead of site-keyed.
     EXPECT_FALSE(
         p->GetProcessLock(kRendererID).agent_cluster_key().IsOriginKeyed());
     EXPECT_EQ(SiteInfo::GetSiteForOrigin(sub_foo_origin),
-              p->GetProcessLock(kRendererID).lock_url());
+              p->GetProcessLock(kRendererID).agent_cluster_key().GetSite());
 
     EXPECT_FALSE(ProcessLock::FromSiteInfo(foo_instance->GetSiteInfo())
                      .agent_cluster_key()
@@ -3324,7 +3256,7 @@ TEST_P(ChildProcessSecurityPolicyTest, NoBrowsingInstanceIDs_UnlockedProcess) {
   EXPECT_EQ(static_cast<size_t>(0),
             p->BrowsingInstanceIdCountForTesting(kRendererID));
 
-  EXPECT_FALSE(p->GetProcessLock(kRendererID).is_locked_to_site());
+  EXPECT_FALSE(p->GetProcessLock(kRendererID).IsLockedToSite());
   // Ensure that we don't allow the process to keep accessing data for foo after
   // all of the BrowsingInstances are gone, since that would require checking
   // whether foo itself requires a dedicated process.
@@ -3353,8 +3285,8 @@ TEST_P(ChildProcessSecurityPolicyTest, CannotLockUsedProcessToSite) {
                      StoragePartitionConfig::CreateDefault(&context),
                      WebExposedIsolationInfo::CreateNonIsolated(),
                      /*cross_origin_isolation_key=*/std::nullopt));
-  EXPECT_TRUE(p->GetProcessLock(kRendererID).allows_any_site());
-  EXPECT_FALSE(p->GetProcessLock(kRendererID).is_locked_to_site());
+  EXPECT_TRUE(p->GetProcessLock(kRendererID).AllowsAnySite());
+  EXPECT_FALSE(p->GetProcessLock(kRendererID).IsLockedToSite());
 
   // If the process is then considered used (e.g., by loading content), it
   // should not be possible to lock it to another site.
@@ -3371,17 +3303,16 @@ TEST_P(ChildProcessSecurityPolicyTest, CannotLockUsedProcessToSite) {
 }
 
 // Test that
-// ChildProcessSecurityPolicyImpl::AddV8OptimizationDisabledStateForOrigin()
+// ChildProcessSecurityPolicyImpl::AddV8OptimizationDisabledStateForOriginIfNotCached()
 // ignores opaque origins.
-TEST_P(ChildProcessSecurityPolicyTest,
-       AddV8OptimizationDisabledStateForOpaqueOrigin) {
+TEST_P(ChildProcessSecurityPolicyTest, AddV8OptimizationStateForOpaqueOrigin) {
   ChildProcessSecurityPolicyImpl* p =
       ChildProcessSecurityPolicyImpl::GetInstance();
   BrowsingInstanceId browsing_instance_id =
       SiteInstanceImpl::NextBrowsingInstanceId();
   url::Origin opaque_origin;
 
-  p->AddV8OptimizationDisabledStateForOrigin(
+  p->AddV8OptimizationDisabledStateForOriginIfNotCached(
       browsing_instance_id, opaque_origin,
       /*are_v8_optimizations_disabled=*/false);
   std::optional<bool> are_v8_optimizations_disabled_result =
@@ -3390,17 +3321,17 @@ TEST_P(ChildProcessSecurityPolicyTest,
 }
 
 // Test the behavior of
-// ChildProcessSecurityPolicyImpl::AddV8OptimizationDisabledStateForOrigin()
+// ChildProcessSecurityPolicyImpl::AddV8OptimizationDisabledStateForOriginIfNotCached()
 // for non-opaque origins.
 TEST_P(ChildProcessSecurityPolicyTest,
-       AddV8OptimizationDisabledStateForNonOpaqueOrigin) {
+       AddV8OptimizationStateForNonOpaqueOrigin) {
   ChildProcessSecurityPolicyImpl* p =
       ChildProcessSecurityPolicyImpl::GetInstance();
   BrowsingInstanceId browsing_instance_id =
       BrowsingInstanceId::FromUnsafeValue(1);
   url::Origin origin = url::Origin::Create(GURL("https://foo.com"));
 
-  p->AddV8OptimizationDisabledStateForOrigin(
+  p->AddV8OptimizationDisabledStateForOriginIfNotCached(
       browsing_instance_id, origin, /*are_v8_optimizations_disabled=*/false);
   EXPECT_EQ(std::optional<bool>(false),
             p->LookupAreV8OptimizationsDisabled(browsing_instance_id, origin));
@@ -3417,6 +3348,26 @@ TEST_P(ChildProcessSecurityPolicyTest,
   EXPECT_FALSE(p->LookupAreV8OptimizationsDisabled(
                     BrowsingInstanceId::FromUnsafeValue(2), origin)
                    .has_value());
+}
+
+TEST_P(ChildProcessSecurityPolicyTest, AddV8OptimizationState_AlreadyCached) {
+  ChildProcessSecurityPolicyImpl* p =
+      ChildProcessSecurityPolicyImpl::GetInstance();
+  BrowsingInstanceId browsing_instance_id =
+      BrowsingInstanceId::FromUnsafeValue(1);
+  url::Origin origin = url::Origin::Create(GURL("https://foo.com"));
+
+  p->AddV8OptimizationDisabledStateForOriginIfNotCached(
+      browsing_instance_id, origin, /*are_v8_optimizations_disabled=*/false);
+  EXPECT_EQ(std::optional<bool>(false),
+            p->LookupAreV8OptimizationsDisabled(browsing_instance_id, origin));
+
+  // Check that calling AddV8OptimizationDisabledStateForOriginIfNotCached() is
+  // a no-op if the value is already cached.
+  p->AddV8OptimizationDisabledStateForOriginIfNotCached(
+      browsing_instance_id, origin, /*are_v8_optimizations_disabled=*/true);
+  EXPECT_EQ(std::optional<bool>(false),
+            p->LookupAreV8OptimizationsDisabled(browsing_instance_id, origin));
 }
 
 INSTANTIATE_TEST_SUITE_P(

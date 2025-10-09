@@ -6,17 +6,25 @@
 
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
+#include "components/prefs/pref_notifier_impl.h"
 #include "components/prefs/pref_service.h"
 
 namespace tabs {
 
 VerticalTabStripStateController::VerticalTabStripStateController(
     PrefService* pref_service)
-    : pref_service_(pref_service) {}
+    : pref_service_(pref_service) {
+  pref_change_registrar_.Init(pref_service_);
+
+  pref_change_registrar_.Add(
+      prefs::kVerticalTabsEnabled,
+      base::BindRepeating(&VerticalTabStripStateController::NotifyStateChanged,
+                          base::Unretained(this)));
+}
 
 VerticalTabStripStateController::~VerticalTabStripStateController() = default;
 
-bool VerticalTabStripStateController::IsVerticalTabsEnabled() const {
+bool VerticalTabStripStateController::ShouldDisplayVerticalTabs() const {
   return pref_service_->GetBoolean(prefs::kVerticalTabsEnabled);
 }
 

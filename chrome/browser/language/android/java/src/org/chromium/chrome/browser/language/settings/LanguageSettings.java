@@ -15,7 +15,7 @@ import androidx.annotation.VisibleForTesting;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.ApkInfo;
 import org.chromium.base.Log;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
@@ -165,7 +165,7 @@ public class LanguageSettings extends ChromeBaseSettingsFragment
         // Set title to include current app name.
         PreferenceCategory mAppLanguageTitle =
                 (PreferenceCategory) findPreference(APP_LANGUAGE_SECTION_KEY);
-        String appName = BuildInfo.getInstance().hostPackageLabel;
+        String appName = ApkInfo.getHostPackageLabel();
         mAppLanguageTitle.setTitle(getResources().getString(R.string.app_language_title, appName));
 
         LanguageItemPickerPreference appLanguagePreference =
@@ -341,10 +341,11 @@ public class LanguageSettings extends ChromeBaseSettingsFragment
 
     /**
      * Set preference's OnPreferenceClickListener to launch the Select Language Fragment.
-     * @param Preference preference The Preference to set listener on.
-     * @param int launchCode The language options code to filter selectable languages.
-     * @param int requestCode The code to return from the select language fragment with.
-     * @param int pageType The LanguageSettingsPageType to record impression for.
+     *
+     * @param preference The Preference to set listener on.
+     * @param languageListType The language options code to filter selectable languages.
+     * @param requestCode The code to return from the select language fragment with.
+     * @param pageType The LanguageSettingsPageType to record impression for.
      */
     private void setSelectLanguageLauncher(
             Preference preference,
@@ -365,8 +366,8 @@ public class LanguageSettings extends ChromeBaseSettingsFragment
     /**
      * Launch the SelectLanguageFragment with launch and request codes to select a single language.
      *
-     * @param int launchCode The language options code to filter selectable languages.
-     * @param int requestCode The code to return from the select language fragment with.
+     * @param languageListType The language options code to filter selectable languages.
+     * @param requestCode The code to return from the select language fragment with.
      */
     private void launchSelectLanguage(
             @LanguagesManager.LanguageListType int languageListType, int requestCode) {

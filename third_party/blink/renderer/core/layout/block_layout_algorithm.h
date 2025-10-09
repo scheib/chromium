@@ -91,6 +91,7 @@ struct BlockLineClampData {
 
   // Returns false if we need to relayout with a different clamp BFC offset.
   bool UpdateAfterLayout(const LayoutResult* layout_result,
+                         Document& document,
                          LayoutUnit bfc_block_offset,
                          const PreviousInflowPosition& previous_inflow_position,
                          LayoutUnit block_end_padding);
@@ -165,10 +166,20 @@ class CORE_EXPORT BlockLayoutAlgorithm
   NOINLINE const LayoutResult* HandleNonsuccessfulLayoutResult(
       const LayoutResult*);
 
-  NOINLINE const LayoutResult* LayoutInlineChild(const InlineNode& child);
+  const LayoutResult* LayoutInlineChild(const InlineNode& child);
+  // A helper for the above.
+  // If `paragraph_scale` is std::nullopt, this lays out inline children
+  // without any fit-text handling. We can use its result to compute the
+  // paragraph scaling factor.
+  // Otherwise, it lays out inline children with `*paragraph_scale`.
+  NOINLINE const LayoutResult* LayoutInlineChild(
+      const InlineNode& node,
+      const ParagraphScale* paragraph_scale);
+  // Ditto, for OptimalInlineChildLayoutContext.
   template <wtf_size_t capacity>
   NOINLINE const LayoutResult* LayoutWithOptimalInlineChildLayoutContext(
-      const InlineNode& child);
+      const InlineNode& child,
+      const ParagraphScale* paragraph_scale);
 
   NOINLINE const LayoutResult* RelayoutIgnoringLineClamp();
   NOINLINE const LayoutResult* RelayoutClampingByLines(int lines_until_clamp);
@@ -460,11 +471,17 @@ class CORE_EXPORT BlockLayoutAlgorithm
     return false;
   }
 
+  // Represent the result of HandleTextControlPlaceholder().
+  struct PlaceholderLayoutResult {
+    LayoutUnit logical_block_offset;
+    LayoutResult::EStatus status;
+  };
+
   // Layout |placeholder| content, and decide the location of |placeholder|.
   // This is called only if |this| is a text control.
   // This function returns a new value for `PreviousInflowPosition::
-  // logical_block_offset`.
-  LayoutUnit HandleTextControlPlaceholder(
+  // logical_block_offset` and the status of placeholder layout.
+  PlaceholderLayoutResult HandleTextControlPlaceholder(
       BlockNode placeholder,
       const PreviousInflowPosition& previous_inflow_position);
   // A helper for HandleTextControlPlaceholder().

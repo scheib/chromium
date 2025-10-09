@@ -88,6 +88,10 @@ class PasswordFormManager : public PasswordFormManagerForUI,
   // form.
   static constexpr int kMaxTimesAutofill = 5;
 
+  // Inform of a manual filling event in order to update the password's
+  // |date_last_filled| timestamp.
+  void OnPasswordFilledManually();
+
   // Returns whether the form identified by |form_renderer_id| and |driver|
   // is managed by this password form manager.
   bool DoesManage(autofill::FormRendererId form_renderer_id,
@@ -438,7 +442,7 @@ class PasswordFormManager : public PasswordFormManagerForUI,
   std::unique_ptr<FormFetcher> CreateFormFetcher();
 
   // The client which implements embedder-specific PasswordManager operations.
-  const raw_ptr<PasswordManagerClient> client_;
+  const raw_ptr<PasswordManagerClient, DanglingUntriaged> client_;
 
   base::WeakPtr<PasswordManagerDriver> driver_;
 
@@ -513,9 +517,6 @@ class PasswordFormManager : public PasswordFormManagerForUI,
   // Stores if Save() was called when FormFetcher was in WAITING state.
   // In that case we should schedule a Save() call, when FormFecher is ready.
   bool should_schedule_save_for_later_ = false;
-
-  // A password field that is used for generation.
-  autofill::FieldRendererId generation_element_;
 
   // For generating timing metrics on retrieving server-side predictions.
   std::unique_ptr<base::ElapsedTimer> server_side_predictions_timer_;

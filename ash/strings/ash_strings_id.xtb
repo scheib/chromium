@@ -332,10 +332,12 @@ Berikut ini beberapa hal yang dapat Anda coba untuk memulai.</translation>
 <translation id="2083190527011054446">Selamat malam <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Buka Alat Pilih Emoji</translation>
 <translation id="2088116547584365419">game</translation>
+<translation id="2093792000875799555">Berita Steam untuk Chromebook</translation>
 <translation id="209965399369889474">Tidak terhubung ke jaringan</translation>
 <translation id="2107581415810719320">Tombol Lainnya <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">Kabel USB-C Anda tidak mendukung Thunderbolt. Performa perangkat mungkin dibatasi.</translation>
 <translation id="2108303511227308752">Pintasan keyboard Alt + Backspace telah diubah. Untuk menggunakan tombol Delete, tekan tombol <ph name="LAUNCHER_KEY_NAME" /> + backspace.</translation>
+<translation id="2115680839221566783">Baterai <ph name="PERCENTAGE" />%. Pengisian daya dihentikan sementara.</translation>
 <translation id="2126242104232412123">Desktop baru</translation>
 <translation id="2132302418721800944">Rekam dalam layar penuh</translation>
 <translation id="2135456203358955318">Kaca pembesar tersemat</translation>
@@ -1588,6 +1590,7 @@ Tidak ada perangkat yang terhubung.</translation>
 <translation id="612734058257491180">Asisten Google tidak tersedia dalam sesi tamu.</translation>
 <translation id="6127395413317891856">Anda sedang offline. Periksa koneksi dan coba lagi.</translation>
 <translation id="6129953537138746214">Space</translation>
+<translation id="6136872094979134163">Tidak dapat mengambil berita Steam untuk Chromebook.</translation>
 <translation id="6137566720514957455">Buka dialog hapus untuk <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">Apa yang ingin Anda fokuskan?</translation>
 <translation id="6141988275892716286">Konfirmasi download</translation>
@@ -1677,6 +1680,7 @@ Tidak ada perangkat yang terhubung.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> di <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> acara</translation>
+<translation id="6448529022565414427">Pengisian daya dihentikan sementara</translation>
 <translation id="6449483711453944360">Aplikasi Linux dan jendela Samaran saat ini tidak didukung</translation>
 <translation id="6450245544201845082">Pintasan klik kanan saat ini nonaktif</translation>
 <translation id="6452181791372256707">Tolak</translation>
@@ -1829,7 +1833,7 @@ Baru diinstal</translation>
 <translation id="6912901278692845878">Tur singkat</translation>
 <translation id="6917259695595127329">Tugas terakhir diperbarui: <ph name="TIME" />.</translation>
 <translation id="6919251195245069855">Tidak bisa mengenali kartu smart Anda. Coba lagi.</translation>
-<translation id="692135145298539227">hapus, delete</translation>
+<translation id="692135145298539227">hapus</translation>
 <translation id="6921427376813842559">Update perangkat</translation>
 <translation id="6929081673585394903">Tampilkan kontrol</translation>
 <translation id="6931576957638141829">Simpan ke</translation>

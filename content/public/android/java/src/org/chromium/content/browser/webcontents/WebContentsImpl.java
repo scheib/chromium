@@ -34,7 +34,6 @@ import org.chromium.base.TerminationStatus;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.UserData;
 import org.chromium.base.UserDataHost;
-import org.chromium.base.process_launcher.ChildProcessConnection;
 import org.chromium.blink_public.input.SelectionGranularity;
 import org.chromium.build.annotations.Initializer;
 import org.chromium.build.annotations.NullMarked;
@@ -52,6 +51,7 @@ import org.chromium.content.browser.framehost.RenderFrameHostImpl;
 import org.chromium.content.browser.input.ImeAdapterImpl;
 import org.chromium.content.browser.selection.SelectionPopupControllerImpl;
 import org.chromium.content_public.browser.ChildProcessImportance;
+import org.chromium.content_public.browser.ContentFeatureMap;
 import org.chromium.content_public.browser.GlobalRenderFrameHostId;
 import org.chromium.content_public.browser.ImageDownloadCallback;
 import org.chromium.content_public.browser.JavaScriptCallback;
@@ -67,6 +67,7 @@ import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsInternals;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.content_public.browser.back_forward_transition.AnimationStage;
+import org.chromium.content_public.common.ContentFeatures;
 import org.chromium.ui.BrowserControlsOffsetTagDefinitions;
 import org.chromium.ui.OverscrollRefreshHandler;
 import org.chromium.ui.base.EventForwarder;
@@ -518,6 +519,13 @@ public class WebContentsImpl
     }
 
     @Override
+    public void discard(Runnable onDiscarded) {
+        checkNotDestroyed();
+        assert ContentFeatureMap.isEnabled(ContentFeatures.WEB_CONTENTS_DISCARD);
+        WebContentsImplJni.get().discard(mNativeWebContentsAndroid, onDiscarded);
+    }
+
+    @Override
     public boolean isLoading() {
         checkNotDestroyed();
         return WebContentsImplJni.get().isLoading(mNativeWebContentsAndroid);
@@ -602,9 +610,6 @@ public class WebContentsImpl
             @ChildProcessImportance int mainFrameImportance,
             @ChildProcessImportance int subframeImportance) {
         checkNotDestroyed();
-        assert ChildProcessConnection.supportNotPerceptibleBinding()
-                || (mainFrameImportance != ChildProcessImportance.PERCEPTIBLE
-                        && subframeImportance != ChildProcessImportance.PERCEPTIBLE);
         assert mainFrameImportance >= subframeImportance;
         WebContentsImplJni.get()
                 .setPrimaryPageImportance(
@@ -1270,6 +1275,13 @@ public class WebContentsImpl
         return WebContentsImplJni.get().getOriginalWindowOpenDisposition(mNativeWebContentsAndroid);
     }
 
+    @Override
+    public void updateWindowControlsOverlay(Rect rect) {
+        WebContentsImplJni.get()
+                .updateWindowControlsOverlay(
+                        mNativeWebContentsAndroid, rect.left, rect.top, rect.right, rect.bottom);
+    }
+
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
     public interface Natives {
@@ -1313,6 +1325,8 @@ public class WebContentsImpl
         int getVirtualKeyboardMode(long nativeWebContentsAndroid);
 
         String getEncoding(long nativeWebContentsAndroid);
+
+        void discard(long nativeWebContentsAndroid, Runnable onDiscarded);
 
         boolean isLoading(long nativeWebContentsAndroid);
 
@@ -1496,5 +1510,8 @@ public class WebContentsImpl
         boolean hasOpener(long nativeWebContentsAndroid);
 
         int getOriginalWindowOpenDisposition(long nativeWebContentsAndroid);
+
+        void updateWindowControlsOverlay(
+                long nativeWebContentsAndroid, int left, int top, int right, int bottom);
     }
 }

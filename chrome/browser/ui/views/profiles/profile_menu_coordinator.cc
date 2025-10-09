@@ -6,9 +6,13 @@
 
 #include "base/check_deref.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/signin/signin_promo_util.h"
 #include "chrome/browser/signin/signin_ui_util.h"
+#include "chrome/browser/signin/signin_util.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/interaction/browser_elements.h"
 #include "chrome/browser/ui/user_education/browser_user_education_interface.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
@@ -16,6 +20,7 @@
 #include "chrome/browser/ui/views/profiles/incognito_menu_view.h"
 #include "chrome/browser/ui/views/profiles/profile_menu_view_base.h"
 #include "components/feature_engagement/public/feature_constants.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/user_education/common/feature_promo/feature_promo_controller.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/view_class_properties.h"
@@ -38,17 +43,44 @@ void ProfileMenuCoordinator::Show(
     std::optional<signin_metrics::AccessPoint> explicit_signin_access_point) {
   // TODO(crbug.com/425953501): Update this code.
   Browser* const browser = browser_->GetBrowserForMigrationOnly();
-  auto* avatar_toolbar_button = BrowserView::GetBrowserViewForBrowser(browser)
-                                    ->toolbar_button_provider()
-                                    ->GetAvatarToolbarButton();
+  auto* avatar_toolbar_button =
+      BrowserElements::From(browser)->GetElement(kToolbarAvatarButtonElementId);
 
-  // Do not show avatar bubble if there is no avatar menu button, the button
-  // action is disabled or the bubble is already showing.
-  if (!avatar_toolbar_button ||
-      avatar_toolbar_button->IsButtonActionDisabled() || IsShowing()) {
+  // Do not show avatar bubble if there is no avatar menu button or if the
+  // bubble is already showing.
+  if (!avatar_toolbar_button || IsShowing()) {
     return;
   }
 
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+  // Only request promo info if the user is signed in.
+  if (signin_util::GetSignedInState(IdentityManagerFactory::GetForProfile(
+          GetProfile())) == signin_util::SignedInState::kSignedIn) {
+    signin::ComputeProfileMenuAvatarButtonPromoInfo(
+        *GetProfile(),
+        base::BindOnce(&ProfileMenuCoordinator::ShowWithPromoResults,
+                       weak_pointer_factory_.GetWeakPtr(),
+                       is_source_accelerator, explicit_signin_access_point));
+    return;
+  }
+#endif
+
+  ShowWithPromoResults(is_source_accelerator, explicit_signin_access_point
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+                       ,
+                       signin::ProfileMenuAvatarButtonPromoInfo()
+#endif
+  );
+}
+
+void ProfileMenuCoordinator::ShowWithPromoResults(
+    bool is_source_accelerator,
+    std::optional<signin_metrics::AccessPoint> explicit_signin_access_point
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+    ,
+    signin::ProfileMenuAvatarButtonPromoInfo promo_info
+#endif
+) {
   signin_ui_util::RecordProfileMenuViewShown(GetProfile());
   // Close any existing IPH bubble for the profile menu.
   BrowserUserEducationInterface::From(GetBrowser())
@@ -62,6 +94,9 @@ void ProfileMenuCoordinator::Show(
           FeaturePromoFeatureUsedAction::kClosePromoIfPresent);
 #endif
 
+  Browser* const browser = browser_->GetBrowserForMigrationOnly();
+  auto* avatar_toolbar_button =
+      BrowserElements::From(browser)->GetElement(kToolbarAvatarButtonElementId);
   std::unique_ptr<ProfileMenuViewBase> bubble;
   const bool is_incognito = GetProfile()->IsIncognitoProfile();
   if (is_incognito) {
@@ -73,6 +108,7 @@ void ProfileMenuCoordinator::Show(
     NOTREACHED() << "The profile menu is not implemented on Ash.";
 #else
     bubble = std::make_unique<ProfileMenuView>(avatar_toolbar_button, browser,
+                                               promo_info,
                                                explicit_signin_access_point);
 #endif  // BUILDFLAG(IS_CHROMEOS)
   }

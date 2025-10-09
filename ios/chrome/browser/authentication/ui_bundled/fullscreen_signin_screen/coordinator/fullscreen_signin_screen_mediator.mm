@@ -161,12 +161,12 @@ enum class SigninScreenState {
 }
 
 - (void)dealloc {
-  DCHECK(!_accountManagerService);
-  DCHECK(!_authenticationService);
-  DCHECK(!_identityManager);
-  DCHECK(!self.localPrefService);
-  DCHECK(!self.prefService);
-  DCHECK(!self.syncService);
+  CHECK(!_accountManagerService, base::NotFatalUntil::M145);
+  CHECK(!_authenticationService, base::NotFatalUntil::M145);
+  CHECK(!_identityManager, base::NotFatalUntil::M145);
+  CHECK(!self.localPrefService, base::NotFatalUntil::M145);
+  CHECK(!self.prefService, base::NotFatalUntil::M145);
+  CHECK(!self.syncService, base::NotFatalUntil::M145);
 }
 
 - (void)disconnect {
@@ -318,7 +318,9 @@ enum class SigninScreenState {
 #pragma mark - AuthenticationFlowDelegate
 
 - (void)authenticationFlowDidSignInInSameProfileWithResult:
-    (SigninCoordinatorResult)result {
+            (SigninCoordinatorResult)result
+                                                  identity:(id<SystemIdentity>)
+                                                               identity {
   _signinInProgress = NO;
   [self.consumer setUIEnabled:YES];
   if (result != SigninCoordinatorResultSuccess) {
@@ -378,6 +380,7 @@ enum class SigninScreenState {
 // asynchronously when the management status if retrieved and the identity is
 // managed.
 - (BOOL)isIdentityKnownToBeManaged:(id<SystemIdentity>)identity {
+  CHECK(identity, base::NotFatalUntil::M147);
   if (std::optional<BOOL> managed = IsIdentityManaged(identity);
       managed.has_value()) {
     return managed.value();
@@ -414,7 +417,10 @@ enum class SigninScreenState {
   }
   CoreAccountInfo primaryAccount =
       _identityManager->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin);
-  CHECK(primaryAccount.IsEmpty(), base::NotFatalUntil::M145);
+  if (!primaryAccount.IsEmpty()) {
+    // Signed in from a different surface, dismiss the current dialog.
+    [self.delegate fullscreenSigninScreenMediatorWantsToBeDismissed:self];
+  }
 }
 
 #pragma mark - AuthenticationServiceObserving
@@ -424,7 +430,7 @@ enum class SigninScreenState {
       AuthenticationService::ServiceStatus::SigninForcedByPolicy) {
     // Signin is now disabled, so the consistency default account must be
     // stopped.
-    [self.delegate fullscreenSigninScreenMediatorSigninIsNotForced:self];
+    [self.delegate fullscreenSigninScreenMediatorWantsToBeDismissed:self];
   }
 }
 

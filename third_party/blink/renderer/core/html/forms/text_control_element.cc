@@ -128,11 +128,6 @@ void AppendText(const String& value,
                 wtf_size_t limit,
                 ContainerNode& container) {
   Document& doc = container.GetDocument();
-  if (!RuntimeEnabledFeatures::TextareaSplitTextEnabled()) {
-    container.AppendChild(
-        Text::Create(doc, value.Substring(start, limit - start)));
-    return;
-  }
   constexpr wtf_size_t kTextChunkSize = 8192u;
   for (wtf_size_t i = start; i < limit; i += kTextChunkSize) {
     container.AppendChild(Text::Create(
@@ -532,6 +527,11 @@ unsigned TextControlElement::IndexForPosition(HTMLElement* inner_editor,
   }
 
   return index;
+}
+
+unsigned TextControlElement::IndexForPosition(
+    const Position& editor_position) const {
+  return IndexForPosition(InnerEditorElement(), editor_position);
 }
 
 bool TextControlElement::ShouldApplySelectionCache() const {
@@ -945,6 +945,17 @@ void TextControlElement::AdjustPlaceholderBreakElement() {
     return;
   }
   Node* last_child = inner_editor->lastChild();
+  if (RuntimeEnabledFeatures::TextareaLastLineRemovalFixEnabled()) {
+    // Remove the last empty text.  It prevents from adding the placeholder
+    // break though it produces no height.
+    while (auto* text_last_child = DynamicTo<Text>(last_child)) {
+      if (!text_last_child->data().empty()) {
+        break;
+      }
+      last_child = last_child->previousSibling();
+      text_last_child->remove();
+    }
+  }
   if (RuntimeEnabledFeatures::TextareaLineEndingsAsBrEnabled() &&
       IsA<HTMLBRElement>(last_child)) {
     if (!IsPlaceholderBreakElement(last_child)) {
@@ -987,12 +998,8 @@ void TextControlElement::SetInnerEditorValue(const String& value) {
     inner_editor->RemoveChildren();
   } else if (!RuntimeEnabledFeatures::TextareaLineEndingsAsBrEnabled() ||
              IsA<HTMLInputElement>(this)) {
-    if (RuntimeEnabledFeatures::TextareaSplitTextEnabled()) {
-      inner_editor->RemoveChildren();
-      AppendText(value, 0, value.length(), *inner_editor);
-    } else {
-      ReplaceChildrenWithText(inner_editor, value, ASSERT_NO_EXCEPTION);
-    }
+    inner_editor->RemoveChildren();
+    AppendText(value, 0, value.length(), *inner_editor);
   } else {
     inner_editor->RemoveChildren();
     // For <textarea>, \n is replaced with <br>.

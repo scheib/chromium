@@ -143,6 +143,13 @@ WebInputEventResult GestureManager::HandleGestureEventInFrame(
     }
   }
 
+  // Long presses are the only gesture that could happen with an ongoing drag.
+  // We clear the flag on any other gesture in case the gesture manager didn't
+  // receive a drag end event for any reason.
+  if (gesture_event.GetType() != WebInputEvent::Type::kGestureLongPress) {
+    drag_in_progress_ = false;
+  }
+
   switch (gesture_event.GetType()) {
     case WebInputEvent::Type::kGestureTapDown:
       return HandleGestureTapDown(targeted_event);
@@ -408,11 +415,11 @@ WebInputEventResult GestureManager::HandleGestureTap(
 
 WebInputEventResult GestureManager::HandleGestureShortPress(
     const GestureEventWithHitTestResults& targeted_event) {
-  drag_in_progress_ = false;
   if (frame_->GetSettings() &&
       frame_->GetSettings()->GetTouchDragDropEnabled() &&
       RuntimeEnabledFeatures::TouchDragOnShortPressEnabled() &&
-      HandleDragDropIfPossible(targeted_event)) {
+      HandleDragDropIfPossible(targeted_event) !=
+          DragHandlingResult::kNotHandled) {
     return WebInputEventResult::kHandledSystem;
   }
   return WebInputEventResult::kNotHandled;
@@ -435,8 +442,9 @@ WebInputEventResult GestureManager::HandleGestureLongPress(
 
   gesture_context_menu_deferred_ = false;
 
-  if (RuntimeEnabledFeatures::TouchDragOnShortPressEnabled()) {
-    if (drag_in_progress_ && DragEndOpensContextMenu()) {
+  if (RuntimeEnabledFeatures::TouchDragOnShortPressEnabled() &&
+      drag_in_progress_) {
+    if (DragEndOpensContextMenu()) {
       gesture_context_menu_deferred_ = true;
       return WebInputEventResult::kNotHandled;
     }
@@ -454,7 +462,8 @@ WebInputEventResult GestureManager::HandleGestureLongPress(
          !hit_test_result.AbsoluteImageURL().IsNull() ||
          !hit_test_result.AbsoluteMediaURL().IsNull());
     if (!should_open_context_menu_now &&
-        HandleDragDropIfPossible(targeted_event)) {
+        HandleDragDropIfPossible(targeted_event) !=
+            DragHandlingResult::kNotHandled) {
       gesture_context_menu_deferred_ = true;
       return WebInputEventResult::kHandledSystem;
     }
@@ -639,11 +648,14 @@ PointerId GestureManager::GetPointerIdFromWebGestureEvent(
       gesture_event.primary_unique_touch_event_id);
 }
 
-bool GestureManager::HandleDragDropIfPossible(
+DragHandlingResult GestureManager::HandleDragDropIfPossible(
     const GestureEventWithHitTestResults& targeted_event) {
-  return drag_in_progress_ = mouse_event_manager_->HandleDragDropIfPossible(
-             targeted_event,
-             GetPointerIdFromWebGestureEvent(targeted_event.Event()));
+  const DragHandlingResult result =
+      mouse_event_manager_->HandleDragDropIfPossible(
+          targeted_event,
+          GetPointerIdFromWebGestureEvent(targeted_event.Event()));
+  drag_in_progress_ = result == DragHandlingResult::kHandledDragStarted;
+  return result;
 }
 
 bool GestureManager::DragEndOpensContextMenu() {

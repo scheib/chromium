@@ -101,13 +101,17 @@ class NET_EXPORT_PRIVATE HttpStreamPool
   static constexpr base::TimeDelta kDefaultConnectionAttemptDelay =
       base::Milliseconds(250);
 
+  // Sets of protocols for use in allowed ALPN fields of several classes.
+  // kProtoUnknown is not used, as it's an alias for all protocols, so causes
+  // issues when excluding one or more protocols.
+  static inline constexpr NextProtoSet kAllProtocols = {
+      NextProto::kProtoHTTP11, NextProto::kProtoHTTP2, NextProto::kProtoQUIC};
   static inline constexpr NextProtoSet kTcpBasedProtocols = {
-      NextProto::kProtoUnknown, NextProto::kProtoHTTP11,
-      NextProto::kProtoHTTP2};
+      NextProto::kProtoHTTP11, NextProto::kProtoHTTP2};
   static inline constexpr NextProtoSet kHttp11Protocols = {
-      NextProto::kProtoUnknown, NextProto::kProtoHTTP11};
+      NextProto::kProtoHTTP11};
   static inline constexpr NextProtoSet kQuicBasedProtocols = {
-      NextProto::kProtoUnknown, NextProto::kProtoQUIC};
+      NextProto::kProtoQUIC};
 
   // Reasons for closing streams.
   static constexpr std::string_view kIpAddressChanged = "IP address changed";
@@ -154,6 +158,7 @@ class NET_EXPORT_PRIVATE HttpStreamPool
   class NET_EXPORT_PRIVATE AttemptManager;
   class NET_EXPORT_PRIVATE IPEndPointStateTracker;
   class NET_EXPORT_PRIVATE TcpBasedAttempt;
+  class NET_EXPORT_PRIVATE TcpBasedAttemptSlot;
   class NET_EXPORT_PRIVATE QuicAttempt;
   struct NET_EXPORT_PRIVATE QuicAttemptOutcome {
     explicit QuicAttemptOutcome(int result) : result(result) {}
@@ -243,8 +248,7 @@ class NET_EXPORT_PRIVATE HttpStreamPool
 
   // NetworkChangeNotifier::IPAddressObserver methods:
   void OnIPAddressChanged(
-      NetworkChangeNotifier::IPAddressChangeType change_type =
-          NetworkChangeNotifier::IP_ADDRESS_CHANGE_NORMAL) override;
+      NetworkChangeNotifier::IPAddressChangeType change_type) override;
 
   // SSLClientContext::Observer methods.
   void OnSSLConfigChanged(
@@ -264,8 +268,9 @@ class NET_EXPORT_PRIVATE HttpStreamPool
   void ProcessPendingRequestsInGroups();
 
   // Returns true when HTTP/1.1 is required for `destination`.
-  bool RequiresHTTP11(const url::SchemeHostPort& destination,
-                      const NetworkAnonymizationKey& network_anonymization_key);
+  bool RequiresHTTP11(
+      const url::SchemeHostPort& destination,
+      const NetworkAnonymizationKey& network_anonymization_key) const;
 
   // Returns true when QUIC is broken for `destination`.
   bool IsQuicBroken(const url::SchemeHostPort& destination,

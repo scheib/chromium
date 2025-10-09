@@ -20,13 +20,6 @@ static_assert(BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS));
 
 namespace extensions {
 
-void ChromeExtensionsAPIClient::OpenFileUrl(
-    const GURL& file_url,
-    content::BrowserContext* browser_context) {
-  // TODO(crbug.com/417785325): Support opening file URLs on desktop Android.
-  NOTIMPLEMENTED();
-}
-
 std::unique_ptr<DevicePermissionsPrompt>
 ChromeExtensionsAPIClient::CreateDevicePermissionsPrompt(
     content::WebContents* web_contents) const {

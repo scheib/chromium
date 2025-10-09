@@ -12,7 +12,6 @@ import android.graphics.RectF;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.cc.input.BrowserControlsState;
@@ -43,6 +42,7 @@ import org.chromium.ui.resources.ResourceManager;
 import org.chromium.url.GURL;
 
 import java.util.Collections;
+import java.util.function.Supplier;
 
 // TODO(meiliang): Rename to StaticLayoutMediator.
 /**
@@ -173,7 +173,7 @@ public class StaticLayout extends Layout {
         mBrowserControlsStateProviderObserver =
                 new BrowserControlsStateProvider.Observer() {
                     @Override
-                    public void onControlsConstraintsChanged(
+                    public void onOffsetTagsInfoChanged(
                             BrowserControlsOffsetTagsInfo oldOffsetTagsInfo,
                             BrowserControlsOffsetTagsInfo offsetTagsInfo,
                             @BrowserControlsState int constraints,

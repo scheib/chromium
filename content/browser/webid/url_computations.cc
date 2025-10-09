@@ -47,7 +47,7 @@ std::string ComputeUrlEncodedTokenPostData(
         "client_id=" + base::EscapeUrlEncodedData(client_id, /*use_plus=*/true);
   }
 
-  if (!nonce.empty()) {
+  if (!webid::IsNonceInParamsEnabled() && !nonce.empty()) {
     if (!query.empty()) {
       query += "&";
     }
@@ -124,7 +124,7 @@ void MaybeAppendQueryParameters(
   if (idp_login_info.login_hint.empty() && idp_login_info.domain_hint.empty()) {
     return;
   }
-  std::string old_query = login_url->query();
+  std::string old_query = login_url->GetQuery();
   if (!old_query.empty()) {
     old_query += "&";
   }

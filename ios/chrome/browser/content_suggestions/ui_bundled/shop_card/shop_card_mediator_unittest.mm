@@ -60,7 +60,7 @@ class ShopCardMediatorTest : public PlatformTest {
     builder.AddTestingFactory(
         commerce::ShoppingServiceFactory::GetInstance(),
         base::BindRepeating(
-            [](web::BrowserState*) -> std::unique_ptr<KeyedService> {
+            [](ProfileIOS* profile) -> std::unique_ptr<KeyedService> {
               return commerce::MockShoppingService::Build();
             }));
     builder.AddTestingFactory(ios::HistoryServiceFactory::GetInstance(),
@@ -74,9 +74,7 @@ class ShopCardMediatorTest : public PlatformTest {
         base::BindRepeating(
             [](PrefService* pref_service,
                bookmarks::BookmarkModel* bookmark_model,
-               web::BrowserState* browser_state)
-                -> std::unique_ptr<KeyedService> {
-              ProfileIOS* profile = ProfileIOS::FromBrowserState(browser_state);
+               ProfileIOS* profile) -> std::unique_ptr<KeyedService> {
               return std::make_unique<ImpressionLimitService>(
                   pref_service,
                   ios::HistoryServiceFactory::GetForProfile(
@@ -121,7 +119,7 @@ class ShopCardMediatorTest : public PlatformTest {
   IOSChromeScopedTestingLocalState scoped_testing_local_state_;
   base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<bookmarks::BookmarkModel> bookmark_model_;
-  raw_ptr<TestProfileIOS> profile_;
+  raw_ptr<TestProfileIOS, DanglingUntriaged> profile_;
   TestProfileManagerIOS profile_manager_;
   TestingPrefServiceSimple pref_service_;
   std::unique_ptr<commerce::MockShoppingService> shopping_service_;
@@ -195,4 +193,13 @@ TEST_F(ShopCardMediatorTest, TestUntrackedNoShopCardData) {
   [mediator() setShopCardItemForTesting:nil];
   // Shouldn't crash
   [mediator() onUrlUntrackedForTesting:GURL("https://example.com/")];
+}
+
+TEST_F(ShopCardMediatorTest, TestDontFetchIfShopCardDataExists) {
+  ShopCardItem* item = [[ShopCardItem alloc] init];
+  id mock = OCMPartialMock(mediator());
+  OCMReject([mock fetchPriceTrackedBookmarksForTesting]);
+  [mediator() setShopCardItemForTesting:item];
+  [mediator() fetchPriceTrackedBookmarksIfApplicableForTesting];
+  EXPECT_OCMOCK_VERIFY(mock);
 }

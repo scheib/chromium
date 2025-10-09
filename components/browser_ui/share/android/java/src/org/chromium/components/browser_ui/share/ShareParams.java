@@ -34,7 +34,7 @@ public class ShareParams {
     private final @Nullable String mTextFormat;
 
     /** The URL of the page to be shared. */
-    private String mUrl;
+    private @Nullable String mUrl;
 
     /** The common MIME type of the files to be shared. A wildcard if they have differing types. */
     private final @Nullable String mFileContentType;
@@ -149,12 +149,12 @@ public class ShareParams {
     }
 
     /** @return The URL of the page to be shared. */
-    public String getUrl() {
+    public @Nullable String getUrl() {
         return mUrl;
     }
 
     /** @param url set URL to be shared. */
-    public void setUrl(String url) {
+    public void setUrl(@Nullable String url) {
         mUrl = url;
     }
 
@@ -379,21 +379,22 @@ public class ShareParams {
     }
 
     /** Callback interface for when a target is chosen. */
-    public static interface TargetChosenCallback {
+    public interface TargetChosenCallback {
         /**
          * Called when the user chooses a target in the share dialog. When this is called when a
          * custom action is selected on the system share sheet (e.g. Copy, Edit), the
          * |chosenComponent| can be null.
          *
-         * Note that if the user cancels the share dialog, this callback is never called.
+         * <p>Note that if the user cancels the share dialog, this callback is never called.
          */
-        public void onTargetChosen(@Nullable ComponentName chosenComponent);
+        void onTargetChosen(@Nullable ComponentName chosenComponent);
 
         /**
          * Called when the user cancels the share dialog.
          *
-         * Guaranteed that either this, or onTargetChosen (but not both) will be called, eventually.
+         * <p>Guaranteed that either this, or onTargetChosen (but not both) will be called,
+         * eventually.
          */
-        public void onCancel();
+        void onCancel();
     }
 }

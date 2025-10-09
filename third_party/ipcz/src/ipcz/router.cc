@@ -83,13 +83,16 @@ bool ValidateAndAcquireObjectsForTransitFrom(
 
 }  // namespace
 
-Router::Router() = default;
+Router::Router() {
+  DVLOG(5) << "Creating Router " << std::hex << this;
+}
 
 Router::~Router() {
   // A Router MUST be serialized or closed before it can be destroyed. Both
   // operations clear `traps_` and imply that no further traps should be added.
   absl::MutexLock lock(&mutex_);
   ABSL_ASSERT(traps_.empty());
+  DVLOG(5) << "Deleting Router " << std::hex << this;
 }
 
 // static
@@ -720,6 +723,27 @@ Ref<Router> Router::Deserialize(const RouterDescriptor& descriptor,
     return nullptr;
   }
 
+  // Resolve and validate the link state fragment before acquiring the Router
+  // lock. This avoids a potential lock order inversion between `Router::mutex_`
+  // and `BufferPool::mutex_`, as `AdoptFragmentRefIfValid` may acquire the
+  // BufferPool lock.
+  FragmentRef<RouterLinkState> link_state;
+  if (new_decaying_sublink) {
+    link_state =
+        from_node_link.memory().AdoptFragmentRefIfValid<RouterLinkState>(
+            descriptor.new_link_state_fragment);
+    if (link_state.is_null()) {
+      // Central links require a valid link state fragment.
+      return nullptr;
+    }
+  } else {
+    if (!descriptor.new_link_state_fragment.is_null()) {
+      // No RouterLinkState fragment should be provided for this new
+      // peripheral link.
+      return nullptr;
+    }
+  }
+
   auto router = MakeRefCounted<Router>();
   Ref<RemoteRouterLink> new_outward_link;
   {
@@ -766,13 +790,6 @@ Ref<Router> Router::Deserialize(const RouterDescriptor& descriptor,
               ? descriptor.decaying_incoming_sequence_length
               : descriptor.next_incoming_sequence_number);
 
-      auto link_state =
-          from_node_link.memory().AdoptFragmentRefIfValid<RouterLinkState>(
-              descriptor.new_link_state_fragment);
-      if (link_state.is_null()) {
-        // Central links require a valid link state fragment.
-        return nullptr;
-      }
       new_outward_link = from_node_link.AddRemoteRouterLink(
           descriptor.new_sublink, std::move(link_state), LinkType::kCentral,
           LinkSide::kB, router);
@@ -787,11 +804,6 @@ Ref<Router> Router::Deserialize(const RouterDescriptor& descriptor,
                << descriptor.new_sublink << " and decaying sublink "
                << *new_decaying_sublink;
     } else {
-      if (!descriptor.new_link_state_fragment.is_null()) {
-        // No RouterLinkState fragment should be provided for this new
-        // peripheral link.
-        return nullptr;
-      }
       new_outward_link = from_node_link.AddRemoteRouterLink(
           descriptor.new_sublink, nullptr, LinkType::kPeripheralOutward,
           LinkSide::kB, router);
@@ -1460,7 +1472,7 @@ void Router::Flush(FlushBehavior behavior) {
       DVLOG(4) << "Outward " << decaying_outward_link->Describe()
                << " fully decayed at " << outbound_sequence_length_sent
                << " sent and " << inbound_sequence_length_received
-               << " recived";
+               << " received";
       outward_link_decayed = true;
     }
 

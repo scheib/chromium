@@ -18,7 +18,9 @@
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
+#include "chrome/browser/ui/omnibox/omnibox_edit_model.h"
 #include "chrome/browser/ui/omnibox/omnibox_tab_helper.h"
+#include "chrome/browser/ui/omnibox/omnibox_view.h"
 #include "chrome/browser/ui/toasts/api/toast_id.h"
 #include "chrome/browser/ui/toasts/toast_controller.h"
 #include "chrome/browser/ui/toasts/toast_features.h"
@@ -29,8 +31,7 @@
 #include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "chrome/test/interaction/interactive_browser_test.h"
-#include "components/omnibox/browser/omnibox_edit_model.h"
-#include "components/omnibox/browser/omnibox_view.h"
+#include "components/omnibox/common/omnibox_features.h"
 #include "components/plus_addresses/core/common/features.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -120,9 +121,11 @@ class ToastControllerInteractiveTest : public InteractiveBrowserTest {
     feature_list_.InitWithFeatures(
         {toast_features::kLinkCopiedToast, toast_features::kImageCopiedToast,
          toast_features::kReadingListToast,
-         toast_features::kPinnedTabToastOnClose,
          plus_addresses::features::kPlusAddressesEnabled},
-        {});
+        // Disable `kAiModeOmniboxEntryPoint` as it changes the focus and popup
+        // opening order of the omnibox. If it launches, updates the tests to
+        // match the new expectations.
+        {omnibox::kAiModeOmniboxEntryPoint});
     InteractiveBrowserTest::SetUp();
   }
 
@@ -140,7 +143,6 @@ class ToastControllerInteractiveTest : public InteractiveBrowserTest {
   ToastController* GetToastController() {
     return browser()->browser_window_features()->toast_controller();
   }
-
 
   auto ShowToast(ToastParams params) {
     return Do(base::BindOnce(

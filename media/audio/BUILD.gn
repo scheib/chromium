@@ -163,6 +163,8 @@ source_set("audio") {
       "apple/audio_low_latency_input.h",
       "apple/audio_manager_apple.cc",
       "apple/audio_manager_apple.h",
+      "apple/glitch_helper.cc",
+      "apple/glitch_helper.h",
       "apple/scoped_audio_unit.cc",
       "apple/scoped_audio_unit.h",
     ]
@@ -451,9 +453,11 @@ source_set("unit_tests") {
     "audio_output_unittest.cc",
     "audio_system_impl_unittest.cc",
     "audio_thread_hang_monitor_unittest.cc",
+    "null_audio_sink_unittest.cc",
     "power_observer_helper_unittest.cc",
     "reconfigurable_audio_bus_pool_unittest.cc",
     "simple_sources_unittest.cc",
+    "wav_audio_handler_unittest.cc",
   ]
 
   deps = [
@@ -508,7 +512,6 @@ source_set("unit_tests") {
     sources += [
       "flac_audio_handler_unittest.cc",
       "test_data.h",
-      "wav_audio_handler_unittest.cc",
     ]
   }
 

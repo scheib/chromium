@@ -34,21 +34,30 @@ const NSTimeInterval kSlideInDuration = 0.1;
 
 - (void)animateTransition:
     (id<UIViewControllerContextTransitioning>)transitionContext {
-  UIView* toView = [transitionContext viewForKey:UITransitionContextToViewKey];
+  UIViewController* toViewController = [transitionContext
+      viewControllerForKey:UITransitionContextToViewControllerKey];
+  UIView* toView = toViewController.view;
   UIView* containerView = transitionContext.containerView;
   [containerView addSubview:toView];
 
-  UIView* mainView = [_contextProvider mainViewForAnimation];
-  UIView* inputPlateView = [_contextProvider inputPlateViewForAnimation];
-  UITextView* textView = [_contextProvider textViewForAnimation];
+  // Force a layout pass to ensure `inputPlateView` has its final frame.
+  toView.frame =
+      [transitionContext finalFrameForViewController:toViewController];
+  // This is needed to ensure that the input is correctly sized and positioned.
+  [toView layoutIfNeeded];
 
-  mainView.alpha = 0.0;
+  UIView* inputPlateView = [_contextProvider inputPlateViewForAnimation];
+
+  toView.alpha = 0.0;
   CGRect finalFrame = inputPlateView.frame;
   inputPlateView.frame =
       CGRectMake(finalFrame.origin.x, containerView.bounds.size.height,
                  finalFrame.size.width, finalFrame.size.height);
 
-  [textView becomeFirstResponder];
+  BOOL toggleOnAIM = self.toggleOnAIM;
+  __weak id<AIMPrototypeAnimationContextProvider> contextProvider =
+      _contextProvider;
+
   [UIView
       animateKeyframesWithDuration:[self transitionDuration:transitionContext]
       delay:0
@@ -58,7 +67,7 @@ const NSTimeInterval kSlideInDuration = 0.1;
         [UIView addKeyframeWithRelativeStartTime:0.0
                                 relativeDuration:1.0
                                       animations:^{
-                                        mainView.alpha = 1.0;
+                                        toView.alpha = 1.0;
                                       }];
         // Slide in the input plate.
         [UIView addKeyframeWithRelativeStartTime:0.0
@@ -66,6 +75,16 @@ const NSTimeInterval kSlideInDuration = 0.1;
                                       animations:^{
                                         inputPlateView.frame = finalFrame;
                                       }];
+
+        // Enables AIM.
+        [UIView
+            addKeyframeWithRelativeStartTime:0.2
+                            relativeDuration:0.8
+                                  animations:^{
+                                    if (toggleOnAIM) {
+                                      [contextProvider setAIModeEnabled:YES];
+                                    }
+                                  }];
       }
       completion:^(BOOL finished) {
         [transitionContext completeTransition:finished];

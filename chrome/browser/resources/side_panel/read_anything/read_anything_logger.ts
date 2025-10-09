@@ -4,7 +4,7 @@
 
 import {MetricsBrowserProxyImpl, ReadAnythingSpeechError, ReadAnythingVoiceType} from './metrics_browser_proxy.js';
 import type {MetricsBrowserProxy, ReadAloudSettingsChange, ReadAnythingSettingsChange} from './metrics_browser_proxy.js';
-import {isEspeak, isNatural} from './voice_language_util.js';
+import {isEspeak, isNatural} from './read_aloud/voice_language_conversions.js';
 
 export enum TimeFrom {
   APP = 'App',
@@ -21,6 +21,10 @@ export enum SpeechControls {
 // Handles the business logic for logging.
 export class ReadAnythingLogger {
   private metrics: MetricsBrowserProxy = MetricsBrowserProxyImpl.getInstance();
+
+  logEmptyState() {
+    this.metrics.recordEmptyState();
+  }
 
   logSpeechStopSource(source: number) {
     this.metrics.recordSpeechStopSource(source);
@@ -101,6 +105,12 @@ export class ReadAnythingLogger {
       // </if>
       // <if expr="not is_chromeos">
       voiceType = ReadAnythingVoiceType.SYSTEM;
+
+      // When a system voice is used, log additional information to better
+      // understand the TTS engine state when the system voice is used.
+      // Extension state information cannot easily be passed to the renderer,
+      // so this logging needs to be handled within the page handler.
+      this.metrics.recordExtensionState();
       // </if>
     }
 

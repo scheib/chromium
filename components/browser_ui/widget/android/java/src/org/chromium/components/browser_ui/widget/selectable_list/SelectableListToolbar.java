@@ -172,6 +172,9 @@ public class SelectableListToolbar<E> extends Toolbar
 
     // current view type that SelectableListToolbar is showing
     private int mViewType;
+    private boolean mIsLargeScreenWithKeyboard;
+    private final ObservableSupplierImpl<Boolean> mHasSearchTextSupplier =
+            new ObservableSupplierImpl<>(false);
 
     /** Constructor for inflating from XML. */
     public SelectableListToolbar(Context context, AttributeSet attrs) {
@@ -287,6 +290,7 @@ public class SelectableListToolbar<E> extends Toolbar
         mShowInfoIcon = true;
         mShowInfoStringId = R.string.show_info;
         mHideInfoStringId = R.string.hide_info;
+        mIsLargeScreenWithKeyboard = false;
 
         if (showBackInNormalView) {
             mShowBackInNormalView = true;
@@ -324,6 +328,7 @@ public class SelectableListToolbar<E> extends Toolbar
                     public void onTextChanged(CharSequence s, int start, int before, int count) {
                         mClearTextButton.setVisibility(
                                 TextUtils.isEmpty(s) ? View.INVISIBLE : View.VISIBLE);
+                        mHasSearchTextSupplier.set(!TextUtils.isEmpty(s));
                         if (isSearching()) mSearchDelegate.onSearchTextChanged(s.toString());
                     }
                 });
@@ -446,7 +451,7 @@ public class SelectableListToolbar<E> extends Toolbar
      * search view will be hidden.
      */
     public void onSearchNavigationBack() {
-        if (!mHasSearchView || !isSearching()) return;
+        if (!mHasSearchView || !isSearching() || mIsLargeScreenWithKeyboard) return;
 
         hideSearchView();
     }
@@ -473,6 +478,7 @@ public class SelectableListToolbar<E> extends Toolbar
             case NavigationButton.NONE:
                 break;
             case NavigationButton.SEARCH_BACK:
+                if (mIsLargeScreenWithKeyboard) break;
                 // Create a LayerDrawable to hold the search box icon highlight background as well
                 // as the navigation icon drawable.
                 var navigationBackgroundDrawable =
@@ -515,6 +521,23 @@ public class SelectableListToolbar<E> extends Toolbar
         updateDisplayStyleIfNecessary();
     }
 
+    /**
+     * Requests focus on the search text field if the search view is currently visible.
+     *
+     * @param showKeyboard Whether to show the soft keyboard.
+     */
+    public void requestSearchFocus(boolean showKeyboard) {
+        if (!isSearching() || mSearchEditText == null) return;
+
+        mSearchEditText.post(
+                () -> {
+                    mSearchEditText.requestFocus();
+                    if (showKeyboard) {
+                        KeyboardVisibilityDelegate.getInstance().showKeyboard(mSearchEditText);
+                    }
+                });
+    }
+
     /** Shows the search edit text box and related views. */
     public void showSearchView(boolean showKeyboard) {
         assert mHasSearchView;
@@ -525,13 +548,7 @@ public class SelectableListToolbar<E> extends Toolbar
         showSearchViewInternal();
 
         setTitle(null);
-        mSearchEditText.post(
-                () -> {
-                    mSearchEditText.requestFocus();
-                    if (showKeyboard) {
-                        KeyboardVisibilityDelegate.getInstance().showKeyboard(mSearchEditText);
-                    }
-                });
+        requestSearchFocus(showKeyboard);
     }
 
     /** Hides the search edit text box and related views. Notifies delegate of the change. */
@@ -549,6 +566,7 @@ public class SelectableListToolbar<E> extends Toolbar
         if (!isSearching()) return;
 
         mIsSearchingSupplier.set(false);
+        mHasSearchTextSupplier.set(false);
         mSearchEditText.setText("");
         hideKeyboard();
         showNormalView();
@@ -557,7 +575,34 @@ public class SelectableListToolbar<E> extends Toolbar
     }
 
     /**
+     * @return An observable supplier that notifies observers if the search box has text.
+     */
+    public ObservableSupplier<Boolean> hasSearchTextSupplier() {
+        return mHasSearchTextSupplier;
+    }
+
+    /**
+     * @return If search text is present.
+     */
+    public boolean hasSearchText() {
+        if (mSearchEditText == null) return false;
+        return !TextUtils.isEmpty(mSearchEditText.getText());
+    }
+
+    /**
+     * Clears the text in the search edit text box. This is the desired behavior on large screens
+     * where the search bar is persistent and should not be hidden.
+     */
+    public void clearSearch() {
+        if (!isSearching()) return;
+        mSearchEditText.setText("");
+
+        mSearchEditText.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
+    }
+
+    /**
      * Called to enable/disable search menu button.
+     *
      * @param searchEnabled Whether the search button should be enabled.
      */
     public void setSearchEnabled(boolean searchEnabled) {
@@ -582,7 +627,7 @@ public class SelectableListToolbar<E> extends Toolbar
         if (mIsDestroyed) return;
 
         if (mSelectionDelegate != null) mSelectionDelegate.clearSelection();
-        if (isSearching()) hideSearchView();
+        if (isSearching() && !mIsLargeScreenWithKeyboard) hideSearchView();
     }
 
     /**
@@ -838,5 +883,13 @@ public class SelectableListToolbar<E> extends Toolbar
     @VisibleForTesting
     public @ViewType int getCurrentViewType() {
         return mViewType;
+    }
+
+    public void setIsLargeScreenWithKeyboard(boolean isLargeScreenWithKeyboard) {
+        mIsLargeScreenWithKeyboard = isLargeScreenWithKeyboard;
+    }
+
+    public boolean isLargeScreenWithKeyboard() {
+        return mIsLargeScreenWithKeyboard;
     }
 }

@@ -286,12 +286,16 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
   // is managed.
   BOOL _shouldConvertPersonalProfileToManaged;
 
+  // The regular browser of the scene from which the sign-in was started.
   raw_ptr<Browser> _browser;
   id<SystemIdentity> _identityToSignIn;
   signin_metrics::AccessPoint _accessPoint;
   BOOL _precedingHistorySync;
   NSString* _identityToSignInHostedDomain;
 
+  // The browser the user will use after sign-in.
+  // It may be incognito if the last time the profile was used, it was in
+  // incognito mode.
   raw_ptr<Browser> _browserForAuthenticationFlowInProfile;
 
   // This AuthenticationFlow keeps a reference to `self` while a sign-in flow is
@@ -332,10 +336,14 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
                      anchorView:(UIView*)anchorView
                      anchorRect:(CGRect)anchorRect {
   if ((self = [super init])) {
-    DCHECK(browser);
-    DCHECK(presentingViewController);
+    CHECK(browser);
+    // Sign-in related work should be done on regular browser.
+    CHECK_EQ(browser->type(), Browser::Type::kRegular,
+             base::NotFatalUntil::M145);
+    CHECK(presentingViewController, base::NotFatalUntil::M145);
     CHECK(identity, base::NotFatalUntil::M142);
     _browser = browser;
+
     _identityToSignIn = identity;
     _accessPoint = accessPoint;
     _precedingHistorySync = precedingHistorySync;
@@ -348,7 +356,7 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
     _profileSeparationDataMigrationSettings =
         policy::ProfileSeparationDataMigrationSettings::USER_OPT_IN;
 
-    ProfileIOS* profile = [self originalProfile];
+    ProfileIOS* profile = [self profile];
     AuthenticationService* authenticationService =
         AuthenticationServiceFactory::GetForProfile(profile);
     id<SystemIdentity> current_primary_identity =
@@ -465,7 +473,7 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
 // Continues the sign-in state machine starting from `_state` and invokes
 // a `self.delegate`’s method when finished.
 - (void)continueFlow {
-  ProfileIOS* profile = [self originalProfile];
+  ProfileIOS* profile = [self profile];
   if (self.handlingError) {
     // The flow should not continue while the error is being handled, e.g. while
     // the user is being informed of an issue.
@@ -522,14 +530,16 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
       [self continueFlow];
       return;
     }
-    case AuthenticationState::kDone:
+    case AuthenticationState::kDone: {
+      [self doneStep];
       return;
+    }
   }
   NOTREACHED();
 }
 
 - (void)checkUnsyncedDataStep {
-  ProfileIOS* profile = [self originalProfile];
+  ProfileIOS* profile = [self profile];
   AuthenticationService* authenticationService =
       AuthenticationServiceFactory::GetForProfile(profile);
   id<SystemIdentity> currentIdentity =
@@ -543,13 +553,13 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
     return;
   }
   syncer::SyncService* syncService =
-      SyncServiceFactory::GetForProfile([self originalProfile]);
+      SyncServiceFactory::GetForProfile([self profile]);
   [_performer fetchUnsyncedDataWithSyncService:syncService];
 }
 
 - (void)showLeavingPrimaryAccountConfirmationIfNeededStep {
   CHECK(_unsyncedDataTypes.has_value(), base::NotFatalUntil::M140);
-  ProfileIOS* profile = _browser->GetProfile()->GetOriginalProfile();
+  ProfileIOS* profile = [self profile];
   AuthenticationService* authenticationService =
       AuthenticationServiceFactory::GetForProfile(profile);
   signin::IdentityManager* identityManager =
@@ -592,7 +602,7 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
     return;
   }
 
-  ProfileIOS* profile = [self originalProfile];
+  ProfileIOS* profile = [self profile];
   [_performer fetchProfileSeparationPolicies:profile
                                  forIdentity:_identityToSignIn];
 }
@@ -621,7 +631,7 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
                                         prefService);
 
     signin::IdentityManager* identityManager =
-        IdentityManagerFactory::GetForProfile([self originalProfile]);
+        IdentityManagerFactory::GetForProfile([self profile]);
 
     browsingDataMigrationDisabledByPolicy =
         IsBrowsingDataMigrationDisabledByPolicy(
@@ -662,7 +672,7 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
 // If the identity is assigned to the current profile this step is a no-op.
 - (void)switchProfileIfNeededStep {
   CHECK(_unsyncedDataTypes.has_value());
-  ProfileIOS* profile = [self originalProfile];
+  ProfileIOS* profile = [self profile];
   signin::IdentityManager* identityManager =
       IdentityManagerFactory::GetForProfile(profile);
   RecordIOSIdentityAvailableInProfile(_identityToSignIn.gaiaID, identityManager,
@@ -670,12 +680,11 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
   std::vector<AccountInfo> accountsOnDevice =
       identityManager->GetAccountsOnDevice();
   BOOL isValidIdentityOnDevice = base::Contains(
-      accountsOnDevice, GaiaId(_identityToSignIn.gaiaID), &AccountInfo::gaia);
+      accountsOnDevice, _identityToSignIn.gaiaId, &AccountInfo::gaia);
   std::vector<CoreAccountInfo> accountsInProfile =
       identityManager->GetAccountsWithRefreshTokens();
-  BOOL isValidIdentityInProfile =
-      base::Contains(accountsInProfile, GaiaId(_identityToSignIn.gaiaID),
-                     &CoreAccountInfo::gaia);
+  BOOL isValidIdentityInProfile = base::Contains(
+      accountsInProfile, _identityToSignIn.gaiaId, &CoreAccountInfo::gaia);
   if (!isValidIdentityOnDevice ||
       (!isValidIdentityInProfile &&
        !AreSeparateProfilesForManagedAccountsEnabled())) {
@@ -696,18 +705,22 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
     id<SystemIdentity> identityToSignIn = _identityToSignIn;
     signin_metrics::AccessPoint accessPoint = _accessPoint;
     // In case of sign-in in same profile, we can reuse the same browser.
-    raw_ptr<Browser> browser = _browser;
+    base::WeakPtr<Browser> weakBrowser = _browser->AsWeakPtr();
     // In case of same profile signin, the delegate simply allows
     // to update the view that started the authentication. If it gets
     // deallocated, it means the view is closed, so it’s acceptable
     // not to call its method.
     __weak id<AuthenticationFlowDelegate> delegate = [self takeDelegate];
-    // Not using a call call to a method on self, because self will be
+    // Not using a call to a method on self, because self will be
     // deallocated by the time the `signinCompletion` is executed.
     _signInInProfileCompletion = ^(SigninCoordinatorResult result) {
-      [delegate authenticationFlowDidSignInInSameProfileWithResult:result];
-      CompletePostSignInActions(postSignInActions, identityToSignIn, browser,
-                                accessPoint);
+      [delegate
+          authenticationFlowDidSignInInSameProfileWithResult:result
+                                                    identity:identityToSignIn];
+      if (Browser* browser = weakBrowser.get()) {
+        CompletePostSignInActions(postSignInActions, identityToSignIn, browser,
+                                  accessPoint);
+      }
     };
     [self continueFlow];
     return;
@@ -728,6 +741,13 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
       identityManager->HasPrimaryAccount(signin::ConsentLevel::kSignin)
           ? ChangeProfileReason::kSwitchAccounts
           : ChangeProfileReason::kManagedAccountSignIn;
+
+  // Calling switchToProfileWithIdentity will shutdown the BrowserViewWrangler
+  // and clear the browser.
+  _browser = nullptr;
+  _browserForAuthenticationFlowInProfile = nullptr;
+  _presentingViewController = nil;
+
   [_performer switchToProfileWithIdentity:_identityToSignIn
                                sceneState:sceneState
                                    reason:reason
@@ -788,9 +808,20 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
     case CancelationReason::kNotCanceled:
       NOTREACHED();
   }
-  [[self takeDelegate]
-      authenticationFlowDidSignInInSameProfileWithResult:result];
+  [[self takeDelegate] authenticationFlowDidSignInInSameProfileWithResult:result
+                                                                 identity:nil];
   [self continueFlow];
+}
+
+- (void)doneStep {
+  _presentingViewController = nil;
+  _anchorView = nil;
+  _signInInProfileCompletion = nil;
+  _performer = nil;
+  _browser = nullptr;
+  _identityToSignIn = nil;
+  _identityToSignInHostedDomain = nil;
+  _browserForAuthenticationFlowInProfile = nullptr;
 }
 
 - (BOOL)canceled {
@@ -876,14 +907,12 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
 
 - (void)didAcceptManagedConfirmationWithBrowsingDataSeparate:
     (BOOL)browsingDataSeparate {
-  if (IsIdentityDiscAccountMenuEnabled()) {
-    // Only show the dialog once per account.
-    signin::GaiaIdHash gaiaIDHash =
-        signin::GaiaIdHash::FromGaiaId(GaiaId(_identityToSignIn.gaiaID));
-    syncer::SetAccountKeyedPrefValue([self prefs],
-                                     prefs::kSigninHasAcceptedManagementDialog,
-                                     gaiaIDHash, base::Value(true));
-  }
+  // Only show the dialog once per account.
+  signin::GaiaIdHash gaiaIDHash =
+      signin::GaiaIdHash::FromGaiaId(_identityToSignIn.gaiaId);
+  syncer::SetAccountKeyedPrefValue([self prefs],
+                                   prefs::kSigninHasAcceptedManagementDialog,
+                                   gaiaIDHash, base::Value(true));
 
   _shouldConvertPersonalProfileToManaged =
       AreSeparateProfilesForManagedAccountsEnabled() &&
@@ -922,17 +951,18 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
   CHECK(AreSeparateProfilesForManagedAccountsEnabled());
   CHECK(completion);
   CHECK(newProfileBrowser);
+  // Sign-in related work should be done on regular browser.
+  CHECK_EQ(newProfileBrowser->type(), Browser::Type::kRegular,
+           base::NotFatalUntil::M145);
   // With the profile switching `_browser` and `_presentingViewController` are
   // not valid anymore.
-  _browser = nullptr;
-  _presentingViewController = nil;
+  CHECK(!_browser, base::NotFatalUntil::M145);
+  CHECK(!_presentingViewController, base::NotFatalUntil::M145);
+  CHECK(!_browserForAuthenticationFlowInProfile, base::NotFatalUntil::M145);
   _browserForAuthenticationFlowInProfile = newProfileBrowser;
   CHECK(!_signInInProfileCompletion);
-  _signInInProfileCompletion = base::CallbackToBlock(base::BindOnce(
-      [](base::OnceClosure closure, SigninCoordinatorResult result) {
-        std::move(closure).Run();
-      },
-      std::move(completion)));
+  _signInInProfileCompletion = base::CallbackToBlock(
+      base::IgnoreArgs<SigninCoordinatorResult>(std::move(completion)));
 
   [self continueFlow];
 }
@@ -950,16 +980,17 @@ void RecordUnsyncedDataHistogramIfNeeded(UnsyncedDataTypeHistogram histogram,
   return delegate;
 }
 
-// The original profile used for services that don't exist in incognito mode.
-- (ProfileIOS*)originalProfile {
+// The original profile used for services that don't exist in incognito mode. Or
+// nullptr if there is no _browser.
+- (ProfileIOS*)profile {
   if (!_browser) {
     return nullptr;
   }
-  return _browser->GetProfile()->GetOriginalProfile();
+  return _browser->GetProfile();
 }
 
 - (PrefService*)prefs {
-  return [self originalProfile]->GetPrefs();
+  return [self profile]->GetPrefs();
 }
 
 @end

@@ -105,13 +105,13 @@ bool IsIncognitoAllowed() {
 // Returns URL path and query without the "/" prefix. For example, for the URL
 // "chrome://settings/networks/?type=WiFi" returns "networks/?type=WiFi".
 std::string GetPathAndQuery(const GURL& url) {
-  std::string result = url.path();
+  std::string result = url.GetPath();
   if (!result.empty() && result[0] == '/') {
     result.erase(0, 1);
   }
   if (url.has_query()) {
     result += '?';
-    result += url.query();
+    result += url.GetQuery();
   }
   return result;
 }
@@ -340,13 +340,13 @@ void ChromeNewWindowClient::OpenUrl(const GURL& url,
        url.SchemeIs(content::kChromeUIScheme))) {
     // Show browser settings (e.g. chrome://settings). This may open in a window
     // or a tab depending on feature SplitSettings.
-    if (url.host() == chrome::kChromeUISettingsHost) {
+    if (url.GetHost() == chrome::kChromeUISettingsHost) {
       std::string sub_page = GetPathAndQuery(url);
       chrome::ShowSettingsSubPageForProfile(profile, sub_page);
       return;
     }
     // OS settings are shown in a window.
-    if (url.host() == chrome::kChromeUIOSSettingsHost) {
+    if (url.GetHost() == chrome::kChromeUIOSSettingsHost) {
       std::string sub_page = GetPathAndQuery(url);
       chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(profile,
                                                                    sub_page);
@@ -466,7 +466,7 @@ void ChromeNewWindowClient::OpenCrosh() {
 
 void ChromeNewWindowClient::OpenGetHelp() {
   Profile* const profile = ProfileManager::GetActiveUserProfile();
-  chrome::ShowHelpForProfile(profile, chrome::HELP_SOURCE_KEYBOARD);
+  chrome::ShowHelpForProfile(profile, chrome::HelpSource::kKeyboard);
 }
 
 void ChromeNewWindowClient::RestoreTab() {

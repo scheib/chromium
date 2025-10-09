@@ -10,6 +10,7 @@
 #include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/actor/ui/states/handoff_button_state.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 
@@ -56,10 +57,14 @@ class HandoffButtonController {
   explicit HandoffButtonController(tabs::TabInterface& tab_interface);
   virtual ~HandoffButtonController();
 
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kHandoffButtonElementId);
+
   HandoffButtonController(const HandoffButtonController&) = delete;
   HandoffButtonController& operator=(const HandoffButtonController&) = delete;
 
   virtual void UpdateState(const HandoffButtonState& state, bool is_visible);
+  // Returns true if the mouse is currently hovering over the handoff button.
+  virtual bool IsHovering();
 
  protected:
   void OnButtonPressed();
@@ -81,8 +86,8 @@ class HandoffButtonController {
 
   tabs::TabDialogManager* GetTabDialogManager();
 
-  bool is_active_ = false;
   bool is_visible_ = false;
+  bool is_hovering_ = false;
   HandoffButtonState::ControlOwnership ownership_ =
       HandoffButtonState::ControlOwnership::kActor;
   const raw_ref<tabs::TabInterface> tab_interface_;

@@ -20,10 +20,6 @@
 
 namespace blink {
 
-BASE_FEATURE(kRTCAlignReceivedEncodedVideoTransforms,
-             "RTCAlignReceivedEncodedVideoTransforms",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 RtpReceiverState::RtpReceiverState(
     scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> signaling_task_runner,
@@ -146,7 +142,6 @@ class RTCRtpReceiverImpl::RTCRtpReceiverInternal
   RTCRtpReceiverInternal(webrtc::scoped_refptr<webrtc::PeerConnectionInterface>
                              native_peer_connection,
                          RtpReceiverState state,
-                         bool require_encoded_insertable_streams,
                          std::unique_ptr<webrtc::Metronome> decode_metronome)
       : native_peer_connection_(std::move(native_peer_connection)),
         main_task_runner_(state.main_task_runner()),
@@ -158,17 +153,14 @@ class RTCRtpReceiverImpl::RTCRtpReceiverInternal
     if (webrtc_receiver_->media_type() == webrtc::MediaType::AUDIO) {
       encoded_audio_transformer_ =
           std::make_unique<RTCEncodedAudioStreamTransformer>(main_task_runner_);
-      webrtc_receiver_->SetDepacketizerToDecoderFrameTransformer(
+      webrtc_receiver_->SetFrameTransformer(
           encoded_audio_transformer_->Delegate());
     } else {
       CHECK(webrtc_receiver_->media_type() == webrtc::MediaType::VIDEO);
       encoded_video_transformer_ =
           std::make_unique<RTCEncodedVideoStreamTransformer>(
-              main_task_runner_, base::FeatureList::IsEnabled(
-                                     kRTCAlignReceivedEncodedVideoTransforms)
-                                     ? std::move(decode_metronome)
-                                     : nullptr);
-      webrtc_receiver_->SetDepacketizerToDecoderFrameTransformer(
+              main_task_runner_, std::move(decode_metronome));
+      webrtc_receiver_->SetFrameTransformer(
           encoded_video_transformer_->Delegate());
     }
     DCHECK(!encoded_audio_transformer_ || !encoded_video_transformer_);
@@ -305,12 +297,10 @@ RTCRtpReceiverImpl::RTCRtpReceiverImpl(
     webrtc::scoped_refptr<webrtc::PeerConnectionInterface>
         native_peer_connection,
     RtpReceiverState state,
-    bool require_encoded_insertable_streams,
     std::unique_ptr<webrtc::Metronome> decode_metronome)
     : internal_(base::MakeRefCounted<RTCRtpReceiverInternal>(
           std::move(native_peer_connection),
           std::move(state),
-          require_encoded_insertable_streams,
           std::move(decode_metronome))) {}
 
 RTCRtpReceiverImpl::RTCRtpReceiverImpl(const RTCRtpReceiverImpl& other)

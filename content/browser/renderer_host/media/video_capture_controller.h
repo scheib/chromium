@@ -24,12 +24,7 @@
 #include "media/capture/video/video_frame_receiver.h"
 #include "media/capture/video_capture_types.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "services/video_effects/public/cpp/buildflags.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
-
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-#include "services/video_effects/public/mojom/video_effects_processor.mojom-forward.h"
-#endif
 
 namespace content {
 
@@ -122,8 +117,7 @@ class CONTENT_EXPORT VideoCaptureController
   void OnBufferRetired(int buffer_id) override;
   void OnError(media::VideoCaptureError error) override;
   void OnFrameDropped(media::VideoCaptureFrameDropReason reason) override;
-  void OnNewSubCaptureTargetVersion(
-      uint32_t sub_capture_target_version) override;
+  void OnNewCaptureVersion(media::CaptureVersion capture_version) override;
   void OnFrameWithEmptyRegionCapture() override;
   void OnLog(const std::string& message) override;
   void OnStarted() override;
@@ -138,16 +132,9 @@ class CONTENT_EXPORT VideoCaptureController
 
   void OnDeviceConnectionLost();
 
-  void CreateAndStartDeviceAsync(
-      const media::VideoCaptureParams& params,
-      VideoCaptureDeviceLaunchObserver* callbacks,
-      base::OnceClosure done_cb,
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-      mojo::PendingRemote<video_effects::mojom::VideoEffectsProcessor>
-          video_effects_processor,
-#endif
-      mojo::PendingRemote<media::mojom::ReadonlyVideoEffectsManager>
-          readonly_video_effects_manager);
+  void CreateAndStartDeviceAsync(const media::VideoCaptureParams& params,
+                                 VideoCaptureDeviceLaunchObserver* callbacks,
+                                 base::OnceClosure done_cb);
   void ReleaseDeviceAsync(base::OnceClosure done_cb);
   bool IsDeviceAlive() const;
   void GetPhotoState(

@@ -25,6 +25,7 @@ source_set("exclusive_access") {
     "fullscreen_controller.cc",
     "fullscreen_controller.h",
     "fullscreen_observer.h",
+    "fullscreen_tab_params.h",
     "fullscreen_within_tab_helper.cc",
     "fullscreen_within_tab_helper.h",
     "keyboard_lock_controller.cc",
@@ -41,6 +42,8 @@ source_set("exclusive_access") {
     "//url",
   ]
   deps = [
+    "//chrome/browser/app_mode",
+    "//chrome/browser/history",
     "//chrome/browser/profiles:profile",
     "//chrome/browser/ui:ui_features",
     "//chrome/common:constants",
@@ -138,6 +141,7 @@ if (!is_android) {
       deps = [
         ":test_support",
         "//chrome/browser/content_settings:content_settings_factory",
+        "//chrome/browser/preloading:test_support",
         "//chrome/browser/ui:test_support",
         "//chrome/browser/web_applications:web_applications_test_support",
         "//components/blocked_content",

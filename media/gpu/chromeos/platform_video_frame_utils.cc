@@ -36,7 +36,6 @@
 #include "media/base/video_util.h"
 #include "media/gpu/buffer_validation.h"
 #include "media/gpu/macros.h"
-#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/gpu_memory_buffer_handle.h"
 #include "ui/gfx/linux/drm_util_linux.h"
@@ -53,10 +52,10 @@
 namespace media {
 
 namespace {
+
 struct DrmVersionDeleter {
   void operator()(drmVersion* version) const { drmFreeVersion(version); }
 };
-
 using ScopedDrmVersionPtr = std::unique_ptr<drmVersion, DrmVersionDeleter>;
 
 // Returns the gbm device using the |drm_node_file_prefix|.
@@ -144,7 +143,7 @@ class GbmDeviceWrapper {
   // Creates a native BO and returns it as a NativePixmapHandle. Returns
   // std::nullopt on failure.
   std::optional<gfx::NativePixmapHandle> CreateNativePixmapHandle(
-      gfx::BufferFormat format,
+      viz::SharedImageFormat format,
       const gfx::Size& size,
       gfx::BufferUsage buffer_usage) {
     base::AutoLock lock(lock_);
@@ -153,7 +152,7 @@ class GbmDeviceWrapper {
       return std::nullopt;
     }
 
-    const int fourcc_format = ui::GetFourCCFormatFromBufferFormat(format);
+    const int fourcc_format = ui::GetFourCCFormatFromSharedImageFormat(format);
     if (fourcc_format == DRM_FORMAT_INVALID)
       return std::nullopt;
 
@@ -167,22 +166,6 @@ class GbmDeviceWrapper {
       return std::nullopt;
 
     return native_pixmap_handle;
-  }
-
-  std::unique_ptr<ui::GbmBuffer> ImportGpuMemoryBuffer(
-      gfx::BufferFormat format,
-      const gfx::Size& size,
-      gfx::NativePixmapHandle handle) {
-    CHECK_LE(handle.planes.size(), base::checked_cast<size_t>(GBM_MAX_PLANES));
-    base::AutoLock lock(lock_);
-    if (!IsInitialized()) {
-      return nullptr;
-    }
-    const int fourcc_format = ui::GetFourCCFormatFromBufferFormat(format);
-    if (fourcc_format == DRM_FORMAT_INVALID)
-      return nullptr;
-    return gbm_device_->CreateBufferFromHandle(fourcc_format, size,
-                                               std::move(handle));
   }
 
  private:
@@ -295,11 +278,12 @@ std::optional<gfx::NativePixmapHandle> AllocateNativePixmapHandle(
     VideoPixelFormat pixel_format,
     const gfx::Size& coded_size,
     gfx::BufferUsage buffer_usage) {
-  auto buffer_format = VideoPixelFormatToGfxBufferFormat(pixel_format);
-  if (!buffer_format)
+  auto si_format = VideoPixelFormatToSharedImageFormat(pixel_format);
+  if (!si_format) {
     return std::nullopt;
+  }
   return GbmDeviceWrapper::Get()->CreateNativePixmapHandle(
-      *buffer_format, coded_size, buffer_usage);
+      *si_format, coded_size, buffer_usage);
 }
 
 }  // namespace

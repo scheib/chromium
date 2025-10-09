@@ -40,7 +40,6 @@
 #include "third_party/blink/renderer/platform/fonts/font_metrics.h"
 #include "third_party/blink/renderer/platform/fonts/plain_text_painter.h"
 #include "third_party/blink/renderer/platform/fonts/string_truncator.h"
-#include "third_party/blink/renderer/platform/fonts/text_run_paint_info.h"
 #include "third_party/blink/renderer/platform/graphics/bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
@@ -207,7 +206,7 @@ std::unique_ptr<DragImage> DragImage::Create(const KURL& url,
   gfx::Size scaled_image_size =
       gfx::ScaleToFlooredSize(image_size, device_scale_factor);
   // TODO(fserb): are we sure this should be software?
-  std::unique_ptr<CanvasResourceProvider> resource_provider(
+  std::unique_ptr<CanvasResourceProviderBitmap> resource_provider(
       CanvasResourceProvider::CreateBitmapProvider(
           scaled_image_size, GetN32FormatForCanvas(), kPremul_SkAlphaType,
           gfx::ColorSpace::CreateSRGB(),

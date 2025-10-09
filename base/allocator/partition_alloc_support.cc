@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/rand_util.h"
 #ifdef UNSAFE_BUFFERS_BUILD
 // TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
 #pragma allow_unsafe_buffers
 #endif
-
-#include "base/allocator/partition_alloc_support.h"
 
 #include <algorithm>
 #include <array>
@@ -19,6 +18,7 @@
 #include <string_view>
 
 #include "base/allocator/partition_alloc_features.h"
+#include "base/allocator/partition_alloc_support.h"
 #include "base/allocator/scheduler_loop_quarantine_config.h"
 #include "base/at_exit.h"
 #include "base/check.h"
@@ -42,7 +42,9 @@
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock_impl.h"
+#include "base/synchronization/lock_metrics_recorder.h"
 #include "base/system/sys_info.h"
+#include "base/task/common/task_annotator.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/threading/platform_thread.h"
@@ -70,6 +72,7 @@
 #include "partition_alloc/shim/allocator_shim.h"
 #include "partition_alloc/shim/allocator_shim_default_dispatch_to_partition_alloc.h"
 #include "partition_alloc/shim/allocator_shim_dispatch_to_noop_on_free.h"
+#include "partition_alloc/spinning_mutex.h"
 #include "partition_alloc/stack/stack.h"
 #include "partition_alloc/thread_cache.h"
 
@@ -130,13 +133,40 @@ namespace switches {
 constexpr char kZygoteProcess[] = "zygote";
 }  // namespace switches
 
+class LockMetricsRecorderSupport
+    : public partition_alloc::internal::LockMetricsRecorderInterface {
+ public:
+  LockMetricsRecorderSupport() : recorder_(base::LockMetricsRecorder::Get()) {}
+
+  static LockMetricsRecorderSupport* Instance() {
+    static LockMetricsRecorderSupport instance;
+    return &instance;
+  }
+
+  bool ShouldRecordLockAcquisitionTime() const override {
+    return recorder_->ShouldRecordLockAcquisitionTime();
+  }
+
+  void RecordLockAcquisitionTime(
+      partition_alloc::internal::base::TimeDelta sample) override {
+    recorder_->RecordLockAcquisitionTime(
+        Microseconds(sample.InMicroseconds()),
+        base::LockMetricsRecorder::LockType::kPartitionAllocLock);
+  }
+
+ private:
+  base::LockMetricsRecorder* recorder_;
+};
+
 }  // namespace
 
 namespace {
 
 void RunThreadCachePeriodicPurge() {
   // Micros, since periodic purge should typically take at most a few ms.
-  SCOPED_UMA_HISTOGRAM_TIMER_MICROS("Memory.PartitionAlloc.PeriodicPurge");
+  SCOPED_UMA_HISTOGRAM_TIMER_MICROS_SUBSAMPLED(
+      "Memory.PartitionAlloc.PeriodicPurge.Subsampled",
+      base::ShouldRecordSubsampledMetric(0.01));
   TRACE_EVENT0("memory", "PeriodicPurge");
   auto& instance = ::partition_alloc::ThreadCacheRegistry::Instance();
   instance.RunPeriodicPurge();
@@ -931,6 +961,9 @@ void PartitionAllocSupport::ReconfigureEarlyish(
 #if PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
   allocator_shim::EnablePartitionAllocMemoryReclaimer();
 #endif  // PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+
+  partition_alloc::internal::SpinningMutex::SetLockMetricsRecorder(
+      LockMetricsRecorderSupport::Instance());
 }
 
 void PartitionAllocSupport::ReconfigureAfterZygoteFork(
@@ -976,6 +1009,7 @@ void PartitionAllocSupport::ReconfigureAfterFeatureListInit(
     base::allocator::InstallDanglingRawPtrChecks();
   }
   base::allocator::InstallUnretainedDanglingRawPtrChecks();
+
   {
     base::AutoLock scoped_lock(lock_);
     // Avoid initializing more than once.
@@ -1017,10 +1051,9 @@ void PartitionAllocSupport::ReconfigureAfterFeatureListInit(
 
   // Configure ASAN hooks to report the `MiraclePtr status`. This is enabled
   // only if BackupRefPtr is normally enabled in the current process for the
-  // current platform. Note that CastOS and iOS aren't protected by BackupRefPtr
+  // current platform. Note that CastOS is not protected by BackupRefPtr
   // a the moment, so they are excluded.
-#if PA_BUILDFLAG(USE_ASAN_BACKUP_REF_PTR) && !PA_BUILDFLAG(IS_CASTOS) && \
-    !PA_BUILDFLAG(IS_IOS)
+#if PA_BUILDFLAG(USE_ASAN_BACKUP_REF_PTR) && !PA_BUILDFLAG(IS_CASTOS)
   if (ShouldEnableFeatureOnProcess(
           base::features::kBackupRefPtrEnabledProcessesParam.Get(),
           process_type)) {
@@ -1036,7 +1069,7 @@ void PartitionAllocSupport::ReconfigureAfterFeatureListInit(
                                                EnableExtractionCheck(false),
                                                EnableInstantiationCheck(false));
   }
-#endif  // PA_BUILDFLAG(USE_ASAN_BACKUP_REF_PTR)
+#endif  // PA_BUILDFLAG(USE_ASAN_BACKUP_REF_PTR) && !PA_BUILDFLAG(IS_CASTOS)
 
 #if PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
   auto bucket_distribution = allocator_shim::BucketDistribution::kNeutral;
@@ -1057,11 +1090,25 @@ void PartitionAllocSupport::ReconfigureAfterFeatureListInit(
   const auto scheduler_loop_quarantine_thread_local_config =
       GetSchedulerLoopQuarantineConfiguration(
           process_type, SchedulerLoopQuarantineBranchType::kThreadLocalDefault);
+  const auto
+      scheduler_loop_quarantine_for_advanced_memory_safety_checks_config =
+          GetSchedulerLoopQuarantineConfiguration(
+              process_type,
+              SchedulerLoopQuarantineBranchType::kAdvancedMemorySafetyChecks);
+
+  if (base::FeatureList::IsEnabled(
+          base::features::
+              kPartitionAllocSchedulerLoopQuarantineTaskControlledPurge) &&
+      ShouldEnableFeatureOnProcess(
+          base::features::
+              kPartitionAllocSchedulerLoopQuarantineTaskControlledPurgeEnabledProcessesParam
+                  .Get(),
+          process_type)) {
+    base::EnableSchedulerLoopQuarantineTaskControlledPurge();
+  }
 
   const bool eventually_zero_freed_memory = base::FeatureList::IsEnabled(
       base::features::kPartitionAllocEventuallyZeroFreedMemory);
-  const bool fewer_memory_regions = base::FeatureList::IsEnabled(
-      base::features::kPartitionAllocFewerMemoryRegions);
 
   bool enable_memory_tagging = false;
   partition_alloc::TagViolationReportingMode memory_tagging_reporting_mode =
@@ -1158,8 +1205,8 @@ void PartitionAllocSupport::ReconfigureAfterFeatureListInit(
       memory_tagging_reporting_mode, bucket_distribution,
       scheduler_loop_quarantine_global_config,
       scheduler_loop_quarantine_thread_local_config,
-      allocator_shim::EventuallyZeroFreedMemory(eventually_zero_freed_memory),
-      allocator_shim::FewerMemoryRegions(fewer_memory_regions));
+      scheduler_loop_quarantine_for_advanced_memory_safety_checks_config,
+      allocator_shim::EventuallyZeroFreedMemory(eventually_zero_freed_memory));
 
   const uint32_t extras_size = allocator_shim::GetMainPartitionRootExtrasSize();
   // As per description, extras are optional and are expected not to

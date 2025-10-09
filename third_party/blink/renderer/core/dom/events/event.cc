@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -237,6 +238,10 @@ bool Event::IsPatchEvent() const {
   return false;
 }
 
+bool Event::IsRouteEvent() const {
+  return false;
+}
+
 void Event::preventDefault() {
   if (handling_passive_ != PassiveMode::kNotPassive &&
       handling_passive_ != PassiveMode::kNotPassiveDefault) {
@@ -285,13 +290,18 @@ void Event::SetRelatedTargetIfExists(EventTarget* related_target) {
 
 void Event::ReceivedTarget() {}
 
-Element* Event::Retarget(const Element* element) const {
+Element* Event::Retarget(Element* element) const {
   CHECK(RuntimeEnabledFeatures::ImprovedSourceRetargetingEnabled());
-  EventTarget* retarget_against = currentTarget() ? currentTarget() : target();
-  if (element && retarget_against && retarget_against->ToNode()) {
-    return &retarget_against->ToNode()->GetTreeScope().Retarget(*element);
+  if (!element) {
+    return nullptr;
   }
-  return nullptr;
+  if (EventTarget* current_target = currentTarget()) {
+    if (auto* current_target_node = current_target->ToNode()) {
+      return &current_target_node->GetTreeScope().Retarget(*element);
+    }
+  }
+  // retarget against the topmost TreeScope if there isn't a current target.
+  return &element->GetDocument().Retarget(*element);
 }
 
 void Event::SetUnderlyingEvent(const Event* ue) {
@@ -350,15 +360,17 @@ HeapVector<Member<EventTarget>> Event::composedPath(
     }
     NOTREACHED();
   }
+  LocalDOMWindow* window = current_target_->ToLocalDOMWindow();
+  if (window && event_path_ && !event_path_->IsEmpty()) {
+    return HeapVector<Member<EventTarget>>(event_path_->TopNodeEventContext()
+                                               .GetTreeScopeEventContext()
+                                               .EnsureEventPath(*event_path_));
+  }
 
-  if (LocalDOMWindow* window = current_target_->ToLocalDOMWindow()) {
-    if (event_path_ && !event_path_->IsEmpty()) {
-      return HeapVector<Member<EventTarget>>(
-          event_path_->TopNodeEventContext()
-              .GetTreeScopeEventContext()
-              .EnsureEventPath(*event_path_));
-    }
-    return HeapVector<Member<EventTarget>>(1, window);
+  if (RuntimeEnabledFeatures::ComposedPathReturnTargetBeingDispatchedEnabled()
+          ? IsBeingDispatched()
+          : !!window) {
+    return HeapVector<Member<EventTarget>>(1, current_target_);
   }
 
   return HeapVector<Member<EventTarget>>();

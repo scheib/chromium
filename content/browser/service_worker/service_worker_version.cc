@@ -26,6 +26,7 @@
 #include "base/observer_list.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_view_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
@@ -57,8 +58,7 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/result_codes.h"
-#include "crypto/secure_hash.h"
-#include "crypto/sha2.h"
+#include "crypto/hash.h"
 #include "mojo/public/c/system/types.h"
 #include "net/base/net_errors.h"
 #include "net/cookies/site_for_cookies.h"
@@ -211,8 +211,7 @@ std::optional<std::string> MergeResourceRecordSHA256ScriptChecksum(
     const ServiceWorkerScriptCacheMap& script_cache_map,
     std::optional<blink::mojom::ServiceWorkerFetchHandlerType>
         fetch_handler_type) {
-  const std::unique_ptr<crypto::SecureHash> checksum =
-      crypto::SecureHash::Create(crypto::SecureHash::SHA256);
+  crypto::hash::Hasher checksum(crypto::hash::kSha256);
   std::vector<storage::mojom::ServiceWorkerResourceRecordPtr> resources =
       script_cache_map.GetResources();
   // Sort |resources| by |sha256_checksum| value not to make the merged value
@@ -235,12 +234,11 @@ std::optional<std::string> MergeResourceRecordSHA256ScriptChecksum(
     // value collisions: ab,cdef vs abcd,ef
     const std::string checksum_with_delimiter =
         *resource->sha256_checksum + "|";
-    checksum->Update(checksum_with_delimiter.data(),
-                     checksum_with_delimiter.size());
+    checksum.Update(base::as_string_view(checksum_with_delimiter));
   }
 
-  uint8_t result[crypto::kSHA256Length];
-  checksum->Finish(result, crypto::kSHA256Length);
+  std::array<uint8_t, crypto::hash::kSha256Size> result;
+  checksum.Finish(result);
   const std::string encoded = base::HexEncode(result);
 
   if (fetch_handler_type) {
@@ -2586,20 +2584,23 @@ void ServiceWorkerVersion::OnTimeoutTimer() {
     return;
   }
 
-  // Are there requests that have not finished before their expiration.
-  bool has_kill_on_timeout = false;
-  bool has_continue_on_timeout = false;
-  // In case, `request_timeouts_` can be modified in the callbacks initiated
-  // in `MaybeTimeoutRequest`, we keep its contents locally during the
-  // following while loop.
-  std::set<InflightRequestTimeoutInfo> request_timeouts;
-  request_timeouts.swap(request_timeouts_);
-  auto timeout_iter = request_timeouts.begin();
-  while (timeout_iter != request_timeouts.end()) {
-    const InflightRequestTimeoutInfo& info = *timeout_iter;
-    if (!RequestExpired(info.expiration_time)) {
+  // 1. Identify timed-out requests and extract their info. This is done in a
+  // separate loop to avoid race conditions where a timeout callback adds a new
+  // request that could be immediately timed out.
+  std::vector<InflightRequestTimeoutInfo> timed_out_infos;
+  auto it = request_timeouts_.begin();
+  while (it != request_timeouts_.end()) {
+    if (!RequestExpired(it->expiration_time)) {
       break;
     }
+    timed_out_infos.push_back(*it);
+    it = request_timeouts_.erase(it);
+  }
+
+  // 2. Run the error callbacks for the timed-out requests.
+  bool has_kill_on_timeout = false;
+  bool has_continue_on_timeout = false;
+  for (const auto& info : timed_out_infos) {
     if (MaybeTimeoutRequest(info)) {
       switch (info.timeout_behavior) {
         case KILL_ON_TIMEOUT:
@@ -2610,14 +2611,12 @@ void ServiceWorkerVersion::OnTimeoutTimer() {
           break;
       }
     }
-    timeout_iter = request_timeouts.erase(timeout_iter);
   }
-  // Ensure the `request_timeouts_` won't be touched during the loop.
-  DCHECK(request_timeouts_.empty());
-  request_timeouts_.swap(request_timeouts);
-  // TODO(crbug.com/40864997): remove the following DCHECK when the cause
-  // identified.
-  DCHECK_EQ(request_timeouts_.size(), inflight_requests_.size());
+
+  // TODO(crbug.com/40864997): This was promoted from a DCHECK to validate
+  // the fix for this bug. If no crashes are observed by the next release
+  // cycle, this CHECK and other related DCHECKs in this file can be removed.
+  CHECK_EQ(request_timeouts_.size(), inflight_requests_.size());
 
   if (has_kill_on_timeout &&
       running_status() != blink::EmbeddedWorkerStatus::kStopping) {
@@ -2724,9 +2723,18 @@ bool ServiceWorkerVersion::MaybeTimeoutRequest(
   // ServiceWorkerVersion::Request
   TRACE_EVENT_END("ServiceWorker", perfetto::Track::FromPointer(request),
                   "Error", "Timeout");
-  std::move(request->error_callback)
-      .Run(blink::ServiceWorkerStatusCode::kErrorTimeout);
+
+  // Move the callback to a local variable before removing the request from the
+  // map, as the request object will be destroyed.
+  auto error_callback = std::move(request->error_callback);
+
+  // Remove the request from inflight_requests_ *before* running the callback.
+  // This restores the invariant that request_timeouts_ and inflight_requests_
+  // have the same size, preventing a DCHECK failure if the callback
+  // synchronously finishes another request.
   inflight_requests_.Remove(info.id);
+
+  std::move(error_callback).Run(blink::ServiceWorkerStatusCode::kErrorTimeout);
   return true;
 }
 

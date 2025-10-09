@@ -33,11 +33,6 @@
 #include "media/capture/video/video_capture_buffer_tracker_factory_impl.h"
 #include "media/capture/video/video_capture_device_client.h"
 #include "media/capture/video/video_capture_metrics.h"
-#include "services/video_effects/public/cpp/buildflags.h"
-
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-#include "services/video_effects/public/mojom/video_effects_processor.mojom.h"
-#endif
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "content/browser/compositor/image_transport_factory.h"
@@ -568,17 +563,17 @@ void VideoCaptureController::OnFrameDropped(
   }
 }
 
-void VideoCaptureController::OnNewSubCaptureTargetVersion(
-    uint32_t sub_capture_target_version) {
+void VideoCaptureController::OnNewCaptureVersion(
+    media::CaptureVersion capture_version) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   EmitLogMessage(
-      base::StringPrintf("%s(%u)", __func__, sub_capture_target_version), 3);
+      base::StringPrintf("%s(%s)", __func__, capture_version.ToString()), 3);
   for (const auto& client : controller_clients_) {
     if (client->session_closed) {
       continue;
     }
-    client->event_handler->OnNewSubCaptureTargetVersion(
-        client->controller_id, sub_capture_target_version);
+    client->event_handler->OnNewCaptureVersion(client->controller_id,
+                                               capture_version);
   }
 }
 
@@ -665,13 +660,7 @@ void VideoCaptureController::OnDeviceConnectionLost() {
 void VideoCaptureController::CreateAndStartDeviceAsync(
     const media::VideoCaptureParams& params,
     VideoCaptureDeviceLaunchObserver* observer,
-    base::OnceClosure done_cb,
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-    mojo::PendingRemote<video_effects::mojom::VideoEffectsProcessor>
-        video_effects_processor,
-#endif
-    mojo::PendingRemote<media::mojom::ReadonlyVideoEffectsManager>
-        readonly_video_effects_manager) {
+    base::OnceClosure done_cb) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
                "VideoCaptureController::CreateAndStartDeviceAsync");
@@ -686,11 +675,7 @@ void VideoCaptureController::CreateAndStartDeviceAsync(
       device_id_, stream_type_, params, GetWeakPtrForIOThread(),
       base::BindOnce(&VideoCaptureController::OnDeviceConnectionLost,
                      GetWeakPtrForIOThread()),
-      this, std::move(done_cb),
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-      std::move(video_effects_processor),
-#endif
-      std::move(readonly_video_effects_manager));
+      this, std::move(done_cb));
 }
 
 void VideoCaptureController::ReleaseDeviceAsync(base::OnceClosure done_cb) {
@@ -759,7 +744,7 @@ void VideoCaptureController::Resume() {
 void VideoCaptureController::ApplySubCaptureTarget(
     media::mojom::SubCaptureTargetType type,
     const base::Token& target,
-    uint32_t sub_capture_target_version,
+    uint32_t sub_capture_version,
     base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
         callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
@@ -775,8 +760,8 @@ void VideoCaptureController::ApplySubCaptureTarget(
     return;
   }
 
-  launched_device_->ApplySubCaptureTarget(
-      type, target, sub_capture_target_version, std::move(callback));
+  launched_device_->ApplySubCaptureTarget(type, target, sub_capture_version,
+                                          std::move(callback));
 }
 
 void VideoCaptureController::RequestRefreshFrame() {

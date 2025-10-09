@@ -64,6 +64,21 @@ gfx::ImageSkia MultiCaptureDataService::GetAppIcon(
   return gfx::ImageSkia();
 }
 
+bool MultiCaptureDataService::IsMultiCaptureAllowed(const GURL& url) const {
+  return std::ranges::any_of(
+      multi_screen_capture_allowlist_on_login_,
+      [url](const base::Value& value) {
+        ContentSettingsPattern pattern =
+            ContentSettingsPattern::FromString(value.GetString());
+        // Despite |url| being a GURL, the path is ignored when matching.
+        return pattern.IsValid() && pattern.Matches(url);
+      });
+}
+
+bool MultiCaptureDataService::IsMultiCaptureAllowedForAnyApp() const {
+  return multi_screen_capture_allowlist_on_login_.size();
+}
+
 void MultiCaptureDataService::AddObserver(Observer* observer) {
   observers_.AddObserver(observer);
 
@@ -153,7 +168,7 @@ void MultiCaptureDataService::LoadData() {
                        weak_ptr_factory_.GetWeakPtr(), *app_id));
 
     const bool can_skip_active_notification = base::Contains(
-        app_without_notification_bundle_ids_, allowlisted_app_url.host());
+        app_without_notification_bundle_ids_, allowlisted_app_url.GetHost());
     const std::string app_name = registrar.GetAppShortName(*app_id);
     if (can_skip_active_notification) {
       capture_apps_without_notification_[*app_id] = app_name;
@@ -193,7 +208,7 @@ bool MultiCaptureDataService::MaybeAddAppToCaptureAppLists(
                               return false;
                             }
                             const GURL url(value.GetString());
-                            return url.is_valid() && url.host() == bundle_id;
+                            return url.is_valid() && url.GetHost() == bundle_id;
                           });
   if (!capture_allowed_by_policy) {
     return false;

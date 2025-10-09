@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "base/feature_list.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "build/android_buildflags.h"
@@ -121,16 +120,6 @@
 
 namespace blink {
 namespace {
-
-// Serves as a kill switch.
-BASE_FEATURE(kBlinkEnableInnerTextAgent,
-             "BlinkEnableInnerTextAgent",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-// Serves as a kill switch.
-BASE_FEATURE(kBlinkEnableInnerHtmlAgent,
-             "BlinkEnableInnerHtmlAgent",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 #if BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_DESKTOP_ANDROID)
 
@@ -264,15 +253,11 @@ void ModulesInitializer::InitLocalFrame(LocalFrame& frame) const {
       BindRepeating(&PeerConnectionTracker::BindToFrame,
                     WrapCrossThreadWeakPersistent(&frame)));
 
-  if (base::FeatureList::IsEnabled(kBlinkEnableInnerTextAgent)) {
-    frame.GetInterfaceRegistry()->AddInterface(BindRepeating(
-        &InnerTextAgent::BindReceiver, WrapWeakPersistent(&frame)));
-  }
+  frame.GetInterfaceRegistry()->AddInterface(
+      BindRepeating(&InnerTextAgent::BindReceiver, WrapWeakPersistent(&frame)));
 
-  if (base::FeatureList::IsEnabled(kBlinkEnableInnerHtmlAgent)) {
-    frame.GetInterfaceRegistry()->AddInterface(BindRepeating(
-        &InnerHtmlAgent::BindReceiver, WrapWeakPersistent(&frame)));
-  }
+  frame.GetInterfaceRegistry()->AddInterface(
+      BindRepeating(&InnerHtmlAgent::BindReceiver, WrapWeakPersistent(&frame)));
 
   if (base::FeatureList::IsEnabled(features::kFrameMetadataObserver)) {
     frame.GetInterfaceRegistry()->AddInterface(
@@ -304,8 +289,8 @@ void ModulesInitializer::InitInspectorAgentSession(
     InspectorDOMAgent* dom_agent,
     InspectedFrames* inspected_frames,
     Page* page) const {
-  session->CreateAndAppend<InspectorIndexedDBAgent>(inspected_frames,
-                                                    session->V8Session());
+  session->CreateAndAppend<InspectorIndexedDBAgent>(
+      inspected_frames, /*worker_global_scope=*/nullptr, session->V8Session());
   session->CreateAndAppend<DeviceOrientationInspectorAgent>(inspected_frames);
   session->CreateAndAppend<InspectorDOMStorageAgent>(inspected_frames);
   session->CreateAndAppend<InspectorAccessibilityAgent>(inspected_frames,
@@ -313,6 +298,13 @@ void ModulesInitializer::InitInspectorAgentSession(
   session->CreateAndAppend<InspectorWebAudioAgent>(page);
   session->CreateAndAppend<InspectorCacheStorageAgent>(inspected_frames);
   session->CreateAndAppend<BucketFileSystemAgent>(inspected_frames);
+}
+
+void ModulesInitializer::InitWorkerInspectorAgentSession(
+    DevToolsSession* session,
+    WorkerGlobalScope* worker_global_scope) const {
+  session->CreateAndAppend<InspectorIndexedDBAgent>(
+      /*inspected_frames=*/nullptr, worker_global_scope, session->V8Session());
 }
 
 void ModulesInitializer::OnClearWindowObjectInMainWorld(

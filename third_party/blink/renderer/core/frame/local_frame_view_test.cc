@@ -142,7 +142,8 @@ TEST_F(LocalFrameViewTest, HideTooltipWhenScrollPositionChanges) {
       GetAnimationMockChromeClient(),
       MockUpdateTooltipUnderCursor(GetDocument().GetFrame(), String(), _));
   GetDocument().View()->LayoutViewport()->SetScrollOffset(
-      ScrollOffset(1, 1), mojom::blink::ScrollType::kUser);
+      ScrollOffset(1, 1), mojom::blink::ScrollType::kUser,
+      cc::ScrollSourceType::kNone);
 
   // Programmatic scrolling should not dismiss the tooltip, so
   // MockUpdateTooltipUnderCursor should not be called for this invocation.
@@ -151,7 +152,8 @@ TEST_F(LocalFrameViewTest, HideTooltipWhenScrollPositionChanges) {
       MockUpdateTooltipUnderCursor(GetDocument().GetFrame(), String(), _))
       .Times(0);
   GetDocument().View()->LayoutViewport()->SetScrollOffset(
-      ScrollOffset(2, 2), mojom::blink::ScrollType::kProgrammatic);
+      ScrollOffset(2, 2), mojom::blink::ScrollType::kProgrammatic,
+      cc::ScrollSourceType::kNone);
 }
 
 // NoOverflowInIncrementVisuallyNonEmptyPixelCount tests fail if the number of
@@ -690,7 +692,7 @@ TEST_F(LocalFrameViewTest, StartOfLifecycleTaskRunsOnFullLifecycle) {
   TestCallback callback;
 
   frame_view->EnqueueStartOfLifecycleTask(
-      WTF::BindOnce(&TestCallback::Increment, WTF::Unretained(&callback)));
+      BindOnce(&TestCallback::Increment, Unretained(&callback)));
   EXPECT_EQ(callback.calls, 0);
 
   frame_view->UpdateAllLifecyclePhasesExceptPaint(DocumentUpdateReason::kTest);

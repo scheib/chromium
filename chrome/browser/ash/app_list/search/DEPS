@@ -45,7 +45,6 @@ include_rules = [
   "+chrome/browser/ui/browser.h",
   "+chrome/browser/ui/browser_window.h",
   "+chrome/browser/ui/chrome_pages.h",
-  "+chrome/browser/ui/settings_window_manager_chromeos.h",
   "+chrome/browser/ui/webui/ash/settings/calculator",
   "+chrome/browser/ui/webui/ash/settings/pages/storage",
   "+chrome/browser/ui/webui/ash/settings/search",
@@ -62,7 +61,6 @@ include_rules = [
 
   # Dependencies outside of //chrome:
   "+ash/accelerators",
-  "+ash/assistant/util",
   "+ash/strings/grit",
   "+chromeos/ui/vector_icons",
   "+chromeos/ash/components/launcher_search",

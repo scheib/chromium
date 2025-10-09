@@ -8,10 +8,9 @@ import android.app.Activity;
 import android.os.Handler;
 import android.view.View;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.build.annotations.NullMarked;
@@ -49,6 +48,8 @@ import org.chromium.components.feature_engagement.Tracker;
 import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
+
+import java.util.function.Supplier;
 
 /**
  * A helper class for IPH shown on the toolbar. TODO(crbug.com/40585866): Remove feature-specific
@@ -95,7 +96,7 @@ public class ToolbarButtonInProductHelpController
         mMenuButtonAnchorView = menuButtonAnchorView;
         mIsInOverviewModeSupplier = isInOverviewModeSupplier;
         mUserEducationHelper = new UserEducationHelper(mActivity, profile, new Handler());
-        if (!BuildInfo.getInstance().isAutomotive) {
+        if (!DeviceInfo.isAutomotive()) {
             mScreenshotMonitor = new ScreenshotMonitorImpl(this, mActivity);
         }
         mLifecycleDispatcher = lifecycleDispatcher;
@@ -143,9 +144,9 @@ public class ToolbarButtonInProductHelpController
                                     return;
                                 }
 
-                                Tracker tracker =
-                                        TrackerFactory.getTrackerForProfile(
-                                                Profile.fromWebContents(tab.getWebContents()));
+                                Profile profile = Profile.fromWebContents(tab.getWebContents());
+                                assert profile != null;
+                                Tracker tracker = TrackerFactory.getTrackerForProfile(profile);
                                 tracker.notifyEvent(EventConstants.USER_HAS_SEEN_DINO);
                             }
                         },

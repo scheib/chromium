@@ -27,7 +27,6 @@ import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.build.BuildConfig;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
-import org.chromium.chrome.browser.password_manager.GmsUpdateLauncher;
 import org.chromium.chrome.browser.password_manager.ManagePasswordsReferrer;
 import org.chromium.chrome.browser.password_manager.PasswordCheckReferrer;
 import org.chromium.chrome.browser.password_manager.PasswordManagerHelper;
@@ -45,7 +44,6 @@ import org.chromium.chrome.browser.safety_check.SafetyCheckProperties.SafeBrowsi
 import org.chromium.chrome.browser.safety_check.SafetyCheckProperties.UpdatesState;
 import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 import org.chromium.components.browser_ui.settings.SettingsCustomTabLauncher;
-import org.chromium.components.prefs.PrefService;
 import org.chromium.components.sync.SyncService;
 import org.chromium.content_public.common.ContentUrlConstants;
 import org.chromium.ui.modaldialog.ModalDialogManager;
@@ -105,7 +103,7 @@ class SafetyCheckMediator {
      */
     private final SettingsCustomTabLauncher mSettingsCustomTabLauncher;
 
-    private final ObservableSupplier<ModalDialogManager> mModalDialogManagerSupplier;
+    private final ObservableSupplier<@Nullable ModalDialogManager> mModalDialogManagerSupplier;
 
     /** Callbacks and related objects to show the checking state for at least 1 second. */
     private Handler mHandler;
@@ -191,12 +189,11 @@ class SafetyCheckMediator {
             SafetyCheckUpdatesDelegate client,
             SafetyCheckBridge bridge,
             @Nullable SyncService syncService,
-            PrefService prefService,
             Handler handler,
             PasswordStoreBridge passwordStoreBridge,
             PasswordCheckControllerFactory passwordCheckControllerFactory,
             PasswordManagerHelper passwordManagerHelper,
-            ObservableSupplier<ModalDialogManager> modalDialogManagerSupplier,
+            ObservableSupplier<@Nullable ModalDialogManager> modalDialogManagerSupplier,
             SettingsCustomTabLauncher settingsCustomTabLauncher) {
         mSafetyCheckModel = safetyCheckModel;
         mPasswordsCheckAccountStorageModel = passwordsCheckAccountModel;
@@ -208,7 +205,7 @@ class SafetyCheckMediator {
         mPreferenceManager = ChromeSharedPreferences.getInstance();
         mPasswordCheckController =
                 passwordCheckControllerFactory.create(
-                        syncService, prefService, passwordStoreBridge, passwordManagerHelper);
+                        syncService, passwordStoreBridge, passwordManagerHelper);
         mPasswordManagerHelper = passwordManagerHelper;
         mModalDialogManagerSupplier = modalDialogManagerSupplier;
         mSettingsCustomTabLauncher = settingsCustomTabLauncher;
@@ -420,10 +417,10 @@ class SafetyCheckMediator {
         PropertyModel passwordsCheckModel = getPasswordsCheckModelForStoreType(passwordStorageType);
         if (passwordsCheckModel == null) return;
 
-        if (passwordSafetyCheckResult.getBreachedCount().isPresent()) {
+        if (passwordSafetyCheckResult.getBreachedCount() != null) {
             passwordsCheckModel.set(
                     PasswordsCheckPreferenceProperties.COMPROMISED_PASSWORDS_COUNT,
-                    passwordSafetyCheckResult.getBreachedCount().getAsInt());
+                    passwordSafetyCheckResult.getBreachedCount());
         }
 
         @PasswordsState int passwordsState;
@@ -444,8 +441,8 @@ class SafetyCheckMediator {
 
     private @PasswordsState int getPasswordStateWhenInitialLoad(
             PasswordCheckResult passwordCheckResult) {
-        if (passwordCheckResult.getBreachedCount().isPresent()
-                && passwordCheckResult.getBreachedCount().getAsInt() > 0) {
+        if (passwordCheckResult.getBreachedCount() != null
+                && passwordCheckResult.getBreachedCount() > 0) {
             return PasswordsState.COMPROMISED_EXIST;
         }
         @PasswordsState
@@ -512,12 +509,6 @@ class SafetyCheckMediator {
                                 mModalDialogManagerSupplier,
                                 account,
                                 mSettingsCustomTabLauncher);
-                        return true;
-                    };
-        } else if (state == PasswordsState.BACKEND_VERSION_NOT_SUPPORTED) {
-            listener =
-                    (p) -> {
-                        GmsUpdateLauncher.launch(p.getContext());
                         return true;
                     };
         }

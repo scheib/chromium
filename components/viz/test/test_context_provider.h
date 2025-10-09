@@ -44,8 +44,6 @@ class TestContextProvider
       std::string additional_extensions = std::string());
   static scoped_refptr<TestContextProvider> Create(
       std::unique_ptr<TestGLES2Interface> gl);
-  static scoped_refptr<TestContextProvider> Create(
-      scoped_refptr<gpu::TestSharedImageInterface> sii);
 
   // Creates a context backed by TestRasterInterface with no lock.
   static scoped_refptr<TestContextProvider> CreateRaster();
@@ -82,13 +80,14 @@ class TestContextProvider
   gpu::gles2::GLES2Interface* ContextGL() override;
   gpu::raster::RasterInterface* RasterInterface() override;
   gpu::ContextSupport* ContextSupport() override;
-  class GrDirectContext* GrContext() override;
   gpu::TestSharedImageInterface* SharedImageInterface() override;
   ContextCacheController* CacheController() override;
   base::Lock* GetLock() override;
   void AddObserver(ContextLostObserver* obs) override;
   void RemoveObserver(ContextLostObserver* obs) override;
   unsigned int GetGrGLTextureFormat(SharedImageFormat format) const override;
+
+  class GrDirectContext* GrContext();
 
   TestGLES2Interface* TestContextGL();
   TestRasterInterface* GetTestRasterInterface();

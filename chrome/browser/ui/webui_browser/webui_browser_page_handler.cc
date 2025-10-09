@@ -10,32 +10,143 @@
 #include "base/notimplemented.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/tabs/tab_strip_api/types/node_id.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
+#include "chrome/browser/ui/views/bubble_anchor_util_views.h"
+#include "chrome/browser/ui/views/page_info/page_info_bubble_specification.h"
+#include "chrome/browser/ui/views/page_info/page_info_bubble_view.h"
 #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
 #include "chrome/browser/ui/views/tab_search_bubble_host.h"
 #include "chrome/browser/ui/views/toolbar/app_menu.h"
+#include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
 #include "components/guest_contents/browser/guest_contents_handle.h"
+#include "components/omnibox/browser/location_bar_model.h"
+#include "components/omnibox/browser/vector_icons.h"
+#include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/base/interaction/element_tracker.h"
+#include "ui/gfx/vector_icon_types.h"
 #include "ui/views/controls/menu/menu_runner.h"
+#include "ui/views/interaction/element_tracker_views.h"
 
-namespace {
+class WebUIBrowserGuestHandler
+    : public content::DocumentService<webui_browser::mojom::GuestHandler> {
+ public:
+  WebUIBrowserGuestHandler(
+      content::RenderFrameHost& render_frame_host,
+      mojo::PendingReceiver<webui_browser::mojom::GuestHandler> receiver,
+      content::WebContents* web_contents,
+      WebUIBrowserWindow* window)
+      : content::DocumentService<webui_browser::mojom::GuestHandler>(
+            render_frame_host,
+            std::move(receiver)),
+        window_(window),
+        web_contents_(web_contents->GetWeakPtr()) {}
+  WebUIBrowserGuestHandler(const WebUIBrowserGuestHandler&) = delete;
+  WebUIBrowserGuestHandler& operator=(const WebUIBrowserGuestHandler&) = delete;
+  ~WebUIBrowserGuestHandler() override = default;
 
-content::NavigationController* GetGuestNavigationController(int guest_id) {
-  auto* guest_handle = guest_contents::GuestContentsHandle::FromID(guest_id);
-  if (!guest_handle) {
-    return nullptr;
+ private:
+  // webui_browser::mojom::GuestHandler
+  void Navigate(const GURL& src) override {
+    content::NavigationController::LoadURLParams load_url_params(src);
+    web_contents_->GetController().LoadURLWithParams(load_url_params);
   }
-  auto* web_contents = guest_handle->web_contents();
-  return web_contents ? &web_contents->GetController() : nullptr;
-}
 
-}  // namespace
+  void CanGoBack(CanGoBackCallback callback) override {
+    if (!web_contents_.get()) {
+      std::move(callback).Run(/*can_go_back=*/false);
+      return;
+    }
+    std::move(callback).Run(web_contents_->GetController().CanGoBack());
+  }
+
+  void GoBack() override {
+    if (web_contents_->GetController().CanGoBack()) {
+      web_contents_->GetController().GoBack();
+    }
+  }
+
+  void CanGoForward(CanGoForwardCallback callback) override {
+    if (!web_contents_.get()) {
+      std::move(callback).Run(/*can_go_forward=*/false);
+      return;
+    }
+    std::move(callback).Run(web_contents_->GetController().CanGoForward());
+  }
+
+  void GoForward() override {
+    if (web_contents_->GetController().CanGoForward()) {
+      web_contents_->GetController().GoForward();
+    }
+  }
+
+  void Reload() override {
+    web_contents_->GetController().Reload(content::ReloadType::NORMAL, true);
+  }
+
+  void StopLoading() override { web_contents_->Stop(); }
+
+  void OpenPageInfoMenu() override {
+    std::unique_ptr<PageInfoBubbleSpecification> specification =
+        PageInfoBubbleSpecification::Builder(
+            window_->GetLocationBar()->GetChipAnchor()->anchor,
+            window_->GetNativeWindow(), web_contents_.get(),
+            web_contents_->GetLastCommittedURL())
+            .Build();
+
+    views::BubbleDialogDelegateView* const bubble =
+        PageInfoBubbleView::CreatePageInfoBubble(std::move(specification));
+    bubble->GetWidget()->Show();
+  }
+
+  void GetSecurityIcon(GetSecurityIconCallback callback) override {
+    auto* icon = &window_->browser()
+                      ->GetFeatures()
+                      .location_bar_model()
+                      ->GetVectorIcon();
+    webui_browser::mojom::SecurityIcon icon_type;
+    if (icon == &omnibox::kHttpChromeRefreshIcon) {
+      icon_type = webui_browser::mojom::SecurityIcon::HttpChromeRefresh;
+    } else if (icon == &omnibox::kSecurePageInfoChromeRefreshIcon) {
+      icon_type =
+          webui_browser::mojom::SecurityIcon::SecurePageInfoChromeRefresh;
+    } else if (icon == &vector_icons::kNoEncryptionIcon) {
+      icon_type = webui_browser::mojom::SecurityIcon::NoEncryption;
+    } else if (icon == &vector_icons::kNotSecureWarningChromeRefreshIcon) {
+      icon_type =
+          webui_browser::mojom::SecurityIcon::NotSecureWarningChromeRefresh;
+    } else if (icon == &vector_icons::kBusinessChromeRefreshIcon) {
+      icon_type = webui_browser::mojom::SecurityIcon::BusinessChromeRefresh;
+    } else if (icon == &vector_icons::kDangerousChromeRefreshIcon) {
+      icon_type = webui_browser::mojom::SecurityIcon::DangerousChromeRefresh;
+    } else if (icon == &omnibox::kProductChromeRefreshIcon) {
+      icon_type = webui_browser::mojom::SecurityIcon::ProductChromeRefresh;
+    } else if (icon == &vector_icons::kExtensionChromeRefreshIcon) {
+      icon_type = webui_browser::mojom::SecurityIcon::ExtensionChromeRefresh;
+    } else if (icon == &omnibox::kOfflinePinIcon) {
+      icon_type = webui_browser::mojom::SecurityIcon::OfflinePin;
+    } else {
+      CHECK(false) << "Add new icon to webui_browsers's browser.mojom and "
+                   << "app.ts and icons.html.ts.";
+    }
+    std::move(callback).Run(icon_type);
+  }
+
+  raw_ptr<WebUIBrowserWindow> window_;
+
+  // The WebContents is destroyed before document
+  // services, causing a raw_ptr of WebContents dangling here, so use a weak
+  // ptr instead.
+  base::WeakPtr<content::WebContents> web_contents_;
+};
 
 WebUIBrowserPageHandler::~WebUIBrowserPageHandler() = default;
 
@@ -51,6 +162,7 @@ void WebUIBrowserPageHandler::CreateForRenderFrameHost(
 
 void WebUIBrowserPageHandler::GetGuestIdForTabId(
     const tabs_api::NodeId& tab_id,
+    mojo::PendingReceiver<webui_browser::mojom::GuestHandler> receiver,
     GetGuestIdForTabIdCallback callback) {
   tabs::TabInterface* tab = nullptr;
   std::optional<tabs::TabHandle> maybe_tab_handle = tab_id.ToTabHandle();
@@ -67,6 +179,11 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
     mojo::ReportBadMessage("Tab has no contents");
     return;
   }
+
+  // The RenderFrameHost takes ownership of this object via the DocumentService.
+  new WebUIBrowserGuestHandler(render_frame_host(), std::move(receiver),
+                               tab_contents, GetBrowserWindow());
+
   guest_contents::GuestContentsHandle::CreateForWebContents(tab_contents);
   auto* guest_handle =
       guest_contents::GuestContentsHandle::FromWebContents(tab_contents);
@@ -93,65 +210,29 @@ void WebUIBrowserPageHandler::ShowTabSearchBubble(
   NOTIMPLEMENTED();
 }
 
-void WebUIBrowserPageHandler::Navigate(int guest_id, const GURL& src) {
-  content::NavigationController::LoadURLParams load_url_params(src);
-  auto* navigation_controller = GetGuestNavigationController(guest_id);
-  if (navigation_controller) {
-    navigation_controller->LoadURLWithParams(load_url_params);
-  } else {
-    mojo::ReportBadMessage("Invalid guest id");
-  }
-}
-
-void WebUIBrowserPageHandler::CanGoBack(int guest_id,
-                                        CanGoBackCallback callback) {
-  auto* navigation_controller = GetGuestNavigationController(guest_id);
-  std::move(callback).Run(
-      navigation_controller ? navigation_controller->CanGoBack() : false);
-}
-
-void WebUIBrowserPageHandler::GoBack(int guest_id) {
-  auto* navigation_controller = GetGuestNavigationController(guest_id);
-  if (navigation_controller) {
-    if (navigation_controller->CanGoBack()) {
-      navigation_controller->GoBack();
-    }
-  } else {
-    mojo::ReportBadMessage("Invalid guest id");
-  }
-}
-
-void WebUIBrowserPageHandler::CanGoForward(int guest_id,
-                                           CanGoForwardCallback callback) {
-  auto* navigation_controller = GetGuestNavigationController(guest_id);
-  std::move(callback).Run(
-      navigation_controller ? navigation_controller->CanGoForward() : false);
-}
-
-void WebUIBrowserPageHandler::GoForward(int guest_id) {
-  auto* navigation_controller = GetGuestNavigationController(guest_id);
-  if (navigation_controller) {
-    if (navigation_controller->CanGoForward()) {
-      navigation_controller->GoForward();
-    }
-  } else {
-    mojo::ReportBadMessage("Invalid guest id");
-  }
-}
-
 void WebUIBrowserPageHandler::OpenAppMenu() {
   menu_.reset();
 
-  // TODO(webium): Find app menu button and call
-  // menu_->RunMenu(nullptr, app_menu_button.GetScreenBounds()).
-  NOTIMPLEMENTED();
+  // TODO(webium): use BrowserElements::From(browser)->GetElement(). This
+  // requires adding a BrowserElementsWebUI.
+  ui::TrackedElement* app_menu_button =
+      ui::ElementTracker::GetElementTracker()->GetFirstMatchingElement(
+          kToolbarAppMenuButtonElementId,
+          views::ElementTrackerViews::GetContextForWidget(
+              GetBrowserWindow()->widget()));
+  CHECK(app_menu_button) << "App menu button not found";
+  menu_model_ =
+      std::make_unique<AppMenuModel>(GetBrowserWindow(), GetBrowser());
+  menu_model_->Init();
+  menu_ = std::make_unique<AppMenu>(GetBrowser(), menu_model_.get(),
+                                    views::MenuRunner::NO_FLAGS);
+  menu_->RunMenu(GetBrowserWindow()->widget(),
+                 app_menu_button->GetScreenBounds());
 }
 
 void WebUIBrowserPageHandler::OpenProfileMenu() {
-  // TODO(webium): Find profile menu button and call
-  // GetBrowser()->GetFeatures().profile_menu_coordinator()->Show(
-  //    /*is_source_accelerator=*/false, avatar_button);
-  NOTIMPLEMENTED();
+  GetBrowser()->GetFeatures().profile_menu_coordinator()->Show(
+      /*is_source_accelerator=*/false);
 }
 
 void WebUIBrowserPageHandler::LaunchDevToolsForBrowser() {
@@ -162,8 +243,7 @@ void WebUIBrowserPageHandler::LaunchDevToolsForBrowser() {
 }
 
 void WebUIBrowserPageHandler::OnSidePanelClosed() {
-  // TODO(webium): Find side panel UI and call OnSidePanelClosed().
-  NOTIMPLEMENTED();
+  GetBrowserWindow()->GetWebUIBrowserSidePanelUI()->OnSidePanelClosed();
 }
 
 void WebUIBrowserPageHandler::Minimize() {

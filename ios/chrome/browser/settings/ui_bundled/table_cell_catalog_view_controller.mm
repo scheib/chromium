@@ -19,7 +19,6 @@
 #import "ios/chrome/browser/settings/ui_bundled/elements/enterprise_info_popover_view_controller.h"
 #import "ios/chrome/browser/settings/ui_bundled/password/passwords_table_view_constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
-#import "ios/chrome/browser/shared/ui/symbols/chrome_icon.h"
 #import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_icon_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
@@ -30,7 +29,6 @@
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_multi_detail_text_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_multi_line_text_edit_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
-#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_tabs_search_suggested_history_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_button_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_edit_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
@@ -171,15 +169,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
   TableViewImageItem* textImageItem =
       [[TableViewImageItem alloc] initWithType:ItemTypeTextAccessoryImage];
   textImageItem.title = @"Image Item with History Image";
+  textImageItem.detailText = @"and with a very very very long subtitle.";
   textImageItem.image =
       DefaultSymbolWithPointSize(kHistorySymbol, kSymbolActionPointSize);
   [model addItem:textImageItem toSectionWithIdentifier:SectionIdentifierText];
-
-  TableViewTabsSearchSuggestedHistoryItem* searchHistorySuggestedItem =
-      [[TableViewTabsSearchSuggestedHistoryItem alloc]
-          initWithType:ItemTypeSearchHistorySuggestedItem];
-  [model addItem:searchHistorySuggestedItem
-      toSectionWithIdentifier:SectionIdentifierText];
 
   TableViewImageItem* textImageItem2 =
       [[TableViewImageItem alloc] initWithType:ItemTypeTextAccessoryImage];
@@ -377,6 +370,48 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   tableViewMultiDetailTextItem = [[TableViewMultiDetailTextItem alloc]
       initWithType:ItemTypeMultiDetailText];
+  tableViewMultiDetailTextItem.text =
+      @"Title label is very very very very very very very long";
+  tableViewMultiDetailTextItem.leadingDetailText = @"Leading Detail Text";
+  tableViewMultiDetailTextItem.trailingDetailText =
+      @"Right label is very very very very very very very long";
+  tableViewMultiDetailTextItem.accessoryType =
+      UITableViewCellAccessoryDisclosureIndicator;
+  [model addItem:tableViewMultiDetailTextItem
+      toSectionWithIdentifier:SectionIdentifierText];
+
+  tableViewMultiDetailTextItem = [[TableViewMultiDetailTextItem alloc]
+      initWithType:ItemTypeMultiDetailText];
+  tableViewMultiDetailTextItem.text = @"L";
+  tableViewMultiDetailTextItem.leadingDetailText = @"Leading Detail Text";
+  tableViewMultiDetailTextItem.trailingDetailText =
+      @"Right label is very very very very very very very long";
+  tableViewMultiDetailTextItem.accessoryType =
+      UITableViewCellAccessoryDisclosureIndicator;
+  [model addItem:tableViewMultiDetailTextItem
+      toSectionWithIdentifier:SectionIdentifierText];
+
+  tableViewMultiDetailTextItem = [[TableViewMultiDetailTextItem alloc]
+      initWithType:ItemTypeMultiDetailText];
+  tableViewMultiDetailTextItem.text = @"L";
+  tableViewMultiDetailTextItem.trailingDetailText =
+      @"Right label is very very very very very very very long";
+  [model addItem:tableViewMultiDetailTextItem
+      toSectionWithIdentifier:SectionIdentifierText];
+
+  tableViewMultiDetailTextItem = [[TableViewMultiDetailTextItem alloc]
+      initWithType:ItemTypeMultiDetailText];
+  tableViewMultiDetailTextItem.text =
+      @"Title label is very very very very very very very long ";
+  tableViewMultiDetailTextItem.leadingDetailText = @"Leading Detail Text";
+  tableViewMultiDetailTextItem.trailingDetailText = @"R";
+  tableViewMultiDetailTextItem.accessoryType =
+      UITableViewCellAccessoryDisclosureIndicator;
+  [model addItem:tableViewMultiDetailTextItem
+      toSectionWithIdentifier:SectionIdentifierText];
+
+  tableViewMultiDetailTextItem = [[TableViewMultiDetailTextItem alloc]
+      initWithType:ItemTypeMultiDetailText];
   tableViewMultiDetailTextItem.text = @"Main Text";
   tableViewMultiDetailTextItem.leadingDetailText = @"Leading Detail Text";
   tableViewMultiDetailTextItem.trailingDetailText = @"Trailing Detail Text";
@@ -464,8 +499,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
   imageDetailTextItem.text = @"This is an error description about sync";
   imageDetailTextItem.detailText =
       @"This is more detail about the sync error description";
-  imageDetailTextItem.image = [[ChromeIcon infoIcon]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  imageDetailTextItem.image = DefaultSymbolTemplateWithPointSize(
+      kInfoCircleSymbol, kSymbolActionPointSize);
   [model addItem:imageDetailTextItem
       toSectionWithIdentifier:SectionIdentifierSettings];
 
@@ -499,8 +534,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
   checkFinishedWithLeadingImage.detailText =
       @"This is very long description of check item. Another line of "
       @"description.";
-  checkFinishedWithLeadingImage.leadingIcon = [[ChromeIcon infoIcon]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  checkFinishedWithLeadingImage.leadingIcon =
+      DefaultSymbolTemplateWithPointSize(kInfoCircleSymbol,
+                                         kSymbolActionPointSize);
   checkFinishedWithLeadingImage.enabled = YES;
   checkFinishedWithLeadingImage.indicatorHidden = YES;
   checkFinishedWithLeadingImage.trailingImage =
@@ -524,8 +560,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
   checkDisabledWithLeadingImage.detailText =
       @"This is very long description of check item. Another line of "
       @"description.";
-  checkDisabledWithLeadingImage.leadingIcon = [[ChromeIcon infoIcon]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  checkDisabledWithLeadingImage.leadingIcon =
+      DefaultSymbolTemplateWithPointSize(kInfoCircleSymbol,
+                                         kSymbolActionPointSize);
   checkDisabledWithLeadingImage.enabled = NO;
   [model addItem:checkDisabledWithLeadingImage
       toSectionWithIdentifier:SectionIdentifierSettings];
@@ -786,11 +823,6 @@ typedef NS_ENUM(NSInteger, ItemType) {
     [checkCell.infoButton addTarget:self
                              action:@selector(didTapCheckInfoButton:)
                    forControlEvents:UIControlEventTouchUpInside];
-  } else if (itemType == ItemTypeSearchHistorySuggestedItem) {
-    TableViewTabsSearchSuggestedHistoryCell* searchHistoryCell =
-        base::apple::ObjCCastStrict<TableViewTabsSearchSuggestedHistoryCell>(
-            cell);
-    [searchHistoryCell updateHistoryResultsCount:7];
   } else if (itemType == ItemTypeURLWithActivityIndicator) {
     TableViewURLCell* URLCell =
         base::apple::ObjCCastStrict<TableViewURLCell>(cell);

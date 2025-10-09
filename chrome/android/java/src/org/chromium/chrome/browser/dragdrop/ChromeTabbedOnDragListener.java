@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.dragdrop;
 
+import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.content.ClipDescription;
@@ -12,10 +13,10 @@ import android.view.View;
 import android.view.View.OnDragListener;
 
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.Contract;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.multiwindow.MultiInstanceManager;
@@ -35,6 +36,7 @@ import org.chromium.ui.dragdrop.DragDropMetricUtils.DragDropType;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Define the default behavior when {@link ChromeTabbedActivity} receive drag events that's not
@@ -48,7 +50,7 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
     private final WindowAndroid mWindowAndroid;
     private final Supplier<LayoutStateProvider> mLayoutStateProviderSupplier;
     private final @Nullable DesktopWindowStateManager mDesktopWindowStateManager;
-    private @Nullable NativePage mNtpToEnableFakeBox;
+    private @Nullable Tab mTabToEnableFakeBox;
 
     /**
      * Drag and Drop listener defines the default behavior {@link ChromeTabbedActivity} receive drag
@@ -86,7 +88,9 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
                 }
                 Tab selectedTab = mTabModelSelector.getCurrentTab();
                 assumeNonNull(selectedTab);
-                mNtpToEnableFakeBox = selectedTab.getNativePage();
+                if (selectedTab.getNativePage() instanceof NewTabPage) {
+                    mTabToEnableFakeBox = selectedTab;
+                }
                 return true;
             case DragEvent.ACTION_DROP:
                 // This is to prevent tab switcher from receiving drops. We might support dropping
@@ -100,9 +104,11 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
                         || mLayoutStateProviderSupplier
                                 .get()
                                 .isLayoutVisible(LayoutType.TAB_SWITCHER)) {
-                    // TODO(crbug.com/404074503): Metric for multi-tab drop.
                     DragDropMetricUtils.recordDragDropResult(
-                            DragDropResult.IGNORED_TAB_SWITCHER, isInDesktopWindow, isTabGroupDrop);
+                            DragDropResult.IGNORED_TAB_SWITCHER,
+                            isInDesktopWindow,
+                            isTabGroupDrop,
+                            isMultiTabDrop);
                     return false;
                 }
                 if (clipDescription == null) return false;
@@ -116,13 +122,11 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
                 }
             case DragEvent.ACTION_DRAG_ENDED:
                 // Re-enable the NTP we disabled at DRAG_STARTED if any.
-                final NewTabPage originallyDisabled =
-                        (mNtpToEnableFakeBox != null
-                                        && mNtpToEnableFakeBox instanceof NewTabPage ntp)
-                                ? ntp
-                                : null;
-                if (originallyDisabled != null) {
-                    originallyDisabled.enableSearchBoxEditText(true);
+                if (mTabToEnableFakeBox != null) {
+                    NativePage nativePage = mTabToEnableFakeBox.getNativePage();
+                    if (nativePage instanceof NewTabPage ntp) {
+                        ntp.enableSearchBoxEditText(true);
+                    }
                 }
 
                 // If the selected tab changed to a different NTP during the drag, re-enable that
@@ -134,7 +138,7 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
                                 ? ntp
                                 : null;
 
-                if (currentNtp != null && currentNtp != originallyDisabled) {
+                if (currentNtp != null) {
                     currentNtp.enableSearchBoxEditText(true);
                 }
         }
@@ -143,8 +147,22 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
 
     private boolean handleTabDrop(DragEvent dragEvent, boolean isInDesktopWindow) {
         DragDropGlobalState globalState = DragDropGlobalState.getState(dragEvent);
+        assertNonNull(globalState);
         Tab draggedTab = ChromeDragDropUtils.getTabFromGlobalState(globalState);
-        if (!validDragEvent(globalState, draggedTab, isInDesktopWindow, /* isTabGroup= */ false)) {
+        if (!validDragEvent(
+                globalState,
+                draggedTab,
+                isInDesktopWindow,
+                /* isTabGroup= */ false,
+                /* isMultiTab= */ false)) {
+            return false;
+        }
+
+        // Reject cross-model drops if incognito is opened as a new window.
+        boolean draggedTabIncognito = draggedTab.isIncognitoBranded();
+        if (IncognitoUtils.shouldOpenIncognitoAsWindow()
+                && !ChromeDragDropUtils.doesBelongToCurrentModel(
+                        draggedTabIncognito, mTabModelSelector)) {
             return false;
         }
 
@@ -157,9 +175,7 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
         // destination tab models match.
         final int destIndex =
                 ChromeDragDropUtils.handleDropInDifferentModel(
-                        mWindowAndroid.getActivity().get(),
-                        draggedTab.isIncognitoBranded(),
-                        mTabModelSelector);
+                        mWindowAndroid.getActivity().get(), draggedTabIncognito, mTabModelSelector);
 
         // Reparent the dragged tab to the destination window.
         mMultiInstanceManager.moveTabsToWindow(
@@ -167,14 +183,31 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
                 Collections.singletonList(draggedTab),
                 destIndex);
         DragDropMetricUtils.recordDragDropType(
-                DragDropType.TAB_STRIP_TO_CONTENT, isInDesktopWindow, /* isTabGroup= */ false);
+                DragDropType.TAB_STRIP_TO_CONTENT,
+                isInDesktopWindow,
+                /* isTabGroup= */ false,
+                /* isMultiTab= */ false);
         return true;
     }
 
     private boolean handleMultiTabDrop(DragEvent dragEvent, boolean isInDesktopWindow) {
         DragDropGlobalState globalState = DragDropGlobalState.getState(dragEvent);
+        assertNonNull(globalState);
         List<Tab> draggedTabs = ChromeDragDropUtils.getTabsFromGlobalState(globalState);
-        if (!validDragEvent(globalState, draggedTabs, isInDesktopWindow, /* isTabGroup= */ false)) {
+        if (!validDragEvent(
+                globalState,
+                draggedTabs,
+                isInDesktopWindow,
+                /* isTabGroup= */ false,
+                /* isMultiTab= */ true)) {
+            return false;
+        }
+
+        // Reject cross-model drops if incognito is opened as a new window.
+        boolean draggedTabsIncognito = draggedTabs.get(0).isIncognitoBranded();
+        if (IncognitoUtils.shouldOpenIncognitoAsWindow()
+                && !ChromeDragDropUtils.doesBelongToCurrentModel(
+                        draggedTabsIncognito, mTabModelSelector)) {
             return false;
         }
 
@@ -183,24 +216,40 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
         final int destIndex =
                 ChromeDragDropUtils.handleDropInDifferentModel(
                         mWindowAndroid.getActivity().get(),
-                        draggedTabs.get(0).isIncognitoBranded(),
+                        draggedTabsIncognito,
                         mTabModelSelector);
 
         // Reparent the dragged tabs to the destination window.
         mMultiInstanceManager.moveTabsToWindow(
                 mWindowAndroid.getActivity().get(), draggedTabs, destIndex);
         DragDropMetricUtils.recordDragDropType(
-                DragDropType.TAB_STRIP_TO_CONTENT, isInDesktopWindow, /* isTabGroup= */ false);
+                DragDropType.TAB_STRIP_TO_CONTENT,
+                isInDesktopWindow,
+                /* isTabGroup= */ false,
+                /* isMultiTab= */ true);
         return true;
     }
 
     private boolean handleGroupDrop(DragEvent dragEvent, boolean isInDesktopWindow) {
         DragDropGlobalState globalState = DragDropGlobalState.getState(dragEvent);
+        assertNonNull(globalState);
         TabGroupMetadata tabGroupMetadata =
                 ChromeDragDropUtils.getTabGroupMetadataFromGlobalState(globalState);
 
         if (!validDragEvent(
-                globalState, tabGroupMetadata, isInDesktopWindow, /* isTabGroup= */ true)) {
+                globalState,
+                tabGroupMetadata,
+                isInDesktopWindow,
+                /* isTabGroup= */ true,
+                /* isMultiTab= */ false)) {
+            return false;
+        }
+
+        // Reject cross-model drops if incognito is opened as a new window.
+        boolean draggedTabGroupIncognito = tabGroupMetadata.isIncognito;
+        if (IncognitoUtils.shouldOpenIncognitoAsWindow()
+                && !ChromeDragDropUtils.doesBelongToCurrentModel(
+                        draggedTabGroupIncognito, mTabModelSelector)) {
             return false;
         }
 
@@ -209,35 +258,41 @@ public class ChromeTabbedOnDragListener implements OnDragListener {
         final int destIndex =
                 ChromeDragDropUtils.handleDropInDifferentModel(
                         mWindowAndroid.getActivity().get(),
-                        tabGroupMetadata.isIncognito,
+                        draggedTabGroupIncognito,
                         mTabModelSelector);
 
         // Reparent the dragged tab group to destination window.
         mMultiInstanceManager.moveTabGroupToWindow(
                 mWindowAndroid.getActivity().get(), tabGroupMetadata, destIndex);
         DragDropMetricUtils.recordDragDropType(
-                DragDropType.TAB_STRIP_TO_CONTENT, isInDesktopWindow, /* isTabGroup= */ true);
+                DragDropType.TAB_STRIP_TO_CONTENT,
+                isInDesktopWindow,
+                /* isTabGroup= */ true,
+                /* isMultiTab= */ false);
         return true;
     }
 
-    @Contract("null, _, _, _ -> false; _, null, _, _ -> false")
+    @Contract("null, _, _, _, _ -> false; _, null, _, _, _ -> false")
     private boolean validDragEvent(
             @Nullable DragDropGlobalState globalState,
             @Nullable Object draggedData,
             boolean isInDesktopWindow,
-            boolean isTabGroup) {
+            boolean isTabGroup,
+            boolean isMultiTab) {
         if (globalState == null || draggedData == null) {
             DragDropMetricUtils.recordDragDropResult(
                     DragDropResult.ERROR_CONTENT_NOT_FOUND,
                     isInDesktopWindow,
-                    /* isTabGroup= */ isTabGroup);
+                    /* isTabGroup= */ isTabGroup,
+                    /* isMultiTab= */ isMultiTab);
             return false;
         }
         if (globalState.isDragSourceInstance(mMultiInstanceManager.getCurrentInstanceId())) {
             DragDropMetricUtils.recordDragDropResult(
                     DragDropResult.IGNORED_SAME_INSTANCE,
                     isInDesktopWindow,
-                    /* isTabGroup= */ isTabGroup);
+                    /* isTabGroup= */ isTabGroup,
+                    /* isMultiTab= */ isMultiTab);
             return false;
         }
         return true;

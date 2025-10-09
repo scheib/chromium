@@ -180,6 +180,10 @@
 #include "chrome/browser/webapps/webapps_client_android.h"
 #include "chrome/browser/webauthn/android/chrome_webauthn_client_android.h"
 #include "components/webauthn/android/webauthn_client_android.h"
+
+namespace chrome_browser_prefs {
+void OnLocalStatePrefsLoaded();
+}  // namespace chrome_browser_prefs
 #else
 #include "chrome/browser/devtools/devtools_auto_opener.h"
 #include "chrome/browser/error_reporting/chrome_js_error_report_processor.h"
@@ -255,10 +259,17 @@
 
 #if BUILDFLAG(IS_LINUX)
 #include "chrome/browser/browser_features.h"
-#include "components/os_crypt/async/browser/fallback_linux_key_provider.h"
 #include "components/os_crypt/async/browser/freedesktop_secret_key_provider.h"
 #include "components/os_crypt/async/browser/secret_portal_key_provider.h"
 #include "components/password_manager/core/browser/password_manager_switches.h"
+#endif
+
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
+#include "components/os_crypt/async/browser/posix_key_provider.h"
+#endif
+
+#if BUILDFLAG(IS_MAC)
+#include "components/os_crypt/async/browser/keychain_key_provider.h"
 #endif
 
 #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
@@ -407,6 +418,10 @@ void BrowserProcessImpl::Init() {
 
   MigrateObsoleteLocalStatePrefs(local_state());
   pref_change_registrar_.Init(local_state());
+
+#if BUILDFLAG(IS_ANDROID)
+  chrome_browser_prefs::OnLocalStatePrefsLoaded();
+#endif
 
   // Initialize the notification for the default browser setting policy.
   pref_change_registrar_.Add(
@@ -1335,6 +1350,88 @@ void BrowserProcessImpl::PreMainMessageLoopRun() {
   // ensure the persistent storage of current max SessionId.
   sessions::SessionIdGenerator::GetInstance()->Init(local_state_.get());
 
+  // OSCryptAsync provider configuration. This must run before
+  // `browser_policy_connector_` initialization since implementations like
+  // BrowserPolicyConnectorAsh require an OSCryptAsync. If empty, this delegates
+  // all encryption operations to OSCrypt.
+  std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>>
+      providers;
+
+  if (additional_provider_for_test_) {
+    // Explicitly move the KeyProvider but leave the std::optional holding the
+    // pair, this ensures it can only be set once in testing.
+    providers.emplace_back(
+        std::get<0>(*additional_provider_for_test_),
+        std::move(std::get<1>(*additional_provider_for_test_)));
+  }
+
+#if BUILDFLAG(IS_WIN)
+  // The DPAPI key provider requires OSCrypt::Init to have already been called
+  // to initialize the key storage. This happens in
+  // ChromeBrowserMainPartsWin::PreCreateMainMessageLoop.
+  providers.emplace_back(std::make_pair(
+      /*precedence=*/10u,
+      std::make_unique<os_crypt_async::DPAPIKeyProvider>(local_state())));
+
+  providers.emplace_back(std::make_pair(
+      // Note: 15 is chosen to be higher than the 10 precedence above for
+      // DPAPI. This ensures that when the the provider is enabled for
+      // encryption, the App-Bound encryption key is used and not the DPAPI
+      // one.
+      /*precedence=*/15u,
+      std::make_unique<os_crypt_async::AppBoundEncryptionProviderWin>(
+          local_state())));
+#endif  // BUILDFLAG(IS_WIN)
+
+#if BUILDFLAG(IS_LINUX)
+  base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
+  if (cmd_line->GetSwitchValueASCII(password_manager::kPasswordStore) !=
+      "basic") {
+    if (base::FeatureList::IsEnabled(features::kDbusSecretPortal)) {
+      providers.emplace_back(
+          /*precedence=*/10u,
+          std::make_unique<os_crypt_async::SecretPortalKeyProvider>(
+              local_state(),
+              base::FeatureList::IsEnabled(
+                  features::kSecretPortalKeyProviderUseForEncryption)));
+    }
+    const auto password_store =
+        cmd_line->GetSwitchValueASCII(password_manager::kPasswordStore);
+    // Use a higher priority than the SecretPortalKeyProvider.
+    providers.emplace_back(
+        /*precedence=*/15u,
+        std::make_unique<os_crypt_async::FreedesktopSecretKeyProvider>(
+            password_store, l10n_util::GetStringUTF8(IDS_PRODUCT_NAME),
+            nullptr));
+  }
+#endif  // BUILDFLAG(IS_LINUX)
+
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
+  // On Linux, this is used if the other key providers are disabled or not
+  // available. On other POSIX systems, this is the only key provider.
+  providers.emplace_back(
+      /*precedence=*/5u, std::make_unique<os_crypt_async::PosixKeyProvider>());
+#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
+
+#if BUILDFLAG(IS_MAC)
+  if (base::FeatureList::IsEnabled(features::kUseKeychainKeyProvider)) {
+    providers.emplace_back(std::make_pair(
+        /*precedence=*/10u,
+        std::make_unique<os_crypt_async::KeychainKeyProvider>()));
+  }
+#endif  // BUILDFLAG(IS_MAC)
+
+  os_crypt_async_ =
+      std::make_unique<os_crypt_async::OSCryptAsync>(std::move(providers));
+
+  // Trigger async initialization of OSCrypt key providers.
+  os_crypt_async_->GetInstance(base::BindOnce(
+      [](base::TimeTicks start_time, os_crypt_async::Encryptor encryptor) {
+        base::UmaHistogramTimes("OSCrypt.AsyncInitialization.Time",
+                                base::TimeTicks::Now() - start_time);
+      },
+      base::TimeTicks::Now()));
+
   // browser_policy_connector() is created very early because local_state()
   // needs policy to be initialized with the managed preference values.
   // However, policy fetches from the network and loading of disk caches
@@ -1345,8 +1442,9 @@ void BrowserProcessImpl::PreMainMessageLoopRun() {
       local_state(),
       system_network_context_manager()->GetSharedURLLoaderFactory());
 
-  if (local_state_->IsManagedPreference(prefs::kDefaultBrowserSettingEnabled))
+  if (local_state_->IsManagedPreference(prefs::kDefaultBrowserSettingEnabled)) {
     ApplyDefaultBrowserPolicy();
+  }
 
   ApplyMetricsReportingPolicy();
 
@@ -1403,81 +1501,6 @@ void BrowserProcessImpl::PreMainMessageLoopRun() {
   } else {
     breadcrumbs::DeleteBreadcrumbFiles(user_data_dir);
   }
-
-  // OSCryptAsync provider configuration. If empty, this delegates all
-  // encryption operations to OSCrypt.
-  std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>>
-      providers;
-
-  if (additional_provider_for_test_) {
-    // Explicitly move the KeyProvider but leave the std::optional holding the
-    // pair, this ensures it can only be set once in testing.
-    providers.push_back(
-        std::make_pair(std::get<0>(*additional_provider_for_test_),
-                       std::move(std::get<1>(*additional_provider_for_test_))));
-  }
-
-#if BUILDFLAG(IS_WIN)
-  // The DPAPI key provider requires OSCrypt::Init to have already been called
-  // to initialize the key storage. This happens in
-  // ChromeBrowserMainPartsWin::PreCreateMainMessageLoop.
-  providers.emplace_back(std::make_pair(
-      /*precedence=*/10u,
-      std::make_unique<os_crypt_async::DPAPIKeyProvider>(local_state())));
-
-  providers.emplace_back(std::make_pair(
-      // Note: 15 is chosen to be higher than the 10 precedence above for
-      // DPAPI. This ensures that when the the provider is enabled for
-      // encryption, the App-Bound encryption key is used and not the DPAPI
-      // one.
-      /*precedence=*/15u,
-      std::make_unique<os_crypt_async::AppBoundEncryptionProviderWin>(
-          local_state())));
-#endif  // BUILDFLAG(IS_WIN)
-
-#if BUILDFLAG(IS_LINUX)
-  base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
-  if (cmd_line->GetSwitchValueASCII(password_manager::kPasswordStore) !=
-      "basic") {
-    if (base::FeatureList::IsEnabled(features::kDbusSecretPortal)) {
-      providers.emplace_back(
-          /*precedence=*/10u,
-          std::make_unique<os_crypt_async::SecretPortalKeyProvider>(
-              local_state(),
-              base::FeatureList::IsEnabled(
-                  features::kSecretPortalKeyProviderUseForEncryption)));
-    }
-    if (base::FeatureList::IsEnabled(
-            features::kUseFreedesktopSecretKeyProvider)) {
-      const auto password_store =
-          cmd_line->GetSwitchValueASCII(password_manager::kPasswordStore);
-      // Use a higher priority than the SecretPortalKeyProvider.
-      providers.emplace_back(
-          /*precedence=*/15u,
-          std::make_unique<os_crypt_async::FreedesktopSecretKeyProvider>(
-              password_store,
-              base::FeatureList::IsEnabled(
-                  features::kUseFreedesktopSecretKeyProviderForEncryption),
-              l10n_util::GetStringUTF8(IDS_PRODUCT_NAME), nullptr));
-      providers.emplace_back(
-          /*precedence=*/5u,
-          std::make_unique<os_crypt_async::FallbackLinuxKeyProvider>(
-              base::FeatureList::IsEnabled(
-                  features::kUseFreedesktopSecretKeyProviderForEncryption)));
-    }
-  }
-#endif  // BUILDFLAG(IS_LINUX)
-
-  os_crypt_async_ =
-      std::make_unique<os_crypt_async::OSCryptAsync>(std::move(providers));
-
-  // Trigger async initialization of OSCrypt key providers.
-  os_crypt_async_->GetInstance(base::BindOnce(
-      [](base::TimeTicks start_time, os_crypt_async::Encryptor encryptor) {
-        base::UmaHistogramTimes("OSCrypt.AsyncInitialization.Time",
-                                base::TimeTicks::Now() - start_time);
-      },
-      base::TimeTicks::Now()));
 }
 
 void BrowserProcessImpl::CreateIconManager() {
@@ -1615,7 +1638,7 @@ void BrowserProcessImpl::CreateGCMDriver() {
       content::GetNetworkConnectionTracker(), chrome::GetChannel(),
       gcm::GetProductCategoryForSubtypes(local_state()),
       content::GetUIThreadTaskRunner({}), content::GetIOThreadTaskRunner({}),
-      blocking_task_runner);
+      blocking_task_runner, os_crypt_async());
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 

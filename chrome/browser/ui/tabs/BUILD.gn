@@ -45,6 +45,7 @@ source_set("tab_list_interface") {
   ]
 
   deps = [
+    "//build:android_buildflags",
     "//components/tab_groups",
     "//components/tabs:public",
     "//url",
@@ -70,7 +71,7 @@ if (!is_android) {
 
     public_deps = [
       "//base",
-      "//ui/base",
+      "//ui/base/interaction",
       "//ui/menus",
     ]
   }
@@ -106,6 +107,7 @@ if (!is_android) {
       "//chrome/app/vector_icons",
       "//chrome/browser/commerce",
       "//chrome/browser/profiles:profile",
+      "//chrome/browser/send_tab_to_self",
       "//chrome/browser/ui:ui_features",
       "//chrome/browser/ui/tabs/organization",
       "//chrome/browser/ui/web_applications",
@@ -350,9 +352,17 @@ if (!is_android) {
       "//ui/base/unowned_user_data",
     ]
     if (enable_glic) {
-      sources += [ "glic_actor_task_icon_controller.h" ]
+      sources += [
+        "glic_actor_task_icon_controller.h",
+        "glic_actor_task_icon_manager.h",
+        "glic_actor_task_icon_manager_factory.h",
+      ]
 
-      public_deps += [ "//chrome/browser/glic" ]
+      public_deps += [
+        "//chrome/browser/actor:types",
+        "//chrome/browser/glic",
+        "//chrome/browser/glic:mojo_bindings",
+      ]
     }
   }
 
@@ -373,7 +383,11 @@ if (!is_android) {
       "//content/public/browser",
     ]
     if (enable_glic) {
-      sources += [ "glic_actor_task_icon_controller.cc" ]
+      sources += [
+        "glic_actor_task_icon_controller.cc",
+        "glic_actor_task_icon_manager.cc",
+        "glic_actor_task_icon_manager_factory.cc",
+      ]
 
       deps += [ "//chrome/browser/glic" ]
     }
@@ -388,10 +402,11 @@ if (!is_android) {
       "pinned_tab_codec.h",
       "pinned_tab_service.h",
       "pinned_tab_service_factory.h",
+      "split_tab_highlight_controller.h",
+      "split_tab_highlight_delegate.h",
       "split_tab_metrics.h",
-      "split_tab_scrim_controller.h",
-      "split_tab_scrim_delegate.h",
       "split_tab_util.h",
+      "split_view_iph_controller.h",
       "tab_creation_metrics_controller.h",
       "tab_metrics_provider.h",
       "tab_renderer_data.h",
@@ -426,6 +441,7 @@ if (!is_android) {
       "//content/public/browser",
       "//skia",
       "//ui/base",
+      "//ui/base/unowned_user_data",
       "//ui/color:color_headers",
       "//ui/gfx",
       "//ui/gfx:color_utils",
@@ -447,10 +463,11 @@ if (!is_android) {
       "pinned_tab_service.cc",
       "pinned_tab_service_factory.cc",
       "recent_tabs_sub_menu_model.cc",
+      "split_tab_highlight_controller.cc",
+      "split_tab_highlight_delegate.cc",
       "split_tab_metrics.cc",
-      "split_tab_scrim_controller.cc",
-      "split_tab_scrim_delegate.cc",
       "split_tab_util.cc",
+      "split_view_iph_controller.cc",
       "tab_creation_metrics_controller.cc",
       "tab_dialog_manager.cc",
       "tab_features.cc",
@@ -498,6 +515,8 @@ if (!is_android) {
       "//chrome/browser/ui/autofill",
       "//chrome/browser/ui/browser_window",
       "//chrome/browser/ui/commerce",
+      "//chrome/browser/ui/cookie_controls",
+      "//chrome/browser/ui/interaction",
       "//chrome/browser/ui/lens",
       "//chrome/browser/ui/performance_controls",
       "//chrome/browser/ui/tabs/alert:tab_alert",
@@ -505,7 +524,9 @@ if (!is_android) {
       "//chrome/browser/ui/thumbnails",
       "//chrome/browser/ui/toolbar",
       "//chrome/browser/ui/toolbar/pinned_toolbar",
+      "//chrome/browser/ui/user_education",
       "//chrome/browser/ui/views/intent_picker:intent_picker_page_action",
+      "//chrome/browser/ui/views/location_bar",
       "//chrome/browser/ui/views/page_action",
       "//chrome/browser/ui/views/page_info",
       "//chrome/browser/ui/views/side_panel",
@@ -523,16 +544,19 @@ if (!is_android) {
       "//components/fingerprinting_protection_filter/interventions/common:features",
       "//components/image_fetcher/core",
       "//components/ip_protection/common:ip_protection_status",
+      "//components/lens",
       "//components/metrics:content",
       "//components/passage_embeddings",
       "//components/performance_manager",
       "//components/permissions",
       "//components/pref_registry",
+      "//components/privacy_sandbox:features",
       "//components/security_interstitials/content:security_interstitial_page",
       "//components/sessions",
       "//components/sync_sessions",
       "//components/tab_groups",
       "//components/tabs",
+      "//components/wallet/core/common:features",
       "//net",
       "//ui/base/unowned_user_data",
       "//ui/webui",
@@ -548,6 +572,14 @@ if (!is_android) {
 
     if (!is_android) {
       deps += [ "//chrome/browser/ui/views/zoom" ]
+    }
+
+    if (is_win || is_mac || is_linux || is_chromeos) {
+      deps += [ "//chrome/browser/wallet" ]
+    }
+
+    if (is_chromeos) {
+      deps += [ "//chrome/browser/apps/app_service" ]
     }
   }
 
@@ -630,6 +662,8 @@ if (!is_android) {
       "tab_dialog_manager_browsertest.cc",
       "tab_list_bridge_browsertest.cc",
       "tab_menu_model_browsertest.cc",
+      "tab_model_browsertest.cc",
+      "tab_renderer_data_browsertest.cc",
       "tab_strip_model_browsertest.cc",
     ]
 
@@ -644,6 +678,7 @@ if (!is_android) {
       "//base",
       "//base/test:test_support",
       "//chrome/browser",
+      "//chrome/browser/favicon",
       "//chrome/browser/policy:test_support",
       "//chrome/browser/profiles:profile",
       "//chrome/browser/profiles/keep_alive",
@@ -653,8 +688,10 @@ if (!is_android) {
       "//chrome/browser/ui:browser_navigator_params_headers",
       "//chrome/browser/ui:ui_features",
       "//chrome/browser/ui/browser_window",
+      "//chrome/browser/ui/performance_controls",
       "//chrome/browser/ui/tabs/organization",
       "//chrome/browser/ui/tabs/saved_tab_groups",
+      "//chrome/browser/ui/thumbnails",
       "//chrome/browser/web_applications",
       "//chrome/browser/web_applications:prevent_close_test_support",
       "//chrome/browser/web_applications:web_applications_test_support",
@@ -691,7 +728,7 @@ if (!is_android) {
   source_set("interactive_ui_tests") {
     testonly = true
     defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
-    sources = []
+    sources = [ "vertical_tab_strip_state_controller_interactive_uitest.cc" ]
 
     if (!is_chromeos) {
       # ChromeOS does not use desktop widgets.
@@ -718,6 +755,7 @@ if (!is_android) {
     sources = [
       "existing_comparison_table_sub_menu_model_unittest.cc",
       "inactive_window_mouse_event_controller_unittest.cc",
+      "split_view_iph_controller_unittest.cc",
       "tab_collection_storage_unittest.cc",
       "tab_collection_unittest.cc",
       "tab_group_deletion_dialog_controller_unittest.cc",
@@ -725,7 +763,6 @@ if (!is_android) {
       "tab_menu_model_unittest.cc",
       "tab_metrics_provider_unittest.cc",
       "tab_model_unittest.cc",
-      "tab_renderer_data_unittest.cc",
       "tab_strip_model_context_menu_unittest.cc",
       "tab_strip_model_selection_adapter_unittest.cc",
       "tab_strip_model_selection_state_unittest.cc",
@@ -796,5 +833,17 @@ if (!is_android) {
       "//ui/views",
       "//url",
     ]
+
+    if (enable_glic) {
+      sources += [ "glic_actor_task_icon_manager_unittest.cc" ]
+
+      deps += [
+        "//chrome/browser/actor",
+        "//chrome/browser/actor:test_support",
+        "//chrome/browser/glic",
+        "//chrome/browser/glic/test_support",
+        "//chrome/browser/ui/tabs:glic",
+      ]
+    }
   }
 }

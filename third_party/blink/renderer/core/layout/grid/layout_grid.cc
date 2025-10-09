@@ -73,10 +73,12 @@ bool NamedGridLinesDefinitionDidChange(const ComputedStyle& new_style,
 
 }  // namespace
 
-void LayoutGrid::StyleDidChange(StyleDifference diff,
-                                const ComputedStyle* old_style) {
+void LayoutGrid::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
-  LayoutBlock::StyleDidChange(diff, old_style);
+  LayoutBlock::StyleDidChange(diff, old_style, style_change_context);
   if (!old_style)
     return;
 
@@ -213,8 +215,15 @@ LayoutUnit LayoutGrid::GridItemOffset(
 Vector<LayoutUnit, 1> LayoutGrid::TrackSizesForComputedStyle(
     GridTrackSizingDirection track_direction) const {
   NOT_DESTROYED();
+  return CollectTrackSizesForComputedStyle(LayoutData(), track_direction);
+}
+
+// static
+Vector<LayoutUnit, 1> LayoutGrid::CollectTrackSizesForComputedStyle(
+    const GridLayoutData* grid_layout_data,
+    GridTrackSizingDirection track_direction) {
+  CHECK(grid_layout_data);
   Vector<LayoutUnit, 1> track_sizes;
-  const auto* grid_layout_data = LayoutData();
   if (!grid_layout_data)
     return track_sizes;
 
@@ -245,14 +254,12 @@ Vector<LayoutUnit, 1> LayoutGrid::TrackSizesForComputedStyle(
   return track_sizes;
 }
 
-Vector<LayoutUnit> LayoutGrid::RowPositions() const {
+Vector<LayoutUnit> LayoutGrid::GridTrackPositions(
+    GridTrackSizingDirection track_direction) const {
   NOT_DESTROYED();
-  return ComputeExpandedPositions(LayoutData(), kForRows);
-}
-
-Vector<LayoutUnit> LayoutGrid::ColumnPositions() const {
-  NOT_DESTROYED();
-  return ComputeExpandedPositions(LayoutData(), kForColumns);
+  return ComputeExpandedPositions(track_direction == kForColumns
+                                      ? LayoutData()->Columns()
+                                      : LayoutData()->Rows());
 }
 
 // static
@@ -294,15 +301,8 @@ Vector<LayoutUnit> LayoutGrid::ComputeTrackSizeRepeaterForRange(
 
 // static
 Vector<LayoutUnit> LayoutGrid::ComputeExpandedPositions(
-    const GridLayoutData* grid_layout_data,
-    GridTrackSizingDirection track_direction) {
+    const GridLayoutTrackCollection& track_collection) {
   Vector<LayoutUnit> expanded_positions;
-  if (!grid_layout_data)
-    return expanded_positions;
-
-  const auto& track_collection = (track_direction == kForColumns)
-                                     ? grid_layout_data->Columns()
-                                     : grid_layout_data->Rows();
 
   // |EndLineOfImplicitGrid| is equivalent to the total track count.
   expanded_positions.ReserveInitialCapacity(std::min<wtf_size_t>(

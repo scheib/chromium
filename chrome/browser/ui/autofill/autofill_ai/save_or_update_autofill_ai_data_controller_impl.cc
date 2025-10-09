@@ -5,12 +5,17 @@
 #include "chrome/browser/ui/autofill/autofill_ai/save_or_update_autofill_ai_data_controller_impl.h"
 
 #include <algorithm>
+#include <string>
 
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/notimplemented.h"
 #include "base/notreached.h"
 #include "base/strings/strcat.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/types/optional_ref.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/autofill/autofill_ai/save_or_update_autofill_ai_data_controller.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_controller_base.h"
@@ -18,15 +23,21 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/singleton_tabs.h"
+#include "chrome/common/url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_instance.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_type.h"
 #include "components/autofill/core/browser/integrators/autofill_ai/autofill_ai_import_utils.h"
 #include "components/autofill/core/browser/integrators/autofill_ai/autofill_ai_manager.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/visibility.h"
 #include "ui/base/l10n/l10n_util.h"
 
+// TODO(crbug.com/441742849): Refactor this class implementation and possibly
+// others to remove `chrome::FindBrowserWithTab()`.
 namespace autofill {
 
 namespace {
@@ -71,6 +82,8 @@ void EmitBubbleFunnelMetrics(
         return "Passport";
       case EntityTypeName::kRedressNumber:
         return "RedressNumber";
+      case EntityTypeName::kFlightReservation:
+        return "FlightReservation";
     }
     NOTREACHED();
   };
@@ -83,6 +96,20 @@ void EmitBubbleFunnelMetrics(
       base::StrCat({prefix, get_save_or_update_histogram_string(is_save_prompt),
                     ".AllEntities"}),
       close_reason);
+}
+
+std::u16string GetPrimaryAccountEmailFromProfile(Profile* profile) {
+  if (!profile) {
+    return std::u16string();
+  }
+  signin::IdentityManager* identity_manager =
+      IdentityManagerFactory::GetForProfile(profile);
+  if (!identity_manager) {
+    return std::u16string();
+  }
+  return base::UTF8ToUTF16(
+      identity_manager->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin)
+          .email);
 }
 
 }  // namespace
@@ -119,17 +146,33 @@ void SaveOrUpdateAutofillAiDataControllerImpl::ShowPrompt(
     AutofillClient::EntitySaveOrUpdatePromptResultCallback
         save_prompt_acceptance_callback) {
   // Don't show the bubble if it's already visible.
-  if (bubble_view()) {
+  if (bubble_view() || !MaySetUpBubble()) {
     return;
   }
+
+  SetupPrompt(std::move(new_entity), std::move(old_entity),
+              std::move(save_prompt_acceptance_callback));
+  QueueOrShowBubble();
+}
+
+void SaveOrUpdateAutofillAiDataControllerImpl::SetupPrompt(
+    EntityInstance new_entity,
+    std::optional<EntityInstance> old_entity,
+    AutofillClient::EntitySaveOrUpdatePromptResultCallback
+        save_prompt_acceptance_callback) {
   new_entity_ = std::move(new_entity);
   old_entity_ = std::move(old_entity);
   save_prompt_acceptance_callback_ = std::move(save_prompt_acceptance_callback);
-  DoShowBubble();
 }
 
 void SaveOrUpdateAutofillAiDataControllerImpl::OnSaveButtonClicked() {
   OnBubbleClosed(AutofillAiBubbleClosedReason::kAccepted);
+}
+
+std::u16string
+SaveOrUpdateAutofillAiDataControllerImpl::GetPrimaryAccountEmail() const {
+  return GetPrimaryAccountEmailFromProfile(
+      Profile::FromBrowserContext(web_contents()->GetBrowserContext()));
 }
 
 bool SaveOrUpdateAutofillAiDataControllerImpl::IsSavePrompt() const {
@@ -223,6 +266,8 @@ std::u16string SaveOrUpdateAutofillAiDataControllerImpl::GetDialogTitle()
       case EntityTypeName::kVehicle:
         return l10n_util::GetStringUTF16(
             IDS_AUTOFILL_AI_SAVE_VEHICLE_ENTITY_DIALOG_TITLE);
+      case EntityTypeName::kFlightReservation:
+        NOTREACHED() << "Entity is read only and doesn't support save prompts.";
     }
   } else {
     switch (new_entity_->type().name()) {
@@ -244,9 +289,42 @@ std::u16string SaveOrUpdateAutofillAiDataControllerImpl::GetDialogTitle()
       case EntityTypeName::kVehicle:
         return l10n_util::GetStringUTF16(
             IDS_AUTOFILL_AI_UPDATE_VEHICLE_ENTITY_DIALOG_TITLE);
+      case EntityTypeName::kFlightReservation:
+        NOTREACHED()
+            << "Entity is read only and doesn't support update prompts.";
     }
   }
   NOTREACHED();
+}
+
+bool SaveOrUpdateAutofillAiDataControllerImpl::IsWalletableEntity() const {
+  return new_entity_->record_type() ==
+         EntityInstance::RecordType::kServerWallet;
+}
+
+void SaveOrUpdateAutofillAiDataControllerImpl::OnGoToWalletLinkClicked() {
+  if (Browser* browser = chrome::FindBrowserWithTab(web_contents())) {
+    reopen_bubble_when_web_contents_becomes_visible_ = true;
+    ShowSingletonTab(browser, GURL(chrome::kWalletPassesPageURL));
+  }
+}
+
+void SaveOrUpdateAutofillAiDataControllerImpl::OnVisibilityChanged(
+    content::Visibility visibility) {
+  if (IsBubbleManagerEnabled()) {
+    // BubbleManager will handle the effects of tab changes.
+    return;
+  }
+
+  // TODO(crbug.com/441742849): Consider moving this logic to
+  // `AutofillBubbleControllerBase`, for now keep it specific to this class to
+  // avoid interfeering with other bubbles in transactions.
+  AutofillBubbleControllerBase::OnVisibilityChanged(visibility);
+  if (visibility == content::Visibility::VISIBLE &&
+      reopen_bubble_when_web_contents_becomes_visible_) {
+    reopen_bubble_when_web_contents_becomes_visible_ = false;
+    QueueOrShowBubble();
+  }
 }
 
 void SaveOrUpdateAutofillAiDataControllerImpl::OnBubbleClosed(
@@ -256,7 +334,7 @@ void SaveOrUpdateAutofillAiDataControllerImpl::OnBubbleClosed(
   if (bubble_view()) {
     EmitBubbleFunnelMetrics(IsSavePrompt(), new_entity_->type(), close_reason);
   }
-  set_bubble_view(nullptr);
+  ResetBubbleViewAndInformBubbleManager();
   UpdatePageActionIcon();
   if (!save_prompt_acceptance_callback_.is_null()) {
     std::move(save_prompt_acceptance_callback_)
@@ -267,17 +345,16 @@ void SaveOrUpdateAutofillAiDataControllerImpl::OnBubbleClosed(
   }
 }
 
-PageActionIconType
+std::optional<PageActionIconType>
 SaveOrUpdateAutofillAiDataControllerImpl::GetPageActionIconType() {
-  // TODO(crbug.com/362227379): Update icon.
-  return PageActionIconType::kAutofillAddress;
+  return std::nullopt;
 }
 
 void SaveOrUpdateAutofillAiDataControllerImpl::DoShowBubble() {
   Browser* browser = chrome::FindBrowserWithTab(web_contents());
-  set_bubble_view(browser->window()
-                      ->GetAutofillBubbleHandler()
-                      ->ShowSaveAutofillAiDataBubble(web_contents(), this));
+  SetBubbleView(*browser->window()
+                     ->GetAutofillBubbleHandler()
+                     ->ShowSaveAutofillAiDataBubble(web_contents(), this));
   CHECK(bubble_view());
 }
 
@@ -309,6 +386,9 @@ int SaveOrUpdateAutofillAiDataControllerImpl::GetTitleImagesResourceId() const {
       return IDR_AUTOFILL_SAVE_KNOWN_TRAVELER_NUMBER_AND_REDRESS_NUMBER_LOTTIE;
     case EntityTypeName::kVehicle:
       return IDR_AUTOFILL_SAVE_VEHICLE_LOTTIE;
+    case EntityTypeName::kFlightReservation:
+      NOTREACHED()
+          << "Entity is read only and doesn't support saving/updating.";
   }
   NOTREACHED();
 }

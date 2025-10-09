@@ -30,6 +30,7 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_string.h"
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "components/signin/internal/identity_manager/profile_oauth2_token_service_delegate.h"
 #include "components/signin/public/android/jni_headers/IdentityManagerImpl_jni.h"
@@ -218,20 +219,14 @@ IdentityManager::CreateAccessTokenFetcherForAccount(
       mode, require_sync_consent_for_scope_verification_);
 }
 
-#if BUILDFLAG(IS_IOS)
-void IdentityManager::GetRefreshTokenFromDevice(
-    const CoreAccountId& account_id,
-    const OAuth2AccessTokenManager::ScopeSet& scopes,
-    AccessTokenFetcher::TokenCallback callback) {
-  GetTokenService()->GetRefreshTokenFromDevice(account_id, scopes,
-                                               std::move(callback));
-}
-#endif
-
 void IdentityManager::RemoveAccessTokenFromCache(
     const CoreAccountId& account_id,
     const ScopeSet& scopes,
     const std::string& access_token) {
+  if (account_id.empty() || access_token.empty()) {
+    return;
+  }
+
   token_service_->InvalidateAccessToken(account_id, scopes, access_token);
 }
 
@@ -239,6 +234,10 @@ void IdentityManager::RemoveAccessTokenFromCache(
     const CoreAccountId& account_id,
     OAuthConsumerId oauth_consumer_id,
     const std::string& access_token) {
+  if (account_id.empty() || access_token.empty()) {
+    return;
+  }
+
   ScopeSet scopes = GetOAuthConsumerFromId(oauth_consumer_id).GetScopes();
   token_service_->InvalidateAccessToken(account_id, scopes, access_token);
 }
@@ -300,10 +299,13 @@ bool IdentityManager::HasAccountWithRefreshTokenInPersistentErrorState(
 }
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
-std::vector<uint8_t>
-IdentityManager::GetWrappedBindingKeyOfRefreshTokenForAccount(
+bool IdentityManager::HasAccountWithBoundRefreshToken(
     const CoreAccountId& account_id) const {
-  return token_service_->GetWrappedBindingKey(account_id);
+  return !token_service_->GetWrappedBindingKey(account_id).empty();
+}
+
+bool IdentityManager::AllBoundTokensShareSameBindingKey() const {
+  return token_service_->AllBoundTokensShareSameBindingKey();
 }
 
 std::vector<uint8_t> IdentityManager::GetWrappedBindingKey() const {
@@ -342,10 +344,13 @@ AccountInfo IdentityManager::FindExtendedAccountInfo(
 
 AccountInfo IdentityManager::FindExtendedAccountInfoByAccountId(
     const CoreAccountId& account_id) const {
-  if (!HasAccountWithRefreshToken(account_id)) {
+  // Skip the the token check if the switch is enabled, for consistency with the
+  // behavior of FindExtendedAccountInfoByEmailAddress
+  if (!HasAccountWithRefreshToken(account_id) &&
+      !base::FeatureList::IsEnabled(
+          switches::kSkipRefreshTokenCheckInIdentityManager)) {
     return AccountInfo();
   }
-
   // AccountTrackerService returns an empty AccountInfo if the account is not
   // found.
   return account_tracker_service_->GetAccountInfo(account_id);
@@ -355,6 +360,14 @@ AccountInfo IdentityManager::FindExtendedAccountInfoByEmailAddress(
     const std::string& email_address) const {
   AccountInfo account_info =
       account_tracker_service_->FindAccountInfoByEmail(email_address);
+  // Skip the the token check if the switch is enabled.
+  // This prevents a crash that occurs when the account info is retrieved before
+  // the account's refresh token is available, causing the check to fail.
+  // See https://crbug.com/366252188 and https://crbug.com/40183609
+  if (base::FeatureList::IsEnabled(
+          switches::kSkipRefreshTokenCheckInIdentityManager)) {
+    return account_info;
+  }
   // AccountTrackerService always returns an AccountInfo, even on failure. In
   // case of failure, the AccountInfo will be unpopulated, thus we should not
   // be able to find a valid refresh token.
@@ -366,6 +379,12 @@ AccountInfo IdentityManager::FindExtendedAccountInfoByGaiaId(
     const GaiaId& gaia_id) const {
   AccountInfo account_info =
       account_tracker_service_->FindAccountInfoByGaiaId(gaia_id);
+  // Skip the the token check if the switch is enabled, for consistency with the
+  // behavior of FindExtendedAccountInfoByEmailAddress
+  if (base::FeatureList::IsEnabled(
+          switches::kSkipRefreshTokenCheckInIdentityManager)) {
+    return account_info;
+  }
   // AccountTrackerService always returns an AccountInfo, even on failure. In
   // case of failure, the AccountInfo will be unpopulated, thus we should not
   // be able to find a valid refresh token.
@@ -524,8 +543,7 @@ IdentityManager::GetAccountsWithRefreshTokens(JNIEnv* env) const {
 }
 
 jboolean IdentityManager::IsClearPrimaryAccountAllowed(JNIEnv* env) const {
-  return signin_client_->IsClearPrimaryAccountAllowed(
-      HasPrimaryAccount(signin::ConsentLevel::kSync));
+  return signin_client_->IsClearPrimaryAccountAllowed();
 }
 #endif
 
@@ -739,8 +757,12 @@ void IdentityManager::OnRefreshTokenAvailableFromSource(
 void IdentityManager::OnRefreshTokenRevokedFromSource(
     const CoreAccountId& account_id,
     const std::string& source) {
+  // Copy the account ID to avoid a use-after-free if one of the observers
+  // owns the reference to the account ID and destroys it in
+  // `OnRefreshTokenRemovedForAccountFromSource()`.
+  CoreAccountId account_id_copy = account_id;
   for (auto& observer : diagnostics_observation_list_) {
-    observer.OnRefreshTokenRemovedForAccountFromSource(account_id, source);
+    observer.OnRefreshTokenRemovedForAccountFromSource(account_id_copy, source);
   }
 }
 

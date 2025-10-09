@@ -7,6 +7,7 @@
 #include "base/containers/to_vector.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/views/content_setting_bubble_contents.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -59,7 +60,7 @@ class InfoBarObserver : public InfoBarManager::Observer {
   void OnInfoBarAdded(InfoBar* infobar) override { info_bar_added_ = true; }
   void OnInfoBarRemoved(InfoBar* infobar, bool animate) override {}
   void OnInfoBarReplaced(InfoBar* old_infobar, InfoBar* new_infobar) override {}
-  void OnManagerShuttingDown(InfoBarManager* manager) override {}
+  void OnManagerWillBeDestroyed(InfoBarManager* manager) override {}
 
   bool info_bar_added_ = false;
 
@@ -335,7 +336,8 @@ TEST_F(PermissionChipUnitTest, AccessibleName) {
   ui::AXNodeData data;
   browser()
       ->GetBrowserView()
-      .tabstrip_->tab_at(0)
+      .tab_strip_view()
+      ->GetTabAnchorViewAt(0)
       ->GetViewAccessibility()
       .GetAccessibleNodeData(&data);
   EXPECT_TRUE(chip_controller->IsPermissionPromptChipVisible());
@@ -346,7 +348,8 @@ TEST_F(PermissionChipUnitTest, AccessibleName) {
   data = ui::AXNodeData();
   browser()
       ->GetBrowserView()
-      .tabstrip_->tab_at(0)
+      .tab_strip_view()
+      ->GetTabAnchorViewAt(0)
       ->GetViewAccessibility()
       .GetAccessibleNodeData(&data);
   EXPECT_FALSE(chip_controller->IsPermissionPromptChipVisible());
@@ -732,6 +735,7 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 TEST_P(InfobarTest, ShowInfobarIfNecessary) {
+  base::HistogramTester histogram_tester;
   InfoBarObserver infobar_observer(web_contents_);
 
   auto& delegate = *test::MockPermissionRequestManager::CreateForWebContents(
@@ -763,4 +767,8 @@ TEST_P(InfobarTest, ShowInfobarIfNecessary) {
   ClickOnAcceptPermissionRequestQuietChip(chip_controller);
   EXPECT_FALSE(delegate.IsRequestInProgress());
   EXPECT_EQ(infobar_observer.info_bar_added_, true);
+  histogram_tester.ExpectBucketCount(
+      "Permissions.QuietPrompt.Preignore.PageReloadInfoBar", true, 1);
+  histogram_tester.ExpectBucketCount(
+      "Permissions.QuietPrompt.Preignore.PageReloadInfoBar", false, 0);
 }

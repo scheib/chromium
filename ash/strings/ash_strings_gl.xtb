@@ -332,10 +332,12 @@ Para comezar, podes probar o seguinte.</translation>
 <translation id="2083190527011054446">Boas noites, <ph name="GIVEN_NAME" />!</translation>
 <translation id="2086334242442703436">Abrir selector de emojis</translation>
 <translation id="2088116547584365419">xogos</translation>
+<translation id="2093792000875799555">Noticias sobre Steam para Chromebook</translation>
 <translation id="209965399369889474">Non hai conexión á rede</translation>
 <translation id="2107581415810719320">Outro botón <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">O teu cable USB-C non é compatible con Thunderbolt. O rendemento do dispositivo podería verse limitado.</translation>
 <translation id="2108303511227308752">O atallo de teclado Alt + Retroceso cambiou. Para usar a tecla Suprimir, preme <ph name="LAUNCHER_KEY_NAME" /> + Retroceso.</translation>
+<translation id="2115680839221566783">Batería ao <ph name="PERCENTAGE" /> por cento. A carga está en pausa.</translation>
 <translation id="2126242104232412123">Novo escritorio</translation>
 <translation id="2132302418721800944">Gravar pantalla completa</translation>
 <translation id="2135456203358955318">Lupa ancorada</translation>
@@ -1589,6 +1591,7 @@ Non hai ningún dispositivo conectado.</translation>
 <translation id="612734058257491180">O Asistente de Google non está dispoñible cando se utiliza unha sesión de convidado.</translation>
 <translation id="6127395413317891856">Estás sen conexión. Comproba a túa conexión e téntao de novo.</translation>
 <translation id="6129953537138746214">Espazo</translation>
+<translation id="6136872094979134163">Non se poden recuperar as noticias de Steam para Chromebook.</translation>
 <translation id="6137566720514957455">Abrir cadro de diálogo de eliminación para <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">En que tarefa queres concentrarte?</translation>
 <translation id="6141988275892716286">Confirma a descarga</translation>
@@ -1678,6 +1681,7 @@ Non hai ningún dispositivo conectado.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> no receptor <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> evento</translation>
+<translation id="6448529022565414427">A carga está en pausa</translation>
 <translation id="6449483711453944360">As aplicacións de Linux e as ventás do modo de incógnito agora mesmo non son compatibles</translation>
 <translation id="6450245544201845082">O atallo para facer clic co botón dereito está desactivado</translation>
 <translation id="6452181791372256707">Rexeitar</translation>

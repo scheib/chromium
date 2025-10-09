@@ -4,6 +4,7 @@
 
 #import "ios/chrome/browser/intelligence/page_action_menu/coordinator/page_action_menu_coordinator.h"
 
+#import "ios/chrome/browser/content_settings/model/host_content_settings_map_factory.h"
 #import "ios/chrome/browser/dom_distiller/model/distiller_service_factory.h"
 #import "ios/chrome/browser/intelligence/bwg/model/bwg_service_factory.h"
 #import "ios/chrome/browser/intelligence/page_action_menu/coordinator/page_action_menu_mediator.h"
@@ -26,12 +27,6 @@
 #import "ios/chrome/browser/shared/public/commands/page_action_menu_commands.h"
 #import "ios/chrome/browser/shared/public/commands/reader_mode_commands.h"
 #import "ios/chrome/browser/shared/public/commands/reader_mode_options_commands.h"
-
-namespace {
-
-const CGFloat kMenuCornerRadius = 20;
-
-}
 
 @interface PageActionMenuCoordinator () <
     PageActionMenuViewControllerDelegate,
@@ -58,13 +53,22 @@ const CGFloat kMenuCornerRadius = 20;
 
   ReaderModeTabHelper* readerModeTabHelper =
       ReaderModeTabHelper::FromWebState(activeWebState);
+
+  HostContentSettingsMap* hostContentSettingsMap =
+      ios::HostContentSettingsMapFactory::GetForProfile(self.profile);
   _mediator = [[PageActionMenuMediator alloc]
-         initWithWebState:activeWebState
-       profilePrefService:self.profile->GetPrefs()
-       templateURLService:ios::TemplateURLServiceFactory::GetForProfile(
-                              self.profile)
-               BWGService:BwgServiceFactory::GetForProfile(self.profile)
-      readerModeTabHelper:readerModeTabHelper];
+            initWithWebState:activeWebState
+          profilePrefService:self.profile->GetPrefs()
+          templateURLService:ios::TemplateURLServiceFactory::GetForProfile(
+                                 self.profile)
+                  BWGService:BwgServiceFactory::GetForProfile(self.profile)
+         readerModeTabHelper:readerModeTabHelper
+      hostContentSettingsMap:hostContentSettingsMap];
+
+  id<PageActionMenuCommands> pageActionMenuHandler = HandlerForProtocol(
+      self.browser->GetCommandDispatcher(), PageActionMenuCommands);
+  _mediator.pageActionMenuHandler = pageActionMenuHandler;
+  _mediator.consumer = _viewController;
 
   if (readerModeTabHelper) {
     DistillerService* distillerService =
@@ -79,8 +83,7 @@ const CGFloat kMenuCornerRadius = 20;
 
   _viewController.readerModeHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), ReaderModeCommands);
-  _viewController.pageActionMenuHandler = HandlerForProtocol(
-      self.browser->GetCommandDispatcher(), PageActionMenuCommands);
+  _viewController.pageActionMenuHandler = pageActionMenuHandler;
   _viewController.BWGHandler =
       HandlerForProtocol(self.browser->GetCommandDispatcher(), BWGCommands);
 
@@ -114,8 +117,6 @@ const CGFloat kMenuCornerRadius = 20;
   ];
   _navigationController.sheetPresentationController.selectedDetentIdentifier =
       kAIHubDetentIdentifier;
-  _navigationController.sheetPresentationController.preferredCornerRadius =
-      kMenuCornerRadius;
   _navigationController.sheetPresentationController
       .prefersEdgeAttachedInCompactHeight = YES;
   _navigationController.sheetPresentationController.prefersGrabberVisible = NO;
@@ -138,6 +139,7 @@ const CGFloat kMenuCornerRadius = 20;
                                                 completion:completion];
   }
   _viewController = nil;
+  [_mediator disconnect];
   _mediator = nil;
   _readerModeOptionsViewController = nil;
   [_readerModeOptionsMediator disconnect];

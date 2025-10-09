@@ -58,9 +58,9 @@
 #include "chrome/browser/search/search.h"
 #include "chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.h"
 #include "chrome/browser/ui/webui/whats_new/whats_new_util.h"
-#include "chrome/common/extensions/chrome_manifest_url_handlers.h"
 #include "chrome/common/webui_url_constants.h"
 #include "extensions/browser/extension_registry.h"
+#include "extensions/common/manifest_handlers/chrome_url_overrides_handler.h"
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
@@ -117,7 +117,7 @@ bool ValidateUrl(const GURL& url) {
 #endif
 
   auto* policy = content::ChildProcessSecurityPolicy::GetInstance();
-  return policy->IsWebSafeScheme(url.scheme()) ||
+  return policy->IsWebSafeScheme(url.GetScheme()) ||
          url.SchemeIs(url::kFileScheme) || url_scheme_is_chrome ||
          url_points_to_an_approved_settings_page ||
          url.spec() == url::kAboutBlankURL;
@@ -157,9 +157,9 @@ bool IsWelcomePageUrl(const GURL& url) {
 #endif
 
   return url.SchemeIs(content::kChromeUIScheme) &&
-         (url.host_piece() == kChromeUIWelcomeHost
+         (url.host() == kChromeUIWelcomeHost
 #if BUILDFLAG(IS_WIN)
-          || url.host_piece() == kChromeUIWelcomeWin10Host
+          || url.host() == kChromeUIWelcomeWin10Host
 #endif
          );
 }
@@ -279,7 +279,7 @@ StartupTabs StartupTabProviderImpl::GetInitialPrefsTabsForState(
   if (is_first_run) {
     tabs.reserve(first_run_tabs.size());
     for (GURL url : first_run_tabs) {
-      if (url.host_piece() == kNewTabUrlHost) {
+      if (url.host() == kNewTabUrlHost) {
         url = GURL(chrome::kChromeUINewTabURL);
       }
       if (IsWelcomePageUrl(url)) {
@@ -368,7 +368,7 @@ StartupTabs StartupTabProviderImpl::GetPrivacySandboxTabsForState(
       std::ranges::any_of(other_startup_tabs, [&](const StartupTab& tab) {
         // The generic new tab URL is only suitable if the user has a Chrome
         // controlled New Tab Page.
-        if (tab.url.host() == chrome::kChromeUINewTabHost) {
+        if (tab.url.GetHost() == chrome::kChromeUINewTabHost) {
           return !HasExtensionNtpOverride(extension_registry) &&
                  IsChromeControlledNtpUrl(ntp_url);
         }
@@ -393,14 +393,6 @@ StartupTabs StartupTabProviderImpl::GetPrivacySandboxTabsForState(
 }
 
 #endif
-
-// static
-void StartupTabProviderImpl::AddIncompatibleApplicationsUrl(StartupTabs* tabs) {
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  GURL url(chrome::kChromeUISettingsURL);
-  tabs->emplace_back(url.Resolve("incompatibleApplications"));
-#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-}
 
 // static
 GURL StartupTabProviderImpl::GetTriggeredResetSettingsUrl() {

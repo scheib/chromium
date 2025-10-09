@@ -88,6 +88,17 @@ class UI_ANDROID_EXPORT EventForwarder {
       jlong event_time_ns,
       jlong down_time_ms);
 
+  void OnMouseWheelEvent(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& motion_event,
+      jlong time_ns,
+      jfloat x,
+      jfloat y,
+      jfloat raw_x,
+      jfloat raw_y,
+      jfloat delta_x,
+      jfloat delta_y);
+
   jboolean OnKeyUp(JNIEnv* env, const ui::KeyEventAndroid& key_event);
 
   jboolean DispatchKeyEvent(JNIEnv* env, const ui::KeyEventAndroid& key_event);
@@ -110,11 +121,13 @@ class UI_ANDROID_EXPORT EventForwarder {
                   jfloat velocity_x,
                   jfloat velocity_y,
                   jboolean synthetic_scroll,
-                  jboolean prevent_boosting);
+                  jboolean prevent_boosting,
+                  jboolean is_touchpad_event);
 
   void CancelFling(JNIEnv* env,
                    jlong time_ms,
-                   jboolean prevent_boosting);
+                   jboolean prevent_boosting,
+                   jboolean is_touchpad_event);
 
   void AddObserver(Observer* observer);
 

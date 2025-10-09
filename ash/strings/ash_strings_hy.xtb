@@ -332,10 +332,12 @@
 <translation id="2083190527011054446">Բարի գիշեր, <ph name="GIVEN_NAME" /></translation>
 <translation id="2086334242442703436">Բացել էմոջիների ընտրիչը</translation>
 <translation id="2088116547584365419">խաղեր</translation>
+<translation id="2093792000875799555">Steam Chromebook-ի համար․ նորություններ</translation>
 <translation id="209965399369889474">Սարքը միացած չէ ցանցին</translation>
 <translation id="2107581415810719320">Այլ կոճակ <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">USB-C մալուխը չի աջակցում Thunderbolt միջերես։ Սարքի աշխատանքի արդյունավետությունը կարող է սահմանափակվել։</translation>
 <translation id="2108303511227308752">«Alt + Backspace» ստեղնային դյուրանցումը փոփոխվել է։ Delete ստեղնի գործողությունն օգտագործելու համար սեղմեք <ph name="LAUNCHER_KEY_NAME" /> + Backspace։</translation>
+<translation id="2115680839221566783">Մարտկոցի լիցքի մակարդակը <ph name="PERCENTAGE" />% է։ Լիցքավորումը դադարեցված է։</translation>
 <translation id="2126242104232412123">Նոր աշխատանքային տարածք</translation>
 <translation id="2132302418721800944">Տեսագրել լիաէկրան ռեժիմում</translation>
 <translation id="2135456203358955318">Ամրացված խոշորացույց</translation>
@@ -1493,7 +1495,7 @@
 <translation id="5818796501620225415">Կարող եք ժամանակ ավելացնել կամ ավարտել առանց շեղումների ռեժիմը</translation>
 <translation id="5819918159912280082">Ձեր Chromebook-ը անսպասելիորեն վերագործարկվեց։ Բացեք նախորդ պատուհանները և հավելվածները։</translation>
 <translation id="5823239091726045201">Google Tasks-ի առաջադրանքները դիտարկիչում</translation>
-<translation id="5825969630400862129">Կապված սարքերի կարգավորումներ</translation>
+<translation id="5825969630400862129">Կապակցված սարքերի կարգավորումներ</translation>
 <translation id="5830180081891717894">ևս <ph name="WINDOWS" /></translation>
 <translation id="5837036133683224804">Դադարեցնել <ph name="ROUTE_TITLE" /> ներդիրի հեռարձակումը «<ph name="RECEIVER_NAME" />» սարքին</translation>
 <translation id="5840658767386246331">Որոնել Google-ում</translation>
@@ -1588,6 +1590,7 @@
 <translation id="612734058257491180">Google Օգնականը հասանելի չէ հյուրի աշխատաշրջանում:</translation>
 <translation id="6127395413317891856">Դուք միացած չեք համացանցին։ Ստուգեք կապը և նորից փորձեք:</translation>
 <translation id="6129953537138746214">Բացատ</translation>
+<translation id="6136872094979134163">Չհաջողվեց առբերել «Steam Chromebook-ի համար» տարբերակի նորությունները</translation>
 <translation id="6137566720514957455">Բացել <ph name="USER_EMAIL_ADDRESS" /> հաշվի հեռացման երկխոսության պատուհանը</translation>
 <translation id="6141205840878048728">Ինչի՞ վրա եք ուզում կենտրոնանալ</translation>
 <translation id="6141988275892716286">Հաստատեք ներբեռնումը</translation>
@@ -1677,6 +1680,7 @@
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> ներդիրը հեռարձակվում է «<ph name="RECEIVER_NAME" />» սարքին</translation>
 <translation id="6445915701151710649">պրոցեսոր</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> միջոցառում</translation>
+<translation id="6448529022565414427">Լիցքավորումը դադարեցված է</translation>
 <translation id="6449483711453944360">Լինուքսի հավելվածներն ու ինկոգնիտո պատուհանները ներկայումս չեն աջակցվում</translation>
 <translation id="6450245544201845082">«Սեղմել մկնիկի աջ կոճակը» գործողության դյուրանցումը ներկայումս անջատված է</translation>
 <translation id="6452181791372256707">Մերժել</translation>

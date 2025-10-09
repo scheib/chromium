@@ -8,10 +8,12 @@
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/dom/focusgroup_flags.h"
 #include "third_party/blink/renderer/core/events/keyboard_event.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/keywords.h"
 #include "third_party/blink/renderer/core/layout/table/layout_table.h"
 #include "third_party/blink/renderer/core/layout/table/layout_table_cell.h"
 #include "third_party/blink/renderer/core/page/grid_focusgroup_structure_info.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -97,20 +99,25 @@ Element* FocusgroupControllerUtils::FindNearestFocusgroupAncestor(
 
   for (Element* ancestor = FlatTreeTraversal::ParentElement(*element); ancestor;
        ancestor = FlatTreeTraversal::ParentElement(*ancestor)) {
-    FocusgroupFlags ancestor_flags = ancestor->GetFocusgroupFlags();
-    if (ancestor_flags != FocusgroupFlags::kNone) {
+    FocusgroupBehavior ancestor_behavior =
+        ancestor->GetFocusgroupData().behavior;
+    if (ancestor_behavior != FocusgroupBehavior::kNoBehavior) {
       switch (type) {
         case FocusgroupType::kGrid:
+          // Respect the FocusgroupGrid feature gate.
+          CHECK(RuntimeEnabledFeatures::FocusgroupGridEnabled(
+              element->GetExecutionContext()));
           // TODO(bebeaudr): Support grid focusgroups that aren't based on the
           // table layout objects.
-          if (ancestor_flags & FocusgroupFlags::kGrid &&
+          if (ancestor_behavior == FocusgroupBehavior::kGrid &&
               IsA<LayoutTable>(ancestor->GetLayoutObject())) {
             return ancestor;
           }
           break;
         case FocusgroupType::kLinear:
-          if (!(ancestor_flags & FocusgroupFlags::kGrid))
+          if (ancestor_behavior != FocusgroupBehavior::kGrid) {
             return ancestor;
+          }
           break;
         default:
           NOTREACHED();
@@ -182,8 +189,8 @@ bool FocusgroupControllerUtils::IsFocusgroupItem(const Element* element) {
   if (!parent)
     return false;
 
-  FocusgroupFlags parent_flags = parent->GetFocusgroupFlags();
-  return parent_flags != FocusgroupFlags::kNone;
+  FocusgroupData parent_data = parent->GetFocusgroupData();
+  return parent_data.behavior != FocusgroupBehavior::kNoBehavior;
 }
 
 // This function is called whenever the |element| passed by parameter has fallen
@@ -231,12 +238,12 @@ Element* FocusgroupControllerUtils::AdjustElementOutOfUnrelatedFocusgroup(
   // Get the previous focusgroup we were part of (|stop_ancestor| was
   // necessarily part of it: it was either the focusgroup itself or a descendant
   // of that focusgroup).
-  FocusgroupFlags focusgroup_flags = stop_ancestor->GetFocusgroupFlags();
-  if (focusgroup_flags == FocusgroupFlags::kNone) {
+  FocusgroupData focusgroup_data = stop_ancestor->GetFocusgroupData();
+  if (focusgroup_data.behavior == FocusgroupBehavior::kNoBehavior) {
     Element* focusgroup =
         FindNearestFocusgroupAncestor(stop_ancestor, FocusgroupType::kLinear);
     DCHECK(focusgroup);
-    focusgroup_flags = focusgroup->GetFocusgroupFlags();
+    focusgroup_data = focusgroup->GetFocusgroupData();
   }
 
   // Go over each ancestor of the |element| in order to validate that it is
@@ -252,9 +259,10 @@ Element* FocusgroupControllerUtils::AdjustElementOutOfUnrelatedFocusgroup(
     // We consider |element| as being part of a different focusgroup than the
     // one we were previously in when one of its ancestor is a focusgroup that
     // doesn't extend the previous one.
-    FocusgroupFlags ancestor_flags = ancestor->GetFocusgroupFlags();
-    if (ancestor_flags != FocusgroupFlags::kNone &&
-        !FocusgroupExtendsInAxis(ancestor_flags, focusgroup_flags, direction)) {
+    FocusgroupData ancestor_data = ancestor->GetFocusgroupData();
+    if (ancestor_data.behavior != FocusgroupBehavior::kNoBehavior &&
+        !FocusgroupExtendsInAxis(ancestor_data.flags, focusgroup_data.flags,
+                                 direction)) {
       adjusted_element = ancestor;
     }
   }
@@ -263,7 +271,9 @@ Element* FocusgroupControllerUtils::AdjustElementOutOfUnrelatedFocusgroup(
 }
 
 bool FocusgroupControllerUtils::IsGridFocusgroupItem(const Element* element) {
-  DCHECK(element);
+  CHECK(element);
+  CHECK(RuntimeEnabledFeatures::FocusgroupGridEnabled(
+      element->GetExecutionContext()));
   if (!element->IsFocusable())
     return false;
 
@@ -276,7 +286,7 @@ GridFocusgroupStructureInfo*
 FocusgroupControllerUtils::CreateGridFocusgroupStructureInfoForGridRoot(
     Element* root) {
   if (IsA<LayoutTable>(root->GetLayoutObject()) &&
-      root->GetFocusgroupFlags() & FocusgroupFlags::kGrid) {
+      root->GetFocusgroupData().behavior == FocusgroupBehavior::kGrid) {
     return MakeGarbageCollected<AutomaticGridFocusgroupStructureInfo>(
         root->GetLayoutObject());
   } else {

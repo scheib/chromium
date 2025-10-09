@@ -84,7 +84,8 @@ enum class IOSGeminiFirstPromptSubmissionMethod {
   kCheckThisSite = 2,
   kFindRelatedSites = 3,
   kAskAboutPage = 4,
-  kUnknown = 5,
+  kCreateFaq = 5,
+  kUnknown = 6,
   kMaxValue = kUnknown,
 };
 // LINT.ThenChange(/tools/metrics/histograms/metadata/ios/enums.xml:IOSGeminiFirstPromptSubmissionMethod)
@@ -169,5 +170,14 @@ void RecordBWGEntryPointClick(bwg::EntryPoint entry_point, bool is_fre_flow);
 
 // Records that the user tapped the new chat button in a BWG session.
 void RecordBWGNewChatButtonTapped();
+
+// Records that the AI Hub new badge was tapped.
+void RecordAIHubNewBadgeTapped();
+
+// Records that the AI Hub icon was tapped.
+void RecordAIHubIconTapped();
+
+// Records that the user sent a prompt in a BWG session.
+void RecordBWGPromptSent();
 
 #endif  // IOS_CHROME_BROWSER_INTELLIGENCE_BWG_METRICS_BWG_METRICS_H_

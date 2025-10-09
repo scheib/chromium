@@ -50,10 +50,23 @@ class ContextMenuHeaderViewBinder {
             secondaryUrlText.setText(secondaryUrl);
             secondaryUrlText.setVisibility(
                     TextUtils.isEmpty(secondaryUrl) ? View.GONE : View.VISIBLE);
+        } else if (propertyKey == ContextMenuHeaderProperties.TERTIARY_URL) {
+            TextView tertiaryUrlText = view.findViewById(R.id.menu_header_tertiary_url);
+            CharSequence tertiaryUrl = model.get(ContextMenuHeaderProperties.TERTIARY_URL);
+            tertiaryUrlText.setText(tertiaryUrl);
+            tertiaryUrlText.setVisibility(
+                    TextUtils.isEmpty(tertiaryUrl) ? View.GONE : View.VISIBLE);
         } else if (propertyKey == ContextMenuHeaderProperties.TITLE_AND_URL_CLICK_LISTENER) {
-            view.findViewById(R.id.title_and_url)
-                    .setOnClickListener(
-                            model.get(ContextMenuHeaderProperties.TITLE_AND_URL_CLICK_LISTENER));
+            final View.OnClickListener listener =
+                    model.get(ContextMenuHeaderProperties.TITLE_AND_URL_CLICK_LISTENER);
+            final ContextMenuHeaderTextView header =
+                    (ContextMenuHeaderTextView) view.findViewById(R.id.title_and_url);
+            header.setOnClickListener(listener);
+        } else if (propertyKey == ContextMenuHeaderProperties.IS_EXPANDED) {
+            final boolean isExpanded = model.get(ContextMenuHeaderProperties.IS_EXPANDED);
+            final ContextMenuHeaderTextView header =
+                    (ContextMenuHeaderTextView) view.findViewById(R.id.title_and_url);
+            header.setIsExpanded(isExpanded);
         } else if (propertyKey == ContextMenuHeaderProperties.URL_MAX_LINES) {
             final int maxLines = model.get(ContextMenuHeaderProperties.URL_MAX_LINES);
             final TextView urlText = view.findViewById(R.id.menu_header_url);
@@ -71,6 +84,15 @@ class ContextMenuHeaderViewBinder {
                 secondaryUrlText.setEllipsize(null);
             } else {
                 secondaryUrlText.setEllipsize(TextUtils.TruncateAt.END);
+            }
+        } else if (propertyKey == ContextMenuHeaderProperties.TERTIARY_URL_MAX_LINES) {
+            final int maxLines = model.get(ContextMenuHeaderProperties.TERTIARY_URL_MAX_LINES);
+            final TextView tertiaryUrlText = view.findViewById(R.id.menu_header_tertiary_url);
+            tertiaryUrlText.setMaxLines(maxLines);
+            if (maxLines == Integer.MAX_VALUE) {
+                tertiaryUrlText.setEllipsize(null);
+            } else {
+                tertiaryUrlText.setEllipsize(TextUtils.TruncateAt.END);
             }
         } else if (propertyKey == ContextMenuHeaderProperties.IMAGE) {
             Bitmap bitmap = model.get(ContextMenuHeaderProperties.IMAGE);

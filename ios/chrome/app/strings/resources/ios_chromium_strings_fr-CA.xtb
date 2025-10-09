@@ -4,7 +4,6 @@
 <translation id="1000436330784933699">Vous pouvez ouvrir Lentille ici.</translation>
 <translation id="1042296835509784301">Ouvre le gestionnaire de mots de passe dans Chromium.</translation>
 <translation id="1047130070405668746">Sélectionnez Chromium</translation>
-<translation id="1086486568852410168">Rechercher avec Lentille Google</translation>
 <translation id="1091252999271033193">Cela signifie que Chromium demandera toujours la version mobile du site.</translation>
 <translation id="1115463765356382667">Effectuez les actions suggérées ci-dessous pour tirer le meilleur parti de Chromium.</translation>
 <translation id="1185134272377778587">À propos de Chromium</translation>
@@ -43,6 +42,7 @@
 <ph name="BEGIN_LINK" />En savoir plus<ph name="END_LINK" /></translation>
 <translation id="1847960401032164406">Maps dans Chromium</translation>
 <translation id="1867772173333403444">4. Sélectionnez Chromium</translation>
+<translation id="1965068424387304464">Astuce Chromium : Enregistrer les mots de passe</translation>
 <translation id="2006345422933397527">Chromium n'a pas pu vérifier s'il y a des mises à jour. Essayez de vérifier votre connexion Internet.</translation>
 <translation id="2042889939382983733">Afficher votre historique de Chromium</translation>
 <translation id="2052320862053429062">Chromium vérifie régulièrement que vos mots de passe ne figurent pas dans les listes qui ont été publiées en ligne. Lors de cette opération, vos mots de passe et vos noms d'utilisateur sont chiffrés afin que personne ne puisse les consulter, y compris Google.</translation>
@@ -89,7 +89,6 @@ Afin d'accéder à plus de paramètres utilisant des données pour améliorer vo
 <translation id="2977470724722393594">Chromium est à jour</translation>
 <translation id="3044857325852340337">Données Chromium supprimées</translation>
 <translation id="3054480780637153380">Ouvrez les paramètres Chromium dans iOS, puis touchez « Appli de navigation par défaut » et sélectionnez Chromium.</translation>
-<translation id="3102849287235003384">Pour vous déconnecter de votre compte Google sur tous les sites Web, <ph name="BEGIN_LINK" />déconnectez-vous de Chrome<ph name="END_LINK" />.</translation>
 <translation id="3115956258722352278">Faire de Chromium votre navigateur par défaut?</translation>
 <translation id="3180939591219927904">Activez « Verrouiller les onglets de navigation privée lorsque vous fermez Chromium »</translation>
 <translation id="328933489847748230">{count,plural, =1{1 fenêtre de Chromium est maintenant affichée}one{{count} fenêtre de Chromium est maintenant affichée}other{{count} fenêtres de Chromium sont maintenant affichées}}</translation>
@@ -119,6 +118,7 @@ Essayez d'attendre quelques minutes avant de changer de compte. Si vous changez 
 <translation id="3816686541346279443">Chromium vous proposera d'enregistrer votre mot de passe.</translation>
 <translation id="3827545470516145620">Vous bénéficiez d'une protection de sécurité standard sur cet appareil</translation>
 <translation id="3833326979834193417">Chromium exécute automatiquement la Vérification de sécurité tous les jours pour vous protéger, entre autres, contre les violations de données et les sites Web non sécuritaires. Vous trouverez plus d'information sur la Vérification de sécurité dans Paramètres.</translation>
+<translation id="3837584850181228767">Astuce Chromium : Navigation sécurisée améliorée</translation>
 <translation id="3845223911364528001">Retournez à Chromium pour téléverser votre fichier</translation>
 <translation id="3855938650519180865">Quoi de neuf dans Chromium</translation>
 <translation id="3886689467633467988">Connectez-vous à ce site et à Chromium pour obtenir vos favoris et plus encore sur tous vos appareils.</translation>
@@ -194,11 +194,14 @@ Pour modifier ce paramètre, <ph name="BEGIN_LINK" />supprimez les données Chro
 <translation id="5534584691915394889">Les événements seront créés dans votre Calendrier Apple à partir de Chromium et de la Lentille Google.</translation>
 <translation id="5571094606370987472">Ouvre les onglets récents de Chromium.</translation>
 <translation id="5603085937604338780">chromium</translation>
-<translation id="5657280937522795751">Basculer Chromium</translation>
+<translation id="5657280937522795751">Basculez Chromium</translation>
 <translation id="5664395081284292058">Ouvrir Mon dernier onglet dans Chromium</translation>
 <translation id="5671188105328420281">Astuce de Chromium</translation>
 <translation id="5688047395118852662">Cette carte vous montre des suggestions sur la façon de tirer le meilleur parti de Chromium.</translation>
 <translation id="5700709190537129682">Chromium ne peut pas vérifier vos mots de passe</translation>
+<translation id="5731004036450828399">Pour protéger vos clés d'accès, vous devrez d'abord créer un NIP de récupération.
+
+        Les clés d'accès sont enregistrées dans le gestionnaire de mots de passe, ce qui vous permet de les utiliser dans Chromium sur n'importe quel appareil.</translation>
 <translation id="584550191241316896">Connecté à Chromium</translation>
 <translation id="5862307444128926510">Bienvenue dans Chromium</translation>
 <translation id="5889847953983052353">Lorsque activé :
@@ -264,8 +267,8 @@ Seule une personne connaissant votre phrase de passe peut lire vos données chif
 <translation id="7269362888766543920">Certains modules complémentaires provoquent le plantage de Chromium. Veuillez essayer de les désinstaller.</translation>
 <translation id="7285031092584344905">Accédez à vos mots de passe Chromium et plus encore dans d'autres applications.</translation>
 <translation id="7337881442233988129">Chromium</translation>
-<translation id="7357211569052832586">Les données sélectionnées ont été supprimées de Chromium et des appareils synchronisés. D'autres formes d'historique de navigation, telles que les recherches et l'activité d'autres services Google, peuvent exister sur votre compte Google. Plus de détails à history.google.com.</translation>
 <translation id="7395825497086981028">Votre mot de passe sera enregistré dans le gestionnaire de mots de passe du compte <ph name="EMAIL" />.</translation>
+<translation id="7434848749522628428">Cette clé d'accès sera enregistrée dans le gestionnaire de mots de passe du compte <ph name="USER_EMAIL" /></translation>
 <translation id="7504829997542308412">Ouvrez Chromium</translation>
 <translation id="7531461704633548377">De Chromium</translation>
 <translation id="7554983317097061001">Astuce Chromium : Déplacez Chromium vers le Dock</translation>
@@ -299,6 +302,7 @@ Seule une personne connaissant votre phrase de passe peut lire vos données chif
 <translation id="8254729934443216898">Découvrez de nouvelles fonctionnalités qui vous aident à tirer le meilleur parti de Chromium.</translation>
 <translation id="8293572045658095405">Vous utilisez la Navigation privée de Chromium</translation>
 <translation id="830951810931292870">Ouvre les URL entrées dans Chromium en Navigation privée.</translation>
+<translation id="8385503371191508165">Commencez à enregistrer les clés d'accès avec le gestionnaire de mots de passe</translation>
 <translation id="8390323835464055390">Utilisez Chromium pour le remplissage automatique pour vous connecter avec vos clés d'accès et vos mots de passe enregistrés à partir de n'importe quelle appli</translation>
 <translation id="8409374867500149834">Vous disposez de la sécurité la plus robuste de Chromium contre les sites Web dangereux</translation>
 <translation id="8543509361021925846">{THRESHOLD,plural, =1{Cela se produit lorsque Chromium n'est pas utilisé pendant {THRESHOLD} minute. Les données enregistrées uniquement sur cet appareil pendant que vous étiez connecté seront supprimées. Cela peut inclure l'historique et les mots de passe.}one{Cela se produit lorsque Chromium n'est pas utilisé pendant {THRESHOLD} minute. Les données enregistrées uniquement sur cet appareil pendant que vous étiez connecté seront supprimées. Cela peut inclure l'historique et les mots de passe.}other{Cela se produit lorsque Chromium n'est pas utilisé pendant {THRESHOLD} minutes. Les données enregistrées uniquement sur cet appareil pendant que vous étiez connecté seront supprimées. Cela peut inclure l'historique et les mots de passe.}}</translation>

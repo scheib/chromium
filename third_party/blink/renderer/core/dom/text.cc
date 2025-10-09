@@ -134,21 +134,12 @@ Text* Text::splitText(unsigned offset, ExceptionState& exception_state) {
     return nullptr;
 
   if (LayoutText* layout_text = GetLayoutObject()) {
-    if (RuntimeEnabledFeatures::TextDiffSplitFixEnabled()) {
-      // To avoid |LayoutText| has empty text, we rebuild layout tree.
-      if (ContainsOnlyWhitespaceOrEmpty()) {
-        SetForceReattachLayoutTree();
-      } else {
-        layout_text->SetTextWithOffset(
-            data(), TextDiffRange::Delete(offset, old_str.length() - offset));
-      }
+    // To avoid |LayoutText| has empty text, we rebuild layout tree.
+    if (ContainsOnlyWhitespaceOrEmpty()) {
+      SetForceReattachLayoutTree();
     } else {
       layout_text->SetTextWithOffset(
-          data(), TextDiffRange::Delete(0, old_str.length()));
-      if (ContainsOnlyWhitespaceOrEmpty()) {
-        // To avoid |LayoutText| has empty text, we rebuild layout tree.
-        SetForceReattachLayoutTree();
-      }
+          data(), TextDiffRange::Delete(offset, old_str.length() - offset));
     }
   }
 
@@ -271,8 +262,9 @@ static inline bool CanHaveWhitespaceChildren(
   const LayoutObject& parent = *context.parent;
   if (parent.IsTable() || parent.IsTableRow() || parent.IsTableSection() ||
       parent.IsLayoutTableCol() || parent.IsFrameSet() ||
-      parent.IsFlexibleBox() || parent.IsLayoutGrid() || parent.IsSVGRoot() ||
-      parent.IsSVGContainer() || parent.IsSVGImage() || parent.IsSVGShape()) {
+      parent.IsFlexibleBox() || parent.IsLayoutGridOrMasonry() ||
+      parent.IsSVGRoot() || parent.IsSVGContainer() || parent.IsSVGImage() ||
+      parent.IsSVGShape()) {
     if (!context.use_previous_in_flow || !context.previous_in_flow ||
         !context.previous_in_flow->IsText())
       return false;

@@ -13,6 +13,7 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/to_vector.h"
 #include "base/functional/bind.h"
+#include "chrome/browser/actor/ui/actor_ui_tab_controller.h"
 #include "chrome/browser/actor/ui/actor_ui_tab_controller_interface.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/ui/recently_audible_helper.h"
@@ -51,6 +52,9 @@ bool CompareAlerts::operator()(TabAlert first, TabAlert second) const {
            {TabAlert::ACTOR_ACCESSING, 6},
            {TabAlert::GLIC_ACCESSING, 5},
            {TabAlert::GLIC_SHARING, 4},
+           // NOTE: VR must take priority over the audio alert ones
+           // because most VR content has audio and its usage is implied by the
+           // VR icon.
            {TabAlert::VR_PRESENTING_IN_HEADSET, 3},
            {TabAlert::PIP_PLAYING, 2},
            {TabAlert::AUDIO_MUTING, 1},
@@ -75,7 +79,7 @@ TabAlertController::TabAlertController(TabInterface& tab)
               base::Unretained(this)));
 
   if (auto* actor_ui_tab_controller =
-          tab.GetTabFeatures()->actor_ui_tab_controller()) {
+          actor::ui::ActorUiTabController::From(&tab)) {
     callback_subscriptions_.emplace_back(
         actor_ui_tab_controller->RegisterActorTabIndicatorStateChangedCallback(
             base::BindRepeating(
@@ -246,7 +250,14 @@ void TabAlertController::MediaPictureInPictureChanged(
 }
 
 void TabAlertController::DidUpdateAudioMutingState(bool muted) {
-  UpdateAlertState(TabAlert::AUDIO_MUTING, muted);
+  // The muted alert should only show for tabs that were recently audible. It is
+  // possible for a tab to be muted but never play audio, in such cases, the
+  // muted alert should not show.
+  RecentlyAudibleHelper* const audible_helper =
+      RecentlyAudibleHelper::FromWebContents(tab().GetContents());
+  CHECK(audible_helper);
+  UpdateAlertState(TabAlert::AUDIO_MUTING,
+                   audible_helper->WasRecentlyAudible() && muted);
 }
 
 void TabAlertController::OnIsCapturingVideoChanged(
@@ -308,6 +319,10 @@ void TabAlertController::OnActorTabIndicatorStateChanged(bool is_accessing) {
 }
 
 void TabAlertController::OnRecentlyAudibleStateChanged(bool was_audible) {
+  // Muted alert state also needs to update when audible state changes to ensure
+  // that the muted alert becomes active if the tab is already muted but is
+  // recently audible or inactive after the tab is no longer audible.
+  DidUpdateAudioMutingState(tab().GetContents()->IsAudioMuted());
   UpdateAlertState(TabAlert::AUDIO_PLAYING, was_audible);
 }
 

@@ -138,7 +138,7 @@ Length ConvertGridTrackBreadth(const StyleResolverState& state,
 Vector<AtomicString> ValueListToAtomicStringVector(
     const CSSValueList& value_list) {
   Vector<AtomicString> ret;
-  for (auto list_entry : value_list) {
+  for (const auto& list_entry : value_list) {
     const CSSCustomIdentValue& ident = To<CSSCustomIdentValue>(*list_entry);
     ret.push_back(ident.Value());
   }
@@ -275,22 +275,58 @@ StyleSVGResource* StyleBuilderConverter::ConvertElementReference(
       url_value.ValueForSerialization());
 }
 
+namespace {
+
+struct BasicShapeAndCoordBox {
+  STACK_ALLOCATED();
+
+ public:
+  BasicShape* shape;
+  CoordBox coord_box;
+};
+
+BasicShapeAndCoordBox BasicShapeAndCoordBoxForValue(StyleResolverState& state,
+                                                    const CSSValue& value) {
+  BasicShape* shape = nullptr;
+  CoordBox coord_box = CoordBox::kBorderBox;
+  if (const auto* pair = DynamicTo<CSSValuePair>(value)) {
+    shape = BasicShapeForValue(state, pair->First());
+    coord_box = To<CSSIdentifierValue>(pair->Second()).ConvertTo<CoordBox>();
+  } else {
+    shape = BasicShapeForValue(state, value);
+  }
+  return {shape, coord_box};
+}
+
+}  // namespace
+
 StyleBorderShape* StyleBuilderConverter::ConvertBorderShape(
     StyleResolverState& state,
     const CSSValue& value) {
+  // Either:
+  // - none;
+  // - a single shape (meaning default coord box is border-box);
+  // - a pair of shape + coord_box;
+  // - list of either: two pairs of shape + coord_box or two shapes.
   if (value.IsIdentifierValue()) {
     CHECK_EQ(To<CSSIdentifierValue>(value).GetValueID(), CSSValueID::kNone);
     return nullptr;
   }
 
-  if (const auto* pair = DynamicTo<CSSValuePair>(value)) {
+  if (const auto* list = DynamicTo<CSSValueList>(value)) {
+    DCHECK_EQ(list->length(), 2u);
+    auto [outer_shape, outer_coord_box] =
+        BasicShapeAndCoordBoxForValue(state, list->First());
+    auto [inner_shape, inner_coord_box] =
+        BasicShapeAndCoordBoxForValue(state, list->Last());
     return MakeGarbageCollected<StyleBorderShape>(
-        *BasicShapeForValue(state, pair->First()),
-        BasicShapeForValue(state, pair->Second()));
+        *outer_shape, inner_shape, outer_coord_box, inner_coord_box);
   }
 
+  auto [outer_shape, outer_coord_box] =
+      BasicShapeAndCoordBoxForValue(state, value);
   return MakeGarbageCollected<StyleBorderShape>(
-      *BasicShapeForValue(state, value));
+      *outer_shape, outer_shape, outer_coord_box, outer_coord_box);
 }
 
 LengthBox StyleBuilderConverter::ConvertClip(StyleResolverState& state,
@@ -702,6 +738,20 @@ StyleBuilderConverter::ConvertFontVariationSettings(
   }
   std::sort(settings->begin(), settings->end(), CompareTags);
   return settings;
+}
+
+AtomicString StyleBuilderConverter::ConvertFontLanguageOverride(
+    StyleResolverState& state,
+    const CSSValue& value) {
+  const auto* identifier_value = DynamicTo<CSSIdentifierValue>(value);
+  if (identifier_value &&
+      identifier_value->GetValueID() == CSSValueID::kNormal) {
+    return AtomicString();
+  }
+  if (auto* string_value = DynamicTo<CSSStringValue>(value)) {
+    return AtomicString(string_value->Value());
+  }
+  return AtomicString();
 }
 
 scoped_refptr<FontPalette> StyleBuilderConverter::ConvertFontPalette(
@@ -1834,6 +1884,17 @@ StyleHyphenateLimitChars StyleBuilderConverter::ConvertHyphenateLimitChars(
   return StyleHyphenateLimitChars(values[0], values[1], values[2]);
 }
 
+StyleInterestDelay StyleBuilderConverter::ConvertInterestDelayValue(
+    const StyleResolverState& state,
+    const CSSValue& value) {
+  if (const auto* ident = DynamicTo<CSSIdentifierValue>(value)) {
+    DCHECK_EQ(ident->GetValueID(), CSSValueID::kNormal);
+    return StyleInterestDelay();
+  }
+  return StyleInterestDelay(
+      StyleBuilderConverter::ConvertTimeValue(state, value));
+}
+
 int StyleBuilderConverter::ConvertBorderWidth(const StyleResolverState& state,
                                               const CSSValue& value) {
   double result = 0;
@@ -1992,11 +2053,8 @@ Length StyleBuilderConverter::ConvertLengthSizing(StyleResolverState& state,
     case CSSValueID::kWebkitMaxContent:
       return Length::MaxContent();
     case CSSValueID::kStretch:
-      return Length::Stretch();
     case CSSValueID::kWebkitFillAvailable:
-      return RuntimeEnabledFeatures::AliasWebkitFillAvailableEnabled()
-                 ? Length::Stretch()
-                 : Length::FillAvailable();
+      return Length::Stretch();
     case CSSValueID::kWebkitFitContent:
     case CSSValueID::kFitContent:
       return Length::FitContent();
@@ -2688,6 +2746,33 @@ ScopedCSSNameList* StyleBuilderConverter::ConvertViewTransitionClass(
     names.push_back(ConvertNoneOrCustomIdent(state, *item));
   }
   return MakeGarbageCollected<ScopedCSSNameList>(std::move(names));
+}
+
+ScopedCSSNameList* StyleBuilderConverter::ConvertOverscrollArea(
+    StyleResolverState& state,
+    const CSSValue& value) {
+  DCHECK(value.IsScopedValue());
+  if (const auto* identifier_value = DynamicTo<CSSIdentifierValue>(value)) {
+    DCHECK_EQ(identifier_value->GetValueID(), CSSValueID::kNone);
+    return nullptr;
+  }
+  DCHECK(value.IsBaseValueList());
+  HeapVector<Member<const ScopedCSSName>> names;
+  for (const Member<const CSSValue>& item : To<CSSValueList>(value)) {
+    names.push_back(ConvertCustomIdent(state, *item));
+  }
+  return MakeGarbageCollected<ScopedCSSNameList>(std::move(names));
+}
+
+ScopedCSSName* StyleBuilderConverter::ConvertOverscrollPosition(
+    StyleResolverState& state,
+    const CSSValue& value) {
+  DCHECK(value.IsScopedValue());
+  if (const auto* identifier_value = DynamicTo<CSSIdentifierValue>(value)) {
+    DCHECK_EQ(identifier_value->GetValueID(), CSSValueID::kNone);
+    return nullptr;
+  }
+  return ConvertCustomIdent(state, value);
 }
 
 namespace {
@@ -3788,7 +3873,8 @@ ScopedCSSNameList* StyleBuilderConverter::ConvertTimelineScope(
 
 PositionArea StyleBuilderConverter::ConvertPositionArea(
     StyleResolverState& state,
-    const CSSValue& value) {
+    const CSSValue& value,
+    bool allow_any_keyword) {
   auto extract_position_area_span = [](CSSValueID value)
       -> std::pair<PositionAreaRegion, PositionAreaRegion> {
     PositionAreaRegion start = PositionAreaRegion::kNone;
@@ -3968,24 +4054,30 @@ PositionArea StyleBuilderConverter::ConvertPositionArea(
         start = PositionAreaRegion::kCenter;
         end = PositionAreaRegion::kSelfEnd;
         break;
+      case CSSValueID::kAny:
+        start = end = PositionAreaRegion::kAny;
+        break;
       default:
         NOTREACHED();
     }
     return std::make_pair(start, end);
   };
 
-  if (const auto* first_value = DynamicTo<CSSIdentifierValue>(value)) {
-    CSSValueID first_keyword = first_value->GetValueID();
-    if (first_keyword == CSSValueID::kNone) {
+  if (const auto* single_keyword_value = DynamicTo<CSSIdentifierValue>(value)) {
+    CSSValueID single_keyword = single_keyword_value->GetValueID();
+    if (single_keyword == CSSValueID::kNone) {
       return PositionArea();
     }
     PositionAreaRegion span[2];
-    std::tie(span[0], span[1]) = extract_position_area_span(first_keyword);
-    if (css_parsing_utils::IsRepeatedPositionAreaValue(first_keyword)) {
+    std::tie(span[0], span[1]) = extract_position_area_span(single_keyword);
+    if (css_parsing_utils::IsRepeatedPositionAreaValue(single_keyword)) {
       return PositionArea(span[0], span[1], span[0], span[1]);
     } else {
-      return PositionArea(span[0], span[1], PositionAreaRegion::kAll,
-                          PositionAreaRegion::kAll);
+      PositionAreaRegion default_second_span = allow_any_keyword
+                                                   ? PositionAreaRegion::kAny
+                                                   : PositionAreaRegion::kAll;
+      return PositionArea(span[0], span[1], default_second_span,
+                          default_second_span);
     }
   }
 
@@ -4001,10 +4093,12 @@ PositionArea StyleBuilderConverter::ConvertPositionArea(
 
 PositionTryFallback StyleBuilderConverter::ConvertSinglePositionTryFallback(
     StyleResolverState& state,
-    const CSSValue& value) {
+    const CSSValue& value,
+    bool allow_any_keyword_in_position_area) {
   // <'position-area'>
   if (IsA<CSSValuePair>(value) || IsA<CSSIdentifierValue>(value)) {
-    return PositionTryFallback(ConvertPositionArea(state, value));
+    return PositionTryFallback(
+        ConvertPositionArea(state, value, allow_any_keyword_in_position_area));
   }
   // [<dashed-ident> || <try-tactic>]
   const ScopedCSSName* scoped_name = nullptr;

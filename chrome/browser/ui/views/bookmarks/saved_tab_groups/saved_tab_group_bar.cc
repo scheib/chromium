@@ -116,7 +116,9 @@ void SavedTabGroupBar::ShowEverythingMenu() {
   }
 
   everything_menu_ = std::make_unique<STGEverythingMenu>(
-      overflow_button_->button_controller(), browser_);
+      overflow_button_->button_controller(), browser_,
+      STGEverythingMenu::MenuContext::kSavedTabGroupBar);
+
   everything_menu_->RunMenu();
 }
 
@@ -511,18 +513,42 @@ void SavedTabGroupBar::OnTabGroupButtonPressed(const base::Uuid& id,
   bool left_mouse_button_pressed = event.flags() & ui::EF_LEFT_MOUSE_BUTTON;
 
   if (left_mouse_button_pressed || space_pressed) {
-    const bool will_open_shared_group =
-        group->is_shared_tab_group() && !group->local_group_id().has_value();
+    if (base::FeatureList::IsEnabled(features::kTabGroupMenuImprovements)) {
+      // Open the context menu.
+      SavedTabGroupButton* saved_tab_group_button =
+          views::AsViewClass<SavedTabGroupButton>(
+              GetButton(group->saved_guid()));
+      CHECK(saved_tab_group_button);
 
-    tab_group_service_->OpenTabGroup(
-        group->saved_guid(),
-        std::make_unique<TabGroupActionContextDesktop>(
-            browser_, OpeningSource::kOpenedFromRevisitUi));
+      gfx::Point coordinates;
+      ui::mojom::MenuSourceType source_type;
+      if (left_mouse_button_pressed) {
+        coordinates = ConvertPointToScreen(saved_tab_group_button,
+                                           event.AsLocatedEvent()->location());
+        source_type = ui::mojom::MenuSourceType::kMouse;
+      } else {
+        coordinates = saved_tab_group_button->GetKeyboardContextMenuLocation();
+        source_type = ui::mojom::MenuSourceType::kKeyboard;
+      }
 
-    if (will_open_shared_group) {
-      saved_tab_groups::metrics::RecordSharedTabGroupRecallType(
-          saved_tab_groups::metrics::SharedTabGroupRecallTypeDesktop::
-              kOpenedFromBookmarksBar);
+      saved_tab_group_button->ShowContextMenuForView(saved_tab_group_button,
+                                                     coordinates, source_type);
+
+    } else {
+      // Open the tab group on click or space.
+
+      const bool will_open_shared_group =
+          group->is_shared_tab_group() && !group->local_group_id().has_value();
+
+      tab_group_service_->OpenTabGroup(
+          group->saved_guid(),
+          std::make_unique<TabGroupActionContextDesktop>(
+              browser_, OpeningSource::kOpenedFromRevisitUi));
+      if (will_open_shared_group) {
+        saved_tab_groups::metrics::RecordSharedTabGroupRecallType(
+            saved_tab_groups::metrics::SharedTabGroupRecallTypeDesktop::
+                kOpenedFromBookmarksBar);
+      }
     }
   }
 }

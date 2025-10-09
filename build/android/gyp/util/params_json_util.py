@@ -42,14 +42,18 @@ _COLLECTS_NATIVE_LIBRARIES_TYPES = frozenset([
     'robolectric_binary',
 ])
 
-_CLASSPATH_TYPES = frozenset([
+_COMPILE_TYPES = frozenset([
     'android_apk',
     'android_app_bundle_module',
-    'dist_aar',
-    'dist_jar',
     'java_annotation_processor',
     'java_binary',
+    'java_library',
     'robolectric_binary',
+])
+
+_CLASSPATH_TYPES = frozenset(list(_COMPILE_TYPES) + [
+    'dist_aar',
+    'dist_jar',
 ])
 
 # Track inputs for use in depfiles.
@@ -122,8 +126,12 @@ def _topological_walk(top, deps_func):
 def _filter_deps(deps, restrict_to_resource_types=False):
   """Filters dependencies based on their type."""
   if restrict_to_resource_types:
-    # Root types are never is_resource_type().
-    keep_func = lambda x: x.is_resource_type() or x.is_group()
+    # Consider groups that set input_jars_paths() as java targets. This
+    # prevents such groups from contributing to the classpath when they are
+    # depended on via resource deps. Admittedly, a bit of a hack...
+    keep_func = lambda x: x.is_resource_type() or (x.is_group() and not x.get(
+        'input_jars_paths'))
+
   else:
     keep_func = lambda x: not x.is_root_type()
 
@@ -317,13 +325,22 @@ class ParamsJson(dict):
   def __repr__(self):
     return f'<{self.path}>'
 
-  def build_config_path(self):
-    """Returns the corresponding .build_config.json path."""
-    return self.path.replace('.params.json', '.build_config.json')
+  def build_config_path(self, suffix='.build_config.json'):
+    """Returns the .build_config.json path."""
+    return self.path.replace('.params.json', suffix)
 
   def build_config_json(self):
-    """Returns the parsed JSON of the corresponding .build_config.json."""
+    """Returns the parsed JSON of the .build_config.json."""
     return get_build_config(self.build_config_path())
+
+  def javac_build_config_json(self):
+    """Returns the parsed JSON of the .javac.build_config.json."""
+    return get_build_config(self.build_config_path('.javac.build_config.json'))
+
+  def manifest_build_config_json(self):
+    """Returns the parsed JSON of the .manifest.build_config.json."""
+    return get_build_config(
+        self.build_config_path('.manifest.build_config.json'))
 
   def is_root_type(self):
     """Returns True if the target type is a "root" type (e.g., an APK)."""
@@ -340,6 +357,13 @@ class ParamsJson(dict):
   def merges_manifests(self):
     """Returns True if the target type runs manifest_merger.py."""
     return self.type in _MERGES_MANIFESTS_TYPES
+
+  def needs_full_javac_classpath(self):
+    """Returns True if the target type runs manifest_merger.py."""
+    return self.type in ('android_apk', 'android_app_bundle_module') or (
+        self.is_library() and self.get('needs_full_javac_classpath',
+                                       False)) or (self.type == 'dist_jar'
+                                                   and self.requires_android())
 
   def collects_dex_paths(self):
     """Returns True if the target type collects transitive .dex files."""
@@ -369,8 +393,21 @@ class ParamsJson(dict):
   def has_classpath(self):
     """Returns True if the target type has a classpath."""
     if self.is_library():
-      return self.get('dex_needs_classpath') or not self.get('is_prebuilt')
+      return bool(self.get('dex_needs_classpath') or not self.is_prebuilt())
     return self.type in _CLASSPATH_TYPES
+
+  def is_compile_type(self):
+    """Returns True if the target has a compile step."""
+    return not self.is_prebuilt() and self.type in _COMPILE_TYPES
+
+  def needs_transitive_rtxt(self):
+    """Returns True if the target populates "dependency_rtxt_files"."""
+    return self.type == 'dist_aar' or (self.is_library()
+                                       and not self.is_prebuilt())
+
+  def is_prebuilt(self):
+    """If it's a java_library prebuilt."""
+    return self.is_library() and self.get('is_prebuilt', False)
 
   def is_resource_type(self):
     """Returns True if the target is an Android resource type."""
@@ -385,8 +422,8 @@ class ParamsJson(dict):
   def is_bundle_module(self):
     return self.type == 'android_app_bundle_module'
 
-  def is_dist_jar(self):
-    return self.type == 'dist_jar'
+  def is_dist_xar(self):
+    return self.type in ('dist_aar', 'dist_jar')
 
   def is_group(self):
     return self.type == 'group'
@@ -401,7 +438,7 @@ class ParamsJson(dict):
     """Returns True if the target requires the Android platform."""
     if self.type.startswith('android') or self.type == 'dist_aar':
       return True
-    return self.is_resource_type or self.get('requires_android', False)
+    return self.is_resource_type() or self.get('requires_android', False)
 
   def supports_android(self):
     """Returns True if the target supports the Android platform."""
@@ -422,7 +459,7 @@ class ParamsJson(dict):
 
   @functools.cache  # pylint: disable=method-cache-max-size-none
   def deps(self):
-    """Returns all dependencies, from both deps and public_deps."""
+    """Returns deps + resolved public_deps."""
     deps = DepsList(self._direct_deps())
     deps += self._cached_direct_public_deps()
     deps += _filter_deps(_collect_public_deps(deps),

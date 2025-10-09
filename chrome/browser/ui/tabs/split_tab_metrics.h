@@ -5,7 +5,10 @@
 #ifndef CHROME_BROWSER_UI_TABS_SPLIT_TAB_METRICS_H_
 #define CHROME_BROWSER_UI_TABS_SPLIT_TAB_METRICS_H_
 
+class TabStripModel;
+
 namespace split_tabs {
+class SplitTabId;
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -21,11 +24,17 @@ enum class SplitTabCreatedSource {
   // Extensions API is used to open bookmarks in Split View from the Bookmarks
   // Side Panel.
   kExtensionsApi = 7,
-  kMaxValue = kExtensionsApi,
+  kWhatsNew = 8,
+  kKeyboardShortcut = 9,
+  kMaxValue = kKeyboardShortcut,
 };
 // LINT.ThenChange(//tools/metrics/histograms/metadata/tab/enums.xml:SplitTabCreatedSource)
 
 void RecordSplitTabCreated(SplitTabCreatedSource source);
+void LogSplitViewCreatedUKM(const TabStripModel* tab_strip_model,
+                            const SplitTabId split_id);
+void LogSplitViewUpdatedUKM(const TabStripModel* tab_strip_model,
+                            const SplitTabId split_id);
 }  // namespace split_tabs
 
 #endif  // CHROME_BROWSER_UI_TABS_SPLIT_TAB_METRICS_H_

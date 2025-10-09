@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/containers/flat_map.h"
+#include "base/memory/ref_counted.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_backing.h"
 #include "gpu/gpu_gles2_export.h"
 
@@ -17,10 +17,15 @@ namespace gpu {
 class SharedImageCopyStrategy;
 
 // Manages copy strategies and performs copies between shared image backings.
-class GPU_GLES2_EXPORT SharedImageCopyManager {
+// SharedImageBacking can be created and destroyed in different threads. Since
+// CompoundImageBacking has a ref to SharedImageCopyManager, it is
+// made RefCountedThreadSafe to allow it to be created and destroyed on
+// different threads. The |strategies_| does not need locks because they are
+// assumed to be added during initialization and not modified afterward.
+class GPU_GLES2_EXPORT SharedImageCopyManager
+    : public base::RefCountedThreadSafe<SharedImageCopyManager> {
  public:
   SharedImageCopyManager();
-  ~SharedImageCopyManager();
 
   // Adds a strategy to the list of available copy strategies. The manager
   // takes ownership of the strategy. Strategies should be added in order of
@@ -34,6 +39,9 @@ class GPU_GLES2_EXPORT SharedImageCopyManager {
                  SharedImageBacking* dst_backing);
 
  private:
+  friend class base::RefCountedThreadSafe<SharedImageCopyManager>;
+  ~SharedImageCopyManager();
+
   std::vector<std::unique_ptr<SharedImageCopyStrategy>> strategies_;
 };
 

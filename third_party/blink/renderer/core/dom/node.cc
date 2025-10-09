@@ -501,7 +501,7 @@ Node* Node::PseudoAwarePreviousSibling() const {
       CHECK_EQ(parent->GetPseudoId(), kPseudoIdViewTransitionImagePair);
       return parent->GetPseudoElement(
           kPseudoIdViewTransitionOld,
-          To<PseudoElement>(this)->view_transition_name());
+          To<ViewTransitionPseudoElementBase>(this)->view_transition_name());
     case kPseudoIdViewTransitionGroup: {
       auto* pseudo = To<ViewTransitionPseudoElementBase>(this);
       auto* parent_pseudo = To<ViewTransitionPseudoElementBase>(parent);
@@ -519,7 +519,7 @@ Node* Node::PseudoAwarePreviousSibling() const {
       CHECK_EQ(parent->GetPseudoId(), kPseudoIdViewTransitionGroup);
       return parent->GetPseudoElement(
           kPseudoIdViewTransitionImagePair,
-          To<PseudoElement>(this)->view_transition_name());
+          To<ViewTransitionPseudoElementBase>(this)->view_transition_name());
     case kPseudoIdViewTransitionImagePair:
     case kPseudoIdViewTransitionOld:
       return nullptr;
@@ -628,7 +628,7 @@ Node* Node::PseudoAwareNextSibling() const {
       CHECK_EQ(parent->GetPseudoId(), kPseudoIdViewTransitionImagePair);
       return parent->GetPseudoElement(
           kPseudoIdViewTransitionNew,
-          To<PseudoElement>(this)->view_transition_name());
+          To<ViewTransitionPseudoElementBase>(this)->view_transition_name());
     case kPseudoIdViewTransitionGroup: {
       auto* pseudo = To<ViewTransitionPseudoElementBase>(this);
       auto* parent_pseudo = To<ViewTransitionPseudoElementBase>(parent);
@@ -646,7 +646,7 @@ Node* Node::PseudoAwareNextSibling() const {
       CHECK_EQ(parent->GetPseudoId(), kPseudoIdViewTransitionGroup);
       return parent->GetPseudoElement(
           kPseudoIdViewTransitionGroupChildren,
-          To<PseudoElement>(this)->view_transition_name());
+          To<ViewTransitionPseudoElementBase>(this)->view_transition_name());
     case kPseudoIdViewTransitionGroupChildren:
     case kPseudoIdViewTransitionNew:
       return nullptr;
@@ -671,11 +671,11 @@ Node* Node::PseudoAwareFirstChild() const {
     if (GetPseudoId() == kPseudoIdViewTransitionGroup) {
       return current_element->GetPseudoElement(
           kPseudoIdViewTransitionImagePair,
-          To<PseudoElement>(this)->view_transition_name());
+          To<ViewTransitionPseudoElementBase>(this)->view_transition_name());
     }
     if (GetPseudoId() == kPseudoIdViewTransitionImagePair) {
       const AtomicString& name =
-          To<PseudoElement>(this)->view_transition_name();
+          To<ViewTransitionPseudoElementBase>(this)->view_transition_name();
       if (Node* first = current_element->GetPseudoElement(
               kPseudoIdViewTransitionOld, name)) {
         return first;
@@ -772,16 +772,16 @@ Node* Node::PseudoAwareLastChild() const {
                .empty()) {
         return current_element->GetPseudoElement(
             kPseudoIdViewTransitionGroupChildren,
-            To<PseudoElement>(this)->view_transition_name());
+            To<ViewTransitionPseudoElementBase>(this)->view_transition_name());
       } else {
         return current_element->GetPseudoElement(
             kPseudoIdViewTransitionImagePair,
-            To<PseudoElement>(this)->view_transition_name());
+            To<ViewTransitionPseudoElementBase>(this)->view_transition_name());
       }
     }
     if (GetPseudoId() == kPseudoIdViewTransitionImagePair) {
       const AtomicString& name =
-          To<PseudoElement>(this)->view_transition_name();
+          To<ViewTransitionPseudoElementBase>(this)->view_transition_name();
       if (Node* last = current_element->GetPseudoElement(
               kPseudoIdViewTransitionNew, name)) {
         return last;
@@ -1612,26 +1612,6 @@ void Node::SetNeedsStyleRecalc(StyleChangeType change_type,
   // AnimationStyleChange bit may be reset to 'true'.
   if (auto* this_element = DynamicTo<Element>(this)) {
     this_element->SetAnimationStyleChange(false);
-
-    // The style walk for the pseudo tree created for a ViewTransition is
-    // done after resolving style for the author DOM. See
-    // StyleEngine::RecalcTransitionPseudoStyle.
-    // Since the dirty bits from the originating element (root element) are not
-    // propagated to these pseudo-elements during the default walk, we need to
-    // invalidate style for these elements here.
-    bool mark_transition_pseudos =
-        RuntimeEnabledFeatures::ScopedViewTransitionsEnabled()
-            ? this_element->GetPseudoElement(kPseudoIdViewTransition) != nullptr
-            : this_element->IsDocumentElement();
-    if (mark_transition_pseudos) {
-      auto update_style_change = [](PseudoElement* pseudo_element) {
-        pseudo_element->SetNeedsStyleRecalc(
-            kLocalStyleChange, StyleChangeReasonForTracing::Create(
-                                   style_change_reason::kViewTransition));
-      };
-      ViewTransitionUtils::ForEachTransitionPseudo(*this_element,
-                                                   update_style_change);
-    }
   }
 
   if (auto* svg_element = DynamicTo<SVGElement>(this))
@@ -1797,6 +1777,17 @@ bool Node::ContainsIncludingHostElements(const Node& node) const {
           static_cast<const TemplateContentDocumentFragment*>(current)->Host();
     else
       current = current->ParentOrShadowHostNode();
+  } while (current);
+  return false;
+}
+
+bool Node::ContainsViaFlatTree(const Node& node) const {
+  const Node* current = &node;
+  do {
+    if (current == this) {
+      return true;
+    }
+    current = FlatTreeTraversal::Parent(*current);
   } while (current);
   return false;
 }

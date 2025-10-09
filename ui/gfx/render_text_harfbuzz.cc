@@ -80,9 +80,10 @@ const size_t kMaxTextLength = 10000;
 // character to belong to more scripts.
 const size_t kMaxScripts = 32;
 
-BASE_FEATURE(kCombiningMarkScript,
-             "CombiningMarkScript",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+// A kill switch to ignore (copy the previous value) of the script extension
+// property, in case problems occur by changes in ICU/CLDR.
+// Be aware that this feature is off-by-default, unlike other kill switches.
+BASE_FEATURE(kCombiningMarkScript, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsCombiningMarkScriptEnabled() {
   static bool is_enabled = false;
@@ -812,16 +813,13 @@ internal::TextRunHarfBuzz::FontParams CreateFontParams(
   return font_params;
 }
 
-BASE_FEATURE(kRemoveFontLinkFallbacks,
-             "RemoveFontLinkFallbacks",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kRemoveFontLinkFallbacks, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsRemoveFontLinkFallbacks() {
   return base::FeatureList::IsEnabled(kRemoveFontLinkFallbacks);
 }
 
 BASE_FEATURE(kEnableFallbackFontsCrashReporting,
-             "EnableFallbackFontsCrashReporting",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsEnableFallbackFontsCrashReporting() {

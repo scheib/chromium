@@ -680,8 +680,8 @@ IN_PROC_BROWSER_TEST_F(WebUINavigationBrowserTest,
   EXPECT_EQ(main_frame_url, webui_rfh->GetLastCommittedURL());
   EXPECT_TRUE(ChildProcessSecurityPolicyImpl::GetInstance()->HasWebUIBindings(
       webui_rfh->GetProcess()->GetDeprecatedID()));
-  EXPECT_FALSE(
-      webui_site_instance->GetSiteInfo().process_lock_url().is_empty());
+  EXPECT_TRUE(
+      webui_site_instance->GetProcess()->GetProcessLock().IsLockedToSite());
   EXPECT_EQ(root->current_frame_host()->GetProcess()->GetProcessLock(),
             ProcessLock::FromSiteInfo(webui_site_instance->GetSiteInfo()));
 
@@ -1093,7 +1093,7 @@ IN_PROC_BROWSER_TEST_F(WebUINavigationBrowserTest,
   GURL blob_url(
       EvalJs(shell(), kScript, EXECUTE_SCRIPT_DEFAULT_OPTIONS, 1 /* world_id */)
           .ExtractString());
-  EXPECT_EQ(url::kBlobScheme, blob_url.scheme());
+  EXPECT_EQ(url::kBlobScheme, blob_url.GetScheme());
 
   // Verify that the blob also requires a dedicated process and that it would
   // use the same site url as the original page.
@@ -1138,7 +1138,7 @@ IN_PROC_BROWSER_TEST_F(WebUINavigationBrowserTest,
   GURL blob_url(
       EvalJs(shell(), kScript, EXECUTE_SCRIPT_DEFAULT_OPTIONS, 1 /* world_id */)
           .ExtractString());
-  EXPECT_EQ(url::kBlobScheme, blob_url.scheme());
+  EXPECT_EQ(url::kBlobScheme, blob_url.GetScheme());
 
   // Verify that the blob also requires a dedicated process and that it would
   // use the same site url as the original page.

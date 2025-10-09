@@ -14,6 +14,7 @@ found in the LICENSE file.
         <!-- Set android alert dialog attributes because the context menu dialog is
              OS-dependent. -->
         <item name="android:alertDialogTheme">@style/ThemeOverlay.BrowserUI.AlertDialog</item>
+        <item name="android:timePickerDialogTheme">@style/ThemeOverlay.BrowserUI.AlertDialog.TimePicker</item>
     </style>
 
     <style name="Base.Theme.Chromium.WithWindowAnimation">
@@ -96,8 +97,11 @@ found in the LICENSE file.
 
     <style
         name="ThemeOverlay.Chromium.Settings.Containment" parent="">
+        <item name="textInputStyle">@style/Widget.Chromium.Settings.TextInputLayout.OutlinedBox</item>
+        <item name="autoCompleteTextViewStyle">@style/Widget.Chromium.Settings.AutoCompleteTextView.OutlinedBox</item>
         <item name="android:navigationBarColor">@macro/settings_bg_color</item>
         <item name="android:statusBarColor">@macro/settings_bg_color</item>
+        <item name="android:colorAccent">@macro/preference_category_text_color</item>
     </style>
 
     <style name="Theme.Chromium.Settings.ManageSpace">
@@ -173,7 +177,11 @@ found in the LICENSE file.
     </style>
     <style name="Theme.Chromium.DialogWhenLarge" parent="Base.Theme.Chromium.DialogWhenLarge" />
     <style name="DimmingDialog" parent="Base.Theme.Chromium.DialogWhenLarge">
-        <item name="android:windowLightNavigationBar" tools:targetApi="28">false</item>
+        <item name="isDialogFullscreen">true</item>
+        <item name="android:statusBarColor">@color/modal_dialog_scrim_color</item>
+        <item name="android:navigationBarColor">@macro/sheet_bg_color</item>
+        <item name="android:navigationBarDividerColor">@null</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 
     <!-- Theme variation for low-end devices.
@@ -208,7 +216,7 @@ found in the LICENSE file.
 
 
     <!-- Settings -->
-    <style name="SettingsToolbarStyle" parent="Widget.Material3.Toolbar">
+    <style name="SettingsToolbarStyle" parent="Widget.Material3Expressive.Toolbar">
         <item name="titleTextAppearance">@style/TextAppearance.Headline.Primary</item>
         <item name="titleTextColor">?attr/colorOnSurface</item>
         <item name="navigationIconTint">?attr/colorOnSurface</item>
@@ -277,6 +285,32 @@ found in the LICENSE file.
 
     <style name="TextAppearance.DistilledPagePrefTextSizeLarge">
         <item name="android:textSize">20sp</item>
+    </style>
+
+    <style name="ReaderModeFontStyleButton"
+        parent="Widget.Material3Expressive.Button.IconButton.Tonal">
+        <item name="android:textAppearance">
+            @style/TextAppearance.ReaderModeFontStyleButton
+        </item>
+    </style>
+
+    <style name="TextAppearance.ReaderModeFontStyleButton"
+        parent="TextAppearance.Button.Text.Filled">
+        <item name="android:textColor">
+            @color/reader_mode_prefs_font_style_button_text_color
+        </item>
+    </style>
+
+    <style name="TextAppearance.ReaderModePrefsFontStyleSignifier">
+        <item name="android:textSize">
+            @dimen/reader_mode_prefs_font_style_signifier_text_size
+        </item>
+    </style>
+
+    <style name="TextAppearance.ReaderModePrefsFontStyleName">
+        <item name="android:textSize">
+            @dimen/reader_mode_prefs_font_style_name_text_size
+        </item>
     </style>
 
     <!-- Button bar styles -->
@@ -370,9 +404,9 @@ found in the LICENSE file.
     </style>
 
     <!-- Misc styles -->
-    <style name="TextAppearance.UpdateMenuItem">
+    <style name="TextAppearance.DensityAdaptive.UpdateMenuItem" parent="TextAppearance">
         <item name="android:textColor">@color/update_menu_item_text_color</item>
-        <item name="android:textSize">@dimen/text_size_large</item>
+        <item name="android:textSize">?attr/textLargeSize</item>
     </style>
     <style name="SadTabBodyText">
         <item name="android:textAppearance">@style/TextAppearance.TextMedium.Secondary</item>
@@ -411,6 +445,10 @@ found in the LICENSE file.
     -->
     <style name="TextAppearance.FakeSearchBoxTextMedium" parent="TextAppearance.MediumStyle">
         <item name="android:textSize">@dimen/location_bar_url_text_size</item>
+        <item name="android:textColorHint">@macro/ntp_search_box_hint</item>
+    </style>
+
+    <style name="TextAppearance.ComposeplateTextMedium" parent="TextAppearance.TextMediumThick">
         <item name="android:textColorHint">@macro/ntp_search_box_hint</item>
     </style>
 
@@ -464,9 +502,9 @@ found in the LICENSE file.
     <!-- Context menu -->
     <style name="ContextMenuItemText">
         <item name="android:gravity">center_vertical</item>
-        <item name="android:minHeight">@dimen/min_touch_target_size</item>
+        <item name="android:minHeight">?attr/minInteractTargetSize</item>
         <item name="android:textAlignment">viewStart</item>
-        <item name="android:textAppearance">@style/TextAppearance.TextLarge.Primary</item>
+        <item name="android:textAppearance">@style/TextAppearance.DensityAdaptive.TextLarge.Primary</item>
     </style>
 
     <style name="ContextMenuChip" parent="Chip">
@@ -495,7 +533,7 @@ found in the LICENSE file.
 
     <!-- Overflow menu -->
     <style name="AppMenuItemText">
-        <item name="android:textAppearance">@style/TextAppearance.TextLarge.Primary</item>
+        <item name="android:textAppearance">@style/TextAppearance.DensityAdaptive.TextLarge.Primary</item>
         <item name="android:singleLine">true</item>
         <item name="android:paddingEnd">9dp</item>
         <item name="android:gravity">center_vertical</item>
@@ -504,8 +542,8 @@ found in the LICENSE file.
         <item name="android:drawablePadding">12dp</item>
         <item name="android:tintMode">src_in</item>
         <item name="chromeDrawableTint">@color/default_icon_color_secondary_tint_list</item>
-        <item name="drawableWidth">24dp</item>
-        <item name="drawableHeight">24dp</item>
+        <item name="drawableWidth">?attr/listItemIconSize</item>
+        <item name="drawableHeight">?attr/listItemIconSize</item>
     </style>
 
     <!--  Dialog for notification blocked message.  -->
@@ -535,6 +573,8 @@ found in the LICENSE file.
     -->
     <style name="ModernToolbarPopupTheme">
         <item name="android:listChoiceIndicatorSingle">@drawable/checkmark_selection_drawable</item>
+        <item name="android:itemTextAppearance">@style/TextAppearance.DensityAdaptive.TextLarge.Primary</item>
+        <item name="listPreferredItemHeightSmall">?attr/listItemHeight</item>
     </style>
 
     <style name="Theme.Chromium.Widget" parent="Theme.BrowserUI.DayNight" />

@@ -58,7 +58,7 @@ gfx::RectF LayoutSVGForeignObject::DecoratedBoundingBox() const {
 gfx::RectF LayoutSVGForeignObject::VisualRectInLocalSVGCoordinates() const {
   NOT_DESTROYED();
   PhysicalOffset offset = PhysicalLocation();
-  PhysicalSize size = Size();
+  PhysicalSize size = StitchedSize();
   return gfx::RectF(offset.left, offset.top, size.width, size.height);
 }
 
@@ -104,7 +104,7 @@ SVGLayoutResult LayoutSVGForeignObject::UpdateSVGLayout(
   // will not care about (reach) this value.
   UpdateTransformBeforeLayout();
 
-  const PhysicalRect old_frame_rect(PhysicalLocation(), Size());
+  const PhysicalRect old_frame_rect(PhysicalLocation(), StitchedSize());
 
   // Resolve the viewport in the local coordinate space - this does not include
   // zoom.
@@ -158,7 +158,7 @@ SVGLayoutResult LayoutSVGForeignObject::UpdateSVGLayout(
 
   DCHECK(!NeedsLayout() || ChildLayoutBlockedByDisplayLock());
 
-  const PhysicalRect frame_rect(PhysicalLocation(), Size());
+  const PhysicalRect frame_rect(PhysicalLocation(), StitchedSize());
   bool bounds_changed = old_frame_rect != frame_rect;
   if (UpdateAfterSVGLayout(layout_info, bounds_changed)) {
     bounds_changed = true;
@@ -183,10 +183,12 @@ bool LayoutSVGForeignObject::UpdateAfterSVGLayout(
   return UpdateTransformAfterLayout(layout_info, bounds_changed);
 }
 
-void LayoutSVGForeignObject::StyleDidChange(StyleDifference diff,
-                                            const ComputedStyle* old_style) {
+void LayoutSVGForeignObject::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
-  LayoutSVGBlock::StyleDidChange(diff, old_style);
+  LayoutSVGBlock::StyleDidChange(diff, old_style, style_change_context);
 
   float old_zoom = old_style ? old_style->EffectiveZoom()
                              : ComputedStyleInitialValues::InitialZoom();

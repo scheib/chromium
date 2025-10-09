@@ -216,8 +216,7 @@ SupervisedUserService::SupervisedUserService(
          "a dependency of this service.";
 
 #if BUILDFLAG(IS_ANDROID)
-  if (!base::FeatureList::IsEnabled(
-          kPropagateDeviceContentFiltersToSupervisedUser) &&
+  if (!UseLocalSupervision() &&
       (base::FeatureList::IsEnabled(
           kSupervisedUserClearDeviceContentFiltersPrefsOnStartup))) {
     // Users with disabled experiment cannot have these prefs set in user space
@@ -291,6 +290,8 @@ void SupervisedUserService::OnFamilyLinkParentalControlsEnabled() {
 
   // Also disables incognito mode.
   SetSettingsServiceActive(true);
+  // TODO(crbug.com/447414264): Check if tabs should be closed in the first
+  // place.
   platform_delegate_->CloseIncognitoTabs();
 
   remote_web_approvals_manager_.AddApprovalRequestCreator(
@@ -420,7 +421,9 @@ void SupervisedUserService::EnableSearchContentFilters() {
 
   settings_service_->SetSuspended(true);
   content_filters_service_->SetSearchFiltersEnabled(true);
-  platform_delegate_->CloseIncognitoTabs();
+  if (platform_delegate_->ShouldCloseIncognitoTabs()) {
+    platform_delegate_->CloseIncognitoTabs();
+  }
 
   // OnSearchContentFiltersChanged reattributes the synthetic field trial
   // groups and then reloads search pages.
@@ -448,7 +451,9 @@ void SupervisedUserService::EnableBrowserContentFilters() {
   RemoveURLFilterPrefChangeHandlers();
   settings_service_->SetSuspended(true);
   content_filters_service_->SetBrowserFiltersEnabled(true);
-  platform_delegate_->CloseIncognitoTabs();
+  if (platform_delegate_->ShouldCloseIncognitoTabs()) {
+    platform_delegate_->CloseIncognitoTabs();
+  }
 
   // Add handlers that will prevent unsupported url filter changes.
   AddURLFilterPrefChangeSentinels();

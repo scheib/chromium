@@ -443,7 +443,7 @@ class TestWritableStreamSink final : public UnderlyingSinkBase {
       PostCrossThreadTask(*task_runner_, FROM_HERE, std::move(error_callback_));
     }
 
-    // We don't use WTF::String because this object can be accessed from
+    // We don't use blink::String because this object can be accessed from
     // multiple threads.
     std::string result_;
 
@@ -702,7 +702,8 @@ void Internals::ResetToConsistentState(Page* page) {
 
   LocalFrame* frame = page->DeprecatedLocalMainFrame();
   frame->View()->LayoutViewport()->SetScrollOffset(
-      ScrollOffset(), mojom::blink::ScrollType::kProgrammatic);
+      ScrollOffset(), mojom::blink::ScrollType::kProgrammatic,
+      cc::ScrollSourceType::kNone);
   OverrideUserPreferredLanguagesForTesting(Vector<AtomicString>());
 
   KeyboardEventManager::SetCurrentCapsLockState(
@@ -942,8 +943,8 @@ ScriptPromise<IDLLong> Internals::getInitialResourcePriority(
   auto promise = resolver->Promise();
   KURL resource_url = url_test_helpers::ToKURL(url.Utf8());
 
-  auto callback = WTF::BindOnce(&Internals::ResolveResourcePriority,
-                                WrapPersistent(this), WrapPersistent(resolver));
+  auto callback = BindOnce(&Internals::ResolveResourcePriority,
+                           WrapPersistent(this), WrapPersistent(resolver));
   document->Fetcher()->AddPriorityObserverForTesting(
       resource_url, std::move(callback), new_load_only);
 
@@ -1361,10 +1362,7 @@ void Internals::setMarker(Document* document,
     // see the marker appearance.
     document->Markers().AddGlicMarker(EphemeralRange(range));
     document->Markers().StartGlicMarkerAnimationIfNeeded();
-    base::TimeTicks ticks;
-    document->Markers().ContinueGlicMarkerAnimation(ticks);
-    ticks += base::TimeDelta::Max();
-    document->Markers().ContinueGlicMarkerAnimation(ticks);
+    document->Markers().ContinueGlicMarkerAnimation(base::TimeTicks());
   }
 }
 
@@ -2604,6 +2602,27 @@ String Internals::dumpContentNodeTree(Document* document,
   return DumpContentNodeTreeForTest(WebLocalFrameImpl::FromFrame(frame));
 }
 
+String Internals::dumpContentNode(Node* node,
+                                  ExceptionState& exception_state) const {
+  DCHECK(node);
+  Document* document = &node->GetDocument();
+  if (!document->GetFrame()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidAccessError,
+                                      "The node's document is invalid.");
+    return String();
+  }
+
+  LocalFrame* frame = DynamicTo<LocalFrame>(document->GetFrame());
+  if (!frame) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidAccessError,
+        "The node's document must be in a local frame.");
+    return String();
+  }
+
+  return DumpContentNodeForTest(WebLocalFrameImpl::FromFrame(frame), node);
+}
+
 String Internals::mainThreadScrollingReasons(
     Document* document,
     ExceptionState& exception_state) const {
@@ -3368,6 +3387,8 @@ void Internals::setForcedColorsAndDarkPreferredColorScheme(Document* document) {
   color_scheme_helper_.emplace(*document);
   color_scheme_helper_->SetPreferredColorScheme(
       mojom::blink::PreferredColorScheme::kDark);
+  color_scheme_helper_->SetPreferredContrast(
+      mojom::blink::PreferredContrast::kMore);
   color_scheme_helper_->SetInForcedColors(*document, /*in_forced_colors=*/true);
   color_scheme_helper_->SetEmulatedForcedColors(*document,
                                                 /*is_dark_theme=*/false);
@@ -4012,7 +4033,7 @@ ScriptPromise<IDLString> Internals::LCPPrediction(ScriptState* script_state,
   LCPCriticalPathPredictor* lcpp = document->GetFrame()->GetLCPP();
   CHECK(lcpp);
   lcpp->AddLCPPredictedCallback(
-      WTF::BindOnce(&OnLCPPredicted, WrapPersistent(resolver)));
+      BindOnce(&OnLCPPredicted, WrapPersistent(resolver)));
   return promise;
 }
 
@@ -4045,8 +4066,8 @@ ScriptPromise<IDLUndefined> Internals::exemptUrlFromNetworkRevocation(
   auto promise = resolver->Promise();
   frame->GetLocalFrameHostRemote().ExemptUrlFromNetworkRevocationForTesting(
       url_test_helpers::ToKURL(url.Utf8()),
-      WTF::BindOnce(&ExemptUrlFromNetworkRevocationComplete,
-                    WrapPersistent(resolver)));
+      BindOnce(&ExemptUrlFromNetworkRevocationComplete,
+               WrapPersistent(resolver)));
   return promise;
 }
 

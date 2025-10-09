@@ -7,6 +7,7 @@
 #include "base/strings/strcat.h"
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
+#include "gpu/command_buffer/service/shared_image/d3d11_image_same_adapter_copy_strategy.h"
 #include "gpu/command_buffer/service/shared_image/d3d_image_backing.h"
 #include "gpu/ipc/common/dxgi_helpers.h"
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
@@ -173,19 +174,12 @@ void DawnD3DBufferRepresentation::EndAccess() {
 WebNND3DTensorRepresentation::WebNND3DTensorRepresentation(
     SharedImageManager* manager,
     SharedImageBacking* backing,
-    MemoryTypeTracker* tracker,
-    Microsoft::WRL::ComPtr<ID3D12Device> d3d12_device)
-    : WebNNTensorRepresentation(manager, backing, tracker),
-      d3d12_device_(std::move(d3d12_device)) {}
+    MemoryTypeTracker* tracker)
+    : WebNNTensorRepresentation(manager, backing, tracker) {}
 
 WebNND3DTensorRepresentation::~WebNND3DTensorRepresentation() = default;
 
 bool WebNND3DTensorRepresentation::BeginAccess() {
-  // Context was lost and re-synchronization isn't necessary.
-  if (!webnn_tensor_) {
-    return false;
-  }
-
   // Backing rejected access.
   auto opt_d3d_write_fence =
       static_cast<D3DImageBacking*>(backing())->BeginAccessWebNN();
@@ -199,36 +193,13 @@ bool WebNND3DTensorRepresentation::BeginAccess() {
     return true;
   }
 
-  Microsoft::WRL::ComPtr<ID3D12Fence> d3d12_write_fence;
-  HRESULT hr = d3d12_device_->OpenSharedHandle(
-      d3d_write_fence->GetSharedHandle(), IID_PPV_ARGS(&d3d12_write_fence));
-  CHECK_EQ(hr, S_OK) << ", OpenSharedHandle failed: "
-                     << logging::SystemErrorCodeToString(hr);
-
-  if (!webnn_tensor_->BeginAccessWebNN(d3d12_write_fence,
-                                       d3d_write_fence->GetFenceValue())) {
-    LOG(ERROR) << "Failed to begin access on WebNNTensor";
-    return false;
-  };
-
+  acquire_fence_ = std::move(d3d_write_fence);
   return true;
 }
 
 void WebNND3DTensorRepresentation::EndAccess() {
-  scoped_refptr<gfx::D3DSharedFence> signaled_fence;
-  if (webnn_tensor_) {
-    auto webnn_fence_to_wait_for = webnn_tensor_->EndAccessWebNN();
-    CHECK(webnn_fence_to_wait_for) << "Failed to end access on WebNNTensor";
-    signaled_fence = gfx::D3DSharedFence::CreateFromD3D12Fence(
-        webnn_fence_to_wait_for->GetD3D12Fence(),
-        webnn_fence_to_wait_for->GetFenceValue());
-    if (!signaled_fence) {
-      LOG(ERROR) << "Failed to import D3D fence from WebNN on EndAccess";
-    }
-  }
-
   static_cast<D3DImageBacking*>(backing())->EndAccessWebNN(
-      std::move(signaled_fence));
+      std::move(release_fence_));
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource>
@@ -236,10 +207,14 @@ WebNND3DTensorRepresentation::GetD3D12Buffer() const {
   return static_cast<D3DImageBacking*>(backing())->GetD3D12Buffer();
 }
 
-void WebNND3DTensorRepresentation::ConsumeWebNNTensor(
-    base::WeakPtr<webnn::native::d3d12::WebNNTensor> webnn_tensor) {
-  CHECK_EQ(webnn_tensor_.get(), nullptr);
-  webnn_tensor_ = std::move(webnn_tensor);
+scoped_refptr<gfx::D3DSharedFence>
+WebNND3DTensorRepresentation::GetAcquireFence() const {
+  return acquire_fence_;
+}
+
+void WebNND3DTensorRepresentation::SetReleaseFence(
+    scoped_refptr<gfx::D3DSharedFence> release_fence) {
+  release_fence_ = std::move(release_fence);
 }
 
 OverlayD3DImageRepresentation::OverlayD3DImageRepresentation(
@@ -436,53 +411,31 @@ D3D11VideoImageCopyRepresentation::CreateFromD3D(SharedImageManager* manager,
   D3D11_TEXTURE2D_DESC source_desc;
   texture->GetDesc(&source_desc);
 
-  D3D11_TEXTURE2D_DESC desc = InitVideoCopyTextureDesc(
+  D3D11_TEXTURE2D_DESC dest_desc = InitVideoCopyTextureDesc(
       source_desc.Width, source_desc.Height, source_desc.Format);
-  Microsoft::WRL::ComPtr<ID3D11Texture2D> d3d_dest_texture;
-  HRESULT hr = d3d_device->CreateTexture2D(&desc, nullptr, &d3d_dest_texture);
+
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> dest_texture;
+  HRESULT hr = d3d_device->CreateTexture2D(&dest_desc, nullptr, &dest_texture);
   if (FAILED(hr)) {
-    LOG(ERROR) << "Failed to create destination texture for video:"
+    LOG(ERROR) << "Failed to create destination texture for video: "
                << logging::SystemErrorCodeToString(hr);
     return nullptr;
   }
+
   std::string updated_debug_label = base::StrCat(
       {"D3D11VideoImageCopyRepresentation_", std::string(debug_label)});
-  d3d_dest_texture->SetPrivateData(WKPDID_D3DDebugObjectName,
-                                   updated_debug_label.length(),
-                                   updated_debug_label.c_str());
+  dest_texture->SetPrivateData(WKPDID_D3DDebugObjectName,
+                               updated_debug_label.length(),
+                               updated_debug_label.c_str());
 
-  Microsoft::WRL::ComPtr<IDXGIResource1> dxgi_resource;
-  hr = d3d_dest_texture.As(&dxgi_resource);
-  CHECK_EQ(hr, S_OK);
-  HANDLE dest_texture_handle;
-  hr = dxgi_resource->CreateSharedHandle(
-      nullptr, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, nullptr,
-      &dest_texture_handle);
-  CHECK_EQ(hr, S_OK);
-  base::win::ScopedHandle scoped_shared_handle(dest_texture_handle);
-
-  Microsoft::WRL::ComPtr<ID3D11Device1> texture_device1;
-  hr = texture_device->QueryInterface(IID_PPV_ARGS(&texture_device1));
-  CHECK_EQ(hr, S_OK);
-  Microsoft::WRL::ComPtr<ID3D11Texture2D> shared_texture;
-  hr = texture_device1->OpenSharedResource1(dest_texture_handle,
-                                            IID_PPV_ARGS(&shared_texture));
-  CHECK_EQ(hr, S_OK);
-  Microsoft::WRL::ComPtr<IDXGIKeyedMutex> shared_keyed_mutex;
-  hr = shared_texture.As(&shared_keyed_mutex);
-  CHECK_EQ(hr, S_OK);
-  Microsoft::WRL::ComPtr<ID3D11DeviceContext> texture_device_context;
-  texture_device->GetImmediateContext(&texture_device_context);
-
-  hr = shared_keyed_mutex->AcquireSync(0, INFINITE);
-  CHECK_EQ(hr, S_OK);
-  {
-    DXGIScopedReleaseKeyedMutex scoped_keyed_mutex(shared_keyed_mutex, 0);
-    texture_device_context->CopyResource(shared_texture.Get(), texture);
+  if (!D3D11ImageSameAdapterCopyStrategy::CopyD3D11TextureOnSameAdapter(
+          texture, dest_texture.Get())) {
+    LOG(ERROR) << "Failed to copy texture for video";
+    return nullptr;
   }
 
   return std::make_unique<D3D11VideoImageCopyRepresentation>(
-      manager, backing, tracker, d3d_dest_texture.Get());
+      manager, backing, tracker, std::move(dest_texture));
 }
 
 D3D11VideoImageCopyRepresentation::D3D11VideoImageCopyRepresentation(
@@ -547,10 +500,9 @@ bool D3DSkiaGraphiteDawnImageRepresentation::
   return !d3d_image_backing->has_keyed_mutex();
 }
 
-bool D3DSkiaGraphiteDawnImageRepresentation::
-    NeedGraphiteContextSubmitBeforeEndAccess() {
+bool D3DSkiaGraphiteDawnImageRepresentation::SupportsDeferredGraphiteSubmit() {
   D3DImageBacking* d3d_image_backing = static_cast<D3DImageBacking*>(backing());
-  return !d3d_image_backing->SupportsDeferredGraphiteSubmit();
+  return d3d_image_backing->SupportsDeferredGraphiteSubmit();
 }
 
 std::vector<scoped_refptr<SkiaImageRepresentation::GraphiteTextureHolder>>

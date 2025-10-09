@@ -12,12 +12,16 @@
 
 namespace blink {
 
+class ComputedStyle;
 class GridItems;
+class GridLayoutData;
 class GridLineResolver;
 class GridSizingTrackCollection;
 class MasonryRunningPositions;
 enum class SizingConstraint;
+struct BoxStrut;
 struct GridItemData;
+struct GridPlacementData;
 
 class CORE_EXPORT MasonryLayoutAlgorithm
     : public LayoutAlgorithm<MasonryNode, BoxFragmentBuilder, BlockBreakToken> {
@@ -26,6 +30,17 @@ class CORE_EXPORT MasonryLayoutAlgorithm
 
   MinMaxSizesResult ComputeMinMaxSizes(const MinMaxSizesFloatInput&);
   const LayoutResult* Layout();
+
+  // Computes the containing block rect for out-of-flow items placed
+  // within the masonry.
+  static LogicalRect ComputeOutOfFlowItemContainingRect(
+      const GridPlacementData& placement_data,
+      const GridLayoutData& layout_data,
+      const ComputedStyle& masonry_style,
+      const BoxStrut& borders,
+      const LogicalSize& border_box_size,
+      const BoxStrut& border_scrollbar_padding,
+      GridItemData* out_of_flow_item);
 
  private:
   friend class MasonryLayoutAlgorithmTest;
@@ -43,10 +58,15 @@ class CORE_EXPORT MasonryLayoutAlgorithm
       MasonryRunningPositions& running_positions,
       std::optional<SizingConstraint> sizing_constraint = std::nullopt);
 
-  // Places all out-of-flow (OOF) masonry items via
+  // Places all out-of-flow (OOF) masonry items. For each item, this method
+  // computes the size and location of the containing block rectangle within the
+  // masonry container, calculates alignment offsets using item alignment
+  // properties, and adds the item as an out-of-flow candidate via
   // `AddOutOfFlowChildCandidate`. `oof_children` is a required input vector
   // containing the layout boxes of OOF masonry items.
-  void PlaceOutOfFlowItems(HeapVector<Member<LayoutBox>>& oof_children);
+  void PlaceOutOfFlowItems(const GridLayoutData& layout_data,
+                           LayoutUnit block_size,
+                           HeapVector<Member<LayoutBox>>& oof_children);
 
   // Returns the track collection given the provided `sizing_constraint`.
   // If `intrinsic_repeat_track_sizes` is non-null, this contains the track
@@ -80,8 +100,10 @@ class CORE_EXPORT MasonryLayoutAlgorithm
 
   // Given a `track_collection`, return all the track sizes of an auto repeat
   // that has intrinsic track size(s). This method assumes that such an auto
-  // repeat exists in `track_collection`.
+  // repeat exists in `track_collection`. `has_items` indicates whether there
+  // are any masonry items in the masonry container.
   Vector<LayoutUnit> GetIntrinsicRepeaterTrackSizes(
+      bool has_items,
       const GridSizingTrackCollection& track_collection) const;
 
   // If `intrinsic_repeat_track_sizes` is non-null, this indicates the track
@@ -123,9 +145,13 @@ class CORE_EXPORT MasonryLayoutAlgorithm
       const GridItemData& masonry_item,
       const LogicalSize& containing_size,
       const LogicalSize& fixed_available_size,
-      LayoutResultCacheSlot result_cache_slot,
-      const std::optional<LogicalSize>& opt_percentage_resolution_size =
-          std::nullopt) const;
+      LayoutResultCacheSlot result_cache_slot) const;
+
+  // Return the inline contribution of `masonry_item` calculated to either the
+  // min-width or the max-width based on `sizing_constraint`.
+  LayoutUnit CalculateItemInlineContribution(
+      const GridItemData& masonry_item,
+      SizingConstraint sizing_constraint);
 
   // If `containing_rect` is provided, it will store the available size for the
   // item and its offset within the container. These values will be used to
@@ -133,11 +159,11 @@ class CORE_EXPORT MasonryLayoutAlgorithm
   ConstraintSpace CreateConstraintSpaceForLayout(
       const GridItemData& masonry_item,
       const GridLayoutTrackCollection& track_collection,
+      std::optional<LayoutUnit> opt_fixed_inline_size = std::nullopt,
       LogicalRect* containing_rect = nullptr) const;
 
   ConstraintSpace CreateConstraintSpaceForMeasure(
       const GridItemData& masonry_item,
-      const bool needs_intrinsic_track_size = false,
       std::optional<LayoutUnit> opt_fixed_inline_size = std::nullopt,
       bool is_for_min_max_sizing = false) const;
 

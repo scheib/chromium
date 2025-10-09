@@ -33,8 +33,6 @@ namespace gpu {
 struct GpuPreferences;
 class SharedImageManager;
 class SharedImageRepresentationFactory;
-class ServiceDiscardableManager;
-class PassthroughDiscardableManager;
 class DecoderContext;
 class MemoryTracker;
 
@@ -63,11 +61,8 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
                ShaderTranslatorCache* shader_translator_cache,
                FramebufferCompletenessCache* framebuffer_completeness_cache,
                const scoped_refptr<FeatureInfo>& feature_info,
-               bool bind_generates_resource,
                gl::ProgressReporter* progress_reporter,
                const GpuFeatureInfo& gpu_feature_info,
-               ServiceDiscardableManager* discardable_manager,
-               PassthroughDiscardableManager* passthrough_discardable_manager,
                SharedImageManager* shared_image_manager);
 
   ContextGroup(const ContextGroup&) = delete;
@@ -95,10 +90,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
 
   FramebufferCompletenessCache* framebuffer_completeness_cache() const {
     return framebuffer_completeness_cache_;
-  }
-
-  bool bind_generates_resource() {
-    return bind_generates_resource_;
   }
 
   uint32_t max_vertex_attribs() const { return max_vertex_attribs_; }
@@ -193,10 +184,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
     return sampler_manager_.get();
   }
 
-  ServiceDiscardableManager* discardable_manager() const {
-    return discardable_manager_;
-  }
-
   SharedImageRepresentationFactory* shared_image_representation_factory()
       const {
     return shared_image_representation_factory_.get();
@@ -235,10 +222,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
     return passthrough_resources_.get();
   }
 
-  PassthroughDiscardableManager* passthrough_discardable_manager() const {
-    return passthrough_discardable_manager_;
-  }
-
   const GpuFeatureInfo& gpu_feature_info() const { return gpu_feature_info_; }
 
   void ReportProgress();
@@ -261,7 +244,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
   raw_ptr<FramebufferCompletenessCache> framebuffer_completeness_cache_;
 
   bool enforce_gl_minimums_;
-  bool bind_generates_resource_;
 
   uint32_t max_vertex_attribs_;
   uint32_t max_texture_units_;
@@ -306,7 +288,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
 
   bool use_passthrough_cmd_decoder_;
   std::unique_ptr<PassthroughResources> passthrough_resources_;
-  raw_ptr<PassthroughDiscardableManager> passthrough_discardable_manager_;
 
   // Used to notify the watchdog thread of progress during destruction,
   // preventing time-outs when destruction takes a long time. May be null when
@@ -314,8 +295,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
   raw_ptr<gl::ProgressReporter> progress_reporter_;
 
   GpuFeatureInfo gpu_feature_info_;
-
-  raw_ptr<ServiceDiscardableManager> discardable_manager_;
 
   std::unique_ptr<SharedImageRepresentationFactory>
       shared_image_representation_factory_;

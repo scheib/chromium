@@ -7,15 +7,30 @@
 #include "base/i18n/message_formatter.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
+#include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/sync/device_info_sync_service_factory.h"
 #include "chrome/browser/tab_group_sync/tab_group_sync_service_factory.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_command_controller.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/tabs/saved_tab_groups/tab_group_action_context_desktop.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/saved_tab_groups/public/saved_tab_group.h"
 #include "components/saved_tab_groups/public/saved_tab_group_tab.h"
 #include "components/saved_tab_groups/public/tab_group_sync_service.h"
+#include "components/saved_tab_groups/public/types.h"
 #include "components/search/ntp_features.h"
+#include "components/sync_device_info/device_info.h"
+#include "components/sync_device_info/device_info_sync_service.h"
+#include "components/sync_device_info/device_info_tracker.h"
+#include "components/sync_device_info/local_device_info_provider.h"
+#include "components/tab_groups/tab_group_color.h"
 #include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -34,31 +49,27 @@ enum class TimeDimension {
   kMaxValue = kWeeks,
 };
 
-std::vector<const tab_groups::SavedTabGroup*> GetMostRecentTabGroups(
-    std::vector<const tab_groups::SavedTabGroup*> groups,
-    size_t count) {
-  std::sort(groups.begin(), groups.end(),
-            [](const tab_groups::SavedTabGroup* a,
-               const tab_groups::SavedTabGroup* b) {
-              return a->update_time() > b->update_time();
-            });
-  size_t size = std::min(count, groups.size());
-  return std::vector<const tab_groups::SavedTabGroup*>(groups.begin(),
-                                                       groups.begin() + size);
-}
-
-ntp::tab_groups::mojom::TabGroupPtr MakeTabGroup(const std::string& title,
-                                                 const std::string& update_time,
-                                                 const std::vector<GURL>& urls,
-                                                 int total_tabs) {
+ntp::tab_groups::mojom::TabGroupPtr MakeTabGroup(
+    const std::string& id,
+    const std::string& title,
+    const std::string& update_time,
+    const std::optional<std::string>& device_name,
+    const std::vector<GURL>& urls,
+    int total_tabs,
+    tab_groups::TabGroupColorId color_id,
+    bool is_shared_tab_group) {
   auto group = ntp::tab_groups::mojom::TabGroup::New();
+  group->id = id;
   group->title = title;
   group->update_time = update_time;
+  group->device_name = device_name;
+  group->color = color_id;
   group->favicon_urls.reserve(urls.size());
   for (const GURL& url : urls) {
     group->favicon_urls.emplace_back(url);
   }
   group->total_tab_count = total_tabs;
+  group->is_shared_tab_group = is_shared_tab_group;
   return group;
 }
 
@@ -93,9 +104,11 @@ TabGroupsPageHandler::TabGroupsPageHandler(
     mojo::PendingReceiver<ntp::tab_groups::mojom::PageHandler>
         pending_page_handler,
     content::WebContents* web_contents)
-    : profile_(Profile::FromBrowserContext(web_contents->GetBrowserContext())),
+    : web_contents_(web_contents),
+      profile_(Profile::FromBrowserContext(web_contents->GetBrowserContext())),
       pref_service_(profile_->GetPrefs()),
       page_handler_(this, std::move(pending_page_handler)) {
+  DCHECK(web_contents_);
   DCHECK(profile_);
   tab_group_service_ =
       tab_groups::TabGroupSyncServiceFactory::GetForProfile(profile_);
@@ -103,6 +116,99 @@ TabGroupsPageHandler::TabGroupsPageHandler(
 }
 
 TabGroupsPageHandler::~TabGroupsPageHandler() = default;
+
+void TabGroupsPageHandler::CreateNewTabGroup() {
+  auto* browser = webui::GetTabInterface(web_contents_)
+                      ->GetBrowserWindowInterface()
+                      ->GetBrowserForMigrationOnly();
+  browser->command_controller()->ExecuteCommand(IDC_CREATE_NEW_TAB_GROUP);
+}
+
+std::vector<const tab_groups::SavedTabGroup*>
+TabGroupsPageHandler::FilterActiveGroup(
+    std::vector<const tab_groups::SavedTabGroup*> groups) {
+  // Get the group ID of the currently active tab. This can be nullopt if the
+  // active tab is not in any group.
+  TabStripModel* tab_strip_model =
+      webui::GetBrowserWindowInterface(web_contents_)->GetTabStripModel();
+  CHECK(tab_strip_model);
+  std::optional<tab_groups::TabGroupId> active_group_id =
+      tab_strip_model->GetTabGroupForTab(tab_strip_model->active_index());
+
+  // Filter the group that the active tab is in.
+  if (active_group_id.has_value()) {
+    groups.erase(
+        std::remove_if(
+            groups.begin(), groups.end(),
+            [&active_group_id](const tab_groups::SavedTabGroup* group) {
+              return group->local_group_id().has_value() &&
+                     group->local_group_id().value() == active_group_id.value();
+            }),
+        groups.end());
+  }
+
+  return groups;
+}
+
+std::vector<const tab_groups::SavedTabGroup*>
+TabGroupsPageHandler::GetMostRecentTabGroups(
+    std::vector<const tab_groups::SavedTabGroup*> groups,
+    size_t count) {
+  if (groups.empty() || count == 0) {
+    return {};
+  }
+
+  groups = FilterActiveGroup(groups);
+
+  // Sort the remaining groups by update time (most recent first).
+  std::sort(groups.begin(), groups.end(),
+            [](const tab_groups::SavedTabGroup* a,
+               const tab_groups::SavedTabGroup* b) {
+              return a->update_time() > b->update_time();
+            });
+
+  // Truncate the list to at most |count| groups.
+  size_t size = std::min(count, groups.size());
+  return std::vector<const tab_groups::SavedTabGroup*>(groups.begin(),
+                                                       groups.begin() + size);
+}
+
+std::optional<std::string> TabGroupsPageHandler::GetDeviceName(
+    const std::optional<std::string>& cache_guid) {
+  if (!cache_guid.has_value()) {
+    return std::nullopt;
+  }
+
+  syncer::DeviceInfoSyncService* device_info_sync_service =
+      DeviceInfoSyncServiceFactory::GetForProfile(profile_);
+  if (!device_info_sync_service) {
+    return std::nullopt;
+  }
+
+  syncer::DeviceInfoTracker* device_info_tracker =
+      device_info_sync_service->GetDeviceInfoTracker();
+  // Return nothing if the tab group was last updated by the current device.
+  if (!device_info_tracker ||
+      device_info_tracker->IsRecentLocalCacheGuid(cache_guid.value())) {
+    return std::nullopt;
+  }
+
+  const syncer::DeviceInfo* device_info =
+      device_info_tracker->GetDeviceInfo(cache_guid.value());
+  if (!device_info) {
+    return std::nullopt;
+  }
+
+  return device_info->client_name();
+}
+
+bool TabGroupsPageHandler::ShouldShowZeroState() {
+  std::vector<const tab_groups::SavedTabGroup*> groups =
+      tab_group_service_->ReadAllGroups();
+  return base::FeatureList::IsEnabled(
+             ntp_features::kNtpTabGroupsModuleZeroState) &&
+         groups.empty();
+}
 
 std::vector<ntp::tab_groups::mojom::TabGroupPtr>
 TabGroupsPageHandler::GetSavedTabGroups() {
@@ -123,12 +229,22 @@ TabGroupsPageHandler::GetSavedTabGroups() {
         std::back_inserter(favicon_urls),
         [](const tab_groups::SavedTabGroupTab& tab) { return tab.url(); });
 
-    std::string title = base::UTF16ToUTF8(group->title());
+    // Set default name for unnamed groups, e.g., "1 tab", "3 tabs".
+    std::string title =
+        group->title().empty()
+            ? l10n_util::GetPluralStringFUTF8(IDS_SAVED_TAB_GROUP_TABS_COUNT,
+                                              group->saved_tabs().size())
+            : base::UTF16ToUTF8(group->title());
+
     std::string update_time =
         base::UTF16ToUTF8(GetElapsedTimeText(group->update_time()));
+    std::optional<std::string> device_name =
+        GetDeviceName(group->last_updater_cache_guid());
 
     tab_groups_mojom.push_back(
-        MakeTabGroup(title, update_time, favicon_urls, tabs.size()));
+        MakeTabGroup(group->saved_guid().AsLowercaseString(), title,
+                     update_time, device_name, favicon_urls, tabs.size(),
+                     group->color(), group->is_shared_tab_group()));
   }
 
   return tab_groups_mojom;
@@ -136,7 +252,7 @@ TabGroupsPageHandler::GetSavedTabGroups() {
 
 void TabGroupsPageHandler::GetTabGroups(GetTabGroupsCallback callback) {
   callback = mojo::WrapCallbackWithDefaultInvokeIfNotRun(std::move(callback),
-                                                         std::nullopt);
+                                                         std::nullopt, false);
 
   base::Time dismiss_time =
       pref_service_->GetTime(kTabGroupsLastDismissedTimePrefName);
@@ -151,6 +267,10 @@ void TabGroupsPageHandler::GetTabGroups(GetTabGroupsCallback callback) {
       ntp_features::kNtpTabGroupsModule,
       ntp_features::kNtpTabGroupsModuleDataParam);
   std::vector<ntp::tab_groups::mojom::TabGroupPtr> tab_groups_mojom;
+  bool should_show_zero_state =
+      data_type_param.empty()
+          ? ShouldShowZeroState()
+          : (data_type_param.find("Fake Zero State") != std::string::npos);
 
   if (data_type_param.empty()) {
     // Fetch real Tab Groups data.
@@ -158,42 +278,39 @@ void TabGroupsPageHandler::GetTabGroups(GetTabGroupsCallback callback) {
   } else {
     // Generate fake data.
     if (data_type_param.find("Fake Data") != std::string::npos) {
-      tab_groups_mojom.push_back(
-          MakeTabGroup("Tab Group 1 (3 tabs total)", "Recently Used",
-                       std::vector<GURL>{GURL("https://www.google.com"),
-                                         GURL("https://www.youtube.com"),
-                                         GURL("https://www.wikipedia.org")},
-                       3));
+      tab_groups_mojom.push_back(MakeTabGroup(
+          "0", "Tab Group 1 (3 tabs total)", "Recently used", "Test Device",
+          std::vector<GURL>{GURL("https://www.google.com"),
+                            GURL("https://www.google.com"),
+                            GURL("https://www.google.com")},
+          3, tab_groups::TabGroupColorId::kBlue, false));
 
-      tab_groups_mojom.push_back(
-          MakeTabGroup("Tab Group 2 (4 tabs total)", "Used 1 day ago",
-                       std::vector<GURL>{GURL("https://www.google.com"),
-                                         GURL("https://www.youtube.com"),
-                                         GURL("https://www.wikipedia.org"),
-                                         GURL("https://maps.google.com")},
-                       4));
+      tab_groups_mojom.push_back(MakeTabGroup(
+          "0", "Tab Group 2 (4 tabs total)", "Used 1 day ago", "Test Device",
+          std::vector<GURL>{
+              GURL("https://www.google.com"), GURL("https://www.google.com"),
+              GURL("https://www.google.com"), GURL("https://www.google.com")},
+          4, tab_groups::TabGroupColorId::kPurple, true));
 
-      tab_groups_mojom.push_back(
-          MakeTabGroup("Tab Group 3 (8 tabs total)", "Used 1 week ago",
-                       std::vector<GURL>{GURL("https://www.google.com"),
-                                         GURL("https://www.youtube.com"),
-                                         GURL("https://www.wikipedia.org"),
-                                         GURL("https://maps.google.com")},
-                       8));
+      tab_groups_mojom.push_back(MakeTabGroup(
+          "0", "Tab Group 3 (8 tabs total)", "Used 1 week ago", "Test Device",
+          std::vector<GURL>{
+              GURL("https://www.google.com"), GURL("https://www.google.com"),
+              GURL("https://www.google.com"), GURL("https://www.google.com")},
+          8, tab_groups::TabGroupColorId::kYellow, false));
 
-      tab_groups_mojom.push_back(
-          MakeTabGroup("Tab Group 4 (199 tabs total)", "Used 2 weeks ago",
-                       std::vector<GURL>{GURL("https://www.google.com"),
-                                         GURL("https://www.youtube.com"),
-                                         GURL("https://www.wikipedia.org"),
-                                         GURL("https://maps.google.com")},
-                       199));
+      tab_groups_mojom.push_back(MakeTabGroup(
+          "0", "Tab Group 4 (199 tabs total)", "Used 2 weeks ago", std::nullopt,
+          std::vector<GURL>{
+              GURL("https://www.google.com"), GURL("https://www.google.com"),
+              GURL("https://www.google.com"), GURL("https://www.google.com")},
+          199, tab_groups::TabGroupColorId::kGreen, true));
     } else if (data_type_param.find("Fake Zero State") != std::string::npos) {
       // No-op: return empty vector to invoke the zero state card.
     }
   }
 
-  std::move(callback).Run(std::move(tab_groups_mojom));
+  std::move(callback).Run(std::move(tab_groups_mojom), should_show_zero_state);
 }
 
 void TabGroupsPageHandler::DismissModule() {
@@ -204,4 +321,22 @@ void TabGroupsPageHandler::DismissModule() {
 void TabGroupsPageHandler::RestoreModule() {
   // Clear the module's last dimissed time.
   pref_service_->SetTime(kTabGroupsLastDismissedTimePrefName, base::Time());
+}
+
+void TabGroupsPageHandler::OpenTabGroup(const std::string& id) {
+  const base::Uuid group_id = base::Uuid::ParseLowercase(id);
+  const std::optional<tab_groups::SavedTabGroup> group =
+      tab_group_service_->GetGroup(group_id);
+
+  if (!group.has_value() || group->saved_tabs().empty()) {
+    return;
+  }
+
+  auto* browser = webui::GetTabInterface(web_contents_)
+                      ->GetBrowserWindowInterface()
+                      ->GetBrowserForMigrationOnly();
+  tab_group_service_->OpenTabGroup(
+      group->saved_guid(),
+      std::make_unique<tab_groups::TabGroupActionContextDesktop>(
+          browser, tab_groups::OpeningSource::kOpenedFromRevisitUi));
 }

@@ -36,13 +36,17 @@ source_set("public") {
     "schedule_service_utils.h",
     "throttle_config.cc",
     "throttle_config.h",
+    "tips_agent.cc",
+    "tips_agent.h",
     "user_action_handler.h",
   ]
 
   public_deps = [ "//base" ]
   deps = [
+    "//chrome/app:generated_resources",
     "//components/keyed_service/core",
     "//skia",
+    "//ui/base",
   ]
 }
 
@@ -57,9 +61,11 @@ source_set("unit_tests") {
   sources = [ "schedule_service_utils_unittest.cc" ]
 
   deps = [
+    "//chrome/app:generated_resources",
     "//chrome/browser/notifications/scheduler/public",
     "//chrome/browser/notifications/scheduler/test:test_lib",
     "//chrome/browser/notifications/scheduler/test:test_support",
     "//testing/gtest",
+    "//ui/base",
   ]
 }

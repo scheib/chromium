@@ -9,17 +9,17 @@
 #import "base/strings/stringprintf.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
+#import "base/test/ios/wait_util.h"
 #import "components/browsing_data/core/browsing_data_utils.h"
 #import "components/browsing_data/core/pref_names.h"
 #import "components/sync/base/command_line_switches.h"
 #import "components/url_formatter/elide_url.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/history/ui_bundled/history_ui_constants.h"
 #import "ios/chrome/browser/menu/ui_bundled/menu_action_type.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/popup_menu/ui_bundled/popup_menu_constants.h"
-#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/features.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_constants.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
@@ -36,6 +36,7 @@
 #import "net/test/embedded_test_server/http_request.h"
 #import "net/test/embedded_test_server/http_response.h"
 
+using base::test::ios::kWaitForClearBrowsingDataTimeout;
 using chrome_test_util::BrowsingDataButtonMatcher;
 using chrome_test_util::ClearBrowsingDataButton;
 using chrome_test_util::ClearBrowsingDataView;
@@ -125,7 +126,6 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   AppLaunchConfiguration config = [super appConfigurationForTestCase];
   config.additional_args.push_back(std::string("--") +
                                    syncer::kSyncShortNudgeDelayForTest);
-  config.features_enabled.push_back(kIOSQuickDelete);
   return config;
 }
 
@@ -179,7 +179,8 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
   // Wait for the browsing data button to disappear.
   [ChromeEarlGrey
-      waitForUIElementToDisappearWithMatcher:BrowsingDataButtonMatcher()];
+      waitForUIElementToDisappearWithMatcher:BrowsingDataButtonMatcher()
+                                     timeout:kWaitForClearBrowsingDataTimeout];
 }
 
 #pragma mark Tests
@@ -303,18 +304,6 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 }
 
 // Tests clear browsing history.
-// TODO(crbug.com/40888582): Fix flakiness.
-- (void)DISABLED_testClearBrowsingHistory {
-  [self addTestURLsToHistory];
-  [self openHistoryPanel];
-
-  [ChromeEarlGreyUI openAndClearBrowsingDataFromHistory];
-  [ChromeEarlGrey waitForSufficientlyVisibleElementWithMatcher:
-                      grey_accessibilityID(kHistoryTableViewIdentifier)];
-  [ChromeEarlGreyUI assertHistoryHasNoEntries];
-}
-
-// Tests clear browsing history.
 - (void)testClearBrowsingHistorySwipeDownDismiss {
   [self addTestURLsToHistory];
   [self openHistoryPanel];
@@ -416,13 +405,8 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
 #pragma mark Multiwindow
 
-- (void)testHistorySyncInMultiwindow {
-  if (@available(iOS 19.0, *)) {
-    // TODO(crbug.com/427699033): Re-enable test on iOS 26.
-    // History UI doesn't appear in the newly created window.
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
-  }
-
+// TODO(crbug.com/446382453): Deflake the test.
+- (void)FLAKY_testHistorySyncInMultiwindow {
   if (![ChromeEarlGrey areMultipleWindowsSupported]) {
     EARL_GREY_TEST_DISABLED(@"Multiple windows can't be opened.");
   }
@@ -433,8 +417,6 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // Open history panel in a second window
   [ChromeEarlGrey openNewWindow];
   [ChromeEarlGrey waitUntilReadyWindowWithNumber:1];
-  [ChromeEarlGrey waitForForegroundWindowCount:2];
-
   [self openHistoryPanelInWindowWithNumber:1];
 
   // Assert that three history elements are present in second window.
@@ -464,6 +446,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
               _URL3.GetContent())] assertWithMatcher:grey_notNil()];
 
   // Open history panel in first window also.
+  [ChromeEarlGrey closeWindowWithNumber:1];
   [self openHistoryPanelInWindowWithNumber:0];
 
   // Assert that three history elements are present in first window.

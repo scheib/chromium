@@ -43,7 +43,7 @@
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_container.h"
 #include "chrome/browser/ui/views/frame/app_menu_button.h"
-#include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
+#include "chrome/browser/ui/views/frame/browser_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/browser_view_layout.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
@@ -121,7 +121,7 @@
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
-#include "chrome/browser/ui/views/frame/browser_non_client_frame_view_chromeos.h"
+#include "chrome/browser/ui/views/frame/browser_frame_view_chromeos.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX)
@@ -133,11 +133,6 @@
 #endif
 
 namespace {
-
-#if BUILDFLAG(IS_MAC)
-// Keep in sync with browser_non_client_frame_view_mac.mm
-constexpr double kTitlePaddingWidthFraction = 0.1;
-#endif
 
 template <typename T>
 T* GetLastVisible(const std::vector<T*>& views) {
@@ -182,7 +177,8 @@ class WebAppFrameToolbarBrowserTest : public web_app::WebAppBrowserTestBase {
         /*enabled_features=*/
         {{features::kPageActionsMigration,
           {{features::kPageActionsMigrationZoom.name, "true"}}},
-         {features::kWebAppPredictableAppUpdating, {}}},
+         {features::kWebAppPredictableAppUpdating, {}},
+         {features::kWebAppUsePrimaryIcon, {}}},
         /*disabled_features=*/{});
   }
 
@@ -458,6 +454,9 @@ IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest, TitleHover) {
       helper()->frame_view()->width() - original_title_gap + narrow_title_gap;
 #if BUILDFLAG(IS_MAC)
   // Increase width to allow for title padding.
+  // LINT.IfChange(mac_title_padding_width_fraction)
+  static constexpr double kTitlePaddingWidthFraction = 0.1;
+  // LINT.ThenChange(//chrome/browser/ui/views/frame/browser_frame_view_mac.mm:mac_title_padding_width_fraction)
   narrow_width = base::checked_cast<int>(
       std::ceil(narrow_width / (1 - 2 * kTitlePaddingWidthFraction)));
 #endif
@@ -688,9 +687,9 @@ class BorderlessIsolatedWebAppBrowserTest
       EXPECT_EQ(title_watcher.WaitAndGetTitle(), kBorderlessAppOnloadTitle);
     }
 
-    views::NonClientFrameView* frame_view =
+    views::FrameView* frame_view =
         browser_view()->GetWidget()->non_client_view()->frame_view();
-    frame_view_ = static_cast<BrowserNonClientFrameView*>(frame_view);
+    frame_view_ = static_cast<BrowserFrameView*>(frame_view);
   }
 
   void GrantWindowManagementPermission() {
@@ -722,7 +721,7 @@ class BorderlessIsolatedWebAppBrowserTest
     return browser_view()->web_app_frame_toolbar_for_testing();
   }
 
-  BrowserNonClientFrameView* frame_view() { return frame_view_; }
+  BrowserFrameView* frame_view() { return frame_view_; }
 
   // Opens a new popup window from `browser_` by running
   // `window_open_script` and returns the `BrowserView` of the popup it opened.
@@ -746,7 +745,8 @@ class BorderlessIsolatedWebAppBrowserTest
                            gfx::Size& expected_outer_size) {
     auto* web_contents = browser_view->GetActiveWebContents();
 
-    const auto& client_view_size = browser_view->frame()->client_view()->size();
+    const auto& client_view_size =
+        browser_view->browser_widget()->client_view()->size();
 
     return client_view_size.height() == expected_inner_size.height() &&
            client_view_size.width() == expected_inner_size.width() &&
@@ -784,7 +784,7 @@ class BorderlessIsolatedWebAppBrowserTest
  private:
   raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser_;
   raw_ptr<BrowserView, AcrossTasksDanglingUntriaged> browser_view_;
-  raw_ptr<BrowserNonClientFrameView, AcrossTasksDanglingUntriaged> frame_view_;
+  raw_ptr<BrowserFrameView, AcrossTasksDanglingUntriaged> frame_view_;
 };
 
 IN_PROC_BROWSER_TEST_F(BorderlessIsolatedWebAppBrowserTest,
@@ -807,8 +807,8 @@ IN_PROC_BROWSER_TEST_F(BorderlessIsolatedWebAppBrowserTest,
 
 #if BUILDFLAG(IS_CHROMEOS)
   // `chromeos::FrameCaptionButtonContainerView` is ChromeOS only thing.
-  BrowserNonClientFrameViewChromeOS* frame_view_cros =
-      static_cast<BrowserNonClientFrameViewChromeOS*>(frame_view());
+  BrowserFrameViewChromeOS* frame_view_cros =
+      static_cast<BrowserFrameViewChromeOS*>(frame_view());
   EXPECT_TRUE(frame_view_cros->caption_button_container()->GetVisible());
 #endif
   EXPECT_TRUE(web_app_frame_toolbar()->GetVisible());
@@ -1441,14 +1441,16 @@ IN_PROC_BROWSER_TEST_P(
   ToggleWindowControlsOverlayAndWait();
   EXPECT_TRUE(GetWindowControlOverlayVisibility());
 
-  BrowserNonClientFrameViewChromeOS* frame_view_cros =
-      static_cast<BrowserNonClientFrameViewChromeOS*>(helper()->frame_view());
+  BrowserFrameViewChromeOS* frame_view_cros =
+      static_cast<BrowserFrameViewChromeOS*>(helper()->frame_view());
 
   int frame_view_height = frame_view_cros->GetMinimumSize().height();
   int caption_container_height =
       frame_view_cros->caption_button_container()->size().height();
-  int client_view_height =
-      frame_view_cros->frame()->client_view()->GetMinimumSize().height();
+  int client_view_height = frame_view_cros->browser_widget()
+                               ->client_view()
+                               ->GetMinimumSize()
+                               .height();
 
   // Frame view minimum height also includes radius of window to ensure correct
   // rounding of window. See b/294588040.
@@ -1586,7 +1588,7 @@ IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest_WindowControlsOverlay,
   ToggleWindowControlsOverlayAndWait();
 
   BrowserView* browser_view = helper()->browser_view();
-  views::NonClientFrameView* frame_view =
+  views::FrameView* frame_view =
       browser_view->GetWidget()->non_client_view()->frame_view();
 
   // A widget owned by BrowserView is triggered to ensure that a click inside
@@ -1769,7 +1771,7 @@ IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest_WindowControlsOverlay,
   ToggleWindowControlsOverlayAndWait();
 
   BrowserView* browser_view = helper()->browser_view();
-  views::NonClientFrameView* frame_view =
+  views::FrameView* frame_view =
       browser_view->GetWidget()->non_client_view()->frame_view();
 
   gfx::Point draggable_point(100, 100);
@@ -2352,7 +2354,7 @@ IN_PROC_BROWSER_TEST_F(
 
   auto* browser_view = helper()->browser_view();
   auto* web_contents = browser_view->GetActiveWebContents();
-  auto* client_view = browser_view->frame()->client_view();
+  auto* client_view = browser_view->browser_widget()->client_view();
 
   browser_view->SetCanResize(true);
 
@@ -2598,14 +2600,6 @@ class WebAppFrameToolbarBrowserTest_OriginText
 
   WebAppFrameToolbarBrowserTest_OriginText() {
     WebAppToolbarButtonContainer::DisableAnimationForTesting(false);
-
-    if (IsScopeExtensionsEnabled()) {
-      scoped_feature_list_.InitAndEnableFeature(
-          blink::features::kWebAppEnableScopeExtensions);
-    } else {
-      scoped_feature_list_.InitAndDisableFeature(
-          blink::features::kWebAppEnableScopeExtensions);
-    }
   }
 
   void InstallAndLaunchWebApp() {
@@ -2641,11 +2635,7 @@ class WebAppFrameToolbarBrowserTest_OriginText
     return https_server()->GetURL(in_scope_host_, "/web_apps/basic.html");
   }
 
-  bool IsScopeExtensionsEnabled() { return GetParam(); }
-
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-
   ui::ScopedAnimationDurationScaleMode scoped_animation_duration_scale_mode_{
       ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION};
 };
@@ -2656,7 +2646,7 @@ class WebAppFrameToolbarBrowserTest_OriginText
 #else
 #define MAYBE_InScopeNavigation InScopeNavigation
 #endif
-IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
+IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest_OriginText,
                        MAYBE_InScopeNavigation) {
   ASSERT_TRUE(https_server()->Started());
   InstallAndLaunchWebApp();
@@ -2678,7 +2668,7 @@ IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
 #else
 #define MAYBE_OutOfScopeBarShown OutOfScopeBarShown
 #endif
-IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
+IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest_OriginText,
                        MAYBE_OutOfScopeBarShown) {
   ASSERT_TRUE(https_server()->Started());
   InstallAndLaunchWebApp();
@@ -2707,7 +2697,7 @@ IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
 #else
 #define MAYBE_ThemeColorChange ThemeColorChange
 #endif
-IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
+IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest_OriginText,
                        MAYBE_ThemeColorChange) {
   ASSERT_TRUE(https_server()->Started());
   InstallAndLaunchWebApp();
@@ -2738,7 +2728,7 @@ IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
 #define MAYBE_OutOfScopeBarWithThemeColorChange \
   OutOfScopeBarWithThemeColorChange
 #endif
-IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
+IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest_OriginText,
                        MAYBE_OutOfScopeBarWithThemeColorChange) {
   ASSERT_TRUE(https_server()->Started());
   InstallAndLaunchWebApp();
@@ -2784,7 +2774,7 @@ IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
 #define MAYBE_WebAppOriginTextAccessibleProperties \
   WebAppOriginTextAccessibleProperties
 #endif
-IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
+IN_PROC_BROWSER_TEST_F(WebAppFrameToolbarBrowserTest_OriginText,
                        MAYBE_WebAppOriginTextAccessibleProperties) {
   InstallAndLaunchWebApp();
   auto* origin_text = helper()->origin_text_view();
@@ -2807,11 +2797,6 @@ IN_PROC_BROWSER_TEST_P(WebAppFrameToolbarBrowserTest_OriginText,
   EXPECT_EQ(origin_text->GetViewAccessibility().GetCachedName(),
             origin_text->GetLabelTextForTesting());
 }
-
-INSTANTIATE_TEST_SUITE_P(
-    /* no prefix */,
-    WebAppFrameToolbarBrowserTest_OriginText,
-    ::testing::Bool());
 
 class WebAppFrameToolbarBrowserTest_ScopeExtensionsOriginText
     : public WebAppFrameToolbarBrowserTest {
@@ -2915,9 +2900,6 @@ class WebAppFrameToolbarBrowserTest_ScopeExtensionsOriginText
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_{
-      blink::features::kWebAppEnableScopeExtensions};
-
   raw_ptr<webapps::TestWebAppOriginAssociationFetcher>
       test_origin_association_fetcher_ = nullptr;
 

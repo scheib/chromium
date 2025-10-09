@@ -9,10 +9,15 @@
 
 #import "ios/chrome/browser/settings/ui_bundled/credit_card_scanner/credit_card_scanner_consumer.h"
 
+@class CreditCardScannerImageProcessor;
 @protocol CreditCardScannerMediatorDelegate;
 
 // A mediator for CreditCardScanner which manages processing images.
 @interface CreditCardScannerMediator : NSObject <CreditCardScannerConsumer>
+
+// An image processor that can extract credit card details.
+@property(nonatomic, strong, readonly)
+    CreditCardScannerImageProcessor* creditCardScannerImageProcessor;
 
 // Initializes with Credit Card mediator delegate and Credit Card consumer.
 - (instancetype)initWithDelegate:(id<CreditCardScannerMediatorDelegate>)delegate
@@ -20,6 +25,9 @@
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
+
+// Cleans up and disconnects the mediator.
+- (void)disconnect;
 
 @end
 

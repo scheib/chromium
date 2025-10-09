@@ -221,7 +221,7 @@
 <translation id="1696984622403682083">你隨時可以前往「設定」關閉這項功能。<ph name="LINK_TO_LEARN_MORE" /></translation>
 <translation id="1698080062160024910"><ph name="TOTAL_TIME" />的計時器 · <ph name="LABEL" /></translation>
 <translation id="1698760176351776263">IPv6 位址：<ph name="ADDRESS" /></translation>
-<translation id="1700782710852683371">目前無法生成這類圖像，請試著修改描述。請注意，你無法生成含有人物、有害或情色露骨內容的圖像。</translation>
+<translation id="1700782710852683371">目前無法生成這類圖像，請試著修改描述。請注意，你無法生成含有人物、有害或露骨內容的圖像。</translation>
 <translation id="1703117532528082099">讓使用中的視窗固定在畫面左側。</translation>
 <translation id="1708345662127501511">桌面：<ph name="DESK_NAME" /></translation>
 <translation id="1709762881904163296">網路設定</translation>
@@ -332,10 +332,12 @@
 <translation id="2083190527011054446">晚安，<ph name="GIVEN_NAME" />：</translation>
 <translation id="2086334242442703436">開啟表情符號挑選器</translation>
 <translation id="2088116547584365419">遊戲</translation>
+<translation id="2093792000875799555">Chromebook 版 Steam 最新消息</translation>
 <translation id="209965399369889474">未連上網路</translation>
 <translation id="2107581415810719320">其他按鈕：<ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">你的 USB-C 連接線不支援 Thunderbolt。裝置效能可能會因此受到限制。</translation>
 <translation id="2108303511227308752">「Alt + Backspace 鍵」的鍵盤快速鍵已變更。如要使用 Delete 鍵，請按下<ph name="LAUNCHER_KEY_NAME" />鍵 + Backspace 鍵。</translation>
+<translation id="2115680839221566783">電池電量：<ph name="PERCENTAGE" />% (目前暫停充電)。</translation>
 <translation id="2126242104232412123">新增虛擬桌面</translation>
 <translation id="2132302418721800944">錄製全螢幕畫面</translation>
 <translation id="2135456203358955318">置頂放大鏡</translation>
@@ -1585,6 +1587,7 @@
 <translation id="612734058257491180">Google 助理不支援訪客工作階段。</translation>
 <translation id="6127395413317891856">目前已離線，請檢查連線狀態，然後再試一次。</translation>
 <translation id="6129953537138746214">空格鍵</translation>
+<translation id="6136872094979134163">無法擷取 Chromebook 版 Steam 最新消息。</translation>
 <translation id="6137566720514957455">開啟移除 <ph name="USER_EMAIL_ADDRESS" /> 的對話方塊</translation>
 <translation id="6141205840878048728">你想專心處理什麼？</translation>
 <translation id="6141988275892716286">確認下載</translation>
@@ -1674,6 +1677,7 @@
 <translation id="6445835306623867477">正在透過<ph name="RECEIVER_NAME" />投放「<ph name="ROUTE_TITLE" />」</translation>
 <translation id="6445915701151710649">CPU</translation>
 <translation id="6447111710783417522"><ph name="DATE" />，<ph name="NUMBER" /> 個活動</translation>
+<translation id="6448529022565414427">目前暫停充電</translation>
 <translation id="6449483711453944360">目前不支援 Linux 應用程式和無痕視窗</translation>
 <translation id="6450245544201845082">右鍵快速鍵目前已關閉</translation>
 <translation id="6452181791372256707">拒絕</translation>

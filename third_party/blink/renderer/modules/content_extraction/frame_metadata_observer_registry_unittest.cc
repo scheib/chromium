@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/html_head_element.h"
 #include "third_party/blink/renderer/core/html/html_meta_element.h"
+#include "third_party/blink/renderer/core/html/html_script_element.h"
 #include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
@@ -58,8 +59,7 @@ class MockMetaTagsObserver : public mojom::blink::MetaTagsObserver {
   }
 
   // mojom::blink::MetaTagsObserver:
-  void OnMetaTagsChanged(
-      Vector<mojom::blink::MetaTagPtr> meta_tags) override {
+  void OnMetaTagsChanged(Vector<mojom::blink::MetaTagPtr> meta_tags) override {
     future_.SetValue(std::move(meta_tags));
   }
 
@@ -101,6 +101,12 @@ class FrameMetadataObserverRegistryTest : public testing::Test {
     EXPECT_EQ(meta_tags[0]->content, "Gary");
   }
 
+  void VerifyAuthorMetaTagNoContent(const Vector<mojom::blink::MetaTagPtr>& meta_tags) {
+    ASSERT_EQ(meta_tags.size(), 1u);
+    EXPECT_EQ(meta_tags[0]->name, "author");
+    EXPECT_EQ(meta_tags[0]->content, "");
+  }
+
  protected:
   test::TaskEnvironment task_environment_;
   frame_test_helpers::WebViewHelper helper_;
@@ -121,7 +127,8 @@ TEST_F(FrameMetadataObserverRegistryTest, PaidContent) {
   BindRegistry();
 
   MockPaidContentMetadataObserver observer;
-  registry_->AddPaidContentMetadataObserver(observer.BindNewPipeAndPassRemote());
+  registry_->AddPaidContentMetadataObserver(
+      observer.BindNewPipeAndPassRemote());
   test::RunPendingTasks();
 
   ASSERT_TRUE(observer.future().IsReady());
@@ -133,7 +140,8 @@ TEST_F(FrameMetadataObserverRegistryTest, NoPaidContent) {
   BindRegistry();
 
   MockPaidContentMetadataObserver observer;
-  registry_->AddPaidContentMetadataObserver(observer.BindNewPipeAndPassRemote());
+  registry_->AddPaidContentMetadataObserver(
+      observer.BindNewPipeAndPassRemote());
   test::RunPendingTasks();
 
   EXPECT_FALSE(observer.future().IsReady());
@@ -154,13 +162,79 @@ TEST_F(FrameMetadataObserverRegistryTest, LateObserver) {
   BindRegistry();
 
   MockPaidContentMetadataObserver observer;
-  registry_->AddPaidContentMetadataObserver(observer.BindNewPipeAndPassRemote());
+  registry_->AddPaidContentMetadataObserver(
+      observer.BindNewPipeAndPassRemote());
   test::RunPendingTasks();
 
   ASSERT_TRUE(observer.future().IsReady());
   EXPECT_TRUE(observer.future().Get());
 }
 
+TEST_F(FrameMetadataObserverRegistryTest, PaidContentAddedDynamically) {
+  LoadHTML(R"HTML(
+    <head>
+    </head>
+    <body></body>
+  )HTML");
+  BindRegistry();
+
+  MockPaidContentMetadataObserver observer;
+  registry_->AddPaidContentMetadataObserver(
+      observer.BindNewPipeAndPassRemote());
+  test::RunPendingTasks();
+
+  // No paid content initially.
+  EXPECT_FALSE(observer.future().IsReady());
+
+  // Dynamically add paid content.
+  auto* script = MakeGarbageCollected<HTMLScriptElement>(*GetDocument(),
+                                                         CreateElementFlags());
+  script->setAttribute(html_names::kTypeAttr,
+                       AtomicString("application/ld+json"));
+  script->setTextContent(R"JSON({
+    "@context": "http://schema.org",
+    "@type": "NewsArticle",
+    "isAccessibleForFree": false
+  })JSON");
+  GetDocument()->head()->AppendChild(script);
+  test::RunPendingTasks();
+
+  ASSERT_TRUE(observer.future().IsReady());
+  EXPECT_TRUE(observer.future().Get());
+}
+
+TEST_F(FrameMetadataObserverRegistryTest, PaidContentUnaffectedByOtherElements) {
+  LoadHTML(R"HTML(
+    <head>
+      <script type="application/ld+json">{
+        "@context": "http://schema.org",
+        "@type": "NewsArticle",
+        "isAccessibleForFree": false
+      }</script>
+    </head>
+    <body></body>
+  )HTML");
+  BindRegistry();
+
+  MockPaidContentMetadataObserver observer;
+  registry_->AddPaidContentMetadataObserver(
+      observer.BindNewPipeAndPassRemote());
+  test::RunPendingTasks();
+
+  ASSERT_TRUE(observer.future().IsReady());
+  EXPECT_TRUE(observer.future().Get());
+
+  // Add a meta element, which should not trigger the observer.
+  observer.future().Clear();
+  auto* meta_element =
+      MakeGarbageCollected<HTMLMetaElement>(*GetDocument(), CreateElementFlags());
+  meta_element->setAttribute(html_names::kNameAttr, AtomicString("author"));
+  meta_element->setAttribute(html_names::kContentAttr, AtomicString("Gary"));
+  GetDocument()->head()->AppendChild(meta_element);
+  test::RunPendingTasks();
+
+  EXPECT_FALSE(observer.future().IsReady());
+}
 TEST_F(FrameMetadataObserverRegistryTest, MetaTags) {
   LoadHTML(R"HTML(
     <head>
@@ -282,7 +356,8 @@ TEST_F(FrameMetadataObserverRegistryTest, MetaTagsUpdated) {
 
   // Add a new tag.
   observer.future().Clear();
-  auto* new_meta = MakeGarbageCollected<HTMLMetaElement>(*GetDocument(), CreateElementFlags());
+  auto* new_meta = MakeGarbageCollected<HTMLMetaElement>(*GetDocument(),
+                                                         CreateElementFlags());
   new_meta->setAttribute(html_names::kNameAttr, AtomicString("subject"));
   new_meta->setAttribute(html_names::kContentAttr, AtomicString("testing"));
   GetDocument()->head()->AppendChild(new_meta);
@@ -318,6 +393,118 @@ TEST_F(FrameMetadataObserverRegistryTest, MetaTagsUpdated) {
   EXPECT_EQ(meta_tags3.size(), 1u);
   EXPECT_EQ(meta_tags3[0]->name, "subject");
   EXPECT_EQ(meta_tags3[0]->content, "testing");
+}
+
+TEST_F(FrameMetadataObserverRegistryTest, MetaTagsUnaffectedByOtherElements) {
+  LoadHTML(R"HTML(
+    <head>
+      <meta name="author" content="Gary">
+    </head>
+    <body></body>
+  )HTML");
+  BindRegistry();
+
+  MockMetaTagsObserver observer;
+  Vector<String> names_to_observe;
+  names_to_observe.push_back("author");
+
+  registry_->AddMetaTagsObserver(names_to_observe,
+                                 observer.BindNewPipeAndPassRemote());
+  test::RunPendingTasks();
+
+  // Initial state.
+  ASSERT_TRUE(observer.future().IsReady());
+  VerifyAuthorMetaTag(observer.future().Take());
+
+  // Add a script element, which should not trigger the observer.
+  observer.future().Clear();
+  auto* script_element =
+      MakeGarbageCollected<HTMLScriptElement>(*GetDocument(),
+                                              CreateElementFlags());
+  script_element->setTextContent("console.log('hello');");
+  GetDocument()->head()->AppendChild(script_element);
+  test::RunPendingTasks();
+
+  EXPECT_FALSE(observer.future().IsReady());
+}
+
+TEST_F(FrameMetadataObserverRegistryTest, MetaTagsWithNamelessTag) {
+  LoadHTML(R"HTML(
+    <head>
+      <meta charset="UTF-8">
+      <meta name="author" content="Gary">
+    </head>
+    <body></body>
+  )HTML");
+  BindRegistry();
+
+  MockMetaTagsObserver observer;
+  Vector<String> names_to_observe;
+  names_to_observe.push_back("author");
+
+  registry_->AddMetaTagsObserver(names_to_observe,
+                                 observer.BindNewPipeAndPassRemote());
+  test::RunPendingTasks();
+
+  ASSERT_TRUE(observer.future().IsReady());
+  VerifyAuthorMetaTag(observer.future().Take());
+}
+
+TEST_F(FrameMetadataObserverRegistryTest, MetaTagsWithNoContent) {
+  LoadHTML(R"HTML(
+    <head>
+      <meta charset="UTF-8">
+      <meta name="author">
+    </head>
+    <body></body>
+  )HTML");
+  BindRegistry();
+
+  MockMetaTagsObserver observer;
+  Vector<String> names_to_observe;
+  names_to_observe.push_back("author");
+
+  registry_->AddMetaTagsObserver(names_to_observe,
+                                 observer.BindNewPipeAndPassRemote());
+  test::RunPendingTasks();
+
+  ASSERT_TRUE(observer.future().IsReady());
+  VerifyAuthorMetaTagNoContent(observer.future().Take());
+}
+
+// Re-enable this test once we support observing head elements that are added
+// dynamically.
+TEST_F(FrameMetadataObserverRegistryTest, MetaTagsAddedWithHead) {
+  LoadHTML("<body></body>");
+  // Remove the head that was automatically added by the parser, to simulate a
+  // document that starts without one.
+  GetDocument()->head()->remove();
+  ASSERT_FALSE(GetDocument()->head());
+  BindRegistry();
+
+  MockMetaTagsObserver observer;
+  Vector<String> names_to_observe;
+  names_to_observe.push_back("author");
+
+  registry_->AddMetaTagsObserver(names_to_observe,
+                                 observer.BindNewPipeAndPassRemote());
+  test::RunPendingTasks();
+
+  // Initially, no head and no meta tags.
+  EXPECT_FALSE(observer.future().IsReady());
+
+  // Dynamically add a head and meta tag.
+  auto* head = MakeGarbageCollected<HTMLHeadElement>(*GetDocument());
+  auto* meta = MakeGarbageCollected<HTMLMetaElement>(*GetDocument(),
+                                                     CreateElementFlags());
+  meta->setAttribute(html_names::kNameAttr, AtomicString("author"));
+  meta->setAttribute(html_names::kContentAttr, AtomicString("Gary"));
+  head->AppendChild(meta);
+  GetDocument()->documentElement()->AppendChild(head);
+  test::RunPendingTasks();
+
+  ASSERT_TRUE(observer.future().IsReady());
+  VerifyAuthorMetaTag(observer.future().Take());
 }
 
 }  // namespace

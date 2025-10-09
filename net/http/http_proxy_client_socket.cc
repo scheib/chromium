@@ -14,6 +14,7 @@
 #include "base/types/expected_macros.h"
 #include "base/values.h"
 #include "net/base/auth.h"
+#include "net/base/completion_once_callback.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -44,9 +45,7 @@ HttpProxyClientSocket::HttpProxyClientSocket(
     scoped_refptr<HttpAuthController> http_auth_controller,
     ProxyDelegate* proxy_delegate,
     const NetworkTrafficAnnotationTag& traffic_annotation)
-    : io_callback_(base::BindRepeating(&HttpProxyClientSocket::OnIOComplete,
-                                       base::Unretained(this))),
-      user_agent_(user_agent),
+    : user_agent_(user_agent),
       socket_(std::move(socket)),
       endpoint_(endpoint),
       auth_(std::move(http_auth_controller)),
@@ -309,6 +308,17 @@ int HttpProxyClientSocket::DoLoop(int last_io_result) {
         net_log_.EndEventWithNetErrorCode(
             NetLogEventType::HTTP_TRANSACTION_TUNNEL_READ_HEADERS, rv);
         break;
+      case STATE_PROCESS_RESPONSE_HEADERS:
+        DCHECK_EQ(OK, rv);
+        rv = DoProcessResponseHeaders();
+        break;
+      case STATE_PROCESS_RESPONSE_HEADERS_COMPLETE:
+        rv = DoProcessResponseHeadersComplete(rv);
+        break;
+      case STATE_PROCESS_RESPONSE_CODE:
+        DCHECK_EQ(OK, rv);
+        rv = DoProcessResponseCode();
+        break;
       case STATE_DRAIN_BODY:
         DCHECK_EQ(OK, rv);
         rv = DoDrainBody();
@@ -328,7 +338,11 @@ int HttpProxyClientSocket::DoLoop(int last_io_result) {
 
 int HttpProxyClientSocket::DoGenerateAuthToken() {
   next_state_ = STATE_GENERATE_AUTH_TOKEN_COMPLETE;
-  return auth_->MaybeGenerateAuthToken(&request_, io_callback_, net_log_);
+  return auth_->MaybeGenerateAuthToken(
+      &request_,
+      base::BindOnce(&HttpProxyClientSocket::OnIOComplete,
+                     weak_factory_.GetWeakPtr()),
+      net_log_);
 }
 
 int HttpProxyClientSocket::DoGenerateAuthTokenComplete(int result) {
@@ -352,10 +366,6 @@ int HttpProxyClientSocket::DoCalculateHeaders() {
   if (auth_->HaveAuth()) {
     auth_->AddAuthorizationHeader(&authorization_headers_);
   }
-  // AddAuthorizationHeader() might not have added the header even if
-  // HaveAuth().
-  response_.did_use_http_auth =
-      authorization_headers_.HasHeader(HttpRequestHeaders::kProxyAuthorization);
 
   if (proxy_delegate_) {
     ASSIGN_OR_RETURN(
@@ -425,9 +435,10 @@ int HttpProxyClientSocket::DoSendRequest() {
   http_stream_parser_ = std::make_unique<HttpStreamParser>(
       socket_.get(), is_reused_, request_.url, request_.method,
       /*upload_data_stream=*/nullptr, parser_buf_.get(), net_log_);
-  return http_stream_parser_->SendRequest(request_line_, request_headers_,
-                                          traffic_annotation_, &response_,
-                                          io_callback_);
+  return http_stream_parser_->SendRequest(
+      request_line_, request_headers_, traffic_annotation_, &response_,
+      base::BindOnce(&HttpProxyClientSocket::OnIOComplete,
+                     base::Unretained(this)));
 }
 
 int HttpProxyClientSocket::DoSendRequestComplete(int result) {
@@ -440,7 +451,8 @@ int HttpProxyClientSocket::DoSendRequestComplete(int result) {
 
 int HttpProxyClientSocket::DoReadHeaders() {
   next_state_ = STATE_READ_HEADERS_COMPLETE;
-  return http_stream_parser_->ReadResponseHeaders(io_callback_);
+  return http_stream_parser_->ReadResponseHeaders(base::BindOnce(
+      &HttpProxyClientSocket::OnIOComplete, base::Unretained(this)));
 }
 
 int HttpProxyClientSocket::DoReadHeadersComplete(int result) {
@@ -451,19 +463,39 @@ int HttpProxyClientSocket::DoReadHeadersComplete(int result) {
   if (response_.headers->GetHttpVersion() < HttpVersion(1, 0))
     return ERR_TUNNEL_CONNECTION_FAILED;
 
+  next_state_ = STATE_PROCESS_RESPONSE_HEADERS;
+
   NetLogResponseHeaders(
       net_log_, NetLogEventType::HTTP_TRANSACTION_READ_TUNNEL_RESPONSE_HEADERS,
       response_.headers.get());
 
+  return OK;
+}
+
+int HttpProxyClientSocket::DoProcessResponseHeaders() {
+  next_state_ = STATE_PROCESS_RESPONSE_HEADERS_COMPLETE;
+
   if (proxy_delegate_) {
-    int rv = proxy_delegate_->OnTunnelHeadersReceived(
-        proxy_chain_, proxy_chain_index_, *response_.headers);
-    if (rv != OK) {
-      DCHECK_NE(ERR_IO_PENDING, rv);
-      return rv;
-    }
+    return proxy_delegate_->OnTunnelHeadersReceived(
+        proxy_chain_, proxy_chain_index_, *response_.headers,
+        base::BindOnce(&HttpProxyClientSocket::OnIOComplete,
+                       weak_factory_.GetWeakPtr()));
   }
 
+  return OK;
+}
+
+int HttpProxyClientSocket::DoProcessResponseHeadersComplete(int result) {
+  DCHECK_NE(ERR_IO_PENDING, result);
+  if (result != OK) {
+    return result;
+  }
+
+  next_state_ = STATE_PROCESS_RESPONSE_CODE;
+  return OK;
+}
+
+int HttpProxyClientSocket::DoProcessResponseCode() {
   switch (response_.headers->response_code()) {
     case 200:  // OK
       if (http_stream_parser_->IsMoreDataBuffered())
@@ -503,7 +535,9 @@ int HttpProxyClientSocket::DoDrainBody() {
   DCHECK(drain_buf_.get());
   next_state_ = STATE_DRAIN_BODY_COMPLETE;
   return http_stream_parser_->ReadResponseBody(
-      drain_buf_.get(), kDrainBodyBufferSize, io_callback_);
+      drain_buf_.get(), kDrainBodyBufferSize,
+      base::BindOnce(&HttpProxyClientSocket::OnIOComplete,
+                     base::Unretained(this)));
 }
 
 int HttpProxyClientSocket::DoDrainBodyComplete(int result) {

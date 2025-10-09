@@ -4,34 +4,49 @@
 
 import './bookmark_bar.js';
 import './content_region.js';
+import './extensions_bar.js';
 import './icons.html.js';
+import './side_panel.js';
 import '/strings.m.js';
 import './tab_strip.js';
 import './webview.js';
-import '//resources/cr_components/searchbox/searchbox.js';
+import 'chrome://resources/cr_components/searchbox/searchbox.js';
 
+import {ColorChangeUpdater} from '//resources/cr_components/color_change_listener/colors_css_updater.js';
+import {assert} from '//resources/js/assert.js';
+import {loadTimeData} from '//resources/js/load_time_data.js';
+import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
+import type {SearchboxElement} from 'chrome://resources/cr_components/searchbox/searchbox.js';
+import {TrackedElementManager} from 'chrome://resources/js/tracked_element/tracked_element_manager.js';
 import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 
 import {getCss} from './app.css.js';
 import {getHtml} from './app.html.js';
 import type {BookmarkBar} from './bookmark_bar.js';
 import {BookmarkBarController} from './bookmark_bar_controller.js';
+import {SecurityIcon} from './browser.mojom-webui.js';
 import {BrowserProxy} from './browser_proxy.js';
 import type {ContentRegion} from './content_region.js';
-import type {TabStrip} from './tab_strip.js';
-import type {LayoutManager} from './tab_strip_controller.js';
+import type {SidePanel} from './side_panel.js';
+import {TabStrip} from './tab_strip.js';
+import type {TabStripControllerDelegate} from './tab_strip_controller.js';
 import {TabStripController} from './tab_strip_controller.js';
 
 export interface WebuiBrowserAppElement {
   $: {
+    address: SearchboxElement,
+    appMenuButton: HTMLElement,
+    avatarButton: HTMLElement,
+    locationIconButton: HTMLElement,
     bookmarkBar: BookmarkBar,
     contentRegion: ContentRegion,
+    sidePanel: SidePanel,
     tabstrip: TabStrip,
   };
 }
 
 export class WebuiBrowserAppElement extends CrLitElement implements
-    LayoutManager {
+    TabStripControllerDelegate {
   static get is() {
     return 'webui-browser-app';
   }
@@ -48,31 +63,101 @@ export class WebuiBrowserAppElement extends CrLitElement implements
     return {
       backButtonDisabled_: {state: true, type: Boolean},
       forwardButtonDisabled_: {state: true, type: Boolean},
+      showingSidePanel_: {state: true, type: Boolean},
+      reloadOrStopIcon_: {state: true, type: String},
+      showLocationIconButton_: {type: Boolean, reflect: true},
+      locationIcon_: {state: true, type: String},
     };
   }
 
   private bookmarkBarController_: BookmarkBarController;
   private tabStripController_: TabStripController;
+  private trackedElementManager_: TrackedElementManager;
   protected accessor backButtonDisabled_: boolean = true;
   protected accessor forwardButtonDisabled_: boolean = true;
+  protected accessor reloadOrStopIcon_: string = 'icon-refresh';
+  protected accessor showingSidePanel_: boolean = false;
+  protected accessor showLocationIconButton_: boolean = false;
+  protected accessor locationIcon_: string = 'NoEncryption';
 
   constructor() {
     super();
+    ColorChangeUpdater.forDocument().start();
 
     this.bookmarkBarController_ = new BookmarkBarController();
     this.tabStripController_ =
         new TabStripController(this, this.$.tabstrip, this.$.contentRegion);
+    this.trackedElementManager_ = TrackedElementManager.getInstance();
+
+    const callbackRouter = BrowserProxy.getCallbackRouter();
+    callbackRouter.showSidePanel.addListener(this.showSidePanel_.bind(this));
+    callbackRouter.closeSidePanel.addListener(this.closeSidePanel_.bind(this));
   }
 
   override connectedCallback() {
     // Important. Properties are not reactive without calling
     // super.connectedCallback().
     super.connectedCallback();
+    this.trackedElementManager_.startTracking(
+        this.$.address, 'kLocationBarElementId');
+    this.trackedElementManager_.startTracking(
+        this.$.appMenuButton, 'kToolbarAppMenuButtonElementId');
+    this.trackedElementManager_.startTracking(
+        this.$.avatarButton, 'kToolbarAvatarButtonElementId');
+    this.trackedElementManager_.startTracking(
+        this.$.locationIconButton, 'kLocationIconElementId');
+    this.trackedElementManager_.startTracking(
+        this.$.contentRegion, 'kContentsContainerViewElementId');
   }
 
-  // LayoutManager:
+  // TabStripControllerDelegate:
   refreshLayout() {
     this.updateToolbarButtons_();
+  }
+
+  // Map from SecurityIcon values to the names of icons defined in
+  // icons.html.ts.
+  private securityIconToIconNameMap = new Map<SecurityIcon, string>([
+    [SecurityIcon.HttpChromeRefresh, 'HttpChromeRefresh'],
+    [SecurityIcon.SecurePageInfoChromeRefresh, 'SecurePageInfoChromeRefresh'],
+    [SecurityIcon.NoEncryption, 'NoEncryption'],
+    [
+      SecurityIcon.NotSecureWarningChromeRefresh,
+      'NotSecureWarningChromeRefresh',
+    ],
+    [SecurityIcon.BusinessChromeRefresh, 'BusinessChromeRefresh'],
+    [SecurityIcon.DangerousChromeRefresh, 'DangerousChromeRefresh'],
+    [SecurityIcon.ProductChromeRefresh, 'ProductChromeRefresh'],
+    [SecurityIcon.ExtensionChromeRefresh, 'ExtensionChromeRefresh'],
+    [SecurityIcon.OfflinePin, 'OfflinePin'],
+  ]);
+
+  async activeTabUpdated(tabData: Tab) {
+    let displayUrl = '';
+    const activeTabUrl = tabData.url.url;
+    // TODO(webium): Should match
+    // ChromeLocationBarModelDelegate::ShouldDisplayURL and
+    // LocationBarModelImpl::GetFormattedURL logic.
+    //
+    // There are also likely some subtleties about what happens when the user
+    // is typing and the tab navigates.
+    const isNTP = activeTabUrl.startsWith('chrome://newtab');
+    if (!isNTP) {
+      displayUrl = activeTabUrl;
+
+      if (this.$.contentRegion.activeWebview) {
+        const securityIcon =
+            await this.$.contentRegion.activeWebview.getSecurityIcon();
+        const iconName = this.securityIconToIconNameMap.get(securityIcon);
+        // Failure here indicates a new icon needs to be added to icons.html.ts
+        // and then to |securityIconToIconNameMap|.
+        assert(iconName);
+        this.locationIcon_ = iconName;
+      }
+    }
+    this.showLocationIconButton_ = !isNTP;
+    this.$.address.setInputText(displayUrl);
+    this.$.contentRegion.classList.toggle('modalScrim', tabData.isBlocked);
   }
 
   protected onLaunchDevtoolsClick_(_: Event) {
@@ -115,6 +200,24 @@ export class WebuiBrowserAppElement extends CrLitElement implements
     }
   }
 
+  protected onReloadOrStopClick_(_: Event) {
+    if (this.$.contentRegion.activeWebview) {
+      if (this.reloadOrStopIcon_ === 'icon-refresh') {
+        this.$.contentRegion.activeWebview.reload();
+      } else {
+        this.$.contentRegion.activeWebview.stopLoading();
+      }
+    }
+  }
+
+  protected reloadOrStopTooltip_(): string {
+    if (this.reloadOrStopIcon_ === 'icon-refresh') {
+      return loadTimeData.getString('tooltipReload');
+    } else {
+      return loadTimeData.getString('tooltipStop');
+    }
+  }
+
   private async updateToolbarButtons_() {
     const webview = this.$.contentRegion.activeWebview;
     if (webview) {
@@ -147,6 +250,10 @@ export class WebuiBrowserAppElement extends CrLitElement implements
 
   protected override firstUpdated() {
     this.bookmarkBarController_.init(this.$.bookmarkBar);
+    BrowserProxy.getCallbackRouter().setFocusToLocationBar.addListener(
+        this.setFocusToLocationBar.bind(this));
+    BrowserProxy.getCallbackRouter().setReloadStopState.addListener(
+        this.setReloadStopState.bind(this));
   }
 
   protected onShowBookmarkBar_() {
@@ -160,6 +267,65 @@ export class WebuiBrowserAppElement extends CrLitElement implements
   protected onBookmarkButtonClick_(e: CustomEvent) {
     const bookmarkId = e.detail.bookmarkId;
     this.bookmarkBarController_.launchBookmark(bookmarkId);
+  }
+
+  protected onTabDragMouseDown_(e: MouseEvent) {
+    if (e.target instanceof TabStrip) {
+      this.$.tabstrip.dragMouseDown(e);
+      this.addEventListener('mouseup', this.onTabDragMouseUp_);
+      this.addEventListener('mousemove', this.onTabDragMouseMove_);
+    }
+  }
+
+  protected onTabDragMouseUp_(_: MouseEvent) {
+    this.$.tabstrip.closeDragElement();
+    this.removeEventListener('mouseup', this.onTabDragMouseUp_);
+    this.removeEventListener('mousemove', this.onTabDragMouseMove_);
+  }
+
+  protected onTabDragMouseMove_(e: MouseEvent) {
+    this.$.tabstrip.elementDrag(e);
+  }
+
+  protected setFocusToLocationBar(isUserInitiated: boolean) {
+    this.$.address.focusInput();
+
+    // If the user initiated the selection (e.g. by pressing Ctrl-L) we want to
+    // select everything in order to make it easy to replace the URL. This is
+    // also useful for some cases where we auto-focus (e.g. about:blank set as
+    // the NTP) if they're not actively using the omnibox, which we check by
+    // looking at the focus. See OmniBoxViewViews::SetFocus() for the
+    // inspiration.
+    if (isUserInitiated || this.shadowRoot.activeElement !== this.$.address) {
+      this.$.address.selectAll();
+    }
+  }
+
+  protected setReloadStopState(isLoading: boolean) {
+    this.reloadOrStopIcon_ = isLoading ? 'icon-clear' : 'icon-refresh';
+  }
+
+
+  protected showSidePanel_(guestContentsId: number, title: string) {
+    this.showingSidePanel_ = true;
+    this.$.sidePanel.show(guestContentsId, title);
+  }
+
+  protected closeSidePanel_() {
+    this.$.sidePanel.close();
+    this.showingSidePanel_ = false;
+  }
+
+  // This function is called when the side panel closes itself. For example,
+  // when user clicks the close "x" button.
+  protected onSidePanelClosed_() {
+    this.showingSidePanel_ = false;
+  }
+
+  protected onLocationIconClick_(_: Event) {
+    if (this.$.contentRegion.activeWebview) {
+      this.$.contentRegion.activeWebview.openPageInfoMenu();
+    }
   }
 }
 

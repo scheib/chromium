@@ -10,16 +10,19 @@
 #include "base/json/json_writer.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/sessions/session_tab_helper_factory.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "content/public/test/web_contents_tester.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registrar.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -32,6 +35,8 @@
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_manager_impl.h"
 #endif
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 
@@ -112,6 +117,12 @@ TestExtensionEnvironment::TestExtensionEnvironment(
                    ? nullptr
                    : std::make_unique<TestingProfile>()),
       profile_ptr_(profile_.get()) {
+
+  // Use SimpleProtocolHandlerRegistryFactory to prevent OS integration during
+  // the protocol registration process.
+  ProtocolHandlerRegistryFactory::GetInstance()->SetTestingFactory(
+      profile_ptr_, custom_handlers::SimpleProtocolHandlerRegistryFactory::
+                        GetDefaultFactory());
 }
 
 TestExtensionEnvironment::~TestExtensionEnvironment() = default;

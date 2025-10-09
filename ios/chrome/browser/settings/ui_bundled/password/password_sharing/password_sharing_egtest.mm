@@ -7,8 +7,8 @@
 #import "components/password_manager/core/common/password_manager_pref_names.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/sync/base/features.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/settings/ui_bundled/elements/elements_constants.h"
 #import "ios/chrome/browser/settings/ui_bundled/password/password_details/password_details_table_view_constants.h"
 #import "ios/chrome/browser/settings/ui_bundled/password/password_manager_egtest_utils.h"
@@ -631,7 +631,17 @@ void TapShareButtonAndWaitForSpinnerToDisappear() {
       assertWithMatcher:grey_sufficientlyVisible()];
 }
 
-- (void)testTappingShareInFirstRunExperienceView {
+// Test failing flakily on devices.
+// TODO(crbug.com/441013259): Re-enable this test on devices.
+#if !TARGET_OS_SIMULATOR
+#define MAYBE_testTappingShareInFirstRunExperienceView \
+  DISABLED_testTappingShareInFirstRunExperienceView
+#else
+#define MAYBE_testTappingShareInFirstRunExperienceView \
+  testTappingShareInFirstRunExperienceView
+#endif
+
+- (void)MAYBE_testTappingShareInFirstRunExperienceView {
   [ChromeEarlGrey setBoolValue:NO
                    forUserPref:prefs::kPasswordSharingFlowHasBeenEntered];
 

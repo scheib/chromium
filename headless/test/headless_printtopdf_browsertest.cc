@@ -553,11 +553,31 @@ const char kExpectedStructTreeJSON[] = R"({
       "~children": [ {
          "type": "TR",
          "~children": [ {
+            "attributes": [ {
+               "O": "Table",
+               "Scope": "Column"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
             "type": "TH",
             "~children": [ {
                "type": "NonStruct"
             } ]
          }, {
+            "attributes": [ {
+               "O": "Table",
+               "Scope": "Column"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
             "type": "TH",
             "~children": [ {
                "type": "NonStruct"
@@ -566,11 +586,31 @@ const char kExpectedStructTreeJSON[] = R"({
       }, {
          "type": "TR",
          "~children": [ {
+            "attributes": [ {
+               "Headers": [ "TH" ],
+               "O": "Table"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
             "type": "TD",
             "~children": [ {
                "type": "NonStruct"
             } ]
          }, {
+            "attributes": [ {
+               "Headers": [ "TH" ],
+               "O": "Table"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
             "type": "TD",
             "~children": [ {
                "type": "NonStruct"
@@ -664,19 +704,184 @@ const char kExpectedImageRoleOnlyStructTreeJSON[] = R"({
 }
 )";
 
+const char kExpectedEmphasisStructTreeJSON[] = R"({
+   "lang": "en",
+   "type": "Document",
+   "~children": [ {
+      "type": "Div",
+      "~children": [ {
+         "type": "NonStruct"
+      }, {
+         "type": "Em",
+         "~children": [ {
+            "type": "NonStruct"
+         } ]
+      }, {
+         "type": "NonStruct"
+      }, {
+         "type": "Em",
+         "~children": [ {
+            "type": "NonStruct"
+         } ]
+      }, {
+         "type": "NonStruct"
+      } ]
+   } ]
+}
+)";
+
+const char kExpectedStrongStructTreeJSON[] = R"({
+   "lang": "en",
+   "type": "Document",
+   "~children": [ {
+      "type": "Div",
+      "~children": [ {
+         "type": "NonStruct"
+      }, {
+         "type": "Strong",
+         "~children": [ {
+            "type": "NonStruct"
+         } ]
+      }, {
+         "type": "NonStruct"
+      }, {
+         "type": "Strong",
+         "~children": [ {
+            "type": "NonStruct"
+         } ]
+      }, {
+         "type": "NonStruct"
+      } ]
+   } ]
+}
+)";
+
+const char kExpectedAsideStructTreeJSON[] = R"({
+   "lang": "en",
+   "type": "Document",
+   "~children": [ {
+      "type": "Aside",
+      "~children": [ {
+         "type": "NonStruct"
+      } ]
+   }, {
+      "type": "Aside",
+      "~children": [ {
+         "type": "NonStruct"
+      } ]
+   } ]
+}
+)";
+
+const char kExpectedTableStructTreeJSON[] = R"({
+   "lang": "en",
+   "type": "Document",
+   "~children": [ {
+      "type": "Table",
+      "~children": [ {
+         "type": "TR",
+         "~children": [ {
+            "attributes": [ {
+               "O": "Table",
+               "Scope": "Column"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
+            "type": "TH",
+            "~children": [ {
+               "type": "NonStruct"
+            } ]
+         }, {
+            "attributes": [ {
+               "O": "Table",
+               "Scope": "Column"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
+            "type": "TH",
+            "~children": [ {
+               "type": "NonStruct"
+            } ]
+         } ]
+      }, {
+         "type": "TR",
+         "~children": [ {
+            "attributes": [ {
+               "Headers": [ "TH" ],
+               "O": "Table"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
+            "type": "TD",
+            "~children": [ {
+               "type": "NonStruct"
+            } ]
+         }, {
+            "attributes": [ {
+               "Headers": [ "TH" ],
+               "O": "Table"
+            }, {
+               "O": "Table",
+               "RowSpan": 1.0
+            }, {
+               "ColSpan": 1.0,
+               "O": "Table"
+            } ],
+            "type": "TD",
+            "~children": [ {
+               "type": "NonStruct"
+            } ]
+         } ]
+      } ]
+   } ]
+}
+)";
+
 struct TaggedPDFTestData {
   const char* url;
   const char* expected_json;
 };
 
+// TaggedPDFTestData is used in a parameterized test. In order to more easily
+// identify failing tests or run specific test, add a comment with the index
+// into the array for each new entries.
 constexpr TaggedPDFTestData kTaggedPDFTestData[] = {
+    // Test 0
     {"/structured_doc.html", kExpectedStructTreeJSON},
+    // Test 1
     {"/structured_doc_only_figure.html", kExpectedFigureOnlyStructTreeJSON},
+    // Test 2
     {"/structured_doc_only_figure_role.html",
      kExpectedFigureRoleOnlyStructTreeJSON},
+    // Test 3
     {"/structured_doc_only_image.html", kExpectedImageOnlyStructTreeJSON},
+    // Test 4
     {"/structured_doc_only_image_role.html",
      kExpectedImageRoleOnlyStructTreeJSON},
+    // Test 5
+    {"/structured_doc_emphasis.html", kExpectedEmphasisStructTreeJSON},
+    // Test 6
+    {"/structured_doc_strong.html", kExpectedStrongStructTreeJSON},
+    // Test 7
+    {"/structured_doc_aside.html", kExpectedAsideStructTreeJSON},
+    // Test 8
+    {"/structured_doc_grid.html", kExpectedTableStructTreeJSON},
+    // Test 9
+    {"/structured_doc_table.html", kExpectedTableStructTreeJSON},
+    // Test 10
+    {"/structured_doc_treegrid.html", kExpectedTableStructTreeJSON},
 };
 
 class HeadlessTaggedPDFBrowserTest
@@ -697,6 +902,7 @@ class HeadlessTaggedPDFBrowserTest
     std::string json;
     base::JSONWriter::WriteWithOptions(
         struct_tree, base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
+
     // Map Windows line endings to Unix by removing '\r'.
     base::RemoveChars(json, "\r", &json);
 

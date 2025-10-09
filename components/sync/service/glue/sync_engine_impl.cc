@@ -59,7 +59,7 @@ enum class SyncTransportDataStartupState {
 
 std::string GenerateCacheGUID() {
   // Generate a GUID with 128 bits of randomness.
-  const int kGuidBytes = 128 / 8;
+  constexpr int kGuidBytes = 128 / 8;
   return base::Base64Encode(base::RandBytesAsVector(kGuidBytes));
 }
 
@@ -146,9 +146,8 @@ void SyncEngineImpl::Initialize(InitParams params) {
   cached_cache_guid_ = prefs_->GetCacheGuid();
   cached_birthday_ = prefs_->GetBirthday();
 
-  // Clear host here to avoid holding a dangling pointer in case the task
-  // outlives the SyncEngineHost. It is safe to clear host here since
-  // SyncEngineBackend doesn't actually need it.
+  // `params.host` is not needed on the backend thread, so we null it out here
+  // to avoid accidentally using it on the wrong thread.
   params.host = nullptr;
   sync_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&SyncEngineBackend::DoInitialize, backend_,

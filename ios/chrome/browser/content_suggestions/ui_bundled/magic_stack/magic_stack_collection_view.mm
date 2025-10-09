@@ -22,6 +22,7 @@
 #import "ios/chrome/browser/content_suggestions/ui_bundled/magic_stack/magic_stack_module_container.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/magic_stack/magic_stack_utils.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/magic_stack/placeholder_config.h"
+#import "ios/chrome/browser/content_suggestions/ui_bundled/shop_card/shop_card_item.h"
 #import "ios/chrome/browser/ntp/shared/metrics/home_metrics.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 
@@ -65,12 +66,10 @@ typedef NSDiffableDataSourceSnapshot<NSString*, MagicStackModule*>
 
   self.view = _collectionView;
 
-  if (@available(iOS 17, *)) {
-    NSArray<UITrait>* traits = TraitCollectionSetForTraits(
-        @[ UITraitPreferredContentSizeCategory.class ]);
-    [self registerForTraitChanges:traits
-                       withAction:@selector(updateCardHeightOnTraitChange)];
-  }
+  NSArray<UITrait>* traits = TraitCollectionSetForTraits(
+      @[ UITraitPreferredContentSizeCategory.class ]);
+  [self registerForTraitChanges:traits
+                     withAction:@selector(updateCardHeightOnTraitChange)];
 }
 
 - (void)viewDidLoad {
@@ -102,20 +101,6 @@ typedef NSDiffableDataSourceSnapshot<NSString*, MagicStackModule*>
       }
                       completion:nil];
 }
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  if (previousTraitCollection.preferredContentSizeCategory !=
-      self.traitCollection.preferredContentSizeCategory) {
-    [self updateCardHeightOnTraitChange];
-  }
-}
-#endif
 
 #pragma mark - Public
 
@@ -162,12 +147,15 @@ typedef NSDiffableDataSourceSnapshot<NSString*, MagicStackModule*>
   NSInteger section =
       [snapshot indexOfSectionIdentifier:kMagicStackSectionIdentifier];
 
-  // Consistency check: `item`'s ID is not in the collection view.
-  if ([self.diffableDataSource indexPathForItemIdentifier:item]) {
-    // TODO(b/341410600): Remove once validate in stable that it can be a hard
-    // expectation.
+  if ([self.diffableDataSource indexPathForItemIdentifier:item] &&
+      [item isKindOfClass:[ShopCardItem class]]) {
+    // TODO(crbug.com/446386562) resolve duplicate insertions of ShopCard then
+    // change this to a CHECK.
     base::debug::DumpWithoutCrashing();
     return;
+  } else {
+    // Consistency check: `item`'s ID is not already in the collection view.
+    CHECK(![self.diffableDataSource indexPathForItemIdentifier:item]);
   }
 
   // Store the identifier of the current item at the given index, if any, prior
@@ -495,12 +483,13 @@ typedef NSDiffableDataSourceSnapshot<NSString*, MagicStackModule*>
     case ContentSuggestionsModuleType::kSendTabPromo:
     case ContentSuggestionsModuleType::kTipsWithProductImage:
     case ContentSuggestionsModuleType::kTips:
+    case ContentSuggestionsModuleType::kAppBundlePromo:
+    case ContentSuggestionsModuleType::kDefaultBrowser:
       return YES;
     case ContentSuggestionsModuleType::kMostVisited:
     case ContentSuggestionsModuleType::kShortcuts:
     case ContentSuggestionsModuleType::kSafetyCheck:
     case ContentSuggestionsModuleType::kTabResumption:
-    case ContentSuggestionsModuleType::kParcelTracking:
     case ContentSuggestionsModuleType::kSetUpListDefaultBrowser:
     case ContentSuggestionsModuleType::kSetUpListAutofill:
     case ContentSuggestionsModuleType::kSetUpListNotifications:

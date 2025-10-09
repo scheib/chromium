@@ -8,24 +8,35 @@
 #include <memory>
 #include <set>
 
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/autofill/bubble_controller_base.h"
 #include "chrome/browser/ui/autofill/bubble_manager.h"
+
+namespace base {
+class CallbackListSubscription;
+}  // namespace base
+
+namespace tabs {
+class TabInterface;
+}  // namespace tabs
 
 namespace autofill {
 
 class BubbleManagerImpl : public BubbleManager {
  public:
-  BubbleManagerImpl();
+  explicit BubbleManagerImpl(tabs::TabInterface* tab);
   ~BubbleManagerImpl() override;
 
   BubbleManagerImpl(const BubbleManagerImpl&) = delete;
   BubbleManagerImpl& operator=(const BubbleManagerImpl&) = delete;
 
   // BubbleManager:
-  void RequestShowController(BubbleControllerBase& controller_to_show) override;
+  void RequestShowController(BubbleControllerBase& controller_to_show,
+                             bool force_show) override;
   void OnBubbleHiddenByController(
       BubbleControllerBase& controller_to_hide) override;
+  bool HasPendingBubbleOfSameType(const BubbleType bubble_type) const override;
 
  private:
   struct PendingRequest {
@@ -59,8 +70,18 @@ class BubbleManagerImpl : public BubbleManager {
   void AddToPendingQueue(base::WeakPtr<BubbleControllerBase> controller);
 
   // Hides the currently active bubble to show a higher-priority one.
-  void HideActiveBubbleForPreemption(
-      base::WeakPtr<BubbleControllerBase> preempting_controller);
+  void HideActiveBubbleForPreemption();
+
+  // Returns true if the `new_controller` should replace the
+  // `active_bubble_controller_`.
+  // 1. Certain bubbles always replace an existing one of similar type (e.g.
+  // passwords).
+  // 2. Any bubble with a higher priority replaces the active one.
+  bool ShouldReplaceExistingBubble(const BubbleType new_bubble_type) const;
+
+  // tabs::TabInterface related overrides:
+  void TabWillEnterBackground(tabs::TabInterface* tab_interface);
+  void TabDidEnterForeground(tabs::TabInterface* tab_interface);
 
   // Currently active controller that is shown.
   base::WeakPtr<BubbleControllerBase> active_bubble_controller_ = nullptr;
@@ -72,6 +93,13 @@ class BubbleManagerImpl : public BubbleManager {
   // A boolean indicating that the manager is in the process of showing a
   // bubble. This could mean another bubble is in the process of preemption.
   bool handling_show_request_ = false;
+
+  // A boolean indicating that the manager is in the process of hiding the
+  // bubble since the tab is to enter the background.
+  bool handling_tab_will_enter_background_request_ = false;
+
+  std::vector<base::CallbackListSubscription> tab_subscriptions_;
+  raw_ptr<tabs::TabInterface> tab_interface_;
 };
 
 }  // namespace autofill

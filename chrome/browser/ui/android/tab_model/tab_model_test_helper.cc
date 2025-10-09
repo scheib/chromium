@@ -17,17 +17,23 @@
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
+#include "build/android_buildflags.h"
 #include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/flags/android/chrome_session_state.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_observer.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test_utils.h"
 #include "url/gurl.h"
+
+// "chrome/browser/ui/browser_window" is available on desktop Android, but not
+// other Android builds.
+#if BUILDFLAG(IS_DESKTOP_ANDROID)
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"  // nogncheck
+#endif
 
 TestTabModel::TestTabModel(Profile* profile,
                            chrome::android::ActivityType activity_type)
@@ -135,8 +141,9 @@ int TestTabModel::GetTabCountNavigatedInTimeWindow(
 void TestTabModel::CloseTabsNavigatedInTimeWindow(const base::Time& begin_time,
                                                   const base::Time& end_time) {}
 
-void TestTabModel::OpenTab(const GURL& url, int index) {
+tabs::TabInterface* TestTabModel::OpenTab(const GURL& url, int index) {
   NOTIMPLEMENTED();
+  return nullptr;
 }
 
 void TestTabModel::DiscardTab(tabs::TabHandle tab) {
@@ -199,11 +206,25 @@ void TestTabModel::MoveGroupTo(tab_groups::TabGroupId group_id, int index) {
   NOTIMPLEMENTED();
 }
 
+void TestTabModel::MoveTabToWindow(tabs::TabHandle tab,
+                                   SessionID destination_window_id,
+                                   int destination_index) {
+  NOTIMPLEMENTED();
+}
+
+void TestTabModel::MoveTabGroupToWindow(tab_groups::TabGroupId group_id,
+                                        SessionID destination_window_id,
+                                        int destination_index) {
+  NOTIMPLEMENTED();
+}
+
+#if BUILDFLAG(IS_DESKTOP_ANDROID)
 void TestTabModel::AssociateWithBrowserWindow(BrowserWindowInterface* browser) {
   scoped_unowned_user_data_ =
       std::make_unique<ui::ScopedUnownedUserData<TabModel>>(
           browser->GetUnownedUserDataHost(), *this);
 }
+#endif
 
 OwningTestTabModel::OwningTestTabModel(
     Profile* profile,
@@ -362,8 +383,9 @@ void OwningTestTabModel::CloseTabsNavigatedInTimeWindow(
   NOTIMPLEMENTED();
 }
 
-void OwningTestTabModel::OpenTab(const GURL& url, int index) {
+tabs::TabInterface* OwningTestTabModel::OpenTab(const GURL& url, int index) {
   NOTIMPLEMENTED();
+  return nullptr;
 }
 
 void OwningTestTabModel::DiscardTab(tabs::TabHandle tab) {
@@ -424,6 +446,18 @@ void OwningTestTabModel::Ungroup(const std::set<tabs::TabHandle>& tabs) {
 
 void OwningTestTabModel::MoveGroupTo(tab_groups::TabGroupId group_id,
                                      int index) {
+  NOTIMPLEMENTED();
+}
+
+void OwningTestTabModel::MoveTabToWindow(tabs::TabHandle tab,
+                                         SessionID destination_window_id,
+                                         int destination_index) {
+  NOTIMPLEMENTED();
+}
+
+void OwningTestTabModel::MoveTabGroupToWindow(tab_groups::TabGroupId group_id,
+                                              SessionID destination_window_id,
+                                              int destination_index) {
   NOTIMPLEMENTED();
 }
 

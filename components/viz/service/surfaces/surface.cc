@@ -9,11 +9,15 @@
 
 #include <algorithm>
 #include <limits>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "base/containers/contains.h"
+#include "base/debug/alias.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/tick_clock.h"
@@ -51,6 +55,36 @@ void RequestCopyOfOutputOnRenderPass(std::unique_ptr<CopyOutputRequest> request,
                   });
   }
   render_pass.copy_requests.push_back(std::move(request));
+}
+
+std::string PendingFrameDataChangeReasonToString(
+    Surface::PendingFrameDataChangeReason reason) {
+  switch (reason) {
+    case Surface::PendingFrameDataChangeReason::kNotSet:
+      return "NotSet";
+    case Surface::PendingFrameDataChangeReason::kCommitFrameReset:
+      return "CommitFrameReset";
+    case Surface::PendingFrameDataChangeReason::kCommitFrameDependencies:
+      return "CommitFrameDependencies";
+    case Surface::PendingFrameDataChangeReason::kActivatePendingFrameReset:
+      return "ActivatePendingFrameReset";
+    case Surface::PendingFrameDataChangeReason::kSurfaceDestruction:
+      return "SurfaceDestruction";
+  }
+}
+
+std::string FrameActivationReasonToString(
+    Surface::FrameActivationReason reason) {
+  switch (reason) {
+    case Surface::FrameActivationReason::kNotSet:
+      return "NotSet";
+    case Surface::FrameActivationReason::kDependencyResolved:
+      return "DependencyResolved";
+    case Surface::FrameActivationReason::kDeadline:
+      return "Deadline";
+    case Surface::FrameActivationReason::kCommitWithNoDependencies:
+      return "CommitWithNoDependencies";
+  }
 }
 
 }  // namespace
@@ -109,6 +143,8 @@ Surface::~Surface() {
     UnrefFrameResourcesAndRunCallbacks(std::move(frame));
   }
 
+  pending_frame_data_change_reason_ =
+      PendingFrameDataChangeReason::kSurfaceDestruction;
   UnrefFrameResourcesAndRunCallbacks(std::move(pending_frame_data_));
   UnrefFrameResourcesAndRunCallbacks(std::move(active_frame_data_));
 
@@ -130,6 +166,28 @@ Surface::~Surface() {
   if (surface_client_) {
     surface_client_->OnSurfaceDestroyed(this);
   }
+}
+
+// FrameSinkObserver implementation
+void Surface::OnViewTransitionSaved(
+    const blink::ViewTransitionToken& transition_token) {
+  if (!view_transition_dependencies_.contains(transition_token)) {
+    // Return early since the dependency was never added for this view
+    // transition token.
+    return;
+  }
+
+  // Since the transition's Save directive is fulfilled, we can remove it as
+  // dependency.
+  view_transition_dependencies_.erase(transition_token);
+
+  // Return early since there are still dependencies to be fulfilled.
+  if (!view_transition_dependencies_.empty() ||
+      !activation_dependencies_.empty()) {
+    return;
+  }
+
+  ActivatePendingFrame();
 }
 
 void Surface::SetDependencyDeadline(
@@ -193,7 +251,7 @@ void Surface::ActivateIfDeadlinePassed() {
 
 Surface::QueueFrameResult Surface::QueueFrame(
     CompositorFrame frame,
-    uint64_t frame_index,
+    uint32_t frame_index,
     base::ScopedClosureRunner frame_rejected_callback) {
   if (frame.size_in_pixels() != surface_info_.size_in_pixels() ||
       frame.device_scale_factor() != surface_info_.device_scale_factor()) {
@@ -254,17 +312,44 @@ Surface::QueueFrameResult Surface::CommitFrame(FrameData frame) {
 
   TakePendingLatencyInfo(&frame.frame.metadata.latency_info);
 
+  pending_frame_data_change_reason_ =
+      PendingFrameDataChangeReason::kCommitFrameReset;
   std::optional<FrameData> previous_pending_frame_data =
       std::move(pending_frame_data_);
   pending_frame_data_.reset();
+  view_transition_dependencies_.clear();
+
+  if (features::ShouldAckCOREarlyForViewTransition()) {
+    for (const auto& directive : frame.frame.metadata.transition_directives) {
+      const auto& token = directive.transition_token();
+      // If there is no SurfaceAnimationManager for the `token` and an Animate
+      // directive has been issued, then previous frame is held up and has not
+      // performed Save directive yet for a cross-document view transition. So
+      // add this token as dependency for new document's surface which needs to
+      // be resolved for activation.
+      if (directive.type() ==
+              CompositorFrameTransitionDirective::Type::kAnimateRenderer &&
+          !surface_manager_->FrameSinkManagerHasViewTransitionToken(token)) {
+        // Observe FrameSinkManager if we're not already observing.
+        if (!frame_sink_manager_observation_.IsObserving()) {
+          frame_sink_manager_observation_.Observe(surface_manager_);
+        }
+        view_transition_dependencies_.insert(token);
+      }
+    }
+  }
 
   UpdateActivationDependencies(frame.frame);
 
   QueueFrameResult result = QueueFrameResult::ACCEPTED_ACTIVE;
-  if (activation_dependencies_.empty()) {
+  if (activation_dependencies_.empty() &&
+      view_transition_dependencies_.empty()) {
     // If there are no blockers, then immediately activate the frame.
     ActivateFrame(std::move(frame));
+    frame_activation_reason_ = FrameActivationReason::kCommitWithNoDependencies;
   } else {
+    pending_frame_data_change_reason_ =
+        PendingFrameDataChangeReason::kCommitFrameDependencies;
     pending_frame_data_ = std::move(frame);
 
     auto traced_value = std::make_unique<base::trace_event::TracedValue>();
@@ -361,14 +446,17 @@ void Surface::OnActivationDependencyResolved(
   DCHECK(activation_dependencies_.count(activation_dependency));
   activation_dependencies_.erase(activation_dependency);
   blocking_allocation_groups_.erase(group);
-  if (!activation_dependencies_.empty())
+  if (!activation_dependencies_.empty() ||
+      !view_transition_dependencies_.empty()) {
     return;
+  }
 
   TRACE_EVENT_END(
       "viz", /* SurfaceQueuedPending */ perfetto::Track::FromPointer(this));
 
   // All blockers have been cleared. The surface can be activated now.
   ActivatePendingFrame();
+  frame_activation_reason_ = FrameActivationReason::kDependencyResolved;
 }
 
 void Surface::ActivatePendingFrameForDeadline() {
@@ -383,11 +471,13 @@ void Surface::ActivatePendingFrameForDeadline() {
   // If a frame is being activated because of a deadline, then clear its set
   // of blockers.
   activation_dependencies_.clear();
+  view_transition_dependencies_.clear();
 
   ActivatePendingFrame();
+  frame_activation_reason_ = FrameActivationReason::kDeadline;
 }
 
-Surface::FrameData::FrameData(CompositorFrame&& frame, uint64_t frame_index)
+Surface::FrameData::FrameData(CompositorFrame&& frame, uint32_t frame_index)
     : frame(std::move(frame)), frame_index(frame_index) {}
 
 Surface::FrameData::FrameData(FrameData&& other) = default;
@@ -405,7 +495,16 @@ void Surface::FrameData::SendAckIfNeeded(SurfaceClient* client) {
 }
 
 void Surface::ActivatePendingFrame() {
-  DCHECK(pending_frame_data_);
+  SCOPED_CRASH_KEY_STRING32(
+      "viz", "Pending frame data change reason",
+      PendingFrameDataChangeReasonToString(pending_frame_data_change_reason_));
+  SCOPED_CRASH_KEY_STRING32(
+      "viz", "Last frame activation reason",
+      FrameActivationReasonToString(frame_activation_reason_));
+  CHECK(pending_frame_data_);
+
+  pending_frame_data_change_reason_ =
+      PendingFrameDataChangeReason::kActivatePendingFrameReset;
   FrameData frame_data = std::move(*pending_frame_data_);
   pending_frame_data_.reset();
 
@@ -466,14 +565,14 @@ void Surface::CommitFramesRecursively(const CommitPredicate& predicate) {
   }
 }
 
-std::optional<uint64_t> Surface::GetFirstUncommitedFrameIndex() {
+std::optional<uint32_t> Surface::GetFirstUncommitedFrameIndex() {
   if (uncommitted_frames_.empty())
     return std::nullopt;
   return uncommitted_frames_.front().frame_index;
 }
 
-std::optional<uint64_t> Surface::GetUncommitedFrameIndexNewerThan(
-    uint64_t frame_index) {
+std::optional<uint32_t> Surface::GetUncommitedFrameIndexNewerThan(
+    uint32_t frame_index) {
   for (auto& frame : uncommitted_frames_) {
     if (frame.frame_index > frame_index) {
       return frame.frame_index;
@@ -570,6 +669,9 @@ void Surface::ActivateFrame(FrameData frame_data) {
   TRACE_EVENT1("viz", "Surface::ActivateFrame", "SurfaceId",
                surface_id().ToString());
 
+  // Reset observation since the pending frame got activated.
+  frame_sink_manager_observation_.Reset();
+
   // Save root pass copy requests.
   std::vector<std::unique_ptr<CopyOutputRequest>> old_copy_requests;
   if (active_frame_data_) {
@@ -623,8 +725,17 @@ void Surface::ActivateFrame(FrameData frame_data) {
   // Defer notifying the embedder of an updated token until the frame has been
   // completely processed.
   const auto& metadata = GetActiveFrameMetadata();
-  if (surface_client_ && metadata.send_frame_token_to_embedder)
+  if (surface_client_ && metadata.send_frame_token_to_embedder) {
+    if (!FrameTokenGT(metadata.frame_token, last_sent_frame_token_)) {
+      uint32_t current_token = metadata.frame_token;
+      uint32_t last_token = last_sent_frame_token_;
+      base::debug::Alias(&current_token);
+      base::debug::Alias(&last_token);
+      base::debug::DumpWithoutCrashing();
+    }
+    last_sent_frame_token_ = metadata.frame_token;
     surface_client_->OnFrameTokenChanged(metadata.frame_token);
+  }
 }
 
 FrameDeadline Surface::ResolveFrameDeadline(
@@ -764,6 +875,12 @@ void Surface::SetActiveFrameForViewTransition(CompositorFrame frame) {
   CHECK(active_frame_data_.has_value());
 
   active_frame_data_->frame = std::move(frame);
+
+  if (features::ShouldAckCOREarlyForViewTransition()) {
+    // We need to recompute these as there can be undrawn surfaces as referenced
+    // surfaces for cross-doc view transitions on shared element replacement.
+    RecomputeActiveReferencedSurfaces();
+  }
 }
 
 const CompositorFrame& Surface::GetPendingFrame() {
@@ -921,11 +1038,6 @@ void Surface::ActivatePendingFrameForInheritedDeadline() {
   // so there shouldn't be an active frame.
   DCHECK(!HasActiveFrame());
   ActivatePendingFrameForDeadline();
-}
-
-std::unique_ptr<gfx::DelegatedInkMetadata> Surface::TakeDelegatedInkMetadata() {
-  DCHECK(active_frame_data_);
-  return active_frame_data_->TakeDelegatedInkMetadata();
 }
 
 }  // namespace viz

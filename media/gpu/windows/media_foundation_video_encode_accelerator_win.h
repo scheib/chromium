@@ -43,6 +43,7 @@ namespace media {
 
 class VideoRateControlWrapper;
 class TemporalScalabilityIdExtractor;
+class VEAEncodingLatencyMetricsHelper;
 
 // Media Foundation implementation of the VideoEncodeAccelerator interface for
 // Windows.
@@ -132,6 +133,7 @@ class MEDIA_GPU_EXPORT MediaFoundationVideoEncodeAccelerator
     std::optional<int> qp;
     uint32_t frame_id;
     base::TimeDelta timestamp;
+    base::TimeTicks frame_encode_start_time;
   };
 
   // Encoder state.
@@ -303,6 +305,7 @@ class MEDIA_GPU_EXPORT MediaFoundationVideoEncodeAccelerator
 
   // Vendor of the active video encoder.
   DriverVendor vendor_ = DriverVendor::kOther;
+  std::string hardware_encoder_name_;
 
   // Group of picture length for encoded output stream, indicates the
   // distance between two key frames.
@@ -326,6 +329,8 @@ class MEDIA_GPU_EXPORT MediaFoundationVideoEncodeAccelerator
   // MF video processor used for color format conversion; only
   // created if needed.
   std::unique_ptr<MediaFoundationVideoProcessorAccelerator> mf_video_processor_;
+
+  std::unique_ptr<VEAEncodingLatencyMetricsHelper> metrics_helper_;
 
   // Variables used by video processing for scaling.
   ComD3D11VideoProcessor video_processor_;

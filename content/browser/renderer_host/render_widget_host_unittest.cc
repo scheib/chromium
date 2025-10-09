@@ -384,20 +384,12 @@ class MockRenderWidgetHostDelegate : public RenderWidgetHostDelegate {
     return unhandled_keyboard_event_type_;
   }
 
-  bool prehandle_mouse_event_called() const {
-    return prehandle_mouse_event_called_;
-  }
-
   bool prehandle_keyboard_event_called() const {
     return prehandle_keyboard_event_called_;
   }
 
   WebInputEvent::Type prehandle_keyboard_event_type() const {
     return prehandle_keyboard_event_type_;
-  }
-
-  void set_prehandle_mouse_event(bool handle) {
-    prehandle_mouse_event_ = handle;
   }
 
   void set_prehandle_keyboard_event(bool handle) {
@@ -467,14 +459,6 @@ class MockRenderWidgetHostDelegate : public RenderWidgetHostDelegate {
               (override));
 
  protected:
-  bool PreHandleMouseEvent(const blink::WebMouseEvent& event) override {
-    prehandle_mouse_event_called_ = true;
-    if (prehandle_mouse_event_) {
-      return true;
-    }
-    return false;
-  }
-
   KeyboardEventProcessingResult PreHandleKeyboardEvent(
       const input::NativeWebKeyboardEvent& event) override {
     prehandle_keyboard_event_type_ = event.GetType();
@@ -526,8 +510,6 @@ class MockRenderWidgetHostDelegate : public RenderWidgetHostDelegate {
   }
 
  private:
-  bool prehandle_mouse_event_ = false;
-  bool prehandle_mouse_event_called_ = false;
   bool prehandle_keyboard_event_;
   bool prehandle_keyboard_event_is_shortcut_;
   bool prehandle_keyboard_event_called_;
@@ -844,15 +826,6 @@ class RenderWidgetHostTest : public testing::Test {
 
   void ReleaseTouchPoint(int index) {
     touch_event_.ReleasePoint(index);
-  }
-
-  const WebInputEvent* GetInputEventFromMessage(const IPC::Message& message) {
-    base::PickleIterator iter(message);
-    const char* data;
-    size_t data_length;
-    if (!iter.ReadData(&data, &data_length))
-      return nullptr;
-    return reinterpret_cast<const WebInputEvent*>(data);
   }
 
   BrowserTaskEnvironment task_environment_{
@@ -1605,37 +1578,6 @@ TEST_F(RenderWidgetHostTest, SendEditCommandsBeforeKeyEvent) {
   // Send the simulated response from the renderer back.
   dispatched_events[1]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultState::kConsumed);
-}
-
-TEST_F(RenderWidgetHostTest, PreHandleMouseEvent) {
-  // Simulate the situation that the browser handled the mouse event during
-  // pre-handle phrase.
-  delegate_->set_prehandle_mouse_event(true);
-
-  // Simulate a mouse event.
-  SimulateMouseEvent(WebMouseEvent::Type::kMouseDown);
-
-  EXPECT_TRUE(delegate_->prehandle_mouse_event_called());
-
-  // Make sure the mouse event is not sent to the renderer.
-  MockWidgetInputHandler::MessageVector dispatched_events =
-      host_->mock_render_input_router()->GetAndResetDispatchedMessages();
-  EXPECT_EQ(0u, dispatched_events.size());
-
-  // Simulate the situation that the browser didn't handle the mouse event
-  // during pre-handle phrase.
-  delegate_->set_prehandle_mouse_event(false);
-
-  // Simulate a mouse event.
-  SimulateMouseEvent(WebMouseEvent::Type::kMouseUp);
-
-  // Make sure the mouse event is sent to the renderer.
-  dispatched_events =
-      host_->mock_render_input_router()->GetAndResetDispatchedMessages();
-  ASSERT_EQ(1u, dispatched_events.size());
-  ASSERT_TRUE(dispatched_events[0]->ToEvent());
-  EXPECT_EQ(WebMouseEvent::Type::kMouseUp,
-            dispatched_events[0]->ToEvent()->Event()->Event().GetType());
 }
 
 TEST_F(RenderWidgetHostTest, PreHandleRawKeyDownEvent) {
@@ -2593,7 +2535,7 @@ TEST_F(RenderWidgetHostTest, OnVerticalScrollDirectionChanged) {
   const auto NotifyVerticalScrollDirectionChanged =
       [this](viz::VerticalScrollDirection scroll_direction) {
         static uint32_t frame_token = 1u;
-        host_->frame_token_message_queue_->DidProcessFrame(
+        host_->render_frame_metadata_provider_.DidProcessFrame(
             frame_token, base::TimeTicks::Now());
 
         cc::RenderFrameMetadata metadata;

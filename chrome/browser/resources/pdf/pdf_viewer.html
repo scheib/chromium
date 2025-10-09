@@ -26,6 +26,8 @@ import {AnnotationMode} from './constants.js';
 </if>
 <if expr="enable_pdf_save_to_drive">
     .pdfSaveToDriveEnabled="${this.pdfSaveToDriveEnabled_}"
+    .saveToDriveProgress="${this.getSaveToDriveProgress_()}"
+    .saveToDriveState="${this.saveToDriveState_}"
 </if>
     @change-page="${this.onChangePage_}"
     @display-annotations-changed="${this.onDisplayAnnotationsChanged_}"
@@ -128,7 +130,9 @@ ${this.showPropertiesDialog_ ? html`<viewer-properties-dialog
 
 <if expr="enable_pdf_save_to_drive">
 ${this.pdfSaveToDriveEnabled_ ? html`<viewer-save-to-drive-bubble
-    .fileName="${this.fileName_}"
+    .docTitle="${this.title_}"
+    .progress="${this.saveToDriveProgress_}"
+    .state="${this.saveToDriveState_}"
     @save-to-drive-bubble-action="${this.onSaveToDriveBubbleAction_}">
 </viewer-save-to-drive-bubble>` : ''}
 </if>

@@ -62,11 +62,26 @@ CONTENT_EXPORT double RoundKbpsToMbpsForTesting(
     const std::string& host,
     const std::optional<int32_t>& downlink_kbps);
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+// LINT.IfChange(CriticalHintsMissingStatus)
+enum class CriticalHintsMissingStatus {
+  // All critical hints were already present.
+  kPresent = 0,
+  // All allowed critical hints were present, but some hints were not allowed
+  // by the permissions policy.
+  kPresentButContainsNotAllowed = 1,
+  // Some critical hints were missing.
+  kMissing = 2,
+  kMaxValue = kMissing,
+};
+// LINT.ThenChange(//tools/metrics/histograms/enums.xml:CriticalHintsMissingStatus)
+
 // Returns true if there is a hint in |critical_hints| that would be sent (i.e.
 // not blocked by browser or origin level preferences like disabled JavaScript
 // or Feature/Permission Policy) but is not currently in the client hint
 // storage.
-CONTENT_EXPORT bool AreCriticalHintsMissing(
+CONTENT_EXPORT CriticalHintsMissingStatus GetCriticalHintsMissingStatus(
     const url::Origin& origin,
     FrameTreeNode* frame_tree_node,
     ClientHintsControllerDelegate* delegate,
@@ -98,18 +113,21 @@ CONTENT_EXPORT void AddNavigationRequestClientHintsHeaders(
     BrowserContext* context,
     ClientHintsControllerDelegate* delegate,
     bool is_ua_override_on,
-    FrameTreeNode*,
-    const network::ParsedPermissionsPolicy&,
+    FrameTreeNode* frame_tree_node,
+    const network::ParsedPermissionsPolicy& container_policy,
     const std::optional<GURL>& request_url = std::nullopt);
 
 // Adds client hints headers for a prefetch navigation that is not associated
-// with a frame. It must be a main frame navigation.
+// with a frame. It must be a main frame navigation. `ftn_for_devtools_override`
+// is only used to apply UA overrides by DevTools and not for any other
+// purposes.
 CONTENT_EXPORT void AddPrefetchNavigationRequestClientHintsHeaders(
     const url::Origin& origin,
     net::HttpRequestHeaders* headers,
     BrowserContext* context,
     ClientHintsControllerDelegate* delegate,
-    bool is_ua_override_on);
+    bool is_ua_override_on,
+    FrameTreeNode* ftn_for_devtools_override);
 
 // Parses incoming client hints and persists them as appropriate. Returns
 // hints that were accepted as enabled even if they are not going to be
@@ -127,7 +145,7 @@ ParseAndPersistAcceptCHForNavigation(
     const net::HttpResponseHeaders* response_headers,
     BrowserContext* context,
     ClientHintsControllerDelegate* delegate,
-    FrameTreeNode*);
+    FrameTreeNode* frame_tree_node);
 
 // Persists the `hints` in the Accept-CH storage for the Origin of `url`.
 // `delegate` cannot be nullptr.

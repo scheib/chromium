@@ -332,10 +332,12 @@
 <translation id="2083190527011054446"><ph name="GIVEN_NAME" />，晚安！</translation>
 <translation id="2086334242442703436">打开表情符号选择器</translation>
 <translation id="2088116547584365419">游戏</translation>
+<translation id="2093792000875799555">Chromebook 版 Steam 资讯</translation>
 <translation id="209965399369889474">未连接到网络</translation>
 <translation id="2107581415810719320">其他按钮 <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">您的 USB-C 数据线不支持 Thunderbolt。设备性能可能会受到限制。</translation>
 <translation id="2108303511227308752">键盘快捷键“Alt + 退格键”已更改。若要使用 Delete 键，请按<ph name="LAUNCHER_KEY_NAME" />键 + 退格键。</translation>
+<translation id="2115680839221566783">当前的电池电量为 <ph name="PERCENTAGE" />%，充电已暂停。</translation>
 <translation id="2126242104232412123">新建桌面</translation>
 <translation id="2132302418721800944">录制整个屏幕</translation>
 <translation id="2135456203358955318">停靠的放大镜</translation>
@@ -1500,7 +1502,7 @@
 <translation id="584525477304726060">按住即可最大化</translation>
 <translation id="5856638668464565213">尚未启用“<ph name="NETWORK_NAME" />”。</translation>
 <translation id="5860033963881614850">关闭</translation>
-<translation id="5860491529813859533">启用</translation>
+<translation id="5860491529813859533">开启</translation>
 <translation id="5864691701242730005">显示“快速分享”设置。已选择“<ph name="VISIBILITY" />”可见性设置</translation>
 <translation id="5864748620896638071">电池电量为 <ph name="BATTERY_PERCENTAGE" />%</translation>
 <translation id="5867217927013474703">正在收集网络信息</translation>
@@ -1586,6 +1588,7 @@
 <translation id="612734058257491180">无法在访客会话中使用 Google 助理。</translation>
 <translation id="6127395413317891856">您处于离线状态。请检查连接，然后重试。</translation>
 <translation id="6129953537138746214">空格键</translation>
+<translation id="6136872094979134163">无法检索 Chromebook 版 Steam 资讯。</translation>
 <translation id="6137566720514957455">打开与 <ph name="USER_EMAIL_ADDRESS" /> 对应的“移除账号”对话框</translation>
 <translation id="6141205840878048728">您打算专注于什么任务？</translation>
 <translation id="6141988275892716286">确认下载</translation>
@@ -1675,6 +1678,7 @@
 <translation id="6445835306623867477">正在将“<ph name="ROUTE_TITLE" />”投放至“<ph name="RECEIVER_NAME" />”</translation>
 <translation id="6445915701151710649">CPU</translation>
 <translation id="6447111710783417522"><ph name="DATE" />，<ph name="NUMBER" /> 个事件</translation>
+<translation id="6448529022565414427">充电已暂停</translation>
 <translation id="6449483711453944360">尚不支持 Linux 应用和无痕式窗口</translation>
 <translation id="6450245544201845082">“右键点击”对应的快捷键目前处于停用状态</translation>
 <translation id="6452181791372256707">拒绝</translation>

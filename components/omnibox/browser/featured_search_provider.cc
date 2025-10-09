@@ -18,6 +18,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "components/history_embeddings/history_embeddings_features.h"
+#include "components/omnibox/browser/aim_eligibility_service.h"
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_match_classification.h"
@@ -301,8 +302,8 @@ void FeaturedSearchProvider::AddFeaturedKeywordMatches(
       }
       // Skip @aimode if feature disabled.
       if (turl->starter_pack_id() == template_url_starter_pack_data::kAiMode &&
-          (!omnibox_feature_configs::Toolbelt::Get().enabled ||
-           !client_->IsAimEligible())) {
+          !OmniboxFieldTrial::IsAimStarterPackEnabled(
+              client_->GetAimEligibilityService())) {
         continue;
       }
       // The history starter pack engine is disabled in incognito mode.
@@ -534,7 +535,7 @@ void FeaturedSearchProvider::AddFeaturedEnterpriseSiteSearchIPHMatch() {
   for (const TemplateURL* turl :
        template_url_service_->GetFeaturedEnterpriseSiteSearchEngines()) {
     if (turl->is_active() == TemplateURLData::ActiveStatus::kTrue) {
-      sites.push_back(url_formatter::StripWWW(GURL(turl->url()).host()));
+      sites.push_back(url_formatter::StripWWW(GURL(turl->url()).GetHost()));
     }
   }
   std::ranges::sort(sites);

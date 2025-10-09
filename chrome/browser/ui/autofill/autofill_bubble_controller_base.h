@@ -7,8 +7,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/autofill/bubble_controller_base.h"
-#include "chrome/browser/ui/autofill/payments/payments_ui_constants.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
+#include "components/autofill/core/common/autofill_features.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 
@@ -21,6 +21,7 @@ namespace autofill {
 class AutofillBubbleBase;
 
 // Enum for the current showing state of the bubble.
+// TODO(crbug.com/445901842): Investigate if this can be removed.
 enum class BubbleState {
   // The bubble and the omnibox icon should be hidden.
   kHidden = 0,
@@ -37,9 +38,16 @@ class AutofillBubbleControllerBase : public BubbleControllerBase,
   explicit AutofillBubbleControllerBase(content::WebContents* web_contents);
   ~AutofillBubbleControllerBase() override;
 
+  // Calls the bubble manager to show the bubble if bubble manager is enabled.
+  // Otherwise just shows the bubble.
+  // `force_show` indicates to the bubble manager to show this bubble
+  // irrespective of its priority.
+  void QueueOrShowBubble(bool force_show = false);
+
   // BubbleControllerBase:
   void ShowBubble() override;
   void HideBubble() override;
+  bool CanBeReshown() const override;
   bool IsShowingBubble() const override;
   bool IsMouseHovered() const override;
 
@@ -48,7 +56,16 @@ class AutofillBubbleControllerBase : public BubbleControllerBase,
   void WebContentsDestroyed() override;
 
  protected:
-  virtual PageActionIconType GetPageActionIconType() = 0;
+  bool IsBubbleManagerEnabled() const {
+#if !BUILDFLAG(IS_ANDROID)
+    return base::FeatureList::IsEnabled(
+        features::kAutofillShowBubblesBasedOnPriorities);
+#else
+    return false;
+#endif  // !BUILDFLAG(IS_ANDROID)
+  }
+
+  virtual std::optional<PageActionIconType> GetPageActionIconType() = 0;
 
   // Subclasses should implement this method to actually show the bubble and
   // potentially log metrics.
@@ -56,10 +73,17 @@ class AutofillBubbleControllerBase : public BubbleControllerBase,
 
   virtual void UpdatePageActionIcon();
 
+  // If the BubbleManager feature is enabled, this returns `false` if a bubble
+  // is already queued to be shown.
+  [[nodiscard]] bool MaySetUpBubble();
+
+  // Setter for `bubble_view`.
+  void SetBubbleView(AutofillBubbleBase& bubble_view);
+
+  // Resets the `bubble_view` and informs the bubble manager about it.
+  void ResetBubbleViewAndInformBubbleManager();
+
   AutofillBubbleBase* bubble_view() const { return bubble_view_; }
-  void set_bubble_view(AutofillBubbleBase* bubble_view) {
-    bubble_view_ = bubble_view;
-  }
 
  private:
   // Weak reference. Will be nullptr if no bubble is currently shown.

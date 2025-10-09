@@ -608,7 +608,7 @@ String CanonicalCSSText(CSSRule* rule) {
 
   std::sort(properties.begin(), properties.end(),
             [](const auto& a, const auto& b) -> bool {
-              return WTF::CodeUnitCompareLessThan(a.second, b.second);
+              return CodeUnitCompareLessThan(a.second, b.second);
             });
 
   StringBuilder builder;
@@ -930,7 +930,7 @@ InspectorStyle::LonghandProperties(
           local_context, longhand_properties)) {
     auto result =
         std::make_unique<protocol::Array<protocol::CSS::CSSProperty>>();
-    for (auto longhand_property : longhand_properties) {
+    for (const auto& longhand_property : longhand_properties) {
       String value = longhand_property.Value().CssText();
       std::unique_ptr<protocol::CSS::CSSProperty> longhand =
           protocol::CSS::CSSProperty::create()

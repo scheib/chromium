@@ -73,7 +73,6 @@ namespace {
 // The space between the home button and quick app.
 constexpr int kQuickAppStartMargin = 8;
 
-constexpr uint8_t kAssistantVisibleAlpha = 255;    // 100% alpha
 constexpr uint8_t kAssistantInvisibleAlpha = 138;  // 54% alpha
 
 // Nudge animation constants
@@ -173,10 +172,7 @@ class HomeButton::ButtonImageView : public views::View {
       fg_flags.setColor(GetColorProvider()->GetColor(GetIconColorId()));
 
       if (is_long_press_action_available) {
-        // active: 100% alpha, inactive: 54% alpha
-        fg_flags.setAlphaf(button_controller_->IsAssistantVisible()
-                               ? kAssistantVisibleAlpha / 255.0f
-                               : kAssistantInvisibleAlpha / 255.0f);
+        fg_flags.setAlphaf(kAssistantInvisibleAlpha / 255.0f);
       }
 
       const float thickness = std::ceil(ring_thickness_dp * dsf);
@@ -468,7 +464,7 @@ void HomeButton::OnShelfButtonAboutToRequestFocusFromTabTraversal(
 void HomeButton::ButtonPressed(views::Button* sender,
                                const ui::Event& event,
                                views::InkDrop* ink_drop) {
-  if (display::Screen::GetScreen()->InTabletMode()) {
+  if (display::Screen::Get()->InTabletMode()) {
     base::RecordAction(
         base::UserMetricsAction("AppList_HomeButtonPressedTablet"));
   } else {
@@ -528,7 +524,7 @@ void HomeButton::HandleLocaleChange() {
 
 int64_t HomeButton::GetDisplayId() const {
   aura::Window* window = GetWidget()->GetNativeWindow();
-  return display::Screen::GetScreen()->GetDisplayNearestWindow(window).id();
+  return display::Screen::Get()->GetDisplayNearestWindow(window).id();
 }
 
 std::unique_ptr<HomeButton::ScopedNoClipRect>
@@ -667,15 +663,10 @@ void HomeButton::CreateExpandableContainer() {
   expandable_container_ = AddChildViewAt(std::make_unique<views::View>(), 0);
   expandable_container_->SetLayoutManager(
       std::make_unique<views::FillLayout>());
-  expandable_container_->SetPaintToLayer(ui::LAYER_SOLID_COLOR);
-  expandable_container_->layer()->SetMasksToBounds(true);
-  if (GetColorProvider()) {
-    expandable_container_->layer()->SetColor(
-        GetColorProvider()->GetColor(cros_tokens::kCrosSysSystemOnBase));
-  }
-  expandable_container_->layer()->SetRoundedCornerRadius(
-      gfx::RoundedCornersF(home_button_width / 2.f));
-  expandable_container_->layer()->SetName("NudgeLabelContainer");
+  expandable_container_->SetBackground(views::CreateLayerBasedRoundedBackground(
+      cros_tokens::kCrosSysSystemOnBase,
+      gfx::RoundedCornersF(home_button_width / 2.f)));
+  expandable_container_->background()->SetInternalName("NudgeLabelContainer");
 }
 
 void HomeButton::UpdateTooltipText() {

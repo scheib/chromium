@@ -12,8 +12,9 @@
 #import "components/password_manager/core/common/password_manager_features.h"
 #import "components/password_manager/ios/features.h"
 #import "components/url_formatter/elide_url.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/autofill/model/features.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/omnibox/eg_tests/omnibox_app_interface.h"
 #import "ios/chrome/browser/passwords/model/metrics/ios_password_manager_metrics.h"
@@ -185,9 +186,16 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
 }  // namespace
 
 @interface PasswordSuggestionBottomSheetEGTest : ChromeTestCase
+
+- (BOOL)useNewBlur;
+
 @end
 
 @implementation PasswordSuggestionBottomSheetEGTest
+
+- (bool)useNewBlur {
+  return NO;
+}
 
 - (void)setUp {
   [super setUp];
@@ -230,31 +238,8 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
   AppLaunchConfiguration config;
   config.relaunch_policy = NoForceRelaunchAndResetState;
 
-  if ([self isRunningTest:@selector(testOpenPasswordBottomOnAutofocus)]) {
-    config.features_enabled.push_back(
-        password_manager::features::kIOSPasswordBottomSheetAutofocus);
-  }
-
-  if ([self isRunningTest:@selector(testOpenKeyboardOnAutofocus)]) {
-    config.features_disabled.push_back(
-        password_manager::features::kIOSPasswordBottomSheetAutofocus);
-  }
-
   if ([self isRunningTest:@selector
-            (testOpenPasswordBottomSheetTapUseKeyboardShowKeyboard_V2)] ||
-      [self
-          isRunningTest:@selector
-          (testOpenPasswordBottomSheetUsePassword_V2_StatelessFillDataFlow)]) {
-    config.features_enabled.push_back(
-        password_manager::features::kIOSPasswordBottomSheetV2);
-  } else {
-    config.features_disabled.push_back(
-        password_manager::features::kIOSPasswordBottomSheetV2);
-  }
-
-  if ([self
-          isRunningTest:@selector
-          (testOpenPasswordBottomSheetUsePassword_V2_StatelessFillDataFlow)]) {
+            (testOpenPasswordBottomSheetUsePassword_StatelessFillDataFlow)]) {
     config.features_enabled.push_back(
         password_manager::features::kIOSStatelessFillDataFlow);
   }
@@ -264,6 +249,12 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
             (testAvailableContextMenuItemsForBackupPassword)]) {
     config.features_enabled.push_back(
         password_manager::features::kIOSFillRecoveryPassword);
+  }
+
+  if ([self useNewBlur]) {
+    config.features_enabled.push_back(kAutofillBottomSheetNewBlur);
+  } else {
+    config.features_disabled.push_back(kAutofillBottomSheetNewBlur);
   }
 
   return config;
@@ -389,10 +380,9 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
   [self verifyPasswordFieldsHaveBeenFilled:@"user"];
 }
 
-// Tests that accepting suggestions from the sheet V2 works when the stateless
-// fill data flow feature is enabled. This tests the combination of the 2
-// features.
-- (void)testOpenPasswordBottomSheetUsePassword_V2_StatelessFillDataFlow {
+// Tests that accepting suggestions from the sheet works when the stateless
+// fill data flow feature is enabled.
+- (void)testOpenPasswordBottomSheetUsePassword_StatelessFillDataFlow {
   [self saveGenericPasswordAndLoadLoginPage];
 
   // Wait a bit to let things settle. Waiting on content to be loaded on the
@@ -427,25 +417,46 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
   [self verifyPasswordFieldsHaveBeenFilled:@"user"];
 }
 
-// This test verifies that the bottom sheet opens on autofocus events, when the
-// kIOSPasswordBottomSheetAutofocus feature is enabled.
+// Tests that the bottom sheet can be used with the new blur.
+- (void)testOpenPasswordBottomSheetUsePasswordWithNewBlur {
+  GURL URL = [self loginPageURL];
+  [PasswordManagerAppInterface
+      storeCredentialWithUsername:@"user"
+                         password:@"password"
+                              URL:net::NSURLWithGURL(URL)];
+  [self loadLoginPage];
+
+  [[EarlGrey selectElementWithMatcher:WebViewMatcher()]
+      performAction:chrome_test_util::TapWebElementWithId(kFormPassword)];
+
+  [ChromeEarlGrey
+      waitForUIElementToAppearWithMatcher:grey_accessibilityID(@"user")];
+
+  // Verify that the subtitle string appears.
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:SubtitleString(URL)];
+
+  [[EarlGrey selectElementWithMatcher:UsePasswordButton()]
+      performAction:grey_tap()];
+
+  // No histogram logged because there is only 1 credential shown to the user.
+  GREYAssertNil(
+      [MetricsAppInterface
+          expectTotalCount:0
+              forHistogram:@"PasswordManager.TouchToFill.CredentialIndex"],
+      @"Unexpected histogram error for touch to fill credential index");
+
+  // Verify that the acceptance of the password suggestion at index 0 was
+  // correctly recorded.
+  CheckAutofillSuggestionAcceptedIndexMetricsCount(/*suggestion_index=*/0);
+
+  [self verifyPasswordFieldsHaveBeenFilled:@"user"];
+}
+
+// This test verifies that the bottom sheet opens on autofocus events.
 - (void)testOpenPasswordBottomOnAutofocus {
   [self saveGenericPasswordAndLoadLoginAutofocusPage];
 
   [ChromeEarlGrey waitForUIElementToAppearWithMatcher:UsePasswordButton()];
-}
-
-// This test verifies that the keyboard opens on autofocus events, when the
-// kIOSPasswordBottomSheetAutofocus feature is disabled.
-- (void)testOpenKeyboardOnAutofocus {
-  // TODO(crbug.com/349804536): Test is flaky on iPad.
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_DISABLED(@"Test is flaky on iPad.")
-  }
-
-  [self saveGenericPasswordAndLoadLoginAutofocusPage];
-
-  [ChromeEarlGrey waitForKeyboardToAppear];
 }
 
 // This test verifies that the password bottom sheet does not open when the
@@ -493,28 +504,8 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
   [self verifyPasswordFieldsHaveBeenFilled:@"user"];
 }
 
+// Tests that showing the keyboard from the bottom sheet works.
 - (void)testOpenPasswordBottomSheetTapUseKeyboardShowKeyboard {
-  // TODO(crbug.com/349804536): Test is flaky on iPad.
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_DISABLED(@"Test is flaky on iPad.")
-  }
-
-  [self saveGenericPasswordAndLoadLoginPage];
-
-  [[EarlGrey selectElementWithMatcher:WebViewMatcher()]
-      performAction:chrome_test_util::TapWebElementWithId(kFormPassword)];
-
-  [ChromeEarlGrey
-      waitForUIElementToAppearWithMatcher:grey_accessibilityID(@"user")];
-
-  [[EarlGrey selectElementWithMatcher:OpenKeyboardButton()]
-      performAction:grey_tap()];
-
-  [ChromeEarlGrey waitForKeyboardToAppear];
-}
-
-// Tests that showing the keyboard from the bottom sheet works for V2.
-- (void)testOpenPasswordBottomSheetTapUseKeyboardShowKeyboard_V2 {
   // TODO(crbug.com/349804536): Test is flaky on iPad.
   if ([ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_DISABLED(@"Test is flaky on iPad.")
@@ -577,7 +568,6 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
       assertWithMatcher:grey_notNil()];
 }
 
-// Disabled due to flakes across builders; see https://crbug.com/374961324.
 - (void)testOpenPasswordBottomSheetOpenPasswordDetails {
   NSURL* URL = net::NSURLWithGURL([self loginPageURL]);
   [PasswordManagerAppInterface storeCredentialWithUsername:@"user"
@@ -716,13 +706,14 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
 }
 
 - (void)testOpenPasswordBottomSheetDeletePassword {
-  NSURL* URL = net::NSURLWithGURL([self loginPageURL]);
+  GURL loginURL = [self loginPageURL];
+  NSURL* storeURL = net::NSURLWithGURL(loginURL);
   [PasswordManagerAppInterface storeCredentialWithUsername:@"user"
                                                   password:@"password"
-                                                       URL:URL];
+                                                       URL:storeURL];
   [PasswordManagerAppInterface storeCredentialWithUsername:@"user2"
                                                   password:@"password2"
-                                                       URL:URL];
+                                                       URL:storeURL];
   CheckNumberOfStoredCredentials(/*expected_count=*/2);
 
   [self loadLoginPage];
@@ -749,7 +740,7 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
   [[EarlGrey selectElementWithMatcher:NavigationBarEditButton()]
       performAction:grey_tap()];
 
-  NSString* website = [URL.absoluteString
+  NSString* website = [storeURL.absoluteString
       stringByReplacingOccurrencesOfString:@"simple_login_form_empty.html"
                                 withString:@""];
   DeleteCredential(@"user2", website);
@@ -760,10 +751,16 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
   // Verify that user2 is not available anymore.
   [[EarlGrey selectElementWithMatcher:WebViewMatcher()]
       performAction:chrome_test_util::TapWebElementWithId(kFormPassword)];
-
-  TapElementOnceVisible(grey_accessibilityID(@"user"));
-
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(@"user2")]
+  // Since the bottom sheet was dismissed, now suggestions are shown in the
+  // keyboard acessory.
+  NSString* accessorySuggestionURL =
+      base::SysUTF8ToNSString(loginURL.GetHost() + ":" + loginURL.GetPort());
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:
+                      grey_accessibilityLabel([@"user, "
+                          stringByAppendingString:accessorySuggestionURL])];
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityLabel([@"user2, "
+                     stringByAppendingString:accessorySuggestionURL])]
       assertWithMatcher:grey_nil()];
 }
 
@@ -1194,5 +1191,22 @@ void LongPressElementOnceVisible(id<GREYMatcher> matcher) {
   [[EarlGrey selectElementWithMatcher:ShowDetailsContextMenuItem()]
       assertWithMatcher:grey_nil()];
 }
+
+@end
+
+// Test suite for testing the new blur approach.
+@interface PasswordSuggestionBottomSheetNewBlurEGTest : PasswordSuggestionBottomSheetEGTest
+@end
+
+@implementation PasswordSuggestionBottomSheetNewBlurEGTest
+
+- (BOOL)useNewBlur {
+  return YES;
+}
+
+// No Op test to have the test fixture visible.
+- (void)testVoid {
+}
+
 
 @end

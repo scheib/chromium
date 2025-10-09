@@ -13,7 +13,7 @@ if (use_bundled_fontconfig) {
     header = "include/fontconfig/fontconfig.h"
     bindgen_flags = [
       "merge-extern-blocks",
-      "allowlist-item=(FcCharSet.*|FC_(SLANT|WEIGHT|WIDTH)_.*|FcFontSet(Add|Create|Destroy).*|FcLangSet(Create|Destroy|Copy|Add|HasLang)|FcWeightFromOpenType.*|FC_DUAL|FC_MONO)",
+      "allowlist-item=(FcCharSet.*|FC_(SLANT|WEIGHT|WIDTH|DUAL|MONO|FAMILY)(_.*)?|Fc(Lang|Font)Set(Add|Create|Destroy|Copy|HasLang).*|FcWeightFromOpenType.*)",
     ]
     crate_name = "fontconfig_bindings"
     configs = [
@@ -59,16 +59,17 @@ if (use_bundled_fontconfig) {
     deps = [
       ":fcint_h_bindgen",
       ":fontconfig_h_bindgen",
-      "//third_party/rust/font_types/v0_9:lib",
+      "//third_party/rust/font_types/v0_10:lib",
       "//third_party/rust/libc/v0_2:lib",
-      "//third_party/rust/read_fonts/v0_31:lib",
-      "//third_party/rust/skrifa/v0_33:lib",
+      "//third_party/rust/read_fonts/v0_35:lib",
+      "//third_party/rust/skrifa/v0_37:lib",
     ]
   }
 
   config("fontconfig_config") {
     include_dirs = [
       "src",
+      "include/",
       "include/fc-lang/",
     ]
   }

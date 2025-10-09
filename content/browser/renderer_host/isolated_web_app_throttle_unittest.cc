@@ -46,7 +46,7 @@ class IsolatedWebAppContentBrowserClient : public ContentBrowserClient {
  public:
   bool ShouldUrlUseApplicationIsolationLevel(BrowserContext* browser_context,
                                              const GURL& url) override {
-    return url.host() == GURL(kAppUrl).host();
+    return url.GetHost() == GURL(kAppUrl).GetHost();
   }
 
   bool HandleExternalProtocol(
@@ -318,7 +318,7 @@ TEST_F(IsolatedWebAppThrottleTest, BlockRedirectOutOfIsolatedWebApp) {
   EXPECT_EQ(1u, GetBrowserClient().GetOpenUrlCallCount());
   EXPECT_TRUE(ui::PageTransitionTypeIncludingQualifiersIs(
       GetBrowserClient().GetLastPageTransition(),
-      ui::PageTransition::PAGE_TRANSITION_SERVER_REDIRECT));
+      ui::PageTransition::PAGE_TRANSITION_LINK));
 }
 
 TEST_F(IsolatedWebAppThrottleTest, AllowIframeNavigationOutOfApp) {

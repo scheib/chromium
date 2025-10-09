@@ -15,14 +15,13 @@ static_library("regional_capabilities") {
     "regional_capabilities_prefs.h",
     "regional_capabilities_service.cc",
     "regional_capabilities_service.h",
-    "regional_capabilities_switches.cc",
-    "regional_capabilities_switches.h",
     "regional_capabilities_utils.cc",
     "regional_capabilities_utils.h",
   ]
 
   public_deps = [
     ":country_id",
+    ":switches",
     "//base",
     "//components/keyed_service/core",
   ]
@@ -35,6 +34,7 @@ static_library("regional_capabilities") {
     "//components/pref_registry",
     "//components/prefs",
     "//components/search_engines:search_engine_pref_names",
+    "//components/strings",
     "//third_party/abseil-cpp:absl",
     "//third_party/search_engines_data:prepopulated_engines",
     "//third_party/search_engines_data:regional_settings",
@@ -58,7 +58,7 @@ source_set("country_access_reason") {
   deps = [ "//base" ]
 }
 
-static_library("country_id") {
+source_set("country_id") {
   public = [ "regional_capabilities_country_id.h" ]
 
   sources = [ "regional_capabilities_country_id.cc" ]
@@ -70,11 +70,29 @@ static_library("country_id") {
   ]
 }
 
+source_set("switches") {
+  visibility = [
+    ":*",
+    "//ios/chrome/browser/metrics/model",
+    "//ios/chrome/browser/metrics/model:unit_tests",
+  ]
+
+  sources = [
+    "regional_capabilities_switches.cc",
+    "regional_capabilities_switches.h",
+  ]
+
+  deps = [ "//base" ]
+}
+
 source_set("data") {
   visibility = [
     ":*",
+    "//chrome/browser/regional_capabilities:metrics_provider_impl",
     "//components/search_engines",
     "//components/search_engines:unit_tests",
+    "//ios/chrome/browser/regional_capabilities/model",
+    "//ios/chrome/browser/regional_capabilities/model:unit_tests",
   ]
 
   sources = [
@@ -84,13 +102,14 @@ source_set("data") {
   ]
 
   deps = [
+    ":switches",
     "//base",
     "//components/country_codes",
     "//ui/base",
   ]
 }
 
-static_library("test_support") {
+source_set("test_support") {
   testonly = true
   sources = [
     "regional_capabilities_test_utils.cc",
@@ -101,7 +120,9 @@ static_library("test_support") {
     ":country_access_reason",
     ":data",
     ":regional_capabilities",
+    "//base/test:test_support",
     "//components/country_codes",
+    "//testing/gtest",
   ]
 }
 

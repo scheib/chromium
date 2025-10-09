@@ -21,8 +21,8 @@
 #include "components/page_info/core/features.h"
 #include "components/permissions/features.h"
 #include "components/permissions/permission_hats_trigger_helper.h"
+#include "components/plus_addresses/core/browser/plus_address_hats_utils.h"
 #include "components/plus_addresses/core/common/features.h"
-#include "components/plus_addresses/plus_address_hats_utils.h"
 #include "components/privacy_sandbox/privacy_sandbox_features.h"
 #include "components/signin/public/base/signin_switches.h"
 #include "components/variations/service/google_groups_manager.h"
@@ -43,10 +43,18 @@
 #include "components/compose/core/browser/compose_features.h"
 #endif  // #if !BUILDFLAG(ENABLE_COMPOSE)
 
+#if BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
+#include "pdf/pdf_features.h"  // nogncheck
+#endif                         // BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
+
 #if !BUILDFLAG(IS_ANDROID)
 constexpr char kHatsSurveyTriggerAutofillAddress[] = "autofill-address";
 constexpr char kHatsSurveyTriggerAutofillAddressUserPerception[] =
     "autofill-address-users-perception";
+constexpr char kHatsSurveyTriggerAutofillAiFilling[] =
+    "autofill-ai-walletable-entity-filled";
+constexpr char kHatsSurveyTriggerAutofillAiSavePrompt[] =
+    "autofill-ai-walletable-entity-save-prompt";
 constexpr char kHatsSurveyTriggerAutofillAddressUserDeclinedSuggestion[] =
     "autofill-address-users-perception";
 constexpr char kHatsSurveyTriggerAutofillAddressUserDeclinedSave[] =
@@ -162,6 +170,11 @@ constexpr char kHatsSurveyOrganicTriggerSafetyHubAndroid[] =
     "safety_hub_android_organic_survey";
 #endif  // #if !BUILDFLAG(IS_ANDROID)
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+constexpr char kHatsSurveyTriggerPrivacySandboxWhatsNewSurvey[] =
+    "privacy-sandbox-whats-new-survey";
+#endif  // !BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+
 #if BUILDFLAG(ENABLE_COMPOSE)
 constexpr char kHatsSurveyTriggerComposeAcceptance[] = "compose-acceptance";
 constexpr char kHatsSurveyTriggerComposeClose[] = "compose-close";
@@ -208,6 +221,10 @@ constexpr char kHatsSurveyTriggerOnFocusZpsSuggestionsHappiness[] =
 constexpr char kHatsSurveyTriggerOnFocusZpsSuggestionsUtility[] =
     "omnibox-on-focus-utility";
 
+#if BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
+constexpr char kHatsSurveyTriggerPdfSaveToDrive[] = "save-to-drive";
+#endif  // BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
+
 namespace {
 
 constexpr char kHatsSurveyProbability[] = "probability";
@@ -239,10 +256,7 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       kHatsSurveyTriggerPermissionsPrompt,
       /*presupplied_trigger_id=*/std::nullopt,
       std::vector<std::string>{
-          permissions::kPermissionsPromptSurveyHadGestureKey,
-          permissions::kPermissionPromptSurveyPreviewVisibleKey,
-          permissions::kPermissionPromptSurveyPreviewDropdownInteractedKey,
-          permissions::kPermissionPromptSurveyPreviewWasCombinedKey},
+          permissions::kPermissionsPromptSurveyHadGestureKey},
       std::vector<std::string>{
           permissions::kPermissionsPromptSurveyPromptDispositionKey,
           permissions::kPermissionsPromptSurveyPromptDispositionReasonKey,
@@ -254,8 +268,8 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
           permissions::kPermissionPromptSurveyUrlKey,
           permissions::kPermissionPromptSurveyPepcPromptPositionKey,
           permissions::kPermissionPromptSurveyInitialPermissionStatusKey,
-          permissions::kPermissionPromptSurveyPreviewTimeToDecisionKey,
-          permissions::kPermissionPromptSurveyPreviewTimeToVisibleKey});
+          permissions::kPermissionPromptSurveyPromptOptionsKey,
+          permissions::kPermissionPromptSurveyPromptDisplayDurationKey});
 
   // Privacy sandbox always on sentiment survey
   survey_configs.emplace_back(
@@ -447,8 +461,8 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
   // Autofill surveys.
   survey_configs.emplace_back(
       &::autofill::features::kAutofillAddressUserPerceptionSurvey,
-      kHatsSurveyTriggerAutofillAddressUserPerception, std::nullopt,
-      std::vector<std::string>{},
+      kHatsSurveyTriggerAutofillAddressUserPerception,
+      /*presupplied_trigger_id=*/std::nullopt, std::vector<std::string>{},
       std::vector<std::string>{
           "Accepted fields", "Corrected to same type",
           "Corrected to a different type", "Corrected to an unknown type",
@@ -459,8 +473,20 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
           "Total number of fields"});
 
   survey_configs.emplace_back(
+      &::autofill::features::kAutofillAiFillingSurvey,
+      kHatsSurveyTriggerAutofillAiFilling,
+      /*presupplied_trigger_id=*/std::nullopt,
+      std::vector<std::string>{"User accepted suggestion"});
+
+  survey_configs.emplace_back(
+      &::autofill::features::kAutofillAiSavePromptSurvey,
+      kHatsSurveyTriggerAutofillAiSavePrompt,
+      /*presupplied_trigger_id=*/std::nullopt);
+
+  survey_configs.emplace_back(
       &::autofill::features::kAutofillAddressUserDeclinedSuggestionSurvey,
-      kHatsSurveyTriggerAutofillAddressUserDeclinedSuggestion, std::nullopt);
+      kHatsSurveyTriggerAutofillAddressUserDeclinedSuggestion,
+      /*presupplied_trigger_id=*/std::nullopt);
 
   survey_configs.emplace_back(
       &::autofill::features::kAutofillAddressUserDeclinedSaveSurvey,
@@ -468,8 +494,8 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
 
   survey_configs.emplace_back(
       &::autofill::features::kAutofillCreditCardUserPerceptionSurvey,
-      kHatsSurveyTriggerAutofillCreditCardUserPerception, std::nullopt,
-      std::vector<std::string>{},
+      kHatsSurveyTriggerAutofillCreditCardUserPerception,
+      /*presupplied_trigger_id=*/std::nullopt, std::vector<std::string>{},
       std::vector<std::string>{
           "Accepted fields", "Corrected to same type",
           "Corrected to a different type", "Corrected to an unknown type",
@@ -480,8 +506,8 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
           "Total number of fields"});
   survey_configs.emplace_back(
       &password_manager::features::kAutofillPasswordUserPerceptionSurvey,
-      kHatsSurveyTriggerAutofillPasswordUserPerception, std::nullopt,
-      std::vector<std::string>{},
+      kHatsSurveyTriggerAutofillPasswordUserPerception,
+      /*presupplied_trigger_id=*/std::nullopt, std::vector<std::string>{},
       std::vector<std::string>{"Filling assistance"});
   survey_configs.emplace_back(&features::kAutofillAddressSurvey,
                               kHatsSurveyTriggerAutofillAddress);
@@ -555,6 +581,18 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       &switches::kChromeIdentitySurveySwitchProfileFromProfilePicker,
       kHatsSurveyTriggerIdentitySwitchProfileFromProfilePicker, std::nullopt,
       std::vector<std::string>{}, identity_string_psd_fields);
+
+  // Privacy sandbox What's New survey
+  survey_configs.emplace_back(  //
+      &privacy_sandbox::kPrivacySandboxWhatsNewSurvey,
+      kHatsSurveyTriggerPrivacySandboxWhatsNewSurvey,
+      /*presupplied_trigger_id=*/std::nullopt,
+      /*product_specific_bits_data_fields=*/
+      std::vector<std::string>{},
+      /*product_specific_string_data_fields=*/
+      std::vector<std::string>{
+          "Has seen Incognito tracking protection features on What's New page",
+      });
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 
 #if BUILDFLAG(ENABLE_COMPOSE)
@@ -725,7 +763,9 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       password_manager::features::kPasswordChangeSuccessSurveyTriggerId.Get(),
       /*product_specific_bits_data_fields=*/
       std::vector<std::string>{password_manager::features_util::
-                                   kPasswordChangeSuggestedPasswordsAdoption},
+                                   kPasswordChangeSuggestedPasswordsAdoption,
+                               password_manager::features_util::
+                                   kPasswordChangeBlockingChallengeDetected},
       /*product_specific_string_data_fields=*/
       std::vector<std::string>{
           password_manager::features_util::
@@ -738,7 +778,9 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       password_manager::features::kPasswordChangeErrorSurveyTriggerId.Get(),
       /*product_specific_bits_data_fields=*/
       std::vector<std::string>{password_manager::features_util::
-                                   kPasswordChangeSuggestedPasswordsAdoption},
+                                   kPasswordChangeSuggestedPasswordsAdoption,
+                               password_manager::features_util::
+                                   kPasswordChangeBlockingChallengeDetected},
       /*product_specific_string_data_fields=*/
       std::vector<std::string>{
           password_manager::features_util::
@@ -751,7 +793,9 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       password_manager::features::kPasswordChangeCanceledSurveyTriggerId.Get(),
       /*product_specific_bits_data_fields=*/
       std::vector<std::string>{password_manager::features_util::
-                                   kPasswordChangeSuggestedPasswordsAdoption},
+                                   kPasswordChangeSuggestedPasswordsAdoption,
+                               password_manager::features_util::
+                                   kPasswordChangeBlockingChallengeDetected},
       /*product_specific_string_data_fields=*/
       std::vector<std::string>{
           password_manager::features_util::
@@ -934,6 +978,15 @@ std::vector<hats::SurveyConfig> GetAllSurveyConfigs() {
       /*product_specific_bits_data_fields=*/std::vector<std::string>{},
       /*product_specific_string_data_fields=*/
       std::vector<std::string>{"page classification", "channel"});
+
+#if BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
+  survey_configs.emplace_back(
+      &chrome_pdf::features::kPdfSaveToDrive, kHatsSurveyTriggerPdfSaveToDrive,
+      /*presupplied_trigger_id=*/"etKhHztBR0ugnJ3q1cK0TKzkyTyw",
+      /*product_specific_bits_data_fields=*/
+      std::vector<std::string>{"Upload status", "Multipart upload",
+                               "Resumable upload"});
+#endif  // BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
 
   return survey_configs;
 }

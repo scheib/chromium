@@ -84,7 +84,7 @@ import org.chromium.chrome.test.util.browser.signin.SigninTestRule;
 import org.chromium.components.browser_ui.settings.SettingsNavigation;
 import org.chromium.components.browser_ui.site_settings.SingleCategorySettings;
 import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.policy.test.annotations.Policies;
 import org.chromium.components.user_prefs.UserPrefs;
@@ -100,10 +100,7 @@ import java.util.concurrent.TimeUnit;
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @DoNotBatch(reason = "Child account can leak to other tests in the suite.")
-@EnableFeatures({
-    ChromeFeatureList.ALWAYS_BLOCK_3PCS_INCOGNITO,
-    ChromeFeatureList.FINGERPRINTING_PROTECTION_UX
-})
+@EnableFeatures({ChromeFeatureList.FINGERPRINTING_PROTECTION_UX})
 // Disable TrackingProtection3pcd as we use prefs instead of the feature in these tests.
 @DisableFeatures({ChromeFeatureList.TRACKING_PROTECTION_3PCD})
 public class PrivacySettingsFragmentTest {
@@ -583,7 +580,7 @@ public class PrivacySettingsFragmentTest {
                     WebsitePreferenceBridge.setDefaultContentSetting(
                             ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.JAVASCRIPT_OPTIMIZER,
-                            ContentSettingValues.ALLOW);
+                            ContentSetting.ALLOW);
                 });
         mSettingsActivityTestRule.startSettingsActivity();
         int javascriptOptimizerLabel =
@@ -601,7 +598,7 @@ public class PrivacySettingsFragmentTest {
                     WebsitePreferenceBridge.setDefaultContentSetting(
                             ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.JAVASCRIPT_OPTIMIZER,
-                            ContentSettingValues.BLOCK);
+                            ContentSetting.BLOCK);
                 });
         mSettingsActivityTestRule.startSettingsActivity();
         int javascriptOptimizerLabel =

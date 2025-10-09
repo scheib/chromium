@@ -36,6 +36,8 @@ NSString* const kAIMCircleAnimationDarkMode = @"mia_glowing_circle_animation";
   NSLayoutConstraint* _aimAnimationWidthConstraint;
   /// Height constraint for the aim animation view.
   NSLayoutConstraint* _aimAnimationHeightConstraint;
+  /// The context in which the omnibox is presented.
+  OmniboxPresentationContext _presentationContext;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -47,17 +49,10 @@ NSString* const kAIMCircleAnimationDarkMode = @"mia_glowing_circle_animation";
            selector:@selector(didReceiveMemoryWarning)
                name:UIApplicationDidReceiveMemoryWarningNotification
              object:nil];
-    if (@available(iOS 17, *)) {
-      [self
-          registerForTraitChanges:@[ UITraitPreferredContentSizeCategory.self ]
+    [self registerForTraitChanges:@[ UITraitPreferredContentSizeCategory.self ]
                        withAction:@selector(traitCollectionDidChangeAction)];
-    }
   }
   return self;
-}
-
-- (void)dealloc {
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)setTrailingIconType:(TrailingIconType)trailingIconType {
@@ -95,20 +90,6 @@ NSString* const kAIMCircleAnimationDarkMode = @"mia_glowing_circle_animation";
   CGFloat size = kAimAnimationViewSizeMedium * multiplier;
   return CGSizeMake(size, size);
 }
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  if (self.traitCollection.preferredContentSizeCategory !=
-      previousTraitCollection.preferredContentSizeCategory) {
-    [self traitCollectionDidChangeAction];
-  }
-}
-#endif
 
 #pragma mark - Low memory warning
 
@@ -152,13 +133,17 @@ NSString* const kAIMCircleAnimationDarkMode = @"mia_glowing_circle_animation";
           [self setupSearchWithAimAnimationView];
         }
         break;
-      case TrailingIconType::kRefineQuery:
+      case TrailingIconType::kRefineQuery: {
+        NSString* iconName =
+            _presentationContext == OmniboxPresentationContext::kAIMPrototype
+                ? kRefineQueryDownSymbol
+                : kRefineQuerySymbol;
         icon = DefaultSymbolWithPointSize(
-            kRefineQuerySymbol,
-            kTrailingButtonIconPointSizeMedium * multiplier);
+            iconName, kTrailingButtonIconPointSizeMedium * multiplier);
         self.accessibilityIdentifier =
             kOmniboxPopupRowAppendAccessibilityIdentifier;
         break;
+      }
       case TrailingIconType::kOpenExistingTab:
         icon = DefaultSymbolWithPointSize(
             kNavigateToTabSymbol,
@@ -265,7 +250,7 @@ NSString* const kAIMCircleAnimationDarkMode = @"mia_glowing_circle_animation";
       self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
           ? kAIMCircleAnimationDarkMode
           : kAIMCircleAnimationLightMode;
-  config.loopAnimationCount = -1;
+  config.shouldLoop = YES;
 
   _aimAnimation = ios::provider::GenerateLottieAnimation(config);
   return _aimAnimation;

@@ -72,7 +72,7 @@ TEST_F(ViewTreeHostRootViewFrameFactoryTest,
       kTestTotalDamageRect,
       /*use_overlays=*/true, resource_manager_);
 
-  auto primary_display = display::Screen::GetScreen()->GetPrimaryDisplay();
+  auto primary_display = display::Screen::Get()->GetPrimaryDisplay();
 
   // We should only have the root render pass.
   EXPECT_EQ(frame->render_pass_list.size(), 1u);
@@ -189,7 +189,7 @@ TEST_P(ViewTreeHostRootViewFrameResourceTest, CorrectResourceCreated) {
       content_rect_,
       /*use_overlays=*/true, resource_manager_);
 
-  auto primary_display = display::Screen::GetScreen()->GetPrimaryDisplay();
+  auto primary_display = display::Screen::Get()->GetPrimaryDisplay();
 
   ASSERT_EQ(frame->resource_list.size(), 1u);
 
@@ -231,7 +231,7 @@ TEST_F(ViewTreeHostRootViewFrameFactoryTest,
   constexpr gfx::Size kResourceSizes[4] = {
       {200, 100}, {200, 100}, {250, 150}, {50, 25}};
   for (const auto& size : kResourceSizes) {
-    resource_manager_.OfferResource(
+    resource_manager_.OfferResourceForTesting(
         ViewTreeHostRootViewFrameFactory::CreateUiResource(
             size, kTestSharedImageFormat, kTestSourceId,
             /*is_overlay_candidate=*/false));

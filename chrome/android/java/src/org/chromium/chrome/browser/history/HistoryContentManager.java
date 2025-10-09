@@ -30,7 +30,6 @@ import androidx.recyclerview.widget.RecyclerView.ViewHolder;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.ResettersForTesting;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
@@ -68,6 +67,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /** Displays and manages the content view / list UI for browsing history. */
 @NullMarked
@@ -131,7 +131,7 @@ public class HistoryContentManager implements SignInStateObserver, PrefObserver 
     private final @Nullable Runnable mHideSoftKeyboard;
     private final boolean mShowAppFilter;
     private final List<AppInfo> mAppInfoList = new ArrayList<>();
-    private final Supplier<@Nullable BottomSheetController> mBottomSheetController;
+    private final @Nullable Supplier<@Nullable BottomSheetController> mBottomSheetController;
     private final @Nullable Supplier<@Nullable Tab> mTabSupplier;
     private final AppInfoCache mAppInfoCache;
     private final @Nullable Runnable mOpenHistoryItemCallback;
@@ -188,7 +188,7 @@ public class HistoryContentManager implements SignInStateObserver, PrefObserver 
             boolean shouldShowClearDataIfAvailable,
             @Nullable String hostName,
             @Nullable SelectionDelegate<HistoryItem> selectionDelegate,
-            Supplier<@Nullable BottomSheetController> bottomSheetController,
+            @Nullable Supplier<@Nullable BottomSheetController> bottomSheetController,
             @Nullable Supplier<@Nullable Tab> tabSupplier,
             @Nullable Runnable hideSoftKeyboard,
             HistoryUmaRecorder umaRecorder,
@@ -507,7 +507,7 @@ public class HistoryContentManager implements SignInStateObserver, PrefObserver 
 
     /** Opens the url of each of the visits in the provided list in a new tab. */
     public void openItemsInNewTab(List<HistoryItem> items, boolean isIncognito) {
-        if (mIsSeparateActivity && items.size() > 1) {
+        if ((mIsSeparateActivity || isIncognito) && items.size() > 1) {
             ArrayList<String> additionalUrls = new ArrayList<>(items.size() - 1);
             for (int i = 1; i < items.size(); i++) {
                 additionalUrls.add(items.get(i).getUrl().getSpec());
@@ -673,7 +673,7 @@ public class HistoryContentManager implements SignInStateObserver, PrefObserver 
         // to appear at the bottom as expected.
         assumeNonNull(mHideSoftKeyboard).run();
         if (mAppFilterSheet == null) {
-            assert mBottomSheetController.get() != null;
+            assert mBottomSheetController != null && mBottomSheetController.get() != null;
             mAppFilterSheet =
                     new AppFilterCoordinator(
                             mActivity,

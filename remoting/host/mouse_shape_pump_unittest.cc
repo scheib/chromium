@@ -14,12 +14,12 @@
 #include "base/test/task_environment.h"
 #include "remoting/host/host_mock_objects.h"
 #include "remoting/proto/video.pb.h"
+#include "remoting/protocol/mouse_cursor_monitor.h"
 #include "remoting/protocol/protocol_mock_objects.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
 #include "third_party/webrtc/modules/desktop_capture/mouse_cursor.h"
-#include "third_party/webrtc/modules/desktop_capture/mouse_cursor_monitor.h"
 
 using ::remoting::protocol::MockClientStub;
 
@@ -33,7 +33,7 @@ static const int kCursorHeight = 32;
 static const int kHotspotX = 11;
 static const int kHotspotY = 12;
 
-class TestMouseCursorMonitor : public webrtc::MouseCursorMonitor {
+class TestMouseCursorMonitor : public MouseCursorMonitor {
  public:
   TestMouseCursorMonitor() : callback_(nullptr) {}
 
@@ -53,10 +53,11 @@ class TestMouseCursorMonitor : public webrtc::MouseCursorMonitor {
     ASSERT_TRUE(callback_);
     capture_call_count_++;
 
-    std::unique_ptr<webrtc::MouseCursor> mouse_cursor(new webrtc::MouseCursor(
+    auto mouse_cursor = std::make_unique<webrtc::MouseCursor>(
         new webrtc::BasicDesktopFrame(
-            webrtc::DesktopSize(kCursorWidth, kCursorHeight)),
-        webrtc::DesktopVector(kHotspotX, kHotspotY)));
+            webrtc::DesktopSize(kCursorWidth, kCursorHeight),
+            webrtc::FOURCC_ARGB),
+        webrtc::DesktopVector(kHotspotX, kHotspotY));
 
     callback_->OnMouseCursor(mouse_cursor.release());
   }

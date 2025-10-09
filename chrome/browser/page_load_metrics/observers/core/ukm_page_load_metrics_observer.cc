@@ -48,6 +48,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/site_engagement/content/site_engagement_service.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/storage_partition.h"
@@ -134,7 +135,7 @@ bool IsValidSearchURL(content::BrowserContext* browser_context,
     return false;
 
   const TemplateURL* template_url =
-      template_service->GetTemplateURLForHost(url.host());
+      template_service->GetTemplateURLForHost(url.GetHost());
   const SearchTermsData& search_terms_data =
       template_service->search_terms_data();
 
@@ -368,6 +369,8 @@ UkmPageLoadMetricsObserver::ObservePolicy UkmPageLoadMetricsObserver::OnCommit(
 
   // The PageTransition for the navigation may be updated on commit.
   page_transition_ = navigation_handle->GetPageTransition();
+  UMA_HISTOGRAM_BOOLEAN("Actor.MayOriginGatePageTransition",
+                        PageLoadMayOriginGate(navigation_handle));
   was_cached_ = navigation_handle->WasResponseCached();
   navigation_handle_timing_ = navigation_handle->GetNavigationHandleTiming();
   prerender::NoStatePrefetchManager* const no_state_prefetch_manager =
@@ -390,6 +393,22 @@ UkmPageLoadMetricsObserver::ObservePolicy UkmPageLoadMetricsObserver::OnCommit(
                                    ->GetLastProcessAssignmentOutcome();
 
   return CONTINUE_OBSERVING;
+}
+
+bool UkmPageLoadMetricsObserver::PageLoadMayOriginGate(
+    content::NavigationHandle* navigation_handle) const {
+  // Actor only uses origin gating for cross-origin navigations.
+  if (navigation_handle->IsSameOrigin()) {
+    return false;
+  }
+  // Cross-origin client redirects would trigger origin gating.
+  if (page_transition_ & ui::PageTransition::PAGE_TRANSITION_CLIENT_REDIRECT) {
+    return true;
+  }
+  // Otherwise, only if it's the last chain in a redirect.
+  return (page_transition_ &
+          ui::PageTransition::PAGE_TRANSITION_SERVER_REDIRECT) &&
+         (page_transition_ & ui::PageTransition::PAGE_TRANSITION_CHAIN_END);
 }
 
 UkmPageLoadMetricsObserver::ObservePolicy
@@ -750,6 +769,23 @@ void UkmPageLoadMetricsObserver::RecordSoftNavigationMetrics(
 }
 
 void UkmPageLoadMetricsObserver::
+    RecordLargestContentfulPaintBeforeSoftNavigation() {
+  ukm::builders::PageLoad builder(GetDelegate().GetPageUkmSourceId());
+  const page_load_metrics::ContentfulPaintTimingInfo& largest_contentful_paint =
+      GetCoreWebVitalsLcpTimingInfo();
+  if (largest_contentful_paint.ContainsValidTime() &&
+      WasStartedInForegroundOptionalEventInForeground(
+          largest_contentful_paint.Time(), GetDelegate())) {
+    builder
+        .SetPaintTimingBeforeSoftNavigation_NavigationToLargestContentfulPaint2(
+            largest_contentful_paint.Time().value().InMilliseconds());
+        PAGE_LOAD_HISTOGRAM("PageLoad.BeforeSoftNavigation.LargestContentfulPaint2",
+                        largest_contentful_paint.Time().value());
+  }
+  builder.Record(ukm::UkmRecorder::Get());
+}
+
+void UkmPageLoadMetricsObserver::
     RecordResponsivenessMetricsBeforeSoftNavigationForMainFrame() {
   ukm::builders::PageLoad builder(GetDelegate().GetPageUkmSourceId());
   const page_load_metrics::ResponsivenessMetricsNormalization&
@@ -817,11 +853,18 @@ void UkmPageLoadMetricsObserver::OnSoftNavigationUpdated(
   // soft_navigation_interval_responsiveness_metrics_normalization_ as INP
   // before soft nav.
   if (current_soft_navigation_metrics->count == 0) {
+    RecordLargestContentfulPaintBeforeSoftNavigation();
     RecordResponsivenessMetricsBeforeSoftNavigationForMainFrame();
     RecordLayoutShiftBeforeSoftNavigationForMainFrame();
-  } else {
-    // Even though a soft-nav arrived, we don't flush until the current one
-    // unloads (i.e. next soft nav arrives).  So the very first skips reporting.
+  } else if (current_soft_navigation_metrics->count !=
+             new_soft_navigation_metrics.count) {
+    // We only want to record metrics once for each soft navigation. So we flush
+    // the current soft navigation metrics when the next soft navigation starts.
+    // So the first soft navigation metrics are recorded when the second soft
+    // navigation starts, and the second soft navigation metrics are recorded
+    // when the third soft navigation starts, etc. The final soft navigation
+    // metrics are recorded in `RecordTimingMetrics` at the end of the page
+    // load.
     RecordSoftNavigationMetrics(
         GetDelegate().GetPreviousUkmSourceIdForSoftNavigation(),
         *current_soft_navigation_metrics);

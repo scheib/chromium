@@ -485,6 +485,11 @@ const char kEnableArcVm[] = "enable-arcvm";
 // Enables ARCVM DLC.
 const char kEnableArcVmDlc[] = "enable-arcvm-dlc";
 
+// This flag is set when the device's hardware meets the hardware requirements
+// for the ARCVM DLC.
+const char kArcVmDlcHardwareRequirementSatisfied[] =
+    "arcvm-dlc-hardware-satisfied";
+
 // Enables ARCVM realtime VCPU feature.
 const char kEnableArcVmRtVcpu[] = "enable-arcvm-rt-vcpu";
 
@@ -792,9 +797,6 @@ const char kBrowserDataBackwardMigrationMode[] =
 // Force skip or force migration. Should only be used for testing.
 const char kForceBrowserDataMigrationForTesting[] =
     "force-browser-data-migration-for-testing";
-
-// The base URL for the App Mall.
-const char kMallUrl[] = "mall-url";
 
 // Determines the URL to be used when calling the backend.
 const char kMarketingOptInUrl[] = "marketing-opt-in-url";

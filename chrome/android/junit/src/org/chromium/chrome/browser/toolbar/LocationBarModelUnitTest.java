@@ -15,8 +15,6 @@ import static org.mockito.Mockito.when;
 
 import android.view.ContextThemeWrapper;
 
-import androidx.annotation.DrawableRes;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -31,10 +29,10 @@ import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.UserDataHost;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
-import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.omnibox.ChromeAutocompleteSchemeClassifier;
 import org.chromium.chrome.browser.omnibox.ChromeAutocompleteSchemeClassifierJni;
 import org.chromium.chrome.browser.omnibox.LocationBarDataProvider;
@@ -42,8 +40,6 @@ import org.chromium.chrome.browser.omnibox.NewTabPageDelegate;
 import org.chromium.chrome.browser.paint_preview.TabbedPaintPreview;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.components.dom_distiller.core.DomDistillerUrlUtilsJni;
-import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.omnibox.OmniboxUrlEmphasizerJni;
 import org.chromium.url.GURL;
 
@@ -76,9 +72,7 @@ public class LocationBarModelUnitTest {
     @Mock private LocationBarDataProvider.Observer mLocationBarDataObserver;
     @Mock private LocationBarModel.Natives mLocationBarModelJni;
     @Mock private ChromeAutocompleteSchemeClassifier.Natives mChromeAutocompleteSchemeClassifierJni;
-    @Mock private DomDistillerUrlUtilsJni mDomDistillerUrlUtilsJni;
     @Mock private OmniboxUrlEmphasizerJni mOmniboxUrlEmphasizerJni;
-    @Mock private LayoutStateProvider mLayoutStateProvider;
     @Mock private TabbedPaintPreview mTabbedPaintPreview;
 
     private final UserDataHost mUserDataHost = new UserDataHost();
@@ -91,7 +85,7 @@ public class LocationBarModelUnitTest {
                     NewTabPageDelegate.EMPTY,
                     url -> url.getSpec(),
                     OFFLINE_STATUS,
-                    () -> ControlsPosition.TOP);
+                    new ObservableSupplierImpl(ControlsPosition.TOP));
 
     private final GURL mExampleGurl = new GURL("http://www.example.com/");
 
@@ -100,7 +94,6 @@ public class LocationBarModelUnitTest {
         ChromeAutocompleteSchemeClassifierJni.setInstanceForTesting(
                 mChromeAutocompleteSchemeClassifierJni);
         LocationBarModelJni.setInstanceForTesting(mLocationBarModelJni);
-        DomDistillerUrlUtilsJni.setInstanceForTesting(mDomDistillerUrlUtilsJni);
         OmniboxUrlEmphasizerJni.setInstanceForTesting(mOmniboxUrlEmphasizerJni);
 
         when(mPrimaryOtrProfileMock.isOffTheRecord()).thenReturn(true);
@@ -343,19 +336,5 @@ public class LocationBarModelUnitTest {
                         /* editingText= */ null);
 
         Assert.assertEquals("Alphabet", data.displayText);
-    }
-
-    @Test
-    public void testGetSecurityIconResource_ReadingModePage() {
-        when(mDomDistillerUrlUtilsJni.isDistilledPage(any())).thenReturn(true);
-        when(mRegularTabMock.getUrl())
-                .thenReturn(new GURL(UrlConstants.DISTILLER_SCHEME + "://test"));
-        when(mRegularTabMock.isInitialized()).thenReturn(true);
-        when(mRegularTabMock.isDestroyed()).thenReturn(false);
-        mLocationBarModel.setTab(mRegularTabMock, mRegularProfileMock);
-
-        @DrawableRes
-        int drawableRes = mLocationBarModel.getSecurityIconResource(/* isTablet= */ false);
-        Assert.assertEquals(R.drawable.ic_reader_mode_24dp, drawableRes);
     }
 }

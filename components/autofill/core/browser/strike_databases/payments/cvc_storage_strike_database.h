@@ -11,7 +11,7 @@
 #include <string_view>
 
 #include "base/time/time.h"
-#include "components/autofill/core/browser/strike_databases/simple_autofill_strike_database.h"
+#include "components/strike_database/simple_autofill_strike_database.h"
 
 namespace autofill {
 
@@ -25,7 +25,8 @@ struct CvcStorageStrikeDatabaseTraits {
 };
 
 class CvcStorageStrikeDatabase
-    : public SimpleAutofillStrikeDatabase<CvcStorageStrikeDatabaseTraits> {
+    : public strike_database::SimpleAutofillStrikeDatabase<
+          CvcStorageStrikeDatabaseTraits> {
  public:
   using SimpleAutofillStrikeDatabase<
       CvcStorageStrikeDatabaseTraits>::SimpleAutofillStrikeDatabase;

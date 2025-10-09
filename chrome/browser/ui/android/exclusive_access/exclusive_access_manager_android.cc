@@ -16,10 +16,12 @@
 ExclusiveAccessManagerAndroid::ExclusiveAccessManagerAndroid(
     JNIEnv* env,
     const jni_zero::JavaRef<jobject>& j_eam,
+    const jni_zero::JavaRef<jobject>& j_activity,
     const jni_zero::JavaRef<jobject>& j_fullscreen_manager,
     const jni_zero::JavaRef<jobject>& j_activity_tab_provider)
     : eac_(std::make_unique<ExclusiveAccessContextAndroid>(
           env,
+          j_activity,
           j_fullscreen_manager,
           j_activity_tab_provider)),
       eam_(eac_.get()) {
@@ -32,9 +34,13 @@ void ExclusiveAccessManagerAndroid::EnterFullscreenModeForTab(
     JNIEnv* env,
     jlong requesting_frame,
     bool prefersNavigationBar,
-    bool prefersStatusBar) {
+    bool prefersStatusBar,
+    jlong displayId) {
+  FullscreenTabParams fullscreen_tab_params{displayId, prefersNavigationBar,
+                                            prefersStatusBar};
   eam_.fullscreen_controller()->EnterFullscreenModeForTab(
-      reinterpret_cast<content::RenderFrameHost*>(requesting_frame));
+      reinterpret_cast<content::RenderFrameHost*>(requesting_frame),
+      fullscreen_tab_params);
 }
 
 void ExclusiveAccessManagerAndroid::ExitFullscreenModeForTab(
@@ -52,6 +58,7 @@ bool ExclusiveAccessManagerAndroid::IsFullscreenForTabOrPending(
   content::WebContents* wc =
       content::WebContents::FromJavaWebContents(jweb_contents);
   DCHECK(wc != nullptr);
+
   auto state = eam_.fullscreen_controller()->GetFullscreenState(wc);
 
   return state.target_mode == content::FullscreenMode::kContent ||
@@ -100,6 +107,30 @@ void ExclusiveAccessManagerAndroid::LostPointerLock(JNIEnv* env) {
   eam_.pointer_lock_controller()->ExitExclusiveAccessToPreviousState();
 }
 
+void ExclusiveAccessManagerAndroid::ExitExclusiveAccess(JNIEnv* env) {
+  eam_.ExitExclusiveAccess();
+}
+
+void ExclusiveAccessManagerAndroid::OnTabDeactivated(
+    JNIEnv* env,
+    const jni_zero::JavaRef<jobject>& jweb_contents) {
+  eam_.OnTabDeactivated(
+      content::WebContents::FromJavaWebContents(jweb_contents));
+}
+
+void ExclusiveAccessManagerAndroid::OnTabDetachedFromView(
+    JNIEnv* env,
+    const jni_zero::JavaRef<jobject>& jweb_contents) {
+  eam_.OnTabDetachedFromView(
+      content::WebContents::FromJavaWebContents(jweb_contents));
+}
+
+void ExclusiveAccessManagerAndroid::OnTabClosing(
+    JNIEnv* env,
+    const jni_zero::JavaRef<jobject>& jweb_contents) {
+  eam_.OnTabClosing(content::WebContents::FromJavaWebContents(jweb_contents));
+}
+
 void ExclusiveAccessManagerAndroid::Destroy(JNIEnv* env) {
   delete this;
 }
@@ -107,9 +138,10 @@ void ExclusiveAccessManagerAndroid::Destroy(JNIEnv* env) {
 jlong JNI_ExclusiveAccessManager_Init(
     JNIEnv* env,
     const jni_zero::JavaParamRef<jobject>& jeam,
+    const jni_zero::JavaParamRef<jobject>& j_activity,
     const jni_zero::JavaParamRef<jobject>& j_fullscreen_manager,
     const jni_zero::JavaParamRef<jobject>& j_activity_tab_provider) {
   ExclusiveAccessManagerAndroid* content = new ExclusiveAccessManagerAndroid(
-      env, jeam, j_fullscreen_manager, j_activity_tab_provider);
+      env, jeam, j_activity, j_fullscreen_manager, j_activity_tab_provider);
   return reinterpret_cast<intptr_t>(content);
 }

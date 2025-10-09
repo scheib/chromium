@@ -59,13 +59,9 @@ namespace network_time {
 // Network time queries are enabled on Android and all desktop platforms except
 // Chrome OS, which uses tlsdated to set the system time.
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_IOS)
-BASE_FEATURE(kNetworkTimeServiceQuerying,
-             "NetworkTimeServiceQuerying",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kNetworkTimeServiceQuerying, base::FEATURE_DISABLED_BY_DEFAULT);
 #else
-BASE_FEATURE(kNetworkTimeServiceQuerying,
-             "NetworkTimeServiceQuerying",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kNetworkTimeServiceQuerying, base::FEATURE_ENABLED_BY_DEFAULT);
 #endif
 
 namespace {
@@ -492,7 +488,8 @@ bool NetworkTimeTracker::UpdateTimeFromResponse(
     return false;
   }
   response.remove_prefix(5);  // Skips leading )]}'\n
-  std::optional<base::Value::Dict> value = base::JSONReader::ReadDict(response);
+  std::optional<base::Value::Dict> value = base::JSONReader::ReadDict(
+      response, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!value) {
     DVLOG(1) << "not a dictionary";
     return false;

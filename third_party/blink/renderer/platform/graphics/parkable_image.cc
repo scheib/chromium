@@ -28,9 +28,7 @@
 
 namespace blink {
 
-BASE_FEATURE(kDelayParkingImages,
-             "DelayParkingImages",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kDelayParkingImages, base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace {
 

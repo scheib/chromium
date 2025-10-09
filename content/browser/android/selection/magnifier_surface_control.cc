@@ -67,8 +67,7 @@ static jlong JNI_MagnifierSurfaceControl_Create(
   WebContentsImpl* web_contents = static_cast<WebContentsImpl*>(
       WebContents::FromJavaWebContents(j_web_contents));
 
-  // Java MagnifierSurfaceControl calls release.
-  bool release_on_destroy = false;
+  bool release_on_destroy = true;
   gl::ScopedJavaSurfaceControl scoped_java_surface_control(j_surface_control,
                                                            release_on_destroy);
   gpu::GpuSurfaceTracker* tracker = gpu::GpuSurfaceTracker::Get();
@@ -185,10 +184,14 @@ MagnifierSurfaceControl::MagnifierSurfaceControl(
 
 MagnifierSurfaceControl::~MagnifierSurfaceControl() {
   display_private_.reset();
-  if (frame_sink_id_.is_valid()) {
-    GetHostFrameSinkManager()->InvalidateFrameSinkId(frame_sink_id_, this);
-  }
-  gpu::GpuSurfaceTracker::Get()->RemoveSurface(surface_handle_);
+  CHECK(frame_sink_id_.is_valid());
+  GetHostFrameSinkManager()->InvalidateFrameSinkId(
+      frame_sink_id_, this,
+      base::BindOnce(
+          [](gpu::SurfaceHandle surface_handle) {
+            gpu::GpuSurfaceTracker::Get()->RemoveSurface(surface_handle);
+          },
+          surface_handle_));
 }
 
 void MagnifierSurfaceControl::SetReadbackOrigin(JNIEnv* env,
@@ -265,7 +268,7 @@ void MagnifierSurfaceControl::CreateDisplayAndFrameSink() {
   root_params->display_client = GetBoundRemote(task_runner);
 
   gfx::DisplayColorSpaces display_color_spaces =
-      display::Screen::GetScreen()
+      display::Screen::Get()
           ->GetDisplayNearestWindow(window_android)
           .GetColorSpaces();
 

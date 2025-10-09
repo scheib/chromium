@@ -237,8 +237,8 @@ base::TimeDelta CorrectEventAsNavigationOrActivationOrigined(
       return zero;
     case PrerenderingState::kActivated: {
       base::TimeDelta corrected = event - delegate.GetActivationStart().value();
-      CHECK_GE(corrected, zero);
-      return corrected;
+      // If the event occurred before activation, return 0.
+      return std::max(corrected, zero);
     }
   }
 }
@@ -366,6 +366,26 @@ bool IsServiceWorkerControlled(
   return (delegate.GetMainFrameMetadata().behavior_flags &
           blink::LoadingBehaviorFlag::
               kLoadingBehaviorServiceWorkerControlled) != 0;
+}
+
+bool IsServiceWorkerSyntheticResponseEnabled(
+    const PageLoadMetricsObserverDelegate& delegate) {
+  if ((delegate.GetMainFrameMetadata().behavior_flags &
+       blink::LoadingBehaviorFlag::
+           kLoadingBehaviorServiceWorkerSyntheticResponse) != 0) {
+    // TODO(crbug.com/40240298): This is added to ensure the tests correctly set
+    // expected loading behaviors. Remove this CHECK once
+    // `ControllerServiceWorkerMode` is updated.
+    CHECK(!IsServiceWorkerControlled(delegate));
+    return true;
+  }
+  return false;
+}
+
+bool IsServiceWorkerControlledOrSyntheticResponseEnabled(
+    const PageLoadMetricsObserverDelegate& delegate) {
+  return IsServiceWorkerControlled(delegate) ||
+         IsServiceWorkerSyntheticResponseEnabled(delegate);
 }
 
 }  // namespace page_load_metrics

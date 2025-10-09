@@ -10,6 +10,7 @@
 #import "base/notreached.h"
 #import "base/task/thread_pool.h"
 #import "base/time/time.h"
+#import "ios/chrome/common/app_group/app_group_utils.h"
 #import "ios/chrome/common/constants.h"
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
@@ -661,7 +662,7 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
         (self.actionButtonsVisibility ==
          ActionButtonsVisibility::kEquallyWeightedButtonShown);
     if (equallyWeightedButton) {
-      UpdateButtonToMatchEqualWeightAction(self.primaryActionButton);
+      UpdateButtonToMatchTertiaryAction(self.primaryActionButton);
     } else {
       UpdateButtonToMatchPrimaryAction(self.primaryActionButton);
     }
@@ -669,11 +670,16 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
   // The secondary action button has button type based on
   // actionButtonsVisibility and should be recreated.
   if (_secondaryActionButton) {
+    UIView* parent = _secondaryActionButton.superview;
+    NSUInteger buttonIndex =
+        [parent.subviews indexOfObject:_secondaryActionButton];
+
     // Remove the current secondary button from view.
     [_secondaryActionButton removeFromSuperview];
     _secondaryActionButton = [self createSecondaryActionButton];
+
     [_actionButtonsStackView insertArrangedSubview:_secondaryActionButton
-                                           atIndex:1];
+                                           atIndex:buttonIndex];
     [self updateActionButtonsSpacing];
   }
 
@@ -857,7 +863,6 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
     [_primaryActionButton addTarget:self
                              action:@selector(didTapPrimaryActionButton)
                    forControlEvents:UIControlEventTouchUpInside];
-    _primaryActionButton.configurationUpdateHandler = self.updateHandler;
     _primaryActionButton.enabled = _primaryButtonEnabled;
     _primaryActionButton.hidden =
         (self.actionButtonsVisibility == ActionButtonsVisibility::kHidden);
@@ -1084,20 +1089,6 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
           self.bannerImageView));
 }
 
-- (void)setPrimaryActionButtonColor:(UIButton*)button {
-  UIButtonConfiguration* buttonConfiguration = button.configuration;
-  BOOL useEquallyWeightedButtons =
-      (self.actionButtonsVisibility ==
-       ActionButtonsVisibility::kEquallyWeightedButtonShown);
-  buttonConfiguration.background.backgroundColor =
-      useEquallyWeightedButtons ? [UIColor colorNamed:kBlueHaloColor]
-                                : [UIColor colorNamed:kBlueColor];
-  buttonConfiguration.baseForegroundColor =
-      useEquallyWeightedButtons ? [UIColor colorNamed:kBlueColor]
-                                : [UIColor colorNamed:kSolidButtonTextColor];
-  button.configuration = buttonConfiguration;
-}
-
 // Sets or resets the "Read More" text label when the bottom hasn't been
 // reached yet and scrolling to the end is mandatory.
 - (void)setReadMoreText {
@@ -1262,8 +1253,11 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
   // Add other buttons with the correct margins.
   if (self.secondaryActionString) {
     _secondaryActionButton = [self createSecondaryActionButton];
-    [_actionButtonsStackView insertArrangedSubview:_secondaryActionButton
-                                           atIndex:1];
+    [_actionButtonsStackView
+        insertArrangedSubview:_secondaryActionButton
+                      atIndex:app_group::IsConfirmationButtonSwapOrderEnabled()
+                                  ? 0
+                                  : 1];
     [self updateActionButtonsSpacing];
   }
   if (self.tertiaryActionString) {
@@ -1514,11 +1508,9 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
 }
 
 - (void)updateActionButtonsSpacing {
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26, *)) {
     _actionButtonsStackView.spacing = kStackViewEquallyWeightedButtonSpacing;
   } else {
-#endif
     switch (self.actionButtonsVisibility) {
       case ActionButtonsVisibility::kEquallyWeightedButtonShown:
         // Spacing is needed when all buttons have filled background.
@@ -1534,9 +1526,7 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
         // Do not add button spacing by default or when buttons are hidden.
         break;
     }
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   }
-#endif
 }
 
 - (void)updateActionButtonsStackAlpha:(CGFloat)alpha {
@@ -1574,7 +1564,7 @@ const CGFloat kHeaderImageShadowShadowInset = 20;
        ActionButtonsVisibility::kEquallyWeightedButtonShown);
   ChromeButton* button;
   if (equallyWeightedButton) {
-    button = EqualWeightButton();
+    button = TertiaryActionButton();
   } else {
     button = primary ? PrimaryActionButton() : SecondaryActionButton();
   }

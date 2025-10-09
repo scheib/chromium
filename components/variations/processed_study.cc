@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
@@ -161,6 +162,16 @@ bool ValidateAndComputeTotalProbability(
       DVLOG(1) << study.name() << " has experiment (" << experiment.name()
                << ") with a google_web_experiment_id and a "
                << "web_trigger_experiment_id.";
+      return false;
+    }
+
+    if (study.activation_type() == Study::STICKY_AFTER_QUERY &&
+        (experiment.has_google_web_experiment_id() ||
+         experiment.has_google_web_trigger_experiment_id() ||
+         experiment.has_google_app_experiment_id())) {
+      LogInvalidReason(InvalidStudyReason::kExperimentIdInStickyStudy);
+      DVLOG(1) << study.name() << " with sticky activation has experiment ("
+               << experiment.name() << ") with an experiment ID.";
       return false;
     }
 

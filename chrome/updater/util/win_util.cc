@@ -30,6 +30,7 @@
 #include "base/compiler_specific.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/containers/span.h"
 #include "base/debug/alias.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -120,8 +121,8 @@ HRESULT GetSidIntegrityLevel(PSID sid, MANDATORY_LEVEL* level) {
   }
   static constexpr SID_IDENTIFIER_AUTHORITY kMandatoryLabelAuth =
       SECURITY_MANDATORY_LABEL_AUTHORITY;
-  if (UNSAFE_TODO(std::memcmp(authority, &kMandatoryLabelAuth,
-                              sizeof(SID_IDENTIFIER_AUTHORITY)))) {
+  if (base::byte_span_from_ref(*authority) !=
+      base::byte_span_from_ref(kMandatoryLabelAuth)) {
     return E_FAIL;
   }
   PUCHAR count = ::GetSidSubAuthorityCount(sid);
@@ -365,6 +366,55 @@ CSecurityDesc GetAdminDaclSecurityDescriptor(ACCESS_MASK accessmask) {
   sd.SetDacl(dacl);
   sd.MakeAbsolute();
   return sd;
+}
+
+std::optional<std::wstring> AddCurrentUserAllowedAce(
+    const std::wstring& sddl,
+    ACCESS_MASK required_permissions,
+    UINT8 required_ace_flags) {
+  CAccessToken token;
+  CSid sid;
+  if (!token.GetEffectiveToken(TOKEN_QUERY) || !token.GetUser(&sid)) {
+    VLOG(2) << "Failed to get current user sid: " << std::hex
+            << HRESULTFromLastError();
+    return {};
+  }
+
+  CSecurityDesc sd;
+  if (!sd.FromString(sddl.c_str())) {
+    return {};
+  }
+  CDacl dacl;
+  if (!sd.GetDacl(&dacl)) {
+    VLOG(2) << "Failed to get dacl: " << std::hex << HRESULTFromLastError();
+    return {};
+  }
+
+  int ace_count = dacl.GetAceCount();
+  for (int i = 0; i < ace_count; ++i) {
+    CSid sid_entry;
+    ACCESS_MASK existing_permissions = 0;
+    BYTE existing_ace_flags = 0;
+    dacl.GetAclEntry(i, &sid_entry, &existing_permissions, NULL,
+                     &existing_ace_flags);
+    if (sid_entry == sid &&
+        required_permissions == (existing_permissions & required_permissions) &&
+        required_ace_flags == (existing_ace_flags & ~INHERITED_ACE)) {
+      return sddl;
+    }
+  }
+
+  if (!dacl.AddAllowedAce(sid, required_permissions, required_ace_flags)) {
+    VLOG(2) << "Failed to add ace: " << std::hex << HRESULTFromLastError();
+    return {};
+  }
+
+  sd.SetDacl(dacl);
+  CString new_sddl;
+  if (!sd.ToString(&new_sddl)) {
+    return {};
+  }
+  return std::wstring(new_sddl);
 }
 
 std::wstring GetAppClientsKey(const std::string& app_id) {
@@ -1225,10 +1275,10 @@ bool MigrateLegacyUpdaters(
         continue;
       }
 
-      registration.version = base::Version(base::SysWideToUTF8(pv));
-      if (!registration.version.IsValid()) {
+      if (!base::Version(base::SysWideToUTF8(pv)).IsValid()) {
         continue;
       }
+      registration.version = base::SysWideToUTF8(pv);
 
       base::win::RegKey client_state_key;
       if (client_state_key.Open(root, GetAppClientStateKey(app_id).c_str(),
@@ -1282,9 +1332,8 @@ bool MigrateLegacyUpdaters(
                 ERROR_SUCCESS) {
               registration.cohort_hint = base::SysWideToUTF8(cohort_hint);
             }
-            VLOG(2) << "Cohort values: " << registration.cohort << ", "
-                    << registration.cohort_name << ", "
-                    << registration.cohort_hint;
+            VLOG(2) << "Cohort values: " << cohort << ", " << cohort_name
+                    << ", " << cohort_hint;
           }
         }
       }

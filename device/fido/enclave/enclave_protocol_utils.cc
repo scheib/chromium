@@ -8,6 +8,7 @@
 #include <variant>
 
 #include "base/compiler_specific.h"
+#include "base/feature_list.h"
 #include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
@@ -56,6 +57,7 @@ const size_t kCredentialIdSize = 16;
 // JSON keys for request fields used for both GetAssertion and MakeCredential.
 const char kRequestDataKey[] = "request";
 const char kRequestClientDataJSONKey[] = "client_data_json";
+const char kRequestClientDataJSONHashKey[] = "client_data_json_hash";
 const char kRequestClaimedPINKey[] = "claimed_pin";
 
 // JSON keys for GetAssertion request fields.
@@ -175,7 +177,7 @@ std::optional<AuthenticatorGetAssertionResponse>
 AuthenticatorGetAssertionResponseFromValue(const cbor::Value::MapValue& map) {
   // 'authenticatorData' and signature' are required fields.
   // 'clientDataJSON' is also a required field, by spec, but we ignore it here
-  // since that is cached at a higher layer.
+  // since the enclave may not return it and it is cached at a higher layer.
   // 'attestationObject' is optional and also ignored.
   auto authenticator_data = ReadAuthenticatorData(map);
   if (!authenticator_data) {
@@ -230,91 +232,6 @@ std::optional<std::vector<uint8_t>> ParsePrfResponse(const cbor::Value& v) {
   }
 
   return ret;
-}
-
-// Redacts `path` from `cbor` using the semantics described below for
-// `RedactCbor`. Mutates `cbor` in place.
-void RedactPath(cbor::Value* cbor, base::span<const char*> path) {
-  if (cbor->is_array()) {
-    // Mutate all the elements in the array.
-    cbor::Value::ArrayValue& array =
-        const_cast<cbor::Value::ArrayValue&>(cbor->GetArray());
-    for (cbor::Value& value : array) {
-      RedactPath(&value, path);
-    }
-    return;
-  }
-  if (!cbor->is_map()) {
-    // Only maps and arrays are supported.
-    return;
-  }
-  cbor::Value::MapValue& map =
-      const_cast<cbor::Value::MapValue&>(cbor->GetMap());
-  const char* field = path.take_first_elem();
-  const auto it = map.find(cbor::Value(field));
-  if (it == map.end()) {
-    // Could not find some part of the path, bail out.
-    return;
-  }
-  if (path.empty()) {
-    // Found the leaf, replace the map value regardless of its type.
-    it->second = cbor::Value("[redacted]");
-    return;
-  }
-  RedactPath(&it->second, path);
-}
-
-// Redacts `paths_to_redact` from `cbor` by finding the corresponding keys and
-// replacing them by the cbor string "redacted". Nested paths should correspond
-// to nested maps under the same key name. The redaction is applied to all array
-// elements for a matching key.
-// If a path is not found, a clone of `cbor` is returned.
-//
-// Example:
-//
-// Given a `cbor` value...
-// {
-//   characters: [
-//     {
-//       name: "Reimu",
-//       occupation: ["Shrine maiden"]
-//     },
-//     {
-//       name: "Marisa",
-//       occupation: ["Witch", "Troublemaker"]
-//     }
-//   ]
-// }
-//
-// ...and a `paths_to_redact` value...
-//
-// [
-//   ["characters", "occupation"],
-//   ["characters", "date-of-birth"],
-// ]
-//
-// ...the returned cbor will be:
-//
-// {
-//   characters: [
-//     {
-//       name: "Reimu",
-//       occupation: "redacted"
-//     },
-//     {
-//       name: "Marisa",
-//       occupation: "redacted"
-//     }
-//   ]
-// }
-cbor::Value RedactCbor(
-    const cbor::Value& cbor,
-    base::span<const std::vector<const char*>> paths_to_redact) {
-  cbor::Value response = cbor.Clone();
-  for (std::vector<const char*> field_to_redact : paths_to_redact) {
-    RedactPath(&response, field_to_redact);
-  }
-  return response;
 }
 
 }  // namespace
@@ -636,8 +553,14 @@ cbor::Value BuildGetAssertionCommand(
   entry_map.emplace(cbor::Value(kGetAssertionRequestProtobufKey),
                     cbor::Value(serialized_passkey));
 
-  entry_map.emplace(cbor::Value(kRequestClientDataJSONKey),
-                    cbor::Value(client_data_json));
+  if (base::FeatureList::IsEnabled(
+          kWebAuthenticationHashClientDataJsonForEnclave)) {
+    entry_map.emplace(cbor::Value(kRequestClientDataJSONHashKey),
+                      cbor::Value(crypto::hash::Sha256(client_data_json)));
+  } else {
+    entry_map.emplace(cbor::Value(kRequestClientDataJSONKey),
+                      cbor::Value(client_data_json));
+  }
 
   if (claimed_pin) {
     entry_map.emplace(kRequestClaimedPINKey, std::move(claimed_pin->pin_claim));
@@ -753,16 +676,15 @@ void BuildCommandRequestBody(
 }
 
 cbor::Value RedactEnclaveRequest(const cbor::Value& cbor) {
-  const std::array redacted_fields = {std::vector{"secret"}};
-  return RedactCbor(cbor, redacted_fields);
+  return fido_parsing_utils::RedactCbor(
+      cbor, std::array{fido_parsing_utils::ToCborVector("secret")});
 }
 
 cbor::Value RedactEnclaveResponse(const cbor::Value& cbor) {
-  const std::array redacted_fields = {
-      std::vector{"ok", "ok", "largeBlob"},
-      std::vector{"ok", "ok", "prf"},
-  };
-  return RedactCbor(cbor, redacted_fields);
+  return fido_parsing_utils::RedactCbor(
+      cbor,
+      std::array{fido_parsing_utils::ToCborVector("ok", "ok", "largeBlob"),
+                 fido_parsing_utils::ToCborVector("ok", "ok", "prf")});
 }
 
 }  // namespace device::enclave

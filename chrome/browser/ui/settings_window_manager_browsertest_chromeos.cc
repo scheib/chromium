@@ -87,10 +87,9 @@ class SettingsWindowManagerTest : public InProcessBrowserTest {
   }
 
   void ShowOSSettings() {
-    ui_test_utils::BrowserChangeObserver browser_opened(
-        nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+    ui_test_utils::BrowserCreatedObserver browser_created_observer;
     settings_manager_->ShowOSSettings(browser()->profile());
-    browser_opened.Wait();
+    browser_created_observer.Wait();
   }
 
  protected:
@@ -191,7 +190,7 @@ IN_PROC_BROWSER_TEST_F(SettingsWindowManagerTest, OpenSettings) {
   // The opened Settings window should be the active browser.
   content::WebContents* web_contents =
       chrome::FindLastActive()->tab_strip_model()->GetWebContentsAt(0);
-  EXPECT_EQ(chrome::kChromeUIOSSettingsHost, web_contents->GetURL().host());
+  EXPECT_EQ(chrome::kChromeUIOSSettingsHost, web_contents->GetURL().GetHost());
 
   // Showing an OS sub-page reuses the OS settings window.
   settings_manager_->ShowOSSettings(

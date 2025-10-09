@@ -4,6 +4,7 @@
 
 #include "components/user_data_importer/utility/safari_data_importer.h"
 
+#include "base/barrier_closure.h"
 #include "base/check_deref.h"
 #include "base/containers/span_rust.h"
 #include "base/files/file_util.h"
@@ -15,13 +16,18 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
 #include "base/types/expected_macros.h"
 #include "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
 #include "components/autofill/core/browser/data_model/payments/credit_card.h"
+#include "components/autofill/core/common/autofill_prefs.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/history/core/browser/history_service.h"
+#include "components/history/core/common/pref_names.h"
 #include "components/password_manager/core/browser/features/password_manager_features_util.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
+#include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/reading_list/core/reading_list_model.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/user_data_importer/utility/bookmark_util.h"
@@ -104,21 +110,21 @@ bool IsRedirect(const GURL& source_url, const GURL& destination_url) {
   // Check for differences in scheme.
   if ((source_url.has_scheme() != destination_url.has_scheme()) ||
       (source_url.has_scheme() && destination_url.has_scheme() &&
-       !source_url.SchemeIs(destination_url.scheme()))) {
+       !source_url.SchemeIs(destination_url.GetScheme()))) {
     return true;
   }
 
   // Check for differences in host.
   if ((source_url.has_host() != destination_url.has_host()) ||
       (source_url.has_host() && destination_url.has_host() &&
-       source_url.host() != destination_url.host())) {
+       source_url.GetHost() != destination_url.GetHost())) {
     return true;
   }
 
   // Check for differences in path.
   if ((source_url.has_path() != destination_url.has_path()) ||
       (source_url.has_path() && destination_url.has_path() &&
-       source_url.path() != destination_url.path())) {
+       source_url.GetPath() != destination_url.GetPath())) {
     return true;
   }
 
@@ -199,6 +205,20 @@ TranslatePasswordStatusToError(password_manager::ImportResults::Status status) {
       return user_data_importer::PasswordsImportError::kOther;
   }
 }
+
+// Returns true if an import is blocked by a "disabling" policy.
+bool IsImportBlockedByDisablingPolicy(const PrefService* pref_service,
+                                      const char* pref_name) {
+  return pref_service->IsManagedPreference(pref_name) &&
+         pref_service->GetBoolean(pref_name);
+}
+
+// Returns true if an import is blocked by an "enabling" policy.
+bool IsImportBlockedByEnablingPolicy(const PrefService* pref_service,
+                                     const char* pref_name) {
+  return pref_service->IsManagedPreference(pref_name) &&
+         !pref_service->GetBoolean(pref_name);
+}
 }  // namespace
 
 namespace user_data_importer {
@@ -212,9 +232,11 @@ class RustHistoryCallback final
       std::vector<user_data_importer::SafariHistoryEntry>)>;
 
   explicit RustHistoryCallback(ParseHistoryCallback parse_history_callback,
-                               base::OnceClosure done_closure)
+                               base::OnceClosure done_closure,
+                               base::OnceClosure failed_closure)
       : parse_history_callback_(parse_history_callback),
-        done_closure_(std::move(done_closure)) {}
+        done_closure_(std::move(done_closure)),
+        failed_closure_(std::move(failed_closure)) {}
 
   ~RustHistoryCallback() override = default;
 
@@ -229,12 +251,13 @@ class RustHistoryCallback final
     }
   }
 
-  // Calls `done_callback_` with 0 to signal that parsing has failed.
-  void Fail() override { std::move(done_closure_).Run(); }
+  // Calls `failed_closure_` to signal that parsing has failed.
+  void Fail() override { std::move(failed_closure_).Run(); }
 
  private:
   ParseHistoryCallback parse_history_callback_;
   base::OnceClosure done_closure_;
+  base::OnceClosure failed_closure_;
 };
 
 SafariDataImporter::SafariDataImporter(
@@ -245,6 +268,7 @@ SafariDataImporter::SafariDataImporter(
     bookmarks::BookmarkModel* bookmark_model,
     ReadingListModel* reading_list_model,
     syncer::SyncService* sync_service,
+    PrefService* pref_service,
     std::unique_ptr<BookmarkParser> bookmark_parser,
     std::string app_locale)
     : blocking_queue_(base::ThreadPool::CreateSequencedTaskRunner(
@@ -259,6 +283,7 @@ SafariDataImporter::SafariDataImporter(
       bookmark_model_(CHECK_DEREF(bookmark_model)),
       reading_list_model_(CHECK_DEREF(reading_list_model)),
       sync_service_(sync_service),
+      pref_service_(pref_service),
       metrics_recorder_(ImporterMetricsRecorder::Source::kSafari),
       app_locale_(std::move(app_locale)) {}
 
@@ -267,7 +292,7 @@ SafariDataImporter::~SafariDataImporter() = default;
 void SafariDataImporter::PrepareImport(const base::FilePath& path) {
   metrics_recorder_.OnFlowStarted();
 
-  std::string zip_filename = path.MaybeAsASCII();
+  std::string zip_filename = path.AsUTF8Unsafe();
   if (zip_filename.empty()) {
     LogTotalFailureError(TotalFailureError::kNoFileProvided);
     client_->OnTotalFailure();
@@ -286,50 +311,79 @@ void SafariDataImporter::PrepareImport(const base::FilePath& path) {
 
 void SafariDataImporter::CompleteImport(
     const std::vector<int>& selected_password_ids) {
-  // The history import process is the only one requiring reading the zip file,
-  // so launch it first.
-  history_urls_imported_ = 0;
-  RustHistoryCallback::ParseHistoryCallback parse_history_callback =
-      base::BindPostTask(
-          GetRunner(),
-          base::BindRepeating(&SafariDataImporter::ImportHistoryEntries,
-                              weak_factory_.GetWeakPtr()));
+  constexpr int kNumTasks = 4;
 
-  base::OnceClosure done_history_closure = base::BindPostTask(
-      GetRunner(), base::BindOnce(&SafariDataImporter::OnHistoryImportCompleted,
-                                  weak_factory_.GetWeakPtr()));
+  // No need to BindPostTask here, because `barrier_closure` is always chained
+  // to another callback which is, itself, posted back to the default runner.
+  base::RepeatingClosure barrier_closure = base::BarrierClosure(
+      kNumTasks, base::BindOnce(&SafariDataImporter::OnImportComplete,
+                                weak_factory_.GetWeakPtr()));
 
-  metrics_recorder_.history_metrics().OnImportStarted();
-  blocking_worker_.AsyncCall(&BlockingWorker::ImportHistory)
-      .WithArgs(std::make_unique<RustHistoryCallback>(
-                    std::move(parse_history_callback),
-                    std::move(done_history_closure)),
-                history_size_threshold_);
+  if (!IsImportBlockedByDisablingPolicy(pref_service_,
+                                        prefs::kSavingBrowserHistoryDisabled)) {
+    history_urls_imported_ = 0;
+    RustHistoryCallback::ParseHistoryCallback parse_history_callback =
+        base::BindPostTask(
+            GetRunner(),
+            base::BindRepeating(&SafariDataImporter::ImportHistoryEntries,
+                                weak_factory_.GetWeakPtr()));
+
+    base::OnceClosure done_history_closure = base::BindPostTask(
+        GetRunner(),
+        base::BindOnce(&SafariDataImporter::OnHistoryImportCompleted,
+                       weak_factory_.GetWeakPtr())
+            .Then(barrier_closure));
+
+    base::OnceClosure failed_history_closure = base::BindPostTask(
+        GetRunner(), base::BindOnce(&SafariDataImporter::OnHistoryImportFailed,
+                                    weak_factory_.GetWeakPtr())
+                         .Then(barrier_closure));
+
+    metrics_recorder_.history_metrics().OnImportStarted();
+    blocking_worker_.AsyncCall(&BlockingWorker::ImportHistory)
+        .WithArgs(std::make_unique<RustHistoryCallback>(
+                      std::move(parse_history_callback),
+                      std::move(done_history_closure),
+                      std::move(failed_history_closure)),
+                  history_size_threshold_);
+  } else {
+    client_->OnHistoryImported(0);
+    barrier_closure.Run();
+  }
 
   if (password_importer_ &&
       password_importer_->IsState(
           password_manager::PasswordImporter::kUserInteractionRequired)) {
+    CHECK(!IsImportBlockedByEnablingPolicy(
+        pref_service_, password_manager::prefs::kCredentialsEnableService));
+
     metrics_recorder_.password_metrics().OnImportStarted();
 
-    // TODO(crbug.com/407587751): Move this to a task.
     password_importer_->ContinueImport(
         selected_password_ids,
         base::BindOnce(&SafariDataImporter::OnPasswordImportCompleted,
-                       weak_factory_.GetWeakPtr()));
+                       weak_factory_.GetWeakPtr())
+            .Then(barrier_closure));
   } else {
     client_->OnPasswordsImported(password_manager::ImportResults());
+    // In the case where no passwords need to be imported, just run
+    // `barrier_closure` directly. This is safe because CompleteImport runs on
+    // the main sequence.
+    barrier_closure.Run();
   }
 
   metrics_recorder_.bookmark_metrics().OnImportStarted();
   metrics_recorder_.reading_list_metrics().OnImportStarted();
   GetRunner()->PostTask(
       FROM_HERE, base::BindOnce(&SafariDataImporter::ContinueImportBookmarks,
-                                weak_factory_.GetWeakPtr()));
+                                weak_factory_.GetWeakPtr())
+                     .Then(barrier_closure));
 
   metrics_recorder_.payment_card_metrics().OnImportStarted();
   GetRunner()->PostTask(
       FROM_HERE, base::BindOnce(&SafariDataImporter::ContinueImportPaymentCards,
-                                weak_factory_.GetWeakPtr()));
+                                weak_factory_.GetWeakPtr())
+                     .Then(barrier_closure));
 }
 
 // Called after calling "Import" in order to cancel the import process.
@@ -504,8 +558,17 @@ void SafariDataImporter::PreparePasswords(std::string csv_data) {
         DataTypeMetrics::ImportOutcome::kNotPresent);
 
     // Empty results object, indicating no work could be done.
-    password_manager::ImportResults results;
-    client_->OnPasswordsReady(results);
+    client_->OnPasswordsReady(base::ok(password_manager::ImportResults{}));
+    return;
+  }
+
+  if (IsImportBlockedByEnablingPolicy(
+          pref_service_, password_manager::prefs::kCredentialsEnableService)) {
+    // TODO(crbug.com/407587751): Signal to UI that passwords import is blocked
+    // by policy.
+    client_->OnPasswordsReady(
+        base::unexpected(ImportPreparationError::kBlockedByPolicy));
+    return;
   }
 
   metrics_recorder_.password_metrics().LogFileSizeBytes(csv_data.length());
@@ -523,10 +586,19 @@ void SafariDataImporter::PreparePasswords(std::string csv_data) {
 
 void SafariDataImporter::PreparePaymentCards(
     SafariDataImporter::BlockingWorker::PaymentCardParseResult result) {
+  if (IsImportBlockedByEnablingPolicy(
+          pref_service_, autofill::prefs::kAutofillCreditCardEnabled)) {
+    // TODO(crbug.com/407587751): Signal to UI that payment cards import is
+    // blocked by policy.
+    client_->OnPaymentCardsReady(
+        base::unexpected(ImportPreparationError::kBlockedByPolicy));
+    return;
+  }
+
   if (result.entries.empty()) {
     metrics_recorder_.payment_card_metrics().LogOutcome(
         DataTypeMetrics::ImportOutcome::kNotPresent);
-    client_->OnPaymentCardsReady(/* count= */ 0);
+    client_->OnPaymentCardsReady(base::ok(0u));
     return;
   }
 
@@ -543,17 +615,26 @@ void SafariDataImporter::PreparePaymentCards(
 
   size_t count = cards_to_import_.size();
   metrics_recorder_.payment_card_metrics().OnPreparationFinished(count);
-  client_->OnPaymentCardsReady(count);
+  client_->OnPaymentCardsReady(base::ok(count));
 }
 
 void SafariDataImporter::PrepareBookmarks(
     SafariDataImporter::BlockingWorker::BookmarkUnzipResult result) {
+  if (IsImportBlockedByEnablingPolicy(
+          pref_service_, bookmarks::prefs::kEditBookmarksEnabled)) {
+    // TODO(crbug.com/407587751): Signal to UI that bookmarks import is blocked
+    // by policy.
+    client_->OnBookmarksReady(
+        base::unexpected(ImportPreparationError::kBlockedByPolicy));
+    return;
+  }
+
   if (!result.path || result.path->empty()) {
     metrics_recorder_.bookmark_metrics().LogOutcome(
         DataTypeMetrics::ImportOutcome::kNotPresent);
     metrics_recorder_.reading_list_metrics().LogOutcome(
         DataTypeMetrics::ImportOutcome::kNotPresent);
-    client_->OnBookmarksReady(/* count= */ 0);
+    client_->OnBookmarksReady(base::ok(0u));
     return;
   }
 
@@ -573,13 +654,14 @@ void SafariDataImporter::OnPasswordsParsed(
   auto error = TranslatePasswordStatusToError(results.status);
   if (error) {
     metrics_recorder_.LogPasswordsError(*error);
+    client_->OnPasswordsReady(base::ok(password_manager::ImportResults{}));
     return;
   }
 
   size_t count = results.displayed_entries.size() + results.number_to_import;
   metrics_recorder_.password_metrics().OnPreparationFinished(count);
 
-  client_->OnPasswordsReady(results);
+  client_->OnPasswordsReady(base::ok(results));
 }
 
 void SafariDataImporter::OnBookmarksParsed(
@@ -602,8 +684,8 @@ void SafariDataImporter::OnBookmarksParsed(
   metrics_recorder_.reading_list_metrics().OnPreparationFinished(
       pending_reading_list_.size());
 
-  client_->OnBookmarksReady(importable_bookmarks_count +
-                            pending_reading_list_.size());
+  client_->OnBookmarksReady(
+      base::ok(importable_bookmarks_count + pending_reading_list_.size()));
 }
 
 void SafariDataImporter::OnBookmarkParsingError(
@@ -614,10 +696,19 @@ void SafariDataImporter::OnBookmarkParsingError(
   metrics_recorder_.reading_list_metrics().LogOutcome(
       DataTypeMetrics::ImportOutcome::kFailure);
 
-  client_->OnBookmarksReady(/* count= */ 0);
+  client_->OnBookmarksReady(base::ok(0u));
 }
 
 void SafariDataImporter::PrepareHistory(size_t file_size_bytes) {
+  if (IsImportBlockedByDisablingPolicy(pref_service_,
+                                       prefs::kSavingBrowserHistoryDisabled)) {
+    // TODO(crbug.com/407587751): Signal to UI that history import is blocked
+    // by policy.
+    client_->OnHistoryReady(
+        base::unexpected(ImportPreparationError::kBlockedByPolicy));
+    return;
+  }
+
   // This is an approximation of the number of bytes per URL entry in the
   // history file.
   static const size_t kBytesPerURL = 250;
@@ -634,7 +725,7 @@ void SafariDataImporter::PrepareHistory(size_t file_size_bytes) {
   }
 
   // TODO(crbug.com/407587751): Pass list of profiles.
-  client_->OnHistoryReady(approximate_number_of_urls, {});
+  client_->OnHistoryReady(base::ok(approximate_number_of_urls));
 }
 
 void SafariDataImporter::ImportHistoryEntries(
@@ -654,6 +745,13 @@ void SafariDataImporter::ImportHistoryEntries(
 
     history_urls_imported_ += url_rows.size();
   }
+}
+
+void SafariDataImporter::OnHistoryImportFailed() {
+  metrics_recorder_.history_metrics().LogOutcome(
+      DataTypeMetrics::ImportOutcome::kFailure);
+  metrics_recorder_.history_metrics().OnImportFinished(history_urls_imported_);
+  client_->OnHistoryImported(history_urls_imported_);
 }
 
 void SafariDataImporter::OnHistoryImportCompleted() {
@@ -677,7 +775,9 @@ void SafariDataImporter::OnPasswordImportCompleted(
 }
 
 void SafariDataImporter::ContinueImportPaymentCards() {
-  if (cards_to_import_.empty()) {
+  if (IsImportBlockedByEnablingPolicy(
+          pref_service_, autofill::prefs::kAutofillCreditCardEnabled) ||
+      cards_to_import_.empty()) {
     client_->OnPaymentCardsImported(/* count= */ 0);
     return;
   }
@@ -712,6 +812,12 @@ void SafariDataImporter::ContinueImportPaymentCards() {
 }
 
 void SafariDataImporter::ContinueImportBookmarks() {
+  if (IsImportBlockedByEnablingPolicy(
+          pref_service_, bookmarks::prefs::kEditBookmarksEnabled)) {
+    client_->OnBookmarksImported(0);
+    return;
+  }
+
   size_t imported_bookmarks_count = user_data_importer::ImportBookmarks(
       &*bookmark_model_, std::move(pending_bookmarks_),
       l10n_util::GetStringUTF16(IDS_IMPORTED_FROM_SAFARI_FOLDER));
@@ -729,6 +835,10 @@ void SafariDataImporter::ContinueImportBookmarks() {
 
   client_->OnBookmarksImported(imported_bookmarks_count +
                                imported_reading_list_count);
+}
+
+void SafariDataImporter::OnImportComplete() {
+  metrics_recorder_.OnFlowFinished();
 }
 
 }  // namespace user_data_importer
