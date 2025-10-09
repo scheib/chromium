@@ -4951,6 +4951,7 @@ enum WebFeature {
   kLineClampByLinesAndHeight = 5640,
   kV8RegExpStaticPropertiesWithLastMatch = 5641,
   kGetStatusForPolicyCrossOriginIframe = 5642,
+  kWebBluetoothRemoteGATTCharacteristicWriteValue = 5643,
 
   // Add new features immediately above this line. Don't change assigned
   // numbers of any item, and don't reuse removed slots. Also don't add extra
